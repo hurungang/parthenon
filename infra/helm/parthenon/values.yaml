@@ -1,0 +1,221 @@
+# Default values for parthenon Helm chart.
+# Override any value with --set or a custom values file.
+
+# ── Global ─────────────────────────────────────────────────────────────────
+global:
+  imageRegistry: ""          # e.g. "registry.example.com/" — include trailing slash
+  imagePullSecrets: []       # list of image pull secret names
+  storageClass: ""           # default StorageClass for PVCs
+
+# ── API (Backend FastAPI) ───────────────────────────────────────────────────
+api:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: parthenon/api
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  env:
+    ENVIRONMENT: production
+    OTEL_SERVICE_NAME: parthenon-api
+    OTEL_ENABLED: "true"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# ── Frontend (React/Vite) ───────────────────────────────────────────────────
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: parthenon/frontend
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5173
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# ── PostgreSQL ───────────────────────────────────────────────────────────────
+postgres:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: postgres
+    tag: "16"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5432
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  storage:
+    size: 20Gi
+  env:
+    POSTGRES_DB: parthenon
+
+# ── Redis ────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 6379
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ── Nginx ────────────────────────────────────────────────────────────────────
+nginx:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: nginx
+    tag: "1.25-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# ── OTEL Collector ───────────────────────────────────────────────────────────
+otelCollector:
+  enabled: true
+  sidecar: false             # true = deploy as a DaemonSet sidecar per node
+  replicaCount: 1
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: "0.105.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    grpcPort: 4317
+    httpPort: 4318
+    prometheusPort: 8889
+    healthCheckPort: 13133
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "200Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  # OTEL Collector pipeline config is stored in a ConfigMap (see configmap.yaml)
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+        timeout: 5s
+    exporters:
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: parthenon
+      debug:
+        verbosity: basic
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus, debug]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+  hosts:
+    - host: parthenon.local
+      paths:
+        - path: /api
+          pathType: Prefix
+          backend: api
+        - path: /ws
+          pathType: Prefix
+          backend: api
+        - path: /
+          pathType: Prefix
+          backend: frontend
+  tls: []
+  # tls:
+  #   - secretName: parthenon-tls
+  #     hosts:
+  #       - parthenon.local
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+secrets:
+  # Set these to non-empty strings to create a Secret from this chart.
+  # For production, prefer external secret management (Vault, ESO, SealedSecrets).
+  create: true
+  postgresUser: "parthenon"
+  postgresPassword: ""       # REQUIRED — set via --set or external values
+  secretKey: ""              # REQUIRED — JWT secret key
+  credentialVaultKey: ""     # REQUIRED — 32-byte AES-256 vault key
+  oidcClientSecret: ""       # REQUIRED — OIDC client secret
+
+# ── ConfigMap extra data ───────────────────────────────────────────────────────
+configMap:
+  oidcProviderUrl: "https://keycloak.example.com/realms/parthenon"
+  jwtAudience: "parthenon"
+  viteApiBaseUrl: "https://parthenon.local/api/v1"
+  viteWsBaseUrl: "wss://parthenon.local/ws"
+  viteOidcAuthority: "https://keycloak.example.com/realms/parthenon"
+  viteOidcClientId: "parthenon-ui"

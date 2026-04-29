@@ -1,0 +1,62 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "parthenon.fullname" . }}-otel-collector
+  labels:
+    {{- include "parthenon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  replicas: {{ .Values.otelCollector.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "parthenon.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: otel-collector
+  template:
+    metadata:
+      labels:
+        {{- include "parthenon.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: {{ include "parthenon.image" (dict "image" .Values.otelCollector.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.otelCollector.image.pullPolicy }}
+          args:
+            - "--config=/etc/otel/otel-collector-config.yaml"
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.otelCollector.service.grpcPort }}
+              protocol: TCP
+            - name: otlp-http
+              containerPort: {{ .Values.otelCollector.service.httpPort }}
+              protocol: TCP
+            - name: prometheus
+              containerPort: {{ .Values.otelCollector.service.prometheusPort }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.otelCollector.service.healthCheckPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel
+              readOnly: true
+          resources:
+            {{- toYaml .Values.otelCollector.resources | nindent 12 }}
+      volumes:
+        - name: otel-config
+          configMap:
+            name: {{ include "parthenon.fullname" . }}-otel-config
+{{- end }}

@@ -1,0 +1,15 @@
+{
+  "name": "parthenon-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
+    "@playwright/test": "^1.47.0",
+    "wait-on": "^8.0.0"
+  }
+}

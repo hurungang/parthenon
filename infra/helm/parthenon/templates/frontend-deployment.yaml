@@ -1,0 +1,70 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "parthenon.fullname" . }}-frontend
+  labels:
+    {{- include "parthenon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "parthenon.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "parthenon.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: frontend
+          image: {{ include "parthenon.image" (dict "image" .Values.frontend.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 5173
+              protocol: TCP
+          env:
+            - name: VITE_API_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "parthenon.configMapName" . }}
+                  key: VITE_API_BASE_URL
+            - name: VITE_WS_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "parthenon.configMapName" . }}
+                  key: VITE_WS_BASE_URL
+            - name: VITE_OIDC_AUTHORITY
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "parthenon.configMapName" . }}
+                  key: VITE_OIDC_AUTHORITY
+            - name: VITE_OIDC_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "parthenon.configMapName" . }}
+                  key: VITE_OIDC_CLIENT_ID
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5173
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5173
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+{{- end }}

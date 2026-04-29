@@ -1,0 +1,14 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend[39m
+
+ [32m✓[39m src/__tests__/AgentManagementPage.test.tsx[2m > [22mAgentManagementPage[2m > [22mrenders the page heading[33m 1692[2mms[22m[39m
+ [32m✓[39m src/__tests__/AgentManagementPage.test.tsx[2m > [22mAgentManagementPage[2m > [22mrenders the agent type from mock data
+ [32m✓[39m src/__tests__/AgentManagementPage.test.tsx[2m > [22mAgentManagementPage[2m > [22mrenders the operating mode chip
+ [32m✓[39m src/__tests__/AgentManagementPage.test.tsx[2m > [22mAgentManagementPage[2m > [22mrenders Create Agent Type button
+ [32m✓[39m src/__tests__/AgentManagementPage.test.tsx[2m > [22mAgentManagementPage[2m > [22mopens dialog when Create Agent Type is clicked
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m   Start at [22m 14:03:56
+[2m   Duration [22m 4.51s[2m (transform 95ms, setup 209ms, collect 296ms, tests 1.93s, environment 1.34s, prepare 237ms)[22m
+

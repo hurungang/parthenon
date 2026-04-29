@@ -1,0 +1,3029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Enterprise AI Harness</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-group{margin-top:8px}
+.nav-group-label{padding:10px 16px 4px;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.nav-group-label .toggle-icon{transition:transform var(--transition);font-size:12px}
+.nav-group.collapsed .nav-children{display:none}
+.nav-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.nav-item.active::before{display:none}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.nav-item.sub-item{padding-left:44px;font-size:13px}
+.nav-parent{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition);color:var(--sidebar-text);font-size:13.5px;user-select:none}
+.nav-parent:hover{background:rgba(255,255,255,.07)}
+.nav-parent .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.nav-parent .nav-arrow{margin-left:auto;font-size:11px;transition:transform var(--transition)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .nav-arrow{transform:rotate(-90deg)}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.btn-icon{background:none;border:none;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);transition:background var(--transition);position:relative}
+.btn-icon:hover{background:var(--bg)}
+.badge{position:absolute;top:2px;right:2px;background:var(--error);color:#fff;font-size:10px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── VIEWS ── */
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);transition:box-shadow var(--transition)}
+.card:hover{box-shadow:var(--shadow-md)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.card-footer{padding:12px 20px;border-top:1px solid var(--border);background:#FAFAFA;border-radius:0 0 var(--radius) var(--radius)}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody tr:nth-child(odd){background:#FDFDFD}
+tbody tr:nth-child(odd):hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── CHIPS / BADGES ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control::placeholder{color:#94A3B8}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.checkbox-group{display:flex;flex-direction:column;gap:8px}
+.checkbox-item{display:flex;align-items:center;gap:8px;cursor:pointer}
+.checkbox-item input{width:15px;height:15px;cursor:pointer;accent-color:var(--primary)}
+.toggle{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:36px;height:20px;background:#CBD5E1;border-radius:10px;transition:background var(--transition);position:relative;flex-shrink:0}
+.toggle-slider::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+.toggle-slider{background:var(--success)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(16px)}
+.search-input{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;flex:1}
+.search-input input{border:none;outline:none;background:none;flex:1;color:var(--text-primary);font-size:14px}
+.search-input svg{color:var(--text-secondary);flex-shrink:0}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-lg{max-width:680px}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition)}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+/* ── DRAWER ── */
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:900}
+.drawer-overlay.open{display:block}
+.drawer{position:fixed;top:0;right:-480px;bottom:0;width:480px;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:901;transition:right 0.3s ease;display:flex;flex-direction:column;overflow:hidden}
+.drawer.open{right:0}
+.drawer-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-header h3{font-size:16px;font-weight:600}
+.drawer-body{flex:1;overflow-y:auto;padding:24px}
+.drawer-body::-webkit-scrollbar{width:4px}.drawer-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.drawer-footer{padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:24px;gap:0}
+.tab{padding:10px 20px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);white-space:nowrap}
+.tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+.tab:hover:not(.active){color:var(--text-primary)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* ── METRIC CARDS ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.metric-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:20px}
+.metric-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.metric-value{font-size:28px;font-weight:700;color:var(--text-primary);line-height:1}
+.metric-delta{font-size:12px;margin-top:6px;display:flex;align-items:center;gap:4px}
+.delta-up{color:var(--success)}.delta-down{color:var(--error)}.delta-neutral{color:var(--text-secondary)}
+.chart-placeholder{background:#F8FAFC;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);font-size:13px;font-weight:500}
+
+/* ── WIZARD ── */
+.wizard-steps{display:flex;align-items:center;margin-bottom:32px}
+.wizard-step{display:flex;align-items:center;gap:10px;flex:1}
+.wizard-step:last-child{flex:0}
+.step-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;transition:all var(--transition)}
+.step-circle.done{background:var(--success);color:#fff}
+.step-circle.active{background:var(--primary);color:#fff;box-shadow:0 0 0 4px var(--primary-light)}
+.step-circle.pending{background:var(--border);color:var(--text-secondary)}
+.step-label{font-size:12px;font-weight:500;white-space:nowrap}
+.step-label.active{color:var(--primary);font-weight:600}
+.step-label.pending{color:var(--text-secondary)}
+.step-connector{flex:1;height:2px;background:var(--border);margin:0 8px}
+.step-connector.done{background:var(--success)}
+.wizard-card{max-width:560px}
+.wizard-success{text-align:center;padding:32px 0}
+.wizard-success .check-icon{width:64px;height:64px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#fff;font-size:28px}
+
+/* ── PERMISSION MATRIX ── */
+.matrix-table thead th{background:#F1F5F9}
+.matrix-cat-row td{background:#F8FAFC;font-weight:600;font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;padding:8px 16px}
+.matrix-check{text-align:center}
+.matrix-check input{accent-color:var(--primary);width:16px;height:16px;cursor:pointer}
+
+/* ── SESSIONS LIST ── */
+.session-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.session-item:last-child{border-bottom:none}
+.session-info{flex:1}
+.session-name{font-weight:500;font-size:14px}
+.session-binding{font-size:12px;color:var(--text-secondary)}
+
+/* ── TOOL REPOSITORY ── */
+.tool-group{margin-bottom:24px}
+.tool-group-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.tool-group-header h4{font-size:15px;font-weight:600}
+.count-badge{background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+
+/* ── SKILL / SOP EDITOR ── */
+.editor-shell{display:flex;height:calc(100vh - var(--topbar-h) - 48px);gap:0}
+.editor-main{flex:1;overflow-y:auto;padding-right:16px}
+.editor-sidebar{width:280px;flex-shrink:0}
+.editor-main::-webkit-scrollbar{width:4px}.editor-main::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:8px;position:relative}
+.step-card-num{width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-card-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.step-arrow{text-align:center;color:var(--text-secondary);font-size:18px;margin:4px 0}
+
+/* ── NOTIFICATIONS CARDS ── */
+.notif-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.notif-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+.notif-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.notif-card-title{font-size:15px;font-weight:600}
+.notif-card-meta{font-size:12px;color:var(--text-secondary);line-height:1.8}
+.notif-card-meta span{color:var(--text-primary);font-weight:500}
+
+/* ── CHAT ── */
+.chat-shell{display:flex;height:calc(100vh - var(--topbar-h) - 48px);gap:0}
+.chat-left{width:280px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden}
+.chat-right{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-left:16px;display:flex;flex-direction:column;overflow:hidden}
+.conv-list{flex:1;overflow-y:auto}
+.conv-item{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background var(--transition)}
+.conv-item:hover{background:#F8FAFC}
+.conv-item.active{background:var(--primary-light);border-left:3px solid var(--primary)}
+.conv-item-agent{font-size:12px;font-weight:600;color:var(--primary)}
+.conv-item-summary{font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.conv-item-time{font-size:11px;color:var(--text-secondary)}
+.chat-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.chat-header-info h4{font-size:15px;font-weight:600}
+.chat-header-info small{font-size:12px;color:var(--text-secondary)}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.chat-messages::-webkit-scrollbar{width:4px}.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.msg{display:flex;gap:10px;max-width:78%}
+.msg-user{align-self:flex-end;flex-direction:row-reverse}
+.msg-bubble{padding:10px 14px;border-radius:12px;font-size:13.5px;line-height:1.55;word-break:break-word}
+.msg-user .msg-bubble{background:var(--primary);color:#fff;border-radius:12px 12px 2px 12px}
+.msg-agent .msg-bubble{background:#F1F5F9;color:var(--text-primary);border-radius:12px 12px 12px 2px}
+.msg-tool{align-self:flex-start;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:var(--text-secondary);font-family:monospace;margin-left:20px}
+.msg-question{background:#FFFBEB;border:2px solid var(--warning);border-radius:var(--radius);padding:14px 16px;margin-top:4px}
+.msg-question-title{font-size:13px;font-weight:600;color:#92400E;margin-bottom:6px}
+.msg-question-text{font-size:13px;color:var(--text-primary);margin-bottom:12px}
+.msg-question-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chat-input-area{padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;align-items:center}
+.chat-input{flex:1;border:1px solid var(--border);border-radius:24px;padding:10px 18px;outline:none;font-size:14px;transition:border-color var(--transition)}.chat-input:focus{border-color:var(--primary)}
+
+/* ── LOGS ── */
+.log-stream{background:#0F172A;border-radius:var(--radius);padding:16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.8;overflow-x:auto;max-height:380px;overflow-y:auto}
+.log-stream::-webkit-scrollbar{width:4px;height:4px}.log-stream::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+.log-line{white-space:pre}
+.log-info{color:#94A3B8}.log-info .lvl{color:#60A5FA}
+.log-warn{color:#FCD34D}.log-warn .lvl{color:#FBBF24;font-weight:700}
+.log-error{color:#FCA5A5}.log-error .lvl{color:#F87171;font-weight:700}
+.log-debug{color:#6B7280}.log-debug .lvl{color:#9CA3AF}
+.filter-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.filter-bar select,.filter-bar input{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);outline:none;font-size:13px}
+.filter-bar select{appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+
+/* ── RESULT CONTENT ── */
+.result-content{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:20px;font-family:'Courier New',monospace;font-size:13px;line-height:1.7;white-space:pre;overflow-x:auto}
+
+/* ── AGENT GATEWAY ── */
+.gateway-shell{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+.protocol-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+.protocol-item{padding:12px 0;border-bottom:1px solid var(--border)}
+.protocol-item:last-child{border-bottom:none}
+.protocol-method{display:inline-block;background:#0F172A;color:#60A5FA;font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-right:6px}
+.protocol-endpoint{font-family:monospace;font-size:13px;font-weight:600;color:var(--text-primary)}
+.protocol-desc{font-size:12px;color:var(--text-secondary);margin:4px 0}
+.protocol-code{font-family:monospace;font-size:11px;color:#64748B;background:#F8FAFC;padding:4px 8px;border-radius:4px;margin-top:4px;white-space:pre}
+
+/* ── SECTION DIVIDER ── */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:24px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ── CONVERSATION DETAIL ── */
+.timeline{display:flex;flex-direction:column;gap:0}
+.timeline-item{display:flex;gap:12px;padding:10px 0;border-left:2px solid var(--border);margin-left:12px;padding-left:16px;position:relative}
+.timeline-item::before{content:'';position:absolute;left:-5px;top:14px;width:8px;height:8px;border-radius:50%;background:var(--border);border:2px solid var(--surface)}
+.timeline-item.user-turn::before{background:var(--primary)}
+.timeline-item.agent-turn::before{background:var(--success)}
+.timeline-item.tool-turn::before{background:var(--warning)}
+.timeline-stamp{font-size:11px;color:var(--text-secondary);white-space:nowrap;min-width:70px;padding-top:2px}
+.timeline-content{flex:1}
+.timeline-role{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.role-user{color:var(--primary)}.role-agent{color:var(--success)}.role-tool{color:var(--warning)}
+.timeline-text{font-size:13px;color:var(--text-primary);line-height:1.5}
+.timeline-tool{font-family:monospace;font-size:12px;background:#FFFBEB;border:1px solid #FDE68A;padding:6px 10px;border-radius:4px;color:#92400E}
+
+/* ── MISC ── */
+.empty-state{text-align:center;padding:48px 24px;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:40px;margin-bottom:12px}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.font-mono{font-family:'Courier New',monospace}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
+.w-full{width:100%}
+strong{font-weight:600}
+.inline-form{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:12px}
+
+/* ── KEYCLOAK IDENTITY BOOTSTRAP STYLES ── */
+.provider-grid{display:flex;flex-direction:column;gap:12px}
+.provider-card{border:2px solid var(--border);border-radius:var(--radius);padding:18px 20px;cursor:pointer;transition:all var(--transition);display:flex;align-items:flex-start;gap:16px;background:var(--surface);position:relative}
+.provider-card:hover{border-color:var(--primary-light);box-shadow:var(--shadow)}
+.provider-card.selected{border-color:var(--primary);background:#F8FAFC}
+.provider-card-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;background:var(--primary-light)}
+.provider-card-icon.amber{background:#FEF3C7}
+.provider-card-body{flex:1}
+.provider-card-title{font-size:15px;font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.provider-card-desc{font-size:13px;color:var(--text-secondary);line-height:1.5}
+.radio-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);margin-top:2px;flex-shrink:0;transition:all var(--transition);position:relative}
+.provider-card.selected .radio-dot{border-color:var(--primary)}
+.provider-card.selected .radio-dot::after{content:'';position:absolute;width:10px;height:10px;border-radius:50%;background:var(--primary);top:3px;left:3px}
+.sub-provider-row{display:flex;gap:10px;margin-top:12px;padding-left:4px}
+.sub-provider-btn{flex:1;padding:10px 8px;border:2px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);display:flex;align-items:center;justify-content:center;gap:6px}
+.sub-provider-btn:hover{border-color:var(--primary-light)}
+.sub-provider-btn.active{border-color:var(--primary);color:var(--primary);background:#F8FAFC}
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:20px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+.alert-success{background:#F0FDF4;color:#166534;border-left:4px solid #22C55E}
+.loading-screen{text-align:center;padding:20px 0}
+.spinner{width:48px;height:48px;border-radius:50%;border:4px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite;margin:0 auto 20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-steps{list-style:none;text-align:left;margin-top:28px}
+.progress-step{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--text-secondary);transition:color var(--transition)}
+.progress-step:last-child{border-bottom:none}
+.progress-step.done{color:var(--success)}
+.progress-step.active{color:var(--primary);font-weight:500}
+.progress-step.pending{color:#94A3B8}
+.step-status{width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px}
+.mini-spinner{width:16px;height:16px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite}
+.form-input.error{border-color:var(--error)}
+.form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.form-error.visible{display:block}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg);border-radius:6px;font-size:13px;margin-bottom:8px}
+.summary-key{color:var(--text-secondary);font-weight:500}
+.summary-value{color:var(--text-primary);font-weight:600;font-family:monospace;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <div class="nav-item" data-view="dashboard" onclick="nav(this,'dashboard')"><span class="nav-icon">🏠</span>Dashboard</div>
+  <div class="nav-item" data-view="mcp-hub" onclick="nav(this,'mcp-hub')"><span class="nav-icon">🔌</span>MCP Hub</div>
+  <div class="nav-item" data-view="skills" onclick="nav(this,'skills')"><span class="nav-icon">🔧</span>Skills</div>
+  <div class="nav-item" data-view="sops" onclick="nav(this,'sops')"><span class="nav-icon">📋</span>SOPs</div>
+  <div class="nav-item" data-view="agents" onclick="nav(this,'agents')"><span class="nav-icon">🤖</span>Agents</div>
+  <div class="nav-item" data-view="gateway" onclick="nav(this,'gateway')"><span class="nav-icon">🚪</span>Gateway</div>
+  <div class="nav-item" data-view="schedules" onclick="nav(this,'schedules')"><span class="nav-icon">📅</span>Schedules</div>
+  <div class="nav-item" data-view="conversations" onclick="nav(this,'conversations')"><span class="nav-icon">💬</span>Conversations</div>
+  <div class="nav-item" data-view="results" onclick="nav(this,'results')"><span class="nav-icon">💾</span>Results</div>
+  <div class="nav-item" data-view="notifications" onclick="nav(this,'notifications')"><span class="nav-icon">🔔</span>Notifications</div>
+  <div class="nav-item" data-view="observability" onclick="nav(this,'observability')"><span class="nav-icon">📊</span>Observability</div>
+  <div class="nav-item" data-view="permissions" onclick="nav(this,'permissions')"><span class="nav-icon">🔐</span>Permissions</div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Communication Hub</div>
+    <div class="topbar-actions">
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: DASHBOARD ═══════════════════════════════ -->
+<div id="view-dashboard" class="view">
+  <div class="view-header">
+    <div><h2>Dashboard</h2><div class="view-desc">Platform overview and quick actions</div></div>
+  </div>
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Active Agents</div>
+      <div class="metric-value">12</div>
+      <div class="metric-delta delta-up">↑ 3 new today</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Failed Requests</div>
+      <div class="metric-value" style="color:var(--error)">4</div>
+      <div class="metric-delta delta-neutral">Requires attention</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Tasks Completed</div>
+      <div class="metric-value">1,492</div>
+      <div class="metric-delta delta-up">↑ +2.4% vs last week</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">System Health</div>
+      <div class="metric-value" style="color:var(--success)">99.9%</div>
+      <div class="metric-delta delta-up">All services operational</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SETUP WIZARD ═══════════════════════════════ -->
+<div id="view-setup-wizard" class="view">
+  <div class="view-header">
+    <div><h2>Identity Setup</h2><div class="view-desc">Configure platform authentication</div></div>
+  </div>
+  <div class="card wizard-card">
+    <div class="card-body">
+      <!-- Step indicator -->
+      <div class="wizard-steps" id="wizard-steps">
+        <div class="wizard-step">
+          <div class="step-circle active" id="sc1">1</div>
+          <div class="step-label active" id="sl1">Provider</div>
+          <div class="step-connector" id="conn1"></div>
+        </div>
+        <div class="wizard-step">
+          <div class="step-circle pending" id="sc2">2</div>
+          <div class="step-label pending" id="sl2">Configure</div>
+          <div class="step-connector" id="conn2"></div>
+        </div>
+        <div class="wizard-step">
+          <div class="step-circle pending" id="sc3">3</div>
+          <div class="step-label pending" id="sl3">Provision</div>
+          <div class="step-connector" id="conn3"></div>
+        </div>
+        <div class="wizard-step" style="flex:0">
+          <div class="step-circle pending" id="sc4">✓</div>
+          <div class="step-label pending" id="sl4">Complete</div>
+        </div>
+      </div>
+
+      <!-- Step 1: Welcome & Choose Provider -->
+      <div id="wiz-step1">
+        <div class="alert alert-warning">
+          <div><strong style="margin-bottom:2px;display:block">Application is not accessible to users</strong>No users can log in until an identity provider is configured.</div>
+        </div>
+
+        <div class="provider-grid" style="margin-top:20px;margin-bottom:24px">
+          <!-- Install Keycloak -->
+          <div class="provider-card selected" id="opt-keycloak-new" onclick="selectProvider('keycloak-new')">
+            <div class="radio-dot"></div>
+            <div class="provider-card-icon blue">🛡️</div>
+            <div class="provider-card-body">
+              <div class="provider-card-title">
+                Install Keycloak
+                <span class="chip chip-green" style="font-size:10px">Recommended</span>
+              </div>
+              <p class="provider-card-desc">Parthenon will provision a dedicated Keycloak instance automatically. Best for new deployments.</p>
+            </div>
+          </div>
+
+          <!-- Connect existing -->
+          <div class="provider-card" id="opt-existing" onclick="selectProvider('existing')">
+            <div class="radio-dot"></div>
+            <div class="provider-card-icon amber">🔗</div>
+            <div class="provider-card-body">
+              <div class="provider-card-title">Connect Existing Provider</div>
+              <p class="provider-card-desc">Connect to your organisation's existing OIDC provider.</p>
+              
+              <div class="sub-provider-row" id="existingSubOptions" style="display:none">
+                <button class="sub-provider-btn active" id="sub-keycloak" onclick="selectExistingType('keycloak', event)">🛡️ Keycloak</button>
+                <button class="sub-provider-btn" id="sub-entra" onclick="selectExistingType('entra', event)">🏢 Azure EntraID</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-primary" onclick="goToConfig()">Configure Provider →</button>
+        </div>
+      </div>
+
+      <!-- Step 2a: New Keycloak Config -->
+      <div id="wiz-step2-kc" style="display:none">
+        <div class="section-title">Configure Keycloak Admin</div>
+        <div class="alert alert-info">
+          <div>These credentials will be used to access the Keycloak console. Store them securely.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Admin Username <span style="color:var(--error)">*</span></label>
+            <input class="form-control" id="kc-username" placeholder="admin" oninput="clearErr('kc-username')">
+            <div class="form-error" id="err-kc-username">Username is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Realm Name</label>
+            <input class="form-control" id="kc-realm" placeholder="parthenon" oninput="clearErr('kc-realm')">
+            <div class="form-hint">Defaults to "parthenon".</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Admin Password <span style="color:var(--error)">*</span></label>
+            <input type="password" class="form-control" id="kc-password" placeholder="••••••••" oninput="clearErr('kc-password');clearErr('kc-confirm')">
+            <div class="form-error" id="err-kc-password">Password is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Confirm Password <span style="color:var(--error)">*</span></label>
+            <input type="password" class="form-control" id="kc-confirm" placeholder="••••••••" oninput="clearErr('kc-confirm')">
+            <div class="form-error" id="err-kc-confirm">Passwords do not match.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:24px;justify-content:space-between">
+          <button class="btn btn-secondary" onclick="wizBack()">← Back</button>
+          <button class="btn btn-primary" onclick="validateKeycloakNew()">Install & Configure →</button>
+        </div>
+      </div>
+
+      <!-- Step 2b: Existing Provider Config -->
+      <div id="wiz-step2-ex" style="display:none">
+        <div class="section-title" id="existingProviderTitle">Connect Keycloak</div>
+        <div class="form-group">
+          <label>OIDC Provider URL <span style="color:var(--error)">*</span></label>
+          <input type="url" class="form-control" id="oidc-url" placeholder="https://auth.example.com/realms/my-realm" oninput="clearErr('oidc-url')">
+          <div class="form-error" id="err-oidc-url">URL is required.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Client ID <span style="color:var(--error)">*</span></label>
+            <input class="form-control" id="oidc-client-id" placeholder="parthenon-app" oninput="clearErr('oidc-client-id')">
+            <div class="form-error" id="err-oidc-client-id">Client ID is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Audience</label>
+            <input class="form-control" id="oidc-audience" placeholder="parthenon-app">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Client Secret <span style="color:var(--error)">*</span></label>
+          <input type="password" class="form-control" id="oidc-secret" placeholder="••••••••" oninput="clearErr('oidc-secret')">
+          <div class="form-error" id="err-oidc-secret">Secret is required.</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:24px;justify-content:space-between">
+          <button class="btn btn-secondary" onclick="wizBack()">← Back</button>
+          <button class="btn btn-primary" onclick="validateExisting()">Save & Connect →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Provisioning -->
+      <div id="wiz-step3" style="display:none">
+        <div class="loading-screen">
+          <div class="spinner"></div>
+          <h2 style="font-size:20px;font-weight:600;margin-bottom:8px" id="loadingTitle">Provisioning Identity Provider…</h2>
+          <p style="font-size:14px;color:var(--text-secondary)" id="loadingSubtitle">Please do not close this window.</p>
+          <ul class="progress-steps" id="progressSteps">
+            <li class="progress-step pending" id="ps-1"><span class="step-status">○</span><span id="ps-1-text">Provisioning Keycloak container…</span></li>
+            <li class="progress-step pending" id="ps-2"><span class="step-status">○</span><span id="ps-2-text">Configuring realm…</span></li>
+            <li class="progress-step pending" id="ps-3"><span class="step-status">○</span><span id="ps-3-text">Creating admin user…</span></li>
+            <li class="progress-step pending" id="ps-4"><span class="step-status">○</span><span id="ps-4-text">Registering OIDC client…</span></li>
+            <li class="progress-step pending" id="ps-5"><span class="step-status">○</span><span id="ps-5-text">Verifying connectivity…</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Step 4: Success -->
+      <div id="wiz-step4" style="display:none">
+        <div class="wizard-success">
+          <div class="check-icon">✓</div>
+          <h3 style="font-size:20px;font-weight:700;margin-bottom:8px" id="successTitle">Platform Ready!</h3>
+          <p style="color:var(--text-secondary);margin-bottom:12px" id="successSubtitle">Parthenon has been successfully configured.</p>
+          
+          <div id="summaryGrid" style="text-align:left;max-width:400px;margin:0 auto 24px"></div>
+
+          <div style="display:flex;gap:12px;justify-content:center">
+            <button class="btn btn-secondary" onclick="nav(null,'dashboard')">Dashboard</button>
+            <button class="btn btn-primary" onclick="nav(null,'dashboard')">Go to Login →</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: PERMISSIONS ═══════════════════════════════ -->
+<div id="view-permissions" class="view">
+  <div class="view-header">
+    <div><h2>Permissions & Access</h2><div class="view-desc">Manage Roles, Groups, Users, and Tags</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'perm-tags-panel')">🏷️ Tags</div>
+    <div class="tab" onclick="switchTab(this,'perm-roles-panel')">🎭 Roles</div>
+    <div class="tab" onclick="switchTab(this,'perm-groups-panel')">👥 Groups</div>
+    <div class="tab" onclick="switchTab(this,'perm-users-panel')">👤 Users</div>
+    <div class="tab" onclick="switchTab(this,'perm-access-req-panel')">🔑 Access Requests</div>
+  </div>
+
+  <div id="perm-tags-panel" class="tab-panel active">
+    <!-- Tag Matrix / Content placeholder -->
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tag</th><th>Description</th><th>Assigned Resources</th></tr></thead>
+        <tbody>
+          <tr><td><strong>environment:production</strong></td><td>Production resources</td><td>14</td></tr>
+          <tr><td><strong>environment:staging</strong></td><td>Staging resources</td><td>8</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-roles-panel" class="tab-panel">
+    <div style="margin-bottom: 16px;">
+      <button class="btn btn-primary" onclick="openModal('modal-role')">+ Create Role</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Name</th><th>Type</th><th>Description</th><th>Permissions</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>admin-user</strong></td>
+            <td><span class="chip chip-purple">both</span></td>
+            <td>Platform administrators with full access</td>
+            <td><span class="chip chip-blue">24 permissions</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm" title="Edit">✏️</button><button class="btn-icon-sm" title="Delete">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>analyst</strong></td>
+            <td><span class="chip chip-blue">user</span></td>
+            <td>Read-only analytics and reporting access</td>
+            <td><span class="chip chip-blue">8 permissions</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-groups-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Group Name</th><th>Members</th><th>Roles</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Admin Group</strong></td><td>3 Users</td><td>admin-user</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-users-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>User</th><th>Email</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Alex Harper</strong></td><td>alex@example.com</td><td><span class="chip chip-green">Active</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="perm-access-req-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>User</th><th>Resource</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Sam Smith</strong></td><td>Role: analyst</td><td><span class="chip chip-yellow">Pending</span></td>
+          <td><button class="btn-icon-sm" title="Approve">✅</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: MCP HUB ═══════════════════════════════ -->
+<div id="view-mcp-hub" class="view">
+  <div class="view-header">
+    <div><h2>MCP Hub</h2><div class="view-desc">Integrated view of Model Context Protocol servers and tools</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-mcp-server')">+ Register Server</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'mcp-servers-panel')">🔌 Servers</div>
+    <div class="tab" onclick="switchTab(this,'mcp-tools-panel')">🛠️ Tool Repository</div>
+  </div>
+
+  <div id="mcp-servers-panel" class="tab-panel active">
+    <!-- Server List -->
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Slug</th><th>Name</th><th>URL</th><th>Auth Type</th><th>Status</th><th>Last Sync</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="font-mono text-sm">filesystem</span></td>
+            <td><strong>File System Tools</strong></td>
+            <td><span class="font-mono text-sm text-secondary">http://mcp-fs:8000</span></td>
+            <td><span class="chip chip-gray">API Key</span></td>
+            <td><span class="chip chip-green">● Active</span></td>
+            <td class="text-secondary">2 min ago</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" title="Sync">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="openSessions('filesystem')" title="Sessions">Sessions</button>
+              <button class="btn-icon-sm">🗑️</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">github</span></td>
+            <td><strong>GitHub Integration</strong></td>
+            <td><span class="font-mono text-sm text-secondary">http://mcp-github:8001</span></td>
+            <td><span class="chip chip-blue">OAuth2</span></td>
+            <td><span class="chip chip-green">● Active</span></td>
+            <td class="text-secondary">5 min ago</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="openSessions('github')">Sessions</button>
+              <button class="btn-icon-sm">🗑️</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">slack-tools</span></td>
+            <td><strong>Slack Notifications</strong></td>
+            <td><span class="font-mono text-sm text-secondary">http://mcp-slack:8002</span></td>
+            <td><span class="chip chip-gray">Bearer Token</span></td>
+            <td><span class="chip chip-yellow">⚠ Warning</span></td>
+            <td class="text-secondary">1 hour ago</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="openSessions('slack-tools')">Sessions</button>
+              <button class="btn-icon-sm">🗑️</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="mcp-tools-panel" class="tab-panel">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div class="search-input" style="max-width:320px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input placeholder="Search tools..." oninput="filterTools(this.value)">
+      </div>
+      <select class="form-control" style="width:200px" onchange="filterToolsByServer(this.value)">
+        <option value="">All Servers</option>
+        <option>filesystem</option><option>github</option><option>slack-tools</option>
+      </select>
+    </div>
+
+    <div id="tool-groups">
+      <!-- filesystem group -->
+      <div class="tool-group">
+        <div class="tool-group-header">
+          <h4>filesystem</h4>
+          <span class="count-badge">6 tools</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool Name</th><th>Description</th><th>Server</th><th>Assigned Skills</th><th style="width:100px">Enabled</th></tr></thead>
+            <tbody>
+              <tr><td><strong class="font-mono">read_file</strong></td><td>Read file contents from path</td><td><span class="chip chip-blue">filesystem</span></td><td>2</td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
+              <tr><td><strong class="font-mono">write_file</strong></td><td>Write data to a file</td><td><span class="chip chip-blue">filesystem</span></td><td>1</td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
+              <tr><td><strong class="font-mono">copy_file</strong></td><td>Copy file to destination</td><td><span class="chip chip-blue">filesystem</span></td><td>1</td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SKILLS ═══════════════════════════════ -->
+<div id="view-skills" class="view">
+  <div id="skills-list-panel">
+    <div class="view-header">
+      <div><h2>Skills</h2><div class="view-desc">Reusable MCP tool compositions assigned to roles</div></div>
+      <button class="btn btn-primary" onclick="showSkillEditor(null)">+ Create Skill</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Description</th><th>MCP Tools</th><th>Assigned Roles</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>read-analyze-file</strong></td>
+            <td>Read and analyze file content with structured output</td>
+            <td><span class="chip chip-blue">2 tools</span></td>
+            <td><span class="chip chip-gray">analyst</span> <span class="chip chip-gray">agent-sop</span></td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm" onclick="showSkillEditor('read-analyze-file')">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>github-pr-workflow</strong></td>
+            <td>Create and manage pull requests with review automation</td>
+            <td><span class="chip chip-blue">3 tools</span></td>
+            <td><span class="chip chip-gray">agent-skillful</span></td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm" onclick="showSkillEditor('github-pr-workflow')">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>slack-notify</strong></td>
+            <td>Send formatted Slack notifications and alerts</td>
+            <td><span class="chip chip-blue">1 tool</span></td>
+            <td><span class="chip chip-gray">admin-user</span> <span class="chip chip-gray">agent-sop</span></td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>db-report</strong></td>
+            <td>Query database and format results as structured reports</td>
+            <td><span class="chip chip-blue">2 tools</span></td>
+            <td><span class="chip chip-gray">analyst</span></td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>file-organizer</strong></td>
+            <td>Organize files by pattern, extension, or date</td>
+            <td><span class="chip chip-blue">3 tools</span></td>
+            <td><span class="chip chip-gray">agent-skillful</span></td>
+            <td><span class="chip chip-yellow">Draft</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Skill Editor Panel -->
+  <div id="skill-editor-panel" style="display:none">
+    <div class="view-header">
+      <div><h2 id="skill-editor-title">Create Skill</h2></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="hideSkillEditor()">← Cancel</button>
+        <button class="btn btn-primary">💾 Save Skill</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
+      <div>
+        <div class="card mb-4">
+          <div class="card-header"><h3>Basic Info</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Skill Name</label>
+              <input class="form-control" id="skill-name-input" placeholder="e.g. read-analyze-file">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea class="form-control" rows="3" placeholder="Describe what this skill does..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><h3>MCP Tools</h3><span class="text-secondary text-sm">Select tools to include</span></div>
+          <div class="card-body">
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px;transition:background 0.2s">
+                <input type="checkbox" checked style="margin-top:2px;accent-color:var(--primary)">
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:13px">filesystem.read_file</div>
+                  <div style="font-size:12px;color:var(--text-secondary)">Read file contents from path</div>
+                  <div style="margin-top:8px;padding:8px;background:#F8FAFC;border-radius:4px;font-size:12px">
+                    <div style="font-weight:600;margin-bottom:4px;color:var(--text-secondary)">Argument Mapping</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center">
+                      <span style="font-family:monospace">path</span>
+                      <input class="form-control" style="font-size:12px;padding:4px 8px" placeholder="{{input.file_path}}">
+                      <span style="font-family:monospace">encoding</span>
+                      <input class="form-control" style="font-size:12px;padding:4px 8px" placeholder="utf-8">
+                    </div>
+                  </div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px">
+                <input type="checkbox" checked style="margin-top:2px;accent-color:var(--primary)">
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:13px">filesystem.list_directory</div>
+                  <div style="font-size:12px;color:var(--text-secondary)">List directory contents</div>
+                  <div style="margin-top:8px;padding:8px;background:#F8FAFC;border-radius:4px;font-size:12px">
+                    <div style="font-weight:600;margin-bottom:4px;color:var(--text-secondary)">Argument Mapping</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center">
+                      <span style="font-family:monospace">directory</span>
+                      <input class="form-control" style="font-size:12px;padding:4px 8px" placeholder="{{input.directory}}">
+                    </div>
+                  </div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px">
+                <input type="checkbox" style="margin-top:2px;accent-color:var(--primary)">
+                <div style="flex:1">
+                  <div style="font-weight:600;font-size:13px">github.create_issue</div>
+                  <div style="font-size:12px;color:var(--text-secondary)">Create a new GitHub issue</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-header"><h3>Assign to Roles</h3></div>
+          <div class="card-body">
+            <div class="checkbox-group">
+              <label class="checkbox-item"><input type="checkbox"> admin-user</label>
+              <label class="checkbox-item"><input type="checkbox" checked> analyst</label>
+              <label class="checkbox-item"><input type="checkbox" checked> agent-sop</label>
+              <label class="checkbox-item"><input type="checkbox"> agent-skillful</label>
+              <label class="checkbox-item"><input type="checkbox"> auditor</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SOPs ═══════════════════════════════ -->
+<div id="view-sops" class="view">
+  <div id="sops-list-panel">
+    <div class="view-header">
+      <div><h2>Standard Operating Procedures</h2><div class="view-desc">Multi-step agent workflows</div></div>
+      <button class="btn btn-primary" onclick="showSopEditor(null)">+ Create SOP</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Description</th><th>Steps</th><th>Last Modified</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>pr-review-workflow</strong></td>
+            <td>Full PR review with analysis and Slack notification</td>
+            <td><span class="chip chip-blue">4 steps</span></td>
+            <td class="text-secondary">2 days ago</td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm" onclick="showSopEditor('pr-review-workflow')">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>daily-report-gen</strong></td>
+            <td>Generate and distribute daily performance reports</td>
+            <td><span class="chip chip-blue">3 steps</span></td>
+            <td class="text-secondary">1 week ago</td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>incident-response</strong></td>
+            <td>Detect, analyze, and escalate infrastructure incidents</td>
+            <td><span class="chip chip-blue">5 steps</span></td>
+            <td class="text-secondary">3 days ago</td>
+            <td><span class="chip chip-yellow">Draft</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>data-pipeline-audit</strong></td>
+            <td>Audit data pipeline integrity and save results</td>
+            <td><span class="chip chip-blue">3 steps</span></td>
+            <td class="text-secondary">5 days ago</td>
+            <td><span class="chip chip-green">Active</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SOP Editor Panel -->
+  <div id="sop-editor-panel" style="display:none">
+    <div class="view-header">
+      <div><h2 id="sop-editor-title">Create SOP</h2></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="hideSopEditor()">← Cancel</button>
+        <button class="btn btn-primary">💾 Save SOP</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
+      <div>
+        <div class="card mb-4">
+          <div class="card-header"><h3>Basic Info</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>SOP Name</label>
+              <input class="form-control" id="sop-name-input" placeholder="e.g. pr-review-workflow">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea class="form-control" rows="2" placeholder="Describe what this SOP does..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Steps</h3><span class="text-secondary text-sm">Define the execution flow</span></div>
+          <div class="card-body" id="sop-steps-container">
+            <!-- Step 1 -->
+            <div class="step-card">
+              <div class="step-card-header">
+                <div class="step-card-num">1</div>
+                <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
+                  <option selected>Skill</option><option>Sub-Agent Delegation</option>
+                </select>
+                <div style="flex:1"></div>
+                <button class="btn-icon-sm">🗑️</button>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:12px">Skill</label>
+                <select class="form-control" style="font-size:13px">
+                  <option selected>read-analyze-file</option>
+                  <option>github-pr-workflow</option><option>slack-notify</option><option>db-report</option>
+                </select>
+              </div>
+            </div>
+            <div class="step-arrow">↓</div>
+            <!-- Step 2 -->
+            <div class="step-card">
+              <div class="step-card-header">
+                <div class="step-card-num">2</div>
+                <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
+                  <option selected>Skill</option><option>Sub-Agent Delegation</option>
+                </select>
+                <div style="flex:1"></div>
+                <button class="btn-icon-sm">🗑️</button>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:12px">Skill</label>
+                <select class="form-control" style="font-size:13px">
+                  <option>read-analyze-file</option>
+                  <option selected>github-pr-workflow</option><option>slack-notify</option><option>db-report</option>
+                </select>
+              </div>
+            </div>
+            <div class="step-arrow">↓</div>
+            <!-- Step 3 -->
+            <div class="step-card">
+              <div class="step-card-header">
+                <div class="step-card-num">3</div>
+                <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
+                  <option>Skill</option><option selected>Sub-Agent Delegation</option>
+                </select>
+                <div style="flex:1"></div>
+                <button class="btn-icon-sm">🗑️</button>
+              </div>
+              <div class="form-row" style="margin-bottom:8px">
+                <div>
+                  <label style="font-size:12px">Agent Type</label>
+                  <select class="form-control" style="font-size:13px">
+                    <option selected>agent-sop</option><option>agent-skillful</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:12px">Instruction</label>
+                <textarea class="form-control" rows="2" style="font-size:13px">Analyze the PR changes and post Slack summary</textarea>
+              </div>
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn btn-secondary" onclick="addSopStep()">+ Add Step</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-header"><h3>SOP Details</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Status</label>
+              <select class="form-control" style="font-size:13px"><option>Draft</option><option>Active</option></select>
+            </div>
+            <div class="form-group">
+              <label>Assigned Agent Type</label>
+              <select class="form-control" style="font-size:13px">
+                <option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENTS ═══════════════════════════════ -->
+<div id="view-agents" class="view">
+  <div class="view-header">
+    <div><h2>Agents</h2><div class="view-desc">Define agent blueprints and monitor active instances</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-agent-type')">+ Create Agent Type</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'agent-types-panel')">📋 Agent Types</div>
+    <div class="tab" onclick="switchTab(this,'agent-instances-panel')">🏃 Active Instances</div>
+  </div>
+
+  <div id="agent-types-panel" class="tab-panel active">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Type</th><th>Identity</th><th>Model</th><th>Max</th><th>Active</th><th>Skills / SOP</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>pr-reviewer</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-pr-reviewer@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o</span></td>
+            <td>3</td><td><strong>1</strong></td>
+            <td><span class="chip chip-purple">pr-review-workflow</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>report-generator</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-reporter@parthenon</span></td>
+            <td><span class="chip chip-gray">claude-3-5-sonnet</span></td>
+            <td>2</td><td><strong>2</strong></td>
+            <td><span class="chip chip-purple">daily-report-gen</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>data-analyst</strong></td>
+            <td><span class="chip chip-green">skillful-agent</span></td>
+            <td><span class="font-mono text-sm">agent-analyst@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o-mini</span></td>
+            <td>5</td><td><strong>3</strong></td>
+            <td><span class="chip chip-blue">read-analyze-file</span> <span class="chip chip-blue">db-report</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>file-manager</strong></td>
+            <td><span class="chip chip-green">skillful-agent</span></td>
+            <td><span class="font-mono text-sm">agent-files@parthenon</span></td>
+            <td><span class="chip chip-gray">claude-3-haiku</span></td>
+            <td>4</td><td><strong style="color:var(--text-secondary)">0</strong></td>
+            <td><span class="chip chip-blue">file-organizer</span> <span class="chip chip-blue">read-analyze-file</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+          <tr>
+            <td><strong>incident-bot</strong></td>
+            <td><span class="chip chip-blue">sop-agent</span></td>
+            <td><span class="font-mono text-sm">agent-incident@parthenon</span></td>
+            <td><span class="chip chip-gray">gpt-4o</span></td>
+            <td>2</td><td><strong>1</strong></td>
+            <td><span class="chip chip-purple">incident-response</span></td>
+            <td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="agent-instances-panel" class="tab-panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Instance ID</th><th>Agent Type</th><th>Status</th><th>Uptime</th><th>Sessions</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="font-mono text-sm">inst-1a2b3c</span></td>
+            <td>pr-reviewer</td>
+            <td><span class="chip chip-green">Running</span></td>
+            <td>2h 15m</td>
+            <td>4</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" onclick="nav(null, 'chat')" title="Chat">💬 Chat</button>
+              <button class="btn-icon-sm" title="Stop">🛑</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">inst-4d5e6f</span></td>
+            <td>data-analyst</td>
+            <td><span class="chip chip-green">Running</span></td>
+            <td>5h 10m</td>
+            <td>12</td>
+            <td class="actions-cell">
+              <button class="btn btn-xs btn-secondary" onclick="nav(null, 'chat')" title="Chat">💬 Chat</button>
+              <button class="btn-icon-sm" title="Stop">🛑</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: GATEWAY ═══════════════════════════════ -->
+<div id="view-gateway" class="view">
+  <div class="view-header">
+    <div><h2>Gateway</h2><div class="view-desc">Endpoint registry and lifecycle protocol reference</div></div>
+  </div>
+  <div class="gateway-shell">
+    <div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Agent Type</th><th>Protocol</th><th>Endpoint URL</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>pr-reviewer</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/pr-reviewer</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>pr-reviewer</strong></td>
+              <td><span class="chip chip-purple">MCP</span></td>
+              <td><span class="font-mono text-sm">mcp://gw.parthenon.local/agents/pr-reviewer</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>report-generator</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/report-generator</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>data-analyst</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/data-analyst</span></td>
+              <td><span class="chip chip-green">● Active</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+            <tr>
+              <td><strong>incident-bot</strong></td>
+              <td><span class="chip chip-blue">HTTP</span></td>
+              <td><span class="font-mono text-sm">https://gw.parthenon.local/agents/incident-bot</span></td>
+              <td><span class="chip chip-gray">● Inactive</span></td>
+              <td class="actions-cell"><button class="btn btn-xs btn-secondary">Test</button><button class="btn-icon-sm">📋</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="protocol-card" style="position:sticky;top:0">
+        <div style="font-size:14px;font-weight:600;margin-bottom:16px;color:var(--text-primary)">📖 Lifecycle Protocol</div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/init</span></div>
+          <div class="protocol-desc">Initialize a new agent session</div>
+          <div class="protocol-code">Body: { user_id, context }
+Returns: { session_id }</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/request</span></div>
+          <div class="protocol-desc">Send a task request to the agent</div>
+          <div class="protocol-code">Body: { session_id, message }
+Returns: { request_id, status }</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">GET</span><span class="protocol-endpoint">/question</span></div>
+          <div class="protocol-desc">Poll for pending agent questions</div>
+          <div class="protocol-code">Returns: { question_id, text } | null</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/answer</span></div>
+          <div class="protocol-desc">Send answer to agent question</div>
+          <div class="protocol-code">Body: { question_id, answer }</div>
+        </div>
+        <div class="protocol-item">
+          <div><span class="protocol-method">POST</span><span class="protocol-endpoint">/close</span></div>
+          <div class="protocol-desc">Close and terminate the session</div>
+          <div class="protocol-code">Body: { session_id }</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SCHEDULES ═══════════════════════════════ -->
+<div id="view-schedules" class="view">
+  <div class="view-header">
+    <div><h2>Schedules</h2><div class="view-desc">Cron-based automation triggers for prompts and SOPs</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-schedule')">+ Create Schedule</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Cron Expression</th><th>Next Run</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>daily-standup-report</strong></td>
+          <td><span class="chip chip-green">sop</span></td>
+          <td><span class="font-mono text-sm">0 8 * * 1-5</span></td>
+          <td class="text-secondary">Tomorrow 08:00</td>
+          <td><span class="chip chip-green">● Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm" title="Edit">✏️</button>
+            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>weekly-audit</strong></td>
+          <td><span class="chip chip-green">sop</span></td>
+          <td><span class="font-mono text-sm">0 9 * * 1</span></td>
+          <td class="text-secondary">Mon 09:00</td>
+          <td><span class="chip chip-green">● Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm">✏️</button>
+            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>hourly-health-check</strong></td>
+          <td><span class="chip chip-blue">prompt</span></td>
+          <td><span class="font-mono text-sm">0 * * * *</span></td>
+          <td class="text-secondary">In 47 min</td>
+          <td><span class="chip chip-green">● Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm">✏️</button>
+            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>monthly-summary</strong></td>
+          <td><span class="chip chip-green">sop</span></td>
+          <td><span class="font-mono text-sm">0 10 1 * *</span></td>
+          <td class="text-secondary">1st of month</td>
+          <td><span class="chip chip-yellow">⏸ Paused</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm">✏️</button>
+            <button class="btn btn-xs btn-success">▶ Resume</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>incident-scan</strong></td>
+          <td><span class="chip chip-blue">prompt</span></td>
+          <td><span class="font-mono text-sm">*/15 * * * *</span></td>
+          <td class="text-secondary">In 12 min</td>
+          <td><span class="chip chip-green">● Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm">✏️</button>
+            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: NOTIFICATIONS ═══════════════════════════════ -->
+<div id="view-notifications" class="view">
+  <div class="view-header">
+    <div><h2>Notification Channels</h2><div class="view-desc">Configure delivery channels for agent alerts and reports</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-notif')">+ Add Channel</button>
+  </div>
+  <div class="notif-grid">
+    <div class="notif-card">
+      <div class="notif-card-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">📧</span>
+          <span class="notif-card-title">Email</span>
+        </div>
+        <span class="chip chip-green">● Active</span>
+      </div>
+      <div class="notif-card-meta">
+        <div>Endpoint: <span>smtp.company.com:587</span></div>
+        <div>MCP Tool: <span>send_email</span></div>
+        <div>Auth: <span>SMTP Credentials</span></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary">🔌 Test</button>
+        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+      </div>
+    </div>
+    <div class="notif-card">
+      <div class="notif-card-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">💬</span>
+          <span class="notif-card-title">Slack</span>
+        </div>
+        <span class="chip chip-green">● Active</span>
+      </div>
+      <div class="notif-card-meta">
+        <div>Endpoint: <span>hooks.slack.com/services/...</span></div>
+        <div>MCP Tool: <span>slack_notify</span></div>
+        <div>Auth: <span>Webhook URL</span></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary">🔌 Test</button>
+        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+      </div>
+    </div>
+    <div class="notif-card" style="border-color:var(--warning)">
+      <div class="notif-card-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">🔷</span>
+          <span class="notif-card-title">Microsoft Teams</span>
+        </div>
+        <span class="chip chip-yellow">⚠ Warning</span>
+      </div>
+      <div class="notif-card-meta">
+        <div>Endpoint: <span>outlook.office.com/webhooks/...</span></div>
+        <div>MCP Tool: <span>teams_notify</span></div>
+        <div style="color:var(--error)">Last test failed — 401 Unauthorized</div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary">🔌 Test</button>
+        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+      </div>
+    </div>
+    <div class="notif-card">
+      <div class="notif-card-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">🌐</span>
+          <span class="notif-card-title">Webhook</span>
+        </div>
+        <span class="chip chip-green">● Active</span>
+      </div>
+      <div class="notif-card-meta">
+        <div>Endpoint: <span>https://api.company.com/events</span></div>
+        <div>MCP Tool: <span>webhook_post</span></div>
+        <div>Auth: <span>Bearer Token</span></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary">🔌 Test</button>
+        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+      </div>
+    </div>
+    <div class="notif-card">
+      <div class="notif-card-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">🚨</span>
+          <span class="notif-card-title">PagerDuty</span>
+        </div>
+        <span class="chip chip-gray">● Inactive</span>
+      </div>
+      <div class="notif-card-meta">
+        <div>Endpoint: <span>events.pagerduty.com</span></div>
+        <div>MCP Tool: <span>pagerduty_alert</span></div>
+        <div>Auth: <span>Integration Key</span></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary">🔌 Test</button>
+        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: OBSERVABILITY ═══════════════════════════════ -->
+<div id="view-observability" class="view">
+  <div class="view-header">
+    <div><h2>Observability</h2><div class="view-desc">Real-time metrics, distributed traces, and log streams</div></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'obs-metrics')">📊 Metrics</div>
+    <div class="tab" onclick="switchTab(this,'obs-traces')">🔍 Traces</div>
+    <div class="tab" onclick="switchTab(this,'obs-logs')">📜 Logs</div>
+  </div>
+
+  <!-- METRICS TAB -->
+  <div id="obs-metrics" class="tab-panel active">
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Active Agent Instances</div>
+        <div class="metric-value">7</div>
+        <div class="metric-delta delta-up">↑ from 4 &nbsp;<span style="color:var(--text-secondary);font-weight:400">(+75%)</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Requests / min</div>
+        <div class="metric-value">23.4</div>
+        <div class="metric-delta delta-up">↑ 12% vs last hour</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Error Rate</div>
+        <div class="metric-value" style="color:var(--success)">0.8%</div>
+        <div class="metric-delta delta-down">↓ Healthy</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Latency</div>
+        <div class="metric-value" style="color:var(--warning)">1.24s</div>
+        <div class="metric-delta" style="color:var(--warning)">↑ +0.18s vs baseline</div>
+      </div>
+    </div>
+
+    <div class="card mb-4" style="margin-bottom:20px">
+      <div class="card-header"><h3>Request Volume — Last 30 minutes</h3></div>
+      <div class="card-body" style="padding:0">
+        <div class="chart-placeholder" style="height:200px;border:none;border-radius:0">
+          <div style="text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">📈</div>
+            <div>Request Volume — Last 30 minutes</div>
+            <div style="font-size:12px;margin-top:4px;color:var(--text-secondary)">Peak: 34.2 req/min at 14:15 · Avg: 21.8 req/min</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><h3>Top Agent Types by Request</h3></div>
+        <div class="card-body" style="padding:0">
+          <div class="chart-placeholder" style="height:180px;border:none;border-radius:0">
+            <div style="width:80%;padding:0 16px">
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>data-analyst</span><span>42%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:42%;height:100%;background:var(--primary);border-radius:5px"></div></div>
+              </div>
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>pr-reviewer</span><span>28%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:28%;height:100%;background:#3B82F6;border-radius:5px"></div></div>
+              </div>
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>report-generator</span><span>18%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:18%;height:100%;background:#8B5CF6;border-radius:5px"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>incident-bot</span><span>12%</span></div>
+                <div style="height:10px;background:#E2E8F0;border-radius:5px;overflow:hidden"><div style="width:12%;height:100%;background:#F59E0B;border-radius:5px"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Tool Call Success Rate</h3></div>
+        <div class="card-body" style="padding:0">
+          <div class="chart-placeholder" style="height:180px;border:none;border-radius:0">
+            <div style="text-align:center">
+              <div style="font-size:36px;font-weight:700;color:var(--success)">97.3%</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Tool Calls Succeeded</div>
+              <div style="display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:12px">
+                <span><span class="status-dot dot-green"></span> Success: 1,847</span>
+                <span><span class="status-dot dot-red"></span> Failed: 51</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRACES TAB -->
+  <div id="obs-traces" class="tab-panel">
+    <div class="filter-bar">
+      <input placeholder="🔍 Trace ID..." style="width:200px">
+      <select style="width:180px"><option>All Agent Types</option><option>pr-reviewer</option><option>data-analyst</option><option>report-generator</option></select>
+      <select style="width:160px"><option>Last 30 min</option><option>Last hour</option><option>Last 24h</option></select>
+      <select style="width:140px"><option>All Status</option><option>Success</option><option>Error</option></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Trace ID</th><th>Agent</th><th>Duration</th><th>Spans</th><th>Status</th><th>Timestamp</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="font-mono text-sm">a3f2c1b9e4d7...</span></td>
+            <td>pr-reviewer</td>
+            <td>2.34s</td>
+            <td>8 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">2 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">b7e9d4a2c5f1...</span></td>
+            <td>data-analyst</td>
+            <td>0.89s</td>
+            <td>3 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">5 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">c1d5f7e3a8b2...</span></td>
+            <td>report-generator</td>
+            <td>5.12s</td>
+            <td>14 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">8 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">d9a2b3c6e1f4...</span></td>
+            <td>incident-bot</td>
+            <td>1.45s</td>
+            <td>6 spans</td>
+            <td><span class="chip chip-red">Error</span></td>
+            <td class="text-secondary">12 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+          <tr>
+            <td><span class="font-mono text-sm">e4f8c2d7b9a3...</span></td>
+            <td>data-analyst</td>
+            <td>0.76s</td>
+            <td>3 spans</td>
+            <td><span class="chip chip-green">Success</span></td>
+            <td class="text-secondary">15 min ago</td>
+            <td><button class="btn btn-xs btn-secondary">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- LOGS TAB -->
+  <div id="obs-logs" class="tab-panel">
+    <div class="filter-bar">
+      <select style="width:130px"><option>ALL Levels</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
+      <select style="width:180px"><option>All Components</option><option>gateway</option><option>agent-executor</option><option>mcp-client</option><option>scheduler</option></select>
+      <input placeholder="🔍 Search logs..." style="flex:1;max-width:300px">
+    </div>
+    <div class="log-stream">
+<div class="log-line log-info"><span>[2025-04-23 14:36:12.341]</span> <span class="lvl">[INFO ]</span>  [gateway         ] Agent pr-reviewer initialized session sess-a3f2c1b9 for user:alex.harper</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:12.358]</span> <span class="lvl">[INFO ]</span>  [agent-executor   ] Executing SOP pr-review-workflow step 1/4: read-analyze-file</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:12.421]</span> <span class="lvl">[INFO ]</span>  [mcp-client       ] Calling tool filesystem.read_file with args {path: "/repo/src/auth.py"}</div>
+<div class="log-line log-warn"><span>[2025-04-23 14:36:13.105]</span> <span class="lvl">[WARN ]</span>  [mcp-client       ] Tool response latency exceeded 500ms threshold (812ms) for filesystem.read_file</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:13.110]</span> <span class="lvl">[INFO ]</span>  [agent-executor   ] Step 1 complete. Advancing to step 2: github-pr-workflow</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:13.145]</span> <span class="lvl">[INFO ]</span>  [mcp-client       ] Calling tool github.list_issues with args {repo: "company/auth-service"}</div>
+<div class="log-line log-error"><span>[2025-04-23 14:36:14.892]</span> <span class="lvl">[ERROR]</span>  [scheduler        ] Schedule incident-scan failed: agent incident-bot has no active instances (max=2, active=0)</div>
+<div class="log-line log-info"><span>[2025-04-23 14:36:15.002]</span> <span class="lvl">[INFO ]</span>  [agent-executor   ] SOP pr-review-workflow completed in 2.34s with 8 tool calls. Session closed.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: CHAT ═══════════════════════════════ -->
+<div id="view-chat" class="view">
+  <div class="chat-shell">
+    <!-- Left panel -->
+    <div class="chat-left">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="btn btn-primary w-full" style="justify-content:center">+ New Chat</button>
+      </div>
+      <div style="padding:10px 16px 4px;flex-shrink:0">
+        <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Agent</label>
+        <select class="form-control" style="margin-top:4px;font-size:13px">
+          <option selected>data-analyst</option>
+          <option>pr-reviewer</option>
+          <option>report-generator</option>
+          <option>incident-bot</option>
+        </select>
+      </div>
+      <div style="padding:8px 16px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Recent</div>
+      <div class="conv-list">
+        <div class="conv-item active">
+          <div class="conv-item-agent">data-analyst</div>
+          <div class="conv-item-summary">Analyze Q3 sales data</div>
+          <div class="conv-item-time">2 min ago</div>
+        </div>
+        <div class="conv-item">
+          <div class="conv-item-agent">pr-reviewer</div>
+          <div class="conv-item-summary">Review PR #142</div>
+          <div class="conv-item-time">1 hour ago</div>
+        </div>
+        <div class="conv-item">
+          <div class="conv-item-agent">report-generator</div>
+          <div class="conv-item-summary">Weekly summary request</div>
+          <div class="conv-item-time">Yesterday</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right chat window -->
+    <div class="chat-right">
+      <div class="chat-header">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">DA</div>
+        <div class="chat-header-info">
+          <h4>data-analyst</h4>
+          <small>gpt-4o-mini · <span class="status-dot dot-green" style="vertical-align:middle"></span> Connected</small>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">📜 History</button>
+          <button class="btn btn-sm btn-secondary">⚙️</button>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <!-- User message -->
+        <div class="msg msg-user">
+          <div class="msg-bubble">Can you analyze the Q3 sales figures from the database and summarize key trends?</div>
+        </div>
+        <!-- Agent message -->
+        <div class="msg msg-agent">
+          <div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>
+          <div class="msg-bubble">I'll start by querying the Q3 sales data. One moment...</div>
+        </div>
+        <!-- Tool call -->
+        <div class="msg-tool">🔧 Calling <strong>db-query.execute_query</strong> with args: <span style="color:#0F172A">{ query: "SELECT region, SUM(revenue)..." }</span></div>
+        <!-- Agent with markdown-like content -->
+        <div class="msg msg-agent">
+          <div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>
+          <div class="msg-bubble" style="max-width:420px">
+            Here's what I found in the Q3 data:<br><br>
+            <strong>Revenue:</strong> $4.2M (↑ 8% vs Q2)<br>
+            <strong>Top Region:</strong> APAC ($1.8M)<br>
+            <strong>Notable:</strong> Enterprise segment grew 23%<br><br>
+            Would you like me to save this as a result or create a visual report?
+          </div>
+        </div>
+        <!-- Agent question card -->
+        <div style="max-width:460px;margin-left:4px">
+          <div class="msg-question">
+            <div class="msg-question-title">🤖 Agent needs your input</div>
+            <div class="msg-question-text">Should I also include a Year-over-Year comparison in the analysis?</div>
+            <div class="msg-question-actions">
+              <button class="btn btn-sm btn-primary" onclick="answerQuestion('Yes, include YoY comparison')">Yes</button>
+              <button class="btn btn-sm btn-secondary" onclick="answerQuestion('No, skip YoY comparison')">No</button>
+              <input id="custom-answer" class="form-control" style="width:200px;padding:6px 10px" placeholder="Custom answer...">
+              <button class="btn btn-sm btn-secondary" onclick="answerQuestion(document.getElementById('custom-answer').value)">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <input class="chat-input" id="chat-input" placeholder="Message data-analyst..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+        <button class="btn btn-primary" onclick="sendChatMsg()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: CONVERSATIONS ═══════════════════════════════ -->
+<div id="view-conversations" class="view">
+  <div class="view-header">
+    <div><h2>Conversations</h2><div class="view-desc">All agent conversation records</div></div>
+  </div>
+  <div class="filter-bar" style="margin-bottom:16px">
+    <input type="date" class="form-control" style="width:160px">
+    <select class="form-control" style="width:180px">
+      <option>All Agents</option>
+      <option>data-analyst</option><option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
+    </select>
+    <select class="form-control" style="width:160px">
+      <option>All Status</option><option>Active</option><option>Completed</option>
+    </select>
+    <div class="search-input" style="max-width:280px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input placeholder="Search conversations...">
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Date</th><th>Agent</th><th>Summary</th><th>Turns</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="font-mono text-sm">CONV-0042</span></td>
+          <td class="text-secondary">Today 14:32</td>
+          <td>data-analyst</td>
+          <td>Analyze Q3 sales data</td>
+          <td>6</td>
+          <td><span class="chip chip-green">● Active</span></td>
+          <td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td>
+        </tr>
+        <tr>
+          <td><span class="font-mono text-sm">CONV-0041</span></td>
+          <td class="text-secondary">Today 11:15</td>
+          <td>pr-reviewer</td>
+          <td>Review PR #142 — auth token refactor</td>
+          <td>4</td>
+          <td><span class="chip chip-blue">Completed</span></td>
+          <td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td>
+        </tr>
+        <tr>
+          <td><span class="font-mono text-sm">CONV-0040</span></td>
+          <td class="text-secondary">Yesterday</td>
+          <td>report-generator</td>
+          <td>Weekly performance summary</td>
+          <td>3</td>
+          <td><span class="chip chip-blue">Completed</span></td>
+          <td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td>
+        </tr>
+        <tr>
+          <td><span class="font-mono text-sm">CONV-0039</span></td>
+          <td class="text-secondary">2 days ago</td>
+          <td>incident-bot</td>
+          <td>Investigate API timeout spike</td>
+          <td>8</td>
+          <td><span class="chip chip-blue">Completed</span></td>
+          <td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td>
+        </tr>
+        <tr>
+          <td><span class="font-mono text-sm">CONV-0038</span></td>
+          <td class="text-secondary">3 days ago</td>
+          <td>data-analyst</td>
+          <td>Q2 data reconciliation analysis</td>
+          <td>5</td>
+          <td><span class="chip chip-blue">Completed</span></td>
+          <td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: RESULTS ═══════════════════════════════ -->
+<div id="view-results" class="view">
+  <div class="view-header">
+    <div><h2>Results</h2><div class="view-desc">Saved agent outputs and analysis reports</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <div class="search-input" style="max-width:320px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input placeholder="Search results...">
+    </div>
+    <select class="form-control" style="width:200px">
+      <option>All Agents</option>
+      <option>data-analyst</option><option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Title</th><th>Source Agent</th><th>SOP / Skill</th><th>Saved At</th><th>Size</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Q3 Sales Analysis</strong></td>
+          <td>data-analyst</td>
+          <td><span class="chip chip-gray">db-report</span></td>
+          <td class="text-secondary">Today 14:35</td>
+          <td>4.2 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>PR #142 Review Report</strong></td>
+          <td>pr-reviewer</td>
+          <td><span class="chip chip-gray">pr-review-workflow</span></td>
+          <td class="text-secondary">Today 11:20</td>
+          <td>2.1 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Weekly Performance Summary</strong></td>
+          <td>report-generator</td>
+          <td><span class="chip chip-gray">daily-report-gen</span></td>
+          <td class="text-secondary">Yesterday</td>
+          <td>8.7 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">��️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>API Timeout Incident Report</strong></td>
+          <td>incident-bot</td>
+          <td><span class="chip chip-gray">incident-response</span></td>
+          <td class="text-secondary">2 days ago</td>
+          <td>3.4 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Q2 Data Reconciliation</strong></td>
+          <td>data-analyst</td>
+          <td><span class="chip chip-gray">db-report</span></td>
+          <td class="text-secondary">3 days ago</td>
+          <td>5.1 KB</td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-secondary" onclick="openResultDetail()">👁 View</button>
+            <button class="btn btn-xs btn-secondary">⬇ Download</button>
+            <button class="btn-icon-sm">🗑️</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+
+<!-- Create Role Modal -->
+<div id="modal-role" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-role')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Create Role</h3>
+      <button class="modal-close" onclick="closeModal('modal-role')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role Name</label>
+          <input class="form-control" placeholder="e.g. agent-reviewer">
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select class="form-control"><option>user</option><option>agent</option><option>both</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea class="form-control" rows="2" placeholder="Describe the purpose of this role..."></textarea>
+      </div>
+      <div class="section-title">Permissions</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Platform Admin</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> manage_users</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_roles</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_mcp</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_agents</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">MCP Tools</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_tools</label>
+            <label class="checkbox-item"><input type="checkbox"> enable_tools</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Skills</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_skills</label>
+            <label class="checkbox-item"><input type="checkbox"> execute_skills</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_skills</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">SOPs</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_sops</label>
+            <label class="checkbox-item"><input type="checkbox"> execute_sops</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_sops</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Conversations</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_conversations</label>
+            <label class="checkbox-item"><input type="checkbox"> create_conversations</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Results</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_results</label>
+            <label class="checkbox-item"><input type="checkbox"> create_results</label>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px">Schedules</div>
+          <div class="checkbox-group">
+            <label class="checkbox-item"><input type="checkbox"> view_schedules</label>
+            <label class="checkbox-item"><input type="checkbox"> manage_schedules</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-role')">Cancel</button>
+      <button class="btn btn-primary">Save Role</button>
+    </div>
+  </div>
+</div>
+
+<!-- Register MCP Server Modal -->
+<div id="modal-mcp-server" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-mcp-server')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Register MCP Server</h3>
+      <button class="modal-close" onclick="closeModal('modal-mcp-server')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Slug</label>
+          <input class="form-control" placeholder="e.g. my-tools">
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="My Tool Server">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Server URL</label>
+        <input class="form-control" type="url" placeholder="http://mcp-server:8000">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Auth Type</label>
+          <select class="form-control"><option>API Key</option><option>OAuth2</option><option>Bearer Token</option><option>None</option></select>
+        </div>
+        <div class="form-group">
+          <label>Auth Value</label>
+          <input class="form-control" type="password" placeholder="••••••••">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mcp-server')">Cancel</button>
+      <button class="btn btn-primary">Register Server</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Agent Type Modal -->
+<div id="modal-agent-type" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-agent-type')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create Agent Type</h3>
+      <button class="modal-close" onclick="closeModal('modal-agent-type')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="e.g. my-reviewer">
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select class="form-control" id="agent-type-select" onchange="toggleAgentTypeFields()">
+            <option>sop-agent</option><option>skillful-agent</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Identity (OIDC Client ID)</label>
+        <input class="form-control" placeholder="agent-myname@parthenon">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Model</label>
+          <select class="form-control">
+            <option>gpt-4o</option><option>gpt-4o-mini</option>
+            <option>claude-3-5-sonnet</option><option>claude-3-haiku</option><option>gemini-1.5-pro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Max Instances</label>
+          <input class="form-control" type="number" value="3" min="1" max="20">
+        </div>
+      </div>
+      <div id="agent-sop-field">
+        <div class="form-group">
+          <label>SOP</label>
+          <select class="form-control">
+            <option>pr-review-workflow</option><option>daily-report-gen</option>
+            <option>incident-response</option><option>data-pipeline-audit</option>
+          </select>
+        </div>
+      </div>
+      <div id="agent-skills-field" style="display:none">
+        <div class="form-group">
+          <label>Skills (multi-select)</label>
+          <select class="form-control" multiple size="4">
+            <option>read-analyze-file</option><option>github-pr-workflow</option>
+            <option>slack-notify</option><option>db-report</option><option>file-organizer</option>
+          </select>
+          <div class="form-hint">Hold Ctrl/Cmd to select multiple</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-agent-type')">Cancel</button>
+      <button class="btn btn-primary">Create Agent Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Schedule Modal -->
+<div id="modal-schedule" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-schedule')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create Schedule</h3>
+      <button class="modal-close" onclick="closeModal('modal-schedule')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="e.g. daily-report">
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select class="form-control" id="sched-type-select" onchange="toggleSchedFields()">
+            <option>prompt</option><option>sop</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cron Expression</label>
+        <input class="form-control" placeholder="0 8 * * *">
+        <div class="form-hint">e.g. 0 8 * * * (daily at 8am), */15 * * * * (every 15 min)</div>
+      </div>
+      <div id="sched-prompt-field">
+        <div class="form-group">
+          <label>Prompt Text</label>
+          <textarea class="form-control" rows="3" placeholder="Enter the prompt to run on schedule..."></textarea>
+        </div>
+      </div>
+      <div id="sched-sop-field" style="display:none">
+        <div class="form-group">
+          <label>SOP</label>
+          <select class="form-control">
+            <option>pr-review-workflow</option><option>daily-report-gen</option>
+            <option>incident-response</option><option>data-pipeline-audit</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="toggle">
+          <input type="checkbox" checked>
+          <span class="toggle-slider"></span>
+          <span>Enabled</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-schedule')">Cancel</button>
+      <button class="btn btn-primary">Create Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Notification Channel Modal -->
+<div id="modal-notif" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-notif')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Notification Channel</h3>
+      <button class="modal-close" onclick="closeModal('modal-notif')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Channel Type</label>
+          <select class="form-control"><option>Email</option><option>Slack</option><option>Teams</option><option>Webhook</option><option>PagerDuty</option></select>
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input class="form-control" placeholder="e.g. primary-slack">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Endpoint URL</label>
+        <input class="form-control" type="url" placeholder="https://hooks.slack.com/services/...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Auth Type</label>
+          <select class="form-control"><option>None</option><option>Bearer Token</option><option>API Key</option><option>Basic Auth</option></select>
+        </div>
+        <div class="form-group">
+          <label>Auth Value</label>
+          <input class="form-control" type="password" placeholder="••••••••">
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-sm">🔌 Test Connection</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-notif')">Cancel</button>
+      <button class="btn btn-primary">Add Channel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ DRAWERS ═══════════════════════════════ -->
+
+<!-- Sessions Drawer -->
+<div id="drawer-overlay" class="drawer-overlay" onclick="closeSessions()"></div>
+<div id="drawer-sessions" class="drawer">
+  <div class="drawer-header">
+    <h3 id="drawer-sessions-title">Sessions</h3>
+    <button class="modal-close" onclick="closeSessions()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div id="sessions-list">
+      <div class="session-item">
+        <div class="session-info">
+          <div class="session-name font-mono">session-default</div>
+          <div class="session-binding text-secondary">agent:agent-sop</div>
+        </div>
+        <span class="chip chip-green">Active</span>
+        <button class="btn-icon-sm">🗑️</button>
+      </div>
+      <div class="session-item">
+        <div class="session-info">
+          <div class="session-name font-mono">session-analyst</div>
+          <div class="session-binding text-secondary">role:analyst</div>
+        </div>
+        <span class="chip chip-green">Active</span>
+        <button class="btn-icon-sm">🗑️</button>
+      </div>
+      <div class="session-item">
+        <div class="session-info">
+          <div class="session-name font-mono">session-debug</div>
+          <div class="session-binding text-secondary">agent:agent-skillful</div>
+        </div>
+        <span class="chip chip-gray">Inactive</span>
+        <button class="btn-icon-sm">🗑️</button>
+      </div>
+    </div>
+    <div id="add-session-form" class="inline-form" style="display:none">
+      <div class="form-group">
+        <label>Session Name</label>
+        <input class="form-control" placeholder="e.g. session-new">
+      </div>
+      <div class="form-group">
+        <label>Identity Binding</label>
+        <input class="form-control" placeholder="agent:agent-sop or role:analyst">
+      </div>
+      <div class="form-group">
+        <label class="toggle">
+          <input type="checkbox" checked>
+          <span class="toggle-slider"></span>
+          <span>Active</span>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm">Save Session</button>
+        <button class="btn btn-secondary btn-sm" onclick="hideAddSession()">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" onclick="showAddSession()">+ Add Session</button>
+  </div>
+</div>
+
+<!-- Conversation Detail Drawer -->
+<div id="drawer-conv-overlay" class="drawer-overlay" onclick="closeConvDetail()"></div>
+<div id="drawer-conv" class="drawer" style="width:560px;right:-560px">
+  <div class="drawer-header">
+    <h3>CONV-0041 — pr-reviewer</h3>
+    <button class="modal-close" onclick="closeConvDetail()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
+        <span>Date: <strong style="color:var(--text-primary)">Today 11:15</strong></span>
+        <span>Status: <span class="chip chip-blue" style="font-size:11px">Completed</span></span>
+        <span>Turns: <strong style="color:var(--text-primary)">4</strong></span>
+      </div>
+    </div>
+    <div class="timeline">
+      <div class="timeline-item user-turn">
+        <div class="timeline-stamp">14:32:01</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-user">User</div>
+          <div class="timeline-text">Please review PR #142 — auth token refactor</div>
+        </div>
+      </div>
+      <div class="timeline-item agent-turn">
+        <div class="timeline-stamp">14:32:03</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-agent">Agent</div>
+          <div class="timeline-text">Initializing PR review. Fetching PR details...</div>
+        </div>
+      </div>
+      <div class="timeline-item tool-turn">
+        <div class="timeline-stamp">14:32:04</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-tool">Tool Call</div>
+          <div class="timeline-tool">🔧 github.list_issues — { repo: "company/auth-service", pr: 142 }</div>
+        </div>
+      </div>
+      <div class="timeline-item tool-turn">
+        <div class="timeline-stamp">14:32:06</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-tool">Tool Call</div>
+          <div class="timeline-tool">🔧 github.create_pr — { title: "Review: PR #142", body: "..." }</div>
+        </div>
+      </div>
+      <div class="timeline-item agent-turn">
+        <div class="timeline-stamp">14:32:09</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-agent">Agent</div>
+          <div class="timeline-text">PR #142 review complete. I found 2 potential issues:<br>
+            (1) Token expiry not handled in refresh flow<br>
+            (2) Missing rate limit on /auth/token endpoint<br>
+            Shall I create GitHub issues for these?
+          </div>
+        </div>
+      </div>
+      <div class="timeline-item user-turn">
+        <div class="timeline-stamp">14:32:45</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-user">User</div>
+          <div class="timeline-text">Yes, create the issues</div>
+        </div>
+      </div>
+      <div class="timeline-item tool-turn">
+        <div class="timeline-stamp">14:32:46</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-tool">Tool Call ×2</div>
+          <div class="timeline-tool">🔧 github.create_issue — { title: "Token expiry not handled..." }<br>🔧 github.create_issue — { title: "Missing rate limit on /auth/token" }</div>
+        </div>
+      </div>
+      <div class="timeline-item agent-turn">
+        <div class="timeline-stamp">14:33:01</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-agent">Agent</div>
+          <div class="timeline-text">Created issues #287 and #288. PR review complete.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Result Detail Drawer -->
+<div id="drawer-result-overlay" class="drawer-overlay" onclick="closeResultDetail()"></div>
+<div id="drawer-result" class="drawer" style="width:560px;right:-560px">
+  <div class="drawer-header">
+    <h3>Q3 Sales Analysis</h3>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm btn-secondary">⬇ Download</button>
+      <button class="modal-close" onclick="closeResultDetail()">✕</button>
+    </div>
+  </div>
+  <div class="drawer-body">
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
+        <span>Agent: <strong style="color:var(--text-primary)">data-analyst</strong></span>
+        <span>SOP: <strong style="color:var(--text-primary)">db-report</strong></span>
+        <span>Saved: <strong style="color:var(--text-primary)">2025-04-23 14:35:42</strong></span>
+        <span>Trace: <span class="font-mono" style="color:var(--text-primary)">a3f2c1b9...</span></span>
+        <span>Size: <strong style="color:var(--text-primary)">4.2 KB</strong></span>
+      </div>
+    </div>
+    <div class="result-content">Q3 2025 Sales Analysis
+======================
+Revenue: $4,200,000 (↑ 8% vs Q2)
+
+Regions:
+  APAC:     $1,800,000 (43%)
+  EMEA:     $1,100,000 (26%)
+  Americas: $1,300,000 (31%)
+
+Segment Highlights:
+  Enterprise: +23% growth
+  SMB:        +4% growth
+  Consumer:   -2% decline
+
+Top Products by Revenue:
+  1. Enterprise Suite Pro  — $1,240,000
+  2. Analytics Platform    — $890,000
+  3. Data Connector Pack   — $670,000
+
+Recommendations:
+  1. Increase APAC headcount by Q4
+  2. Launch Enterprise upsell campaign
+  3. Review Consumer pricing strategy
+  4. Accelerate Analytics Platform feature roadmap</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════ STATE ═══════════════════════════════
+var currentView = 'dashboard';
+var wizardStep = 1;
+var sopStepCount = 3;
+
+// ═══════════════════════════════ NAV ═══════════════════════════════
+const viewTitles = {
+  'dashboard': 'Dashboard',
+  'setup-wizard': 'Setup Wizard',
+  'mcp-hub': 'MCP Hub',
+  'skills': 'Skills',
+  'sops': 'Standard Operating Procedures',
+  'agents': 'Agents',
+  'gateway': 'Gateway',
+  'schedules': 'Schedules',
+  'notifications': 'Notification Channels',
+  'observability': 'Observability',
+  'chat': 'Communication Hub',
+  'conversations': 'Conversations',
+  'results': 'Results',
+  'permissions': 'Permissions & Access'
+};
+
+function nav(el, viewId) {
+  showView(viewId);
+  // Update active nav item
+  document.querySelectorAll('.nav-item').forEach(function(item) {
+    item.classList.remove('active');
+  });
+  if (el && el.classList) {
+    el.classList.add('active');
+  } else {
+    // Find nav item by data-view
+    var items = document.querySelectorAll('.nav-item[data-view="' + viewId + '"]');
+    if (items.length) items[0].classList.add('active');
+  }
+}
+
+function showView(viewId) {
+  document.querySelectorAll('.view').forEach(function(v) {
+    v.classList.remove('active');
+  });
+  var target = document.getElementById('view-' + viewId);
+  if (target) {
+    target.classList.add('active');
+    currentView = viewId;
+    document.getElementById('topbar-title').textContent = viewTitles[viewId] || viewId;
+  }
+  // Scroll main content to top
+  var mc = document.querySelector('.main-content');
+  if (mc) mc.scrollTop = 0;
+}
+
+function toggleGroup(groupId) {
+  var grp = document.getElementById(groupId);
+  if (grp) grp.classList.toggle('collapsed');
+}
+
+function toggleParentGroup(pgId) {
+  var pg = document.getElementById(pgId);
+  if (pg) pg.classList.toggle('collapsed');
+}
+
+// ═══════════════════════════════ MODALS ═══════════════════════════════
+function openModal(modalId) {
+  var modal = document.getElementById(modalId);
+  if (modal) modal.classList.add('open');
+}
+
+function closeModal(modalId) {
+  var modal = document.getElementById(modalId);
+  if (modal) modal.classList.remove('open');
+}
+
+function closeModalIfOverlay(event, modalId) {
+  if (event.target === event.currentTarget) closeModal(modalId);
+}
+
+// ═══════════════════════════════ SESSIONS DRAWER ═══════════════════════════════
+function openSessions(serverSlug) {
+  document.getElementById('drawer-sessions-title').textContent = 'Sessions — ' + serverSlug;
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('drawer-sessions').classList.add('open');
+  document.getElementById('add-session-form').style.display = 'none';
+}
+
+function closeSessions() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer-sessions').classList.remove('open');
+}
+
+function showAddSession() {
+  document.getElementById('add-session-form').style.display = 'block';
+}
+function hideAddSession() {
+  document.getElementById('add-session-form').style.display = 'none';
+}
+
+// ═══════════════════════════════ CONVERSATION DETAIL ═══════════════════════════════
+function openConvDetail() {
+  document.getElementById('drawer-conv-overlay').classList.add('open');
+  var d = document.getElementById('drawer-conv');
+  d.classList.add('open');
+  d.style.right = '0';
+}
+function closeConvDetail() {
+  document.getElementById('drawer-conv-overlay').classList.remove('open');
+  var d = document.getElementById('drawer-conv');
+  d.classList.remove('open');
+  d.style.right = '-560px';
+}
+
+// ═══════════════════════════════ RESULT DETAIL ═══════════════════════════════
+function openResultDetail() {
+  document.getElementById('drawer-result-overlay').classList.add('open');
+  var d = document.getElementById('drawer-result');
+  d.classList.add('open');
+  d.style.right = '0';
+}
+function closeResultDetail() {
+  document.getElementById('drawer-result-overlay').classList.remove('open');
+  var d = document.getElementById('drawer-result');
+  d.classList.remove('open');
+  d.style.right = '-560px';
+}
+
+// ═══════════════════════════════ SETUP WIZARD ═══════════════════════════════
+var selectedProvider = 'keycloak-new';
+var existingType = 'keycloak';
+
+function wizNext() {
+  if (wizardStep < 4) { wizardStep++; renderWizard(); }
+}
+function wizBack() {
+  if (wizardStep > 1) { wizardStep--; renderWizard(); }
+}
+function renderWizard() {
+  for (var i = 1; i <= 4; i++) {
+    var sc = document.getElementById('sc' + i);
+    var sl = document.getElementById('sl' + i);
+    if (!sc) continue;
+    if (i < wizardStep) {
+      sc.className = 'step-circle done';
+      sc.textContent = '✓';
+      sl.className = 'step-label';
+    } else if (i === wizardStep) {
+      sc.className = 'step-circle active';
+      sc.textContent = i === 4 ? '✓' : i;
+      sl.className = 'step-label active';
+    } else {
+      sc.className = 'step-circle pending';
+      sc.textContent = i === 4 ? '✓' : i;
+      sl.className = 'step-label pending';
+    }
+  }
+  for (var j = 1; j <= 3; j++) {
+    var conn = document.getElementById('conn' + j);
+    if (conn) conn.className = 'step-connector' + (j < wizardStep ? ' done' : '');
+  }
+  
+  document.getElementById('wiz-step1').style.display = wizardStep === 1 ? 'block' : 'none';
+  document.getElementById('wiz-step2-kc').style.display = (wizardStep === 2 && selectedProvider === 'keycloak-new') ? 'block' : 'none';
+  document.getElementById('wiz-step2-ex').style.display = (wizardStep === 2 && selectedProvider === 'existing') ? 'block' : 'none';
+  document.getElementById('wiz-step3').style.display = wizardStep === 3 ? 'block' : 'none';
+  document.getElementById('wiz-step4').style.display = wizardStep === 4 ? 'block' : 'none';
+}
+
+function selectProvider(type) {
+  selectedProvider = type;
+  document.getElementById('opt-keycloak-new').classList.toggle('selected', type === 'keycloak-new');
+  document.getElementById('opt-existing').classList.toggle('selected', type === 'existing');
+  document.getElementById('existingSubOptions').style.display = type === 'existing' ? 'flex' : 'none';
+}
+function selectExistingType(type, e) {
+  e.stopPropagation();
+  existingType = type;
+  document.getElementById('sub-keycloak').classList.toggle('active', type === 'keycloak');
+  document.getElementById('sub-entra').classList.toggle('active', type === 'entra');
+}
+function goToConfig() {
+  if (selectedProvider === 'existing') {
+    document.getElementById('existingProviderTitle').textContent = existingType === 'entra' ? 'Connect Azure EntraID' : 'Connect Keycloak';
+  }
+  wizNext();
+}
+
+function showErr(id, msg) {
+  var input = document.getElementById(id);
+  var err = document.getElementById('err-' + id);
+  if (input) input.classList.add('error');
+  if (err) { err.textContent = msg; err.classList.add('visible'); }
+}
+function clearErr(id) {
+  var input = document.getElementById(id);
+  var err = document.getElementById('err-' + id);
+  if (input) input.classList.remove('error');
+  if (err) err.classList.remove('visible');
+}
+function val(id) { return (document.getElementById(id)?.value || '').trim(); }
+
+function validateKeycloakNew() {
+  let ok = true;
+  if (!val('kc-username')) { showErr('kc-username', 'Username is required.'); ok = false; }
+  if (!val('kc-password')) { showErr('kc-password', 'Password is required.'); ok = false; }
+  if (!val('kc-confirm')) { showErr('kc-confirm', 'Please confirm password.'); ok = false; }
+  else if (val('kc-password') !== val('kc-confirm')) { showErr('kc-confirm', 'Passwords mismatch.'); ok = false; }
+  if (ok) runLoading('keycloak-new', {
+    username: val('kc-username'), realm: val('kc-realm') || 'parthenon'
+  });
+}
+function validateExisting() {
+  let ok = true;
+  if (!val('oidc-url')) { showErr('oidc-url', 'Provider URL is required.'); ok = false; }
+  if (!val('oidc-client-id')) { showErr('oidc-client-id', 'Client ID is required.'); ok = false; }
+  if (!val('oidc-secret')) { showErr('oidc-secret', 'Client secret is required.'); ok = false; }
+  if (ok) runLoading('existing', {
+    url: val('oidc-url'), clientId: val('oidc-client-id'), type: existingType, audience: val('oidc-audience') || val('oidc-client-id')
+  });
+}
+
+function resetStep(n) {
+  var el = document.getElementById('ps-' + n);
+  if(!el) return;
+  el.className = 'progress-step pending';
+  el.querySelector('.step-status').textContent = '○';
+}
+function activateStep(n) {
+  var el = document.getElementById('ps-' + n);
+  if(!el) return;
+  el.className = 'progress-step active';
+  el.querySelector('.step-status').innerHTML = '<div class="mini-spinner"></div>';
+}
+function completeStep(n) {
+  var el = document.getElementById('ps-' + n);
+  if(!el) return;
+  el.className = 'progress-step done';
+  el.querySelector('.step-status').textContent = '✓';
+}
+function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+
+function runLoading(mode, data) {
+  wizNext();
+  var isNew = mode === 'keycloak-new';
+  setText('ps-1-text', isNew ? 'Provisioning Keycloak...' : 'Validating OIDC endpoint...');
+  setText('ps-2-text', isNew ? 'Configuring realm "'+data.realm+'"...' : 'Fetching metadata...');
+  setText('ps-3-text', isNew ? 'Creating user "'+data.username+'"...' : 'Verifying credentials...');
+  setText('ps-4-text', isNew ? 'Registering OIDC client...' : 'Saving configuration...');
+  setText('ps-5-text', isNew ? 'Verifying connectivity...' : 'Testing token endpoint...');
+  setText('loadingTitle', isNew ? 'Provisioning Keycloak...' : 'Connecting Provider...');
+  
+  for (var i = 1; i <= 5; i++) resetStep(i);
+  [0, 600, 1200, 1800, 2400].forEach((d, idx) => {
+    setTimeout(() => activateStep(idx + 1), d);
+    setTimeout(() => completeStep(idx + 1), d + 500);
+  });
+  setTimeout(() => showSuccess(mode, data), 3000);
+}
+
+function showSuccess(mode, data) {
+  wizNext();
+  var grid = document.getElementById('summaryGrid');
+  grid.innerHTML = '';
+  function row(k, v) { return `<div class="summary-row"><span class="summary-key">${k}</span><span class="summary-value">${v}</span></div>`; }
+  
+  if (mode === 'keycloak-new') {
+    setText('successTitle', 'Keycloak Configured!');
+    setText('successSubtitle', 'A Keycloak instance has been provisioned.');
+    grid.innerHTML += row('Provider', 'Keycloak (managed)') + row('Realm', data.realm) + row('Admin User', data.username);
+  } else {
+    var typeLabel = data.type === 'entra' ? 'Azure EntraID' : 'Keycloak';
+    setText('successTitle', typeLabel + ' Connected!');
+    setText('successSubtitle', typeLabel + ' OIDC provider validated and saved.');
+    grid.innerHTML += row('Provider', typeLabel) + row('Client ID', data.clientId) + row('Audience', data.audience);
+  }
+}
+
+// ═══════════════════════════════ TABS ═══════════════════════════════
+function switchTab(tabEl, panelId) {
+  var parent = tabEl.closest('.view') || tabEl.parentElement.closest('div');
+  // Deactivate all tabs/panels in this view
+  tabEl.parentElement.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  tabEl.classList.add('active');
+  var view = tabEl.closest('.view');
+  if (view) {
+    view.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    var panel = document.getElementById(panelId);
+    if (panel) panel.classList.add('active');
+  }
+}
+
+// ═══════════════════════════════ SKILL EDITOR ═══════════════════════════════
+function showSkillEditor(skillName) {
+  document.getElementById('skills-list-panel').style.display = 'none';
+  document.getElementById('skill-editor-panel').style.display = 'block';
+  document.getElementById('skill-editor-title').textContent = skillName ? 'Edit Skill: ' + skillName : 'Create Skill';
+  if (skillName) document.getElementById('skill-name-input').value = skillName;
+}
+function hideSkillEditor() {
+  document.getElementById('skills-list-panel').style.display = 'block';
+  document.getElementById('skill-editor-panel').style.display = 'none';
+}
+
+// ═══════════════════════════════ SOP EDITOR ═══════════════════════════════
+function showSopEditor(sopName) {
+  document.getElementById('sops-list-panel').style.display = 'none';
+  document.getElementById('sop-editor-panel').style.display = 'block';
+  document.getElementById('sop-editor-title').textContent = sopName ? 'Edit SOP: ' + sopName : 'Create SOP';
+  if (sopName) document.getElementById('sop-name-input').value = sopName;
+}
+function hideSopEditor() {
+  document.getElementById('sops-list-panel').style.display = 'block';
+  document.getElementById('sop-editor-panel').style.display = 'none';
+}
+function addSopStep() {
+  sopStepCount++;
+  var container = document.getElementById('sop-steps-container');
+  var arrow = document.createElement('div');
+  arrow.className = 'step-arrow';
+  arrow.textContent = '↓';
+  var step = document.createElement('div');
+  step.className = 'step-card';
+  step.innerHTML = '<div class="step-card-header">' +
+    '<div class="step-card-num">' + sopStepCount + '</div>' +
+    '<select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">' +
+    '<option>Skill</option><option>Sub-Agent Delegation</option></select>' +
+    '<div style="flex:1"></div>' +
+    '<button class="btn-icon-sm" onclick="this.closest(\'.step-card\').previousSibling.remove();this.closest(\'.step-card\').remove();renumberSteps()">🗑️</button>' +
+    '</div>' +
+    '<div class="form-group" style="margin-bottom:0">' +
+    '<label style="font-size:12px">Skill</label>' +
+    '<select class="form-control" style="font-size:13px"><option>read-analyze-file</option><option>github-pr-workflow</option><option>slack-notify</option></select>' +
+    '</div>';
+  // Insert before the Add Step button
+  var addBtn = container.querySelector('div[style*="margin-top"]') || container.lastElementChild;
+  container.insertBefore(arrow, addBtn);
+  container.insertBefore(step, addBtn);
+}
+function renumberSteps() {
+  document.querySelectorAll('.step-card-num').forEach(function(el, i) {
+    el.textContent = (i + 1);
+  });
+  sopStepCount = document.querySelectorAll('.step-card').length;
+}
+
+// ═══════════════════════════════ AGENT TYPE MODAL ═══════════════════════════════
+function toggleAgentTypeFields() {
+  var type = document.getElementById('agent-type-select').value;
+  document.getElementById('agent-sop-field').style.display = (type === 'sop-agent') ? 'block' : 'none';
+  document.getElementById('agent-skills-field').style.display = (type === 'skillful-agent') ? 'block' : 'none';
+}
+
+// ═══════════════════════════════ SCHEDULE MODAL ═══════════════════════════════
+function toggleSchedFields() {
+  var type = document.getElementById('sched-type-select').value;
+  document.getElementById('sched-prompt-field').style.display = (type === 'prompt') ? 'block' : 'none';
+  document.getElementById('sched-sop-field').style.display = (type === 'sop') ? 'block' : 'none';
+}
+
+// ═══════════════════════════════ CHAT ═══════════════════════════════
+function sendChatMsg() {
+  var input = document.getElementById('chat-input');
+  var text = (input.value || '').trim();
+  if (!text) return;
+  var msgs = document.getElementById('chat-messages');
+
+  // User bubble
+  var userMsg = document.createElement('div');
+  userMsg.className = 'msg msg-user';
+  userMsg.innerHTML = '<div class="msg-bubble">' + escHtml(text) + '</div>';
+  msgs.appendChild(userMsg);
+  input.value = '';
+
+  // Simulated agent response
+  setTimeout(function() {
+    var agentMsg = document.createElement('div');
+    agentMsg.className = 'msg msg-agent';
+    agentMsg.innerHTML = '<div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>' +
+      '<div class="msg-bubble">I\'ve received your message and I\'m processing it. One moment...</div>';
+    msgs.appendChild(agentMsg);
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 800);
+
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function answerQuestion(answer) {
+  var msgs = document.getElementById('chat-messages');
+  // Remove the question card
+  var qcard = document.querySelector('.msg-question');
+  if (qcard) {
+    var wrapper = qcard.closest('div[style]');
+    if (wrapper) wrapper.remove();
+  }
+  // Add user answer
+  var userMsg = document.createElement('div');
+  userMsg.className = 'msg msg-user';
+  userMsg.innerHTML = '<div class="msg-bubble">' + escHtml(answer) + '</div>';
+  msgs.appendChild(userMsg);
+  // Agent confirmation
+  setTimeout(function() {
+    var agentMsg = document.createElement('div');
+    agentMsg.className = 'msg msg-agent';
+    agentMsg.innerHTML = '<div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>' +
+      '<div class="msg-bubble">Got it! I\'ll include the Year-over-Year comparison in the analysis. Generating the updated report...</div>';
+    msgs.appendChild(agentMsg);
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 600);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════ TOOL FILTER ═══════════════════════════════
+function filterTools(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#tool-groups tbody tr').forEach(function(row) {
+    var text = row.textContent.toLowerCase();
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+function filterToolsByServer(server) {
+  document.querySelectorAll('.tool-group').forEach(function(grp) {
+    var title = grp.querySelector('h4');
+    if (!server || (title && title.textContent.trim() === server)) {
+      grp.style.display = '';
+    } else {
+      grp.style.display = 'none';
+    }
+  });
+}
+
+// ═══════════════════════════════ INIT ═══════════════════════════════
+(function init() {
+  showView('dashboard');
+  // Set default nav item as active
+  var dashNav = document.querySelector('.nav-item[data-view="dashboard"]');
+  if (dashNav) dashNav.classList.add('active');
+})();
+
+
+        // Navigation Logic
+        const navItems = document.querySelectorAll('.nav-item');
+        const pages = document.querySelectorAll('.page-section');
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                // Remove active class from all
+                navItems.forEach(nav => nav.classList.remove('active'));
+                pages.forEach(page => page.classList.remove('active'));
+                
+                // Add active class to clicked
+                item.classList.add('active');
+                const target = item.getAttribute('data-target');
+                document.getElementById(target).classList.add('active');
+            });
+        });
+
+        // Modal Logic
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Close modal on outside click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal-overlay')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        // Dynamic Policy Statement
+        let statementCount = 1;
+        function addStatement() {
+            statementCount++;
+            const list = document.getElementById('policy-list');
+            const div = document.createElement('div');
+            div.className = 'policy-statement';
+            div.innerHTML = `
+                <div class="policy-header">
+                    <h4>Statement ${statementCount}</h4>
+                    <button class="btn btn-danger" style="padding: 4px 8px;" onclick="this.parentElement.parentElement.remove()">Remove</button>
+                </div>
+                <div class="policy-row">
+                    <div class="policy-col">
+                        <label class="form-label">Module</label>
+                        <select class="form-control">
+                            <option value="agents">Agents</option>
+                            <option value="mcp-hub">MCP Hub</option>
+                            <option value="skills">Skills</option>
+                            <option value="scheduling">Scheduling</option>
+                        </select>
+                    </div>
+                    <div class="policy-col">
+                        <label class="form-label">Resource Scope</label>
+                        <select class="form-control" onchange="toggleResourceIds(this)">
+                            <option value="all">All Resources</option>
+                            <option value="specific">Specific IDs...</option>
+                        </select>
+                        <div class="resource-ids-section" style="display:none; margin-top:8px;">
+                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                <input type="text" class="form-control resource-id-input" placeholder="e.g. agent_001 or support_*">
+                                <button class="btn btn-primary" style="white-space:nowrap;" onclick="addResourceIdChip(this)">Add</button>
+                            </div>
+                            <div class="resource-id-chips" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px;"></div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Wildcards supported (e.g. support_* matches all IDs starting with support_)</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Actions Allowed</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label"><input type="checkbox"> View</label>
+                        <label class="checkbox-label"><input type="checkbox"> Create</label>
+                        <label class="checkbox-label"><input type="checkbox"> Edit</label>
+                        <label class="checkbox-label"><input type="checkbox"> Delete</label>
+                        <label class="checkbox-label"><input type="checkbox"> Execute</label>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Tag Conditions (AND)</label>
+                    <div class="empty-state" style="padding:10px;">No conditions applied.</div>
+                    <button class="btn" style="margin-top: 8px;" onclick="alert('Add condition dialog')">+ Add Condition</button>
+                </div>
+            `;
+            list.appendChild(div);
+        }
+
+        // Fix 1: Tag Value Chips
+        function openTagModal() {
+            const container = document.getElementById('tagValueChips');
+            container.innerHTML = '';
+            ['test', 'prod'].forEach(function(v) {
+                const chip = document.createElement('span');
+                chip.className = 'chip-tag';
+                chip.innerHTML = v + ' <span class="chip-remove" onclick="this.parentElement.remove()">\u00d7</span>';
+                container.appendChild(chip);
+            });
+            document.getElementById('newTagValue').value = '';
+            openModal('modal-tag');
+        }
+
+        function addTagValueChip() {
+            const input = document.getElementById('newTagValue');
+            const val = input.value.trim();
+            if (!val) return;
+            const container = document.getElementById('tagValueChips');
+            const chip = document.createElement('span');
+            chip.className = 'chip-tag';
+            chip.innerHTML = val + ' <span class="chip-remove" onclick="this.parentElement.remove()">\u00d7</span>';
+            container.appendChild(chip);
+            input.value = '';
+            input.focus();
+        }
+
+        document.getElementById('newTagValue').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); addTagValueChip(); }
+        });
+
+        // Fix 2a: Resource ID chips
+        function toggleResourceIds(select) {
+            const section = select.parentElement.querySelector('.resource-ids-section');
+            if (section) section.style.display = select.value === 'specific' ? 'block' : 'none';
+        }
+
+        function addResourceIdChip(btn) {
+            const section = btn.closest('.resource-ids-section');
+            const input = section.querySelector('.resource-id-input');
+            const val = input.value.trim();
+            if (!val) return;
+            const container = section.querySelector('.resource-id-chips');
+            const chip = document.createElement('span');
+            chip.className = 'chip-tag';
+            chip.innerHTML = val + ' <span class="chip-remove" onclick="this.parentElement.remove()">\u00d7</span>';
+            container.appendChild(chip);
+            input.value = '';
+            input.focus();
+        }
+
+        // Fix 2b: Tag value dropdown
+        const TAG_VALUES = {
+            'env': ['test', 'prod'],
+            'agent_type': ['support', 'monitoring', 'reporting']
+        };
+
+        function updateTagValueDropdown(keySelect) {
+            const row = keySelect.closest('.tag-condition');
+            const valueSelect = row.querySelector('.tag-val-select');
+            const key = keySelect.value;
+            if (!key) {
+                valueSelect.innerHTML = '<option value="" disabled selected>Select key first</option>';
+                valueSelect.disabled = true;
+            } else {
+                valueSelect.disabled = false;
+                const opts = TAG_VALUES[key] || [];
+                valueSelect.innerHTML = opts.map(function(v) { return '<option value="' + v + '">' + v + '</option>'; }).join('');
+            }
+        }
+
+        // Fix 3: Manage Access modal
+        function openManageAccess(userName) {
+            document.getElementById('manage-access-user-name').textContent = userName;
+            switchManageTab('tab-direct-roles');
+            openModal('modal-manage-access');
+        }
+
+        function switchManageTab(tabId) {
+            document.querySelectorAll('.manage-tab-panel').forEach(function(p) { p.style.display = 'none'; });
+            document.querySelectorAll('.manage-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.getElementById(tabId).style.display = 'block';
+            document.querySelector('[data-tab="' + tabId + '"]').classList.add('active');
+        }
+
+        function assignRole() {
+            const sel = document.getElementById('assign-role-select');
+            const val = sel.value;
+            if (!val) return;
+            const list = document.getElementById('direct-roles-list');
+            const div = document.createElement('div');
+            div.className = 'tag-condition';
+            div.style.justifyContent = 'space-between';
+            div.innerHTML = '<span>' + val + '</span><button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>';
+            list.appendChild(div);
+            sel.value = '';
+        }
+
+        function assignGroup() {
+            const sel = document.getElementById('assign-group-select');
+            const val = sel.value;
+            if (!val) return;
+            const list = document.getElementById('group-memberships-list');
+            const div = document.createElement('div');
+            div.className = 'tag-condition';
+            div.style.justifyContent = 'space-between';
+            div.innerHTML = '<span>' + val + '</span><button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>';
+            list.appendChild(div);
+            sel.value = '';
+        }
+
+        // Fix 4: Request form validation
+        function updateRequestSubmit() {
+            const anyChecked = Array.from(document.querySelectorAll('.request-group-cb')).some(function(cb) { return cb.checked; });
+            const hasJustification = document.getElementById('requestJustification').value.trim().length > 0;
+            document.getElementById('btn-submit-request').disabled = !(anyChecked && hasJustification);
+        }
+
+        // Fix 5: Reject reason validation
+        function updateRejectConfirm() {
+            const reason = document.getElementById('rejectReason').value.trim();
+            document.getElementById('btn-confirm-reject').disabled = !reason;
+        }
+    
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "parthenon.fullname" . }}-otel-collector
+  labels:
+    {{- include "parthenon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  type: {{ .Values.otelCollector.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.otelCollector.service.grpcPort }}
+      targetPort: otlp-grpc
+      protocol: TCP
+      name: otlp-grpc
+    - port: {{ .Values.otelCollector.service.httpPort }}
+      targetPort: otlp-http
+      protocol: TCP
+      name: otlp-http
+    - port: {{ .Values.otelCollector.service.prometheusPort }}
+      targetPort: prometheus
+      protocol: TCP
+      name: prometheus
+    - port: {{ .Values.otelCollector.service.healthCheckPort }}
+      targetPort: health
+      protocol: TCP
+      name: health
+  selector:
+    {{- include "parthenon.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+{{- end }}

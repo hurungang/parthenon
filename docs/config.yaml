@@ -1,0 +1,73 @@
+# Change Lifecycle Configuration
+# Provides project-specific context for the /change:* workflow tools.
+# All agents read this file first before starting any task.
+# Run /change:init to update this file when the project evolves.
+
+project:
+  name: Parthenon
+  description: >
+    Enterprise AI Harness Framework — a self-hosted, identity-aware platform for managing AI agents,
+    MCP tool hubs, skills, SOPs, scheduling, observability, and multi-agent communication.
+    Designed for enterprise deployment with OIDC identity provider integration (Keycloak, Azure EntraID),
+    role/permission management, and a management Web UI.
+
+# Source code locations — used by agents to resolve code references
+source:
+  frontend: frontend/src
+  backend: backend/app
+  schema: backend/app/db/models/
+  tests:
+    - backend/tests/
+    - frontend/src/__tests__/
+    - e2e/tests/
+
+# Project tooling — scripts available for service management
+tooling:
+  management_script: parthenon.ps1
+  description: >
+    PowerShell script for managing all services (infra, backend, frontend).
+    Supports start/stop/restart/status commands with health checks.
+    See PARTHENON-SCRIPT-GUIDE.md or read the script for usage details.
+
+# Technology stack — context for agents, not prescriptive
+tech_stack:
+  frontend: React 19 + TypeScript + Material-UI (MUI 7) + React Router 7 + Vite + i18next + OpenTelemetry
+  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry
+  database: PostgreSQL 16 — SQLAlchemy declarative models in backend/app/db/models/, Alembic migrations in backend/alembic/
+  auth: OIDC/OAuth2 — supports Keycloak and Azure EntraID; JWT validation via python-jose; internal RBAC roles (user, agent, both)
+  infra: Docker Compose (dev/self-hosted) + Kubernetes/Helm (production) + nginx reverse proxy + OTEL Collector
+
+# Key project conventions — agents follow these when making decisions
+conventions:
+  - "All UI text must go through the i18next t() function — no hardcoded strings in components"
+  - "Use strong typing everywhere — TypeScript interfaces/enums on frontend; Pydantic models and Python Enums on backend"
+  - "Database schema is managed via SQLAlchemy declarative models in backend/app/db/models/ — never write raw ALTER TABLE; generate Alembic migrations with alembic revision --autogenerate"
+  - "Frontend calls backend REST APIs — no direct database access from frontend (no Supabase pattern here)"
+  - "All backend endpoints require JWT authentication unless explicitly marked public"
+  - "Identity provider configuration is managed via config/identity.yaml — written by setup wizard or CLI; operators should NOT hand-edit this file"
+  - "First-run setup: on initial deployment, users complete a setup wizard to configure the identity provider (bundled Keycloak or external OIDC) before accessing the main application"
+  - "MCP server connections use encrypted credential storage (AES-256); decrypt only at call time"
+  - "All inter-service communication is instrumented with OpenTelemetry traces, metrics, and logs"
+  - "Telemetry configuration is managed via config/telemetry.yaml and TELEMETRY_* environment variables — operators configure export targets (console, file, OTLP, Logfire, custom), enable/disable signals (traces, metrics, logs), and set log levels without code changes"
+  - "Agent identities are first-class OIDC principals — agents have their own client credentials in the identity provider"
+  - "MCP server slug/alias must be unique platform-wide and is used as the namespace for all synced tools"
+  - "PowerShell terminal on Windows — use ; not && to chain commands"
+
+# Domain knowledge — business rules agents must always know
+domain:
+  - "Identity provider modes: 'bundled' (Keycloak running in Docker Compose, auto-configured via setup wizard) or 'external' (existing OIDC provider like Azure EntraID, manually registered)"
+  - "Setup wizard: first-run experience that collects identity provider configuration, creates initial realm/client in bundled Keycloak, and writes config/identity.yaml"
+  - "Role types: 'user' (human), 'agent' (AI agent), 'both' (service account usable by either). Roles carry permission sets."
+  - "MCP Hub: each registered MCP server has a unique slug; all tools from that server are synced under the slug namespace; permissions are granted at tool level"
+  - "MCP Sessions: multiple named sessions can be defined per MCP server with different identity/credential bindings; a session can be mapped to an agent identity or a role"
+  - "Skills: named invocable units that wrap one or more MCP tool calls; Skills are the permission-grantable unit for agents"
+  - "SOPs (Standard Operating Procedures): higher-level Skills composed of multiple Skills with sequencing logic; may involve agent-to-agent delegation"
+  - "Agent types: 'sop-agent' (bound to one SOP, follows it strictly) or 'skillful-agent' (unbound, uses available skills based on user input)"
+  - "Agent instances: each agent type has a max-instance limit; each inbound request spawns a new instance up to the limit"
+  - "Agent Gateway: exposes agent types via a lifecycle protocol (init, request, question, answer, close) over MCP or HTTP"
+  - "Communication Hub: central broker for Web UI ↔ agent and agent ↔ agent messaging"
+  - "Result Repository: a default MCP tool ('save_result') available to all SOPs/agents to persist structured outputs"
+  - "Notification integrations: pluggable channels (email, Slack, Teams, webhook) exposed as MCP tools"
+  - "Observability: OTEL traces, metrics, and structured logs emitted by all components; collected via OTEL Collector; shipped to configurable backends (Prometheus, Jaeger, Loki, etc.)"
+  - "Schedule management: cron-based scheduling for prompts and SOPs; managed via the admin UI; backed by a persistent job store"
+  - "Conversation history: every interaction (user→agent, agent→agent, agent→tool) is persisted to the conversation store for audit and replay"

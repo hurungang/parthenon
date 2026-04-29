@@ -1,0 +1,91 @@
+{{- if .Values.api.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "parthenon.fullname" . }}-api
+  labels:
+    {{- include "parthenon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "parthenon.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "parthenon.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: api
+          image: {{ include "parthenon.image" (dict "image" .Values.api.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "parthenon.fullname" . }}-postgres:5432/parthenon"
+            - name: REDIS_URL
+              value: "redis://{{ include "parthenon.fullname" . }}-redis:6379/0"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://{{ include "parthenon.fullname" . }}-otel-collector:4317"
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.api.env.OTEL_SERVICE_NAME | quote }}
+            - name: OTEL_ENABLED
+              value: {{ .Values.api.env.OTEL_ENABLED | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.api.env.ENVIRONMENT | quote }}
+            - name: OIDC_PROVIDER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "parthenon.configMapName" . }}
+                  key: OIDC_PROVIDER_URL
+            {{- if .Values.secrets.create }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "parthenon.secretName" . }}
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "parthenon.secretName" . }}
+                  key: POSTGRES_PASSWORD
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "parthenon.secretName" . }}
+                  key: SECRET_KEY
+            - name: CREDENTIAL_VAULT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "parthenon.secretName" . }}
+                  key: CREDENTIAL_VAULT_KEY
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+{{- end }}

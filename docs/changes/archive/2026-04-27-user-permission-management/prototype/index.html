@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Permission Management - Parthenon</title>
+    <style>
+        :root {
+            --sidebar-bg: #111827;
+            --sidebar-color: #9CA3AF;
+            --sidebar-hover: #1F2937;
+            --sidebar-active: #374151;
+            --sidebar-active-color: #F9FAFB;
+            
+            --bg-color: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --border-color: #E5E7EB;
+            --text-main: #111827;
+            --text-muted: #6B7280;
+            
+            --primary: #2563EB;
+            --primary-hover: #1D4ED8;
+            --danger: #DC2626;
+            --success: #059669;
+            
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: white;
+            border-bottom: 1px solid #374151;
+            margin-bottom: 10px;
+        }
+
+        .nav-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background-color: var(--sidebar-hover);
+            color: white;
+        }
+
+        .nav-item.active {
+            background-color: var(--sidebar-active);
+            color: var(--sidebar-active-color);
+            border-left: 4px solid var(--primary);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            background: white;
+            padding: 20px 30px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .page-content {
+            padding: 30px;
+            flex: 1;
+        }
+
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        /* Components */
+        .btn {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #F9FAFB;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-danger {
+            background-color: white;
+            color: var(--danger);
+            border-color: #FECACA;
+        }
+        .btn-danger:hover {
+            background-color: #FEF2F2;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        /* Tables */
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            background-color: #F9FAFB;
+            padding: 12px 16px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: #E5E7EB;
+            color: #374151;
+            margin-right: 4px;
+            margin-bottom: 4px;
+        }
+        .badge.blue { background: #DBEAFE; color: #1E40AF; }
+        .badge.green { background: #D1FAE5; color: #065F46; }
+
+        /* Forms & Inputs */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+
+        .modal.lg {
+            max-width: 800px;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            line-height: 1;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: #F9FAFB;
+            border-radius: 0 0 8px 8px;
+        }
+
+        /* Policy Builder */
+        .policy-statement {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: #F9FAFB;
+        }
+
+        .policy-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .policy-header h4 {
+            font-size: 0.875rem;
+            color: var(--text-main);
+        }
+
+        .policy-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .policy-col {
+            flex: 1;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+        
+        .checkbox-label input {
+            margin-right: 6px;
+        }
+
+        .tag-condition {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            background: white;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        /* Chips */
+        .chip-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #DBEAFE;
+            color: #1E40AF;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            gap: 6px;
+        }
+        .chip-remove {
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            line-height: 1;
+        }
+        .chip-remove:hover { color: var(--danger); }
+
+        /* Manage Access tabs */
+        .manage-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 16px;
+        }
+        .manage-tab-btn {
+            padding: 10px 16px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            margin-bottom: -1px;
+        }
+        .manage-tab-btn.active {
+            border-bottom-color: var(--primary);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            Parthenon
+        </div>
+        <nav>
+            <div class="nav-item active" data-target="tags">Tags</div>
+            <div class="nav-item" data-target="roles">Roles</div>
+            <div class="nav-item" data-target="groups">Groups</div>
+            <div class="nav-item" data-target="users">Users</div>
+            <div class="nav-item" data-target="access">Access Requests</div>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- TAGS PAGE -->
+        <section id="tags" class="page-section active">
+            <div class="page-header">
+                <h1 class="page-title">Tags</h1>
+                <button class="btn btn-primary" onclick="openTagModal()">+ Create Tag</button>
+            </div>
+            <div class="page-content">
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tag Key</th>
+                                    <th>Scope</th>
+                                    <th>Allowed Values</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>env</strong></td>
+                                    <td><span class="badge blue">Global</span></td>
+                                    <td><span class="badge">test</span> <span class="badge">prod</span></td>
+                                    <td>
+                                        <button class="btn">Edit</button>
+                                        <button class="btn btn-danger">Delete</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>agent_type</strong></td>
+                                    <td><span class="badge">Resource: Agents</span></td>
+                                    <td><span class="badge">support</span> <span class="badge">monitoring</span> <span class="badge">reporting</span></td>
+                                    <td>
+                                        <button class="btn">Edit</button>
+                                        <button class="btn btn-danger">Delete</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ROLES PAGE -->
+        <section id="roles" class="page-section">
+            <div class="page-header">
+                <h1 class="page-title">Roles & Policies</h1>
+                <button class="btn btn-primary" onclick="openModal('modal-role')">+ Create Role</button>
+            </div>
+            <div class="page-content">
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Role Name</th>
+                                    <th>Description</th>
+                                    <th>Assignments</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>support-agent-viewer</strong></td>
+                                    <td>Can view support agents across all environments</td>
+                                    <td>1 Group</td>
+                                    <td>
+                                        <button class="btn" onclick="openModal('modal-role')">Edit Policy</button>
+                                        <button class="btn btn-danger">Delete</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>test-agent-creator</strong></td>
+                                    <td>Can create and manage test environment agents</td>
+                                    <td>1 Group, 1 User</td>
+                                    <td>
+                                        <button class="btn" onclick="openModal('modal-role')">Edit Policy</button>
+                                        <button class="btn btn-danger">Delete</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GROUPS PAGE -->
+        <section id="groups" class="page-section">
+            <div class="page-header">
+                <h1 class="page-title">Groups</h1>
+                <button class="btn btn-primary" onclick="openModal('modal-group')">+ Create Group</button>
+            </div>
+            <div class="page-content">
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Group Name</th>
+                                    <th>Owner</th>
+                                    <th>Roles Assigned</th>
+                                    <th>IdP Mapping</th>
+                                    <th>Members</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>support-team</strong></td>
+                                    <td>admin@company.com</td>
+                                    <td><span class="badge blue">support-agent-viewer</span></td>
+                                    <td><code>SSO_Group_Support</code></td>
+                                    <td>1</td>
+                                    <td>
+                                        <button class="btn">Edit</button>
+                                        <button class="btn btn-danger">Delete</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>monitoring-team</strong></td>
+                                    <td>devops@company.com</td>
+                                    <td><span class="badge blue">test-agent-creator</span></td>
+                                    <td>-</td>
+                                    <td>1</td>
+                                    <td>
+                                        <button class="btn">Edit</button>
+                                        <button class="btn btn-danger">Delete</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- USERS PAGE -->
+        <section id="users" class="page-section">
+            <div class="page-header">
+                <h1 class="page-title">OIDC Users</h1>
+            </div>
+            <div class="page-content">
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Direct Roles</th>
+                                    <th>Groups</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Alice Smith</strong></td>
+                                    <td>alice@company.com</td>
+                                    <td>-</td>
+                                    <td><span class="badge green">support-team</span></td>
+                                    <td><button class="btn" onclick="openManageAccess('Alice Smith')">Manage Access</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Bob Jones</strong></td>
+                                    <td>bob@company.com</td>
+                                    <td><span class="badge blue">test-agent-creator</span></td>
+                                    <td><span class="badge green">monitoring-team</span></td>
+                                    <td><button class="btn" onclick="openManageAccess('Bob Jones')">Manage Access</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ACCESS REQUESTS PAGE -->
+        <section id="access" class="page-section">
+            <div class="page-header">
+                <h1 class="page-title">Access Requests</h1>
+            </div>
+            <div class="page-content">
+                <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="document.getElementById('view-my').style.display = 'block'; document.getElementById('view-pending').style.display = 'none';">My Requests</button>
+                    <button class="btn" onclick="document.getElementById('view-pending').style.display = 'block'; document.getElementById('view-my').style.display = 'none';">Requests to Approve</button>
+                </div>
+                
+                <div id="view-my" class="card">
+                    <div style="padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="font-size: 1rem;">My Group Requests</h3>
+                        <button class="btn" onclick="openModal('modal-request')">Request New Access</button>
+                    </div>
+                    <div class="empty-state">No active requests.</div>
+                </div>
+
+                <div id="view-pending" class="card" style="display:none;">
+                    <div style="padding: 16px; border-bottom: 1px solid var(--border-color);">
+                        <h3 style="font-size: 1rem;">Pending Approvals (Owner View)</h3>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Target Group</th>
+                                    <th>Requested At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Charlie Brown (charlie@company.com)</td>
+                                    <td><strong>support-team</strong></td>
+                                    <td>2 hours ago</td>
+                                    <td style="white-space:nowrap;">
+                                        <button class="btn" onclick="openModal('modal-view-details')">View Details</button>
+                                        <button class="btn btn-primary" onclick="openModal('modal-approve-confirm')">Approve</button>
+                                        <button class="btn btn-danger" onclick="openModal('modal-reject-confirm')">Reject</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Create Role Modal (Policy Builder) -->
+    <div id="modal-role" class="modal-overlay">
+        <div class="modal lg">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Role</h2>
+                <button class="modal-close" onclick="closeModal('modal-role')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Role Name</label>
+                    <input type="text" class="form-control" placeholder="e.g. test-agent-creator" value="test-agent-creator">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-control" placeholder="Brief description of permissions" value="Can create and manage test environment agents">
+                </div>
+                
+                <hr style="border:0; border-top:1px solid var(--border-color); margin: 24px 0;">
+                <h3 style="font-size: 1rem; margin-bottom: 16px;">Permission Policies</h3>
+
+                <div id="policy-list">
+                    <!-- Policy Statement 1 -->
+                    <div class="policy-statement">
+                        <div class="policy-header">
+                            <h4>Statement 1</h4>
+                            <button class="btn btn-danger" style="padding: 4px 8px;">Remove</button>
+                        </div>
+                        <div class="policy-row">
+                            <div class="policy-col">
+                                <label class="form-label">Module</label>
+                                <select class="form-control">
+                                    <option value="agents" selected>Agents</option>
+                                    <option value="mcp-hub">MCP Hub</option>
+                                    <option value="skills">Skills</option>
+                                    <option value="scheduling">Scheduling</option>
+                                </select>
+                            </div>
+                            <div class="policy-col">
+                                <label class="form-label">Resource Scope</label>
+                                <select class="form-control" onchange="toggleResourceIds(this)">
+                                    <option value="all" selected>All Resources</option>
+                                    <option value="specific">Specific IDs...</option>
+                                </select>
+                                <div class="resource-ids-section" style="display:none; margin-top:8px;">
+                                    <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                        <input type="text" class="form-control resource-id-input" placeholder="e.g. agent_001 or support_*">
+                                        <button class="btn btn-primary" style="white-space:nowrap;" onclick="addResourceIdChip(this)">Add</button>
+                                    </div>
+                                    <div class="resource-id-chips" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px;">
+                                        <span class="chip-tag">agent_001 <span class="chip-remove" onclick="this.parentElement.remove()">×</span></span>
+                                        <span class="chip-tag">support_* <span class="chip-remove" onclick="this.parentElement.remove()">×</span></span>
+                                    </div>
+                                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Wildcards supported (e.g. support_* matches all IDs starting with support_)</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Actions Allowed</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label"><input type="checkbox" checked> View</label>
+                                <label class="checkbox-label"><input type="checkbox" checked> Create</label>
+                                <label class="checkbox-label"><input type="checkbox" checked> Edit</label>
+                                <label class="checkbox-label"><input type="checkbox" checked> Delete</label>
+                                <label class="checkbox-label"><input type="checkbox"> Execute</label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Tag Conditions (AND)</label>
+                            <div class="tag-condition">
+                                <select class="form-control tag-key-select" style="width:160px;" onchange="updateTagValueDropdown(this)">
+                                    <option value="">-- Select Key --</option>
+                                    <option value="env" selected>env</option>
+                                    <option value="agent_type">agent_type</option>
+                                </select>
+                                <span>=</span>
+                                <select class="form-control tag-val-select" style="flex:1;">
+                                    <option value="test" selected>test</option>
+                                    <option value="prod">prod</option>
+                                </select>
+                                <button class="btn btn-danger" style="padding: 4px 8px;" onclick="this.parentElement.remove()">&times;</button>
+                            </div>
+                            <button class="btn" style="margin-top: 8px;" onclick="alert('Add condition dialog')">+ Add Condition</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="addStatement()">+ Add Policy Statement</button>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-role')">Cancel</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-role')">Save Role</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Tag Modal -->
+    <div id="modal-tag" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Tag</h2>
+                <button class="modal-close" onclick="closeModal('modal-tag')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Tag Key</label>
+                    <input type="text" class="form-control" placeholder="e.g. env">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Scope</label>
+                    <select class="form-control">
+                        <option value="global">Global (All Resources)</option>
+                        <option value="agents">Resource: Agents Only</option>
+                        <option value="skills">Resource: Skills Only</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Allowed Values</label>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <input type="text" id="newTagValue" class="form-control" placeholder="e.g. test">
+                        <button class="btn btn-primary" style="white-space:nowrap;" onclick="addTagValueChip()">Add</button>
+                    </div>
+                    <div id="tagValueChips" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-tag')">Cancel</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-tag')">Save Tag</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Group Modal -->
+    <div id="modal-group" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Group</h2>
+                <button class="modal-close" onclick="closeModal('modal-group')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Group Name</label>
+                    <input type="text" class="form-control" placeholder="e.g. data-science-team">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Group Owner</label>
+                    <select class="form-control">
+                        <option>admin@company.com</option>
+                        <option>bob@company.com</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Assign Roles</label>
+                    <div style="border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; max-height: 100px; overflow-y: auto;">
+                        <label class="checkbox-label" style="margin-bottom: 8px;"><input type="checkbox"> support-agent-viewer</label>
+                        <label class="checkbox-label"><input type="checkbox"> test-agent-creator</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">IdP Claim Mapping (Optional)</label>
+                    <input type="text" class="form-control" placeholder="e.g. SSO_DataScience">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Users with this group claim in their OIDC token will be auto-assigned.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-group')">Cancel</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-group')">Save Group</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Access Modal -->
+    <div id="modal-request" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Request Group Access</h2>
+                <button class="modal-close" onclick="closeModal('modal-request')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Select Groups</label>
+                    <div style="border:1px solid var(--border-color); border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+                        <label class="checkbox-label"><input type="checkbox" class="request-group-cb" value="support-team" onchange="updateRequestSubmit()"> support-team</label>
+                        <label class="checkbox-label"><input type="checkbox" class="request-group-cb" value="monitoring-team" onchange="updateRequestSubmit()"> monitoring-team</label>
+                        <label class="checkbox-label"><input type="checkbox" class="request-group-cb" value="engineering-team" onchange="updateRequestSubmit()"> engineering-team</label>
+                        <label class="checkbox-label"><input type="checkbox" class="request-group-cb" value="ops-team" onchange="updateRequestSubmit()"> ops-team</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Why do you need access? <span style="color:var(--danger);">*</span></label>
+                    <textarea id="requestJustification" class="form-control" rows="3" placeholder="Describe your business reason..." oninput="updateRequestSubmit()"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-request')">Cancel</button>
+                <button id="btn-submit-request" class="btn btn-primary" disabled onclick="closeModal('modal-request'); alert('Request submitted!')">Submit Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Access Modal (Fix 3) -->
+    <div id="modal-manage-access" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Manage Access — <span id="manage-access-user-name"></span></h2>
+                <button class="modal-close" onclick="closeModal('modal-manage-access')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manage-tabs">
+                    <button class="manage-tab-btn active" data-tab="tab-direct-roles" onclick="switchManageTab('tab-direct-roles')">Direct Roles</button>
+                    <button class="manage-tab-btn" data-tab="tab-group-memberships" onclick="switchManageTab('tab-group-memberships')">Group Memberships</button>
+                </div>
+                <div id="tab-direct-roles" class="manage-tab-panel">
+                    <div id="direct-roles-list" style="margin-bottom:16px;">
+                        <div class="tag-condition" style="justify-content:space-between;">
+                            <span>support-agent-viewer</span>
+                            <button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <select id="assign-role-select" class="form-control">
+                            <option value="">— Select role —</option>
+                            <option value="support-agent-viewer">support-agent-viewer</option>
+                            <option value="test-agent-creator">test-agent-creator</option>
+                        </select>
+                        <button class="btn btn-primary" style="white-space:nowrap;" onclick="assignRole()">Assign</button>
+                    </div>
+                </div>
+                <div id="tab-group-memberships" class="manage-tab-panel" style="display:none;">
+                    <div id="group-memberships-list" style="margin-bottom:16px;">
+                        <div class="tag-condition" style="justify-content:space-between;">
+                            <span>support-team</span>
+                            <button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>
+                        </div>
+                        <div class="tag-condition" style="justify-content:space-between;">
+                            <span>monitoring-team</span>
+                            <button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <select id="assign-group-select" class="form-control">
+                            <option value="">— Select group —</option>
+                            <option value="support-team">support-team</option>
+                            <option value="monitoring-team">monitoring-team</option>
+                            <option value="engineering-team">engineering-team</option>
+                            <option value="ops-team">ops-team</option>
+                        </select>
+                        <button class="btn btn-primary" style="white-space:nowrap;" onclick="assignGroup()">Assign</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-manage-access')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Details Modal (Fix 5) -->
+    <div id="modal-view-details" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Request Details</h2>
+                <button class="modal-close" onclick="closeModal('modal-view-details')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Requester</label>
+                    <div style="font-size:0.875rem;">Charlie Brown (charlie@company.com)</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Groups Requested</label>
+                    <div><span class="badge blue">support-team</span></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Requested At</label>
+                    <div style="font-size:0.875rem;">2 hours ago</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Justification</label>
+                    <div style="font-size:0.875rem; padding:10px; background:#F9FAFB; border:1px solid var(--border-color); border-radius:6px;">
+                        I need access to support the EU customer escalations team.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-view-details')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approve Confirmation Modal (Fix 5) -->
+    <div id="modal-approve-confirm" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Confirm Approval</h2>
+                <button class="modal-close" onclick="closeModal('modal-approve-confirm')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Justification (read-only)</label>
+                    <div style="font-size:0.875rem; padding:10px; background:#F9FAFB; border:1px solid var(--border-color); border-radius:6px;">
+                        I need access to support the EU customer escalations team.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Approval Note (optional)</label>
+                    <textarea class="form-control" rows="3" placeholder="Add an optional note for the requester..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-approve-confirm')">Cancel</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-approve-confirm'); alert('Request approved!')">Confirm Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reject Confirmation Modal (Fix 5) -->
+    <div id="modal-reject-confirm" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Confirm Rejection</h2>
+                <button class="modal-close" onclick="closeModal('modal-reject-confirm')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Justification (read-only)</label>
+                    <div style="font-size:0.875rem; padding:10px; background:#F9FAFB; border:1px solid var(--border-color); border-radius:6px;">
+                        I need access to support the EU customer escalations team.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Rejection Reason <span style="color:var(--danger);">*</span></label>
+                    <textarea id="rejectReason" class="form-control" rows="3" placeholder="Required — provide a reason for rejection..." oninput="updateRejectConfirm()"></textarea>
+                    <div id="reject-reason-error" style="display:none; color:var(--danger); font-size:0.75rem; margin-top:4px;">Rejection reason is required.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-reject-confirm')">Cancel</button>
+                <button id="btn-confirm-reject" class="btn btn-danger" disabled onclick="closeModal('modal-reject-confirm'); alert('Request rejected!')">Confirm Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Navigation Logic
+        const navItems = document.querySelectorAll('.nav-item');
+        const pages = document.querySelectorAll('.page-section');
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                // Remove active class from all
+                navItems.forEach(nav => nav.classList.remove('active'));
+                pages.forEach(page => page.classList.remove('active'));
+                
+                // Add active class to clicked
+                item.classList.add('active');
+                const target = item.getAttribute('data-target');
+                document.getElementById(target).classList.add('active');
+            });
+        });
+
+        // Modal Logic
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Close modal on outside click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal-overlay')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        // Dynamic Policy Statement
+        let statementCount = 1;
+        function addStatement() {
+            statementCount++;
+            const list = document.getElementById('policy-list');
+            const div = document.createElement('div');
+            div.className = 'policy-statement';
+            div.innerHTML = `
+                <div class="policy-header">
+                    <h4>Statement ${statementCount}</h4>
+                    <button class="btn btn-danger" style="padding: 4px 8px;" onclick="this.parentElement.parentElement.remove()">Remove</button>
+                </div>
+                <div class="policy-row">
+                    <div class="policy-col">
+                        <label class="form-label">Module</label>
+                        <select class="form-control">
+                            <option value="agents">Agents</option>
+                            <option value="mcp-hub">MCP Hub</option>
+                            <option value="skills">Skills</option>
+                            <option value="scheduling">Scheduling</option>
+                        </select>
+                    </div>
+                    <div class="policy-col">
+                        <label class="form-label">Resource Scope</label>
+                        <select class="form-control" onchange="toggleResourceIds(this)">
+                            <option value="all">All Resources</option>
+                            <option value="specific">Specific IDs...</option>
+                        </select>
+                        <div class="resource-ids-section" style="display:none; margin-top:8px;">
+                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                <input type="text" class="form-control resource-id-input" placeholder="e.g. agent_001 or support_*">
+                                <button class="btn btn-primary" style="white-space:nowrap;" onclick="addResourceIdChip(this)">Add</button>
+                            </div>
+                            <div class="resource-id-chips" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px;"></div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Wildcards supported (e.g. support_* matches all IDs starting with support_)</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Actions Allowed</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label"><input type="checkbox"> View</label>
+                        <label class="checkbox-label"><input type="checkbox"> Create</label>
+                        <label class="checkbox-label"><input type="checkbox"> Edit</label>
+                        <label class="checkbox-label"><input type="checkbox"> Delete</label>
+                        <label class="checkbox-label"><input type="checkbox"> Execute</label>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Tag Conditions (AND)</label>
+                    <div class="empty-state" style="padding:10px;">No conditions applied.</div>
+                    <button class="btn" style="margin-top: 8px;" onclick="alert('Add condition dialog')">+ Add Condition</button>
+                </div>
+            `;
+            list.appendChild(div);
+        }
+
+        // Fix 1: Tag Value Chips
+        function openTagModal() {
+            const container = document.getElementById('tagValueChips');
+            container.innerHTML = '';
+            ['test', 'prod'].forEach(function(v) {
+                const chip = document.createElement('span');
+                chip.className = 'chip-tag';
+                chip.innerHTML = v + ' <span class="chip-remove" onclick="this.parentElement.remove()">\u00d7</span>';
+                container.appendChild(chip);
+            });
+            document.getElementById('newTagValue').value = '';
+            openModal('modal-tag');
+        }
+
+        function addTagValueChip() {
+            const input = document.getElementById('newTagValue');
+            const val = input.value.trim();
+            if (!val) return;
+            const container = document.getElementById('tagValueChips');
+            const chip = document.createElement('span');
+            chip.className = 'chip-tag';
+            chip.innerHTML = val + ' <span class="chip-remove" onclick="this.parentElement.remove()">\u00d7</span>';
+            container.appendChild(chip);
+            input.value = '';
+            input.focus();
+        }
+
+        document.getElementById('newTagValue').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); addTagValueChip(); }
+        });
+
+        // Fix 2a: Resource ID chips
+        function toggleResourceIds(select) {
+            const section = select.parentElement.querySelector('.resource-ids-section');
+            if (section) section.style.display = select.value === 'specific' ? 'block' : 'none';
+        }
+
+        function addResourceIdChip(btn) {
+            const section = btn.closest('.resource-ids-section');
+            const input = section.querySelector('.resource-id-input');
+            const val = input.value.trim();
+            if (!val) return;
+            const container = section.querySelector('.resource-id-chips');
+            const chip = document.createElement('span');
+            chip.className = 'chip-tag';
+            chip.innerHTML = val + ' <span class="chip-remove" onclick="this.parentElement.remove()">\u00d7</span>';
+            container.appendChild(chip);
+            input.value = '';
+            input.focus();
+        }
+
+        // Fix 2b: Tag value dropdown
+        const TAG_VALUES = {
+            'env': ['test', 'prod'],
+            'agent_type': ['support', 'monitoring', 'reporting']
+        };
+
+        function updateTagValueDropdown(keySelect) {
+            const row = keySelect.closest('.tag-condition');
+            const valueSelect = row.querySelector('.tag-val-select');
+            const key = keySelect.value;
+            if (!key) {
+                valueSelect.innerHTML = '<option value="" disabled selected>Select key first</option>';
+                valueSelect.disabled = true;
+            } else {
+                valueSelect.disabled = false;
+                const opts = TAG_VALUES[key] || [];
+                valueSelect.innerHTML = opts.map(function(v) { return '<option value="' + v + '">' + v + '</option>'; }).join('');
+            }
+        }
+
+        // Fix 3: Manage Access modal
+        function openManageAccess(userName) {
+            document.getElementById('manage-access-user-name').textContent = userName;
+            switchManageTab('tab-direct-roles');
+            openModal('modal-manage-access');
+        }
+
+        function switchManageTab(tabId) {
+            document.querySelectorAll('.manage-tab-panel').forEach(function(p) { p.style.display = 'none'; });
+            document.querySelectorAll('.manage-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.getElementById(tabId).style.display = 'block';
+            document.querySelector('[data-tab="' + tabId + '"]').classList.add('active');
+        }
+
+        function assignRole() {
+            const sel = document.getElementById('assign-role-select');
+            const val = sel.value;
+            if (!val) return;
+            const list = document.getElementById('direct-roles-list');
+            const div = document.createElement('div');
+            div.className = 'tag-condition';
+            div.style.justifyContent = 'space-between';
+            div.innerHTML = '<span>' + val + '</span><button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>';
+            list.appendChild(div);
+            sel.value = '';
+        }
+
+        function assignGroup() {
+            const sel = document.getElementById('assign-group-select');
+            const val = sel.value;
+            if (!val) return;
+            const list = document.getElementById('group-memberships-list');
+            const div = document.createElement('div');
+            div.className = 'tag-condition';
+            div.style.justifyContent = 'space-between';
+            div.innerHTML = '<span>' + val + '</span><button class="btn btn-danger" style="padding:4px 8px;" onclick="this.parentElement.remove()">Remove</button>';
+            list.appendChild(div);
+            sel.value = '';
+        }
+
+        // Fix 4: Request form validation
+        function updateRequestSubmit() {
+            const anyChecked = Array.from(document.querySelectorAll('.request-group-cb')).some(function(cb) { return cb.checked; });
+            const hasJustification = document.getElementById('requestJustification').value.trim().length > 0;
+            document.getElementById('btn-submit-request').disabled = !(anyChecked && hasJustification);
+        }
+
+        // Fix 5: Reject reason validation
+        function updateRejectConfirm() {
+            const reason = document.getElementById('rejectReason').value.trim();
+            document.getElementById('btn-confirm-reject').disabled = !reason;
+        }
+    </script>
+</body>
+</html>

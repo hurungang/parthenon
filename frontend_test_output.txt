@@ -1,0 +1,16 @@
+
+> parthenon-frontend@0.1.0 test
+> vitest run
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend[39m
+
+ [32mΓ£ô[39m src/__tests__/api-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/types.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 3[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/useChatSession.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 52[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m12 passed[39m[22m[90m (12)[39m
+[2m   Start at [22m 20:35:39
+[2m   Duration [22m 3.41s[2m (transform 137ms, setup 830ms, collect 297ms, tests 79ms, environment 5.89s, prepare 1.16s)[22m
+

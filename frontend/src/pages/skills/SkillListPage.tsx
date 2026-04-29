@@ -1,0 +1,171 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+} from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import apiClient from '../../api/apiClient'
+import type { Skill } from '../../types'
+
+/**
+ * Skill list page with search filter and create/edit actions.
+ */
+export function SkillListPage() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editSkill, setEditSkill] = useState<Skill | null>(null)
+  const [form, setForm] = useState({ name: '', description: '' })
+
+  const { data: skills, isLoading } = useQuery<Skill[]>({
+    queryKey: ['skills'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Skill[]>('/skills')
+      return data
+    },
+  })
+
+  const filtered = (skills ?? []).filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const handleOpenCreate = () => {
+    setEditSkill(null)
+    setForm({ name: '', description: '' })
+    setDialogOpen(true)
+  }
+
+  const handleOpenEdit = (skill: Skill) => {
+    setEditSkill(skill)
+    setForm({ name: skill.name, description: skill.description ?? '' })
+    setDialogOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (editSkill) {
+      await apiClient.put(`/skills/${editSkill.id}`, form)
+    } else {
+      await apiClient.post('/skills', { ...form, tool_ids: [] })
+    }
+    setDialogOpen(false)
+    await queryClient.invalidateQueries({ queryKey: ['skills'] })
+  }
+
+  const handleDelete = async (id: string) => {
+    if (confirm(t('app.confirm'))) {
+      await apiClient.delete(`/skills/${id}`)
+      await queryClient.invalidateQueries({ queryKey: ['skills'] })
+    }
+  }
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4" fontWeight={700}>{t('skills.title')}</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+          {t('skills.createSkill')}
+        </Button>
+      </Box>
+
+      <TextField
+        placeholder={t('app.search')}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        size="small"
+        sx={{ mb: 2, width: 300 }}
+      />
+
+      {isLoading ? (
+        <CircularProgress />
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('app.name')}</TableCell>
+                <TableCell>{t('app.description')}</TableCell>
+                <TableCell>{t('app.status')}</TableCell>
+                <TableCell>{t('app.actions')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filtered.map((skill) => (
+                <TableRow key={skill.id}>
+                  <TableCell>{skill.name}</TableCell>
+                  <TableCell>{skill.description ?? '—'}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={skill.is_active ? t('app.active') : t('app.inactive')}
+                      color={skill.is_active ? 'success' : 'default'}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <IconButton size="small" onClick={() => handleOpenEdit(skill)}>
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => handleDelete(skill.id)}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} align="center">{t('app.noData')}</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editSkill ? t('skills.editSkill') : t('skills.createSkill')}</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+            <TextField
+              label={t('app.name')}
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label={t('app.description')}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              fullWidth
+              multiline
+              rows={2}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
+          <Button variant="contained" onClick={handleSave}>{t('app.save')}</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  )
+}

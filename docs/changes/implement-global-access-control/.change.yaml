@@ -1,0 +1,16 @@
+name: implement-global-access-control
+created_at: 2026-04-28
+status: in-progress
+scope:
+  has_ui_changes: true
+  has_architecture_changes: false
+  has_db_changes: false
+  has_deployment_changes: false
+  has_operations_changes: false
+agents_complete:
+  product_owner: true
+  ux_specialist: true
+  architect: skipped
+  database_designer: skipped
+  developer: true
+  tester: true

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: parthenon
+description: Parthenon Enterprise AI Harness — Kubernetes Helm Chart
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - agents
+  - mcp
+  - enterprise
+home: https://github.com/parthenon/parthenon
+maintainers:
+  - name: Parthenon Team
+    email: platform@parthenon.io

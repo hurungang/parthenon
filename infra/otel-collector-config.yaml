@@ -1,0 +1,80 @@
+# infra/otel-collector-config.yaml
+# OpenTelemetry Collector configuration for Parthenon.
+# Receives traces/metrics/logs from backend and frontend, then fans out to
+# Prometheus (metrics), Jaeger (traces), and Loki (logs).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  resource:
+    attributes:
+      - key: environment
+        value: "docker-compose"
+        action: insert
+
+exporters:
+  # Expose metrics for Prometheus scraping on port 8889
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: parthenon
+    send_timestamps: true
+    metric_expiration: 3m
+
+  # Forward traces to Jaeger via OTLP
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  # Forward logs to Loki
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: false
+      job: true
+
+  # Debug exporter — logs pipeline activity to collector stdout
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  pprof:
+    endpoint: 0.0.0.0:1777
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [otlp/jaeger, debug]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheus, debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [loki, debug]

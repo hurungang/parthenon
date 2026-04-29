@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Dashboard Prototype</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <style>
+        /* CSS Reset & Variables */
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #e0e7ff;
+            --secondary: #10b981;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --transition: all 0.2s ease-in-out;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 260px;
+            background-color: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo-icon {
+            color: var(--primary);
+            font-size: 28px;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-list {
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            background-color: var(--primary-light);
+            color: var(--primary);
+        }
+
+        .nav-item.active {
+            background-color: var(--primary-light);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .nav-icon {
+            font-size: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .topbar {
+            height: 72px;
+            background-color: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background-color: var(--background);
+            border-radius: 24px;
+            padding: 8px 16px;
+            width: 320px;
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .search-bar:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+
+        .search-input {
+            border: none;
+            background: transparent;
+            outline: none;
+            padding: 4px 8px;
+            width: 100%;
+            font-family: inherit;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .icon-button {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-button:hover {
+            background-color: var(--background);
+            color: var(--text-primary);
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 32px;
+            flex: 1;
+        }
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Dashboard Grid */
+        .grid-container {
+            display: grid;
+            gap: 24px;
+        }
+
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        /* Cards */
+        .card {
+            background-color: var(--surface);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            padding: 24px;
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .stat-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stat-icon-wrapper.blue { background-color: var(--primary-light); color: var(--primary); }
+        .stat-icon-wrapper.green { background-color: #d1fae5; color: #059669; }
+        .stat-icon-wrapper.orange { background-color: #ffedd5; color: #ea580c; }
+        .stat-icon-wrapper.purple { background-color: #f3e8ff; color: #9333ea; }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-top: 8px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .trend-up { color: var(--secondary); }
+        .trend-down { color: #ef4444; }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 16px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        tr:hover td {
+            background-color: var(--background);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.success { background-color: #d1fae5; color: #059669; }
+        .badge.warning { background-color: #fef3c7; color: #d97706; }
+        .badge.info { background-color: var(--primary-light); color: var(--primary); }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--background);
+            border-color: var(--text-secondary);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <span class="material-icons-round logo-icon">dashboard</span>
+            <span class="brand-name">Parthenon UI</span>
+        </div>
+        <nav class="nav-list">
+            <a href="#" class="nav-item active">
+                <span class="material-icons-round nav-icon">home</span>
+                Overview
+            </a>
+            <a href="#" class="nav-item">
+                <span class="material-icons-round nav-icon">bar_chart</span>
+                Analytics
+            </a>
+            <a href="#" class="nav-item">
+                <span class="material-icons-round nav-icon">people</span>
+                Customers
+            </a>
+            <a href="#" class="nav-item">
+                <span class="material-icons-round nav-icon">inventory_2</span>
+                Products
+            </a>
+            <a href="#" class="nav-item">
+                <span class="material-icons-round nav-icon">settings</span>
+                Settings
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="search-bar">
+                <span class="material-icons-round" style="color: var(--text-secondary); font-size: 20px;">search</span>
+                <input type="text" class="search-input" placeholder="Search...">
+            </div>
+            <div class="header-actions">
+                <button class="icon-button">
+                    <span class="material-icons-round">notifications_none</span>
+                </button>
+                <button class="icon-button">
+                    <span class="material-icons-round">help_outline</span>
+                </button>
+                <div class="avatar">RH</div>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="content">
+            <div class="page-header">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div>
+                        <h1 class="page-title">Dashboard Overview</h1>
+                        <p class="page-subtitle">Welcome back! Here's what's happening today.</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-outline">
+                            <span class="material-icons-round" style="font-size: 18px;">download</span>
+                            Export
+                        </button>
+                        <button class="btn btn-primary">
+                            <span class="material-icons-round" style="font-size: 18px;">add</span>
+                            New Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid-stats">
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Total Revenue</div>
+                            <div class="stat-value">$45,231.89</div>
+                        </div>
+                        <div class="stat-icon-wrapper blue">
+                            <span class="material-icons-round">attach_money</span>
+                        </div>
+                    </div>
+                    <div class="stat-trend trend-up">
+                        <span class="material-icons-round" style="font-size: 16px;">arrow_upward</span>
+                        +20.1% from last month
+                    </div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Active Users</div>
+                            <div class="stat-value">2,350</div>
+                        </div>
+                        <div class="stat-icon-wrapper green">
+                            <span class="material-icons-round">group</span>
+                        </div>
+                    </div>
+                    <div class="stat-trend trend-up">
+                        <span class="material-icons-round" style="font-size: 16px;">arrow_upward</span>
+                        +15.2% from last month
+                    </div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">System Performance</div>
+                            <div class="stat-value">99.9%</div>
+                        </div>
+                        <div class="stat-icon-wrapper purple">
+                            <span class="material-icons-round">speed</span>
+                        </div>
+                    </div>
+                    <div class="stat-trend trend-up">
+                        <span class="material-icons-round" style="font-size: 16px;">check_circle</span>
+                        All systems operational
+                    </div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-label">Pending Issues</div>
+                            <div class="stat-value">12</div>
+                        </div>
+                        <div class="stat-icon-wrapper orange">
+                            <span class="material-icons-round">error_outline</span>
+                        </div>
+                    </div>
+                    <div class="stat-trend trend-down">
+                        <span class="material-icons-round" style="font-size: 16px;">arrow_downward</span>
+                        -4 from yesterday
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Table Section -->
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <h2 class="card-title">Recent Transactions</h2>
+                    <button class="btn btn-outline" style="padding: 6px 12px;">View All</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Customer</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>#TRX-00125</td>
+                                <td>
+                                    <div style="font-weight: 500;">John Doe</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">john.doe@example.com</div>
+                                </td>
+                                <td>Oct 24, 2023</td>
+                                <td style="font-weight: 500;">$1,200.00</td>
+                                <td><span class="badge success">Completed</span></td>
+                            </tr>
+                            <tr>
+                                <td>#TRX-00124</td>
+                                <td>
+                                    <div style="font-weight: 500;">Sarah Smith</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">sarah.s@example.com</div>
+                                </td>
+                                <td>Oct 24, 2023</td>
+                                <td style="font-weight: 500;">$450.00</td>
+                                <td><span class="badge warning">Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td>#TRX-00123</td>
+                                <td>
+                                    <div style="font-weight: 500;">Tech Solutions Inc.</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">billing@techsolutions.com</div>
+                                </td>
+                                <td>Oct 23, 2023</td>
+                                <td style="font-weight: 500;">$3,450.00</td>
+                                <td><span class="badge success">Completed</span></td>
+                            </tr>
+                             <tr>
+                                <td>#TRX-00122</td>
+                                <td>
+                                    <div style="font-weight: 500;">Alice Johnson</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">alice.j@example.com</div>
+                                </td>
+                                <td>Oct 23, 2023</td>
+                                <td style="font-weight: 500;">$150.00</td>
+                                <td><span class="badge info">Processing</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Simple Interaction logic
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

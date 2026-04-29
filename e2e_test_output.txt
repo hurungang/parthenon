@@ -1,0 +1,259 @@
+
+> parthenon-e2e@0.1.0 test
+> playwright test
+
+[WebServer] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 115 tests using 1 worker
+
+  Γ£ô    1 [chromium] ΓÇ║ tests\agent-management.spec.ts:32:7 ΓÇ║ Agent Management ΓÇ║ Agent management page renders without crashing (842ms)
+  Γ£ô    2 [chromium] ΓÇ║ tests\agent-management.spec.ts:40:7 ΓÇ║ Agent Management ΓÇ║ Agent management page has content (850ms)
+  Γ£ô    3 [chromium] ΓÇ║ tests\agent-management.spec.ts:47:7 ΓÇ║ Agent Management ΓÇ║ Agent management page has at least one button (801ms)
+  Γ£ô    4 [chromium] ΓÇ║ tests\agent-management.spec.ts:54:7 ΓÇ║ Agent Management ΓÇ║ displays list of agent types from API (822ms)
+  Γ£ô    5 [chromium] ΓÇ║ tests\agent-management.spec.ts:61:7 ΓÇ║ Agent Management ΓÇ║ displays agent mode for each agent type (854ms)
+  Γ£ô    6 [chromium] ΓÇ║ tests\agent-management.spec.ts:68:7 ΓÇ║ Agent Management ΓÇ║ shows create agent type button and opens dialog on click (878ms)
+  Γ£ô    7 [chromium] ΓÇ║ tests\auth.spec.ts:31:7 ΓÇ║ Authentication ΓÇ║ unauthenticated user sees the login page (712ms)
+  Γ£ô    8 [chromium] ΓÇ║ tests\auth.spec.ts:37:7 ΓÇ║ Authentication ΓÇ║ login page renders without JavaScript errors (1.1s)
+  Γ£ô    9 [chromium] ΓÇ║ tests\auth.spec.ts:46:7 ΓÇ║ Authentication ΓÇ║ login page has a clickable action button (1.1s)
+  Γ£ô   10 [chromium] ΓÇ║ tests\auth.spec.ts:55:7 ΓÇ║ Authentication ΓÇ║ unauthenticated request to protected route redirects to login (1.1s)
+  Γ£ô   11 [chromium] ΓÇ║ tests\auth.spec.ts:69:7 ΓÇ║ Authentication ΓÇ║ clearing token on logout redirects to login (976ms)
+  Γ£ô   12 [chromium] ΓÇ║ tests\chat.spec.ts:41:7 ΓÇ║ Chat ΓÇ║ chat page renders without crashing (707ms)
+  Γ£ô   13 [chromium] ΓÇ║ tests\chat.spec.ts:49:7 ΓÇ║ Chat ΓÇ║ chat page does not redirect to login (674ms)
+  Γ£ô   14 [chromium] ΓÇ║ tests\chat.spec.ts:55:7 ΓÇ║ Chat ΓÇ║ chat page has a message input area (756ms)
+  Γ£ô   15 [chromium] ΓÇ║ tests\chat.spec.ts:67:7 ΓÇ║ Chat ΓÇ║ chat page displays agent greeting message from API (747ms)
+  Γ£ô   16 [chromium] ΓÇ║ tests\chat.spec.ts:81:7 ΓÇ║ Chat ΓÇ║ chat page shows agent type selector or session list (740ms)
+  Γ£ô   17 [chromium] ΓÇ║ tests\chat.spec.ts:97:7 ΓÇ║ Chat ΓÇ║ chat page send button is present and enabled (828ms)
+  Γ£ô   18 [chromium] ΓÇ║ tests\conversations.spec.ts:48:7 ΓÇ║ Conversation History ΓÇ║ conversation history page renders without crashing (710ms)
+  Γ£ô   19 [chromium] ΓÇ║ tests\conversations.spec.ts:56:7 ΓÇ║ Conversation History ΓÇ║ conversation history page does not redirect to login (674ms)
+  Γ£ô   20 [chromium] ΓÇ║ tests\conversations.spec.ts:62:7 ΓÇ║ Conversation History ΓÇ║ conversation history page lists sessions from API (763ms)
+  Γ£ô   21 [chromium] ΓÇ║ tests\conversations.spec.ts:70:7 ΓÇ║ Conversation History ΓÇ║ shows turn count for sessions (757ms)
+  Γ£ô   22 [chromium] ΓÇ║ tests\conversations.spec.ts:76:7 ΓÇ║ Conversation History ΓÇ║ clicking a conversation expand button shows its turns (758ms)
+  Γ£ô   23 [chromium] ΓÇ║ tests\conversations.spec.ts:92:7 ΓÇ║ Conversation History ΓÇ║ conversation history shows both user and agent turns when expanded (774ms)
+  Γ£ô   24 [chromium] ΓÇ║ tests\dashboard.spec.ts:19:7 ΓÇ║ Dashboard ΓÇ║ dashboard page renders without crashing (634ms)
+  Γ£ô   25 [chromium] ΓÇ║ tests\dashboard.spec.ts:27:7 ΓÇ║ Dashboard ΓÇ║ dashboard page has content (745ms)
+  Γ£ô   26 [chromium] ΓÇ║ tests\dashboard.spec.ts:34:7 ΓÇ║ Dashboard ΓÇ║ dashboard renders app shell layout with header (753ms)
+  Γ£ô   27 [chromium] ΓÇ║ tests\dashboard.spec.ts:41:7 ΓÇ║ Dashboard ΓÇ║ dashboard displays app title or welcome content (742ms)
+  Γ£ô   28 [chromium] ΓÇ║ tests\dashboard.spec.ts:54:7 ΓÇ║ Dashboard ΓÇ║ dashboard has page content area (774ms)
+  Γ£ô   29 [chromium] ΓÇ║ tests\dashboard.spec.ts:62:7 ΓÇ║ Dashboard ΓÇ║ dashboard has navigation sidebar with nav items (782ms)
+  Γ£ô   30 [chromium] ΓÇ║ tests\dashboard.spec.ts:77:7 ΓÇ║ Dashboard ΓÇ║ dashboard navigation links are clickable (779ms)
+Starting test...
+Navigating to /
+Waiting for button
+Test complete
+  Γ£ô   31 [chromium] ΓÇ║ tests\debug-auth.spec.ts:4:7 ΓÇ║ Debug Authentication ΓÇ║ debug unauthenticated user sees the login page (20.6s)
+  Γ£ô   32 [chromium] ΓÇ║ tests\gateway.spec.ts:31:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway config page renders without crashing (617ms)
+  Γ£ô   33 [chromium] ΓÇ║ tests\gateway.spec.ts:39:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway config page does not redirect to login (616ms)
+  Γ£ÿ   34 [chromium] ΓÇ║ tests\gateway.spec.ts:45:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows agent type names (6.1s)
+  Γ£ÿ   35 [chromium] ΓÇ║ tests\gateway.spec.ts:55:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows HTTP endpoint path (6.2s)
+  Γ£ÿ   36 [chromium] ΓÇ║ tests\gateway.spec.ts:63:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows MCP tool names (6.3s)
+  Γ£ÿ   37 [chromium] ΓÇ║ tests\gateway.spec.ts:71:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page has interactive elements for configuration (6.3s)
+  Γ£ô   38 [chromium] ΓÇ║ tests\health.spec.ts:9:7 ΓÇ║ App Health ΓÇ║ app root loads and renders an HTML body (1.4s)
+  Γ£ô   39 [chromium] ΓÇ║ tests\health.spec.ts:15:7 ΓÇ║ App Health ΓÇ║ app renders a root element (622ms)
+  Γ£ô   40 [chromium] ΓÇ║ tests\health.spec.ts:21:7 ΓÇ║ App Health ΓÇ║ no unhandled JavaScript errors on load (1.3s)
+  Γ£ô   41 [chromium] ΓÇ║ tests\health.spec.ts:35:7 ΓÇ║ App Health ΓÇ║ page title is set (558ms)
+  Γ£ô   42 [chromium] ΓÇ║ tests\health.spec.ts:41:7 ΓÇ║ App Health ΓÇ║ navigating to unknown path renders something (1.4s)
+  Γ£ô   43 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:37:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub page renders without crashing (702ms)
+  Γ£ô   44 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:45:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub page does not redirect to login (707ms)
+  Γ£ô   45 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:51:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows server names from API (900ms)
+  Γ£ô   46 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:57:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows second server in list (839ms)
+  Γ£ô   47 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:63:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows server status indicators (837ms)
+  Γ£ô   48 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:76:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub has a register/add server button (975ms)
+  Γ£ô   49 [chromium] ΓÇ║ tests\notifications.spec.ts:49:7 ΓÇ║ Notification Configuration ΓÇ║ notification config page renders without crashing (738ms)
+  Γ£ô   50 [chromium] ΓÇ║ tests\notifications.spec.ts:57:7 ΓÇ║ Notification Configuration ΓÇ║ notification config page does not redirect to login (736ms)
+  Γ£ô   51 [chromium] ΓÇ║ tests\notifications.spec.ts:63:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows channel names from API (884ms)
+  Γ£ô   52 [chromium] ΓÇ║ tests\notifications.spec.ts:69:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows second channel in list (895ms)
+  Γ£ô   53 [chromium] ΓÇ║ tests\notifications.spec.ts:75:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows channel types (778ms)
+  Γ£ô   54 [chromium] ΓÇ║ tests\notifications.spec.ts:82:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows event log with event types (790ms)
+  Γ£ô   55 [chromium] ΓÇ║ tests\notifications.spec.ts:96:7 ΓÇ║ Notification Configuration ΓÇ║ notification page has add channel button (828ms)
+  Γ£ô   56 [chromium] ΓÇ║ tests\observability.spec.ts:18:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard renders without crashing (657ms)
+  Γ£ô   57 [chromium] ΓÇ║ tests\observability.spec.ts:26:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard does not redirect to login (766ms)
+  Γ£ô   58 [chromium] ΓÇ║ tests\observability.spec.ts:32:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard shows request rate metric (809ms)
+  Γ£ô   59 [chromium] ΓÇ║ tests\observability.spec.ts:45:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard shows latency metric (789ms)
+  Γ£ô   60 [chromium] ΓÇ║ tests\observability.spec.ts:58:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard has external tool links (919ms)
+  Γ£ô   61 [chromium] ΓÇ║ tests\observability.spec.ts:71:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard tabs or sections are navigable (788ms)
+  Γ£ô   62 [chromium] ΓÇ║ tests\observability.spec.ts:97:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app starts successfully with telemetry enabled (1.3s)
+  Γ£ô   63 [chromium] ΓÇ║ tests\observability.spec.ts:141:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app initializes telemetry from backend config (1.3s)
+  Γ£ô   64 [chromium] ΓÇ║ tests\observability.spec.ts:184:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app starts successfully with telemetry disabled (1.1s)
+  Γ£ô   65 [chromium] ΓÇ║ tests\observability.spec.ts:231:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app degrades gracefully when telemetry config fetch fails (1.2s)
+  Γ£ô   66 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:62:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with valid code exchanges token and lands on /dashboard (809ms)
+  Γ£ô   67 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:95:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback without code redirects to /login (1.2s)
+  Γ£ô   68 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:104:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with failed token exchange redirects to /login (1.2s)
+  Γ£ô   69 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:118:7 ΓÇ║ OIDC Callback Flow ΓÇ║ clicking login button initiates OIDC redirect (2.3s)
+  Γ£ô   70 [chromium] ΓÇ║ tests\permissions.spec.ts:51:7 ΓÇ║ Permissions Page ΓÇ║ navigates to /permissions and renders page (692ms)
+  Γ£ô   71 [chromium] ΓÇ║ tests\permissions.spec.ts:58:7 ΓÇ║ Permissions Page ΓÇ║ renders tabs for tag/role/group/user/access management (1.4s)
+  Γ£ô   72 [chromium] ΓÇ║ tests\permissions.spec.ts:68:7 ΓÇ║ Permissions Page ΓÇ║ shows page without crashes (1.3s)
+  Γ£ô   73 [chromium] ΓÇ║ tests\permissions.spec.ts:86:7 ΓÇ║ Tags Management ΓÇ║ renders tag definitions table (1.3s)
+  Γ£ô   74 [chromium] ΓÇ║ tests\permissions.spec.ts:101:7 ΓÇ║ Tags Management ΓÇ║ Add Tag button is present on Tags tab (1.3s)
+  Γ£ô   75 [chromium] ΓÇ║ tests\permissions.spec.ts:117:7 ΓÇ║ Roles Management ΓÇ║ navigates to Roles tab and shows role data (1.3s)
+  Γ£ô   76 [chromium] ΓÇ║ tests\permissions.spec.ts:151:7 ΓÇ║ Groups Management ΓÇ║ groups tab shows group data (1.4s)
+  Γ£ô   77 [chromium] ΓÇ║ tests\permissions.spec.ts:176:7 ΓÇ║ Access Request Flow ΓÇ║ access requests tab renders (1.3s)
+  Γ£ô   78 [chromium] ΓÇ║ tests\permissions.spec.ts:197:7 ΓÇ║ User Access Management ΓÇ║ users tab shows user data (1.4s)
+  Γ£ô   79 [chromium] ΓÇ║ tests\results.spec.ts:33:7 ΓÇ║ Result Repository ΓÇ║ result repository page renders without crashing (640ms)
+  Γ£ô   80 [chromium] ΓÇ║ tests\results.spec.ts:41:7 ΓÇ║ Result Repository ΓÇ║ result repository page does not redirect to login (777ms)
+  Γ£ô   81 [chromium] ΓÇ║ tests\results.spec.ts:47:7 ΓÇ║ Result Repository ΓÇ║ result repository shows result payload text (901ms)
+  Γ£ô   82 [chromium] ΓÇ║ tests\results.spec.ts:60:7 ΓÇ║ Result Repository ΓÇ║ result repository shows tags for results (802ms)
+  Γ£ô   83 [chromium] ΓÇ║ tests\results.spec.ts:72:7 ΓÇ║ Result Repository ΓÇ║ result repository shows content types (832ms)
+  Γ£ô   84 [chromium] ΓÇ║ tests\results.spec.ts:84:7 ΓÇ║ Result Repository ΓÇ║ result repository has filter or search capability (757ms)
+  Γ£ô   85 [chromium] ΓÇ║ tests\scheduling.spec.ts:52:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager page renders without crashing (702ms)
+  Γ£ô   86 [chromium] ΓÇ║ tests\scheduling.spec.ts:60:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager page does not redirect to login (700ms)
+  Γ£ô   87 [chromium] ΓÇ║ tests\scheduling.spec.ts:66:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows schedule names from API (885ms)
+  Γ£ô   88 [chromium] ΓÇ║ tests\scheduling.spec.ts:72:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows inactive schedule (875ms)
+  Γ£ô   89 [chromium] ΓÇ║ tests\scheduling.spec.ts:78:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows cron expressions (803ms)
+  Γ£ô   90 [chromium] ΓÇ║ tests\scheduling.spec.ts:91:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows active vs inactive status (826ms)
+  Γ£ô   91 [chromium] ΓÇ║ tests\scheduling.spec.ts:103:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager has create schedule button (806ms)
+  Γ£ô   92 [chromium] ΓÇ║ tests\scheduling.spec.ts:115:7 ΓÇ║ Schedule Manager ΓÇ║ schedule execution history is available (790ms)
+  Γ£ô   93 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:77:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ navigates to /setup when identity is NOT_CONFIGURED (881ms)
+  Γ£ô   94 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:87:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ does NOT redirect to /setup when already CONFIGURED (1.1s)
+  Γ£ô   95 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:99:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 shows all three provider radio buttons (683ms)
+  Γ£ô   96 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:107:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 Next button advances to Keycloak config by default (717ms)
+  Γ£ô   97 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:114:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ selecting Azure EntraID and clicking Next shows OIDC config (851ms)
+  Γ£ô   98 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:130:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ bundled Keycloak happy path completes and shows success (869ms)
+  Γ£ô   99 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:163:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ 502 from server shows keycloak unreachable error (954ms)
+  Γ£ô  100 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:182:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Try Again button returns to config step (1.1s)
+  Γ£ô  101 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:203:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Configure button is disabled when required fields are empty (761ms)
+  Γ£ô  102 [chromium] ΓÇ║ tests\skills-sops.spec.ts:33:7 ΓÇ║ Skills ΓÇ║ skills page renders without crashing (712ms)
+  Γ£ô  103 [chromium] ΓÇ║ tests\skills-sops.spec.ts:41:7 ΓÇ║ Skills ΓÇ║ skills page does not redirect to login (676ms)
+  Γ£ô  104 [chromium] ΓÇ║ tests\skills-sops.spec.ts:47:7 ΓÇ║ Skills ΓÇ║ skills page lists skill names from API (756ms)
+  Γ£ô  105 [chromium] ΓÇ║ tests\skills-sops.spec.ts:53:7 ΓÇ║ Skills ΓÇ║ skills page shows all skills including Send Email (910ms)
+  Γ£ô  106 [chromium] ΓÇ║ tests\skills-sops.spec.ts:59:7 ΓÇ║ Skills ΓÇ║ skills page shows skill descriptions (818ms)
+  Γ£ô  107 [chromium] ΓÇ║ tests\skills-sops.spec.ts:71:7 ΓÇ║ Skills ΓÇ║ skills page shows active vs inactive status (860ms)
+  Γ£ô  108 [chromium] ΓÇ║ tests\skills-sops.spec.ts:83:7 ΓÇ║ Skills ΓÇ║ skills page has create skill button (840ms)
+  Γ£ô  109 [chromium] ΓÇ║ tests\skills-sops.spec.ts:115:7 ΓÇ║ SOPs ΓÇ║ SOPs page renders without crashing (668ms)
+  Γ£ô  110 [chromium] ΓÇ║ tests\skills-sops.spec.ts:123:7 ΓÇ║ SOPs ΓÇ║ SOPs page does not redirect to login (690ms)
+  Γ£ô  111 [chromium] ΓÇ║ tests\skills-sops.spec.ts:129:7 ΓÇ║ SOPs ΓÇ║ SOPs page lists SOP names from API (785ms)
+  Γ£ô  112 [chromium] ΓÇ║ tests\skills-sops.spec.ts:135:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows second SOP in list (891ms)
+  Γ£ô  113 [chromium] ΓÇ║ tests\skills-sops.spec.ts:141:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows step count for SOPs (728ms)
+  Γ£ô  114 [chromium] ΓÇ║ tests\skills-sops.spec.ts:154:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows SOP descriptions (779ms)
+  Γ£ô  115 [chromium] ΓÇ║ tests\skills-sops.spec.ts:166:7 ΓÇ║ SOPs ΓÇ║ clicking a SOP shows its steps (787ms)
+
+
+  1) [chromium] ΓÇ║ tests\gateway.spec.ts:45:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows agent type names 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('table')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('table')[22m
+
+
+      48 |     // Verify table structure exists (data may not load due to auth in e2e)
+      49 |     const table = page.locator('table')
+    > 50 |     await expect(table).toBeVisible()
+         |                         ^
+      51 |     // Check for table headers
+      52 |     await expect(page.getByRole('columnheader')).toHaveCount(4) // agentType, mode, httpEndpoint, actions
+      53 |   })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\gateway.spec.ts:50:25
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\gateway-Gateway-Configurat-cc68e-page-shows-agent-type-names-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\gateway-Gateway-Configurat-cc68e-page-shows-agent-type-names-chromium\error-context.md
+
+  2) [chromium] ΓÇ║ tests\gateway.spec.ts:55:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows HTTP endpoint path 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('heading')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('heading')[22m
+
+
+      58 |     // Verify page has gateway-related content
+      59 |     const heading = page.getByRole('heading')
+    > 60 |     await expect(heading).toBeVisible()
+         |                           ^
+      61 |   })
+      62 |
+      63 |   test('gateway page shows MCP tool names', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\gateway.spec.ts:60:27
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\gateway-Gateway-Configurat-ae141-ge-shows-HTTP-endpoint-path-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\gateway-Gateway-Configurat-ae141-ge-shows-HTTP-endpoint-path-chromium\error-context.md
+
+  3) [chromium] ΓÇ║ tests\gateway.spec.ts:63:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows MCP tool names 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('table')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('table')[22m
+
+
+      66 |     // Verify table structure for MCP tool display
+      67 |     const table = page.locator('table')
+    > 68 |     await expect(table).toBeVisible()
+         |                         ^
+      69 |   })
+      70 |
+      71 |   test('gateway page has interactive elements for configuration', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\gateway.spec.ts:68:25
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\gateway-Gateway-Configurat-39d81-y-page-shows-MCP-tool-names-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\gateway-Gateway-Configurat-39d81-y-page-shows-MCP-tool-names-chromium\error-context.md
+
+  4) [chromium] ΓÇ║ tests\gateway.spec.ts:71:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page has interactive elements for configuration 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('table')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('table')[22m
+
+
+      74 |     // Just verify the page structure is interactive-ready
+      75 |     const table = page.locator('table')
+    > 76 |     await expect(table).toBeVisible()
+         |                         ^
+      77 |   })
+      78 | })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\gateway.spec.ts:76:25
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\gateway-Gateway-Configurat-b8aa7--elements-for-configuration-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\gateway-Gateway-Configurat-b8aa7--elements-for-configuration-chromium\error-context.md
+
+  4 failed
+    [chromium] ΓÇ║ tests\gateway.spec.ts:45:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows agent type names 
+    [chromium] ΓÇ║ tests\gateway.spec.ts:55:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows HTTP endpoint path 
+    [chromium] ΓÇ║ tests\gateway.spec.ts:63:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows MCP tool names 
+    [chromium] ΓÇ║ tests\gateway.spec.ts:71:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page has interactive elements for configuration 
+  111 passed (2.9m)
+
+To open last HTML report run:
+[36m[39m
+[36m  npx playwright show-report[39m
+[36m[39m
