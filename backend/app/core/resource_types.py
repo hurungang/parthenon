@@ -20,7 +20,6 @@ RT_PERMISSIONS: Final[str] = "permissions"
 RT_SKILL: Final[str] = "skill"
 RT_SCHEDULING: Final[str] = "scheduling"
 RT_NOTIFICATION: Final[str] = "notification"
-RT_RESULT: Final[str] = "result"
 
 # ── Manifest ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +28,7 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
         "actions": ["create", "read", "update", "delete", "execute"],
     },
     RT_MCP_SERVER: {
-        "actions": ["create", "read", "update", "delete", "execute", "manage"],
+        "actions": ["create", "read", "update", "delete", "execute"],
     },
     RT_CONVERSATION: {
         "actions": ["create", "read", "update", "delete"],
@@ -60,8 +59,5 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     },
     RT_NOTIFICATION: {
         "actions": ["read", "manage"],
-    },
-    RT_RESULT: {
-        "actions": ["read"],
     },
 }

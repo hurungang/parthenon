@@ -15,6 +15,7 @@ import {
 } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { AgentType } from '../../types'
 
 /**
@@ -22,7 +23,7 @@ import type { AgentType } from '../../types'
  */
 export function GatewayConfigPage() {
   const { t } = useTranslation()
-  const { data: agentTypes, isLoading } = useAgentTypes()
+  const { data: agentTypes, isLoading, error } = useAgentTypes()
 
   const handleCopy = (text: string) => {
     void navigator.clipboard.writeText(text)
@@ -35,6 +36,8 @@ export function GatewayConfigPage() {
       <Typography variant="h4" fontWeight={700} mb={3}>
         {t('gateway.title')}
       </Typography>
+
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       {isLoading ? (
         <CircularProgress />

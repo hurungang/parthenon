@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Improved Role Policy Management</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.btn-icon{background:none;border:none;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);transition:background var(--transition);position:relative}
+.btn-icon:hover{background:var(--bg)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── VIEWS ── */
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:4px}
+.view-actions{display:flex;gap:12px;align-items:center}
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:24px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-danger-ghost{background:transparent;border:1px solid transparent;color:var(--error);padding:6px 12px;border-radius:var(--radius-sm);font-weight:500;transition:all var(--transition)}.btn-danger-ghost:hover{background:#FEE2E2;border-color:#FCA5A5}
+.btn-icon-svg{width:16px;height:16px;fill:currentColor}
+
+/* ── CHIPS / BADGES ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-gray{background:#F1F5F9;color:#475569;border:1px solid #E2E8F0}
+.resource-badge{display:inline-flex;align-items:center;font-family:monospace;background:#E2E8F0;color:#334155;padding:4px 10px;border-radius:6px;font-size:13px;font-weight:600;}
+
+/* ── CARDS (POLICY STATEMENTS) ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);transition:box-shadow var(--transition);margin-bottom:16px}
+.card:hover{box-shadow:var(--shadow-md)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#F8FAFC;border-radius:var(--radius) var(--radius) 0 0}
+.card-title{display:flex;align-items:center;gap:12px}
+.card-body{padding:20px}
+.policy-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.policy-col{display:flex;flex-direction:column;gap:8px}
+.policy-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.chip-list{display:flex;flex-wrap:wrap;gap:6px}
+.conditions-box{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-family:'Courier New',monospace;font-size:12px;color:var(--text-primary);line-height:1.6}
+.conditions-box .key{color:#1D4ED8;font-weight:600}
+.conditions-box .val{color:#047857}
+.conditions-empty{color:var(--text-secondary);font-style:italic;font-family:inherit;font-size:13px}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:20px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px}
+.form-control{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none;font-size:14px}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* Multi-select */
+.multi-select-box{border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;display:flex;flex-wrap:wrap;gap:6px;background:var(--surface);cursor:text;min-height:42px}
+.multi-select-box:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.multi-select-chip{background:var(--primary-light);color:var(--primary-dark);padding:4px 8px;border-radius:4px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.multi-select-chip button{background:none;border:none;color:var(--primary);cursor:pointer;font-size:14px;line-height:1;margin-top:-2px}
+.multi-select-chip button:hover{color:var(--primary-dark)}
+.multi-select-input{border:none;outline:none;background:transparent;padding:4px 6px;font-size:14px;flex:1;min-width:120px;color:var(--text-primary)}
+
+/* Condition Rows */
+.condition-row{display:grid;grid-template-columns:1fr 1fr 40px;gap:12px;align-items:center;margin-bottom:12px}
+.condition-row .btn-remove-row{background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.condition-row .btn-remove-row:hover{background:#FEE2E2;color:var(--error)}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:600px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;animation:modal-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1)}
+.modal-lg{max-width:700px}
+@keyframes modal-enter { from{opacity:0;transform:translateY(10px) scale(0.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#FAFAFA}
+.modal-header h3{font-size:18px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:20px;line-height:1;transition:background var(--transition)}.modal-close:hover{background:var(--border);color:var(--text-primary)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:12px;flex-shrink:0;background:#FAFAFA}
+
+/* ── JSON VIEW ── */
+.json-view{background:#1E1E1E;color:#D4D4D4;padding:20px;border-radius:var(--radius);font-family:'Courier New',monospace;font-size:13px;overflow-x:auto;white-space:pre;line-height:1.6;border:1px solid #333}
+.json-view-container{position:relative}
+.btn-copy{position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.1);color:#fff;border:none;padding:6px 12px;border-radius:4px;font-size:12px;cursor:pointer;transition:background 0.2s}
+.btn-copy:hover{background:rgba(255,255,255,0.2)}
+.jk{color:#9CDCFE}.js{color:#CE9178}.jb{color:#569CD6}.jp{color:#D4D4D4}
+
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <h1>⚡ Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+    <div class="nav-item" style="margin-top:8px"><span class="nav-icon">🏠</span>Dashboard</div>
+    <div class="nav-item"><span class="nav-icon">🤖</span>Agents</div>
+    <div class="nav-item"><span class="nav-icon">🔧</span>Skills</div>
+    <div class="nav-item"><span class="nav-icon">🔌</span>MCP Hub</div>
+    <div class="nav-item active"><span class="nav-icon">🔐</span>Permissions</div>
+  </nav>
+
+  <!-- MAIN WRAPPER -->
+  <div class="main-wrapper">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-title">Role Management</div>
+      <div class="topbar-actions">
+        <div class="avatar">AH</div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      
+      <!-- ROLE HEADER -->
+      <div class="view-header">
+        <div>
+          <h2>Role: Data Scientist</h2>
+          <div class="view-desc">Role ID: role_8f7b2c9a • Defines standard access for the data science team</div>
+        </div>
+        <div class="view-actions">
+          <button class="btn btn-secondary" onclick="openModal('modal-clone')">
+            <svg class="btn-icon-svg" viewBox="0 0 24 24"><path d="M8 4V16a2 2 0 002 2h10a2 2 0 002-2V4a2 2 0 00-2-2H10a2 2 0 00-2 2zM4 8v12a2 2 0 002 2h10v-2H6V8H4z"/></svg> Clone Role
+          </button>
+          <button class="btn btn-secondary" onclick="openModal('modal-json')">
+            <svg class="btn-icon-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6zm4-10h4v2h-4v-2zm0 4h4v2h-4v-2z"/></svg> View JSON
+          </button>
+          <button class="btn btn-primary" onclick="openModal('modal-statement')">
+            <svg class="btn-icon-svg" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Add Statement
+          </button>
+        </div>
+      </div>
+
+      <div class="section-title">Role Policy Statements (2 statements)</div>
+      
+      <!-- STATEMENT CARDS CONTAINER -->
+      <div id="statements-container">
+        
+        <!-- CARD 1 -->
+        <div class="card" id="stmt-1">
+          <div class="card-header">
+             <div class="card-title">
+               <span class="resource-badge">mcp_server</span>
+               <span class="chip chip-green">Allow</span>
+             </div>
+             <button class="btn-danger-ghost" onclick="document.getElementById('stmt-1').remove()">Remove</button>
+          </div>
+          <div class="card-body">
+             <div class="policy-grid">
+               <div class="policy-col">
+                 <div class="policy-label">Allowed Actions</div>
+                 <div class="chip-list">
+                   <span class="chip chip-gray">read</span>
+                   <span class="chip chip-gray">execute</span>
+                   <span class="chip chip-gray">update</span>
+                 </div>
+               </div>
+               <div class="policy-col">
+                 <div class="policy-label">Tag Conditions</div>
+                 <div class="conditions-box">
+                    "<span class="key">environment</span>": "<span class="val">production</span>"<br>
+                    "<span class="key">department</span>": "<span class="val">data-science</span>"
+                 </div>
+               </div>
+             </div>
+          </div>
+        </div>
+
+        <!-- CARD 2 -->
+        <div class="card" id="stmt-2">
+          <div class="card-header">
+             <div class="card-title">
+               <span class="resource-badge">skill</span>
+               <span class="chip chip-green">Allow</span>
+             </div>
+             <button class="btn-danger-ghost" onclick="document.getElementById('stmt-2').remove()">Remove</button>
+          </div>
+          <div class="card-body">
+             <div class="policy-grid">
+               <div class="policy-col">
+                 <div class="policy-label">Allowed Actions</div>
+                 <div class="chip-list">
+                   <span class="chip chip-gray">read</span>
+                   <span class="chip chip-gray">execute</span>
+                 </div>
+               </div>
+               <div class="policy-col">
+                 <div class="policy-label">Tag Conditions</div>
+                 <div class="conditions-box">
+                    "<span class="key">domain</span>": "<span class="val">analytics</span>"
+                 </div>
+               </div>
+             </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+
+<!-- MODAL: ADD STATEMENT -->
+<div class="modal-overlay" id="modal-statement">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Add Policy Statement</h3>
+      <button class="modal-close" onclick="closeModal('modal-statement')">&times;</button>
+    </div>
+    <div class="modal-body">
+      
+      <div class="form-row" style="margin-bottom:20px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Resource Type</label>
+          <select class="form-control">
+            <option value="user">User</option>
+            <option value="role">Role</option>
+            <option value="group">Group</option>
+            <option value="tag">Tag</option>
+            <option value="agent">Agent</option>
+            <option value="mcp_server" selected>MCP Server</option>
+            <option value="skill">Skill</option>
+            <option value="sop">SOP</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Effect</label>
+          <select class="form-control">
+            <option value="Allow">Allow</option>
+            <option value="Deny">Deny</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Actions (Multi-select)</label>
+        <div class="multi-select-box" onclick="document.getElementById('action-input').focus()">
+          <div class="multi-select-chip"><span>read</span><button onclick="this.parentElement.remove()">&times;</button></div>
+          <div class="multi-select-chip"><span>execute</span><button onclick="this.parentElement.remove()">&times;</button></div>
+          <input type="text" class="multi-select-input" id="action-input" placeholder="Type to add action (e.g. update, delete)..." onkeydown="handleActionInput(event)">
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:32px">Tag Conditions</div>
+      
+      <div id="conditions-container">
+        <div class="condition-row">
+          <div>
+            <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block">Tag Key</label>
+            <select class="form-control">
+              <option value="environment" selected>environment</option>
+              <option value="department">department</option>
+              <option value="sensitivity">sensitivity</option>
+              <option value="domain">domain</option>
+              <option value="region">region</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block">Tag Value</label>
+            <input type="text" class="form-control" value="production" placeholder="e.g. production">
+          </div>
+          <div style="margin-top:-6px">
+            <label style="display:block;margin-bottom:4px">&nbsp;</label>
+            <button class="btn-remove-row" onclick="this.parentElement.parentElement.remove()" title="Remove condition">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="addConditionRow()">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> 
+        Add Condition
+      </button>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-statement')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitStatement()">Save Statement</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CLONE ROLE -->
+<div class="modal-overlay" id="modal-clone">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Clone Role</h3>
+      <button class="modal-close" onclick="closeModal('modal-clone')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>New Role Name</label>
+        <input type="text" class="form-control" id="clone-name" value="Copy of Data Scientist">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Description</label>
+        <textarea class="form-control" rows="3">Defines standard access for the data science team</textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-clone')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-clone'); alert('Role cloned successfully!')">Clone Role</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VIEW JSON -->
+<div class="modal-overlay" id="modal-json">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Role Policy (JSON)</h3>
+      <button class="modal-close" onclick="closeModal('modal-json')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:16px">
+      <div class="json-view-container">
+        <button class="btn-copy" onclick="copyJson(this)">Copy JSON</button>
+        <div class="json-view"><span class="jp">{</span>
+  <span class="jk">"role_id"</span><span class="jp">: </span><span class="js">"role_8f7b2c9a"</span><span class="jp">,</span>
+  <span class="jk">"name"</span><span class="jp">: </span><span class="js">"Data Scientist"</span><span class="jp">,</span>
+  <span class="jk">"statements"</span><span class="jp">: [</span>
+    <span class="jp">{</span>
+      <span class="jk">"effect"</span><span class="jp">: </span><span class="js">"Allow"</span><span class="jp">,</span>
+      <span class="jk">"resource_type"</span><span class="jp">: </span><span class="js">"mcp_server"</span><span class="jp">,</span>
+      <span class="jk">"actions"</span><span class="jp">: [</span><span class="js">"read"</span><span class="jp">, </span><span class="js">"execute"</span><span class="jp">, </span><span class="js">"update"</span><span class="jp">],</span>
+      <span class="jk">"conditions"</span><span class="jp">: {</span>
+        <span class="jk">"tags"</span><span class="jp">: {</span>
+          <span class="jk">"environment"</span><span class="jp">: </span><span class="js">"production"</span><span class="jp">,</span>
+          <span class="jk">"department"</span><span class="jp">: </span><span class="js">"data-science"</span>
+        <span class="jp">}</span>
+      <span class="jp">}</span>
+    <span class="jp">},</span>
+    <span class="jp">{</span>
+      <span class="jk">"effect"</span><span class="jp">: </span><span class="js">"Allow"</span><span class="jp">,</span>
+      <span class="jk">"resource_type"</span><span class="jp">: </span><span class="js">"skill"</span><span class="jp">,</span>
+      <span class="jk">"actions"</span><span class="jp">: [</span><span class="js">"read"</span><span class="jp">, </span><span class="js">"execute"</span><span class="jp">],</span>
+      <span class="jk">"conditions"</span><span class="jp">: {</span>
+        <span class="jk">"tags"</span><span class="jp">: {</span>
+          <span class="jk">"domain"</span><span class="jp">: </span><span class="js">"analytics"</span>
+        <span class="jp">}</span>
+      <span class="jp">}</span>
+    <span class="jp">}</span>
+  <span class="jp">]</span>
+<span class="jp">}</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-json')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Modal Handlers
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if(id === 'modal-clone') {
+    setTimeout(() => {
+      const input = document.getElementById('clone-name');
+      input.focus();
+      input.setSelectionRange(0, input.value.length);
+    }, 50);
+  }
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if(e.target === overlay) {
+      overlay.classList.remove('open');
+    }
+  });
+});
+
+// JSON Copy
+function copyJson(btn) {
+  const originalText = btn.innerText;
+  btn.innerText = 'Copied!';
+  setTimeout(() => btn.innerText = originalText, 2000);
+}
+
+// Multi-select Action Input
+function handleActionInput(e) {
+  if(e.key === 'Enter' && e.target.value.trim()) {
+    e.preventDefault();
+    const val = e.target.value.trim();
+    const chipHtml = `<div class="multi-select-chip"><span>${val}</span><button onclick="this.parentElement.remove()">&times;</button></div>`;
+    e.target.insertAdjacentHTML('beforebegin', chipHtml);
+    e.target.value = '';
+  }
+}
+
+// Dynamic Condition Rows
+function addConditionRow() {
+  const container = document.getElementById('conditions-container');
+  const rowHtml = `
+    <div class="condition-row">
+      <div>
+        <select class="form-control">
+          <option value="environment">environment</option>
+          <option value="department">department</option>
+          <option value="sensitivity">sensitivity</option>
+          <option value="domain">domain</option>
+          <option value="region">region</option>
+        </select>
+      </div>
+      <div>
+        <input type="text" class="form-control" placeholder="Condition value...">
+      </div>
+      <div>
+        <button class="btn-remove-row" onclick="this.parentElement.parentElement.remove()" title="Remove condition">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', rowHtml);
+}
+
+// Fake Submission
+function submitStatement() {
+  closeModal('modal-statement');
+  alert('Statement successfully added to the role policy!');
+}
+</script>
+
+</body>
+</html>

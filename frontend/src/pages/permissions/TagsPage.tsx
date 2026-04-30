@@ -31,6 +31,7 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useTagDefinitions, useCreateTag, useUpdateTag, useDeleteTag } from '../../hooks/usePermissions'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { TagScope } from '../../types/permissions'
 import type { TagDefinition } from '../../types/permissions'
 
@@ -62,6 +63,7 @@ export function TagsPage() {
   const deleteTag = useDeleteTag()
 
   const [dialogMode, setDialogMode] = useState<DialogMode>(null)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [editingTag, setEditingTag] = useState<TagDefinition | null>(null)
   const [form, setForm] = useState<TagForm>(emptyForm)
   const [deleteTarget, setDeleteTarget] = useState<TagDefinition | null>(null)
@@ -71,6 +73,7 @@ export function TagsPage() {
   const openAdd = () => {
     setForm(emptyForm)
     setEditingTag(null)
+    setDialogError(null)
     setDialogMode('add')
   }
 
@@ -84,13 +87,23 @@ export function TagsPage() {
       allowed_values: tag.allowed_values.map((v) => v.value),
       valueInput: '',
     })
+    setDialogError(null)
     setDialogMode('edit')
   }
 
   const addValue = () => {
     const v = form.valueInput.trim()
-    if (!v || form.allowed_values.includes(v)) return
+    if (!v || form.allowed_values.includes(v)) {
+      console.log('Tag value not added:', !v ? 'empty value' : 'duplicate value')
+      return
+    }
+    console.log('Adding tag value:', v)
     setForm((f) => ({ ...f, allowed_values: [...f.allowed_values, v], valueInput: '' }))
+  }
+
+  const canAddValue = () => {
+    const v = form.valueInput.trim()
+    return v.length > 0 && !form.allowed_values.includes(v)
   }
 
   const removeValue = (v: string) => {
@@ -98,28 +111,33 @@ export function TagsPage() {
   }
 
   const handleSave = async () => {
-    if (dialogMode === 'add') {
-      await createTag.mutateAsync({
-        key: form.key,
-        scope: form.scope,
-        resource_type: form.scope === TagScope.ResourceType ? form.resource_type : undefined,
-        description: form.description || undefined,
-        allowed_values: form.allowed_values,
-      })
-    } else if (dialogMode === 'edit' && editingTag) {
-      const currentValues = editingTag.allowed_values.map((v) => v.value)
-      const addValues = form.allowed_values.filter((v) => !currentValues.includes(v))
-      const removeValues = currentValues.filter((v) => !form.allowed_values.includes(v))
-      await updateTag.mutateAsync({
-        id: editingTag.id,
-        data: {
+    try {
+      setDialogError(null)
+      if (dialogMode === 'add') {
+        await createTag.mutateAsync({
+          key: form.key,
+          scope: form.scope,
+          resource_type: form.scope === TagScope.ResourceType ? form.resource_type : undefined,
           description: form.description || undefined,
-          add_values: addValues,
-          remove_values: removeValues,
-        },
-      })
+          allowed_values: form.allowed_values,
+        })
+      } else if (dialogMode === 'edit' && editingTag) {
+        const currentValues = editingTag.allowed_values.map((v) => v.value)
+        const addValues = form.allowed_values.filter((v) => !currentValues.includes(v))
+        const removeValues = currentValues.filter((v) => !form.allowed_values.includes(v))
+        await updateTag.mutateAsync({
+          id: editingTag.id,
+          data: {
+            description: form.description || undefined,
+            add_values: addValues,
+            remove_values: removeValues,
+          },
+        })
+      }
+      setDialogMode(null)
+    } catch (err) {
+      setDialogError(err)
     }
-    setDialogMode(null)
   }
 
   const handleDelete = async () => {
@@ -155,7 +173,7 @@ export function TagsPage() {
       />
 
       {isLoading && <CircularProgress />}
-      {error && <Alert severity="error">{t('app.error')}</Alert>}
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -200,11 +218,12 @@ export function TagsPage() {
       </TableContainer>
 
       {/* Add / Edit dialog */}
-      <Dialog open={dialogMode !== null} onClose={() => setDialogMode(null)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogMode !== null} onClose={() => { setDialogMode(null); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>
           {dialogMode === 'add' ? t('permissions.tags.addTag') : t('permissions.tags.editTag')}
         </DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               label={t('permissions.tags.key')}
@@ -253,7 +272,11 @@ export function TagsPage() {
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addValue() } }}
                   sx={{ flexGrow: 1 }}
                 />
-                <Button variant="outlined" onClick={addValue}>
+                <Button 
+                  variant="outlined" 
+                  onClick={addValue}
+                  disabled={!canAddValue()}
+                >
                   {t('permissions.tags.addValue')}
                 </Button>
               </Box>

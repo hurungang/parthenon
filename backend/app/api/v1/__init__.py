@@ -9,6 +9,7 @@ from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
 from app.api.v1.mcp_hub import McpServerRouter, McpSessionRouter, McpToolRouter
 from app.api.v1.notifications import NotificationRouter
 from app.api.v1.platform_users import PlatformUsersRouter
+from app.api.v1.policy import PolicyRouter
 from app.api.v1.results import ResultRouter
 from app.api.v1.user_roles import RolesRouter
 from app.api.v1.scheduling import ScheduleRouter
@@ -50,6 +51,7 @@ router.include_router(NotificationRouter)
 # Permission management
 router.include_router(TagsRouter)
 router.include_router(RolesRouter)
+router.include_router(PolicyRouter)
 router.include_router(GroupsRouter)
 router.include_router(PlatformUsersRouter)
 router.include_router(AccessRequestsRouter)

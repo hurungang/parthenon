@@ -22,3 +22,8 @@ class TagDefinition(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     tag_values = relationship("TagValue", back_populates="tag_definition", cascade="all, delete-orphan")
+    
+    @property
+    def allowed_values(self):
+        """Alias for tag_values to match Pydantic schema."""
+        return self.tag_values

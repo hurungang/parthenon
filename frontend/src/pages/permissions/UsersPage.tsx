@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
@@ -18,6 +17,7 @@ import {
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import { usePlatformUsers } from '../../hooks/usePermissions'
 import { ManageAccessModal } from '../../components/permissions/ManageAccessModal'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { PlatformUser } from '../../types/permissions'
 
 export function UsersPage() {
@@ -48,7 +48,7 @@ export function UsersPage() {
       />
 
       {isLoading && <CircularProgress />}
-      {error && <Alert severity="error">{t('app.error')}</Alert>}
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       <TableContainer component={Paper}>
         <Table size="small">

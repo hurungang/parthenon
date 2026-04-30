@@ -25,6 +25,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { Sop } from '../../types'
 
 /**
@@ -34,10 +35,11 @@ export function SopListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [editSop, setEditSop] = useState<Sop | null>(null)
   const [form, setForm] = useState({ name: '', description: '' })
 
-  const { data: sops, isLoading } = useQuery<Sop[]>({
+  const { data: sops, isLoading, error } = useQuery<Sop[]>({
     queryKey: ['sops'],
     queryFn: async () => {
       const { data } = await apiClient.get<Sop[]>('/sops')
@@ -48,23 +50,30 @@ export function SopListPage() {
   const handleOpenCreate = () => {
     setEditSop(null)
     setForm({ name: '', description: '' })
+    setDialogError(null)
     setDialogOpen(true)
   }
 
   const handleOpenEdit = (sop: Sop) => {
     setEditSop(sop)
     setForm({ name: sop.name, description: sop.description ?? '' })
+    setDialogError(null)
     setDialogOpen(true)
   }
 
   const handleSave = async () => {
-    if (editSop) {
-      await apiClient.put(`/sops/${editSop.id}`, form)
-    } else {
-      await apiClient.post('/sops', form)
+    try {
+      setDialogError(null)
+      if (editSop) {
+        await apiClient.put(`/sops/${editSop.id}`, form)
+      } else {
+        await apiClient.post('/sops', form)
+      }
+      setDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['sops'] })
+    } catch (err) {
+      setDialogError(err)
     }
-    setDialogOpen(false)
-    await queryClient.invalidateQueries({ queryKey: ['sops'] })
   }
 
   const handleDelete = async (id: string) => {
@@ -82,6 +91,8 @@ export function SopListPage() {
           {t('sops.createSop')}
         </Button>
       </Box>
+
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       {isLoading ? (
         <CircularProgress />
@@ -128,9 +139,10 @@ export function SopListPage() {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>{editSop ? t('sops.editSop') : t('sops.createSop')}</DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

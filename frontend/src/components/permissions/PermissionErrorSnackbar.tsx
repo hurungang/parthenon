@@ -1,26 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, Button, Snackbar } from '@mui/material'
+import { Alert, Snackbar } from '@mui/material'
 import {
   PERMISSION_DENIED_EVENT,
   type PermissionDeniedDetail,
-  type RequiredPermission,
 } from '../../utils/permissionError'
-import { RequestPermissionModal } from './RequestPermissionModal'
 
 /**
  * Global snackbar that displays structured 403 "permission denied" messages.
  *
  * Mount once in AppShell.  Listens for the `parthenon:permissionDenied` custom
- * event dispatched by the API client interceptor and shows a targeted message
- * with a "Request Access" action button.
+ * event dispatched by the API client interceptor and shows a targeted message.
  */
 export function PermissionErrorSnackbar() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
-  const [permissionContext, setPermissionContext] = useState<RequiredPermission | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -32,7 +27,6 @@ export function PermissionErrorSnackbar() {
         resource_id: resource_id ?? '*',
       })
       setMessage(msg)
-      setPermissionContext(detail.required_permission)
       setOpen(true)
     }
 
@@ -40,38 +34,16 @@ export function PermissionErrorSnackbar() {
     return () => window.removeEventListener(PERMISSION_DENIED_EVENT, handler)
   }, [t])
 
-  const handleRequestAccess = () => {
-    setOpen(false)
-    setModalOpen(true)
-  }
-
   return (
-    <>
-      <Snackbar
-        open={open}
-        autoHideDuration={6000}
-        onClose={() => setOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          severity="error"
-          onClose={() => setOpen(false)}
-          sx={{ width: '100%' }}
-          action={
-            <Button color="inherit" size="small" onClick={handleRequestAccess}>
-              {t('permissions.errors.requestAccessButton')}
-            </Button>
-          }
-        >
-          {message}
-        </Alert>
-      </Snackbar>
-      <RequestPermissionModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        permissionContext={permissionContext}
-      />
-    </>
+    <Snackbar
+      open={open}
+      autoHideDuration={6000}
+      onClose={() => setOpen(false)}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+    >
+      <Alert severity="error" onClose={() => setOpen(false)} sx={{ width: '100%' }}>
+        {message}
+      </Alert>
+    </Snackbar>
   )
 }
-

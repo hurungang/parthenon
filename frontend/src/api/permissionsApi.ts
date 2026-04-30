@@ -14,7 +14,9 @@ import type {
   PlatformUserDetail,
   PolicyStatement,
   PolicyStatementCreate,
+  ResourceTypeDef,
   Role,
+  RoleCloneCreate,
   RoleCreate,
   RoleUpdate,
   TagDefinition,
@@ -89,6 +91,30 @@ export async function createPolicyStatement(
 
 export async function deletePolicyStatement(roleId: string, policyId: string): Promise<void> {
   await apiClient.delete(`/user-roles/${roleId}/policies/${policyId}`)
+}
+
+export async function updatePolicyStatement(
+  roleId: string,
+  policyId: string,
+  data: PolicyStatementCreate
+): Promise<PolicyStatement> {
+  const response = await apiClient.patch<PolicyStatement>(
+    `/user-roles/${roleId}/policies/${policyId}`,
+    data
+  )
+  return response.data
+}
+
+// ── Policy catalogue ──────────────────────────────────────────────────────────
+
+export async function listResourceTypes(): Promise<ResourceTypeDef[]> {
+  const response = await apiClient.get<ResourceTypeDef[]>('/policy/resource-types')
+  return response.data
+}
+
+export async function cloneRole(sourceId: string, data: RoleCloneCreate): Promise<Role> {
+  const response = await apiClient.post<Role>(`/user-roles/${sourceId}/clone`, data)
+  return response.data
 }
 
 // ── Groups ────────────────────────────────────────────────────────────────────
@@ -195,7 +221,7 @@ export async function removeUserFromGroup(userId: string, groupId: string): Prom
 // ── Access Requests ───────────────────────────────────────────────────────────
 
 export async function submitAccessRequest(
-  groupIds: string[],
+  groupIds: string[] = [],
   justification: string
 ): Promise<AccessRequestBatch> {
   const response = await apiClient.post<AccessRequestBatch>('/user-access-requests', {
@@ -217,9 +243,11 @@ export async function listPendingRequests(): Promise<AccessRequest[]> {
 
 export async function approveAccessRequest(
   requestId: string,
+  groupId?: string,
   approvalReason?: string
 ): Promise<AccessRequest> {
   const response = await apiClient.patch<AccessRequest>(`/user-access-requests/${requestId}/approve`, {
+    ...(groupId !== undefined && { group_id: groupId }),
     approval_reason: approvalReason,
   })
   return response.data

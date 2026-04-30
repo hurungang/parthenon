@@ -52,6 +52,7 @@ conventions:
   - "Agent identities are first-class OIDC principals — agents have their own client credentials in the identity provider"
   - "MCP server slug/alias must be unique platform-wide and is used as the namespace for all synced tools"
   - "PowerShell terminal on Windows — use ; not && to chain commands"
+  - "**Dialog Error Handling Standard (CRITICAL)**: ALL dialogs with API calls MUST handle errors using this pattern: (1) Add dialogError state: `const [dialogError, setDialogError] = useState<unknown>(null)`, (2) Wrap async operations in try-catch: `try { setDialogError(null); await operation(); close dialog; } catch (err) { setDialogError(err) }`, (3) Clear error on open/close: `onClose={() => { close(); setDialogError(null) }}`, (4) Display error in DialogContent FIRST: `{dialogError && <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />}`. This ensures users see permission errors (403) and other API failures immediately in dialogs instead of silent failures. See frontend/src/hooks/useDialogErrorHandler.ts for reusable hook implementation."
 
 # Domain knowledge — business rules agents must always know
 domain:

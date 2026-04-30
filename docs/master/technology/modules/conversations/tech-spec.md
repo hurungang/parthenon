@@ -40,7 +40,7 @@ The conversations module provides complete and durable persistence of every inte
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `ConversationStore` | class | Persists conversation sessions, turns, and tool call records synchronously during execution | `backend/app/services/conversations/store.py` |
-| `ConversationRouter` | router | Query endpoints for filtered session listing and detailed session retrieval | `backend/app/api/v1/conversations.py` |
+| `ConversationRouter` | router | Query endpoints for filtered session listing and detailed session retrieval; guarded by `require_permission(RT_CONVERSATION, "read")` | `backend/app/api/v1/conversations.py` |
 | `ConversationSession` | model | SQLAlchemy model for a bounded interaction context (agent instance, participants, status) | `backend/app/db/models/conversations.py` |
 | `ConversationTurn` | model | SQLAlchemy model for a single message in a session (role, content, sequence) | `backend/app/db/models/conversations.py` |
 | `ToolCallRecord` | model | SQLAlchemy model recording a tool invocation within a turn (tool, inputs, result, timing) | `backend/app/db/models/conversations.py` |

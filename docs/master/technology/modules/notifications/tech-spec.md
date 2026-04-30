@@ -43,7 +43,7 @@ The notifications module provides a pluggable outbound notification system that 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `NotificationDispatcher` | class | Dispatches notifications to configured channels; registers each channel as an MCP tool | `backend/app/services/notifications/dispatcher.py` |
-| `NotificationRouter` | router | CRUD, test-send, and event history endpoints for notification channels | `backend/app/api/v1/notifications.py` |
+| `NotificationRouter` | router | CRUD, test-send, and event history endpoints for notification channels; all operations guarded by `require_permission(RT_NOTIFICATION, action)` | `backend/app/api/v1/notifications.py` |
 | `NotificationChannel` | model | SQLAlchemy model for a configured outbound notification destination (type, config, enabled state) | `backend/app/db/models/notifications.py` |
 | `NotificationEvent` | model | SQLAlchemy model recording a dispatched notification with channel, payload summary, and status | `backend/app/db/models/notifications.py` |
 | `NotificationConfigPage` | component | Channel list, add/edit form per channel type, test-send, and event history table | `frontend/src/pages/notifications/NotificationConfigPage.tsx` |

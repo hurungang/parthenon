@@ -83,7 +83,7 @@ erDiagram
     Group }o--|| PlatformUser : "owned by"
     AccessRequestBatch }o--|| PlatformUser : "submitted by"
     AccessRequest }o--|| AccessRequestBatch : "part of"
-    AccessRequest }o--|| Group : "for"
+    AccessRequest }o--o| Group : "assigned to"
     AccessRequest }o--|| PlatformUser : "requested by"
 
     TagDefinition {
@@ -174,7 +174,7 @@ erDiagram
     AccessRequest {
         uuid id
         uuid batch_id
-        uuid group_id
+        uuid group_id "optional"
         uuid requested_by
         string status
         datetime requested_at

@@ -30,3 +30,9 @@ Env defaults for local dev (`frontend/.env.local`):
 - `VITE_OIDC_AUTHORITY=http://localhost:8082/realms/parthenon`
 - `VITE_OIDC_CLIENT_ID=parthenon-api-ui`
 - `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+
+## temporary test scripts
+
+temporary test scripts for quick local testing of auth flows, etc. must be saved under `scripts/` and should be named descriptively (e.g. `test-auth-flows.ps1`) to avoid confusion with production scripts. These are not intended for long-term use and can be deleted after testing is complete.
+
+temporary output files generated during testing (e.g. token dumps, test logs) should be saved under `tmp/` with descriptive names (e.g. `auth-flow-test-output.txt`) and can be deleted after review. This keeps the project organized and prevents clutter in the main directories.  

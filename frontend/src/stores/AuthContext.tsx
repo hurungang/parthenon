@@ -108,11 +108,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    // Clear local tokens
+    const idToken = localStorage.getItem('id_token')
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('id_token')
     setTokenState(null)
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    window.location.href = '/login'
+    
+    // Redirect to Keycloak's logout endpoint to end the SSO session
+    const postLogoutRedirectUri = `${window.location.origin}/login`
+    const params = new URLSearchParams({
+      client_id: OIDC_CLIENT_ID,
+      post_logout_redirect_uri: postLogoutRedirectUri,
+    })
+    
+    // Include id_token_hint if available (recommended for better logout)
+    if (idToken) {
+      params.append('id_token_hint', idToken)
+    }
+    
+    window.location.href = `${OIDC_AUTHORITY}/protocol/openid-connect/logout?${params}`
   }, [])
 
   // Silent token refresh: schedule refresh 60s before expiry

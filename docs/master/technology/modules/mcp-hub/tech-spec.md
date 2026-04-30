@@ -59,9 +59,9 @@ The MCP Hub module is the canonical integration boundary between the Parthenon p
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `McpServerRouter` | router | CRUD and sync endpoints for MCP servers | `backend/app/api/v1/mcp_hub.py` |
-| `McpSessionRouter` | router | CRUD endpoints for MCP sessions with encrypted credential storage | `backend/app/api/v1/mcp_hub.py` |
-| `McpToolRouter` | router | Tool listing and permission grant/revoke endpoints | `backend/app/api/v1/mcp_hub.py` |
+| `McpServerRouter` | router | CRUD and sync endpoints for MCP servers; all operations guarded by `require_permission(RT_MCP_SERVER, action)` | `backend/app/api/v1/mcp_hub.py` |
+| `McpSessionRouter` | router | CRUD endpoints for MCP sessions with encrypted credential storage; guarded by `require_permission(RT_MCP_SERVER, "manage")` | `backend/app/api/v1/mcp_hub.py` |
+| `McpToolRouter` | router | Tool listing and permission grant/revoke endpoints; guarded by `require_permission(RT_MCP_SERVER, "manage")` | `backend/app/api/v1/mcp_hub.py` |
 | `ToolSyncService` | class | Fetches tool manifest from a registered MCP server and upserts under the server slug namespace | `backend/app/services/mcp/tool_sync.py` |
 | `McpProxyEngine` | class | Routes tool-call invocations to the correct server session with credential injection | `backend/app/services/mcp/proxy.py` |
 | `McpServer` | model | SQLAlchemy model for a registered external MCP tool server | `backend/app/db/models/mcp_hub.py` |

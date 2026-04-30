@@ -26,6 +26,7 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useMcpServers, useSyncServer } from '../../hooks/useMcpServers'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import apiClient from '../../api/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import type { McpServer } from '../../types'
@@ -35,10 +36,11 @@ import type { McpServer } from '../../types'
  */
 export function McpHubPage() {
   const { t } = useTranslation()
-  const { data: servers, isLoading } = useMcpServers()
+  const { data: servers, isLoading, error } = useMcpServers()
   const syncServer = useSyncServer()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [editServer, setEditServer] = useState<McpServer | null>(null)
   const [form, setForm] = useState({ name: '', slug: '', base_url: '', description: '' })
 
@@ -55,13 +57,18 @@ export function McpHubPage() {
   }
 
   const handleSave = async () => {
-    if (editServer) {
-      await apiClient.put(`/mcp/servers/${editServer.id}`, form)
-    } else {
-      await apiClient.post('/mcp/servers', form)
+    try {
+      setDialogError(null)
+      if (editServer) {
+        await apiClient.put(`/mcp/servers/${editServer.id}`, form)
+      } else {
+        await apiClient.post('/mcp/servers', form)
+      }
+      setDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers'] })
+    } catch (err) {
+      setDialogError(err)
     }
-    setDialogOpen(false)
-    await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers'] })
   }
 
   const handleDelete = async (id: string) => {
@@ -86,9 +93,10 @@ export function McpHubPage() {
         </Button>
       </Box>
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
+      {isLoading && <CircularProgress />}
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
+
+      {!isLoading && !error && (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
@@ -149,9 +157,10 @@ export function McpHubPage() {
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editServer ? t('mcp.editServer') : t('mcp.registerServer')}</DialogTitle>
+      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
+        <DialogTitle>{editServer ? t('mcp.editServer') : t('mcp.addServer')}</DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

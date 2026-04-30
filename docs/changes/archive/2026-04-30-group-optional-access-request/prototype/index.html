@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Group Optional Access Request Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;margin-top:4px;color:var(--sidebar-text);font-size:13.5px;position:relative;user-select:none}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;padding:24px}
+
+/* ── VIEWS ── */
+.view{display:none}
+.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS & CHIPS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition)}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-gray{background:#F1F5F9;color:#475569}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:480px;display:flex;flex-direction:column;overflow:hidden}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition)}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+/* ── ALERTS ── */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:20px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+
+.toast{position:fixed;bottom:24px;right:24px;background:#323232;color:#fff;padding:12px 24px;border-radius:4px;box-shadow:var(--shadow-md);font-size:14px;transform:translateY(100px);opacity:0;transition:all 0.3s ease;z-index:9999}
+.toast.show{transform:translateY(0);opacity:1}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <h1>⚡ Parthenon</h1>
+    </div>
+    <div style="padding: 16px 16px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">User Views</div>
+    <div class="nav-item active" data-view="user-view" onclick="switchView('user-view', 'My Access')">
+      <span class="nav-icon">👤</span>My Access
+    </div>
+    
+    <div style="padding: 24px 16px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;">Admin Views</div>
+    <div class="nav-item" data-view="admin-view" onclick="switchView('admin-view', 'Access Requests')">
+      <span class="nav-icon">🔑</span>Access Requests
+      <span class="chip chip-yellow" id="req-badge" style="margin-left: auto; font-size: 9px; padding: 2px 6px;">1 pending</span>
+    </div>
+  </nav>
+
+  <!-- MAIN WRAPPER -->
+  <div class="main-wrapper">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">My Access</div>
+      <div class="topbar-actions">
+        <div class="avatar" title="Current User" id="user-avatar">US</div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+
+      <!-- VIEW 1: USER VIEW -->
+      <div id="user-view" class="view active">
+        <div class="view-header">
+          <div>
+            <h2>My Access</h2>
+            <div class="view-desc">View your permissions and request new access</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('request-access-modal')">+ Request Access</button>
+        </div>
+
+        <div class="table-wrap" style="margin-bottom: 32px;">
+          <table>
+            <thead><tr><th>Resource / Group</th><th>Status</th><th>Requested On</th></tr></thead>
+            <tbody id="user-request-table-body">
+              <tr id="empty-state-user-req">
+                <td colspan="3" style="text-align:center;color:var(--text-secondary);padding:24px;">No active requests.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VIEW 2: ADMIN VIEW -->
+      <div id="admin-view" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Pending Access Requests</h2>
+            <div class="view-desc">Review and approve access for platform users</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>User</th><th>Request Details</th><th>Requested Group</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead>
+            <tbody id="admin-request-table-body">
+              <tr id="req-row-1">
+                <td><strong>Taylor Smith</strong><br><small class="text-secondary">taylor@example.com</small></td>
+                <td>Need access to deploying the staging environment metrics.</td>
+                <td><span class="chip chip-gray">Unassigned</span></td>
+                <td><span class="chip chip-yellow">Pending Review</span></td>
+                <td>Just now</td>
+                <td>
+                  <button class="btn btn-success btn-sm" onclick="openAdminModal('req-row-1', 'Taylor Smith')">Review Request</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- USER MODAL (Request Access) -->
+<div class="modal-overlay" id="request-access-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Request Access</h3>
+      <button class="modal-close" onclick="closeModal('request-access-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info">
+        <strong>Group access is assigned by an administrator.</strong>
+        <p style="margin-top:4px;">Please describe what resources you need to access, and our team will assign you to the correct permissions group upon approval.</p>
+      </div>
+      
+      <div class="form-group">
+        <label>Reason for Access / Which resources do you need? <span style="color:var(--error)">*</span></label>
+        <textarea class="form-control" id="user-request-reason" placeholder="e.g. I need access to the production analytics tools for the Q3 audit..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('request-access-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitUserRequest()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN MODAL (Review & Assign Group) -->
+<div class="modal-overlay" id="admin-review-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Review Access Request</h3>
+      <button class="modal-close" onclick="closeModal('admin-review-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;">
+        <span style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Requesting User</span>
+        <div id="admin-modal-username" style="font-weight:500;font-size:16px;">Taylor Smith</div>
+      </div>
+      
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+        <span style="font-size:12px;color:var(--text-secondary);font-weight:600;">User's Reason:</span>
+        <p style="margin-top:4px;font-size:13.5px;" id="admin-modal-reason">Need access to deploying the staging environment metrics.</p>
+      </div>
+
+      <div class="form-group">
+        <label>Assign to Group <span style="color:var(--error)">*</span></label>
+        <select class="form-control" id="admin-assign-group">
+          <option value="">-- Select a Group --</option>
+          <option value="Analytics Readers">Analytics Readers</option>
+          <option value="Staging Deployers">Staging Deployers</option>
+          <option value="Platform Admins">Platform Admins</option>
+        </select>
+        <div class="form-hint">Assigning a group gives the user all roles and permissions mapped to that group.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('admin-review-modal')">Cancel</button>
+      <button class="btn btn-secondary" style="color:var(--error);border-color:transparent;" onclick="rejectRequest()">Deny Request</button>
+      <button class="btn btn-success" onclick="approveRequest()">Approve & Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST MESSAGE -->
+<div id="toast" class="toast">Action successful</div>
+
+<script>
+  let currentRequestId = null;
+
+  function switchView(viewId, title) {
+    // Update nav items
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.nav-item[data-view="${viewId}"]`).classList.add('active');
+
+    // Update views
+    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+
+    // Update Topbar
+    document.getElementById('topbar-title').innerText = title;
+    
+    // Toggle Avatar as a hint of whose perspective we are in
+    document.getElementById('user-avatar').innerText = viewId === 'user-view' ? 'US' : 'AD';
+    document.getElementById('user-avatar').title = viewId === 'user-view' ? 'User' : 'Administrator';
+  }
+
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3000);
+  }
+
+  function submitUserRequest() {
+    const reason = document.getElementById('user-request-reason').value;
+    if (!reason.trim()) {
+      alert("Please provide a reason for the access request.");
+      return;
+    }
+
+    // Add to user view table
+    const userTable = document.getElementById('user-request-table-body');
+    document.getElementById('empty-state-user-req').style.display = 'none';
+    
+    const reqId = 'req-row-' + Date.now();
+    
+    userTable.insertAdjacentHTML('beforeend', `
+      <tr id="user-${reqId}">
+        <td><span class="chip chip-gray">Assigned by Admin</span><br><small class="text-secondary" style="display:inline-block;margin-top:4px;">${reason}</small></td>
+        <td><span class="chip chip-yellow">Pending Review</span></td>
+        <td>Just now</td>
+      </tr>
+    `);
+
+    // Add to admin view table
+    const adminTable = document.getElementById('admin-request-table-body');
+    const b = adminTable.querySelector('.empty-state-admin-req');
+    if(b) b.remove();
+
+    adminTable.insertAdjacentHTML('beforeend', `
+       <tr id="${reqId}">
+        <td><strong>You (Demo User)</strong><br><small class="text-secondary">demo@example.com</small></td>
+        <td id="${reqId}-reason">${reason}</td>
+        <td><span class="chip chip-gray">Unassigned</span></td>
+        <td><span class="chip chip-yellow">Pending Review</span></td>
+        <td>Just now</td>
+        <td>
+          <button class="btn btn-success btn-sm" onclick="openAdminModal('${reqId}', 'You (Demo User)')">Review Request</button>
+        </td>
+      </tr>
+    `);
+
+    // Update badge
+    updateBadge();
+
+    closeModal('request-access-modal');
+    document.getElementById('user-request-reason').value = '';
+    showToast('Access request submitted successfully.');
+  }
+
+  function openAdminModal(reqId, username) {
+    currentRequestId = reqId;
+    document.getElementById('admin-modal-username').innerText = username;
+    
+    // Get reason text from the row
+    const reasonCell = document.getElementById(reqId + '-reason');
+    if (reasonCell) {
+      document.getElementById('admin-modal-reason').innerText = reasonCell.innerText;
+    } else {
+      document.getElementById('admin-modal-reason').innerText = "Need access to deploying the staging environment metrics.";
+    }
+    
+    document.getElementById('admin-assign-group').value = '';
+    
+    openModal('admin-review-modal');
+  }
+
+  function approveRequest() {
+    const groupSelect = document.getElementById('admin-assign-group');
+    if (!groupSelect.value) {
+      alert("Please assign a group before approving.");
+      return;
+    }
+
+    const reqRow = document.getElementById(currentRequestId);
+    if(reqRow) {
+      reqRow.innerHTML = `
+        <td><strong>${document.getElementById('admin-modal-username').innerText}</strong><br><small class="text-secondary">...</small></td>
+        <td>${document.getElementById('admin-modal-reason').innerText}</td>
+        <td><span class="chip chip-green">${groupSelect.value}</span></td>
+        <td><span class="chip chip-green">Approved</span></td>
+        <td>Just now</td>
+        <td><span class="text-secondary" style="font-size:12px;">Assigned</span></td>
+      `;
+    }
+    
+    // simulate sync on user view if it was user generated
+    const userReqRow = document.getElementById('user-' + currentRequestId);
+    if(userReqRow) {
+      userReqRow.innerHTML = `
+        <td><strong>${groupSelect.value}</strong><br><small class="text-secondary" style="display:inline-block;margin-top:4px;">${document.getElementById('admin-modal-reason').innerText}</small></td>
+        <td><span class="chip chip-green">Approved</span></td>
+        <td>Just now</td>
+      `;
+    }
+
+    updateBadge();
+    closeModal('admin-review-modal');
+    showToast(`Request approved and assigned to "${groupSelect.value}".`);
+  }
+
+  function rejectRequest() {
+    const reqRow = document.getElementById(currentRequestId);
+    if(reqRow) {
+      reqRow.innerHTML = `
+        <td><strong>${document.getElementById('admin-modal-username').innerText}</strong><br><small class="text-secondary">...</small></td>
+        <td>${document.getElementById('admin-modal-reason').innerText}</td>
+        <td><span class="chip chip-gray">Unassigned</span></td>
+        <td><span class="chip chip-yellow" style="color:var(--error);background:#FEE2E2;">Denied</span></td>
+        <td>Just now</td>
+        <td><span class="text-secondary" style="font-size:12px;">Denied</span></td>
+      `;
+    }
+    
+    const userReqRow = document.getElementById('user-' + currentRequestId);
+    if(userReqRow) {
+      userReqRow.innerHTML = `
+        <td><span class="chip chip-gray">Unassigned</span><br><small class="text-secondary" style="display:inline-block;margin-top:4px;">${document.getElementById('admin-modal-reason').innerText}</small></td>
+        <td><span class="chip chip-yellow" style="color:var(--error);background:#FEE2E2;">Denied</span></td>
+        <td>Just now</td>
+      `;
+    }
+
+    updateBadge();
+    closeModal('admin-review-modal');
+    showToast(`Request was denied.`);
+  }
+
+  function updateBadge() {
+    const rows = document.querySelectorAll('#admin-request-table-body tr');
+    let pendingCount = 0;
+    rows.forEach(row => {
+      if(row.innerText.includes('Pending Review')) pendingCount++;
+    });
+    
+    const badge = document.getElementById('req-badge');
+    if (pendingCount > 0) {
+      badge.style.display = 'inline-flex';
+      badge.innerText = pendingCount + ' pending';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+</script>
+</body>
+</html>

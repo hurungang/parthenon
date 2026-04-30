@@ -25,6 +25,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { Skill } from '../../types'
 
 /**
@@ -35,10 +36,11 @@ export function SkillListPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [editSkill, setEditSkill] = useState<Skill | null>(null)
   const [form, setForm] = useState({ name: '', description: '' })
 
-  const { data: skills, isLoading } = useQuery<Skill[]>({
+  const { data: skills, isLoading, error } = useQuery<Skill[]>({
     queryKey: ['skills'],
     queryFn: async () => {
       const { data } = await apiClient.get<Skill[]>('/skills')
@@ -53,23 +55,30 @@ export function SkillListPage() {
   const handleOpenCreate = () => {
     setEditSkill(null)
     setForm({ name: '', description: '' })
+    setDialogError(null)
     setDialogOpen(true)
   }
 
   const handleOpenEdit = (skill: Skill) => {
     setEditSkill(skill)
     setForm({ name: skill.name, description: skill.description ?? '' })
+    setDialogError(null)
     setDialogOpen(true)
   }
 
   const handleSave = async () => {
-    if (editSkill) {
-      await apiClient.put(`/skills/${editSkill.id}`, form)
-    } else {
-      await apiClient.post('/skills', { ...form, tool_ids: [] })
+    try {
+      setDialogError(null)
+      if (editSkill) {
+        await apiClient.put(`/skills/${editSkill.id}`, form)
+      } else {
+        await apiClient.post('/skills', { ...form, tool_ids: [] })
+      }
+      setDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['skills'] })
+    } catch (err) {
+      setDialogError(err)
     }
-    setDialogOpen(false)
-    await queryClient.invalidateQueries({ queryKey: ['skills'] })
   }
 
   const handleDelete = async (id: string) => {
@@ -95,6 +104,8 @@ export function SkillListPage() {
         size="small"
         sx={{ mb: 2, width: 300 }}
       />
+
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       {isLoading ? (
         <CircularProgress />
@@ -141,9 +152,10 @@ export function SkillListPage() {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>{editSkill ? t('skills.editSkill') : t('skills.createSkill')}</DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

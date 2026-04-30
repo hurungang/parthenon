@@ -68,7 +68,8 @@ export async function mockTelemetry(page: Page) {
   )
   
   // Abort any cross-origin requests that aren't the app itself (e.g. CDN, external APIs)
-  await page.route(/^https?:\/\/(?!localhost:4173)/, (route) => route.abort())
+  // Use (?!localhost) to allow all localhost ports (5173 dev, 4173 preview, 8000 backend, 4318 OTEL)
+  await page.route(/^https?:\/\/(?!localhost)/, (route) => route.abort())
 }
 
 /**

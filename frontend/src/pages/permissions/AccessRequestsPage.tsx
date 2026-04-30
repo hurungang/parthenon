@@ -11,11 +11,16 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  FormHelperText,
+  InputLabel,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Tab,
   Table,
@@ -37,6 +42,7 @@ import {
   useGroups,
 } from '../../hooks/usePermissions'
 import { AccessRequestStatus } from '../../types/permissions'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { AccessRequest } from '../../types/permissions'
 
 export function AccessRequestsPage() {
@@ -65,20 +71,40 @@ export function AccessRequestsPage() {
 function PendingRequestsTab() {
   const { t } = useTranslation()
   const { data: requests, isLoading, error } = usePendingAccessRequests()
+  const { data: groups } = useGroups()
   const approve = useApproveAccessRequest()
   const reject = useRejectAccessRequest()
 
   const [approveTarget, setApproveTarget] = useState<AccessRequest | null>(null)
   const [rejectTarget, setRejectTarget] = useState<AccessRequest | null>(null)
   const [approvalNote, setApprovalNote] = useState('')
+  const [approveGroupId, setApproveGroupId] = useState('')
+  const [approveGroupError, setApproveGroupError] = useState(false)
+  const [approveDialogError, setApproveDialogError] = useState<unknown>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [rejectionError, setRejectionError] = useState(false)
 
   const handleApprove = async () => {
     if (!approveTarget) return
-    await approve.mutateAsync({ requestId: approveTarget.id, reason: approvalNote || undefined })
-    setApproveTarget(null)
-    setApprovalNote('')
+    const needsGroup = !approveTarget.group_id
+    if (needsGroup && !approveGroupId) {
+      setApproveGroupError(true)
+      return
+    }
+    try {
+      setApproveDialogError(null)
+      await approve.mutateAsync({
+        requestId: approveTarget.id,
+        groupId: approveGroupId || undefined,
+        reason: approvalNote || undefined,
+      })
+      setApproveTarget(null)
+      setApprovalNote('')
+      setApproveGroupId('')
+      setApproveGroupError(false)
+    } catch (err) {
+      setApproveDialogError(err)
+    }
   }
 
   const handleReject = async () => {
@@ -91,7 +117,7 @@ function PendingRequestsTab() {
   }
 
   if (isLoading) return <CircularProgress />
-  if (error) return <Alert severity="error">{t('app.error')}</Alert>
+  if (error) return <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />
   if (!requests?.length)
     return <Typography color="text.secondary">{t('permissions.accessRequests.noPendingRequests')}</Typography>
 
@@ -112,9 +138,12 @@ function PendingRequestsTab() {
             {requests.map((req) => (
               <TableRow key={req.id}>
                 <TableCell>{req.requester_display_name ?? req.user_id}</TableCell>
-                <TableCell>{req.group_name ?? req.group_id}</TableCell>
+                <TableCell>
+                  {req.group_id
+                    ? (req.group_name ?? req.group_id)
+                    : <Chip label={t('permissions.accessRequests.unassigned')} size="small" />}
+                </TableCell>
                 <TableCell sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {/* justification is on the batch — shown as tooltip in full page; abbreviated here */}
                   —
                 </TableCell>
                 <TableCell>{new Date(req.created_at).toLocaleDateString()}</TableCell>
@@ -122,7 +151,13 @@ function PendingRequestsTab() {
                   <Button
                     size="small"
                     color="success"
-                    onClick={() => { setApproveTarget(req); setApprovalNote('') }}
+                    onClick={() => {
+                      setApproveTarget(req)
+                      setApprovalNote('')
+                      setApproveGroupId('')
+                      setApproveGroupError(false)
+                      setApproveDialogError(null)
+                    }}
                   >
                     {t('permissions.accessRequests.approve')}
                   </Button>
@@ -142,22 +177,48 @@ function PendingRequestsTab() {
       </TableContainer>
 
       {/* Approve dialog */}
-      <Dialog open={!!approveTarget} onClose={() => setApproveTarget(null)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!approveTarget}
+        onClose={() => { setApproveTarget(null); setApproveDialogError(null) }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>{t('permissions.accessRequests.approve')}</DialogTitle>
         <DialogContent>
-          <TextField
-            label={t('permissions.accessRequests.approvalNote')}
-            placeholder={t('permissions.accessRequests.approvalNotePlaceholder')}
-            value={approvalNote}
-            onChange={(e) => setApprovalNote(e.target.value)}
-            fullWidth
-            multiline
-            rows={3}
-            sx={{ mt: 1 }}
-          />
+          {approveDialogError != null && (
+            <PermissionDeniedAlert error={approveDialogError} fallbackMessage={t('app.error')} />
+          )}
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {!approveTarget?.group_id && (
+              <FormControl fullWidth required error={approveGroupError}>
+                <InputLabel>{t('permissions.accessRequests.assignGroup')}</InputLabel>
+                <Select
+                  value={approveGroupId}
+                  label={t('permissions.accessRequests.assignGroup')}
+                  onChange={(e) => { setApproveGroupId(e.target.value); setApproveGroupError(false) }}
+                >
+                  {(groups ?? []).map((g) => (
+                    <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
+                  ))}
+                </Select>
+                {approveGroupError && (
+                  <FormHelperText>{t('permissions.accessRequests.assignGroupRequired')}</FormHelperText>
+                )}
+              </FormControl>
+            )}
+            <TextField
+              label={t('permissions.accessRequests.approvalNote')}
+              placeholder={t('permissions.accessRequests.approvalNotePlaceholder')}
+              value={approvalNote}
+              onChange={(e) => setApprovalNote(e.target.value)}
+              fullWidth
+              multiline
+              rows={3}
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setApproveTarget(null)}>{t('app.cancel')}</Button>
+          <Button onClick={() => { setApproveTarget(null); setApproveDialogError(null) }}>{t('app.cancel')}</Button>
           <Button onClick={handleApprove} variant="contained" color="success" disabled={approve.isPending}>
             {t('permissions.accessRequests.approve')}
           </Button>
@@ -201,11 +262,14 @@ function MyRequestsTab() {
   const { data: groups } = useGroups()
   const submitRequest = useSubmitAccessRequest()
 
+  const hasNoGroups = !groups || groups.length === 0
+
   const [requestOpen, setRequestOpen] = useState(false)
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
   const [justification, setJustification] = useState('')
   const [formErrors, setFormErrors] = useState({ groups: false, justification: false })
   const [successMsg, setSuccessMsg] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
 
   const toggleGroup = (id: string) => {
     setSelectedGroupIds((prev) =>
@@ -215,18 +279,27 @@ function MyRequestsTab() {
 
   const handleSubmit = async () => {
     const errors = {
-      groups: selectedGroupIds.length === 0,
+      groups: !hasNoGroups && selectedGroupIds.length === 0,
       justification: !justification.trim(),
     }
     setFormErrors(errors)
     if (errors.groups || errors.justification) return
 
-    await submitRequest.mutateAsync({ groupIds: selectedGroupIds, justification })
-    setRequestOpen(false)
-    setSelectedGroupIds([])
-    setJustification('')
-    setSuccessMsg(true)
-    setTimeout(() => setSuccessMsg(false), 4000)
+    try {
+      setDialogError(null)
+      await submitRequest.mutateAsync({
+        groupIds: hasNoGroups ? [] : selectedGroupIds,
+        justification,
+      })
+      setRequestOpen(false)
+      setSelectedGroupIds([])
+      setJustification('')
+      setDialogError(null)
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 4000)
+    } catch (err) {
+      setDialogError(err)
+    }
   }
 
   const statusColor = (status: AccessRequestStatus) => {
@@ -236,12 +309,12 @@ function MyRequestsTab() {
   }
 
   if (isLoading) return <CircularProgress />
-  if (error) return <Alert severity="error">{t('app.error')}</Alert>
+  if (error) return <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />
 
   return (
     <>
       <Box display="flex" justifyContent="flex-end" mb={2}>
-        <Button variant="contained" onClick={() => setRequestOpen(true)}>
+        <Button variant="contained" onClick={() => { setRequestOpen(true); setDialogError(null) }}>
           {t('permissions.accessRequests.requestAccess')}
         </Button>
       </Box>
@@ -267,7 +340,7 @@ function MyRequestsTab() {
                 {batch.requests.map((req) => (
                   <ListItem key={req.id} disablePadding>
                     <ListItemText
-                      primary={req.group_name ?? req.group_id}
+                      primary={req.group_name ?? req.group_id ?? t('permissions.accessRequests.unassigned')}
                       secondary={req.reviewer_reason}
                     />
                     <Chip
@@ -284,40 +357,54 @@ function MyRequestsTab() {
       )}
 
       {/* Request access dialog */}
-      <Dialog open={requestOpen} onClose={() => setRequestOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={requestOpen}
+        onClose={() => { setRequestOpen(false); setDialogError(null) }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>{t('permissions.accessRequests.requestAccess')}</DialogTitle>
         <DialogContent>
+          {dialogError != null && (
+            <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+          )}
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                {t('permissions.accessRequests.selectGroups')}
-              </Typography>
-              {formErrors.groups && (
-                <Alert severity="error" sx={{ mb: 1 }}>
-                  {t('permissions.accessRequests.selectGroupsRequired')}
-                </Alert>
-              )}
-              <Typography variant="caption" color="text.secondary">
-                {t('permissions.accessRequests.selectGroupsHint')}
-              </Typography>
-              <List dense sx={{ maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, mt: 0.5 }}>
-                {(groups ?? []).map((g) => (
-                  <ListItem key={g.id} disablePadding>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={selectedGroupIds.includes(g.id)}
-                          onChange={() => toggleGroup(g.id)}
-                          size="small"
-                        />
-                      }
-                      label={g.name}
-                      sx={{ px: 1, width: '100%' }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
+            {hasNoGroups ? (
+              <Alert severity="info">
+                {t('permissions.accessRequests.noGroupInfoAlert')}
+              </Alert>
+            ) : (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  {t('permissions.accessRequests.selectGroups')}
+                </Typography>
+                {formErrors.groups && (
+                  <Alert severity="error" sx={{ mb: 1 }}>
+                    {t('permissions.accessRequests.selectGroupsRequired')}
+                  </Alert>
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  {t('permissions.accessRequests.selectGroupsHint')}
+                </Typography>
+                <List dense sx={{ maxHeight: 200, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, mt: 0.5 }}>
+                  {(groups ?? []).map((g) => (
+                    <ListItem key={g.id} disablePadding>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={selectedGroupIds.includes(g.id)}
+                            onChange={() => toggleGroup(g.id)}
+                            size="small"
+                          />
+                        }
+                        label={g.name}
+                        sx={{ px: 1, width: '100%' }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            )}
             <TextField
               label={t('permissions.accessRequests.justification')}
               placeholder={t('permissions.accessRequests.justificationPlaceholder')}
@@ -332,7 +419,7 @@ function MyRequestsTab() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRequestOpen(false)}>{t('app.cancel')}</Button>
+          <Button onClick={() => { setRequestOpen(false); setDialogError(null) }}>{t('app.cancel')}</Button>
           <Button
             onClick={handleSubmit}
             variant="contained"

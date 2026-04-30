@@ -2,7 +2,7 @@
 
 ## Overview
 
-The foundation module provides the shared infrastructure on which all other backend and frontend modules depend. It covers application configuration loading via a layered config system (YAML file + environment variables + defaults, merged by pydantic-settings), the async database session factory, OIDC JWT validation against an external identity provider, the JWT authentication middleware that enforces token presence on every protected route, the AES-256 credential vault for safe storage of sensitive credentials, and the OpenTelemetry telemetry initialisation that instruments all libraries and exporters for traces, metrics, and logs.
+The foundation module provides the shared infrastructure on which all other backend and frontend modules depend. It covers application configuration loading via a layered config system (YAML file + environment variables + defaults, merged by pydantic-settings), the async database session factory, OIDC JWT validation against an external identity provider, the JWT authentication middleware that enforces token presence on every protected route, the AES-256 credential vault for safe storage of sensitive credentials, the OpenTelemetry telemetry initialisation that instruments all libraries and exporters for traces, metrics, and logs, shared FastAPI dependencies (`require_permission`, `get_current_claims`) used by every guarded router, and the centralised resource type registry (`ResourceTypeManifest` + RT_* constants) that acts as the authoritative source of valid module/action combinations for the permission engine.
 
 ---
 
@@ -20,6 +20,24 @@ The foundation module provides the shared infrastructure on which all other back
 | `setup_telemetry` | Called once at application startup; configures the OTEL `TracerProvider`, `MeterProvider`, and `LoggerProvider` with OTLP exporters pointed at the configured collector endpoint; delegates library patching to `_instrument_libraries` |
 | `_instrument_libraries` | Applies OTEL auto-instrumentation patches for FastAPI, SQLAlchemy, Redis, and httpx; isolated in a separate function so a patch failure for one library does not block application startup |
 | `limiter` | Global `slowapi.Limiter` instance attached to `app.state`; provides per-route rate limiting using the remote client address as the key function |
+
+### API Dependencies & Permission Registry
+
+Shared FastAPI dependencies and the platform-wide resource type registry. Every guarded route imports from these two files — no module may call the permission engine or read resource types directly.
+
+| Component | Description |
+|-----------|-------------|
+| `require_permission` | Cached FastAPI dependency factory keyed by `(module, action)` pair; resolves the calling user's `PlatformUser` record from the JWT `sub` claim, calls `PermissionEngine.authorize()`, and raises `HTTPException(403, PermissionDeniedDetail)` on denial; returns the decoded claims dict on success; safe for use in `dependency_overrides` in tests |
+| `get_current_claims` | FastAPI dependency that extracts the decoded JWT claims dict from `request.state.identity` (populated by `JWTAuthMiddleware`); used by handlers that need raw token claims without a full permission check |
+| `ResourceTypeManifest` | Centralised Python dict keyed by resource type string; maps each type to its list of allowed action strings; imported by `PermissionEngine` for fast-fail validation on unknown types or actions, and mirrored to TypeScript as `RESOURCE_TYPES` for the frontend policy builder |
+| `RT_AGENT` | Resource type constant: `"agent"` — agents module |
+| `RT_MCP_SERVER` | Resource type constant: `"mcp_server"` — MCP Hub module |
+| `RT_SKILL` | Resource type constant: `"skill"` — skills and SOPs module |
+| `RT_SCHEDULING` | Resource type constant: `"scheduling"` — scheduling module |
+| `RT_NOTIFICATION` | Resource type constant: `"notification"` — notifications module |
+| `RT_CONVERSATION` | Resource type constant: `"conversation"` — conversations module |
+| `RT_RESULT` | Resource type constant: `"result"` — results module; registered in this change |
+| `RT_ACCESS_REQUEST` | Resource type constant: `"access_request"` — user access requests module |
 
 ### Frontend
 
@@ -92,3 +110,19 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | `limiter` | object | Global slowapi.Limiter instance with remote-address key function; attached to app.state | `backend/app/main.py` |
 | `initTelemetry` | function | Initialises browser WebTracerProvider with OTLP HTTP exporter and FetchInstrumentation; triggers Web Vitals recording | `frontend/src/telemetry.ts` |
 | `_recordWebVitals` | function | Lazily imports web-vitals and records LCP, FID, FCP, CLS as OTEL histograms | `frontend/src/telemetry.ts` |
+
+### API Dependencies & Permission Registry
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `require_permission` | function | FastAPI dependency factory keyed by `(module, action)`; resolves `PlatformUser` from JWT `sub`, calls `PermissionEngine.authorize()`, raises `HTTPException(403)` with `PermissionDeniedDetail` on denial; cached for `dependency_overrides` compatibility in tests | `backend/app/api/deps.py` |
+| `get_current_claims` | function | FastAPI dependency that extracts the decoded JWT claims dict from `request.state.identity`; used by handlers that need raw claims without a full permission check | `backend/app/api/deps.py` |
+| `ResourceTypeManifest` | dict | Centralised registry mapping resource type strings to allowed action lists; authoritative source for `PermissionEngine` validation and the frontend `RESOURCE_TYPES` mirror | `backend/app/core/resource_types.py` |
+| `RT_AGENT` | constant | Resource type identifier: `"agent"` — agents module | `backend/app/core/resource_types.py` |
+| `RT_MCP_SERVER` | constant | Resource type identifier: `"mcp_server"` — MCP Hub module | `backend/app/core/resource_types.py` |
+| `RT_SKILL` | constant | Resource type identifier: `"skill"` — skills and SOPs module | `backend/app/core/resource_types.py` |
+| `RT_SCHEDULING` | constant | Resource type identifier: `"scheduling"` — scheduling module | `backend/app/core/resource_types.py` |
+| `RT_NOTIFICATION` | constant | Resource type identifier: `"notification"` — notifications module | `backend/app/core/resource_types.py` |
+| `RT_CONVERSATION` | constant | Resource type identifier: `"conversation"` — conversations module | `backend/app/core/resource_types.py` |
+| `RT_RESULT` | constant | Resource type identifier: `"result"` — results module; newly registered in implement-global-access-control | `backend/app/core/resource_types.py` |
+| `RT_ACCESS_REQUEST` | constant | Resource type identifier: `"access_request"` — user access requests module | `backend/app/core/resource_types.py` |

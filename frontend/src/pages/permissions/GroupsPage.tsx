@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
@@ -26,10 +25,13 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PeopleIcon from '@mui/icons-material/People'
 import { useGroups, useCreateGroup, useUpdateGroup, useDeleteGroup, useGroupMembers } from '../../hooks/usePermissions'
+import { ManageGroupRolesModal } from '../../components/permissions/ManageGroupRolesModal'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { Group } from '../../types/permissions'
 
 export function GroupsPage() {
@@ -42,7 +44,9 @@ export function GroupsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Group | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Group | null>(null)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [viewMembersGroup, setViewMembersGroup] = useState<Group | null>(null)
+  const [manageRolesGroup, setManageRolesGroup] = useState<Group | null>(null)
   const [form, setForm] = useState({ name: '', description: '', idp_claim_value: '' })
   const [search, setSearch] = useState('')
 
@@ -61,28 +65,34 @@ export function GroupsPage() {
       description: group.description ?? '',
       idp_claim_value: group.idp_claim_value ?? '',
     })
+    setDialogError(null)
     setAddOpen(true)
   }
 
   const handleSave = async () => {
-    if (editTarget) {
-      await updateGroup.mutateAsync({
-        id: editTarget.id,
-        data: {
+    try {
+      setDialogError(null)
+      if (editTarget) {
+        await updateGroup.mutateAsync({
+          id: editTarget.id,
+          data: {
+            name: form.name,
+            description: form.description || undefined,
+            idp_claim_value: form.idp_claim_value || undefined,
+          },
+        })
+      } else {
+        await createGroup.mutateAsync({
           name: form.name,
           description: form.description || undefined,
           idp_claim_value: form.idp_claim_value || undefined,
-        },
-      })
-    } else {
-      await createGroup.mutateAsync({
-        name: form.name,
-        description: form.description || undefined,
-        idp_claim_value: form.idp_claim_value || undefined,
-      })
+        })
+      }
+      setAddOpen(false)
+      setEditTarget(null)
+    } catch (err) {
+      setDialogError(err)
     }
-    setAddOpen(false)
-    setEditTarget(null)
   }
 
   const handleDelete = async () => {
@@ -113,7 +123,7 @@ export function GroupsPage() {
       />
 
       {isLoading && <CircularProgress />}
-      {error && <Alert severity="error">{t('app.error')}</Alert>}
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       <TableContainer component={Paper}>
         <Table size="small">
@@ -137,17 +147,22 @@ export function GroupsPage() {
                 <TableCell>{group.idp_claim_value ?? '—'}</TableCell>
                 <TableCell>
                   <Tooltip title={t('permissions.groups.viewMembers')}>
-                    <IconButton size="small" onClick={() => setViewMembersGroup(group)}>
+                    <IconButton size="small" onClick={() => setViewMembersGroup(group)} aria-label={t('permissions.groups.viewMembers')}>
                       <PeopleIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
+                  <Tooltip title={t('permissions.groups.manageRoles')}>
+                    <IconButton size="small" onClick={() => setManageRolesGroup(group)} aria-label={t('permissions.groups.manageRoles')}>
+                      <AdminPanelSettingsIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title={t('app.edit')}>
-                    <IconButton size="small" onClick={() => openEdit(group)}>
+                    <IconButton size="small" onClick={() => openEdit(group)} aria-label={t('app.edit')}>
                       <EditIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title={t('app.delete')}>
-                    <IconButton size="small" onClick={() => setDeleteTarget(group)}>
+                    <IconButton size="small" onClick={() => setDeleteTarget(group)} aria-label={t('app.delete')}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -159,11 +174,12 @@ export function GroupsPage() {
       </TableContainer>
 
       {/* Add / Edit dialog */}
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addOpen} onClose={() => { setAddOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>
           {editTarget ? t('permissions.groups.editGroup') : t('permissions.groups.addGroup')}
         </DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               label={t('app.name')}
@@ -246,6 +262,12 @@ export function GroupsPage() {
           <Button onClick={() => setViewMembersGroup(null)}>{t('app.close')}</Button>
         </DialogActions>
       </Dialog>
+
+      <ManageGroupRolesModal
+        open={!!manageRolesGroup}
+        onClose={() => setManageRolesGroup(null)}
+        group={manageRolesGroup}
+      />
     </Box>
   )
 }

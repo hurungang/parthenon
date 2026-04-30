@@ -30,6 +30,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { ScheduledJob } from '../../types'
 
 /**
@@ -39,6 +40,7 @@ export function ScheduleManagerPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [form, setForm] = useState({
     name: '',
     cron_expression: '0 * * * *',
@@ -47,7 +49,7 @@ export function ScheduleManagerPage() {
     description: '',
   })
 
-  const { data: jobs, isLoading } = useQuery<ScheduledJob[]>({
+  const { data: jobs, isLoading, error } = useQuery<ScheduledJob[]>({
     queryKey: ['schedules'],
     queryFn: async () => {
       const { data } = await apiClient.get<ScheduledJob[]>('/schedules')
@@ -56,9 +58,14 @@ export function ScheduleManagerPage() {
   })
 
   const handleSave = async () => {
-    await apiClient.post('/schedules', form)
-    setDialogOpen(false)
-    await queryClient.invalidateQueries({ queryKey: ['schedules'] })
+    try {
+      setDialogError(null)
+      await apiClient.post('/schedules', form)
+      setDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['schedules'] })
+    } catch (err) {
+      setDialogError(err)
+    }
   }
 
   const handlePause = async (id: string) => {
@@ -92,6 +99,8 @@ export function ScheduleManagerPage() {
           {t('schedules.createSchedule')}
         </Button>
       </Box>
+
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       {isLoading ? (
         <CircularProgress />
@@ -146,9 +155,10 @@ export function ScheduleManagerPage() {
         </TableContainer>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>{t('schedules.createSchedule')}</DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

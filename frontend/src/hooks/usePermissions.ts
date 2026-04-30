@@ -8,6 +8,7 @@ import * as api from '../api/permissionsApi'
 import type {
   TagDefinitionCreate,
   TagDefinitionUpdate,
+  RoleCloneCreate,
   RoleCreate,
   RoleUpdate,
   PolicyStatementCreate,
@@ -26,6 +27,7 @@ export const permissionKeys = {
   platformUser: (id: string) => ['permissions', 'platform-users', id] as const,
   accessRequestsMy: ['permissions', 'access-requests', 'my'] as const,
   accessRequestsPending: ['permissions', 'access-requests', 'pending'] as const,
+  resourceTypes: ['permissions', 'resource-types'] as const,
 }
 
 // ── Tags ───────────────────────────────────────────────────────────────────────
@@ -125,6 +127,43 @@ export function useDeletePolicyStatement() {
   })
 }
 
+export function useUpdatePolicyStatement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      roleId,
+      policyId,
+      data,
+    }: {
+      roleId: string
+      policyId: string
+      data: PolicyStatementCreate
+    }) => api.updatePolicyStatement(roleId, policyId, data),
+    onSuccess: (_data, { roleId }) => {
+      qc.invalidateQueries({ queryKey: permissionKeys.role(roleId) })
+    },
+  })
+}
+
+export function useResourceTypes() {
+  return useQuery({
+    queryKey: permissionKeys.resourceTypes,
+    queryFn: () => api.listResourceTypes(),
+    staleTime: Infinity,
+  })
+}
+
+export function useCloneRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sourceId, data }: { sourceId: string; data: RoleCloneCreate }) =>
+      api.cloneRole(sourceId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: permissionKeys.roles })
+    },
+  })
+}
+
 // ── Groups ─────────────────────────────────────────────────────────────────────
 
 export function useGroups(page = 1, pageSize = 50) {
@@ -163,6 +202,36 @@ export function useGroupMembers(groupId: string | null) {
     queryKey: ['permissions', 'groups', groupId, 'members'],
     queryFn: () => api.listGroupMembers(groupId!),
     enabled: !!groupId,
+  })
+}
+
+export function useGroupRoles(groupId: string | null) {
+  return useQuery({
+    queryKey: ['group-roles', groupId],
+    queryFn: () => api.listGroupRoles(groupId!),
+    enabled: !!groupId,
+  })
+}
+
+export function useAssignGroupRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId, roleId }: { groupId: string; roleId: string }) =>
+      api.assignGroupRole(groupId, roleId),
+    onSuccess: (_data, { groupId }) => {
+      qc.invalidateQueries({ queryKey: ['group-roles', groupId] })
+    },
+  })
+}
+
+export function useRemoveGroupRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId, roleId }: { groupId: string; roleId: string }) =>
+      api.removeGroupRole(groupId, roleId),
+    onSuccess: (_data, { groupId }) => {
+      qc.invalidateQueries({ queryKey: ['group-roles', groupId] })
+    },
   })
 }
 
@@ -253,8 +322,8 @@ export function usePendingAccessRequests() {
 export function useSubmitAccessRequest() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ groupIds, justification }: { groupIds: string[]; justification: string }) =>
-      api.submitAccessRequest(groupIds, justification),
+    mutationFn: ({ groupIds, justification }: { groupIds?: string[]; justification: string }) =>
+      api.submitAccessRequest(groupIds ?? [], justification),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: permissionKeys.accessRequestsMy })
     },
@@ -264,8 +333,8 @@ export function useSubmitAccessRequest() {
 export function useApproveAccessRequest() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ requestId, reason }: { requestId: string; reason?: string }) =>
-      api.approveAccessRequest(requestId, reason),
+    mutationFn: ({ requestId, groupId, reason }: { requestId: string; groupId?: string; reason?: string }) =>
+      api.approveAccessRequest(requestId, groupId, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: permissionKeys.accessRequestsPending })
     },

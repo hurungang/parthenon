@@ -19,6 +19,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { ConversationSession, ConversationSessionDetail } from '../../types'
 function SessionRow({ session }: { session: ConversationSession }) {
   const [open, setOpen] = useState(false)
@@ -83,7 +84,7 @@ function SessionRow({ session }: { session: ConversationSession }) {
 export function ConversationHistoryPage() {
   const { t } = useTranslation()
 
-  const { data: sessions, isLoading } = useQuery<ConversationSession[]>({
+  const { data: sessions, isLoading, error } = useQuery<ConversationSession[]>({
     queryKey: ['conversations'],
     queryFn: async () => {
       const { data } = await apiClient.get<ConversationSession[]>('/conversations')
@@ -94,6 +95,8 @@ export function ConversationHistoryPage() {
   return (
     <Box>
       <Typography variant="h4" fontWeight={700} mb={3}>{t('conversations.title')}</Typography>
+
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       {isLoading ? (
         <CircularProgress />

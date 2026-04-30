@@ -83,7 +83,7 @@ erDiagram
     Group }o--|| PlatformUser : "owned by"
     AccessRequestBatch }o--|| PlatformUser : "submitted by"
     AccessRequest }o--|| AccessRequestBatch : "part of"
-    AccessRequest }o--|| Group : "for"
+    AccessRequest }o--o| Group : "assigned to"
     AccessRequest }o--|| PlatformUser : "requested by"
 
     TagDefinition {
@@ -174,7 +174,7 @@ erDiagram
     AccessRequest {
         uuid id
         uuid batch_id
-        uuid group_id
+        uuid group_id "optional"
         uuid requested_by
         string status
         datetime requested_at
@@ -201,4 +201,4 @@ erDiagram
 | **GroupRole** | Roles assigned to a group, inherited by all group members (junction). |
 | **UserGroup** | Membership record linking a user to a group (junction). |
 | **AccessRequestBatch** | A user's submission requesting access to one or more groups; holds the shared justification. |
-| **AccessRequest** | A request for access to a single group within a batch; holds status and reviewer details. |
+| **AccessRequest** | A single group-access request within a batch; `group_id` is optional — users without permission to view groups submit requests without a group, and administrators assign the group during approval. |

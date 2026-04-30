@@ -20,6 +20,7 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { ResultRecord } from '../../types'
 
 /**
@@ -29,7 +30,7 @@ export function ResultRepositoryPage() {
   const { t } = useTranslation()
   const [selected, setSelected] = useState<ResultRecord | null>(null)
 
-  const { data: results, isLoading } = useQuery<ResultRecord[]>({
+  const { data: results, isLoading, error } = useQuery<ResultRecord[]>({
     queryKey: ['results'],
     queryFn: async () => {
       const { data } = await apiClient.get<ResultRecord[]>('/results')
@@ -40,6 +41,8 @@ export function ResultRepositoryPage() {
   return (
     <Box>
       <Typography variant="h4" fontWeight={700} mb={3}>{t('results.title')}</Typography>
+
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
       {isLoading ? (
         <CircularProgress />

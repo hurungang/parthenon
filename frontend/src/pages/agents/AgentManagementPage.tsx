@@ -28,6 +28,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useAgentTypes, useAgentInstances, useTerminateInstance } from '../../hooks/useAgentTypes'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import apiClient from '../../api/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import type { AgentType } from '../../types'
@@ -37,11 +38,12 @@ import type { AgentType } from '../../types'
  */
 export function AgentManagementPage() {
   const { t } = useTranslation()
-  const { data: agentTypes, isLoading } = useAgentTypes()
+  const { data: agentTypes, isLoading, error } = useAgentTypes()
   const queryClient = useQueryClient()
   const terminateInstance = useTerminateInstance()
   const [selectedType, setSelectedType] = useState<AgentType | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -56,9 +58,14 @@ export function AgentManagementPage() {
   const { data: instances } = useAgentInstances(selectedType?.id ?? '')
 
   const handleSave = async () => {
-    await apiClient.post('/agents/types', form)
-    setDialogOpen(false)
-    await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+    try {
+      setDialogError(null)
+      await apiClient.post('/agents/types', form)
+      setDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+    } catch (err) {
+      setDialogError(err)
+    }
   }
 
   const handleTerminate = async (instanceId: string) => {
@@ -83,9 +90,10 @@ export function AgentManagementPage() {
         </Button>
       </Box>
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
+      {isLoading && <CircularProgress />}
+      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
+
+      {!isLoading && !error && (
         <TableContainer component={Paper} sx={{ mb: 3 }}>
           <Table>
             <TableHead>
@@ -188,9 +196,10 @@ export function AgentManagementPage() {
       )}
 
       {/* Create Agent Type Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>{t('agents.createType')}</DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

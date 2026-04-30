@@ -17,6 +17,11 @@ vi.mock('../hooks/usePermissions', () => ({
   useCreateGroup: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateGroup: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteGroup: () => ({ mutate: vi.fn(), isPending: false }),
+  useGroupMembers: () => ({ data: [], isLoading: false }),
+  useGroupRoles: () => ({ data: [], isLoading: false, error: null }),
+  useAssignGroupRole: () => ({ mutate: vi.fn(), isPending: false }),
+  useRemoveGroupRole: () => ({ mutate: vi.fn(), isPending: false }),
+  useRoles: () => ({ data: [], isLoading: false }),
 }))
 
 function wrapper({ children }: { children: React.ReactNode }) {

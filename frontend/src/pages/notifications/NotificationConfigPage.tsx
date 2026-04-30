@@ -30,6 +30,7 @@ import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { NotificationChannel, NotificationEvent } from '../../types'
 
 /**
@@ -39,6 +40,7 @@ export function NotificationConfigPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
   const [testSuccess, setTestSuccess] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
@@ -64,9 +66,14 @@ export function NotificationConfigPage() {
   })
 
   const handleSave = async () => {
-    await apiClient.post('/notifications/channels', form)
-    setDialogOpen(false)
-    await queryClient.invalidateQueries({ queryKey: ['notifications', 'channels'] })
+    try {
+      setDialogError(null)
+      await apiClient.post('/notifications/channels', form)
+      setDialogOpen(false)
+      await queryClient.invalidateQueries({ queryKey: ['notifications', 'channels'] })
+    } catch (err) {
+      setDialogError(err)
+    }
   }
 
   const handleTestSend = async (channelId: string) => {
@@ -192,9 +199,10 @@ export function NotificationConfigPage() {
       </TableContainer>
 
       {/* Create Channel Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>{t('app.create')}</DialogTitle>
         <DialogContent>
+          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

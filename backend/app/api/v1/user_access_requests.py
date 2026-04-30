@@ -2,12 +2,12 @@
 import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_claims, require_permission
-from app.core.resource_types import RT_ACCESS_REQUEST
+from app.api.deps import get_current_claims
+from app.core.resource_types import RT_PERMISSIONS
 from app.db.models.access_request import AccessRequest, AccessRequestStatus
 from app.db.models.access_request_batch import AccessRequestBatch
 from app.db.models.group import Group
@@ -21,12 +21,27 @@ from app.schemas.access_requests import (
     RejectRequestBody,
 )
 from app.services.permissions.access_request_service import AccessRequestService
+from app.services.permissions.permission_engine import PermissionEngine
 
 AccessRequestsRouter = APIRouter(prefix="/user-access-requests", tags=["Permissions: Access Requests"])
 
 
 def _get_platform_user_id(request: Request) -> uuid.UUID | None:
     return getattr(request.state, "platform_user_id", None)
+
+
+async def _has_permission(db: DbSession, platform_user_id: uuid.UUID, module: str, action: str) -> bool:
+    """Check if user has permission for the given module and action."""
+    engine = PermissionEngine()
+    result = await engine.authorize(
+        db=db,
+        user_id=platform_user_id,
+        module=module,
+        action=action,
+        resource_id="*",
+        resource_tags={},
+    )
+    return result.allowed
 
 
 async def _enrich_request(db: DbSession, req: AccessRequest) -> AccessRequestRead:
@@ -106,16 +121,57 @@ async def list_my_requests(
 async def list_pending_requests(
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_ACCESS_REQUEST, "read")),
 ) -> List[AccessRequestRead]:
-    """List pending access requests. Requires access_request:read permission."""
-    result = await db.execute(
-        select(AccessRequest)
-        .where(AccessRequest.status == AccessRequestStatus.pending)
-        .order_by(AccessRequest.created_at.desc())
-    )
+    """List pending access requests. Users with permission to manage permissions see all; group owners see their groups only."""
+    platform_user_id = _get_platform_user_id(request)
+    
+    # Check if user has permissions to manage permissions (admin-level access)
+    has_manage_permission = False
+    if platform_user_id:
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+
+    if has_manage_permission:
+        result = await db.execute(
+            select(AccessRequest)
+            .where(AccessRequest.status == AccessRequestStatus.pending)
+            .order_by(AccessRequest.created_at.desc())
+        )
+    elif platform_user_id is not None:
+        owned_result = await db.execute(
+            select(Group.id).where(Group.owner_id == platform_user_id)
+        )
+        group_ids = list(owned_result.scalars().all())
+        if not group_ids:
+            return []
+        result = await db.execute(
+            select(AccessRequest)
+            .where(
+                AccessRequest.group_id.in_(group_ids),
+                AccessRequest.status == AccessRequestStatus.pending,
+            )
+            .order_by(AccessRequest.created_at.desc())
+        )
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized.")
+
     requests = result.scalars().all()
     return [await _enrich_request(db, r) for r in requests]
+
+
+async def _require_reviewer(
+    db: DbSession,
+    req: AccessRequest,
+    platform_user_id: uuid.UUID | None,
+    has_permission: bool,
+) -> None:
+    """Raise 403 if the current user is neither the group owner nor has permission to manage permissions."""
+    if has_permission:
+        return
+    if platform_user_id is None:
+        raise HTTPException(status_code=403, detail="Not authorized.")
+    group = await db.get(Group, req.group_id)
+    if not group or group.owner_id != platform_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to review this request.")
 
 
 @AccessRequestsRouter.patch("/{request_id}/approve", response_model=AccessRequestRead)
@@ -124,19 +180,24 @@ async def approve_request(
     body: ApproveRequestBody,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_ACCESS_REQUEST, "approve")),
 ) -> AccessRequestRead:
-    """Approve an access request. Requires access_request:approve permission."""
+    """Approve an access request. Group owner or users with permission to manage permissions."""
     platform_user_id = _get_platform_user_id(request)
-    if platform_user_id is None:
-        raise HTTPException(status_code=403, detail="User identity not resolved.")
+    
+    # Check if user has permissions to manage permissions
+    has_manage_permission = False
+    if platform_user_id:
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
         raise HTTPException(status_code=404, detail="Access request not found.")
 
+    await _require_reviewer(db, req_obj, platform_user_id, has_manage_permission)
+
+    reviewer_id = platform_user_id or req_obj.reviewer_id  # fallback if platform_user_id not set
     svc = AccessRequestService()
-    updated = await svc.approve_request(db, request_id, platform_user_id, body.approval_reason)
+    updated = await svc.approve_request(db, request_id, reviewer_id, body.approval_reason)
     return await _enrich_request(db, updated)
 
 
@@ -146,17 +207,22 @@ async def reject_request(
     body: RejectRequestBody,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_ACCESS_REQUEST, "reject")),
 ) -> AccessRequestRead:
-    """Reject an access request. Requires access_request:reject permission."""
+    """Reject an access request. Group owner or users with permission to manage permissions. rejection_reason is required."""
     platform_user_id = _get_platform_user_id(request)
-    if platform_user_id is None:
-        raise HTTPException(status_code=403, detail="User identity not resolved.")
+    
+    # Check if user has permissions to manage permissions
+    has_manage_permission = False
+    if platform_user_id:
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
         raise HTTPException(status_code=404, detail="Access request not found.")
 
+    await _require_reviewer(db, req_obj, platform_user_id, has_manage_permission)
+
+    reviewer_id = platform_user_id or req_obj.reviewer_id
     svc = AccessRequestService()
-    updated = await svc.reject_request(db, request_id, platform_user_id, body.rejection_reason)
+    updated = await svc.reject_request(db, request_id, reviewer_id, body.rejection_reason)
     return await _enrich_request(db, updated)

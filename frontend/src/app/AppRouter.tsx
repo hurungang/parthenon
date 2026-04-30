@@ -19,6 +19,7 @@ import { ChatPage } from '../pages/chat/ChatPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { PermissionsPage } from '../pages/permissions/PermissionsPage'
+import { AccessRequestsPage } from '../pages/permissions/AccessRequestsPage'
 import { AccessDeniedPage } from '../pages/AccessDeniedPage'
 import { getIdentityStatus } from '../api/setupApi'
 import { SetupState } from '../types/setup'
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="/notifications" element={<NotificationConfigPage />} />
         <Route path="/observability" element={<ObservabilityDashboard />} />
         <Route path="/chat/:agentTypeId?" element={<ChatPage />} />
+        <Route path="/permissions/access-requests" element={<AccessRequestsPage />} />
         <Route path="/user-permissions/*" element={<PermissionsPage />} />
       </Route>
 

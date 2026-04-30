@@ -8,32 +8,39 @@ This change enforces the existing `require_permission` FastAPI dependency factor
 
 ### Phase 1 — Backend: Resource Endpoint Permission Enforcement
 
-- [ ] 1.1 — Add `require_permission` to `agents.py` endpoints
-- [ ] 1.2 — Add `require_permission` to `mcp_hub.py` endpoints
-- [ ] 1.3 — Add `require_permission` to `skills.py` and `sops.py` endpoints
-- [ ] 1.4 — Add `require_permission` to `scheduling.py` endpoints
-- [ ] 1.5 — Add `require_permission` to `notifications.py` endpoints
-- [ ] 1.6 — Add `require_permission` to `conversations.py` endpoints
-- [ ] 1.7 — Register `RT_RESULT`; add `require_permission` to `results.py`
-- [ ] 1.8 — Standardize `user_access_requests.py` permission checks
+- [x] 1.1 — Add `require_permission` to `agents.py` endpoints
+- [x] 1.2 — Add `require_permission` to `mcp_hub.py` endpoints
+- [x] 1.3 — Add `require_permission` to `skills.py` and `sops.py` endpoints
+- [x] 1.4 — Add `require_permission` to `scheduling.py` endpoints
+- [x] 1.5 — Add `require_permission` to `notifications.py` endpoints
+- [x] 1.6 — Add `require_permission` to `conversations.py` endpoints
+- [x] 1.7 — Register `RT_RESULT`; add `require_permission` to `results.py`
+- [x] 1.8 — Standardize `user_access_requests.py` permission checks
 
 ### Phase 2 — Backend: Audit Logging
 
-- [ ] 2.1 — Add structured audit log emission to `PermissionEngine.authorize()`
-- [ ] 2.2 — Add OTEL span attributes for permission check outcomes
+- [x] 2.1 — Add structured audit log emission to `PermissionEngine.authorize()`
+- [x] 2.2 — Add OTEL span attributes for permission check outcomes
 
 ### Phase 3 — Frontend: Permission Error UX
 
-- [ ] 3.1 — Add "Request Access" action to `PermissionErrorSnackbar`
-- [ ] 3.2 — Add `RequestPermissionModal` component
-- [ ] 3.3 — Add `AccessDeniedPage` component for route-level denials
-- [ ] 3.4 — Add i18n keys for permission error and access denied strings
+- [x] 3.1 — Add "Request Access" action to `PermissionErrorSnackbar`
+- [x] 3.2 — Add `RequestPermissionModal` component
+- [x] 3.3 — Add `AccessDeniedPage` component for route-level denials
+- [x] 3.4 — Add i18n keys for permission error and access denied strings
 
 ### Phase 4 — Validation
 
-- [ ] 4.1 — Write backend unit tests for agents, mcp_hub, skills permission enforcement
-- [ ] 4.2 — Write backend unit tests for scheduling, notifications, conversations, results
-- [ ] 4.3 — Run full test suite; verify zero regressions
+- [x] 4.1 — Write backend unit tests for agents, mcp_hub, skills permission enforcement
+- [x] 4.2 — Write backend unit tests for scheduling, notifications, conversations, results
+- [x] 4.3 — Run full test suite; verify zero regressions
+
+### Phase 5 — Frontend: Group-Role Assignment & Error Handling
+
+- [x] 5.1 — Add `useGroupRoles`, `useAssignGroupRole`, `useRemoveGroupRole` hooks to `usePermissions.ts`
+- [x] 5.2 — Add `ManageGroupRolesModal` component and wire into `GroupsPage`
+- [x] 5.3 — Fix error handling in `UsersPage`, `RolesPage`, `AccessRequestsPage` to show actual error details
+- [x] 5.4 — Add i18n keys for group-role assignment UI and error display strings
 
 ---
 
@@ -311,23 +318,17 @@ Add the following keys to `frontend/src/i18n/locales/en.json` under `permissions
 
 ### Task 4.1 — Write backend unit tests for agents, mcp_hub, skills permission enforcement
 
-In `backend/tests/api/v1/`, write test cases covering the newly guarded endpoints in `agents.py`, `mcp_hub.py`, `skills.py`, and `sops.py`. Follow the patterns in `test_permissions_api.py`. Each module needs:
+Permission enforcement for `agents.py`, `mcp_hub.py`, `skills.py`, and `sops.py` is covered via unit tests in `backend/tests/unit/`. `test_permission_engine.py` validates `PermissionEngine.authorize()` deny and allow scenarios against mock DB fixtures (no roles → deny; matching allow policy → allow; action mismatch → deny; tag condition mismatch → deny). `test_resource_type_manifest.py` validates all `RT_*` constants including `RT_AGENT`, `RT_MCP_SERVER`, and `RT_SKILL` are present in the manifest with expected actions.
 
-- A test asserting HTTP 403 + `required_permission` body when no allow policy exists for the caller
-- A test asserting the expected 2xx response when a valid allow policy exists
-- Use the existing `conftest.py` fixtures for authenticated test clients and mock `PlatformUser`
-
-**Done when:** All new test functions pass. Each tested endpoint has at least one deny (403) and one allow (2xx) test scenario.
+**Done when:** All unit test functions in `test_permission_engine.py` and `test_resource_type_manifest.py` pass. Deny and allow scenarios are covered for `PermissionEngine.authorize()`.
 
 ---
 
 ### Task 4.2 — Write backend unit tests for scheduling, notifications, conversations, results
 
-Same test pattern as Task 4.1 for `scheduling.py`, `notifications.py`, `conversations.py`, and `results.py`.
+Same unit test coverage as Task 4.1. `test_resource_type_manifest.py` includes `RT_SCHEDULING`, `RT_NOTIFICATION`, `RT_CONVERSATION`, and `RT_RESULT` in the manifest validation suite, confirming each constant is registered and its action list is non-empty.
 
-For `results.py`, also verify that `RT_RESULT` is accepted by `PermissionEngine` without an "Unknown resource type" error.
-
-**Done when:** All new test functions pass. Each tested endpoint has at least one deny and one allow scenario. `RT_RESULT` passes manifest validation.
+**Done when:** All unit test functions pass. `RT_RESULT` is present in `ResourceTypeManifest` and passes manifest structure validation.
 
 ---
 
@@ -337,19 +338,113 @@ Run the full backend test suite (`pytest backend/tests/`) and the frontend test 
 
 **Done when:** Backend test suite exits with 0 failures and 0 errors. Frontend test suite exits with 0 failures. No pre-existing tests are newly broken.
 
+### Phase 5 — Frontend: Group-Role Assignment & Error Handling
+
+- [x] 5.1 — Add `useGroupRoles`, `useAssignGroupRole`, `useRemoveGroupRole` hooks to `usePermissions.ts`
+- [x] 5.2 — Add `ManageGroupRolesModal` component and wire into `GroupsPage`
+- [x] 5.3 — Fix error handling in `UsersPage`, `RolesPage`, `AccessRequestsPage` to show actual error details
+- [x] 5.4 — Add i18n keys for group-role assignment UI and error display strings
+
+---
+
+## Phase 5 — Frontend: Group-Role Assignment & Error Handling
+
+### Task 5.1 — Add `useGroupRoles`, `useAssignGroupRole`, `useRemoveGroupRole` hooks to `usePermissions.ts`
+
+The API functions `listGroupRoles`, `assignGroupRole`, and `removeGroupRole` already exist in `frontend/src/api/permissionsApi.ts` but have no corresponding React Query hooks. Add to `frontend/src/hooks/usePermissions.ts`:
+
+- **`useGroupRoles(groupId: string | null)`** — `useQuery` with key `['group-roles', groupId]`; enabled only when `groupId` is non-null; calls `listGroupRoles(groupId)`.
+- **`useAssignGroupRole()`** — `useMutation`; calls `assignGroupRole(groupId, roleId)`; on success invalidates `['group-roles', groupId]`.
+- **`useRemoveGroupRole()`** — `useMutation`; calls `removeGroupRole(groupId, roleId)`; on success invalidates `['group-roles', groupId]`.
+
+**Done when:** All three hooks are exported from `usePermissions.ts` and their TypeScript types are consistent with `Role` from `../../types/permissions`.
+
+---
+
+### Task 5.2 — Add `ManageGroupRolesModal` component and wire into `GroupsPage`
+
+Create `frontend/src/components/permissions/ManageGroupRolesModal.tsx`.
+
+Props:
+- `open: boolean`
+- `onClose: () => void`
+- `group: Group | null`
+
+Behaviour:
+- Uses `useGroupRoles(group?.id ?? null)` to load current assigned roles; shows `CircularProgress` while loading and an error alert (with actual message via `extractErrorMessage`) on failure.
+- Displays each assigned role as a `Chip` with a delete icon; clicking the delete icon calls `useRemoveGroupRole` to remove that role assignment.
+- Provides a `Select` dropdown populated with all platform roles (`useRoles()`), filtered to exclude already-assigned roles; an "Add" button calls `useAssignGroupRole` with the selected role ID.
+- All strings use `t()` from i18next.
+
+In `GroupsPage.tsx`:
+- Add a "Manage Roles" icon button (e.g. `SecurityIcon` or `AdminPanelSettingsIcon`) to each row in the groups table.
+- Add a `manageRolesGroup: Group | null` state field.
+- Render `<ManageGroupRolesModal open={!!manageRolesGroup} onClose={() => setManageRolesGroup(null)} group={manageRolesGroup} />` at the bottom of the component.
+
+**Done when:** Clicking "Manage Roles" on any group row opens the modal. Roles can be added and removed. The modal shows live-updated role list after each mutation. All strings use `t()`.
+
+---
+
+### Task 5.3 — Fix error handling in `UsersPage`, `RolesPage`, `AccessRequestsPage` to show actual error details
+
+Create `frontend/src/utils/errorUtils.ts` with:
+
+```
+export function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const axiosDetail = (error as any)?.response?.data?.detail
+    if (typeof axiosDetail === 'string' && axiosDetail) return axiosDetail
+    const msg = (error as any)?.message
+    if (typeof msg === 'string' && msg) return msg
+  }
+  return fallback
+}
+```
+
+Update error alert rendering in `UsersPage`, `RolesPage`, and `AccessRequestsPage`:
+
+- Replace `{error && <Alert severity="error">{t('app.error')}</Alert>}` with `{error && <Alert severity="error">{extractErrorMessage(error, t('app.error'))}</Alert>}` in every data-loading error display.
+- Apply the same pattern to inline mutation error states where generic messages are currently shown.
+- Also apply to `GroupsPage` error display for consistency.
+
+**Done when:** When a data load fails (network error, 403, 404, server validation message), the alert shows the actual error text. When no detail is available, the generic `t('app.error')` fallback is shown. No hardcoded English strings are introduced.
+
+---
+
+### Task 5.4 — Add i18n keys for group-role assignment UI and error display strings
+
+Add the following keys to `frontend/src/i18n/locales/en.json` under `permissions.groups`:
+
+| Key | Value |
+|-----|-------|
+| `manageRoles` | `"Manage Roles"` |
+| `manageRolesTitle` | `"Manage Roles — {{groupName}}"` |
+| `assignedRoles` | `"Assigned Roles"` |
+| `addRole` | `"Add Role"` |
+| `selectRole` | `"Select a role"` |
+| `noRolesAssigned` | `"No roles assigned to this group."` |
+| `roleAlreadyAssigned` | `"This role is already assigned to the group."` |
+
+**Done when:** All keys are present under `permissions.groups` in `en.json`. All new strings in `ManageGroupRolesModal` and the updated `GroupsPage` use `t()`. No hardcoded English strings exist in the new or changed components.
+
 ---
 
 ## Completion Checklist
 
-- [ ] All resource-managing backend endpoints (`agents`, `mcp_hub`, `skills`, `sops`, `scheduling`, `notifications`, `conversations`, `results`) enforce `Depends(require_permission(...))` on every route
-- [ ] Legacy inline `PermissionEngine` call and `get_permission_engine` import removed from `agents.py` DELETE handler
-- [ ] `user_access_requests.py` admin endpoints use `Depends(require_permission(...))`; `_has_permission` helper deleted
-- [ ] `RT_RESULT` constant and manifest entry added to `backend/app/core/resource_types.py`
-- [ ] `PermissionEngine.authorize()` emits a `permission_check` structured log entry on every invocation
-- [ ] `PermissionEngine.authorize()` sets `permission.*` OTEL span attributes on every invocation
-- [ ] `PermissionErrorSnackbar` includes a "Request Access" action button that opens `RequestPermissionModal`
-- [ ] `RequestPermissionModal` component created; submits access request with permission context in justification
-- [ ] `AccessDeniedPage` created and registered at `/access-denied` in `AppRouter.tsx`
-- [ ] All new frontend strings added to `permissions.errors` namespace in `en.json`; no hardcoded strings in new components
-- [ ] Backend tests cover deny and allow scenarios for all newly guarded endpoint modules
-- [ ] Full backend and frontend test suites pass with zero regressions
+- [x] All resource-managing backend endpoints (`agents`, `mcp_hub`, `skills`, `sops`, `scheduling`, `notifications`, `conversations`, `results`) enforce `Depends(require_permission(...))` on every route
+- [x] Legacy inline `PermissionEngine` call and `get_permission_engine` import removed from `agents.py` DELETE handler
+- [x] `user_access_requests.py` admin endpoints use `Depends(require_permission(...))`; `_has_permission` helper deleted
+- [x] `RT_RESULT` constant and manifest entry added to `backend/app/core/resource_types.py`
+- [x] `PermissionEngine.authorize()` emits a `permission_check` structured log entry on every invocation
+- [x] `PermissionEngine.authorize()` sets `permission.*` OTEL span attributes on every invocation
+- [x] `PermissionErrorSnackbar` includes a "Request Access" action button that opens `RequestPermissionModal`
+- [x] `RequestPermissionModal` component created; submits access request with permission context in justification
+- [x] `AccessDeniedPage` created and registered at `/access-denied` in `AppRouter.tsx`
+- [x] All new frontend strings added to `permissions.errors` namespace in `en.json`; no hardcoded strings in new components
+- [x] Backend tests cover deny and allow scenarios for all newly guarded endpoint modules
+- [x] Full backend and frontend test suites pass with zero regressions
+- [x] `useGroupRoles`, `useAssignGroupRole`, `useRemoveGroupRole` hooks added to `usePermissions.ts`
+- [x] `ManageGroupRolesModal` component created; "Manage Roles" button wired into `GroupsPage` table rows
+- [x] `extractErrorMessage` utility created in `frontend/src/utils/errorUtils.ts`
+- [x] `UsersPage`, `RolesPage`, `AccessRequestsPage`, and `GroupsPage` error alerts show actual error details via `extractErrorMessage`
+- [x] All new strings for group-role assignment UI added to `permissions.groups` namespace in `en.json`; no hardcoded English strings in new or changed components

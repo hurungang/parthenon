@@ -54,8 +54,8 @@ The skills module defines the execution primitives that agents use to interact w
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `SkillRouter` | router | CRUD endpoints for Skill management | `backend/app/api/v1/skills.py` |
-| `SopRouter` | router | CRUD and step management endpoints for SOPs | `backend/app/api/v1/sops.py` |
+| `SkillRouter` | router | CRUD endpoints for Skill management; all operations guarded by `require_permission(RT_SKILL, action)` | `backend/app/api/v1/skills.py` |
+| `SopRouter` | router | CRUD and step management endpoints for SOPs; all operations guarded by `require_permission(RT_SKILL, action)` | `backend/app/api/v1/sops.py` |
 | `SkillExecutor` | class | Resolves MCP tool bindings for a skill and invokes them via McpProxyEngine | `backend/app/services/skills/executor.py` |
 | `SopOrchestrator` | class | Executes ordered SOP steps; dispatches to SkillExecutor or delegates to Agent Engine per step type | `backend/app/services/skills/sop_orchestrator.py` |
 | `Skill` | model | SQLAlchemy model for a named, permission-assignable MCP tool wrapper | `backend/app/db/models/skills.py` |

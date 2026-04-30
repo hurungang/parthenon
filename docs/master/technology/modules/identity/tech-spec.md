@@ -43,15 +43,14 @@ The identity module covers three interconnected concerns: the platform's interna
 
 | Component | Description |
 |-----------|-------------|
+| `PolicyRouter` | New FastAPI router at `/api/v1/policy`; exposes `GET /resource-types` returning the full `ResourceTypeManifest` as a list of `{ resource_type, actions }` objects; no database access — manifest is a static in-memory dict; requires `role:read` permission |
 | `BootstrapService` | Seeds a `system_admin` role with full-access policy on first startup; idempotent; runs as a FastAPI startup event handler |
-| `PermissionEngine` | Evaluates authorization requests against the user's effective policy set; deny-by-default; supports wildcard resource ID patterns; returns `AuthorizationResult` with decision and audit reason |
+| `PermissionEngine` | Evaluates authorization requests against the user's effective policy set; deny-by-default; supports wildcard resource ID patterns; returns `AuthorizationResult` with decision and audit reason; emits one structured audit log record and sets `permission.*` OTEL span attributes per call |
 | `TagRegistry` | Manages `TagDefinition` and `TagValue` records; enforces key uniqueness per scope; validates proposed tag key/value pairs against allowed values list |
 | `UserCacheService` | Upserts a `PlatformUser` record on every successful JWT validation; creates on first encounter, updates `last_seen_at` on subsequent calls |
 | `GroupClaimMapper` | Processes JWT group claims after User Cache write; creates missing `UserGroup` membership records for groups whose `idp_claim_value` appears in JWT claims; idempotent |
 | `AccessRequestService` | Manages the full lifecycle of group join requests; handles `submit_batch_request`, approval (creates `UserGroup` record), and rejection; enforces one-pending-per-user/group constraint; delegates notification triggers to `NotificationHook` |
 | `NotificationHook` | Sends permission-domain alerts via the existing notification service: owner notification on new join request, requester notification on approve/reject |
-| `ResourceTypeManifest` | Centralized constant (`backend/app/core/resource_types.py`) mapping resource type identifiers to allowed action sets; imported by `PermissionEngine` and all user permission routers |
-| `require_permission` | FastAPI dependency factory: resolves `PlatformUser` from JWT `sub`, calls `PermissionEngine`, raises `403` with `PermissionDeniedDetail` body on deny |
 | Auth middleware (modified) | Extended to call `UserCacheService.upsert_user()` and `GroupClaimMapper.map_claims()` after every successful JWT validation; failures are logged without failing the request |
 
 ### Frontend — Setup Wizard
@@ -73,14 +72,21 @@ The identity module covers three interconnected concerns: the platform's interna
 |-----------|-------------|
 | `PermissionsPage` | Layout container with tab navigation for the five permission sub-pages; admin-gated via router guard |
 | `TagsPage` | Tag definitions table with add/edit/delete |
-| `RolesPage` | Roles table with single-dialog policy statement management (`RolePolicyDialog`); system roles have all controls disabled |
-| `GroupsPage` | Groups table with member/role management and IdP claim binding |
+| `RolesPage` | Roles table with expandable policy statement panel (`PolicyEditor`); adds "View JSON" (`JSONViewModal`) and "Clone" (`CloneRoleDialog`) icon buttons per row; system roles have all controls disabled |
+| `PolicyEditor` | Expanded-row component rendered inside `RolesPage`; fetches and displays a role's policy statements; owns the Remove mutation and the trigger for `AddStatementDialog` |
+| `AddStatementDialog` | Self-contained dialog with structured form for creating a policy statement; resource type dropdown drives actions dropdown via `useResourceTypes()`; owns `useCreatePolicyStatement` mutation |
+| `JSONViewModal` | Read-only dialog rendering a role's effective policy as canonical JSON in a dark monospace block with clipboard copy action; data derived from `useRole()` |
+| `CloneRoleDialog` | Dialog for cloning a role; pre-populates name and description from the source; owns `useCloneRole()` mutation and inline error display |
+| `GroupsPage` | Groups table with member/role management, IdP claim binding, and "Manage Roles" action that opens `ManageGroupRolesModal` |
 | `UsersPage` | Paginated platform users table with role/group assignment |
 | `AccessRequestsPage` | Pending requests view for owners/admins; own-requests view for users |
 | `ManageAccessModal` | Tabbed modal for assigning/removing roles and groups for a given user |
+| `ManageGroupRolesModal` | Modal for viewing, adding, and removing role assignments on an existing group; opened via a "Manage Roles" icon button in the groups table; displays current roles as removable chips with a dropdown to add any unassigned platform role |
 | `permissionsApi` | Typed async functions for all permission management endpoints |
 | `useTagValueOptions` | React hook returning the allowed-values array for a given tag key from the tag definition store |
-| `RESOURCE_TYPES` | TypeScript mirror of `ResourceTypeManifest`; populates resource type and action dropdowns in the policy builder |
+| `useResourceTypes` | React Query `useQuery` hook; fetches resource types from `GET /api/v1/policy/resource-types`; cached indefinitely (static data) |
+| `useCloneRole` | React Query `useMutation` hook; posts to `POST /api/v1/user-roles/{id}/clone`; invalidates `permissionKeys.roles` on success |
+| `RESOURCE_TYPES` | Static TypeScript const mirroring `ResourceTypeManifest`; retained for reference; `AddStatementDialog` now uses `useResourceTypes()` backed by the API |
 
 ### Infrastructure
 
@@ -133,6 +139,13 @@ The identity module covers three interconnected concerns: the platform's interna
 | `GET` | `/api/v1/user-roles/{id}/policies` | JWT (admin) | List policy statements for role |
 | `POST` | `/api/v1/user-roles/{id}/policies` | JWT (admin) | Create policy statement (effect, module, actions, resource scopes, tag conditions) |
 | `DELETE` | `/api/v1/user-roles/{id}/policies/{policy_id}` | JWT (admin) | Delete policy statement |
+| `POST` | `/api/v1/user-roles/{id}/clone` | JWT (admin) | Deep-copy role and all nested policy statements under a new name; 409 on duplicate name, 404 if source not found |
+
+### Policy (`/api/v1/policy`)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/api/v1/policy/resource-types` | JWT (`role:read`) | Returns all resource types and their allowed actions from `ResourceTypeManifest`; response is an array of `{ resource_type, actions }` objects; no database access |
 
 ### User Groups (`/api/v1/user-groups`)
 
@@ -272,7 +285,8 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 |--------|------|-------------|------|
 | `BootstrapService` | class | Seeds system admin role on first startup; idempotent; runs as FastAPI startup event | `backend/app/services/permissions/bootstrap_service.py` |
 | `BootstrapService.initialize` | method | Ensures `system_admin` role + full-access policy + assigns initial admin by `BOOTSTRAP_ADMIN_EMAIL` env var | `backend/app/services/permissions/bootstrap_service.py` |
-| `PermissionEngine` | class | Evaluates user permission policies; deny-by-default; returns allow/deny with audit reason | `backend/app/services/permissions/permission_engine.py` |
+| `PermissionEngine` | class | Evaluates user permission policies; deny-by-default; returns allow/deny with audit reason; emits structured audit log and OTEL span attributes per call | `backend/app/services/permissions/permission_engine.py` |
+| `PermissionEngine.authorize` | method | Evaluates allow/deny for user + module + action + resource_id; validates against `ResourceTypeManifest`; loads effective role IDs (direct `UserRole` + group-inherited `GroupRole`); emits one structured log record and sets `permission.*` OTEL span attributes per call; returns `AuthorizationResult` | `backend/app/services/permissions/permission_engine.py` |
 | `AuthorizationResult` | dataclass | Return type of `PermissionEngine.authorize()` — decision + reason | `backend/app/services/permissions/permission_engine.py` |
 | `_match_resource_id` | private method | Evaluates wildcard patterns against resource IDs in `PermissionEngine` | `backend/app/services/permissions/permission_engine.py` |
 | `get_permission_engine` | function | FastAPI dependency that provides a `PermissionEngine` instance | `backend/app/services/permissions/permission_engine.py` |
@@ -280,11 +294,10 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | `UserCacheService` | class | Upserts `PlatformUser` records from OIDC token claims | `backend/app/services/permissions/user_cache_service.py` |
 | `GroupClaimMapper` | class | Maps JWT group claims to `UserGroup` memberships idempotently | `backend/app/services/permissions/group_claim_mapper.py` |
 | `AccessRequestService` | class | Handles submit, approve, and reject of group join requests | `backend/app/services/permissions/access_request_service.py` |
-| `submit_batch_request` | method | Creates an `AccessRequestBatch` + one `AccessRequest` per group ID | `backend/app/services/permissions/access_request_service.py` |
+| `submit_batch_request` | method | Creates an `AccessRequestBatch` + one `AccessRequest` per group (or one group-less request when `group_ids` is empty) | `backend/app/services/permissions/access_request_service.py` |
+| `approve_request` | method | Approves a request, optionally assigning a group at approval time, then creates the `UserGroup` membership record | `backend/app/services/permissions/access_request_service.py` |
 | `NotificationHook` | class | Sends permission-domain notifications via existing notification service | `backend/app/services/permissions/notification_hook.py` |
-| `require_permission` | function | FastAPI dependency factory: resolves `PlatformUser` from JWT `sub`, calls `PermissionEngine`, raises 403 on deny | `backend/app/api/deps.py` |
 | `require_admin` | function | Legacy JWT-claim-based admin check; kept for non-permission-managed endpoints | `backend/app/api/deps.py` |
-| `ResourceTypeManifest` | Python constant | Centralized dict mapping resource type identifiers to allowed action sets; authoritative source for `PermissionEngine` and router constants | `backend/app/core/resource_types.py` |
 | Auth middleware (modified) | middleware | Extended to call `UserCacheService` and `GroupClaimMapper` on every validated request | `backend/app/middleware/auth.py` |
 
 ### User Permission System — Database Models
@@ -321,9 +334,10 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | `GroupRead` | Pydantic model | Response schema for a group with member and role counts | `backend/app/schemas/groups.py` |
 | `PlatformUserRead` | Pydantic model | Response schema for a platform user with role and group lists | `backend/app/schemas/platform_users.py` |
 | `AccessRequestStatus` | Python Enum | `pending` / `approved` / `rejected` | `backend/app/schemas/access_requests.py` |
-| `AccessRequestCreate` | Pydantic model | Request schema for submitting a join request | `backend/app/schemas/access_requests.py` |
-| `AccessRequestRead` | Pydantic model | Response schema for an access request with status and review info | `backend/app/schemas/access_requests.py` |
-| `AccessRequestBatchSchema` | Pydantic model | Request/response schema for the batch submit endpoint | `backend/app/schemas/access_requests.py` |
+| `AccessRequestBatchCreate` | Pydantic model | Request schema for submitting a request batch; `group_ids` defaults to `[]` (empty list creates a group-less request) | `backend/app/schemas/access_requests.py` |
+| `AccessRequestRead` | Pydantic model | Response schema for a single access request; `group_id` is nullable — consumers must handle `null` | `backend/app/schemas/access_requests.py` |
+| `AccessRequestBatchRead` | Pydantic model | Response schema for a batch with its enriched request list | `backend/app/schemas/access_requests.py` |
+| `ApproveRequestBody` | Pydantic model | Request schema for the approve PATCH payload; optional `group_id` — required by the service when the stored request has no assigned group | `backend/app/schemas/access_requests.py` |
 | `PermissionDeniedDetail` | Pydantic model | 403 response body schema; contains `detail` string and nested `required_permission` object | `backend/app/schemas/errors.py` |
 | `RequiredPermission` | Pydantic model | Nested model within `PermissionDeniedDetail`; contains `resource_type`, `action`, and `resource_id` fields | `backend/app/schemas/errors.py` |
 
@@ -333,31 +347,61 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 |--------|------|-------------|------|
 | User Tags API router | FastAPI router | CRUD endpoints for user tag definitions under `/api/v1/user-tags` | `backend/app/api/v1/user_tags.py` |
 | User Roles API router | FastAPI router | CRUD endpoints for user roles and policy statements under `/api/v1/user-roles` | `backend/app/api/v1/user_roles.py` |
+| `clone_role` | endpoint | `POST /api/v1/user-roles/{role_id}/clone` — deep-copies a role and all nested `PolicyStatement` / `PolicyAction` / `PolicyResource` / `PolicyTagCondition` rows in a single async transaction; validates name uniqueness (409) and source existence (404); requires `role:manage` | `backend/app/api/v1/user_roles.py` |
+| `PolicyRouter` | FastAPI router | Read-only policy endpoint at `/api/v1/policy`; exposes `list_resource_types` returning the static `ResourceTypeManifest` as `ResourceTypeRead` list; requires `role:read` | `backend/app/api/v1/policy.py` |
+| `list_resource_types` | endpoint | `GET /api/v1/policy/resource-types` — returns all resource types and their allowed actions from the in-memory `ResourceTypeManifest`; no database query | `backend/app/api/v1/policy.py` |
 | User Groups API router | FastAPI router | CRUD and membership endpoints for user groups under `/api/v1/user-groups` | `backend/app/api/v1/user_groups.py` |
 | Platform Users API router | FastAPI router | User list and assignment endpoints under `/api/v1/platform-users` | `backend/app/api/v1/platform_users.py` |
-| User Access Requests API router | FastAPI router | Submit, list, approve, reject endpoints under `/api/v1/user-access-requests` | `backend/app/api/v1/user_access_requests.py` |
+| `AccessRequestsRouter` | FastAPI router | Submit, list, approve, and reject endpoints under `/api/v1/user-access-requests`; admin endpoints (`pending`, `approve`, `reject`) guarded by `require_permission(RT_ACCESS_REQUEST, action)` | `backend/app/api/v1/user_access_requests.py` |
+| `_enrich_request` | helper | Populates `group_name` and `requester_display_name` on `AccessRequestRead`; guards against `group_id` being `None` | `backend/app/api/v1/user_access_requests.py` |
+| `submit_access_request` | endpoint | `POST /user-access-requests` — creates a request batch; accepts empty `group_ids` for a group-less request | `backend/app/api/v1/user_access_requests.py` |
+| `approve_request` | endpoint | `PATCH /user-access-requests/{id}/approve` — approves a request; accepts optional `group_id` in body, required when the stored request has no group | `backend/app/api/v1/user_access_requests.py` |
 
 ### User Permission System — Frontend
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `permissionsApi` | TypeScript module | Typed async functions for all permission management endpoints | `frontend/src/api/permissionsApi.ts` |
+| `submitAccessRequest` | function | API call — `POST /user-access-requests`; accepts optional `groupIds` (empty array allowed) | `frontend/src/api/permissionsApi.ts` |
+| `listGroupRoles` | function | API call — `GET /user-groups/{id}/roles`; returns roles currently assigned to the group | `frontend/src/api/permissionsApi.ts` |
+| `assignGroupRole` | function | API call — `POST /user-groups/{id}/roles`; assigns a role to a group; 409 if already assigned | `frontend/src/api/permissionsApi.ts` |
+| `removeGroupRole` | function | API call — `DELETE /user-groups/{id}/roles/{role_id}`; removes a role assignment from a group | `frontend/src/api/permissionsApi.ts` |
+| `useGroupRoles` | hook | React Query `useQuery` hook; fetches roles assigned to a group; enabled only when `groupId` is non-null | `frontend/src/hooks/usePermissions.ts` |
+| `useAssignGroupRole` | hook | React Query `useMutation` hook; calls `assignGroupRole`; invalidates the group roles query on success | `frontend/src/hooks/usePermissions.ts` |
+| `useRemoveGroupRole` | hook | React Query `useMutation` hook; calls `removeGroupRole`; invalidates the group roles query on success | `frontend/src/hooks/usePermissions.ts` |
+| `ManageGroupRolesModal` | component | Modal rendered within `GroupsPage`; displays current role assignments as removable chips; dropdown to add any unassigned platform role; all strings via `t()` | `frontend/src/components/permissions/ManageGroupRolesModal.tsx` |
+| `GroupsPage` | component | Groups management page — group table with member/role management, IdP claim binding, and "Manage Roles" icon button that opens `ManageGroupRolesModal` | `frontend/src/pages/permissions/GroupsPage.tsx` |
+| `approveAccessRequest` | function | API call — `PATCH /user-access-requests/{id}/approve`; includes optional `group_id` in body | `frontend/src/api/permissionsApi.ts` |
 | `TagDefinition` (TS) | TypeScript interface | Client-side type for a tag definition | `frontend/src/types/permissions.ts` |
 | `Role` (TS) | TypeScript interface | Client-side type for a role with policy statements | `frontend/src/types/permissions.ts` |
 | `PolicyStatement` (TS) | TypeScript interface | Client-side type for a policy statement | `frontend/src/types/permissions.ts` |
 | `Group` (TS) | TypeScript interface | Client-side type for a group | `frontend/src/types/permissions.ts` |
 | `PlatformUser` (TS) | TypeScript interface | Client-side type for a platform user | `frontend/src/types/permissions.ts` |
-| `AccessRequest` (TS) | TypeScript interface | Client-side type for a join request | `frontend/src/types/permissions.ts` |
+| `AccessRequest` (TS) | TypeScript interface | Client-side type for a join request; `group_id` is optional | `frontend/src/types/permissions.ts` |
+| `AccessRequestBatch` (TS) | TypeScript interface | Client-side type for a batch grouping multiple join requests | `frontend/src/types/permissions.ts` |
 | `PolicyEffect` (TS) | TypeScript enum | `allow` / `deny` | `frontend/src/types/permissions.ts` |
 | `AccessRequestStatus` (TS) | TypeScript enum | `pending` / `approved` / `rejected` | `frontend/src/types/permissions.ts` |
 | `TagScope` (TS) | TypeScript enum | `global` / `resource_type` | `frontend/src/types/permissions.ts` |
-| `RESOURCE_TYPES` | TypeScript const | Frontend mirror of `ResourceTypeManifest`; populates resource type and action dropdowns in the single-dialog policy builder | `frontend/src/constants/resourceTypes.ts` |
+| `ResourceTypeDef` | TypeScript interface | Client-side shape for a resource type entry: `{ resource_type: string; actions: string[] }` | `frontend/src/types/permissions.ts` |
+| `RoleCloneCreate` | TypeScript interface | Request body for cloning a role: `{ name: string; description?: string }` | `frontend/src/types/permissions.ts` |
+| `RESOURCE_TYPES` | TypeScript const | Static frontend mirror of `ResourceTypeManifest`; retained for display purposes; `AddStatementDialog` now uses `useResourceTypes()` backed by the API | `frontend/src/constants/resourceTypes.ts` |
+| `listResourceTypes` | function | API call — `GET /api/v1/policy/resource-types`; returns `ResourceTypeDef[]` | `frontend/src/api/permissionsApi.ts` |
+| `cloneRole` | function | API call — `POST /api/v1/user-roles/{id}/clone`; posts `RoleCloneCreate`; returns cloned `Role` | `frontend/src/api/permissionsApi.ts` |
+| `useResourceTypes` | hook | React Query `useQuery` hook; fetches `listResourceTypes()`; cached indefinitely (static data) | `frontend/src/hooks/usePermissions.ts` |
+| `useCloneRole` | hook | React Query `useMutation` hook; calls `cloneRole()`; invalidates `permissionKeys.roles` on success | `frontend/src/hooks/usePermissions.ts` |
 | `PermissionsPage` | React component | Layout with tab navigation for the five permission sub-pages; admin-gated | `frontend/src/pages/permissions/PermissionsPage.tsx` |
 | `TagsPage` | React component | Tag definitions table with add/edit/delete | `frontend/src/pages/permissions/TagsPage.tsx` |
-| `RolesPage` | React component | Roles table with policy statement detail and CRUD; contains `RolePolicyDialog` | `frontend/src/pages/permissions/RolesPage.tsx` |
-| `RolePolicyDialog` | React component | Single comprehensive dialog for viewing and managing all policy statements for a selected role; replaces separate add/edit flows | `frontend/src/pages/permissions/RolesPage.tsx` |
-| `GroupsPage` | React component | Groups table with member/role management and IdP claim binding | `frontend/src/pages/permissions/GroupsPage.tsx` |
+| `RolesPage` | React component | Roles table wiring together `PolicyEditor`, `JSONViewModal`, and `CloneRoleDialog`; adds View JSON and Clone icon buttons per row; removes inline policy form state (moved to `AddStatementDialog`) | `frontend/src/pages/permissions/RolesPage.tsx` |
+| `PolicyEditor` | React component | Expanded-row component rendered inside `RolesPage`; fetches and displays role policy statements via `useRole()`; owns Remove mutation and trigger for `AddStatementDialog` | `frontend/src/components/permissions/PolicyEditor.tsx` |
+| `AddStatementDialog` | React component | Self-contained dialog with structured form for creating a policy statement; resource type dropdown drives actions dropdown via `useResourceTypes()`; owns `useCreatePolicyStatement` mutation; resets state on open/close | `frontend/src/components/permissions/AddStatementDialog.tsx` |
+| `JSONViewModal` | React component | Read-only dialog rendering a role's effective policy as canonical JSON in a dark monospace block with clipboard copy action; derives data from `useRole(roleId)` | `frontend/src/components/permissions/JSONViewModal.tsx` |
+| `CloneRoleDialog` | React component | Dialog for cloning a role; pre-populates name/description from source; owns `useCloneRole()` mutation and inline error display via `PermissionDeniedAlert` | `frontend/src/components/permissions/CloneRoleDialog.tsx` |
 | `UsersPage` | React component | Paginated platform users table with role/group assignment | `frontend/src/pages/permissions/UsersPage.tsx` |
-| `AccessRequestsPage` | React component | Pending requests view for owners/admins and own-requests view for users | `frontend/src/pages/permissions/AccessRequestsPage.tsx` |
+| `AccessRequestsPage` | React component | Top-level page containing the user and admin access request tabs | `frontend/src/pages/permissions/AccessRequestsPage.tsx` |
+| `MyRequestsTab` | React component | User-facing request form (adaptive: hides group selection when user sees no groups) and request history list | `frontend/src/pages/permissions/AccessRequestsPage.tsx` |
+| `PendingRequestsTab` | React component | Admin review table with approve/reject dialogs; renders "Unassigned" for group-less requests and provides a mandatory group-selection dropdown on approval | `frontend/src/pages/permissions/AccessRequestsPage.tsx` |
 | `ManageAccessModal` | React component | Tabbed modal for assigning/removing roles and groups for a given user | `frontend/src/components/permissions/ManageAccessModal.tsx` |
+| `en.json` (permissions.accessRequests) | i18n | Default locale file; contains translation keys under `permissions.accessRequests` for group-optional access request UI strings | `frontend/src/i18n/locales/en.json` |
 | `useTagValueOptions` | React hook | Returns allowed values array for a given tag key from the tag definition store | `frontend/src/hooks/useTagValueOptions.ts` |
+| `useSubmitAccessRequest` | React hook | React Query mutation for submitting an access request; `groupIds` parameter is optional | `frontend/src/hooks/usePermissions.ts` |
+| `useApproveAccessRequest` | React hook | React Query mutation for approving an access request; threads optional `groupId` to `approveAccessRequest` | `frontend/src/hooks/usePermissions.ts` |

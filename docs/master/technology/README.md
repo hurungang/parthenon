@@ -8,6 +8,7 @@ This section contains per-module technology specifications for every backend, fr
 
 | Module | Description |
 |--------|-------------|
+| [frontend](modules/frontend/tech-spec.md) | Global MUI theming infrastructure (palette, typography, shadows, component overrides), app bootstrap (ThemeProvider, CssBaseline), and top-level layout shell (AppShell, sidebar, AppBar) |
 | [foundation](modules/foundation/tech-spec.md) | Core infrastructure: application settings, async database session, OIDC JWT validation, auth middleware, AES-256 credential vault, and OpenTelemetry setup |
 | [identity](modules/identity/tech-spec.md) | RBAC layer (Roles, Permissions, Identities); identity provider bootstrap for bundled Keycloak, external Keycloak, and Azure EntraID; setup wizard and first-run redirect guard |
 | [mcp-hub](modules/mcp-hub/tech-spec.md) | External MCP server registration, tool catalogue sync under slug namespaces, encrypted session management, and tool-call proxy engine |

@@ -57,7 +57,7 @@ export function OidcCallback() {
             throw new Error('Token exchange failed')
           })
         }
-        return res.json() as Promise<{ access_token: string; refresh_token: string }>
+        return res.json() as Promise<{ access_token: string; refresh_token: string; id_token?: string }>
       })
       .then((data) => {
         // Clear the PKCE verifier after successful exchange
@@ -69,6 +69,10 @@ export function OidcCallback() {
           setToken(data.access_token)
         })
         localStorage.setItem('refresh_token', data.refresh_token)
+        // Store id_token for proper Keycloak logout
+        if (data.id_token) {
+          localStorage.setItem('id_token', data.id_token)
+        }
         navigate('/dashboard', { replace: true })
       })
       .catch(() => navigate('/login', { replace: true }))

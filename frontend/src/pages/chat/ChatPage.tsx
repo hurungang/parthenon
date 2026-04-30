@@ -15,6 +15,7 @@ import SendIcon from '@mui/icons-material/Send'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import PersonIcon from '@mui/icons-material/Person'
 import apiClient from '../../api/apiClient'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useChatSession, type ChatMessage } from '../../hooks/useChatSession'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
 import type { GatewayInitResponse } from '../../types'
@@ -29,7 +30,7 @@ export function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [inputText, setInputText] = useState('')
   const [isStarting, setIsStarting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
 
   const { messages, connected, pendingQuestion, sendMessage } = useChatSession(sessionId)
 
@@ -43,8 +44,8 @@ export function ChatPage() {
         {},
       )
       setSessionId(data.instance_id)
-    } catch {
-      setError(t('app.error'))
+    } catch (err) {
+      setError(err)
     } finally {
       setIsStarting(false)
     }
@@ -82,7 +83,7 @@ export function ChatPage() {
         )}
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error ? <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} /> : null}
 
       {!sessionId ? (
         <Box display="flex" justifyContent="center" alignItems="center" flex={1}>

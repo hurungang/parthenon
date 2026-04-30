@@ -45,7 +45,7 @@ The scheduling module provides cron-based trigger capabilities for the platform,
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `SchedulingEngine` | class | APScheduler cron manager with PostgreSQL job store; triggers agent/SOP execution on schedule | `backend/app/services/scheduling/scheduler.py` |
-| `ScheduleRouter` | router | CRUD, pause, resume, and execution history endpoints for scheduled jobs | `backend/app/api/v1/scheduling.py` |
+| `ScheduleRouter` | router | CRUD, pause, resume, and execution history endpoints for scheduled jobs; all operations guarded by `require_permission(RT_SCHEDULING, action)` | `backend/app/api/v1/scheduling.py` |
 | `ScheduledJob` | model | SQLAlchemy model for a cron-based schedule (expression, target, payload, state) | `backend/app/db/models/scheduling.py` |
 | `JobExecution` | model | SQLAlchemy model for a single scheduled job execution run | `backend/app/db/models/scheduling.py` |
 | `ScheduleManagerPage` | component | Cron job list with status, create/edit form, pause/resume/delete, and execution history | `frontend/src/pages/scheduling/ScheduleManagerPage.tsx` |

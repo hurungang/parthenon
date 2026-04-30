@@ -51,8 +51,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `AgentTypeRouter` | router | CRUD endpoints for AgentType definitions | `backend/app/api/v1/agents.py` |
-| `AgentInstanceRouter` | router | Instance listing and force-termination endpoints | `backend/app/api/v1/agents.py` |
+| `AgentTypeRouter` | router | CRUD endpoints for AgentType definitions; all operations guarded by `require_permission(RT_AGENT, action)` | `backend/app/api/v1/agents.py` |
+| `AgentInstanceRouter` | router | Instance listing and force-termination endpoints; instance operations guarded by `require_permission(RT_AGENT, "execute")` | `backend/app/api/v1/agents.py` |
 | `AgentInstanceManager` | class | Spawns and destroys agent instances; enforces max_instances per type; tracks lifecycle status | `backend/app/services/agents/instance_manager.py` |
 | `ModelBindingLayer` | class | Resolves LLM provider config per agent type and dispatches prompts to the configured model | `backend/app/services/agents/model_binding.py` |
 | `SopAgentExecutor` | class | Executes a sop-agent prompt by delegating to SopOrchestrator with the bound SOP | `backend/app/services/agents/sop_executor.py` |

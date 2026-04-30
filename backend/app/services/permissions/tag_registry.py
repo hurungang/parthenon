@@ -6,6 +6,7 @@ from typing import List
 from fastapi import HTTPException
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models.tag_definition import TagDefinition, TagScope
 from app.db.models.policy_tag_condition import PolicyTagCondition
@@ -24,7 +25,11 @@ class TagRegistry:
         resource_type: str | None = None,
     ) -> List[TagDefinition]:
         """Return tag definitions, optionally filtered by scope or resource_type."""
-        stmt = select(TagDefinition).order_by(TagDefinition.key)
+        stmt = (
+            select(TagDefinition)
+            .options(selectinload(TagDefinition.tag_values))
+            .order_by(TagDefinition.key)
+        )
         if scope is not None:
             stmt = stmt.where(TagDefinition.scope == scope)
         if resource_type is not None:
@@ -71,7 +76,7 @@ class TagRegistry:
             db.add(TagValue(tag_definition_id=tag_def.id, value=value))
 
         await db.flush()
-        await db.refresh(tag_def)
+        await db.refresh(tag_def, attribute_names=['tag_values'])
         return tag_def
 
     async def update_definition(
@@ -113,7 +118,8 @@ class TagRegistry:
             )
 
         await db.flush()
-        await db.refresh(tag_def)
+        await db.refresh(tag_def, attribute_names=['tag_values'])
+        
         return tag_def
 
     async def delete_definition(self, db: AsyncSession, tag_id: uuid.UUID) -> None:

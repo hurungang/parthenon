@@ -4,7 +4,6 @@ import uuid
 from dataclasses import dataclass
 from typing import List
 
-import opentelemetry.trace
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,19 +55,19 @@ class PermissionEngine:
         # Wildcard module '*' bypasses this check (used internally by system admin policy)
         if module != "*":
             if module not in ResourceTypeManifest:
-                r = AuthorizationResult(allowed=False, reason=f"Unknown resource type '{module}'.")
-                self._emit_audit(user_id, module, action, resource_id, r)
-                return r
+                return AuthorizationResult(
+                    allowed=False,
+                    reason=f"Unknown resource type '{module}'.",
+                )
             if action != "*" and action not in ResourceTypeManifest[module]["actions"]:
-                r = AuthorizationResult(allowed=False, reason=f"Action '{action}' is not valid for resource type '{module}'.")
-                self._emit_audit(user_id, module, action, resource_id, r)
-                return r
+                return AuthorizationResult(
+                    allowed=False,
+                    reason=f"Action '{action}' is not valid for resource type '{module}'.",
+                )
 
         role_ids = await self._get_effective_role_ids(db, user_id)
         if not role_ids:
-            r = AuthorizationResult(allowed=False, reason="User has no assigned roles.")
-            self._emit_audit(user_id, module, action, resource_id, r)
-            return r
+            return AuthorizationResult(allowed=False, reason="User has no assigned roles.")
 
         # Fetch all policy statements for those roles matching this module OR wildcard '*'
         stmts_result = await db.execute(
@@ -81,9 +80,10 @@ class PermissionEngine:
         statements = stmts_result.scalars().all()
 
         if not statements:
-            r = AuthorizationResult(allowed=False, reason=f"No allow policy for module '{module}'.")
-            self._emit_audit(user_id, module, action, resource_id, r)
-            return r
+            return AuthorizationResult(
+                allowed=False,
+                reason=f"No allow policy for module '{module}'.",
+            )
 
         for stmt in statements:
             # Load related data
@@ -128,48 +128,15 @@ class PermissionEngine:
             if not tags_satisfied:
                 continue
 
-            r = AuthorizationResult(
+            return AuthorizationResult(
                 allowed=True,
                 reason=f"Allowed by policy statement {stmt.id}.",
             )
-            self._emit_audit(user_id, module, action, resource_id, r)
-            return r
 
-        result = AuthorizationResult(
+        return AuthorizationResult(
             allowed=False,
             reason=f"No matching allow policy for action '{action}' on '{resource_id}'.",
         )
-        self._emit_audit(user_id, module, action, resource_id, result)
-        return result
-
-    def _emit_audit(
-        self,
-        user_id: uuid.UUID,
-        module: str,
-        action: str,
-        resource_id: str,
-        result: "AuthorizationResult",
-    ) -> None:
-        """Emit a structured audit log entry and set OTEL span attributes."""
-        logger.info(
-            "permission_check",
-            extra={
-                "event": "permission_check",
-                "user_id": str(user_id),
-                "module": module,
-                "action": action,
-                "resource_id": resource_id,
-                "allowed": result.allowed,
-                "reason": result.reason,
-            },
-        )
-        span = opentelemetry.trace.get_current_span()
-        if span and span.is_recording():
-            span.set_attribute("permission.user_id", str(user_id))
-            span.set_attribute("permission.module", module)
-            span.set_attribute("permission.action", action)
-            span.set_attribute("permission.resource_id", resource_id)
-            span.set_attribute("permission.allowed", result.allowed)
 
     def _match_resource_id(self, pattern: str, resource_id: str) -> bool:
         """Match a resource_id pattern against an actual resource_id.

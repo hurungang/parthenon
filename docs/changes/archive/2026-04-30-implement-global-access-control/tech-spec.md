@@ -43,6 +43,35 @@ The change applies the existing `require_permission` FastAPI dependency factory 
 | `AccessDeniedPage` | **New** | Full-page route-level denial view; mirrors prototype error-state card design |
 | i18n `permissions.errors.*` keys | **New** | String keys for all new and extended UI text |
 
+### Frontend: Group-Role Assignment UI (new)
+
+The `GroupsPage` currently supports creating groups (with initial role assignments via `role_ids` in the creation body) but has no UI for adding or removing roles on an existing group. The backend endpoints for this already exist with proper permission guards:
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `GET /api/v1/user-groups/{id}/roles` | `permissions:manage` or group owner | List roles currently assigned to a group |
+| `POST /api/v1/user-groups/{id}/roles` | `permissions:manage` | Assign a role to a group |
+| `DELETE /api/v1/user-groups/{id}/roles/{role_id}` | `permissions:manage` | Remove a role from a group |
+
+The frontend API functions (`listGroupRoles`, `assignGroupRole`, `removeGroupRole`) already exist in `permissionsApi.ts` but the corresponding React Query hooks and the management UI are missing.
+
+- **`useGroupRoles(groupId)`** — `useQuery` hook; fetches the role list for a given group. Enabled only when `groupId` is non-null.
+- **`useAssignGroupRole()`** — `useMutation` hook; calls `assignGroupRole`; invalidates the group roles query on success.
+- **`useRemoveGroupRole()`** — `useMutation` hook; calls `removeGroupRole`; invalidates the group roles query on success.
+- **`ManageGroupRolesModal`** — New component rendered within `GroupsPage`. Opens via a "Manage Roles" icon button in the groups table. Displays the group's current roles as removable chips and provides a dropdown to add any platform role not yet assigned. All strings use `t()`.
+
+### Frontend: Error Handling Approach (improvement)
+
+Currently `UsersPage`, `RolesPage`, and `AccessRequestsPage` display a generic `t('app.error')` string when a data-loading query fails. This obscures the actual problem (network error, 403, 404, backend validation message, etc.).
+
+The improved pattern extracts the real error message before falling back to the generic key:
+
+- For Axios errors: read `error.response.data.detail` (FastAPI error body) if present.
+- For generic `Error` objects: use `error.message`.
+- Fall back to `t('app.error')` only when neither is available.
+
+A shared utility function `extractErrorMessage(error: unknown, fallback: string): string` is added to `frontend/src/utils/errorUtils.ts` and used consistently across `UsersPage`, `RolesPage`, `AccessRequestsPage`, and `GroupsPage` error alerts.
+
 ## API Changes
 
 No new endpoints are introduced. All changes below add a `Depends(require_permission(...))` parameter to existing handlers — the request/response schema is unchanged for authorized callers. Unauthorized callers receive HTTP 403 with the body format below.
@@ -210,3 +239,15 @@ No new global stores or context providers are introduced.
 | `AccessDeniedPage` | component | Full-page access denied view for route-level 403s; reads context from router state (new) | `frontend/src/pages/AccessDeniedPage.tsx` |
 | `AppShell` | component | Root shell that mounts `PermissionErrorSnackbar` globally | `frontend/src/app/AppShell.tsx` |
 | `AppRouter` | component | Route configuration; registers `/access-denied` route for `AccessDeniedPage` | `frontend/src/app/AppRouter.tsx` |
+| `ManageGroupRolesModal` | component | Modal for viewing, adding, and removing role assignments on an existing group (new) | `frontend/src/components/permissions/ManageGroupRolesModal.tsx` |
+| `useGroupRoles` | hook | React Query `useQuery` hook for fetching roles assigned to a group | `frontend/src/hooks/usePermissions.ts` |
+| `useAssignGroupRole` | hook | React Query `useMutation` hook for assigning a role to a group | `frontend/src/hooks/usePermissions.ts` |
+| `useRemoveGroupRole` | hook | React Query `useMutation` hook for removing a role from a group | `frontend/src/hooks/usePermissions.ts` |
+| `listGroupRoles` | function | API call: GET `/user-groups/{id}/roles` — list roles assigned to a group | `frontend/src/api/permissionsApi.ts` |
+| `assignGroupRole` | function | API call: POST `/user-groups/{id}/roles` — assign a role to a group | `frontend/src/api/permissionsApi.ts` |
+| `removeGroupRole` | function | API call: DELETE `/user-groups/{id}/roles/{role_id}` — remove role assignment from a group | `frontend/src/api/permissionsApi.ts` |
+| `extractErrorMessage` | function | Utility: extracts a human-readable message from an unknown error (Axios detail, Error.message, or fallback) | `frontend/src/utils/errorUtils.ts` |
+| `GroupsPage` | component | Groups management page — extended with "Manage Roles" button and `ManageGroupRolesModal` | `frontend/src/pages/permissions/GroupsPage.tsx` |
+| `UsersPage` | component | Users management page — error display updated to show actual error details | `frontend/src/pages/permissions/UsersPage.tsx` |
+| `RolesPage` | component | Roles management page — error display updated to show actual error details | `frontend/src/pages/permissions/RolesPage.tsx` |
+| `AccessRequestsPage` | component | Access requests page — error display updated to show actual error details | `frontend/src/pages/permissions/AccessRequestsPage.tsx` |

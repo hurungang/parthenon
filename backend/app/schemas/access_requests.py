@@ -15,7 +15,7 @@ class AccessRequestStatusEnum(str, Enum):
 
 
 class AccessRequestBatchCreate(BaseModel):
-    group_ids: List[uuid.UUID] = Field(..., min_length=1)
+    group_ids: List[uuid.UUID] = Field(default_factory=list)
     justification: Annotated[str, StringConstraints(min_length=1, max_length=2000)]
 
 
@@ -25,7 +25,7 @@ class AccessRequestRead(BaseModel):
     id: uuid.UUID
     batch_id: uuid.UUID
     user_id: uuid.UUID
-    group_id: uuid.UUID
+    group_id: uuid.UUID | None
     status: AccessRequestStatusEnum
     reviewer_id: uuid.UUID | None
     reviewer_reason: str | None
@@ -47,6 +47,7 @@ class AccessRequestBatchRead(BaseModel):
 
 
 class ApproveRequestBody(BaseModel):
+    group_id: uuid.UUID | None = None
     approval_reason: str | None = None
 
 
