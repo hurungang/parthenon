@@ -48,6 +48,7 @@ frontend/.vite/
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
+*.tsbuildinfo
 
 # IDEs
 .idea/
