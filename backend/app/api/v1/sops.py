@@ -1,15 +1,23 @@
 """SOPs API router — CRUD and step management for Standard Operating Procedures."""
-import uuid
+
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_SKILL
-from app.db.session import DbSession
 from app.db.models.skills import Skill, Sop, SopStep
-from app.schemas.skills import SopCreate, SopDetailRead, SopRead, SopStepCreate, SopStepRead, SopUpdate
+from app.db.session import DbSession
+from app.schemas.skills import (
+    SopCreate,
+    SopDetailRead,
+    SopRead,
+    SopStepCreate,
+    SopStepRead,
+    SopUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +52,7 @@ async def get_sop(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
 ) -> Sop:
-    result = await db.execute(
-        select(Sop).where(Sop.id == sop_id)
-    )
+    result = await db.execute(select(Sop).where(Sop.id == sop_id))
     sop = result.scalar_one_or_none()
     if not sop:
         raise HTTPException(status_code=404, detail="SOP not found")

@@ -1,4 +1,5 @@
 """Telemetry configuration API router."""
+
 import logging
 from typing import Any
 

@@ -1,9 +1,11 @@
 """
 Test SchedulingEngine: job add, pause/resume via ScheduledJob status changes.
 """
+
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 def test_scheduling_engine_starts_and_shuts_down():
@@ -26,8 +28,8 @@ def test_scheduling_engine_starts_and_shuts_down():
 @pytest.mark.asyncio
 async def test_scheduling_engine_add_job_registers_with_apscheduler():
     """SchedulingEngine.add_job() registers a cron job with APScheduler."""
+    from app.db.models.scheduling import JobStatus, ScheduledJob
     from app.services.scheduling.scheduler import SchedulingEngine
-    from app.db.models.scheduling import ScheduledJob, JobStatus
 
     mock_job = MagicMock(spec=ScheduledJob)
     mock_job.id = uuid.uuid4()

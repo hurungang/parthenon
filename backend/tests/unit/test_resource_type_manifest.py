@@ -3,21 +3,21 @@ Tests for the Resource Type Manifest.
 
 Validates that the manifest structure is correct and contains expected resource types.
 """
-import pytest
+
 from app.core.resource_types import (
-    ResourceTypeManifest,
-    RT_PERMISSIONS,
-    RT_AGENT,
-    RT_MCP_SERVER,
-    RT_CONVERSATION,
-    RT_NOTIFICATION,
-    RT_SCHEDULING,
-    RT_TAG,
-    RT_ROLE,
-    RT_GROUP,
-    RT_USER,
     RT_ACCESS_REQUEST,
+    RT_AGENT,
+    RT_CONVERSATION,
+    RT_GROUP,
+    RT_MCP_SERVER,
+    RT_NOTIFICATION,
+    RT_PERMISSIONS,
+    RT_ROLE,
+    RT_SCHEDULING,
     RT_SKILL,
+    RT_TAG,
+    RT_USER,
+    ResourceTypeManifest,
 )
 
 
@@ -25,7 +25,7 @@ def test_manifest_structure():
     """Manifest should be a dict mapping resource types to action dicts."""
     assert isinstance(ResourceTypeManifest, dict)
     assert len(ResourceTypeManifest) > 0
-    
+
     for resource_type, config in ResourceTypeManifest.items():
         assert isinstance(resource_type, str)
         assert isinstance(config, dict)
@@ -54,7 +54,7 @@ def test_all_resource_type_constants_exist():
         RT_ACCESS_REQUEST,
         RT_SKILL,
     ]
-    
+
     for resource_type in expected_types:
         assert resource_type in ResourceTypeManifest, f"{resource_type} missing from manifest"
 

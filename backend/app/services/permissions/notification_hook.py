@@ -1,4 +1,5 @@
 """Notification Hook — sends permission-domain notifications via the notification service."""
+
 import logging
 import uuid
 
@@ -106,13 +107,9 @@ class NotificationHook:
         except Exception as exc:
             logger.error("NotificationHook.notify_requester_decision failed: %s", exc)
 
-    async def _get_any_active_channel(
-        self, db: AsyncSession
-    ) -> NotificationChannel | None:
+    async def _get_any_active_channel(self, db: AsyncSession) -> NotificationChannel | None:
         """Return any active notification channel, or None."""
         result = await db.execute(
-            select(NotificationChannel)
-            .where(NotificationChannel.is_active.is_(True))
-            .limit(1)
+            select(NotificationChannel).where(NotificationChannel.is_active.is_(True)).limit(1)
         )
         return result.scalar_one_or_none()

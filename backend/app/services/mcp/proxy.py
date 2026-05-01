@@ -1,4 +1,5 @@
 """MCP Proxy Engine — routes tool-call invocations to the correct server session."""
+
 import json
 import logging
 from typing import Any
@@ -66,12 +67,8 @@ class McpProxyEngine:
                 result: dict[str, Any] = response.json()
                 return result
         except httpx.HTTPStatusError as exc:
-            logger.error(
-                "Tool call failed for %s: HTTP %d", tool.name, exc.response.status_code
-            )
-            raise McpProxyError(
-                f"Tool call failed: HTTP {exc.response.status_code}"
-            ) from exc
+            logger.error("Tool call failed for %s: HTTP %d", tool.name, exc.response.status_code)
+            raise McpProxyError(f"Tool call failed: HTTP {exc.response.status_code}") from exc
         except httpx.HTTPError as exc:
             logger.error("Tool call network error for %s: %s", tool.name, exc)
             raise McpProxyError(f"Tool call network error: {exc}") from exc
@@ -83,7 +80,6 @@ class McpProxyEngine:
         db: AsyncSession,
     ) -> McpSession:
         """Resolve the MCP session to use for a tool call."""
-        from sqlalchemy.orm import selectinload
 
         if session_id:
             result = await db.execute(
@@ -95,10 +91,12 @@ class McpProxyEngine:
             )
         else:
             result = await db.execute(
-                select(McpSession).where(
+                select(McpSession)
+                .where(
                     McpSession.server_id == server_id,
                     McpSession.is_active == True,  # noqa: E712
-                ).limit(1)
+                )
+                .limit(1)
             )
 
         session = result.scalar_one_or_none()
@@ -130,6 +128,7 @@ class McpProxyEngine:
             headers["Authorization"] = f"Bearer {token}"
         elif session.auth_type == McpSessionAuthType.basic_auth:
             import base64
+
             user = creds.get("username", "")
             pwd = creds.get("password", "")
             encoded = base64.b64encode(f"{user}:{pwd}".encode()).decode()

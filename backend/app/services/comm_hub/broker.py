@@ -1,7 +1,8 @@
 """Message Broker — Redis pub/sub with per-session typed channels."""
+
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -24,7 +25,7 @@ class BrokerMessage:
         self.session_id = session_id
         self.sender_role = sender_role
         self.content = content
-        self.timestamp = datetime.now(timezone.utc).isoformat()
+        self.timestamp = datetime.now(UTC).isoformat()
         self.metadata = metadata or {}
 
     def to_dict(self) -> dict[str, Any]:
@@ -72,9 +73,7 @@ class MessageBroker:
         channel = _session_channel(message.session_id)
         payload = json.dumps(message.to_dict())
         count: int = await self._redis.publish(channel, payload)
-        logger.debug(
-            "Published to channel %s (%d subscribers)", channel, count
-        )
+        logger.debug("Published to channel %s (%d subscribers)", channel, count)
         return count
 
     async def subscribe(self, session_id: str):  # type: ignore[return]

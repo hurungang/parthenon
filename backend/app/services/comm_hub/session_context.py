@@ -1,4 +1,5 @@
 """Session Context Manager — stores and retrieves active session state in Redis."""
+
 import json
 import logging
 from typing import Any

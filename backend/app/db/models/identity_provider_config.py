@@ -1,9 +1,10 @@
 """SQLAlchemy 2 model for IdentityProviderConfig."""
+
 import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,9 +16,7 @@ class IdentityProviderConfig(Base):
 
     __tablename__ = "identity_provider_configs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     provider_type: Mapped[str] = mapped_column(
         String(50), nullable=False, comment="keycloak_bundled | keycloak_external | azure_entraid"
     )

@@ -1,23 +1,24 @@
 """API v1 root router — aggregates all domain routers."""
+
 from fastapi import APIRouter
 
-from app.api.v1.user_access_requests import AccessRequestsRouter
 from app.api.v1.agents import AgentInstanceRouter, AgentTypeRouter
 from app.api.v1.conversations import ConversationRouter
-from app.api.v1.user_groups import GroupsRouter
 from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
 from app.api.v1.mcp_hub import McpServerRouter, McpSessionRouter, McpToolRouter
 from app.api.v1.notifications import NotificationRouter
 from app.api.v1.platform_users import PlatformUsersRouter
 from app.api.v1.policy import PolicyRouter
 from app.api.v1.results import ResultRouter
-from app.api.v1.user_roles import RolesRouter
 from app.api.v1.scheduling import ScheduleRouter
 from app.api.v1.setup import SetupRouter
 from app.api.v1.skills import SkillRouter
 from app.api.v1.sops import SopRouter
-from app.api.v1.user_tags import TagsRouter
 from app.api.v1.telemetry import TelemetryRouter
+from app.api.v1.user_access_requests import AccessRequestsRouter
+from app.api.v1.user_groups import GroupsRouter
+from app.api.v1.user_roles import RolesRouter
+from app.api.v1.user_tags import TagsRouter
 
 router = APIRouter()
 

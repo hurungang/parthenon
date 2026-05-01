@@ -55,8 +55,8 @@ const MOCK_PENDING_REQUEST = {
 }
 
 beforeEach(() => {
-  vi.mocked(useGroups).mockReturnValue({ data: [], isLoading: false } as any)
-  vi.mocked(usePendingAccessRequests).mockReturnValue({ data: [], isLoading: false } as any)
+  vi.mocked(useGroups).mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof useGroups>)
+  vi.mocked(usePendingAccessRequests).mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof usePendingAccessRequests>)
 })
 
 describe('AccessRequestsPage', () => {
@@ -106,7 +106,7 @@ describe('MyRequestsTab — group-optional behaviour', () => {
   })
 
   it('renders group selection list when useGroups returns non-empty data', async () => {
-    vi.mocked(useGroups).mockReturnValue({ data: [MOCK_GROUP], isLoading: false } as any)
+    vi.mocked(useGroups).mockReturnValue({ data: [MOCK_GROUP], isLoading: false } as unknown as ReturnType<typeof useGroups>)
 
     const { AccessRequestsPage } = await import('../pages/permissions/AccessRequestsPage')
     render(<AccessRequestsPage />, { wrapper })
@@ -136,7 +136,7 @@ describe('PendingRequestsTab — group-optional behaviour', () => {
     vi.mocked(usePendingAccessRequests).mockReturnValue({
       data: [MOCK_PENDING_REQUEST],
       isLoading: false,
-    } as any)
+    } as unknown as ReturnType<typeof usePendingAccessRequests>)
 
     const { AccessRequestsPage } = await import('../pages/permissions/AccessRequestsPage')
     render(<AccessRequestsPage />, { wrapper })
@@ -151,8 +151,8 @@ describe('PendingRequestsTab — group-optional behaviour', () => {
     vi.mocked(usePendingAccessRequests).mockReturnValue({
       data: [MOCK_PENDING_REQUEST],
       isLoading: false,
-    } as any)
-    vi.mocked(useGroups).mockReturnValue({ data: [MOCK_GROUP], isLoading: false } as any)
+    } as unknown as ReturnType<typeof usePendingAccessRequests>)
+    vi.mocked(useGroups).mockReturnValue({ data: [MOCK_GROUP], isLoading: false } as unknown as ReturnType<typeof useGroups>)
 
     const { AccessRequestsPage } = await import('../pages/permissions/AccessRequestsPage')
     render(<AccessRequestsPage />, { wrapper })

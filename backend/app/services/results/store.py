@@ -1,4 +1,5 @@
 """Result Store — persists structured agent/SOP outputs; registers save_result MCP tool."""
+
 import logging
 from typing import Any
 

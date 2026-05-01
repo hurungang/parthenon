@@ -1,4 +1,5 @@
 """Shared FastAPI dependencies for the API layer."""
+
 from collections.abc import Callable
 from typing import Any
 
@@ -75,9 +76,7 @@ def require_permission(module: str, action: str) -> Callable:
         if not sub:
             raise HTTPException(status_code=403, detail="No identity claims found.")
 
-        result = await db.execute(
-            select(PlatformUser).where(PlatformUser.sub == sub)
-        )
+        result = await db.execute(select(PlatformUser).where(PlatformUser.sub == sub))
         user = result.scalar_one_or_none()
         if user is None:
             raise HTTPException(

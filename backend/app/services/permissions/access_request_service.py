@@ -1,7 +1,7 @@
 """Access Request Service — handles group join request lifecycle."""
+
 import logging
 import uuid
-from typing import List
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -25,7 +25,7 @@ class AccessRequestService:
         self,
         db: AsyncSession,
         user_id: uuid.UUID,
-        group_ids: List[uuid.UUID],
+        group_ids: list[uuid.UUID],
         justification: str,
     ) -> AccessRequestBatch:
         """Create an AccessRequestBatch + one AccessRequest per group_id.
@@ -207,7 +207,7 @@ class AccessRequestService:
         db: AsyncSession,
         group_id: uuid.UUID,
         status: str | None = None,
-    ) -> List[AccessRequest]:
+    ) -> list[AccessRequest]:
         """List AccessRequests for a group, optionally filtered by status."""
         stmt = select(AccessRequest).where(AccessRequest.group_id == group_id)
         if status is not None:

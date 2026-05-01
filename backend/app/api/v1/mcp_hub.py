@@ -1,17 +1,17 @@
 """MCP Hub API routers: Server, Session, Tool management."""
+
 import json
-import uuid
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
 from app.core.resource_types import RT_MCP_SERVER
-from app.db.session import DbSession
 from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission
+from app.db.session import DbSession
 from app.schemas.mcp_hub import (
     McpServerCreate,
     McpServerRead,
@@ -141,9 +141,7 @@ async def list_server_tools(
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
     result = await db.execute(
-        select(McpTool)
-        .where(McpTool.server_id == server_id)
-        .order_by(McpTool.name)
+        select(McpTool).where(McpTool.server_id == server_id).order_by(McpTool.name)
     )
     return list(result.scalars().all())
 
@@ -212,9 +210,7 @@ async def update_mcp_session(
     _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
 ) -> McpSession:
     result = await db.execute(
-        select(McpSession).where(
-            McpSession.id == session_id, McpSession.server_id == server_id
-        )
+        select(McpSession).where(McpSession.id == session_id, McpSession.server_id == server_id)
     )
     session = result.scalar_one_or_none()
     if not session:
@@ -244,9 +240,7 @@ async def delete_mcp_session(
     _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
 ) -> None:
     result = await db.execute(
-        select(McpSession).where(
-            McpSession.id == session_id, McpSession.server_id == server_id
-        )
+        select(McpSession).where(McpSession.id == session_id, McpSession.server_id == server_id)
     )
     session = result.scalar_one_or_none()
     if not session:
@@ -267,9 +261,7 @@ async def list_tool_permissions(
     tool = await db.get(McpTool, tool_id)
     if not tool:
         raise HTTPException(status_code=404, detail="MCP tool not found")
-    result = await db.execute(
-        select(ToolPermission).where(ToolPermission.tool_id == tool_id)
-    )
+    result = await db.execute(select(ToolPermission).where(ToolPermission.tool_id == tool_id))
     return list(result.scalars().all())
 
 
@@ -321,9 +313,7 @@ async def revoke_tool_permission(
     await db.delete(tp)
 
 
-async def check_tool_permission(
-    tool_id: uuid.UUID, role_id: uuid.UUID, db: DbSession
-) -> bool:
+async def check_tool_permission(tool_id: uuid.UUID, role_id: uuid.UUID, db: DbSession) -> bool:
     """Check if a role has permission to call a specific tool."""
     result = await db.execute(
         select(ToolPermission).where(

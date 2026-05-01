@@ -1,4 +1,5 @@
 """Gateway Lifecycle Handler — orchestrates the gateway state machine."""
+
 import asyncio
 import logging
 from typing import Any
@@ -7,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentInstanceStatus, AgentMode
 from app.services.agents.instance_manager import AgentInstanceManager, InstanceLimitError
-from app.services.agents.sop_executor import SopAgentExecutor
 from app.services.agents.skillful_executor import SkillfulAgentExecutor
+from app.services.agents.sop_executor import SopAgentExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ class GatewayLifecycleHandler:
             raise ValueError(f"Instance is not active (status={instance.status})")
 
         from app.db.models.agents import AgentType
+
         agent_type = await db.get(AgentType, instance.agent_type_id)
         if not agent_type:
             raise ValueError(f"Agent type not found: {instance.agent_type_id}")
@@ -92,9 +94,7 @@ class GatewayLifecycleHandler:
             "has_question": False,
         }
 
-    async def get_question(
-        self, session_handle: str, timeout: float = 5.0
-    ) -> dict[str, Any]:
+    async def get_question(self, session_handle: str, timeout: float = 5.0) -> dict[str, Any]:
         """Long-poll for a pending agent question. Returns None if no question within timeout."""
         queue = _pending_questions.get(session_handle)
         if not queue:
@@ -103,12 +103,10 @@ class GatewayLifecycleHandler:
         try:
             question = await asyncio.wait_for(queue.get(), timeout=timeout)
             return {"question": question, "pending": True}
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"question": None, "pending": False}
 
-    async def answer(
-        self, session_handle: str, answer_text: str
-    ) -> dict[str, Any]:
+    async def answer(self, session_handle: str, answer_text: str) -> dict[str, Any]:
         """Provide an answer to a pending agent question."""
         queue = _pending_answers.get(session_handle)
         if not queue:
@@ -117,9 +115,7 @@ class GatewayLifecycleHandler:
         await queue.put(answer_text)
         return {"acknowledged": True}
 
-    async def close(
-        self, session_handle: str, db: AsyncSession
-    ) -> dict[str, Any]:
+    async def close(self, session_handle: str, db: AsyncSession) -> dict[str, Any]:
         """Close the agent instance and clean up the session."""
         instance = await self._instance_manager.get_by_handle(session_handle, db)
         if not instance:

@@ -1,8 +1,8 @@
 """Unit tests for AgentInstanceManager."""
-import asyncio
+
 import os
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -64,7 +64,7 @@ class TestAgentInstanceManager:
         mock_db.flush = AsyncMock()
         mock_db.refresh = AsyncMock()
 
-        instance = await manager.spawn(agent_type_id, "test-user", mock_db)
+        instance = await manager.spawn(agent_type_id, "test-user", mock_db)  # noqa: F841
         assert mock_db.add.called
         assert mock_db.flush.called
 

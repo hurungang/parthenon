@@ -1,4 +1,5 @@
 """Unit tests for PermissionEngine."""
+
 from __future__ import annotations
 
 import os
@@ -11,13 +12,13 @@ os.environ.setdefault("CREDENTIAL_VAULT_KEY", "test-32-byte-key-for-aes-256-enc!
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
-from app.services.permissions.permission_engine import PermissionEngine, AuthorizationResult
 from app.db.models.policy_statement import PolicyEffect
-
+from app.services.permissions.permission_engine import PermissionEngine
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_db() -> AsyncMock:
     return AsyncMock()
@@ -82,13 +83,13 @@ def _setup_engine_db(
         stmt = statements[stmt_idx] if stmt_idx < len(statements) else None
 
         if idx_in_cycle == 0:  # actions
-            acts = actions_per_stmt.get(getattr(stmt, 'id', None), [])
+            acts = actions_per_stmt.get(getattr(stmt, "id", None), [])
             return _make_scalars(acts)
         if idx_in_cycle == 1:  # resources
-            ress = resources_per_stmt.get(getattr(stmt, 'id', None), [])
+            ress = resources_per_stmt.get(getattr(stmt, "id", None), [])
             return _make_scalars(ress)
         if idx_in_cycle == 2:  # conditions
-            conds = conditions_per_stmt.get(getattr(stmt, 'id', None), [])
+            conds = conditions_per_stmt.get(getattr(stmt, "id", None), [])
             return _make_scalars(conds)
 
         return _make_scalars([])
@@ -131,6 +132,7 @@ def _condition(stmt_id, tag_key: str, tag_value: str):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_deny_when_no_roles():
@@ -243,6 +245,7 @@ async def test_allow_when_tag_condition_satisfied():
 # ---------------------------------------------------------------------------
 # _match_resource_id tests (synchronous)
 # ---------------------------------------------------------------------------
+
 
 def test_wildcard_star_matches_anything():
     engine = PermissionEngine()

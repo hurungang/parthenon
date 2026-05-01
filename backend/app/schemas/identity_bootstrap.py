@@ -1,8 +1,8 @@
 """Pydantic v2 schemas for the Identity Bootstrap API endpoints."""
+
 from __future__ import annotations
 
 import enum
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -27,8 +27,8 @@ class IdentityStatusResponse(BaseModel):
     """Response schema for GET /setup/identity-status."""
 
     setup_state: SetupState
-    provider_type: Optional[str] = None
-    oidc_provider_url: Optional[str] = None
+    provider_type: str | None = None
+    oidc_provider_url: str | None = None
 
 
 class ProviderSetupRequest(BaseModel):
@@ -37,27 +37,31 @@ class ProviderSetupRequest(BaseModel):
     provider_type: ProviderType
 
     # Keycloak-specific fields
-    keycloak_url: Optional[str] = Field(default=None, description="Base URL of the Keycloak instance")
-    realm_name: Optional[str] = Field(default=None, description="Keycloak realm name")
-    client_id: Optional[str] = Field(default=None, description="OIDC client ID")
-    admin_user: Optional[str] = Field(default=None, description="Keycloak master-realm admin username")
-    admin_password: Optional[str] = Field(default=None, description="Keycloak master-realm admin password")
-    initial_admin_password: Optional[str] = Field(
+    keycloak_url: str | None = Field(default=None, description="Base URL of the Keycloak instance")
+    realm_name: str | None = Field(default=None, description="Keycloak realm name")
+    client_id: str | None = Field(default=None, description="OIDC client ID")
+    admin_user: str | None = Field(default=None, description="Keycloak master-realm admin username")
+    admin_password: str | None = Field(
+        default=None, description="Keycloak master-realm admin password"
+    )
+    initial_admin_password: str | None = Field(
         default=None, description="Password for the initial Parthenon admin user"
     )
 
     # External OIDC-specific fields
-    client_secret: Optional[str] = Field(default=None, description="Pre-existing OIDC client secret")
-    oidc_discovery_url: Optional[str] = Field(
+    client_secret: str | None = Field(default=None, description="Pre-existing OIDC client secret")
+    oidc_discovery_url: str | None = Field(
         default=None, description="Full /.well-known/openid-configuration URL"
     )
 
     # Re-configure flag
-    force_reconfigure: bool = Field(default=False, description="Allow overwriting an existing configuration")
+    force_reconfigure: bool = Field(
+        default=False, description="Allow overwriting an existing configuration"
+    )
 
     @field_validator("keycloak_url", "realm_name", "client_id", mode="before")
     @classmethod
-    def strip_whitespace(cls, v: Optional[str]) -> Optional[str]:
+    def strip_whitespace(cls, v: str | None) -> str | None:
         if v is not None:
             return v.strip() or None
         return v
@@ -68,8 +72,8 @@ class ProviderSetupResult(BaseModel):
 
     success: bool
     provider_type: str
-    oidc_provider_url: Optional[str] = None
-    realm_name: Optional[str] = None
-    client_id: Optional[str] = None
-    error_code: Optional[str] = None
-    detail: Optional[str] = None
+    oidc_provider_url: str | None = None
+    realm_name: str | None = None
+    client_id: str | None = None
+    error_code: str | None = None
+    detail: str | None = None

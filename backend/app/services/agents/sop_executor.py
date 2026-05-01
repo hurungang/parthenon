@@ -1,4 +1,5 @@
 """SOP Agent Executor — handles sop-agent prompt execution via SopOrchestrator."""
+
 import logging
 from typing import Any
 
@@ -55,9 +56,7 @@ class SopAgentExecutor:
             )
 
         if not agent_type.sop_id:
-            raise SopAgentError(
-                f"sop-agent '{agent_type.name}' has no bound SOP"
-            )
+            raise SopAgentError(f"sop-agent '{agent_type.name}' has no bound SOP")
 
         logger.info(
             "sop-agent instance %s executing SOP %s for prompt: %s...",

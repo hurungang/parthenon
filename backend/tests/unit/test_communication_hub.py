@@ -1,15 +1,16 @@
 """
 Test MessageBroker channel isolation and SessionContextManager TTL/expiry.
 """
+
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-import json
 
 
 @pytest.mark.asyncio
 async def test_messagebroker_publishes_to_correct_channel():
     """MessageBroker.publish() sends to the session-scoped channel only."""
-    from app.services.comm_hub.broker import MessageBroker, BrokerMessage
+    from app.services.comm_hub.broker import BrokerMessage, MessageBroker
 
     mock_redis = AsyncMock()
     mock_redis.publish = AsyncMock(return_value=1)
@@ -28,7 +29,7 @@ async def test_messagebroker_publishes_to_correct_channel():
 @pytest.mark.asyncio
 async def test_messagebroker_channel_isolation():
     """Publishing to channel A does not affect channel B subscriber counts."""
-    from app.services.comm_hub.broker import MessageBroker, BrokerMessage
+    from app.services.comm_hub.broker import BrokerMessage, MessageBroker
 
     mock_redis = AsyncMock()
     # Channel A has 1 subscriber; channel B has 0
@@ -52,12 +53,8 @@ async def test_session_context_manager_set_and_get():
     stored: dict = {}
 
     mock_redis = AsyncMock()
-    mock_redis.setex = AsyncMock(
-        side_effect=lambda key, ttl, val: stored.update({key: val})
-    )
-    mock_redis.get = AsyncMock(
-        side_effect=lambda key: stored.get(key)
-    )
+    mock_redis.setex = AsyncMock(side_effect=lambda key, ttl, val: stored.update({key: val}))
+    mock_redis.get = AsyncMock(side_effect=lambda key: stored.get(key))
 
     with patch("redis.asyncio.from_url", return_value=mock_redis):
         mgr = SessionContextManager(ttl_seconds=60)

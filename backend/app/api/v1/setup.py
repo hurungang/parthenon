@@ -1,11 +1,12 @@
 """Setup router — initial admin seeding endpoint (public during first setup)."""
+
 import logging
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 
-from app.db.session import DbSession
 from app.db.models.identity import Identity, IdentityType, Role, RoleType
+from app.db.session import DbSession
 from app.schemas.identity import SetupInitResponse
 from app.schemas.identity_bootstrap import (
     IdentityStatusResponse,
@@ -105,9 +106,7 @@ async def setup_init(db: DbSession) -> SetupInitResponse:
     This endpoint is public — no JWT required.
     """
     # Check if admin role already exists
-    existing_role_result = await db.execute(
-        select(Role).where(Role.name == ADMIN_ROLE_NAME)
-    )
+    existing_role_result = await db.execute(select(Role).where(Role.name == ADMIN_ROLE_NAME))
     admin_role = existing_role_result.scalar_one_or_none()
     already_initialized = admin_role is not None
 

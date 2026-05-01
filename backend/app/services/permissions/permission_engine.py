@@ -1,20 +1,20 @@
 """Permission Engine — evaluates IAM-style policy statements for authorization."""
+
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import List
 
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.resource_types import ResourceTypeManifest
-from app.db.models.policy_statement import PolicyStatement, PolicyEffect
+from app.db.models.group_role import GroupRole
 from app.db.models.policy_action import PolicyAction
 from app.db.models.policy_resource import PolicyResource
+from app.db.models.policy_statement import PolicyEffect, PolicyStatement
 from app.db.models.policy_tag_condition import PolicyTagCondition
-from app.db.models.user_role import UserRole
 from app.db.models.user_group import UserGroup
-from app.db.models.group_role import GroupRole
+from app.db.models.user_role import UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +98,7 @@ class PermissionEngine:
             stmt_resources = resources_result.scalars().all()
 
             conditions_result = await db.execute(
-                select(PolicyTagCondition).where(
-                    PolicyTagCondition.policy_statement_id == stmt.id
-                )
+                select(PolicyTagCondition).where(PolicyTagCondition.policy_statement_id == stmt.id)
             )
             stmt_conditions = conditions_result.scalars().all()
 
@@ -154,7 +152,7 @@ class PermissionEngine:
 
     async def _get_effective_role_ids(
         self, db: AsyncSession, user_id: uuid.UUID
-    ) -> List[uuid.UUID]:
+    ) -> list[uuid.UUID]:
         """Collect all role IDs for a user: direct + group-inherited."""
         # Direct roles
         direct_result = await db.execute(

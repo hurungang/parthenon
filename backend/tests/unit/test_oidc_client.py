@@ -1,8 +1,8 @@
 """Unit tests for OIDCClient JWT validation."""
+
 import os
 import time
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -31,14 +31,21 @@ class TestOIDCClient:
     async def test_validate_token_raises_when_jwks_fetch_fails(self) -> None:
         client = self._make_client()
         # Create a fake token with a valid header structure
-        import base64, json
+        import base64
+        import json
 
-        header = base64.urlsafe_b64encode(
-            json.dumps({"alg": "RS256", "kid": "test-kid"}).encode()
-        ).rstrip(b"=").decode()
-        payload = base64.urlsafe_b64encode(
-            json.dumps({"sub": "user123", "exp": time.time() + 3600}).encode()
-        ).rstrip(b"=").decode()
+        header = (
+            base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": "test-kid"}).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps({"sub": "user123", "exp": time.time() + 3600}).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
         fake_token = f"{header}.{payload}.fakesig"
 
         with patch("httpx.AsyncClient.get", side_effect=Exception("network error")):
@@ -49,14 +56,21 @@ class TestOIDCClient:
     async def test_validate_token_raises_on_expired_claims(self) -> None:
         """Test that expired tokens raise OIDCError."""
         client = self._make_client()
-        import base64, json
+        import base64
+        import json
 
-        header = base64.urlsafe_b64encode(
-            json.dumps({"alg": "RS256", "kid": "test-kid"}).encode()
-        ).rstrip(b"=").decode()
-        payload = base64.urlsafe_b64encode(
-            json.dumps({"sub": "user123", "exp": time.time() - 1000}).encode()
-        ).rstrip(b"=").decode()
+        header = (
+            base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": "test-kid"}).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps({"sub": "user123", "exp": time.time() - 1000}).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
         fake_token = f"{header}.{payload}.fakesig"
 
         # Mock JWKS fetch to return a fake key
@@ -72,14 +86,21 @@ class TestOIDCClient:
     async def test_validate_token_succeeds_with_valid_claims(self) -> None:
         """Test that valid tokens return claims dict."""
         client = self._make_client()
-        import base64, json
+        import base64
+        import json
 
-        header = base64.urlsafe_b64encode(
-            json.dumps({"alg": "RS256", "kid": "test-kid"}).encode()
-        ).rstrip(b"=").decode()
-        payload = base64.urlsafe_b64encode(
-            json.dumps({"sub": "user123", "exp": time.time() + 3600}).encode()
-        ).rstrip(b"=").decode()
+        header = (
+            base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "kid": "test-kid"}).encode())
+            .rstrip(b"=")
+            .decode()
+        )
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps({"sub": "user123", "exp": time.time() + 3600}).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
         fake_token = f"{header}.{payload}.fakesig"
 
         mock_jwks = {"test-kid": {"kty": "RSA", "use": "sig"}}

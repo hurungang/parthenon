@@ -3,6 +3,7 @@
 These tests exercise the real service + DB layer (SQLite in-memory) while
 mocking only the external Keycloak HTTP calls via ``respx``.
 """
+
 from __future__ import annotations
 
 import os
@@ -140,9 +141,7 @@ class TestProvisionExternalOidcIntegration:
     @pytest.mark.asyncio
     async def test_provision_external_oidc_success(self, async_client) -> None:
         """POST /setup/identity with azure_entraid returns 200 with success=true."""
-        discovery_url = (
-            "https://login.microsoftonline.com/tenant/.well-known/openid-configuration"
-        )
+        discovery_url = "https://login.microsoftonline.com/tenant/.well-known/openid-configuration"
         discovery_doc = {
             "issuer": "https://login.microsoftonline.com/tenant/v2.0",
             "authorization_endpoint": "https://login.microsoftonline.com/tenant/oauth2/v2.0/authorize",
@@ -154,12 +153,8 @@ class TestProvisionExternalOidcIntegration:
             patch(_PATCH_YAML),
             patch(_PATCH_RELOAD),
         ):
-            mock_http.get(discovery_url).mock(
-                return_value=Response(200, json=discovery_doc)
-            )
-            response = await async_client.post(
-                "/api/v1/setup/identity", json=EXTERNAL_OIDC_PAYLOAD
-            )
+            mock_http.get(discovery_url).mock(return_value=Response(200, json=discovery_doc))
+            response = await async_client.post("/api/v1/setup/identity", json=EXTERNAL_OIDC_PAYLOAD)
 
         assert response.status_code == 200
         data = response.json()
@@ -175,18 +170,14 @@ class TestProvisionExternalOidcIntegration:
         db_session.add(state_row)
         await db_session.commit()
 
-        response = await async_client.post(
-            "/api/v1/setup/identity", json=EXTERNAL_OIDC_PAYLOAD
-        )
+        response = await async_client.post("/api/v1/setup/identity", json=EXTERNAL_OIDC_PAYLOAD)
         assert response.status_code == 409
         assert "already configured" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_provision_endpoint_is_public(self, async_client) -> None:
         """POST /setup/identity must not require an Authorization header."""
-        discovery_url = (
-            "https://login.microsoftonline.com/tenant/.well-known/openid-configuration"
-        )
+        discovery_url = "https://login.microsoftonline.com/tenant/.well-known/openid-configuration"
         with (
             respx.mock(assert_all_called=False) as mock_http,
             patch(_PATCH_YAML),
@@ -195,9 +186,7 @@ class TestProvisionExternalOidcIntegration:
             mock_http.get(discovery_url).mock(
                 return_value=Response(200, json={"issuer": "https://example.com"})
             )
-            response = await async_client.post(
-                "/api/v1/setup/identity", json=EXTERNAL_OIDC_PAYLOAD
-            )
+            response = await async_client.post("/api/v1/setup/identity", json=EXTERNAL_OIDC_PAYLOAD)
         assert response.status_code not in (401, 403)
 
 
@@ -230,18 +219,14 @@ class TestProvisionBundledKeycloakIntegration:
                 return_value=Response(404)
             )
             # Create realm
-            mock_kc.post("http://keycloak.local:8080/admin/realms").mock(
-                return_value=Response(201)
-            )
+            mock_kc.post("http://keycloak.local:8080/admin/realms").mock(return_value=Response(201))
             # client_exists check for api client
             mock_kc.get(
                 "http://keycloak.local:8080/admin/realms/parthenon/clients",
                 params={"clientId": "parthenon-api"},
             ).mock(return_value=Response(200, json=[]))
             # Create api client
-            mock_kc.post(
-                "http://keycloak.local:8080/admin/realms/parthenon/clients"
-            ).mock(
+            mock_kc.post("http://keycloak.local:8080/admin/realms/parthenon/clients").mock(
                 return_value=Response(
                     201,
                     headers={
@@ -259,17 +244,15 @@ class TestProvisionBundledKeycloakIntegration:
                 params={"clientId": "parthenon-api-ui"},
             ).mock(return_value=Response(200, json=[]))
             # Create ui client (public, no secret)
-            mock_kc.post(
-                "http://keycloak.local:8080/admin/realms/parthenon/clients"
-            ).mock(return_value=Response(201))
-            # Create initial admin user
-            mock_kc.post(
-                "http://keycloak.local:8080/admin/realms/parthenon/users"
-            ).mock(return_value=Response(201))
-
-            response = await async_client.post(
-                "/api/v1/setup/identity", json=KEYCLOAK_PAYLOAD
+            mock_kc.post("http://keycloak.local:8080/admin/realms/parthenon/clients").mock(
+                return_value=Response(201)
             )
+            # Create initial admin user
+            mock_kc.post("http://keycloak.local:8080/admin/realms/parthenon/users").mock(
+                return_value=Response(201)
+            )
+
+            response = await async_client.post("/api/v1/setup/identity", json=KEYCLOAK_PAYLOAD)
 
         assert response.status_code == 200
         data = response.json()
@@ -278,9 +261,7 @@ class TestProvisionBundledKeycloakIntegration:
         assert data["realm_name"] == "parthenon"
 
     @pytest.mark.asyncio
-    async def test_provision_bundled_keycloak_502_on_connection_error(
-        self, async_client
-    ) -> None:
+    async def test_provision_bundled_keycloak_502_on_connection_error(self, async_client) -> None:
         """Returns 502 when Keycloak health check fails with ConnectError."""
         import httpx as _httpx
 
@@ -289,8 +270,6 @@ class TestProvisionBundledKeycloakIntegration:
                 side_effect=_httpx.ConnectError("Connection refused")
             )
 
-            response = await async_client.post(
-                "/api/v1/setup/identity", json=KEYCLOAK_PAYLOAD
-            )
+            response = await async_client.post("/api/v1/setup/identity", json=KEYCLOAK_PAYLOAD)
 
         assert response.status_code == 502

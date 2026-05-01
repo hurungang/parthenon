@@ -35,7 +35,16 @@ const mockPolicies = [
 ]
 
 // Module-level state that mock factories read dynamically — avoids vi.doMock/resetModules corruption
-let mockRoleState: { policy_statements?: typeof mockPolicies } | null = { policy_statements: mockPolicies }
+type MockPolicyEntry = {
+  id: string
+  effect: string
+  module: string
+  actions: { id: string; action: string }[]
+  resources: { id: string; resource_type: string; resource_id: string | null }[]
+  tag_conditions: { id: string; tag_key: string; tag_value: string }[]
+  created_at: string
+}
+let mockRoleState: { policy_statements?: MockPolicyEntry[] } | null = { policy_statements: mockPolicies }
 
 // Mock ALL hooks from usePermissions to prevent unmocked hooks failing in AddStatementDialog
 vi.mock('../hooks/usePermissions', () => ({

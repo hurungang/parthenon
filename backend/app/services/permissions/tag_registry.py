@@ -1,15 +1,15 @@
 """Tag Registry service — manages TagDefinition and TagValue records."""
+
 import logging
 import uuid
-from typing import List
 
 from fastapi import HTTPException
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models.tag_definition import TagDefinition, TagScope
 from app.db.models.policy_tag_condition import PolicyTagCondition
+from app.db.models.tag_definition import TagDefinition, TagScope
 from app.db.models.tag_value import TagValue
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class TagRegistry:
         db: AsyncSession,
         scope: str | None = None,
         resource_type: str | None = None,
-    ) -> List[TagDefinition]:
+    ) -> list[TagDefinition]:
         """Return tag definitions, optionally filtered by scope or resource_type."""
         stmt = (
             select(TagDefinition)
@@ -44,7 +44,7 @@ class TagRegistry:
         scope: TagScope,
         resource_type: str | None = None,
         description: str | None = None,
-        allowed_values: List[str] | None = None,
+        allowed_values: list[str] | None = None,
     ) -> TagDefinition:
         """Create a TagDefinition + TagValue records.
 
@@ -72,11 +72,11 @@ class TagRegistry:
         db.add(tag_def)
         await db.flush()
 
-        for value in (allowed_values or []):
+        for value in allowed_values or []:
             db.add(TagValue(tag_definition_id=tag_def.id, value=value))
 
         await db.flush()
-        await db.refresh(tag_def, attribute_names=['tag_values'])
+        await db.refresh(tag_def, attribute_names=["tag_values"])
         return tag_def
 
     async def update_definition(
@@ -84,8 +84,8 @@ class TagRegistry:
         db: AsyncSession,
         tag_id: uuid.UUID,
         description: str | None = None,
-        add_values: List[str] | None = None,
-        remove_values: List[str] | None = None,
+        add_values: list[str] | None = None,
+        remove_values: list[str] | None = None,
     ) -> TagDefinition:
         """Update description and/or allowed values.
 
@@ -98,7 +98,7 @@ class TagRegistry:
         if description is not None:
             tag_def.description = description
 
-        for value in (add_values or []):
+        for value in add_values or []:
             # Only add if not already present
             exists = await db.execute(
                 select(TagValue).where(
@@ -118,8 +118,8 @@ class TagRegistry:
             )
 
         await db.flush()
-        await db.refresh(tag_def, attribute_names=['tag_values'])
-        
+        await db.refresh(tag_def, attribute_names=["tag_values"])
+
         return tag_def
 
     async def delete_definition(self, db: AsyncSession, tag_id: uuid.UUID) -> None:
@@ -155,9 +155,7 @@ class TagRegistry:
 
         Raises HTTPException 422 if the value is not in the allowed set.
         """
-        tag_def_result = await db.execute(
-            select(TagDefinition).where(TagDefinition.key == tag_key)
-        )
+        tag_def_result = await db.execute(select(TagDefinition).where(TagDefinition.key == tag_key))
         tag_def = tag_def_result.scalar_one_or_none()
         if tag_def is None:
             raise HTTPException(
@@ -165,9 +163,7 @@ class TagRegistry:
                 detail={"tag_key": tag_key, "error": "Tag key not found."},
             )
 
-        allowed = await db.execute(
-            select(TagValue).where(TagValue.tag_definition_id == tag_def.id)
-        )
+        allowed = await db.execute(select(TagValue).where(TagValue.tag_definition_id == tag_def.id))
         allowed_values = [tv.value for tv in allowed.scalars().all()]
         if allowed_values and tag_value not in allowed_values:
             raise HTTPException(

@@ -1,11 +1,11 @@
 """Pydantic v2 schemas for permission-management Roles and Policy Statements."""
+
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints, computed_field
-from typing import Annotated
 
 
 class PolicyEffect(str, Enum):
@@ -14,6 +14,7 @@ class PolicyEffect(str, Enum):
 
 
 # ── Policy sub-schemas ─────────────────────────────────────────────────────────
+
 
 class PolicyActionCreate(BaseModel):
     action: Annotated[str, StringConstraints(min_length=1, max_length=100)]
@@ -55,9 +56,9 @@ class PolicyTagConditionRead(BaseModel):
 class PolicyStatementCreate(BaseModel):
     effect: PolicyEffect = PolicyEffect.allow
     module: Annotated[str, StringConstraints(min_length=1, max_length=100)]
-    actions: List[PolicyActionCreate] = Field(default_factory=list)
-    resources: List[PolicyResourceCreate] = Field(default_factory=list)
-    tag_conditions: List[PolicyTagConditionCreate] = Field(default_factory=list)
+    actions: list[PolicyActionCreate] = Field(default_factory=list)
+    resources: list[PolicyResourceCreate] = Field(default_factory=list)
+    tag_conditions: list[PolicyTagConditionCreate] = Field(default_factory=list)
 
 
 class PolicyStatementRead(BaseModel):
@@ -67,12 +68,13 @@ class PolicyStatementRead(BaseModel):
     effect: PolicyEffect
     module: str
     created_at: datetime
-    actions: List[PolicyActionRead] = Field(default_factory=list)
-    resources: List[PolicyResourceRead] = Field(default_factory=list)
-    tag_conditions: List[PolicyTagConditionRead] = Field(default_factory=list)
+    actions: list[PolicyActionRead] = Field(default_factory=list)
+    resources: list[PolicyResourceRead] = Field(default_factory=list)
+    tag_conditions: list[PolicyTagConditionRead] = Field(default_factory=list)
 
 
 # ── Role schemas ───────────────────────────────────────────────────────────────
+
 
 class PermRoleCreate(BaseModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
@@ -108,4 +110,14 @@ class PermRoleRead(BaseModel):
 class PermRoleDetailRead(PermRoleRead):
     """Role with full nested policy statements."""
 
-    policy_statements: List[PolicyStatementRead] = Field(default_factory=list)
+    policy_statements: list[PolicyStatementRead] = Field(default_factory=list)
+
+
+# ── Resource type schemas ──────────────────────────────────────────────────────
+
+
+class ResourceTypeRead(BaseModel):
+    """Schema for a resource type and its allowed actions."""
+
+    resource_type: str
+    actions: list[str]

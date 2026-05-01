@@ -1,4 +1,5 @@
 """Unit tests for GroupClaimMapper."""
+
 from __future__ import annotations
 
 import os
@@ -44,8 +45,8 @@ async def test_creates_new_membership_when_claim_matches():
     async def execute_side(q, *a, **kw):
         call[0] += 1
         if call[0] == 1:
-            return _make_scalars([group])   # matched groups
-        return _make_scalars([])            # existing memberships (none)
+            return _make_scalars([group])  # matched groups
+        return _make_scalars([])  # existing memberships (none)
 
     db.execute = execute_side
     db.add = MagicMock()
@@ -69,8 +70,8 @@ async def test_idempotent_no_duplicate_on_second_call():
     async def execute_side(q, *a, **kw):
         call[0] += 1
         if call[0] == 1:
-            return _make_scalars([group])           # matched groups
-        return _make_scalars([group.id])            # existing memberships = already member
+            return _make_scalars([group])  # matched groups
+        return _make_scalars([group.id])  # existing memberships = already member
 
     db.execute = execute_side
     db.add = MagicMock()
@@ -90,7 +91,7 @@ async def test_no_op_when_no_claims_match_any_group():
     db = _mock_db()
 
     async def execute_side(q, *a, **kw):
-        return _make_scalars([])   # no matched groups
+        return _make_scalars([])  # no matched groups
 
     db.execute = execute_side
     db.add = MagicMock()

@@ -1,4 +1,5 @@
 """API tests for the group-optional access request endpoints."""
+
 from __future__ import annotations
 
 import uuid
@@ -49,9 +50,7 @@ def _make_db_override(get_return=None):
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none = MagicMock(return_value=mock_user)
-    mock_result.scalars = MagicMock(
-        return_value=MagicMock(all=MagicMock(return_value=[]))
-    )
+    mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.get = AsyncMock(return_value=get_return)
     mock_session.add = MagicMock()

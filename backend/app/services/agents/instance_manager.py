@@ -1,7 +1,8 @@
 """Agent Instance Manager — spawns and destroys agent instances with max_instances enforcement."""
+
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -44,9 +45,7 @@ class AgentInstanceManager:
         count_result = await db.execute(
             select(func.count(AgentInstance.id)).where(
                 AgentInstance.agent_type_id == agent_type_id,
-                AgentInstance.status.in_(
-                    [AgentInstanceStatus.created, AgentInstanceStatus.active]
-                ),
+                AgentInstance.status.in_([AgentInstanceStatus.created, AgentInstanceStatus.active]),
             )
         )
         current_count = count_result.scalar_one()
@@ -81,9 +80,7 @@ class AgentInstanceManager:
         if not instance:
             raise ValueError(f"AgentInstance {instance_id} not found")
         if instance.status != AgentInstanceStatus.created:
-            raise ValueError(
-                f"Cannot activate instance in status '{instance.status}'"
-            )
+            raise ValueError(f"Cannot activate instance in status '{instance.status}'")
         instance.status = AgentInstanceStatus.active
         await db.flush()
         await db.refresh(instance)
@@ -95,31 +92,25 @@ class AgentInstanceManager:
         if not instance:
             raise ValueError(f"AgentInstance {instance_id} not found")
         instance.status = AgentInstanceStatus.closed
-        instance.closed_at = datetime.now(timezone.utc)
+        instance.closed_at = datetime.now(UTC)
         await db.flush()
         await db.refresh(instance)
         logger.info("Closed agent instance %s", instance_id)
         return instance
 
-    async def get_by_handle(
-        self, session_handle: str, db: AsyncSession
-    ) -> AgentInstance | None:
+    async def get_by_handle(self, session_handle: str, db: AsyncSession) -> AgentInstance | None:
         """Resolve an AgentInstance by its session handle."""
         result = await db.execute(
             select(AgentInstance).where(AgentInstance.session_handle == session_handle)
         )
         return result.scalar_one_or_none()
 
-    async def list_active(
-        self, agent_type_id: Any, db: AsyncSession
-    ) -> list[AgentInstance]:
+    async def list_active(self, agent_type_id: Any, db: AsyncSession) -> list[AgentInstance]:
         """List all active (created or active) instances for an agent type."""
         result = await db.execute(
             select(AgentInstance).where(
                 AgentInstance.agent_type_id == agent_type_id,
-                AgentInstance.status.in_(
-                    [AgentInstanceStatus.created, AgentInstanceStatus.active]
-                ),
+                AgentInstance.status.in_([AgentInstanceStatus.created, AgentInstanceStatus.active]),
             )
         )
         return list(result.scalars().all())

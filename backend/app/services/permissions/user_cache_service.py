@@ -1,4 +1,5 @@
 """User Cache Service — upserts PlatformUser records from OIDC token claims."""
+
 import logging
 from datetime import datetime
 
@@ -25,9 +26,7 @@ class UserCacheService:
         Sets first_seen_at and last_seen_at on creation.
         Updates only last_seen_at on subsequent calls.
         """
-        result = await db.execute(
-            select(PlatformUser).where(PlatformUser.sub == sub)
-        )
+        result = await db.execute(select(PlatformUser).where(PlatformUser.sub == sub))
         user = result.scalar_one_or_none()
 
         if user is None:
@@ -55,7 +54,5 @@ class UserCacheService:
 
     async def get_user_by_sub(self, db: AsyncSession, sub: str) -> PlatformUser | None:
         """Return the PlatformUser for the given OIDC subject, or None."""
-        result = await db.execute(
-            select(PlatformUser).where(PlatformUser.sub == sub)
-        )
+        result = await db.execute(select(PlatformUser).where(PlatformUser.sub == sub))
         return result.scalar_one_or_none()

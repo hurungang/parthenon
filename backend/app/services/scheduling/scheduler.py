@@ -1,13 +1,13 @@
 """Scheduling Engine — APScheduler cron manager with PostgreSQL job store."""
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.db.models.scheduling import ExecutionStatus, JobExecution, JobStatus, ScheduledJob
 
 logger = logging.getLogger(__name__)
@@ -56,9 +56,7 @@ class SchedulingEngine:
             replace_existing=True,
             kwargs={"job_id": str(job.id), "db_factory": db_factory},
         )
-        logger.info(
-            "Scheduled job '%s' (id=%s, cron=%s)", job.name, job.id, job.cron_expression
-        )
+        logger.info("Scheduled job '%s' (id=%s, cron=%s)", job.name, job.id, job.cron_expression)
         return scheduler_job.id
 
     async def remove_job(self, scheduler_job_id: str) -> None:
@@ -85,6 +83,7 @@ class SchedulingEngine:
     async def _execute_job(self, job_id: str, db_factory: Any) -> None:
         """Execute a scheduled job and record the result."""
         from app.db.session import AsyncSessionLocal
+
         async with AsyncSessionLocal() as db:
             job = await db.get(ScheduledJob, job_id)
             if not job or job.status != JobStatus.active:
@@ -93,7 +92,7 @@ class SchedulingEngine:
             execution = JobExecution(
                 job_id=job.id,
                 status=ExecutionStatus.running,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
             )
             db.add(execution)
             await db.flush()
@@ -107,12 +106,10 @@ class SchedulingEngine:
                 execution.status = ExecutionStatus.failure
                 execution.error = str(exc)
             finally:
-                execution.finished_at = datetime.now(timezone.utc)
+                execution.finished_at = datetime.now(UTC)
                 await db.commit()
 
-    async def _dispatch(
-        self, job: ScheduledJob, db: AsyncSession
-    ) -> dict[str, Any]:
+    async def _dispatch(self, job: ScheduledJob, db: AsyncSession) -> dict[str, Any]:
         """Dispatch the job to the appropriate target (agent or SOP)."""
         from app.db.models.scheduling import JobTargetType
 

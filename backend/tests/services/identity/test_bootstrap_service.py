@@ -1,4 +1,5 @@
 """Unit tests for IdentityBootstrapService."""
+
 from __future__ import annotations
 
 import os
@@ -13,7 +14,6 @@ os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.schemas.identity_bootstrap import ProviderSetupRequest, ProviderType, SetupState
 from app.services.identity.bootstrap_service import IdentityBootstrapService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -131,14 +131,14 @@ class TestProvisionBundledKeycloak:
 
         # Build a mock AsyncClient context manager that raises ConnectError on get()
         mock_http_client = AsyncMock()
-        mock_http_client.get = AsyncMock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        mock_http_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_http_client)
         mock_cm.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("app.services.identity.bootstrap_service.httpx.AsyncClient", return_value=mock_cm):
+        with patch(
+            "app.services.identity.bootstrap_service.httpx.AsyncClient", return_value=mock_cm
+        ):
             service = IdentityBootstrapService()
             result = await service.provision_bundled_keycloak(db, request)
 

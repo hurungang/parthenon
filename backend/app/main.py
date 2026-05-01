@@ -1,4 +1,5 @@
 """FastAPI application entry point."""
+
 import logging
 import sys
 
@@ -17,10 +18,8 @@ from app.middleware.auth import JWTAuthMiddleware
 # Configure logging before anything else
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 
 logger = logging.getLogger(__name__)
@@ -102,8 +101,8 @@ def create_app() -> FastAPI:
 
 def _register_routers(app: FastAPI) -> None:
     """Register all API routers."""
-    from app.api.v1 import router as api_v1_router
     from app.api.gateway.lifecycle import GatewayRouter
+    from app.api.v1 import router as api_v1_router
     from app.api.ws.chat import ws_router
 
     app.include_router(api_v1_router, prefix="/api/v1")
@@ -116,6 +115,7 @@ async def _run_bootstrap() -> None:
     try:
         from app.db.session import AsyncSessionLocal
         from app.services.permissions.bootstrap_service import BootstrapService
+
         async with AsyncSessionLocal() as db:
             await BootstrapService().initialize(db)
     except Exception:

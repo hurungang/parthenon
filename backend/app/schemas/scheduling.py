@@ -1,10 +1,10 @@
 """Pydantic v2 schemas for Scheduling."""
+
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, StringConstraints
-from typing import Annotated
 
 from app.db.models.scheduling import ExecutionStatus, JobStatus, JobTargetType
 

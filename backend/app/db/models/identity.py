@@ -1,4 +1,5 @@
 """SQLAlchemy models for Identity, Role, Permission, and RolePermission."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -32,9 +33,7 @@ class Role(Base):
 
     __tablename__ = "roles"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     role_type: Mapped[RoleType] = mapped_column(
@@ -59,13 +58,13 @@ class Role(Base):
     identities: Mapped[list["Identity"]] = relationship("Identity", back_populates="role")
 
     # Permission-management relationships (added in user-permission-management change)
-    policy_statements: Mapped[list["PolicyStatement"]] = relationship(  # type: ignore[name-defined]
+    policy_statements: Mapped[list["PolicyStatement"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "PolicyStatement", back_populates="role", cascade="all, delete-orphan"
     )
-    user_roles: Mapped[list["UserRole"]] = relationship(  # type: ignore[name-defined]
+    user_roles: Mapped[list["UserRole"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "UserRole", back_populates="role", cascade="all, delete-orphan"
     )
-    group_roles: Mapped[list["GroupRole"]] = relationship(  # type: ignore[name-defined]
+    group_roles: Mapped[list["GroupRole"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "GroupRole", back_populates="role", cascade="all, delete-orphan"
     )
 
@@ -79,9 +78,7 @@ class Permission(Base):
     __tablename__ = "permissions"
     __table_args__ = (UniqueConstraint("resource", "action", name="uq_permission_resource_action"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     resource: Mapped[str] = mapped_column(String(100), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -103,13 +100,9 @@ class RolePermission(Base):
     """Assignment linking a Role to a Permission."""
 
     __tablename__ = "role_permissions"
-    __table_args__ = (
-        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
-    )
+    __table_args__ = (UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     role_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
     )
@@ -139,13 +132,9 @@ class Identity(Base):
     """An external principal registered in the platform (user or agent)."""
 
     __tablename__ = "identities"
-    __table_args__ = (
-        Index("ix_identities_idp_subject", "idp_subject"),
-    )
+    __table_args__ = (Index("ix_identities_idp_subject", "idp_subject"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Subject claim from the OIDC provider
     subject: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)

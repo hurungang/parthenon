@@ -1,4 +1,5 @@
 """HTTP Gateway Transport adapter."""
+
 from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler
 
 

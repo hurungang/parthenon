@@ -4,6 +4,7 @@ Defines all known resource types and their allowed action sets.
 Routers and the Permission Engine import constants from this module
 to avoid hardcoding string literals.
 """
+
 from typing import Final
 
 # ── Resource type identifier constants ────────────────────────────────────────

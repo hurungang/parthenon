@@ -1,4 +1,5 @@
 """Pydantic v2 schemas for Agent Gateway."""
+
 import uuid
 from datetime import datetime
 from typing import Any

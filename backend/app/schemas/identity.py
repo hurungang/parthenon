@@ -1,14 +1,15 @@
 """Pydantic v2 schemas for Identity & Auth API."""
+
 import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, StringConstraints
 
 from app.db.models.identity import IdentityType, RoleType
 
-
 # ── Permission schemas ─────────────────────────────────────────────────────────
+
 
 class PermissionCreate(BaseModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
@@ -29,6 +30,7 @@ class PermissionRead(BaseModel):
 
 
 # ── Role schemas ───────────────────────────────────────────────────────────────
+
 
 class RoleCreate(BaseModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
@@ -61,6 +63,7 @@ class RolePermissionAssign(BaseModel):
 
 # ── Identity schemas ───────────────────────────────────────────────────────────
 
+
 class IdentityCreate(BaseModel):
     subject: Annotated[str, StringConstraints(min_length=1, max_length=500)]
     email: str | None = None
@@ -84,6 +87,7 @@ class IdentityRead(BaseModel):
 
 
 # ── Setup schemas ──────────────────────────────────────────────────────────────
+
 
 class SetupInitResponse(BaseModel):
     message: str

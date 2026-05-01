@@ -1,6 +1,6 @@
 """Platform Users API router."""
+
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -8,20 +8,19 @@ from sqlalchemy import func, select
 from app.api.deps import require_permission
 from app.core.resource_types import RT_PERMISSIONS
 from app.db.models.group import Group
-from app.db.models.group_role import GroupRole
 from app.db.models.identity import Role
 from app.db.models.platform_user import PlatformUser
 from app.db.models.user_group import UserGroup
 from app.db.models.user_role import UserRole
 from app.db.session import DbSession
 from app.schemas.groups import GroupMembershipRead
+from app.schemas.perm_roles import PermRoleRead
 from app.schemas.platform_users import (
     AddUserToGroupBody,
     AssignUserRoleBody,
     PlatformUserDetail,
     PlatformUserRead,
 )
-from app.schemas.perm_roles import PermRoleRead
 
 PlatformUsersRouter = APIRouter(prefix="/platform-users", tags=["Permissions: Platform Users"])
 
@@ -41,26 +40,25 @@ async def _enrich_user(db: DbSession, user: PlatformUser) -> PlatformUserRead:
         select(func.count()).select_from(UserGroup).where(UserGroup.user_id == user.id)
     )
     read = PlatformUserRead.model_validate(user)
-    return read.model_copy(update={
-        "direct_role_count": rc_r.scalar_one(),
-        "group_count": gc_r.scalar_one(),
-    })
+    return read.model_copy(
+        update={
+            "direct_role_count": rc_r.scalar_one(),
+            "group_count": gc_r.scalar_one(),
+        }
+    )
 
 
-@PlatformUsersRouter.get("", response_model=List[PlatformUserRead])
+@PlatformUsersRouter.get("", response_model=list[PlatformUserRead])
 async def list_platform_users(
     db: DbSession,
     page: int = 1,
     page_size: int = 20,
     _: dict = Depends(require_permission(RT_PERMISSIONS, "read")),
-) -> List[PlatformUserRead]:
+) -> list[PlatformUserRead]:
     """Paginated list of platform users with role/group counts."""
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(PlatformUser)
-        .order_by(PlatformUser.display_name)
-        .offset(offset)
-        .limit(page_size)
+        select(PlatformUser).order_by(PlatformUser.display_name).offset(offset).limit(page_size)
     )
     users = list(result.scalars().all())
     return [await _enrich_user(db, u) for u in users]

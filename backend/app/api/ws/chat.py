@@ -1,9 +1,9 @@
 """WebSocket server — authenticates connections and bridges to MessageBroker."""
+
 import logging
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
-from jose import JWTError
 
 from app.core.oidc_client import OIDCError, get_oidc_client
 from app.services.comm_hub.broker import BrokerMessage, MessageBroker

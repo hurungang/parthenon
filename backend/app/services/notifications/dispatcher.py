@@ -1,10 +1,11 @@
 """Notification Dispatcher — dispatches notifications via configured channels."""
+
 import json
 import logging
 import smtplib
-from datetime import datetime, timezone
-from email.mime.text import MIMEText
+from datetime import UTC, datetime
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Any
 
 import httpx
@@ -129,11 +130,9 @@ class NotificationDispatcher:
                 await self._send_webhook(config, body, recipient)
 
             event.status = DeliveryStatus.delivered
-            event.delivered_at = datetime.now(timezone.utc)
+            event.delivered_at = datetime.now(UTC)
         except Exception as exc:
-            logger.error(
-                "Notification delivery failed for channel %s: %s", channel.id, exc
-            )
+            logger.error("Notification delivery failed for channel %s: %s", channel.id, exc)
             event.status = DeliveryStatus.failed
             event.error = str(exc)
 
@@ -177,9 +176,7 @@ class NotificationDispatcher:
         await asyncio.get_event_loop().run_in_executor(None, send_sync)
         logger.info("Email sent to %s via %s:%d", to_addr, smtp_host, smtp_port)
 
-    async def _send_slack(
-        self, config: dict[str, Any], body: str, recipient: str | None
-    ) -> None:
+    async def _send_slack(self, config: dict[str, Any], body: str, recipient: str | None) -> None:
         """Send a Slack message via Incoming Webhook or Bot API."""
         webhook_url = config.get("webhook_url")
         if webhook_url:
@@ -207,9 +204,7 @@ class NotificationDispatcher:
             response = await client.post(webhook_url, json=payload)
             response.raise_for_status()
 
-    async def _send_webhook(
-        self, config: dict[str, Any], body: str, recipient: str | None
-    ) -> None:
+    async def _send_webhook(self, config: dict[str, Any], body: str, recipient: str | None) -> None:
         """Send an HTTP POST to a configured webhook URL."""
         url = recipient or config.get("url")
         if not url:

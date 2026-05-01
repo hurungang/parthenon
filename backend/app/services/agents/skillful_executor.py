@@ -1,4 +1,5 @@
 """Skillful Agent Executor — LLM reasoning loop with skill selection and invocation."""
+
 import json
 import logging
 from typing import Any
@@ -7,8 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentInstance, AgentMode, AgentSkillAssignment, AgentType
-from app.db.models.mcp_hub import McpTool
-from app.db.models.skills import Skill, SkillToolBinding
+from app.db.models.skills import Skill
 from app.services.agents.model_binding import ModelBindingLayer
 from app.services.skills.executor import SkillExecutor
 
@@ -58,9 +58,7 @@ class SkillfulAgentExecutor:
             raise SkillfulAgentError(f"Agent type {instance.agent_type_id} not found")
 
         if agent_type.mode != AgentMode.skillful_agent:
-            raise SkillfulAgentError(
-                f"Agent type '{agent_type.name}' is not a skillful-agent"
-            )
+            raise SkillfulAgentError(f"Agent type '{agent_type.name}' is not a skillful-agent")
 
         # Load available skills for this agent type
         skill_defs, skill_map = await self._load_skills(agent_type.id, db)
@@ -70,9 +68,7 @@ class SkillfulAgentExecutor:
         if agent_type.system_prompt:
             messages.append({"role": "system", "content": agent_type.system_prompt})
         if context:
-            messages.append(
-                {"role": "system", "content": f"Context: {json.dumps(context)}"}
-            )
+            messages.append({"role": "system", "content": f"Context: {json.dumps(context)}"})
         messages.append({"role": "user", "content": prompt})
 
         turn_history: list[dict[str, Any]] = []
@@ -89,9 +85,7 @@ class SkillfulAgentExecutor:
 
             if not tool_calls:
                 # Final answer — LLM returned text without tool calls
-                logger.info(
-                    "skillful-agent %s completed in %d turns", instance.id, turn + 1
-                )
+                logger.info("skillful-agent %s completed in %d turns", instance.id, turn + 1)
                 return {
                     "agent_type": agent_type.name,
                     "instance_id": str(instance.id),
@@ -115,7 +109,9 @@ class SkillfulAgentExecutor:
                 else:
                     logger.info(
                         "skillful-agent %s invoking skill '%s' (turn %d)",
-                        instance.id, skill_name, turn + 1,
+                        instance.id,
+                        skill_name,
+                        turn + 1,
                     )
                     skill_results = await self._skill_executor.execute(
                         skill_id=skill_id,
@@ -155,9 +151,7 @@ class SkillfulAgentExecutor:
             Tuple of (tool_definitions_list, skill_name_to_id_map).
         """
         assignments_result = await db.execute(
-            select(AgentSkillAssignment).where(
-                AgentSkillAssignment.agent_type_id == agent_type_id
-            )
+            select(AgentSkillAssignment).where(AgentSkillAssignment.agent_type_id == agent_type_id)
         )
         assignments = assignments_result.scalars().all()
 

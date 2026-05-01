@@ -1,6 +1,7 @@
 """Conversation Store — persists conversation sessions, turns, and tool call records."""
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -96,14 +97,12 @@ class ConversationStore:
         await db.refresh(record)
         return record
 
-    async def close_session(
-        self, session_id: Any, db: AsyncSession
-    ) -> ConversationSession | None:
+    async def close_session(self, session_id: Any, db: AsyncSession) -> ConversationSession | None:
         """Mark a session as closed."""
         conv_session = await db.get(ConversationSession, session_id)
         if conv_session:
             conv_session.status = ConversationStatus.closed
-            conv_session.closed_at = datetime.now(timezone.utc)
+            conv_session.closed_at = datetime.now(UTC)
             await db.flush()
             await db.refresh(conv_session)
         return conv_session
@@ -129,9 +128,7 @@ class ConversationStore:
         offset: int = 0,
     ) -> list[ConversationSession]:
         """List conversation sessions with optional filtering."""
-        query = select(ConversationSession).order_by(
-            ConversationSession.created_at.desc()
-        )
+        query = select(ConversationSession).order_by(ConversationSession.created_at.desc())
         if agent_type_id:
             query = query.where(ConversationSession.agent_type_id == agent_type_id)
         query = query.limit(limit).offset(offset)

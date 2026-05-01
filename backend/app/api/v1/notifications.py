@@ -1,7 +1,8 @@
 """Notifications API router — channel CRUD, test-send, and event history."""
+
 import json
-import uuid
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -9,8 +10,8 @@ from sqlalchemy import select
 from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
 from app.core.resource_types import RT_NOTIFICATION
-from app.db.session import DbSession
 from app.db.models.notifications import NotificationChannel, NotificationEvent
+from app.db.session import DbSession
 from app.schemas.notifications import (
     NotificationChannelCreate,
     NotificationChannelRead,

@@ -1,10 +1,10 @@
 """Pydantic v2 schemas for Results and Notifications."""
+
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, StringConstraints
-from typing import Annotated
 
 from app.db.models.notifications import ChannelType, DeliveryStatus
 
@@ -25,6 +25,7 @@ class ResultRecordRead(BaseModel):
 
 class SaveResultRequest(BaseModel):
     """Request payload for the save_result MCP tool."""
+
     title: str | None = None
     payload: dict[str, Any]
     tags: list[str] | None = None

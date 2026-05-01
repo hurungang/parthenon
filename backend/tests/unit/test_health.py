@@ -1,13 +1,16 @@
 """Integration tests for the health endpoint and basic API structure."""
+
 import os
 import uuid
+
 import pytest
 
 os.environ.setdefault("CREDENTIAL_VAULT_KEY", "test-32-byte-key-for-aes-256-enc!")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
 from app.main import create_app
 
 
@@ -35,7 +38,8 @@ async def test_protected_endpoint_returns_401_without_token() -> None:
 @pytest.mark.asyncio
 async def test_setup_init_is_public() -> None:
     """POST /api/v1/setup/init should be accessible without authentication (not return 401)."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    from unittest.mock import AsyncMock, MagicMock
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     app = create_app()
@@ -61,7 +65,7 @@ async def test_setup_init_is_public() -> None:
     mock_session.add = MagicMock(side_effect=lambda obj: added_objects.append(obj))
 
     async def mock_refresh(obj, *args, **kwargs):
-        if hasattr(obj, 'id') and obj.id is None:
+        if hasattr(obj, "id") and obj.id is None:
             obj.id = uuid.uuid4()
 
     mock_session.refresh = mock_refresh
@@ -70,6 +74,7 @@ async def test_setup_init_is_public() -> None:
         yield mock_session
 
     from app.db.session import get_db
+
     app.dependency_overrides[get_db] = override_get_db
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

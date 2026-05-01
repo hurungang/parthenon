@@ -1,16 +1,18 @@
 """
 Test SkillExecutor and SopOrchestrator: execution, invalid binding, step ordering.
 """
+
 import uuid
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.mark.asyncio
 async def test_skill_executor_raises_on_missing_binding():
     """SkillExecutor.execute() raises SkillExecutionError when no tool bindings exist."""
-    from app.services.skills.executor import SkillExecutor, SkillExecutionError
     from app.db.models.skills import Skill
+    from app.services.skills.executor import SkillExecutionError, SkillExecutor
 
     mock_skill = MagicMock(spec=Skill)
     mock_skill.id = uuid.uuid4()
@@ -30,9 +32,9 @@ async def test_skill_executor_raises_on_missing_binding():
 @pytest.mark.asyncio
 async def test_skill_executor_returns_results_for_each_tool():
     """SkillExecutor.execute() invokes the proxy for each bound tool and returns results."""
-    from app.services.skills.executor import SkillExecutor
-    from app.db.models.skills import Skill, SkillToolBinding
     from app.db.models.mcp_hub import McpTool
+    from app.db.models.skills import Skill, SkillToolBinding
+    from app.services.skills.executor import SkillExecutor
 
     skill_id = uuid.uuid4()
     tool_id = uuid.uuid4()
@@ -71,8 +73,8 @@ async def test_skill_executor_returns_results_for_each_tool():
 @pytest.mark.asyncio
 async def test_sop_orchestrator_executes_steps_in_order():
     """SopOrchestrator.execute() iterates SOP steps sorted by .order and returns combined output."""
-    from app.services.skills.sop_orchestrator import SopOrchestrator
     from app.db.models.skills import Sop, SopStep, SopStepType
+    from app.services.skills.sop_orchestrator import SopOrchestrator
 
     sop_id = uuid.uuid4()
 

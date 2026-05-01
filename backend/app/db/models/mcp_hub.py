@@ -1,4 +1,5 @@
 """SQLAlchemy models for MCP Hub: McpServer, McpSession, McpTool, ToolPermission."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -33,9 +34,7 @@ class McpServer(Base):
 
     __tablename__ = "mcp_servers"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -45,9 +44,7 @@ class McpServer(Base):
         nullable=False,
         default=McpServerStatus.active,
     )
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -83,13 +80,9 @@ class McpSession(Base):
     """A named connection configuration on an MCP server with encrypted credentials."""
 
     __tablename__ = "mcp_sessions"
-    __table_args__ = (
-        UniqueConstraint("server_id", "name", name="uq_mcp_session_server_name"),
-    )
+    __table_args__ = (UniqueConstraint("server_id", "name", name="uq_mcp_session_server_name"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     server_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=False
     )
@@ -126,13 +119,9 @@ class McpTool(Base):
     """A tool synced from an MCP server, namespaced under the server slug."""
 
     __tablename__ = "mcp_tools"
-    __table_args__ = (
-        UniqueConstraint("server_id", "name", name="uq_mcp_tool_server_name"),
-    )
+    __table_args__ = (UniqueConstraint("server_id", "name", name="uq_mcp_tool_server_name"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     server_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=False
     )
@@ -168,13 +157,9 @@ class ToolPermission(Base):
     """Grants a Role or Identity access to a specific MCP tool."""
 
     __tablename__ = "tool_permissions"
-    __table_args__ = (
-        UniqueConstraint("tool_id", "role_id", name="uq_tool_permission_tool_role"),
-    )
+    __table_args__ = (UniqueConstraint("tool_id", "role_id", name="uq_tool_permission_tool_role"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tool_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("mcp_tools.id", ondelete="CASCADE"), nullable=False
     )

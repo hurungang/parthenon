@@ -1,4 +1,5 @@
 """Unit tests for credential vault (AES-256 encrypt/decrypt)."""
+
 import os
 
 import pytest

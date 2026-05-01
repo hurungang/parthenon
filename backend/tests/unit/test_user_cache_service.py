@@ -1,10 +1,10 @@
 """Unit tests for UserCacheService."""
+
 from __future__ import annotations
 
 import os
-import uuid
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -38,7 +38,7 @@ async def test_creates_new_user_on_first_call():
     db.execute = AsyncMock(return_value=_make_scalars(None))  # not found
 
     svc = UserCacheService()
-    user = await svc.upsert_user(db, sub="sub123", email="a@b.com", display_name="Alice")
+    await svc.upsert_user(db, sub="sub123", email="a@b.com", display_name="Alice")
 
     assert db.add.called
     added = db.add.call_args[0][0]

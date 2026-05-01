@@ -3,6 +3,7 @@
 Silent when the file is absent; raises ConfigurationError for invalid YAML.
 Pydantic handles all type coercion and validation automatically.
 """
+
 import logging
 import os
 from pathlib import Path
@@ -62,7 +63,7 @@ def load_identity_yaml() -> IdentityYamlConfig:
         return IdentityYamlConfig()
 
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             raw = yaml.safe_load(fh)
     except yaml.YAMLError as exc:
         raise ConfigurationError(f"identity.yaml is not valid YAML: {exc}") from exc
@@ -72,9 +73,7 @@ def load_identity_yaml() -> IdentityYamlConfig:
         return IdentityYamlConfig()
 
     if not isinstance(raw, dict):
-        raise ConfigurationError(
-            f"identity.yaml must be a YAML mapping (got {type(raw).__name__})"
-        )
+        raise ConfigurationError(f"identity.yaml must be a YAML mapping (got {type(raw).__name__})")
 
     try:
         config = IdentityYamlConfig.model_validate(raw)

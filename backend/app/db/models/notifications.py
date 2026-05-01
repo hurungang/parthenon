@@ -1,4 +1,5 @@
 """SQLAlchemy models for Notifications: NotificationChannel, NotificationEvent."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -32,9 +33,7 @@ class NotificationChannel(Base):
 
     __tablename__ = "notification_channels"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     channel_type: Mapped[ChannelType] = mapped_column(
         Enum(ChannelType, name="channel_type_enum"), nullable=False
@@ -67,9 +66,7 @@ class NotificationEvent(Base):
 
     __tablename__ = "notification_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     channel_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("notification_channels.id", ondelete="CASCADE"),

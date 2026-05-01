@@ -1,4 +1,5 @@
 """JWT authentication middleware."""
+
 import logging
 from typing import Any
 
@@ -53,9 +54,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             authorization = request.headers.get("Authorization", "")
             logger.debug("Auth middleware: Authorization header present: %s", bool(authorization))
             if not authorization.startswith("Bearer "):
-                logger.warning("Auth middleware: Missing or invalid Authorization header for %s", path)
+                logger.warning(
+                    "Auth middleware: Missing or invalid Authorization header for %s", path
+                )
                 return self._unauthorized(request, "Missing or invalid Authorization header")
-            token = authorization[len("Bearer "):]
+            token = authorization[len("Bearer ") :]
             logger.debug("Auth middleware: Token extracted (length: %d)", len(token))
 
         if not token:
@@ -67,7 +70,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             logger.debug("Auth middleware: Validating token for %s", path)
             claims: dict[str, Any] = await client.validate_token(token)
             request.state.identity = claims
-            logger.info("Auth middleware: Token validated successfully for %s (sub: %s)", path, claims.get("sub", "unknown"))
+            logger.info(
+                "Auth middleware: Token validated successfully for %s (sub: %s)",
+                path,
+                claims.get("sub", "unknown"),
+            )
         except OIDCError as exc:
             logger.warning("JWT validation failed for %s: %s", path, exc)
             logger.debug("JWT validation error details: %s", exc, exc_info=True)
@@ -83,9 +90,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
-    async def _sync_user_and_groups(
-        self, request: Request, claims: dict[str, Any]
-    ) -> None:
+    async def _sync_user_and_groups(self, request: Request, claims: dict[str, Any]) -> None:
         """Upsert PlatformUser and map IdP group claims. Errors are logged only."""
         # Lazy imports to avoid startup circular dependencies
         try:
@@ -100,24 +105,23 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         display_name = claims.get("name") or claims.get("preferred_username", "") or sub
 
         try:
-            async with AsyncSessionLocal() as session:
-                async with session.begin():
-                    user_cache = UserCacheService()
-                    platform_user = await user_cache.upsert_user(
-                        session, sub=sub, email=email, display_name=display_name
-                    )
-                    request.state.platform_user_id = platform_user.id
+            async with AsyncSessionLocal() as session, session.begin():
+                user_cache = UserCacheService()
+                platform_user = await user_cache.upsert_user(
+                    session, sub=sub, email=email, display_name=display_name
+                )
+                request.state.platform_user_id = platform_user.id
 
-                    group_claims: list[str] = claims.get("groups", [])
-                    if group_claims:
-                        mapper = GroupClaimMapper()
-                        new_groups = await mapper.map_claims(session, platform_user.id, group_claims)
-                        if new_groups:
-                            logger.info(
-                                "Auto-assigned user %s to %d group(s) via IdP claims",
-                                platform_user.id,
-                                len(new_groups),
-                            )
+                group_claims: list[str] = claims.get("groups", [])
+                if group_claims:
+                    mapper = GroupClaimMapper()
+                    new_groups = await mapper.map_claims(session, platform_user.id, group_claims)
+                    if new_groups:
+                        logger.info(
+                            "Auto-assigned user %s to %d group(s) via IdP claims",
+                            platform_user.id,
+                            len(new_groups),
+                        )
         except Exception as exc:
             logger.warning("User cache/group mapping failed for sub=%s: %s", sub, exc)
 
@@ -131,7 +135,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     def _unauthorized(self, request: Request, detail: str) -> JSONResponse:
         """Return 401 response with CORS headers to prevent browser CORS errors."""
         response = JSONResponse(status_code=401, content={"detail": detail})
-        
+
         # Add CORS headers for allowed origins to prevent browser CORS errors
         origin = request.headers.get("origin", "")
         allowed_origins = [
@@ -139,10 +143,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             "http://localhost:4173",
             "http://localhost:3000",
         ]
-        
+
         if origin in allowed_origins:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
-        
-        return response
 
+        return response

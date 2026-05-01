@@ -1,12 +1,13 @@
 """Identity API routers: Role, Permission, Identity CRUD."""
-import uuid
+
 import logging
+import uuid
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
-from app.db.session import DbSession
 from app.db.models.identity import Identity, Permission, Role, RolePermission
+from app.db.session import DbSession
 from app.schemas.identity import (
     IdentityCreate,
     IdentityRead,
