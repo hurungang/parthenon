@@ -1,16 +1,18 @@
 """Pytest configuration and shared fixtures."""
+
 import asyncio
 import os
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from fastapi.testclient import TestClient
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Set test environment variables before importing app modules
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://parthenon:parthenon@localhost:5432/parthenon_test")
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql+asyncpg://parthenon:parthenon@localhost:5432/parthenon_test"
+)
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
 os.environ.setdefault("OIDC_PROVIDER_URL", "http://localhost:8080/realms/parthenon")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
@@ -79,7 +81,5 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     app = create_app()
     app.dependency_overrides[get_db] = override_get_db
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client

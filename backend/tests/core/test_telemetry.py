@@ -1,8 +1,7 @@
 """Unit tests for ExporterFactory in app.core.telemetry."""
-import os
-from unittest.mock import MagicMock, patch
 
-import pytest
+import os
+from unittest.mock import patch
 
 os.environ.setdefault("CREDENTIAL_VAULT_KEY", "test-32-byte-key-for-aes-256-enc!")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
@@ -43,6 +42,7 @@ class TestExporterFactoryConsole:
 
     def test_console_span_exporter_type(self) -> None:
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
         cfg = _make_config(exporters=[TelemetryExporterType.console])
         factory = ExporterFactory(cfg)
         exporter = factory._build_span_exporter(TelemetryExporterType.console)
@@ -50,6 +50,7 @@ class TestExporterFactoryConsole:
 
     def test_console_log_exporter_type(self) -> None:
         from opentelemetry.sdk._logs.export import ConsoleLogExporter
+
         cfg = _make_config(exporters=[TelemetryExporterType.console])
         factory = ExporterFactory(cfg)
         exporter = factory._build_log_exporter(TelemetryExporterType.console)
@@ -59,6 +60,7 @@ class TestExporterFactoryConsole:
 class TestExporterFactoryOtlpGrpc:
     def test_otlp_grpc_span_exporter(self) -> None:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
         cfg = _make_config(
             exporters=[TelemetryExporterType.otlp],
             otlp=OtlpExporterOptions(protocol="grpc"),
@@ -69,6 +71,7 @@ class TestExporterFactoryOtlpGrpc:
 
     def test_otlp_grpc_metric_exporter(self) -> None:
         from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+
         cfg = _make_config(
             exporters=[TelemetryExporterType.otlp],
             otlp=OtlpExporterOptions(protocol="grpc"),
@@ -79,6 +82,7 @@ class TestExporterFactoryOtlpGrpc:
 
     def test_otlp_grpc_log_exporter(self) -> None:
         from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+
         cfg = _make_config(
             exporters=[TelemetryExporterType.otlp],
             otlp=OtlpExporterOptions(protocol="grpc"),
@@ -90,7 +94,10 @@ class TestExporterFactoryOtlpGrpc:
 
 class TestExporterFactoryOtlpHttp:
     def test_otlp_http_span_exporter(self) -> None:
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPSpanExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter as OTLPSpanExporterHTTP,
+        )
+
         cfg = _make_config(
             exporters=[TelemetryExporterType.otlp],
             otlp=OtlpExporterOptions(protocol="http", endpoint="http://collector:4318"),
@@ -100,7 +107,10 @@ class TestExporterFactoryOtlpHttp:
         assert isinstance(exporter, OTLPSpanExporterHTTP)
 
     def test_otlp_http_metric_exporter(self) -> None:
-        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPMetricExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+            OTLPMetricExporter as OTLPMetricExporterHTTP,
+        )
+
         cfg = _make_config(
             exporters=[TelemetryExporterType.otlp],
             otlp=OtlpExporterOptions(protocol="http", endpoint="http://collector:4318"),
@@ -117,14 +127,16 @@ class TestExporterFactoryDisabledSignals:
         factory = ExporterFactory(cfg)
         # ExporterFactory still has exporters; but setup_telemetry won't call it for traces.
         # Directly verify setup_telemetry registers no-op path (no processors built).
-        processors = factory.build_trace_processors()
+        factory.build_trace_processors()
         # exporters=[otlp] — factory would normally build processors, but setup_telemetry
         # skips this call entirely when traces_enabled=False.  Verify via state flag.
         import app.core.telemetry as tel_module
+
         original = tel_module._telemetry_initialised
         tel_module._telemetry_initialised = False
         try:
             from app.core.telemetry import setup_telemetry
+
             # Should complete without error even when traces disabled
             setup_telemetry(cfg)
             assert tel_module._telemetry_initialised is True
@@ -133,11 +145,13 @@ class TestExporterFactoryDisabledSignals:
 
     def test_all_disabled_sets_initialised_flag(self) -> None:
         import app.core.telemetry as tel_module
+
         original = tel_module._telemetry_initialised
         tel_module._telemetry_initialised = False
         cfg = _make_config(traces_enabled=False, metrics_enabled=False, logs_enabled=False)
         try:
             from app.core.telemetry import setup_telemetry
+
             setup_telemetry(cfg)
             assert tel_module._telemetry_initialised is True
         finally:
@@ -196,8 +210,12 @@ class TestExporterFactoryLogfire:
 
 class TestExporterFactoryCustom:
     def test_custom_span_exporter_uses_endpoint(self) -> None:
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPSpanExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter as OTLPSpanExporterHTTP,
+        )
+
         from app.core.config import CustomExporterOptions
+
         cfg = _make_config(
             exporters=[TelemetryExporterType.custom],
             custom=CustomExporterOptions(endpoint="http://my-collector:4318"),
@@ -212,6 +230,7 @@ class TestFileExporter:
         log_path = str(tmp_path / "sub" / "dir" / "otel.log")
         opts = FileExporterOptions(path=log_path)
         from app.core.telemetry import _FileSpanExporter
+
         fe = _FileSpanExporter(opts)
         assert (tmp_path / "sub" / "dir").exists()
         fe.shutdown()

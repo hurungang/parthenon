@@ -2,16 +2,18 @@
 Test ToolSyncService: idempotent upsert and tool deactivation on removal.
 Tests McpProxyEngine session resolution via ToolSyncService.
 """
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, AsyncMock
+
 import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_toolsyncservice_adds_new_tools():
     """ToolSyncService.sync() adds new tools from the remote server."""
-    from app.services.mcp.tool_sync import ToolSyncService
     from app.db.models.mcp_hub import McpServerStatus
+    from app.services.mcp.tool_sync import ToolSyncService
 
     mock_server = MagicMock()
     mock_server.id = uuid.uuid4()
@@ -24,7 +26,9 @@ async def test_toolsyncservice_adds_new_tools():
     mock_db.execute = AsyncMock(
         side_effect=[
             MagicMock(scalar_one_or_none=MagicMock(return_value=None)),  # tool lookup
-            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),  # deactivation query
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+            ),  # deactivation query
         ]
     )
 
@@ -50,8 +54,8 @@ async def test_toolsyncservice_adds_new_tools():
 @pytest.mark.asyncio
 async def test_toolsyncservice_deactivates_removed_tools():
     """ToolSyncService.sync() marks tools inactive when they disappear from remote."""
-    from app.services.mcp.tool_sync import ToolSyncService
     from app.db.models.mcp_hub import McpServerStatus, McpTool
+    from app.services.mcp.tool_sync import ToolSyncService
 
     mock_server = MagicMock()
     mock_server.id = uuid.uuid4()

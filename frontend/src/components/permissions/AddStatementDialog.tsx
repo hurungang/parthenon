@@ -139,12 +139,18 @@ function ResourceRowEditor({
   )
 }
 
-const DEFAULT_FORM = {
+const DEFAULT_FORM: {
+  resourceType: string
+  effect: PolicyEffect
+  actions: string[]
+  resources: ResourceRow[]
+  tagConditions: TagConditionRow[]
+} = {
   resourceType: '',
   effect: PolicyEffect.Allow,
-  actions: [] as string[],
-  resources: [] as ResourceRow[],
-  tagConditions: [] as TagConditionRow[],
+  actions: [],
+  resources: [],
+  tagConditions: [],
 }
 
 export default function AddStatementDialog({

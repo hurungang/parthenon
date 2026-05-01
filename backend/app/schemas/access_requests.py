@@ -1,11 +1,11 @@
 """Pydantic v2 schemas for Access Requests."""
+
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints
-from typing import Annotated
 
 
 class AccessRequestStatusEnum(str, Enum):
@@ -15,7 +15,7 @@ class AccessRequestStatusEnum(str, Enum):
 
 
 class AccessRequestBatchCreate(BaseModel):
-    group_ids: List[uuid.UUID] = Field(default_factory=list)
+    group_ids: list[uuid.UUID] = Field(default_factory=list)
     justification: Annotated[str, StringConstraints(min_length=1, max_length=2000)]
 
 
@@ -43,7 +43,7 @@ class AccessRequestBatchRead(BaseModel):
     user_id: uuid.UUID
     justification: str
     submitted_at: datetime
-    requests: List[AccessRequestRead] = Field(default_factory=list)
+    requests: list[AccessRequestRead] = Field(default_factory=list)
 
 
 class ApproveRequestBody(BaseModel):

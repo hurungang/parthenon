@@ -3,25 +3,27 @@
 Supports multiple simultaneous export targets (console, file, OTLP, Logfire, custom)
 configured via :class:`~app.core.config.TelemetrySettings`.
 """
+
 from __future__ import annotations
 
 import logging
 import logging.handlers
-import sys
 from logging import Logger
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from opentelemetry import metrics, trace
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, LogExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import MetricExporter, MetricReader, PeriodicExportingMetricReader
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 from opentelemetry.propagate import set_global_textmap
 from opentelemetry.propagators.composite import CompositePropagator
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import (
+    PeriodicExportingMetricReader,
+)
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 if TYPE_CHECKING:
@@ -46,8 +48,10 @@ class ExporterFactory:
 
     def _build_span_exporter(self, exporter_type):
         from app.core.config import TelemetryExporterType
+
         if exporter_type == TelemetryExporterType.console:
             from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
             return ConsoleSpanExporter()
         if exporter_type == TelemetryExporterType.file:
             return _FileSpanExporter(self._config.file)
@@ -64,8 +68,12 @@ class ExporterFactory:
         opts = self._config.otlp
         if opts.protocol == "grpc":
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
             return OTLPSpanExporter(endpoint=opts.endpoint, insecure=opts.insecure)
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPSpanExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter as OTLPSpanExporterHTTP,
+        )
+
         return OTLPSpanExporterHTTP(endpoint=f"{opts.endpoint}/v1/traces")
 
     def _build_logfire_span_exporter(self):
@@ -75,6 +83,7 @@ class ExporterFactory:
             return None
         try:
             import logfire
+
             logfire.configure(token=token, send_to_logfire=True)
             logger.info("Logfire initialised")
             return None
@@ -83,7 +92,10 @@ class ExporterFactory:
             return None
 
     def _build_custom_span_exporter(self):
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPSpanExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter as OTLPSpanExporterHTTP,
+        )
+
         endpoint = self._config.custom.endpoint
         return OTLPSpanExporterHTTP(endpoint=f"{endpoint.rstrip('/')}/v1/traces")
 
@@ -92,13 +104,17 @@ class ExporterFactory:
         for exporter_type in self._config.exporters:
             exporter = self._build_metric_exporter(exporter_type)
             if exporter is not None:
-                readers.append(PeriodicExportingMetricReader(exporter, export_interval_millis=30_000))
+                readers.append(
+                    PeriodicExportingMetricReader(exporter, export_interval_millis=30_000)
+                )
         return readers
 
     def _build_metric_exporter(self, exporter_type):
         from app.core.config import TelemetryExporterType
+
         if exporter_type == TelemetryExporterType.console:
             from opentelemetry.sdk.metrics.export import ConsoleMetricExporter
+
             return ConsoleMetricExporter()
         if exporter_type == TelemetryExporterType.file:
             return _FileMetricExporter(self._config.file)
@@ -114,12 +130,19 @@ class ExporterFactory:
         opts = self._config.otlp
         if opts.protocol == "grpc":
             from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+
             return OTLPMetricExporter(endpoint=opts.endpoint, insecure=opts.insecure)
-        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPMetricExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+            OTLPMetricExporter as OTLPMetricExporterHTTP,
+        )
+
         return OTLPMetricExporterHTTP(endpoint=f"{opts.endpoint}/v1/metrics")
 
     def _build_custom_metric_exporter(self):
-        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPMetricExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+            OTLPMetricExporter as OTLPMetricExporterHTTP,
+        )
+
         endpoint = self._config.custom.endpoint
         return OTLPMetricExporterHTTP(endpoint=f"{endpoint.rstrip('/')}/v1/metrics")
 
@@ -133,8 +156,10 @@ class ExporterFactory:
 
     def _build_log_exporter(self, exporter_type):
         from app.core.config import TelemetryExporterType
+
         if exporter_type == TelemetryExporterType.console:
             from opentelemetry.sdk._logs.export import ConsoleLogExporter
+
             return ConsoleLogExporter()
         if exporter_type == TelemetryExporterType.file:
             return _FileLogExporter(self._config.file)
@@ -150,12 +175,19 @@ class ExporterFactory:
         opts = self._config.otlp
         if opts.protocol == "grpc":
             from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+
             return OTLPLogExporter(endpoint=opts.endpoint, insecure=opts.insecure)
-        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter as OTLPLogExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import (
+            OTLPLogExporter as OTLPLogExporterHTTP,
+        )
+
         return OTLPLogExporterHTTP(endpoint=f"{opts.endpoint}/v1/logs")
 
     def _build_custom_log_exporter(self):
-        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter as OTLPLogExporterHTTP
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import (
+            OTLPLogExporter as OTLPLogExporterHTTP,
+        )
+
         endpoint = self._config.custom.endpoint
         return OTLPLogExporterHTTP(endpoint=f"{endpoint.rstrip('/')}/v1/logs")
 
@@ -177,6 +209,7 @@ class _FileSpanExporter:
 
     def export(self, spans):
         from opentelemetry.sdk.trace.export import SpanExportResult
+
         try:
             for span in spans:
                 self._span_logger.info(str(span))
@@ -205,7 +238,6 @@ class _FileMetricExporter:
 
     @property
     def _preferred_temporality(self):
-        from opentelemetry.sdk.metrics.export import AggregationTemporality
         # Return a dict mapping instrument classes to temporality
         # Using empty dict means default (CUMULATIVE) for all instruments
         return {}
@@ -218,6 +250,7 @@ class _FileMetricExporter:
 
     def export(self, metrics_data, timeout_millis: int = 10_000):
         from opentelemetry.sdk.metrics.export import MetricExportResult
+
         try:
             self._metric_logger.info(str(metrics_data))
             return MetricExportResult.SUCCESS
@@ -240,45 +273,54 @@ class _FileLogExporter:
             opts.path, maxBytes=opts.max_bytes, backupCount=opts.backup_count
         )
         # Set a simple formatter that just writes the message (we'll format it ourselves)
-        formatter = logging.Formatter('%(message)s')
+        formatter = logging.Formatter("%(message)s")
         self._handler.setFormatter(formatter)
-        
+
         self._log_logger = logging.getLogger("otel.logs")
         self._log_logger.addHandler(self._handler)
         self._log_logger.setLevel(logging.DEBUG)
         self._log_logger.propagate = False
 
     def export(self, batch):
-        from opentelemetry.sdk._logs.export import LogExportResult
         from datetime import datetime
+
+        from opentelemetry.sdk._logs.export import LogExportResult
+
         try:
             for readable_log in batch:
                 log_record = readable_log.log_record
-                
+
                 # Format timestamp
-                timestamp = datetime.fromtimestamp(log_record.timestamp / 1e9).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                
+                timestamp = datetime.fromtimestamp(log_record.timestamp / 1e9).strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )[:-3]
+
                 # Get severity/level
-                severity = log_record.severity_text or 'INFO'
-                
+                severity = log_record.severity_text or "INFO"
+
                 # Get logger name from instrumentation scope
-                logger_name = readable_log.instrumentation_scope.name if readable_log.instrumentation_scope else 'root'
-                
+                logger_name = (
+                    readable_log.instrumentation_scope.name
+                    if readable_log.instrumentation_scope
+                    else "root"
+                )
+
                 # Get the actual log message
-                body = log_record.body if log_record.body else ''
-                
+                body = log_record.body if log_record.body else ""
+
                 # Format attributes if present
-                attrs = ''
+                attrs = ""
                 if log_record.attributes:
-                    attrs = ' | ' + ' '.join(f'{k}={v}' for k, v in log_record.attributes.items())
-                
+                    attrs = " | " + " ".join(f"{k}={v}" for k, v in log_record.attributes.items())
+
                 # Format as standard log line
                 log_line = f"{timestamp} - {logger_name} - {severity} - {body}{attrs}"
                 self._log_logger.info(log_line)
-                
+
             return LogExportResult.SUCCESS
         except Exception as e:
             import traceback
+
             self._log_logger.error(f"Failed to export logs: {e}\n{traceback.format_exc()}")
             return LogExportResult.FAILURE
 
@@ -290,7 +332,7 @@ class _FileLogExporter:
         return True
 
 
-def setup_telemetry(config: "TelemetrySettings") -> None:
+def setup_telemetry(config: TelemetrySettings) -> None:
     """Configure TracerProvider, MeterProvider, and LoggerProvider from *config*.
 
     Delegates all exporter construction to ExporterFactory.
@@ -302,9 +344,7 @@ def setup_telemetry(config: "TelemetrySettings") -> None:
         return
 
     all_disabled = (
-        not config.traces_enabled
-        and not config.metrics_enabled
-        and not config.logs_enabled
+        not config.traces_enabled and not config.metrics_enabled and not config.logs_enabled
     )
     if all_disabled:
         logger.info("OpenTelemetry is fully disabled — skipping setup")
@@ -323,6 +363,7 @@ def setup_telemetry(config: "TelemetrySettings") -> None:
         trace.set_tracer_provider(tracer_provider)
     else:
         from opentelemetry.trace import ProxyTracerProvider
+
         trace.set_tracer_provider(ProxyTracerProvider())
         logger.info("Traces disabled — no-op TracerProvider registered")
 
@@ -379,6 +420,7 @@ def _instrument_libraries() -> None:
     """Apply auto-instrumentation patches for FastAPI, SQLAlchemy, Redis, and httpx."""
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
         FastAPIInstrumentor().instrument()
         logger.debug("FastAPI instrumented")
     except Exception as exc:  # pragma: no cover
@@ -386,6 +428,7 @@ def _instrument_libraries() -> None:
 
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
         SQLAlchemyInstrumentor().instrument()
         logger.debug("SQLAlchemy instrumented")
     except Exception as exc:  # pragma: no cover
@@ -393,6 +436,7 @@ def _instrument_libraries() -> None:
 
     try:
         from opentelemetry.instrumentation.redis import RedisInstrumentor
+
         RedisInstrumentor().instrument()
         logger.debug("Redis instrumented")
     except Exception as exc:  # pragma: no cover
@@ -400,6 +444,7 @@ def _instrument_libraries() -> None:
 
     try:
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
         HTTPXClientInstrumentor().instrument()
         logger.debug("httpx instrumented")
     except Exception as exc:  # pragma: no cover

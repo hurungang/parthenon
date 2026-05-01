@@ -1,10 +1,10 @@
 """Pydantic v2 schemas for MCP Hub."""
+
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, StringConstraints
-from typing import Annotated
+from pydantic import BaseModel, StringConstraints
 
 from app.db.models.mcp_hub import McpServerStatus, McpSessionAuthType
 

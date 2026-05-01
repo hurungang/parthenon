@@ -2,14 +2,15 @@
  * TypeScript types and enums for the Permission Management module.
  */
 
+export const PolicyEffect = {
+  Allow: 'allow',
+  Deny: 'deny',
+} as const
+export type PolicyEffect = (typeof PolicyEffect)[keyof typeof PolicyEffect]
+
 export enum TagScope {
   Global = 'global',
   ResourceType = 'resource_type',
-}
-
-export enum PolicyEffect {
-  Allow = 'allow',
-  Deny = 'deny',
 }
 
 export enum AccessRequestStatus {
@@ -58,7 +59,7 @@ export interface PolicyAction {
 export interface PolicyResource {
   id: string
   resource_type: string
-  resource_id?: string
+  resource_id: string | null
 }
 
 export interface PolicyTagCondition {
@@ -81,7 +82,7 @@ export interface PolicyStatementCreate {
   effect: PolicyEffect
   module: string
   actions: { action: string }[]
-  resources: { resource_type: string; resource_id?: string }[]
+  resources: { resource_type: string; resource_id?: string | null }[]
   tag_conditions: { tag_key: string; tag_value: string }[]
 }
 
@@ -98,6 +99,7 @@ export interface Role {
   user_assignment_count: number
   group_assignment_count: number
   policies?: PolicyStatement[]
+  policy_statements?: PolicyStatement[]
 }
 
 export interface RoleCreate {
@@ -190,4 +192,14 @@ export interface AccessRequestBatch {
   justification: string
   submitted_at: string
   requests: AccessRequest[]
+}
+
+export interface RoleCloneCreate {
+  name: string
+  description?: string
+}
+
+export interface ResourceTypeDef {
+  resource_type: string
+  actions: string[]
 }

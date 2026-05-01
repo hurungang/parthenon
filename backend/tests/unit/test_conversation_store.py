@@ -1,16 +1,18 @@
 """
 Test ConversationStore: add_turn persists in order, tool call records linked to turns.
 """
+
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_conversation_store_add_turn_calls_db_add():
     """ConversationStore.add_turn() adds a ConversationTurn via db.add()."""
+    from app.db.models.conversations import ConversationTurn, TurnRole
     from app.services.conversations.store import ConversationStore
-    from app.db.models.conversations import TurnRole, ConversationTurn
 
     session_id = uuid.uuid4()
     turn = MagicMock(spec=ConversationTurn)
@@ -32,7 +34,7 @@ async def test_conversation_store_add_turn_calls_db_add():
         "app.services.conversations.store.ConversationTurn", return_value=turn
     ):
         store = ConversationStore()
-        result = await store.add_turn(session_id, TurnRole.user, "Hello agent", mock_db)
+        await store.add_turn(session_id, TurnRole.user, "Hello agent", mock_db)
 
     mock_db.add.assert_called_once_with(turn)
 
@@ -40,8 +42,8 @@ async def test_conversation_store_add_turn_calls_db_add():
 @pytest.mark.asyncio
 async def test_conversation_store_add_tool_call():
     """ConversationStore.add_tool_call() persists a ToolCallRecord linked to the turn."""
-    from app.services.conversations.store import ConversationStore
     from app.db.models.conversations import ToolCallRecord
+    from app.services.conversations.store import ConversationStore
 
     turn_id = uuid.uuid4()
     record = MagicMock(spec=ToolCallRecord)
@@ -56,6 +58,6 @@ async def test_conversation_store_add_tool_call():
         "app.services.conversations.store.ToolCallRecord", return_value=record
     ):
         store = ConversationStore()
-        result = await store.add_tool_call(turn_id, "my-server/toolA", mock_db)
+        await store.add_tool_call(turn_id, "my-server/toolA", mock_db)
 
     mock_db.add.assert_called_once_with(record)

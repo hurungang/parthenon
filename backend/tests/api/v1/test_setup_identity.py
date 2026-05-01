@@ -1,4 +1,5 @@
 """Unit tests for the Setup Identity API endpoints."""
+
 from __future__ import annotations
 
 import os
@@ -14,8 +15,6 @@ os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.main import create_app
 from app.schemas.identity_bootstrap import (
-    IdentityStatusResponse,
-    ProviderSetupResult,
     SetupState,
 )
 from app.services.identity.keycloak_admin_client import KeycloakAdminError
@@ -60,7 +59,9 @@ class TestGetIdentityStatus:
             mock_instance.check_setup_state = AsyncMock(return_value=SetupState.NOT_CONFIGURED)
             mock_instance.get_current_config = AsyncMock(return_value=None)
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/setup/identity-status")
 
         assert response.status_code == 200
@@ -88,7 +89,9 @@ class TestGetIdentityStatus:
             mock_instance.check_setup_state = AsyncMock(return_value=SetupState.CONFIGURED)
             mock_instance.get_current_config = AsyncMock(return_value=mock_config)
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/setup/identity-status")
 
         assert response.status_code == 200
@@ -124,7 +127,9 @@ class TestProvisionIdentity:
                 "provider_type": "keycloak_bundled",
                 "force_reconfigure": False,
             }
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post("/api/v1/setup/identity", json=payload)
 
         assert response.status_code == 409
@@ -159,7 +164,9 @@ class TestProvisionIdentity:
                 "admin_password": "secret",
                 "force_reconfigure": False,
             }
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post("/api/v1/setup/identity", json=payload)
 
         assert response.status_code == 502

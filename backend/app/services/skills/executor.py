@@ -1,4 +1,5 @@
 """Skill Executor — resolves MCP tool bindings and executes skill via McpProxyEngine."""
+
 import logging
 from typing import Any
 
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.models.mcp_hub import McpTool
-from app.db.models.skills import Skill, SkillToolBinding
+from app.db.models.skills import Skill
 from app.services.mcp.proxy import McpProxyEngine, McpProxyError
 
 logger = logging.getLogger(__name__)
@@ -46,9 +47,7 @@ class SkillExecutor:
         """
         # Load skill with bindings
         result = await db.execute(
-            select(Skill)
-            .where(Skill.id == skill_id)
-            .options(selectinload(Skill.tool_bindings))
+            select(Skill).where(Skill.id == skill_id).options(selectinload(Skill.tool_bindings))
         )
         skill = result.scalar_one_or_none()
         if not skill:

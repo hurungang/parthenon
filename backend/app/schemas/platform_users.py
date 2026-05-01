@@ -1,7 +1,7 @@
 """Pydantic v2 schemas for PlatformUser management."""
+
 import uuid
 from datetime import datetime
-from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -33,8 +33,8 @@ class GroupMembershipRead(BaseModel):
 class PlatformUserDetail(PlatformUserRead):
     """Full user detail with roles and group memberships."""
 
-    direct_roles: List[PermRoleRead] = Field(default_factory=list)
-    group_memberships: List[GroupMembershipRead] = Field(default_factory=list)
+    direct_roles: list[PermRoleRead] = Field(default_factory=list)
+    group_memberships: list[GroupMembershipRead] = Field(default_factory=list)
 
 
 class AssignUserRoleBody(BaseModel):

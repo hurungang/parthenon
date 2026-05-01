@@ -1,6 +1,6 @@
 """Tag Definition API router."""
+
 import uuid
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 
@@ -13,11 +13,11 @@ from app.services.permissions.tag_registry import TagRegistry
 TagsRouter = APIRouter(prefix="/user-tags", tags=["Permissions: Tags"])
 
 
-@TagsRouter.get("/definitions", response_model=List[TagDefinitionRead])
+@TagsRouter.get("/definitions", response_model=list[TagDefinitionRead])
 async def list_tag_definitions(
     db: DbSession,
-    scope: Optional[str] = Query(default=None),
-    resource_type: Optional[str] = Query(default=None),
+    scope: str | None = Query(default=None),
+    resource_type: str | None = Query(default=None),
 ) -> list:
     """List tag definitions; filterable by scope and resource_type. Any authenticated user."""
     return await TagRegistry().list_definitions(db, scope=scope, resource_type=resource_type)

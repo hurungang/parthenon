@@ -2,15 +2,18 @@
 Test CredentialVault encrypt/decrypt and GatewayEndpointRegistry route registration.
 (McpSession CRUD goes through the API layer which uses CredentialVault under the hood.)
 """
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+
 import uuid
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_credential_vault_encrypt_decrypt_roundtrip():
     """CredentialVault: encrypt returns ciphertext; decrypt returns original plaintext."""
     from app.core.credential_vault import CredentialVault
+
     vault = CredentialVault()
     plaintext = '{"api_key": "secret-value"}'
     ciphertext = vault.encrypt(plaintext)
@@ -22,6 +25,7 @@ async def test_credential_vault_encrypt_decrypt_roundtrip():
 async def test_credential_vault_ciphertext_differs_from_input():
     """CredentialVault: the stored ciphertext should not contain plaintext."""
     from app.core.credential_vault import CredentialVault
+
     vault = CredentialVault()
     plaintext = "super-secret-token-12345"
     ciphertext = vault.encrypt(plaintext)

@@ -1,4 +1,5 @@
 """Pydantic schemas for the telemetry config API."""
+
 from pydantic import BaseModel
 
 

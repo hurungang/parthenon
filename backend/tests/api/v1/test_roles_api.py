@@ -1,4 +1,5 @@
 """API tests for roles endpoints."""
+
 from __future__ import annotations
 
 import os
@@ -13,14 +14,13 @@ os.environ.setdefault("ENVIRONMENT", "test")
 
 from httpx import ASGITransport, AsyncClient
 
-from app.main import create_app
+from app.api.deps import require_permission
 from app.db.session import get_db
-from app.api.deps import require_admin, require_permission
+from app.main import create_app
 from app.middleware.auth import JWTAuthMiddleware
 
 
 def _bypass_auth(admin: bool = True):
-    from unittest.mock import patch
 
     async def patched_dispatch(self, request, call_next):
         request.state.identity = {"sub": "user-sub", "roles": ["admin"] if admin else []}
@@ -31,11 +31,13 @@ def _bypass_auth(admin: bool = True):
 
 def _db_override():
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=MagicMock(
-        scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))),
-        scalar_one=MagicMock(return_value=0),
-        scalar_one_or_none=MagicMock(return_value=None),
-    ))
+    mock_session.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))),
+            scalar_one=MagicMock(return_value=0),
+            scalar_one_or_none=MagicMock(return_value=None),
+        )
+    )
 
     async def override():
         yield mock_session
@@ -46,13 +48,16 @@ def _db_override():
 def _admin_override():
     def override():
         return {"sub": "admin-sub", "roles": ["admin"]}
+
     return override
 
 
 def _nonadmin_override():
     def override():
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403, detail="Admin access required.")
+
     return override
 
 
@@ -100,9 +105,11 @@ async def test_create_role_as_admin_returns_201():
     app.dependency_overrides[require_permission("permissions", "manage")] = _admin_override()
 
     # Mock scalar_one_or_none to return None (role doesn't exist yet)
-    mock_session.execute = AsyncMock(return_value=MagicMock(
-        scalar_one_or_none=MagicMock(return_value=None),
-    ))
+    mock_session.execute = AsyncMock(
+        return_value=MagicMock(
+            scalar_one_or_none=MagicMock(return_value=None),
+        )
+    )
     mock_session.add = MagicMock()
     mock_session.flush = AsyncMock()
 

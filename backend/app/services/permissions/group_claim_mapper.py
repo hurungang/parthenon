@@ -1,7 +1,7 @@
 """Group Claim Mapper — maps JWT group claims to UserGroup memberships."""
+
 import logging
 import uuid
-from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +19,8 @@ class GroupClaimMapper:
         self,
         db: AsyncSession,
         user_id: uuid.UUID,
-        jwt_claims: List[str],
-    ) -> List[uuid.UUID]:
+        jwt_claims: list[str],
+    ) -> list[uuid.UUID]:
         """Map JWT group claims to UserGroup records.
 
         Queries Group records whose idp_claim_value appears in jwt_claims.
@@ -31,9 +31,7 @@ class GroupClaimMapper:
             return []
 
         # Find groups whose idp_claim_value matches any JWT claim
-        result = await db.execute(
-            select(Group).where(Group.idp_claim_value.in_(jwt_claims))
-        )
+        result = await db.execute(select(Group).where(Group.idp_claim_value.in_(jwt_claims)))
         matched_groups = result.scalars().all()
         if not matched_groups:
             return []
@@ -44,7 +42,7 @@ class GroupClaimMapper:
         )
         existing_group_ids = set(existing_result.scalars().all())
 
-        newly_assigned: List[uuid.UUID] = []
+        newly_assigned: list[uuid.UUID] = []
         for group in matched_groups:
             if group.id not in existing_group_ids:
                 membership = UserGroup(

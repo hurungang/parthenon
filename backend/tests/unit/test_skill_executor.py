@@ -1,15 +1,16 @@
 """Unit tests for SkillExecutor."""
+
 import os
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 os.environ.setdefault("CREDENTIAL_VAULT_KEY", "test-32-byte-key-for-aes-256-enc!")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
-from app.services.skills.executor import SkillExecutor, SkillExecutionError
 from app.services.mcp.proxy import McpProxyEngine
+from app.services.skills.executor import SkillExecutionError, SkillExecutor
 
 
 class TestSkillExecutor:

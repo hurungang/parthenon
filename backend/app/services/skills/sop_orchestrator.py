@@ -1,4 +1,5 @@
 """SOP Orchestrator — executes ordered SOP steps invoking SkillExecutor or agent delegation."""
+
 import logging
 from typing import Any
 
@@ -46,9 +47,7 @@ class SopOrchestrator:
         """
         # Load SOP with steps
         result = await db.execute(
-            select(Sop)
-            .where(Sop.id == sop_id)
-            .options(selectinload(Sop.steps))
+            select(Sop).where(Sop.id == sop_id).options(selectinload(Sop.steps))
         )
         sop = result.scalar_one_or_none()
         if not sop:
@@ -93,12 +92,8 @@ class SopOrchestrator:
         """Execute a single SOP step."""
         if step.step_type == SopStepType.skill:
             if not step.skill_id:
-                raise SopOrchestratorError(
-                    f"Step {step.id} is type 'skill' but has no skill_id"
-                )
-            logger.info(
-                "Executing skill step (order=%d, skill_id=%s)", step.order, step.skill_id
-            )
+                raise SopOrchestratorError(f"Step {step.id} is type 'skill' but has no skill_id")
+            logger.info("Executing skill step (order=%d, skill_id=%s)", step.order, step.skill_id)
             tool_results = await self._skill_executor.execute(
                 skill_id=step.skill_id,
                 tool_input=context,
@@ -112,7 +107,6 @@ class SopOrchestrator:
                     f"Step {step.id} is type 'agent_delegation' but has no delegate_agent_type_id"
                 )
             # Import here to avoid circular dependency
-            from app.services.agents.instance_manager import AgentInstanceManager
 
             logger.info(
                 "Delegating to agent type %s (step order=%d)",

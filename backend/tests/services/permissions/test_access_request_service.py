@@ -1,4 +1,5 @@
 """Unit tests for AccessRequestService — group-optional access request behaviour."""
+
 from __future__ import annotations
 
 import uuid
@@ -23,6 +24,7 @@ def _make_service() -> AccessRequestService:
 # ---------------------------------------------------------------------------
 # Task 4.1 test cases
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 class TestSubmitBatchRequestGroupLess:
@@ -81,7 +83,9 @@ class TestApproveRequestGroupAssignment:
 
         assert exc_info.value.status_code == 400
 
-    async def test_approve_group_less_with_group_id_assigns_group_and_creates_membership(self, db_session):
+    async def test_approve_group_less_with_group_id_assigns_group_and_creates_membership(
+        self, db_session
+    ):
         """Approving a group-less request with a valid group_id sets
         request.group_id and creates a UserGroup membership row."""
         user_id = uuid.uuid4()
@@ -110,7 +114,9 @@ class TestApproveRequestGroupAssignment:
         membership = membership_result.scalar_one_or_none()
         assert membership is not None
 
-    async def test_approve_request_with_existing_group_id_succeeds_without_body_group(self, db_session):
+    async def test_approve_request_with_existing_group_id_succeeds_without_body_group(
+        self, db_session
+    ):
         """Approving a request that already has a group_id stored succeeds even
         when no group_id is passed to the service method."""
         user_id = uuid.uuid4()
@@ -118,7 +124,9 @@ class TestApproveRequestGroupAssignment:
         stored_group_id = uuid.uuid4()
         svc = _make_service()
 
-        batch = await svc.submit_batch_request(db_session, user_id, [stored_group_id], "Need access")
+        batch = await svc.submit_batch_request(
+            db_session, user_id, [stored_group_id], "Need access"
+        )
         result = await db_session.execute(
             select(AccessRequest).where(AccessRequest.batch_id == batch.id)
         )

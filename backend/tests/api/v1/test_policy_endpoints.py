@@ -1,4 +1,5 @@
 """API tests for policy utility endpoints and role clone endpoint."""
+
 from __future__ import annotations
 
 import os
@@ -12,13 +13,13 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.main import create_app
-from app.db.session import get_db
 from app.api.deps import require_permission
+from app.core.resource_types import RT_ROLE, ResourceTypeManifest
+from app.db.session import get_db
+from app.main import create_app
 from app.middleware.auth import JWTAuthMiddleware
-from app.core.resource_types import ResourceTypeManifest, RT_ROLE
 
 
 def _bypass_auth():
@@ -34,9 +35,7 @@ def _make_mock_db():
     mock_session = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none = MagicMock(return_value=None)
-    mock_result.scalars = MagicMock(
-        return_value=MagicMock(all=MagicMock(return_value=[]))
-    )
+    mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
     mock_result.scalar_one = MagicMock(return_value=0)
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.add = MagicMock()
@@ -105,9 +104,7 @@ class TestListResourceTypes:
         app.dependency_overrides[get_db] = db_dep
         # No auth bypass — real middleware rejects requests without a valid JWT
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/v1/policy/resource-types")
 
         assert response.status_code == 401
@@ -134,9 +131,9 @@ class TestGetRoleWithPolicies:
     async def test_get_role_includes_policy_statements(self, test_engine):
         """GET /api/v1/user-roles/{id} returns policy_statements array with actions, resources, and tag_conditions."""
         from app.db.models.identity import Role
-        from app.db.models.policy_statement import PolicyStatement
         from app.db.models.policy_action import PolicyAction
         from app.db.models.policy_resource import PolicyResource
+        from app.db.models.policy_statement import PolicyStatement
         from app.db.models.policy_tag_condition import PolicyTagCondition
 
         TestSession = async_sessionmaker(
@@ -154,14 +151,16 @@ class TestGetRoleWithPolicies:
             await session.flush()
             session.add(PolicyAction(policy_statement_id=stmt1.id, action="read"))
             session.add(PolicyAction(policy_statement_id=stmt1.id, action="execute"))
-            session.add(PolicyResource(
-                policy_statement_id=stmt1.id,
-                resource_type="agent",
-                resource_id="agent-123",
-            ))
-            session.add(PolicyTagCondition(
-                policy_statement_id=stmt1.id, tag_key="env", tag_value="prod"
-            ))
+            session.add(
+                PolicyResource(
+                    policy_statement_id=stmt1.id,
+                    resource_type="agent",
+                    resource_id="agent-123",
+                )
+            )
+            session.add(
+                PolicyTagCondition(policy_statement_id=stmt1.id, tag_key="env", tag_value="prod")
+            )
 
             stmt2 = PolicyStatement(role_id=role.id, effect="deny", module="role")
             session.add(stmt2)
@@ -197,7 +196,9 @@ class TestGetRoleWithPolicies:
         assert data["name"] == f"test-get-policies-{role_id}"
 
         # Critical: policy_statements field must exist and be non-empty
-        assert "policy_statements" in data, "GET /user-roles/{id} must return policy_statements field"
+        assert "policy_statements" in data, (
+            "GET /user-roles/{id} must return policy_statements field"
+        )
         stmts = data["policy_statements"]
         assert len(stmts) == 2, f"Expected 2 policy statements, got {len(stmts)}"
 
@@ -251,9 +252,9 @@ class TestUpdatePolicyStatement:
     async def test_update_policy_statement(self, test_engine):
         """PATCH /api/v1/user-roles/{role_id}/policies/{policy_id} updates actions and resources."""
         from app.db.models.identity import Role
-        from app.db.models.policy_statement import PolicyStatement
         from app.db.models.policy_action import PolicyAction
         from app.db.models.policy_resource import PolicyResource
+        from app.db.models.policy_statement import PolicyStatement
 
         TestSession = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -270,11 +271,13 @@ class TestUpdatePolicyStatement:
             session.add(stmt)
             await session.flush()
             session.add(PolicyAction(policy_statement_id=stmt.id, action="read"))
-            session.add(PolicyResource(
-                policy_statement_id=stmt.id,
-                resource_type="agent",
-                resource_id="old-resource",
-            ))
+            session.add(
+                PolicyResource(
+                    policy_statement_id=stmt.id,
+                    resource_type="agent",
+                    resource_id="old-resource",
+                )
+            )
             await session.commit()
 
         app = create_app()
@@ -328,8 +331,8 @@ class TestUpdatePolicyStatement:
     async def test_update_policy_statement_reflected_in_get_role(self, test_engine):
         """After PATCH, GET /user-roles/{id} returns the updated policy_statements."""
         from app.db.models.identity import Role
-        from app.db.models.policy_statement import PolicyStatement
         from app.db.models.policy_action import PolicyAction
+        from app.db.models.policy_statement import PolicyStatement
 
         TestSession = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -393,8 +396,8 @@ class TestUpdatePolicyStatement:
     async def test_update_policy_statement_returns_404_for_wrong_role(self, test_engine):
         """PATCH returns 404 when policy_id belongs to a different role."""
         from app.db.models.identity import Role
-        from app.db.models.policy_statement import PolicyStatement
         from app.db.models.policy_action import PolicyAction
+        from app.db.models.policy_statement import PolicyStatement
 
         TestSession = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -524,10 +527,11 @@ class TestCloneRole:
     @pytest.mark.asyncio
     async def test_clone_creates_new_role_with_copied_statements(self, test_engine):
         """POST clone creates a new role and deep-copies all policy statements."""
-        from app.db.models.identity import Role
-        from app.db.models.policy_statement import PolicyStatement
-        from app.db.models.policy_action import PolicyAction
         from sqlalchemy import select
+
+        from app.db.models.identity import Role
+        from app.db.models.policy_action import PolicyAction
+        from app.db.models.policy_statement import PolicyStatement
 
         TestSession = async_sessionmaker(
             bind=test_engine, class_=AsyncSession, expire_on_commit=False
@@ -578,23 +582,27 @@ class TestCloneRole:
         # Verify clone has same number of statements as source
         async with TestSession() as session:
             cloned_stmts = (
-                await session.execute(
-                    select(PolicyStatement).where(
-                        PolicyStatement.role_id == new_role_id
+                (
+                    await session.execute(
+                        select(PolicyStatement).where(PolicyStatement.role_id == new_role_id)
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             assert len(cloned_stmts) == 1
             assert cloned_stmts[0].module == "agent"
             assert cloned_stmts[0].effect == "allow"
             # Source statements unchanged
             src_stmts = (
-                await session.execute(
-                    select(PolicyStatement).where(
-                        PolicyStatement.role_id == source_id
+                (
+                    await session.execute(
+                        select(PolicyStatement).where(PolicyStatement.role_id == source_id)
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             assert len(src_stmts) == 1
 
     @pytest.mark.asyncio
@@ -680,9 +688,7 @@ class TestCloneRole:
         assert response.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_clone_inherits_description_from_source_when_not_provided(
-        self, test_engine
-    ):
+    async def test_clone_inherits_description_from_source_when_not_provided(self, test_engine):
         """When description is omitted in body, clone inherits description from source role."""
         from app.db.models.identity import Role
 

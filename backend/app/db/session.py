@@ -1,4 +1,5 @@
 """Async SQLAlchemy session factory."""
+
 from collections.abc import AsyncGenerator
 from typing import Annotated
 

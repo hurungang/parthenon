@@ -1,4 +1,5 @@
 """SQLAlchemy models for Conversations: ConversationSession, ConversationTurn, ToolCallRecord."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -40,17 +41,13 @@ class ConversationSession(Base):
 
     __tablename__ = "conversation_sessions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_instance_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_instances.id", ondelete="SET NULL"),
         nullable=True,
     )
-    agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    agent_type_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     initiator_subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
     channel: Mapped[str] = mapped_column(String(50), nullable=False, default="web")
     status: Mapped[ConversationStatus] = mapped_column(
@@ -81,17 +78,13 @@ class ConversationTurn(Base):
 
     __tablename__ = "conversation_turns"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("conversation_sessions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    role: Mapped[TurnRole] = mapped_column(
-        Enum(TurnRole, name="turn_role_enum"), nullable=False
-    )
+    role: Mapped[TurnRole] = mapped_column(Enum(TurnRole, name="turn_role_enum"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -115,9 +108,7 @@ class ToolCallRecord(Base):
 
     __tablename__ = "tool_call_records"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     turn_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("conversation_turns.id", ondelete="CASCADE"),
@@ -133,9 +124,7 @@ class ToolCallRecord(Base):
     )
 
     # Relationships
-    turn: Mapped["ConversationTurn"] = relationship(
-        "ConversationTurn", back_populates="tool_calls"
-    )
+    turn: Mapped["ConversationTurn"] = relationship("ConversationTurn", back_populates="tool_calls")
 
     def __repr__(self) -> str:
         return f"<ToolCallRecord id={self.id} tool_name={self.tool_name}>"

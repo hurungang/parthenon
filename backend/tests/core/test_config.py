@@ -1,4 +1,5 @@
 """Unit tests for Settings and _SparseYamlSource in app.core.config."""
+
 import os
 from pathlib import Path
 
@@ -23,7 +24,9 @@ def clear_settings_cache():
 class TestSparseYamlSource:
     """Tests for _SparseYamlSource behaviour via Settings loading."""
 
-    def test_yaml_provider_type_loaded(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_yaml_provider_type_loaded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """YAML file with provider_type: keycloak_bundled → settings.identity_provider_type == 'keycloak_bundled'."""
         yaml_file = tmp_path / "test_identity.yaml"
         yaml_file.write_text("provider_type: keycloak_bundled\n", encoding="utf-8")
@@ -46,7 +49,9 @@ class TestSparseYamlSource:
         settings = Settings()
         assert settings.identity_provider_type == "keycloak_external"
 
-    def test_default_when_both_absent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_when_both_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Both YAML and env var absent → identity_provider_type defaults to 'unconfigured'."""
         # Point to a non-existent file so YAML is absent
         monkeypatch.setenv("IDENTITY_YAML_PATH", str(tmp_path / "nonexistent.yaml"))

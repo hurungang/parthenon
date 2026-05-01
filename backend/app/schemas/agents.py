@@ -1,11 +1,12 @@
 """Pydantic v2 schemas for Agent management."""
+
 import uuid
 from datetime import datetime
-
-from pydantic import BaseModel, Field, StringConstraints
 from typing import Annotated
 
-from app.db.models.agents import AgentMode, AgentInstanceStatus
+from pydantic import BaseModel, Field, StringConstraints
+
+from app.db.models.agents import AgentInstanceStatus, AgentMode
 
 
 class AgentTypeCreate(BaseModel):

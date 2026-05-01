@@ -1,6 +1,7 @@
 """Results API router — query endpoints for the result repository."""
-import uuid
+
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 

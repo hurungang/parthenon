@@ -1,4 +1,5 @@
 """OIDC client — fetches JWKS and validates JWT tokens."""
+
 import logging
 import time
 from typing import Any
@@ -34,19 +35,19 @@ class OIDCClient:
         """Fetch JWKS URI from OIDC discovery endpoint."""
         if self._jwks_uri_cache:
             return self._jwks_uri_cache
-        
+
         discovery_url = f"{self._provider_url}/.well-known/openid-configuration"
         logger.debug("OIDC: Fetching discovery document from %s", discovery_url)
-        
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(discovery_url)
             response.raise_for_status()
             config: dict[str, Any] = response.json()
-        
+
         jwks_uri = config.get("jwks_uri")
         if not jwks_uri:
             raise OIDCError("Discovery document missing jwks_uri")
-        
+
         logger.info("OIDC: JWKS URI discovered: %s", jwks_uri)
         self._jwks_uri_cache = jwks_uri
         return jwks_uri
@@ -60,7 +61,7 @@ class OIDCClient:
 
         jwks_uri = await self._get_jwks_uri()
         logger.debug("OIDC: Fetching JWKS from %s", jwks_uri)
-        
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(jwks_uri)
             response.raise_for_status()
@@ -87,7 +88,9 @@ class OIDCClient:
         try:
             # Decode header without verification to get kid
             header = jwt.get_unverified_header(token)
-            logger.debug("OIDC: JWT header decoded, kid=%s, alg=%s", header.get("kid"), header.get("alg"))
+            logger.debug(
+                "OIDC: JWT header decoded, kid=%s, alg=%s", header.get("kid"), header.get("alg")
+            )
         except JWTError as exc:
             logger.error("OIDC: Invalid JWT header: %s", exc)
             raise OIDCError(f"Invalid JWT header: {exc}") from exc
@@ -118,7 +121,12 @@ class OIDCClient:
             raise OIDCError(f"Unknown key id: {kid}")
 
         jwk = jwks[kid]
-        logger.debug("OIDC: Decoding token with kid=%s, algorithm=%s, audience=%s", kid, self._algorithm, self._audience)
+        logger.debug(
+            "OIDC: Decoding token with kid=%s, algorithm=%s, audience=%s",
+            kid,
+            self._algorithm,
+            self._audience,
+        )
         try:
             claims: dict[str, Any] = jwt.decode(
                 token,
@@ -127,7 +135,11 @@ class OIDCClient:
                 audience=self._audience,
                 options={"verify_aud": False},  # audience can be configured per environment
             )
-            logger.debug("OIDC: Token decoded successfully, sub=%s, exp=%s", claims.get("sub"), claims.get("exp"))
+            logger.debug(
+                "OIDC: Token decoded successfully, sub=%s, exp=%s",
+                claims.get("sub"),
+                claims.get("exp"),
+            )
         except JWTError as exc:
             logger.error("OIDC: JWT validation failed: %s", exc, exc_info=True)
             raise OIDCError(f"JWT validation failed: {exc}") from exc
@@ -136,7 +148,12 @@ class OIDCClient:
         now_ts = time.time()
         exp = claims.get("exp", 0)
         if exp < now_ts:
-            logger.warning("OIDC: Token has expired (exp=%s, now=%s, diff=%s seconds)", exp, now_ts, now_ts - exp)
+            logger.warning(
+                "OIDC: Token has expired (exp=%s, now=%s, diff=%s seconds)",
+                exp,
+                now_ts,
+                now_ts - exp,
+            )
             raise OIDCError("Token has expired")
 
         logger.info("OIDC: Token validation successful for sub=%s", claims.get("sub"))

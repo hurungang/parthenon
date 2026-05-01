@@ -1,10 +1,10 @@
 """Pydantic v2 schemas for Skills and SOPs."""
+
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
-from typing import Annotated
 
 from app.db.models.skills import SopStepType
 

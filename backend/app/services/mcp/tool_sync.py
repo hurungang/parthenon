@@ -1,7 +1,7 @@
 """Tool Sync Service — fetches tool list from MCP server and upserts records."""
-import json
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -60,7 +60,9 @@ class ToolSyncService:
 
             if existing:
                 existing.description = tool_data.get("description")
-                existing.input_schema = tool_data.get("inputSchema") or tool_data.get("input_schema")
+                existing.input_schema = tool_data.get("inputSchema") or tool_data.get(
+                    "input_schema"
+                )
                 existing.is_active = True
                 updated += 1
             else:
@@ -90,12 +92,15 @@ class ToolSyncService:
                 deactivated += 1
 
         # Update server sync timestamp
-        server.last_synced_at = datetime.now(timezone.utc)
+        server.last_synced_at = datetime.now(UTC)
         server.status = McpServerStatus.active
         await db.flush()
 
         logger.info(
             "Synced tools for server %s: +%d updated=%d deactivated=%d",
-            server.slug, added, updated, deactivated,
+            server.slug,
+            added,
+            updated,
+            deactivated,
         )
         return {"added": added, "updated": updated, "deactivated": deactivated}

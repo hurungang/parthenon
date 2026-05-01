@@ -1,4 +1,5 @@
 """Unit tests for KeycloakAdminClient."""
+
 from __future__ import annotations
 
 import os
@@ -17,7 +18,6 @@ from app.services.identity.keycloak_admin_client import (
     KeycloakAdminError,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -26,7 +26,9 @@ _BASE_URL = "http://keycloak.example.com"
 _TOKEN = AdminToken(access_token="test-access-token", token_type="Bearer")
 
 
-def _make_mock_response(status_code: int, json_data: dict | None = None, text: str = "") -> MagicMock:
+def _make_mock_response(
+    status_code: int, json_data: dict | None = None, text: str = ""
+) -> MagicMock:
     """Create a mock httpx.Response."""
     response = MagicMock()
     response.status_code = status_code
@@ -130,7 +132,7 @@ class TestCreateRealm:
         # realm_exists → GET 200 (realm exists)
         mock_cm = _make_mock_async_client(_make_mock_response(200, {}))
 
-        with patch(_PATCH_TARGET, return_value=mock_cm) as mock_cls:
+        with patch(_PATCH_TARGET, return_value=mock_cm):
             client = KeycloakAdminClient(_BASE_URL)
             await client.create_realm(_TOKEN, "existing-realm")
 

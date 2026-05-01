@@ -1,9 +1,10 @@
 """SQLAlchemy models for Scheduling: ScheduledJob, JobExecution."""
+
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,9 +39,7 @@ class ScheduledJob(Base):
 
     __tablename__ = "scheduled_jobs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -79,9 +78,7 @@ class JobExecution(Base):
 
     __tablename__ = "job_executions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("scheduled_jobs.id", ondelete="CASCADE"), nullable=False
     )

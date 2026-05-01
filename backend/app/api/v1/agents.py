@@ -1,7 +1,8 @@
 """Agent management API routers: AgentType and AgentInstance."""
+
 import json
-import uuid
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -9,15 +10,14 @@ from sqlalchemy import select
 from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
 from app.core.resource_types import RT_AGENT
-from app.db.session import DbSession
 from app.db.models.agents import (
     AgentInstance,
-    AgentInstanceStatus,
     AgentMode,
     AgentSkillAssignment,
     AgentType,
 )
 from app.db.models.skills import Skill, Sop
+from app.db.session import DbSession
 from app.schemas.agents import AgentInstanceRead, AgentTypeCreate, AgentTypeRead, AgentTypeUpdate
 from app.services.agents.instance_manager import AgentInstanceManager
 
@@ -28,6 +28,7 @@ AgentInstanceRouter = APIRouter(prefix="/agents/instances", tags=["Agents"])
 
 
 # ── Agent Type Endpoints ───────────────────────────────────────────────────────
+
 
 @AgentTypeRouter.get("", response_model=list[AgentTypeRead])
 async def list_agent_types(
@@ -46,9 +47,7 @@ async def create_agent_type(
 ) -> AgentType:
     # Validate: sop-agent must have sop_id
     if body.mode == AgentMode.sop_agent and not body.sop_id:
-        raise HTTPException(
-            status_code=422, detail="sop-agent type requires a sop_id"
-        )
+        raise HTTPException(status_code=422, detail="sop-agent type requires a sop_id")
 
     # Validate SOP exists
     if body.sop_id:
@@ -61,9 +60,7 @@ async def create_agent_type(
         for skill_id in body.skill_ids:
             skill = await db.get(Skill, skill_id)
             if not skill:
-                raise HTTPException(
-                    status_code=422, detail=f"Skill {skill_id} not found"
-                )
+                raise HTTPException(status_code=422, detail=f"Skill {skill_id} not found")
 
     # Encrypt LLM credentials if provided
     encrypted_creds = None
@@ -86,10 +83,8 @@ async def create_agent_type(
     await db.flush()
 
     # Create skill assignments
-    for skill_id in (body.skill_ids or []):
-        assignment = AgentSkillAssignment(
-            agent_type_id=agent_type.id, skill_id=skill_id
-        )
+    for skill_id in body.skill_ids or []:
+        assignment = AgentSkillAssignment(agent_type_id=agent_type.id, skill_id=skill_id)
         db.add(assignment)
 
     await db.flush()
@@ -133,9 +128,7 @@ async def update_agent_type(
     if body.skill_ids is not None:
         # Remove existing assignments
         existing = await db.execute(
-            select(AgentSkillAssignment).where(
-                AgentSkillAssignment.agent_type_id == type_id
-            )
+            select(AgentSkillAssignment).where(AgentSkillAssignment.agent_type_id == type_id)
         )
         for assignment in existing.scalars().all():
             await db.delete(assignment)
@@ -179,6 +172,7 @@ async def list_agent_instances(
 
 
 # ── Agent Instance Endpoints ───────────────────────────────────────────────────
+
 
 @AgentInstanceRouter.delete("/{instance_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def terminate_agent_instance(

@@ -1,4 +1,5 @@
 """SQLAlchemy 2 model for IdentityProviderSetupState (single-row sentinel)."""
+
 import uuid
 from datetime import datetime
 
@@ -19,18 +20,14 @@ class IdentityProviderSetupState(Base):
 
     __tablename__ = "identity_provider_setup_state"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     is_setup_complete: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
         server_default=sa.text("false"),
     )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("identities.id", ondelete="SET NULL"),
@@ -39,6 +36,5 @@ class IdentityProviderSetupState(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<IdentityProviderSetupState id={self.id} "
-            f"is_setup_complete={self.is_setup_complete}>"
+            f"<IdentityProviderSetupState id={self.id} is_setup_complete={self.is_setup_complete}>"
         )

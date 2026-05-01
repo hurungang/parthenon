@@ -1,8 +1,9 @@
 """HTTP Gateway Transport and GatewayRouter — lifecycle endpoints over HTTP."""
-import uuid
-import logging
 
-from fastapi import APIRouter, HTTPException, Request, status
+import logging
+import uuid
+
+from fastapi import APIRouter, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -11,7 +12,6 @@ from app.schemas.gateway import (
     GatewayAnswerPayload,
     GatewayAnswerResponse,
     GatewayCloseResponse,
-    GatewayInitRequest,
     GatewayInitResponse,
     GatewayQuestionResponse,
     GatewayRequestPayload,

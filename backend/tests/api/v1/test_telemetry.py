@@ -1,4 +1,5 @@
 """API tests for GET /api/v1/telemetry/config."""
+
 from __future__ import annotations
 
 import os
@@ -18,6 +19,7 @@ from app.middleware.auth import JWTAuthMiddleware
 
 def _bypass_auth():
     """Patch JWTAuthMiddleware to inject identity claims without a real token."""
+
     async def patched_dispatch(self, request, call_next):
         request.state.identity = {"sub": "test-user", "roles": ["user"]}
         return await call_next(request)
@@ -40,9 +42,7 @@ async def test_telemetry_config_endpoint_authenticated() -> None:
     """Authenticated GET /api/v1/telemetry/config returns 200 with correct schema."""
     app = create_app()
     with _bypass_auth():
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/v1/telemetry/config")
 
     assert response.status_code == 200
@@ -61,9 +61,7 @@ async def test_telemetry_config_endpoint_unauthenticated() -> None:
     """Unauthenticated GET /api/v1/telemetry/config returns 401."""
     app = create_app()
     with _block_auth():
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/v1/telemetry/config")
 
     assert response.status_code == 401
@@ -75,6 +73,7 @@ async def test_telemetry_config_returns_service_name(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("TELEMETRY__SERVICE_NAME", "my-test-service")
 
     from app.core.config import get_settings
+
     get_settings.cache_clear()
     try:
         app = create_app()

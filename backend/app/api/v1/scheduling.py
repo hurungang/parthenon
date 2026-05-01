@@ -1,15 +1,21 @@
 """Scheduling API router — CRUD, pause, resume, and execution history."""
-import uuid
+
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_SCHEDULING
+from app.db.models.scheduling import JobExecution, JobStatus, ScheduledJob
 from app.db.session import DbSession
-from app.db.models.scheduling import ExecutionStatus, JobExecution, JobStatus, ScheduledJob
-from app.schemas.scheduling import JobExecutionRead, ScheduledJobCreate, ScheduledJobRead, ScheduledJobUpdate
+from app.schemas.scheduling import (
+    JobExecutionRead,
+    ScheduledJobCreate,
+    ScheduledJobRead,
+    ScheduledJobUpdate,
+)
 from app.services.scheduling.scheduler import get_scheduling_engine
 
 logger = logging.getLogger(__name__)
@@ -43,6 +49,7 @@ async def create_schedule(
     # Register with APScheduler
     engine = get_scheduling_engine()
     from app.db.session import AsyncSessionLocal
+
     scheduler_job_id = await engine.add_job(job, AsyncSessionLocal)
     job.scheduler_job_id = scheduler_job_id
     await db.flush()
@@ -81,6 +88,7 @@ async def update_schedule(
         engine = get_scheduling_engine()
         await engine.remove_job(job.scheduler_job_id)
         from app.db.session import AsyncSessionLocal
+
         scheduler_job_id = await engine.add_job(job, AsyncSessionLocal)
         job.scheduler_job_id = scheduler_job_id
         await db.flush()

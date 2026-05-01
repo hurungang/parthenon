@@ -3,9 +3,9 @@
 Never writes client_secret (secrets live encrypted in the DB only).
 Uses write-to-temp-then-rename for crash safety.
 """
+
 import logging
 import os
-from pathlib import Path
 
 import yaml
 
