@@ -1,11 +1,11 @@
 """Groups API router."""
+
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 
-from app.api.deps import get_current_claims, require_permission
+from app.api.deps import require_permission
 from app.core.resource_types import RT_PERMISSIONS
 from app.db.models.group import Group
 from app.db.models.group_role import GroupRole
@@ -27,7 +27,9 @@ from app.services.permissions.permission_engine import PermissionEngine
 GroupsRouter = APIRouter(prefix="/user-groups", tags=["Permissions: Groups"])
 
 
-async def _has_permission(db: DbSession, platform_user_id: uuid.UUID, module: str, action: str) -> bool:
+async def _has_permission(
+    db: DbSession, platform_user_id: uuid.UUID, module: str, action: str
+) -> bool:
     """Check if user has permission for the given module and action."""
     engine = PermissionEngine()
     result = await engine.authorize(
@@ -63,24 +65,24 @@ async def _enrich_group(db: DbSession, group: Group) -> GroupRead:
         select(func.count()).select_from(GroupRole).where(GroupRole.group_id == group.id)
     )
     read = GroupRead.model_validate(group)
-    return read.model_copy(update={
-        "owner_display_name": owner_name,
-        "member_count": mc_r.scalar_one(),
-        "role_count": rc_r.scalar_one(),
-    })
+    return read.model_copy(
+        update={
+            "owner_display_name": owner_name,
+            "member_count": mc_r.scalar_one(),
+            "role_count": rc_r.scalar_one(),
+        }
+    )
 
 
-@GroupsRouter.get("", response_model=List[GroupRead])
+@GroupsRouter.get("", response_model=list[GroupRead])
 async def list_groups(
     db: DbSession,
     page: int = 1,
     page_size: int = 20,
-) -> List[GroupRead]:
+) -> list[GroupRead]:
     """List all groups. Any authenticated user."""
     offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Group).order_by(Group.name).offset(offset).limit(page_size)
-    )
+    result = await db.execute(select(Group).order_by(Group.name).offset(offset).limit(page_size))
     groups = list(result.scalars().all())
     return [await _enrich_group(db, g) for g in groups]
 
@@ -134,11 +136,13 @@ async def update_group(
     group = await _get_group_or_404(db, group_id)
 
     platform_user_id: uuid.UUID | None = getattr(request.state, "platform_user_id", None)
-    
+
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(
+            db, platform_user_id, RT_PERMISSIONS, "manage"
+        )
 
     if not has_manage_permission:
         if platform_user_id is None or group.owner_id != platform_user_id:
@@ -164,22 +168,26 @@ async def delete_group(
     await db.delete(group)
 
 
-@GroupsRouter.get("/{group_id}/members", response_model=List[GroupMemberRead])
+@GroupsRouter.get("/{group_id}/members", response_model=list[GroupMemberRead])
 async def list_group_members(
     group_id: uuid.UUID,
     request: Request,
     db: DbSession,
-) -> List[GroupMemberRead]:
+) -> list[GroupMemberRead]:
     """List group members. Users with permission to manage permissions or group owner."""
     group = await _get_group_or_404(db, group_id)
     platform_user_id: uuid.UUID | None = getattr(request.state, "platform_user_id", None)
-    
+
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(
+            db, platform_user_id, RT_PERMISSIONS, "manage"
+        )
 
-    if not has_manage_permission and (platform_user_id is None or group.owner_id != platform_user_id):
+    if not has_manage_permission and (
+        platform_user_id is None or group.owner_id != platform_user_id
+    ):
         raise HTTPException(status_code=403, detail="Not authorized.")
 
     result = await db.execute(
@@ -258,22 +266,26 @@ async def remove_group_member(
     await db.delete(row)
 
 
-@GroupsRouter.get("/{group_id}/roles", response_model=List[PermRoleRead])
+@GroupsRouter.get("/{group_id}/roles", response_model=list[PermRoleRead])
 async def list_group_roles(
     group_id: uuid.UUID,
     request: Request,
     db: DbSession,
-) -> List[PermRoleRead]:
+) -> list[PermRoleRead]:
     """List roles assigned to a group. Users with permission to manage permissions or group owner."""
     group = await _get_group_or_404(db, group_id)
     platform_user_id: uuid.UUID | None = getattr(request.state, "platform_user_id", None)
-    
+
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(
+            db, platform_user_id, RT_PERMISSIONS, "manage"
+        )
 
-    if not has_manage_permission and (platform_user_id is None or group.owner_id != platform_user_id):
+    if not has_manage_permission and (
+        platform_user_id is None or group.owner_id != platform_user_id
+    ):
         raise HTTPException(status_code=403, detail="Not authorized.")
 
     result = await db.execute(

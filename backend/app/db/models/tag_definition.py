@@ -1,16 +1,20 @@
 """SQLAlchemy model for TagDefinition."""
 
-import uuid
 import enum
+import uuid
 from datetime import datetime
-from sqlalchemy import String, Enum, DateTime, Text, UniqueConstraint
+
+from sqlalchemy import DateTime, Enum, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.session import Base
+
 
 class TagScope(str, enum.Enum):
     global_scope = "global"
     resource_type = "resource_type"
+
 
 class TagDefinition(Base):
     __tablename__ = "tag_definitions"
@@ -21,8 +25,10 @@ class TagDefinition(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    tag_values = relationship("TagValue", back_populates="tag_definition", cascade="all, delete-orphan")
-    
+    tag_values = relationship(
+        "TagValue", back_populates="tag_definition", cascade="all, delete-orphan"
+    )
+
     @property
     def allowed_values(self):
         """Alias for tag_values to match Pydantic schema."""

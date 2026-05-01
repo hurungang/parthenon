@@ -1,16 +1,18 @@
 """
 Test GatewayLifecycleHandler: init, close, invalid handle, question/answer cycle.
 """
+
 import uuid
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.mark.asyncio
 async def test_gateway_init_returns_session_handle():
     """GatewayLifecycleHandler.init() returns a dict with a session_handle."""
-    from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler
     from app.db.models.agents import AgentInstanceStatus
+    from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler
 
     agent_type_id = uuid.uuid4()
     instance_id = uuid.uuid4()
@@ -38,9 +40,14 @@ async def test_gateway_init_returns_session_handle():
 @pytest.mark.asyncio
 async def test_gateway_close_marks_instance_closed():
     """GatewayLifecycleHandler.close() delegates to instance manager close."""
-    from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler, _pending_questions, _pending_answers
-    from app.db.models.agents import AgentInstanceStatus
     import asyncio
+
+    from app.db.models.agents import AgentInstanceStatus
+    from app.services.gateway.lifecycle_handler import (
+        GatewayLifecycleHandler,
+        _pending_answers,
+        _pending_questions,
+    )
 
     instance_id = uuid.uuid4()
     session_handle = str(uuid.uuid4())

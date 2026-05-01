@@ -1,4 +1,5 @@
 """Structured error response models for the Parthenon API."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel

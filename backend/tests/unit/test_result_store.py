@@ -2,16 +2,18 @@
 Test ResultStore: save() creates a ResultRecord; list_records() queries by agent_type_id.
 Also verifies get_mcp_tool_definition() returns a valid MCP tool schema.
 """
+
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_result_store_save_calls_db_add():
     """ResultStore.save() adds a ResultRecord via db.add() and returns it."""
-    from app.services.results.store import ResultStore
     from app.db.models.results import ResultRecord
+    from app.services.results.store import ResultStore
 
     record = MagicMock(spec=ResultRecord)
     record.id = uuid.uuid4()
@@ -32,8 +34,8 @@ async def test_result_store_save_calls_db_add():
 @pytest.mark.asyncio
 async def test_result_store_handle_mcp_call():
     """ResultStore.handle_mcp_call() saves the result and returns result_id."""
-    from app.services.results.store import ResultStore
     from app.db.models.results import ResultRecord
+    from app.services.results.store import ResultStore
 
     record = MagicMock(spec=ResultRecord)
     record.id = uuid.uuid4()

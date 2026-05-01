@@ -1,4 +1,5 @@
 """SQLAlchemy models for Agent management: AgentType, AgentInstance, AgentSkillAssignment."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -43,14 +44,10 @@ class AgentType(Base):
 
     __tablename__ = "agent_types"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    mode: Mapped[AgentMode] = mapped_column(
-        Enum(AgentMode, name="agent_mode_enum"), nullable=False
-    )
+    mode: Mapped[AgentMode] = mapped_column(Enum(AgentMode, name="agent_mode_enum"), nullable=False)
     # LLM provider configuration
     llm_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="openai")
     llm_model: Mapped[str] = mapped_column(String(200), nullable=False, default="gpt-4o")
@@ -94,9 +91,7 @@ class AgentInstance(Base):
 
     __tablename__ = "agent_instances"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_types.id", ondelete="CASCADE"), nullable=False
     )
@@ -131,9 +126,7 @@ class AgentSkillAssignment(Base):
         UniqueConstraint("agent_type_id", "skill_id", name="uq_agent_skill_assignment"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_types.id", ondelete="CASCADE"), nullable=False
     )
@@ -145,15 +138,11 @@ class AgentSkillAssignment(Base):
     )
 
     # Relationships
-    agent_type: Mapped["AgentType"] = relationship(
-        "AgentType", back_populates="skill_assignments"
-    )
+    agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="skill_assignments")
     skill: Mapped["Skill"] = relationship("Skill")
 
     def __repr__(self) -> str:
-        return (
-            f"<AgentSkillAssignment agent_type_id={self.agent_type_id} skill_id={self.skill_id}>"
-        )
+        return f"<AgentSkillAssignment agent_type_id={self.agent_type_id} skill_id={self.skill_id}>"
 
 
 # Resolve forward references

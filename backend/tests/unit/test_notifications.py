@@ -2,16 +2,23 @@
 Test NotificationDispatcher: dispatch() creates a NotificationEvent and attempts delivery.
 Also verifies MCP_TOOLS definitions contain all four channel types.
 """
+
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_notification_dispatcher_creates_event_on_dispatch():
     """NotificationDispatcher.dispatch() adds a NotificationEvent to the DB."""
+    from app.db.models.notifications import (
+        ChannelType,
+        DeliveryStatus,
+        NotificationChannel,
+        NotificationEvent,
+    )
     from app.services.notifications.dispatcher import NotificationDispatcher
-    from app.db.models.notifications import ChannelType, DeliveryStatus, NotificationChannel, NotificationEvent
 
     channel = MagicMock(spec=NotificationChannel)
     channel.id = uuid.uuid4()
@@ -30,7 +37,7 @@ async def test_notification_dispatcher_creates_event_on_dispatch():
     with patch("app.services.notifications.dispatcher.NotificationEvent", return_value=event):
         with patch.object(NotificationDispatcher, "_send_webhook", new=AsyncMock()):
             dispatcher = NotificationDispatcher()
-            result = await dispatcher.dispatch(
+            await dispatcher.dispatch(
                 channel=channel,
                 subject="Test",
                 body="Hello from test",

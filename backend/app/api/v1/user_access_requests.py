@@ -1,12 +1,10 @@
 """Access Requests API router."""
+
 import uuid
-from typing import List
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_claims
 from app.core.resource_types import RT_PERMISSIONS
 from app.db.models.access_request import AccessRequest, AccessRequestStatus
 from app.db.models.access_request_batch import AccessRequestBatch
@@ -23,14 +21,18 @@ from app.schemas.access_requests import (
 from app.services.permissions.access_request_service import AccessRequestService
 from app.services.permissions.permission_engine import PermissionEngine
 
-AccessRequestsRouter = APIRouter(prefix="/user-access-requests", tags=["Permissions: Access Requests"])
+AccessRequestsRouter = APIRouter(
+    prefix="/user-access-requests", tags=["Permissions: Access Requests"]
+)
 
 
 def _get_platform_user_id(request: Request) -> uuid.UUID | None:
     return getattr(request.state, "platform_user_id", None)
 
 
-async def _has_permission(db: DbSession, platform_user_id: uuid.UUID, module: str, action: str) -> bool:
+async def _has_permission(
+    db: DbSession, platform_user_id: uuid.UUID, module: str, action: str
+) -> bool:
     """Check if user has permission for the given module and action."""
     engine = PermissionEngine()
     result = await engine.authorize(
@@ -58,10 +60,12 @@ async def _enrich_request(db: DbSession, req: AccessRequest) -> AccessRequestRea
         requester_name = user.display_name
 
     read = AccessRequestRead.model_validate(req)
-    return read.model_copy(update={
-        "group_name": group_name,
-        "requester_display_name": requester_name,
-    })
+    return read.model_copy(
+        update={
+            "group_name": group_name,
+            "requester_display_name": requester_name,
+        }
+    )
 
 
 async def _load_batch_with_requests(
@@ -69,7 +73,8 @@ async def _load_batch_with_requests(
 ) -> AccessRequestBatchRead:
     """Build AccessRequestBatchRead with enriched requests."""
     result = await db.execute(
-        select(AccessRequest).where(AccessRequest.batch_id == batch.id)
+        select(AccessRequest)
+        .where(AccessRequest.batch_id == batch.id)
         .order_by(AccessRequest.created_at)
     )
     requests = result.scalars().all()
@@ -91,18 +96,20 @@ async def submit_access_request(
     """Submit a batch access request for one or more groups. Authenticated users."""
     platform_user_id = _get_platform_user_id(request)
     if platform_user_id is None:
-        raise HTTPException(status_code=403, detail="User identity not resolved. Please re-authenticate.")
+        raise HTTPException(
+            status_code=403, detail="User identity not resolved. Please re-authenticate."
+        )
 
     svc = AccessRequestService()
     batch = await svc.submit_batch_request(db, platform_user_id, body.group_ids, body.justification)
     return await _load_batch_with_requests(db, batch)
 
 
-@AccessRequestsRouter.get("/my", response_model=List[AccessRequestBatchRead])
+@AccessRequestsRouter.get("/my", response_model=list[AccessRequestBatchRead])
 async def list_my_requests(
     request: Request,
     db: DbSession,
-) -> List[AccessRequestBatchRead]:
+) -> list[AccessRequestBatchRead]:
     """List the current user's access request batches. Authenticated users."""
     platform_user_id = _get_platform_user_id(request)
     if platform_user_id is None:
@@ -117,18 +124,20 @@ async def list_my_requests(
     return [await _load_batch_with_requests(db, b) for b in batches]
 
 
-@AccessRequestsRouter.get("/pending", response_model=List[AccessRequestRead])
+@AccessRequestsRouter.get("/pending", response_model=list[AccessRequestRead])
 async def list_pending_requests(
     request: Request,
     db: DbSession,
-) -> List[AccessRequestRead]:
+) -> list[AccessRequestRead]:
     """List pending access requests. Users with permission to manage permissions see all; group owners see their groups only."""
     platform_user_id = _get_platform_user_id(request)
-    
+
     # Check if user has permissions to manage permissions (admin-level access)
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(
+            db, platform_user_id, RT_PERMISSIONS, "manage"
+        )
 
     if has_manage_permission:
         result = await db.execute(
@@ -137,9 +146,7 @@ async def list_pending_requests(
             .order_by(AccessRequest.created_at.desc())
         )
     elif platform_user_id is not None:
-        owned_result = await db.execute(
-            select(Group.id).where(Group.owner_id == platform_user_id)
-        )
+        owned_result = await db.execute(select(Group.id).where(Group.owner_id == platform_user_id))
         group_ids = list(owned_result.scalars().all())
         if not group_ids:
             return []
@@ -183,11 +190,13 @@ async def approve_request(
 ) -> AccessRequestRead:
     """Approve an access request. Group owner or users with permission to manage permissions."""
     platform_user_id = _get_platform_user_id(request)
-    
+
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(
+            db, platform_user_id, RT_PERMISSIONS, "manage"
+        )
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
@@ -210,11 +219,13 @@ async def reject_request(
 ) -> AccessRequestRead:
     """Reject an access request. Group owner or users with permission to manage permissions. rejection_reason is required."""
     platform_user_id = _get_platform_user_id(request)
-    
+
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(
+            db, platform_user_id, RT_PERMISSIONS, "manage"
+        )
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:

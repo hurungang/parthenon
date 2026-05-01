@@ -5,12 +5,12 @@ methods. Retries on HTTP 503 with exponential back-off (up to 3 attempts).
 Raises :class:`KeycloakAdminError` with a machine-readable ``error_code``
 for all unrecoverable failures.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 
@@ -51,7 +51,7 @@ async def _request_with_retry(
     **kwargs: object,
 ) -> httpx.Response:
     """Execute an HTTP request with exponential back-off on 503."""
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     for attempt in range(_MAX_RETRIES):
         try:
             response = await client.request(method, url, **kwargs)  # type: ignore[arg-type]
@@ -75,7 +75,7 @@ async def _request_with_retry(
             )
             last_exc = exc
 
-        delay = _RETRY_BASE_DELAY * (2 ** attempt)
+        delay = _RETRY_BASE_DELAY * (2**attempt)
         await asyncio.sleep(delay)
 
     if last_exc is not None:
@@ -194,9 +194,7 @@ class KeycloakAdminClient:
             )
         logger.info("Realm %r created", realm_name)
 
-    async def client_exists(
-        self, token: AdminToken, realm_name: str, client_id: str
-    ) -> bool:
+    async def client_exists(self, token: AdminToken, realm_name: str, client_id: str) -> bool:
         """Return True if a client with *client_id* already exists in *realm_name*."""
         url = f"{self._base_url}/admin/realms/{realm_name}/clients"
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -225,7 +223,7 @@ class KeycloakAdminClient:
         web_origins: list[str] | None = None,
         *,
         public_client: bool = False,
-    ) -> Optional[ClientSecret]:
+    ) -> ClientSecret | None:
         """Create an OIDC client in *realm_name*.  Idempotent.
 
         Args:
@@ -299,9 +297,7 @@ class KeycloakAdminClient:
                 return None
             keycloak_client_uuid = clients[0]["id"]
 
-        secret_url = (
-            f"{self._base_url}/admin/realms/{realm_name}/clients/{keycloak_client_uuid}/client-secret"
-        )
+        secret_url = f"{self._base_url}/admin/realms/{realm_name}/clients/{keycloak_client_uuid}/client-secret"
         async with httpx.AsyncClient(timeout=15.0) as client:
             secret_resp = await _request_with_retry(
                 client,

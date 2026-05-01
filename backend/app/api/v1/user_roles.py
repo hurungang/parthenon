@@ -1,6 +1,6 @@
 """Roles and Policy API router."""
+
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -27,24 +27,24 @@ from app.schemas.perm_roles import (
 RolesRouter = APIRouter(prefix="/user-roles", tags=["Permissions: Roles"])
 
 
-@RolesRouter.get("", response_model=List[PermRoleRead])
+@RolesRouter.get("", response_model=list[PermRoleRead])
 async def list_roles(
     db: DbSession,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     _: dict = Depends(require_permission(RT_PERMISSIONS, "read")),
-) -> List[PermRoleRead]:
+) -> list[PermRoleRead]:
     """Paginated list of roles with policy and assignment counts. Admin only."""
     offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Role).order_by(Role.name).offset(offset).limit(page_size)
-    )
+    result = await db.execute(select(Role).order_by(Role.name).offset(offset).limit(page_size))
     roles = list(result.scalars().all())
 
-    enriched: List[PermRoleRead] = []
+    enriched: list[PermRoleRead] = []
     for role in roles:
         pc_r = await db.execute(
-            select(func.count()).select_from(PolicyStatement).where(PolicyStatement.role_id == role.id)
+            select(func.count())
+            .select_from(PolicyStatement)
+            .where(PolicyStatement.role_id == role.id)
         )
         uc_r = await db.execute(
             select(func.count()).select_from(UserRole).where(UserRole.role_id == role.id)
@@ -53,11 +53,13 @@ async def list_roles(
             select(func.count()).select_from(GroupRole).where(GroupRole.role_id == role.id)
         )
         read = PermRoleRead.model_validate(role)
-        read = read.model_copy(update={
-            "policy_count": pc_r.scalar_one(),
-            "user_assignment_count": uc_r.scalar_one(),
-            "group_assignment_count": gc_r.scalar_one(),
-        })
+        read = read.model_copy(
+            update={
+                "policy_count": pc_r.scalar_one(),
+                "user_assignment_count": uc_r.scalar_one(),
+                "group_assignment_count": gc_r.scalar_one(),
+            }
+        )
         enriched.append(read)
     return enriched
 
@@ -143,7 +145,7 @@ async def delete_role(
     await db.delete(role)
 
 
-@RolesRouter.get("/{role_id}/policies", response_model=List[PolicyStatementRead])
+@RolesRouter.get("/{role_id}/policies", response_model=list[PolicyStatementRead])
 async def list_role_policies(
     role_id: uuid.UUID,
     db: DbSession,
@@ -189,18 +191,22 @@ async def create_policy_statement(
         db.add(PolicyAction(policy_statement_id=stmt.id, action=action_body.action))
 
     for resource_body in body.resources:
-        db.add(PolicyResource(
-            policy_statement_id=stmt.id,
-            resource_type=resource_body.resource_type,
-            resource_id=resource_body.resource_id,
-        ))
+        db.add(
+            PolicyResource(
+                policy_statement_id=stmt.id,
+                resource_type=resource_body.resource_type,
+                resource_id=resource_body.resource_id,
+            )
+        )
 
     for cond_body in body.tag_conditions:
-        db.add(PolicyTagCondition(
-            policy_statement_id=stmt.id,
-            tag_key=cond_body.tag_key,
-            tag_value=cond_body.tag_value,
-        ))
+        db.add(
+            PolicyTagCondition(
+                policy_statement_id=stmt.id,
+                tag_key=cond_body.tag_key,
+                tag_value=cond_body.tag_value,
+            )
+        )
 
     await db.flush()
 

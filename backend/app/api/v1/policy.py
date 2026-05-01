@@ -1,5 +1,4 @@
 """Policy utility endpoints."""
-from typing import List
 
 from fastapi import APIRouter, Depends
 
@@ -10,10 +9,10 @@ from app.schemas.perm_roles import ResourceTypeRead
 PolicyRouter = APIRouter(prefix="/policy", tags=["Permissions: Policy"])
 
 
-@PolicyRouter.get("/resource-types", response_model=List[ResourceTypeRead])
+@PolicyRouter.get("/resource-types", response_model=list[ResourceTypeRead])
 async def list_resource_types(
     _: dict = Depends(require_permission(RT_ROLE, "read")),
-) -> List[ResourceTypeRead]:
+) -> list[ResourceTypeRead]:
     """Return all resource types and their allowed actions. Requires role:read."""
     return [
         ResourceTypeRead(resource_type=rt, actions=data["actions"])

@@ -2,9 +2,9 @@
 
 Idempotent: safe to run on every application restart.
 """
+
 import logging
 import os
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

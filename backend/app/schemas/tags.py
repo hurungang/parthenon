@@ -1,11 +1,11 @@
 """Pydantic v2 schemas for Tag management."""
+
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints
-from typing import Annotated
 
 
 class TagScope(str, Enum):
@@ -27,13 +27,13 @@ class TagDefinitionCreate(BaseModel):
     scope: TagScope
     resource_type: str | None = Field(default=None, max_length=100)
     description: str | None = None
-    allowed_values: List[str] = Field(default_factory=list)
+    allowed_values: list[str] = Field(default_factory=list)
 
 
 class TagDefinitionUpdate(BaseModel):
     description: str | None = None
-    add_values: List[str] = Field(default_factory=list)
-    remove_values: List[str] = Field(default_factory=list)
+    add_values: list[str] = Field(default_factory=list)
+    remove_values: list[str] = Field(default_factory=list)
 
 
 class TagDefinitionRead(BaseModel):
@@ -46,4 +46,4 @@ class TagDefinitionRead(BaseModel):
     description: str | None
     created_at: datetime
     updated_at: datetime
-    allowed_values: List[TagValueRead] = Field(default_factory=list)
+    allowed_values: list[TagValueRead] = Field(default_factory=list)

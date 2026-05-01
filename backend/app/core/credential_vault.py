@@ -1,4 +1,5 @@
 """AES-256 credential vault for secure storage and retrieval of secrets."""
+
 import base64
 import os
 

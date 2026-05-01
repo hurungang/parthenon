@@ -1,10 +1,10 @@
 """Gateway Endpoint Registry — persists and resolves gateway routes per agent type."""
+
 import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, DateTime, String, func
-from sqlalchemy import select
+from sqlalchemy import DateTime, String, func, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,9 +17,7 @@ class GatewayRoute(Base):
 
     __tablename__ = "gateway_routes"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), unique=True, nullable=False
     )
@@ -35,9 +33,7 @@ class GatewayRoute(Base):
 class GatewayEndpointRegistry:
     """Persists and resolves gateway route mappings per agent type."""
 
-    async def register(
-        self, agent_type_id: Any, db: AsyncSession
-    ) -> GatewayRoute:
+    async def register(self, agent_type_id: Any, db: AsyncSession) -> GatewayRoute:
         """Create or return the gateway route for an agent type."""
         existing = await self.resolve(agent_type_id, db)
         if existing:
@@ -53,9 +49,7 @@ class GatewayEndpointRegistry:
         await db.refresh(route)
         return route
 
-    async def resolve(
-        self, agent_type_id: Any, db: AsyncSession
-    ) -> GatewayRoute | None:
+    async def resolve(self, agent_type_id: Any, db: AsyncSession) -> GatewayRoute | None:
         """Resolve a gateway route by agent type ID."""
         result = await db.execute(
             select(GatewayRoute).where(GatewayRoute.agent_type_id == agent_type_id)
@@ -64,7 +58,5 @@ class GatewayEndpointRegistry:
 
     async def list_all(self, db: AsyncSession) -> list[GatewayRoute]:
         """List all registered gateway routes."""
-        result = await db.execute(
-            select(GatewayRoute).order_by(GatewayRoute.created_at.desc())
-        )
+        result = await db.execute(select(GatewayRoute).order_by(GatewayRoute.created_at.desc()))
         return list(result.scalars().all())

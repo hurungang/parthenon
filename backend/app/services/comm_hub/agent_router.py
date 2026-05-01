@@ -1,4 +1,5 @@
 """Agent Router (Communication Hub) — routes inter-agent messages via MessageBroker."""
+
 import logging
 from typing import Any
 

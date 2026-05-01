@@ -1,16 +1,16 @@
 """Skills API router — CRUD for skills with MCP tool binding validation."""
-import uuid
+
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_SKILL
-from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
+from app.db.session import DbSession
 from app.schemas.skills import SkillCreate, SkillRead, SkillUpdate
 
 logger = logging.getLogger(__name__)
@@ -48,9 +48,7 @@ async def create_skill(
 
     # Create tool bindings
     for order, tool_id in enumerate(body.tool_ids):
-        binding = SkillToolBinding(
-            skill_id=skill.id, tool_id=tool_id, order=order
-        )
+        binding = SkillToolBinding(skill_id=skill.id, tool_id=tool_id, order=order)
         db.add(binding)
 
     await db.flush()
@@ -103,9 +101,7 @@ async def update_skill(
 
         # Create new bindings
         for order, tool_id in enumerate(body.tool_ids):
-            binding = SkillToolBinding(
-                skill_id=skill.id, tool_id=tool_id, order=order
-            )
+            binding = SkillToolBinding(skill_id=skill.id, tool_id=tool_id, order=order)
             db.add(binding)
 
     await db.flush()

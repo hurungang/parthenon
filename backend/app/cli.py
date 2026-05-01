@@ -6,6 +6,7 @@ Usage:
 Sub-commands:
     setup-identity  Provision the identity provider (Keycloak or external OIDC).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,7 +14,6 @@ import asyncio
 import json
 import logging
 import sys
-from typing import Optional
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -115,20 +115,33 @@ def _build_parser() -> argparse.ArgumentParser:
     setup.add_argument(
         "--provider-type",
         required=True,
-        choices=[pt.value for pt in __import__("app.schemas.identity_bootstrap", fromlist=["ProviderType"]).ProviderType],
+        choices=[
+            pt.value
+            for pt in __import__(
+                "app.schemas.identity_bootstrap", fromlist=["ProviderType"]
+            ).ProviderType
+        ],
         help="Identity provider type.",
     )
-    setup.add_argument("--keycloak-url", dest="keycloak_url", help="Base URL of the Keycloak instance.")
+    setup.add_argument(
+        "--keycloak-url", dest="keycloak_url", help="Base URL of the Keycloak instance."
+    )
     setup.add_argument("--realm", dest="realm", help="Keycloak realm name.")
     setup.add_argument("--client-id", dest="client_id", help="OIDC client ID.")
-    setup.add_argument("--admin-user", dest="admin_user", help="Keycloak master-realm admin username.")
-    setup.add_argument("--admin-password", dest="admin_password", help="Keycloak master-realm admin password.")
+    setup.add_argument(
+        "--admin-user", dest="admin_user", help="Keycloak master-realm admin username."
+    )
+    setup.add_argument(
+        "--admin-password", dest="admin_password", help="Keycloak master-realm admin password."
+    )
     setup.add_argument(
         "--initial-admin-password",
         dest="initial_admin_password",
         help="Password for the initial Parthenon admin user created in the realm.",
     )
-    setup.add_argument("--client-secret", dest="client_secret", help="Pre-existing OIDC client secret.")
+    setup.add_argument(
+        "--client-secret", dest="client_secret", help="Pre-existing OIDC client secret."
+    )
     setup.add_argument(
         "--external-oidc-url",
         dest="external_oidc_url",

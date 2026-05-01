@@ -1,4 +1,5 @@
 """SQLAlchemy models for Skills and SOPs."""
+
 import enum
 import uuid
 from datetime import datetime
@@ -27,9 +28,7 @@ class Skill(Base):
 
     __tablename__ = "skills"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -57,13 +56,9 @@ class SkillToolBinding(Base):
     """Links a Skill to one or more MCP tools it invokes."""
 
     __tablename__ = "skill_tool_bindings"
-    __table_args__ = (
-        UniqueConstraint("skill_id", "tool_id", name="uq_skill_tool_binding"),
-    )
+    __table_args__ = (UniqueConstraint("skill_id", "tool_id", name="uq_skill_tool_binding"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     skill_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
     )
@@ -89,9 +84,7 @@ class Sop(Base):
 
     __tablename__ = "sops"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -129,9 +122,7 @@ class SopStep(Base):
 
     __tablename__ = "sop_steps"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sop_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sops.id", ondelete="CASCADE"), nullable=False
     )

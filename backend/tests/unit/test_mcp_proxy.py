@@ -1,17 +1,18 @@
 """
 Test McpProxyEngine: session resolution, credential injection, tool result return.
 """
-import json
+
 import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 
 @pytest.mark.asyncio
 async def test_proxy_engine_resolves_session_and_returns_result():
     """McpProxyEngine.call_tool() returns the JSON result from the remote server."""
-    from app.services.mcp.proxy import McpProxyEngine
     from app.db.models.mcp_hub import McpSessionAuthType
+    from app.services.mcp.proxy import McpProxyEngine
 
     engine = McpProxyEngine()
 

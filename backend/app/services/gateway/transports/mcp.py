@@ -1,4 +1,5 @@
 """MCP Gateway Transport — exposes lifecycle operations as MCP tools."""
+
 import logging
 from typing import Any
 
@@ -77,9 +78,7 @@ class McpGatewayTransport:
         """Return the MCP tool definitions for gateway lifecycle operations."""
         return self.MCP_TOOLS
 
-    async def dispatch(
-        self, tool_name: str, arguments: dict[str, Any], db: Any
-    ) -> dict[str, Any]:
+    async def dispatch(self, tool_name: str, arguments: dict[str, Any], db: Any) -> dict[str, Any]:
         """Dispatch an MCP tool call to the appropriate lifecycle handler method."""
         if tool_name == "agent_init":
             return await self._handler.init(

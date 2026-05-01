@@ -1,4 +1,5 @@
 """Application configuration via Pydantic BaseSettings."""
+
 import os
 from enum import Enum
 from functools import lru_cache

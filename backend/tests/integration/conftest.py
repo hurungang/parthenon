@@ -6,9 +6,10 @@ SQLAlchemy's default QueuePool creates separate connections, each with their
 own in-memory database, so deletes in ``db_session`` are invisible to the
 ``async_client``'s requests.
 """
+
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

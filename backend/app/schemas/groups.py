@@ -1,10 +1,10 @@
 """Pydantic v2 schemas for Group management."""
+
 import uuid
 from datetime import datetime
-from typing import List
+from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints
-from typing import Annotated
 
 
 class GroupCreate(BaseModel):
@@ -12,7 +12,7 @@ class GroupCreate(BaseModel):
     description: str | None = None
     owner_id: uuid.UUID | None = None
     idp_claim_value: str | None = Field(default=None, max_length=255)
-    role_ids: List[uuid.UUID] = Field(default_factory=list)
+    role_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class GroupUpdate(BaseModel):

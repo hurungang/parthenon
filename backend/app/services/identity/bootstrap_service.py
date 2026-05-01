@@ -7,12 +7,12 @@ Orchestrates the full identity provider setup lifecycle:
 - Persist resolved settings to DB + config/identity.yaml.
 - Trigger OIDC client reload.
 """
+
 from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import select
@@ -27,7 +27,6 @@ from app.db.models.identity_provider_setup_state import IdentityProviderSetupSta
 from app.schemas.identity_bootstrap import (
     ProviderSetupRequest,
     ProviderSetupResult,
-    ProviderType,
     SetupState,
 )
 from app.services.identity.keycloak_admin_client import KeycloakAdminClient, KeycloakAdminError
@@ -67,7 +66,7 @@ class IdentityBootstrapService:
 
         return SetupState.NOT_CONFIGURED
 
-    async def get_current_config(self, db: AsyncSession) -> Optional[IdentityProviderConfig]:
+    async def get_current_config(self, db: AsyncSession) -> IdentityProviderConfig | None:
         """Return the active ``IdentityProviderConfig`` DB row, or ``None``."""
         result = await db.execute(
             select(IdentityProviderConfig)
@@ -189,12 +188,12 @@ class IdentityBootstrapService:
             )
 
         oidc_provider_url = f"{keycloak_url}/realms/{realm_name}"
-        encrypted_secret: Optional[str] = None
+        encrypted_secret: str | None = None
         if api_secret_obj and api_secret_obj.value:
             encrypted_secret = get_vault().encrypt(api_secret_obj.value)
 
         # 7. Persist to DB within a transaction
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         try:
             config_row = IdentityProviderConfig(
                 id=uuid.uuid4(),
@@ -325,11 +324,11 @@ class IdentityBootstrapService:
         issuer: str = discovery_doc.get("issuer", discovery_url.split("/.well-known")[0])
         oidc_provider_url = issuer.rstrip("/")
 
-        encrypted_secret: Optional[str] = None
+        encrypted_secret: str | None = None
         if request.client_secret:
             encrypted_secret = get_vault().encrypt(request.client_secret)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # 2–3. Persist to DB
         try:
@@ -402,9 +401,7 @@ class IdentityBootstrapService:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _reload_oidc_client(
-        provider_url: str, algorithm: str, audience: str
-    ) -> None:
+    def _reload_oidc_client(provider_url: str, algorithm: str, audience: str) -> None:
         """Reload the OIDC client singleton and clear the settings cache."""
         try:
             from app.core.oidc_client import get_oidc_client, reset_singleton  # noqa: PLC0415

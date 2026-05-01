@@ -1,4 +1,5 @@
 """API tests for groups, platform-users, and access-requests endpoints."""
+
 from __future__ import annotations
 
 import os
@@ -13,9 +14,9 @@ os.environ.setdefault("ENVIRONMENT", "test")
 
 from httpx import ASGITransport, AsyncClient
 
-from app.main import create_app
-from app.db.session import get_db
 from app.api.deps import require_admin
+from app.db.session import get_db
+from app.main import create_app
 from app.middleware.auth import JWTAuthMiddleware
 from app.services.permissions.permission_engine import AuthorizationResult
 
@@ -33,20 +34,19 @@ def _bypass_auth(admin: bool = True):
 
 def _db_override():
     mock_session = AsyncMock()
-    
+
     # Mock PlatformUser lookup
     mock_user = MagicMock()
     mock_user.id = uuid.uuid4()
     mock_user.sub = "user-sub"
-    
+
     mock_result = MagicMock()
     mock_result.scalar_one_or_none = MagicMock(return_value=mock_user)
-    mock_result.scalars = MagicMock(return_value=MagicMock(
-        all=MagicMock(return_value=[]),
-        first=MagicMock(return_value=None)
-    ))
+    mock_result.scalars = MagicMock(
+        return_value=MagicMock(all=MagicMock(return_value=[]), first=MagicMock(return_value=None))
+    )
     mock_result.scalar_one = MagicMock(return_value=0)
-    
+
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.add = MagicMock()
     mock_session.flush = AsyncMock()
@@ -62,27 +62,34 @@ def _db_override():
 def _admin_override():
     def override():
         return {"sub": "admin-sub", "roles": ["admin"]}
+
     return override
 
 
 def _nonadmin_override():
     def override():
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403, detail="Admin access required.")
+
     return override
 
 
 def _mock_permission_engine_allow():
     """Mock PermissionEngine.authorize() to always return allowed."""
+
     async def mock_authorize(*args, **kwargs):
         return AuthorizationResult(allowed=True, reason="Test override")
-    
-    return patch("app.services.permissions.permission_engine.PermissionEngine.authorize", mock_authorize)
+
+    return patch(
+        "app.services.permissions.permission_engine.PermissionEngine.authorize", mock_authorize
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Groups
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_list_groups_returns_200():
@@ -121,6 +128,7 @@ async def test_create_group_as_non_admin_returns_403():
 # Platform Users
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_list_platform_users_as_admin_returns_200():
     """GET /platform-users as admin returns 200."""
@@ -154,6 +162,7 @@ async def test_list_platform_users_as_non_admin_returns_403():
 # Access Requests
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_my_access_requests_returns_200():
     """GET /user-access-requests/my returns 200 for authenticated user."""
@@ -169,6 +178,7 @@ async def test_my_access_requests_returns_200():
         return await call_next(request)
 
     from unittest.mock import patch
+
     with patch.object(JWTAuthMiddleware, "dispatch", patched_dispatch):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/v1/user-access-requests/my")
@@ -191,6 +201,7 @@ async def test_reject_access_request_without_reason_returns_422():
         return await call_next(request)
 
     from unittest.mock import patch
+
     with patch.object(JWTAuthMiddleware, "dispatch", patched_dispatch):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.patch(

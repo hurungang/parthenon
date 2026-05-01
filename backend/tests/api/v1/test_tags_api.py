@@ -1,4 +1,5 @@
 """API tests for tag definitions endpoints."""
+
 from __future__ import annotations
 
 import os
@@ -13,9 +14,8 @@ os.environ.setdefault("ENVIRONMENT", "test")
 
 from httpx import ASGITransport, AsyncClient
 
-from app.main import create_app
 from app.db.session import get_db
-from app.api.deps import require_admin, require_permission
+from app.main import create_app
 from app.middleware.auth import JWTAuthMiddleware
 
 _REGISTRY_PATH = "app.api.v1.user_tags.TagRegistry"
@@ -23,7 +23,7 @@ _REGISTRY_PATH = "app.api.v1.user_tags.TagRegistry"
 
 def _bypass_auth(admin: bool = True):
     """Context manager patch that bypasses JWT middleware and injects identity."""
-    from unittest.mock import patch, AsyncMock
+    from unittest.mock import patch
 
     async def patched_dispatch(self, request, call_next):
         request.state.identity = {"sub": "user-sub", "roles": ["admin"] if admin else []}
@@ -35,20 +35,24 @@ def _bypass_auth(admin: bool = True):
 def _mock_permission_engine_allow():
     """Mock PermissionEngine.authorize() to always return allowed."""
     from app.services.permissions.permission_engine import AuthorizationResult
-    
+
     async def mock_authorize(*args, **kwargs):
         return AuthorizationResult(allowed=True, reason="Test override")
-    
-    return patch("app.services.permissions.permission_engine.PermissionEngine.authorize", mock_authorize)
+
+    return patch(
+        "app.services.permissions.permission_engine.PermissionEngine.authorize", mock_authorize
+    )
 
 
 def _db_override():
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=MagicMock(
-        scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))),
-        scalar_one=MagicMock(return_value=0),
-        scalar_one_or_none=MagicMock(return_value=None),
-    ))
+    mock_session.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))),
+            scalar_one=MagicMock(return_value=0),
+            scalar_one_or_none=MagicMock(return_value=None),
+        )
+    )
 
     async def override():
         yield mock_session
@@ -58,15 +62,19 @@ def _db_override():
 
 def _admin_override():
     """Return a dependency override that marks the caller as admin."""
+
     def override():
         return {"sub": "admin-sub", "roles": ["admin"]}
+
     return override
 
 
 def _nonadmin_override():
     """Return a dependency override that marks the caller as non-admin."""
+
     def override():
         raise __import__("fastapi").HTTPException(status_code=403, detail="Admin access required.")
+
     return override
 
 
@@ -93,7 +101,9 @@ async def test_list_tag_definitions_returns_200_for_authenticated_user():
         mock_reg = MockRegistry.return_value
         mock_reg.list_definitions = AsyncMock(return_value=[])
         with _bypass_auth(admin=False):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/user-tags/definitions")
 
     assert response.status_code == 200
@@ -103,6 +113,7 @@ async def test_list_tag_definitions_returns_200_for_authenticated_user():
 async def test_create_tag_definition_as_admin_returns_201():
     """POST /tags/definitions as admin returns 201 with the created tag."""
     from datetime import datetime as dt
+
     from app.schemas.tags import TagDefinitionRead, TagScope
 
     app = create_app()
@@ -175,6 +186,7 @@ async def test_delete_tag_definition_as_admin_returns_204():
 async def test_create_tag_definition_with_allowed_values_returns_201():
     """POST /tags/definitions with allowed_values returns 201 and includes the values in response."""
     from datetime import datetime as dt
+
     from app.schemas.tags import TagDefinitionRead, TagScope, TagValueRead
 
     app = create_app()
@@ -185,7 +197,7 @@ async def test_create_tag_definition_with_allowed_values_returns_201():
     tag_id = uuid.uuid4()
     value_id_1 = uuid.uuid4()
     value_id_2 = uuid.uuid4()
-    
+
     mock_result = TagDefinitionRead(
         id=tag_id,
         key="environment",
@@ -227,6 +239,7 @@ async def test_create_tag_definition_with_allowed_values_returns_201():
 async def test_update_tag_definition_add_values_returns_200():
     """PATCH /tags/definitions/{id} with add_values returns 200 and includes new values."""
     from datetime import datetime as dt
+
     from app.schemas.tags import TagDefinitionRead, TagScope, TagValueRead
 
     app = create_app()
@@ -238,7 +251,7 @@ async def test_update_tag_definition_add_values_returns_200():
     value_id_1 = uuid.uuid4()
     value_id_2 = uuid.uuid4()
     value_id_3 = uuid.uuid4()
-    
+
     mock_result = TagDefinitionRead(
         id=tag_id,
         key="environment",
@@ -271,4 +284,3 @@ async def test_update_tag_definition_add_values_returns_200():
     assert len(data["allowed_values"]) == 3
     values = [v["value"] for v in data["allowed_values"]]
     assert "staging" in values
-

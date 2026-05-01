@@ -1,4 +1,5 @@
 """Unit tests for TelemetrySettings config model."""
+
 import os
 
 import pytest

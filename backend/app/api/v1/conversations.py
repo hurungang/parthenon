@@ -1,15 +1,14 @@
 """Conversations API router — query endpoints for conversation history."""
-import uuid
+
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_CONVERSATION
+from app.db.models.conversations import ConversationSession
 from app.db.session import DbSession
-from app.db.models.conversations import ConversationSession, ConversationTurn
 from app.schemas.conversations import ConversationSessionDetailRead, ConversationSessionRead
 from app.services.conversations.store import ConversationStore
 
