@@ -20,6 +20,7 @@ RT_PERMISSIONS: Final[str] = "permissions"
 RT_SKILL: Final[str] = "skill"
 RT_SCHEDULING: Final[str] = "scheduling"
 RT_NOTIFICATION: Final[str] = "notification"
+RT_RESULT: Final[str] = "result"
 
 # ── Manifest ──────────────────────────────────────────────────────────────────
 
@@ -59,5 +60,8 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     },
     RT_NOTIFICATION: {
         "actions": ["read", "manage"],
+    },
+    RT_RESULT: {
+        "actions": ["read"],
     },
 }
