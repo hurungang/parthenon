@@ -245,8 +245,8 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `getIdentityStatus` | function | Calls `GET /api/v1/setup/identity-status`; returns `IdentityStatusResponse` | `frontend/src/api/setupApi.ts` |
-| `provisionIdentity` | function | Calls `POST /api/v1/setup/identity` with `ProviderSetupRequest`; returns `ProviderSetupResult` | `frontend/src/api/setupApi.ts` |
-| `SetupWizard` | component | Wizard container; step-index state machine; fires `provisionIdentity` on final submission | `frontend/src/pages/setup/SetupWizard.tsx` |
+| `postSetupIdentity` | function | Calls `POST /api/v1/setup/identity` with `ProviderSetupRequest`; returns `ProviderSetupResult` | `frontend/src/api/setupApi.ts` |
+| `SetupWizard` | component | Wizard container; step-index state machine; fires `postSetupIdentity` on final submission | `frontend/src/pages/setup/SetupWizard.tsx` |
 | `ProviderSelectionStep` | component | Wizard step 1 — provider type radio selection | `frontend/src/features/setup/ProviderSelectionStep.tsx` |
 | `KeycloakConfigStep` | component | Wizard step — Keycloak connection and credential form | `frontend/src/features/setup/KeycloakConfigStep.tsx` |
 | `ExternalOidcConfigStep` | component | Wizard step — external OIDC / Azure EntraID configuration form | `frontend/src/features/setup/ExternalOidcConfigStep.tsx` |
