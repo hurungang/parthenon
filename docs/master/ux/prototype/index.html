@@ -776,9 +776,9 @@ strong{font-weight:600}
           <table>
             <thead><tr><th>Tool Name</th><th>Description</th><th>Server</th><th>Assigned Skills</th><th style="width:100px">Enabled</th></tr></thead>
             <tbody>
-              <tr><td><strong class="font-mono">read_file</strong></td><td>Read file contents from path</td><td><span class="chip chip-blue">filesystem</span></td><td>2</td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
-              <tr><td><strong class="font-mono">write_file</strong></td><td>Write data to a file</td><td><span class="chip chip-blue">filesystem</span></td><td>1</td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
-              <tr><td><strong class="font-mono">copy_file</strong></td><td>Copy file to destination</td><td><span class="chip chip-blue">filesystem</span></td><td>1</td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
+              <tr><td><strong class="font-mono">read_file</strong></td><td>Read file contents from path</td><td><span class="chip chip-blue">filesystem</span></td><td><span class="chip chip-gray" style="margin-right:4px">read-analyze-file</span><span class="chip chip-gray">file-organizer</span></td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
+              <tr><td><strong class="font-mono">write_file</strong></td><td>Write data to a file</td><td><span class="chip chip-blue">filesystem</span></td><td><span class="text-secondary">—</span></td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
+              <tr><td><strong class="font-mono">copy_file</strong></td><td>Copy file to destination</td><td><span class="chip chip-blue">filesystem</span></td><td><span class="chip chip-gray">file-organizer</span></td><td><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span></label></td></tr>
             </tbody>
           </table>
         </div>
@@ -865,46 +865,39 @@ strong{font-weight:600}
               <label>Description</label>
               <textarea class="form-control" rows="3" placeholder="Describe what this skill does..."></textarea>
             </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Instructions (for agents)</label>
+              <textarea class="form-control" rows="4" placeholder="Explain how agents should use the tools in this skill..."></textarea>
+            </div>
           </div>
         </div>
         <div class="card mb-4">
           <div class="card-header"><h3>MCP Tools</h3><span class="text-secondary text-sm">Select tools to include</span></div>
           <div class="card-body">
-            <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:13px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">filesystem</div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
               <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px;transition:background 0.2s">
                 <input type="checkbox" checked style="margin-top:2px;accent-color:var(--primary)">
                 <div style="flex:1">
-                  <div style="font-weight:600;font-size:13px">filesystem.read_file</div>
+                  <div style="font-weight:600;font-size:13px">read_file</div>
                   <div style="font-size:12px;color:var(--text-secondary)">Read file contents from path</div>
-                  <div style="margin-top:8px;padding:8px;background:#F8FAFC;border-radius:4px;font-size:12px">
-                    <div style="font-weight:600;margin-bottom:4px;color:var(--text-secondary)">Argument Mapping</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center">
-                      <span style="font-family:monospace">path</span>
-                      <input class="form-control" style="font-size:12px;padding:4px 8px" placeholder="{{input.file_path}}">
-                      <span style="font-family:monospace">encoding</span>
-                      <input class="form-control" style="font-size:12px;padding:4px 8px" placeholder="utf-8">
-                    </div>
-                  </div>
                 </div>
               </label>
               <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px">
                 <input type="checkbox" checked style="margin-top:2px;accent-color:var(--primary)">
                 <div style="flex:1">
-                  <div style="font-weight:600;font-size:13px">filesystem.list_directory</div>
+                  <div style="font-weight:600;font-size:13px">list_directory</div>
                   <div style="font-size:12px;color:var(--text-secondary)">List directory contents</div>
-                  <div style="margin-top:8px;padding:8px;background:#F8FAFC;border-radius:4px;font-size:12px">
-                    <div style="font-weight:600;margin-bottom:4px;color:var(--text-secondary)">Argument Mapping</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center">
-                      <span style="font-family:monospace">directory</span>
-                      <input class="form-control" style="font-size:12px;padding:4px 8px" placeholder="{{input.directory}}">
-                    </div>
-                  </div>
                 </div>
               </label>
+            </div>
+            
+            <div style="font-size:13px;font-weight:600;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">github</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
               <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px">
                 <input type="checkbox" style="margin-top:2px;accent-color:var(--primary)">
                 <div style="flex:1">
-                  <div style="font-weight:600;font-size:13px">github.create_issue</div>
+                  <div style="font-weight:600;font-size:13px">create_issue</div>
                   <div style="font-size:12px;color:var(--text-secondary)">Create a new GitHub issue</div>
                 </div>
               </label>
@@ -1000,6 +993,10 @@ strong{font-weight:600}
               <label>Description</label>
               <textarea class="form-control" rows="2" placeholder="Describe what this SOP does..."></textarea>
             </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Workflow Instruction</label>
+              <textarea class="form-control" rows="4" placeholder="Explain how to execute the SOP using all associated skills... (e.g. 1. Run skill A and map output to B...)"></textarea>
+            </div>
           </div>
         </div>
 
@@ -1009,6 +1006,7 @@ strong{font-weight:600}
             <!-- Step 1 -->
             <div class="step-card">
               <div class="step-card-header">
+                <div class="drag-handle" title="Drag to reorder">☰</div>
                 <div class="step-card-num">1</div>
                 <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
                   <option selected>Skill</option><option>Sub-Agent Delegation</option>
@@ -1028,6 +1026,7 @@ strong{font-weight:600}
             <!-- Step 2 -->
             <div class="step-card">
               <div class="step-card-header">
+                <div class="drag-handle" title="Drag to reorder">☰</div>
                 <div class="step-card-num">2</div>
                 <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
                   <option selected>Skill</option><option>Sub-Agent Delegation</option>
@@ -1047,6 +1046,7 @@ strong{font-weight:600}
             <!-- Step 3 -->
             <div class="step-card">
               <div class="step-card-header">
+                <div class="drag-handle" title="Drag to reorder">☰</div>
                 <div class="step-card-num">3</div>
                 <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
                   <option>Skill</option><option selected>Sub-Agent Delegation</option>
@@ -2191,7 +2191,7 @@ Returns: { request_id, status }</div>
       <div class="session-item">
         <div class="session-info">
           <div class="session-name font-mono">session-default</div>
-          <div class="session-binding text-secondary">agent:agent-sop</div>
+          <div class="session-binding text-secondary">Auth: api_key</div>
         </div>
         <span class="chip chip-green">Active</span>
         <button class="btn-icon-sm">🗑️</button>
@@ -2199,7 +2199,7 @@ Returns: { request_id, status }</div>
       <div class="session-item">
         <div class="session-info">
           <div class="session-name font-mono">session-analyst</div>
-          <div class="session-binding text-secondary">role:analyst</div>
+          <div class="session-binding text-secondary">Auth: bearer_token</div>
         </div>
         <span class="chip chip-green">Active</span>
         <button class="btn-icon-sm">🗑️</button>
@@ -2207,7 +2207,7 @@ Returns: { request_id, status }</div>
       <div class="session-item">
         <div class="session-info">
           <div class="session-name font-mono">session-debug</div>
-          <div class="session-binding text-secondary">agent:agent-skillful</div>
+          <div class="session-binding text-secondary">Auth: none</div>
         </div>
         <span class="chip chip-gray">Inactive</span>
         <button class="btn-icon-sm">🗑️</button>
@@ -2219,17 +2219,24 @@ Returns: { request_id, status }</div>
         <input class="form-control" placeholder="e.g. session-new">
       </div>
       <div class="form-group">
-        <label>Identity Binding</label>
-        <input class="form-control" placeholder="agent:agent-sop or role:analyst">
+        <label>Description</label>
+        <textarea class="form-control" rows="2" placeholder="Session description..."></textarea>
       </div>
       <div class="form-group">
-        <label class="toggle">
-          <input type="checkbox" checked>
-          <span class="toggle-slider"></span>
-          <span>Active</span>
-        </label>
+        <label>Auth Type</label>
+        <select class="form-control">
+          <option>API Key</option>
+          <option>Bearer Token</option>
+          <option>Basic Auth</option>
+          <option>OAuth2</option>
+          <option>None</option>
+        </select>
       </div>
-      <div style="display:flex;gap:8px">
+      <div class="form-group">
+        <label>Credentials</label>
+        <input class="form-control" type="password" placeholder="api key, token, etc.">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
         <button class="btn btn-primary btn-sm">Save Session</button>
         <button class="btn btn-secondary btn-sm" onclick="hideAddSession()">Cancel</button>
       </div>

@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -14,11 +15,6 @@ import {
   TableRow,
   TextField,
   Typography,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -26,19 +22,22 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { SkillEditor } from './SkillEditor'
 import type { Skill } from '../../types'
 
 /**
- * Skill list page with search filter and create/edit actions.
+ * Skill list page with inline SkillEditor side panel.
+ *
+ * editorSkill:
+ *   undefined → editor hidden
+ *   null      → create mode
+ *   Skill     → edit mode
  */
 export function SkillListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogError, setDialogError] = useState<unknown>(null)
-  const [editSkill, setEditSkill] = useState<Skill | null>(null)
-  const [form, setForm] = useState({ name: '', description: '' })
+  const [editorSkill, setEditorSkill] = useState<Skill | null | undefined>(undefined)
 
   const { data: skills, isLoading, error } = useQuery<Skill[]>({
     queryKey: ['skills'],
@@ -48,38 +47,12 @@ export function SkillListPage() {
     },
   })
 
-  const filtered = (skills ?? []).filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()),
+  const filteredSkills = (skills ?? []).filter(
+    (s) =>
+      !search ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.description ?? '').toLowerCase().includes(search.toLowerCase()),
   )
-
-  const handleOpenCreate = () => {
-    setEditSkill(null)
-    setForm({ name: '', description: '' })
-    setDialogError(null)
-    setDialogOpen(true)
-  }
-
-  const handleOpenEdit = (skill: Skill) => {
-    setEditSkill(skill)
-    setForm({ name: skill.name, description: skill.description ?? '' })
-    setDialogError(null)
-    setDialogOpen(true)
-  }
-
-  const handleSave = async () => {
-    try {
-      setDialogError(null)
-      if (editSkill) {
-        await apiClient.put(`/skills/${editSkill.id}`, form)
-      } else {
-        await apiClient.post('/skills', { ...form, tool_ids: [] })
-      }
-      setDialogOpen(false)
-      await queryClient.invalidateQueries({ queryKey: ['skills'] })
-    } catch (err) {
-      setDialogError(err)
-    }
-  }
 
   const handleDelete = async (id: string) => {
     if (confirm(t('app.confirm'))) {
@@ -89,95 +62,105 @@ export function SkillListPage() {
   }
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" fontWeight={700}>{t('skills.title')}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
-          {t('skills.createSkill')}
-        </Button>
+    <Box display="flex" gap={2} alignItems="flex-start">
+      {/* Main list */}
+      <Box flex={1} minWidth={0}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h4" fontWeight={700}>
+            {t('skills.title')}
+          </Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorSkill(null)}>
+            {t('skills.createSkill')}
+          </Button>
+        </Box>
+
+        <TextField
+          placeholder={t('app.search')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          size="small"
+          sx={{ mb: 2, width: 320 }}
+        />
+
+        {isLoading && <CircularProgress />}
+        {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
+
+        {!isLoading && !error && (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('app.name')}</TableCell>
+                  <TableCell>{t('skills.toolCount')}</TableCell>
+                  <TableCell>{t('app.status')}</TableCell>
+                  <TableCell>{t('app.actions')}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredSkills.map((skill) => (
+                  <TableRow
+                    key={skill.id}
+                    selected={
+                      editorSkill !== null &&
+                      editorSkill !== undefined &&
+                      editorSkill.id === skill.id
+                    }
+                  >
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500}>
+                        {skill.name}
+                      </Typography>
+                      {skill.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {skill.description}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={skill.tool_ids?.length ?? 0}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={skill.is_active ? t('app.active') : t('app.inactive')}
+                        color={skill.is_active ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <IconButton size="small" onClick={() => setEditorSkill(skill)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => handleDelete(skill.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredSkills.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      {t('app.noData')}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Box>
 
-      <TextField
-        placeholder={t('app.search')}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        size="small"
-        sx={{ mb: 2, width: 300 }}
-      />
-
-      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
-
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('app.name')}</TableCell>
-                <TableCell>{t('app.description')}</TableCell>
-                <TableCell>{t('app.status')}</TableCell>
-                <TableCell>{t('app.actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered.map((skill) => (
-                <TableRow key={skill.id}>
-                  <TableCell>{skill.name}</TableCell>
-                  <TableCell>{skill.description ?? '—'}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={skill.is_active ? t('app.active') : t('app.inactive')}
-                      color={skill.is_active ? 'success' : 'default'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => handleOpenEdit(skill)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(skill.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">{t('app.noData')}</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      {/* In-page editor panel */}
+      {editorSkill !== undefined && (
+        <SkillEditor
+          skill={editorSkill}
+          onClose={() => setEditorSkill(undefined)}
+          onSaved={() => setEditorSkill(undefined)}
+        />
       )}
-
-      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
-        <DialogTitle>{editSkill ? t('skills.editSkill') : t('skills.createSkill')}</DialogTitle>
-        <DialogContent>
-          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            <TextField
-              label={t('app.name')}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('app.description')}
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave}>{t('app.save')}</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

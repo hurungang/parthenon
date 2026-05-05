@@ -4,7 +4,15 @@ from app.db.models.identity_provider_config import IdentityProviderConfig  # noq
 from app.db.models.identity_provider_setup_state import IdentityProviderSetupState  # noqa: F401
 from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission  # noqa: F401
 from app.db.models.skills import Skill, SkillToolBinding, Sop, SopStep  # noqa: F401
-from app.db.models.agents import AgentInstance, AgentSkillAssignment, AgentType  # noqa: F401
+from app.db.models.agents import (  # noqa: F401
+    AgentIdentity,
+    AgentInstance,
+    AgentJob,
+    AgentRole,
+    AgentRoleSkill,
+    AgentRoleSOP,
+    AgentType,
+)
 from app.db.models.conversations import (  # noqa: F401
     ConversationSession,
     ConversationTurn,

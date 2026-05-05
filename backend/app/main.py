@@ -1,6 +1,12 @@
 """FastAPI application entry point."""
 import logging
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env into os.environ before anything else so os.getenv() calls work
+load_dotenv(Path(__file__).parent.parent / ".env", override=False)
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -127,5 +133,33 @@ app = create_app()
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Run startup tasks including bootstrap seeding."""
+    """Run startup tasks including bootstrap seeding and session dispatcher."""
     await _run_bootstrap()
+    await _initialize_agent_realm()
+    await _start_session_dispatcher()
+
+
+async def _initialize_agent_realm() -> None:
+    """Initialize the agent realm in the identity provider on startup."""
+    try:
+        from app.services.identity.realm_manager import RealmManager
+        manager = RealmManager()
+        await manager.initialize_agent_realm()
+        logger.info("Agent realm initialization complete")
+    except Exception:
+        logger.exception(
+            "Agent realm initialization failed; agents may not be able to authenticate. "
+            "Ensure the identity provider is reachable and configured correctly."
+        )
+
+
+async def _start_session_dispatcher() -> None:
+    """Start the background SessionDispatcher as an asyncio task."""
+    try:
+        import asyncio
+        from app.services.agents.session_dispatcher import SessionDispatcher
+        dispatcher = SessionDispatcher()
+        asyncio.create_task(dispatcher.run())
+        logger.info("SessionDispatcher started")
+    except Exception:
+        logger.exception("Failed to start SessionDispatcher; agent sessions will not auto-execute")

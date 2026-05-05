@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
@@ -32,6 +33,7 @@ class Skill(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -94,6 +96,7 @@ class Sop(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -120,7 +123,7 @@ class Sop(Base):
 class SopStepType(str, enum.Enum):
     """Type of action performed in a SOP step."""
 
-    skill = "skill"
+    skill_invocation = "skill_invocation"
     agent_delegation = "agent_delegation"
 
 
@@ -137,18 +140,19 @@ class SopStep(Base):
     )
     order: Mapped[int] = mapped_column(Integer, nullable=False)
     step_type: Mapped[SopStepType] = mapped_column(
-        Enum(SopStepType, name="sop_step_type_enum"), nullable=False, default=SopStepType.skill
+        Enum(SopStepType, name="sop_step_type_enum"), nullable=False, default=SopStepType.skill_invocation
     )
     # For skill steps
     skill_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("skills.id", ondelete="SET NULL"), nullable=True
     )
     # For agent_delegation steps
-    delegate_agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
+    target_agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    step_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

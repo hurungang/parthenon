@@ -1,8 +1,11 @@
 """MCP Hub API routers: Server, Session, Tool management."""
 import json
+import os
 import uuid
 import logging
+from datetime import datetime
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -11,7 +14,8 @@ from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
 from app.core.resource_types import RT_MCP_SERVER
 from app.db.session import DbSession
-from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission
+from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission, McpSessionAuthType
+from app.db.models.skills import Skill, SkillToolBinding
 from app.schemas.mcp_hub import (
     McpServerCreate,
     McpServerRead,
@@ -24,7 +28,11 @@ from app.schemas.mcp_hub import (
     ToolPermissionCreate,
     ToolPermissionRead,
 )
+from app.schemas.mcp_oauth import OAuthDiscoveryResult, OAuthInitiateRequest
+from app.schemas.skills import SkillRead
 from app.services.mcp.tool_sync import ToolSyncService
+from app.services.mcp_oauth_service import initiate_oauth_flow, handle_oauth_callback as _handle_oauth_callback
+from app.services.mcp_session_test import test_mcp_session_connection
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +118,25 @@ async def sync_mcp_server(
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
+    # Find the first active session for authentication (default session)
+    from app.db.models.mcp_hub import McpSession
+    session_result = await db.execute(
+        select(McpSession).where(
+            McpSession.server_id == server_id,
+            McpSession.is_active == True  # noqa: E712
+        ).order_by(McpSession.created_at.asc()).limit(1)
+    )
+    default_session = session_result.scalar_one_or_none()
+    if default_session:
+        logger.info("Sync: using session %s (auth_type=%s, has_creds=%s) for server %s",
+                    default_session.name, default_session.auth_type,
+                    default_session.encrypted_credentials is not None, server_id)
+    else:
+        logger.info("Sync: no active session found for server %s, syncing without credentials", server_id)
+
     sync_service = ToolSyncService()
     try:
-        counts = await sync_service.sync(server, db)
+        counts = await sync_service.sync(server, db, session=default_session)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
@@ -148,6 +172,55 @@ async def list_server_tools(
     return list(result.scalars().all())
 
 
+@McpServerRouter.post("/{server_id}/oauth/authorize")
+async def get_oauth_authorization_url(
+    server_id: uuid.UUID,
+    db: DbSession,
+    body: OAuthInitiateRequest | None = None,
+    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+) -> dict:
+    """
+    Get OAuth authorization URL for an MCP server.
+
+    Configuration priority:
+    1. If metadata_url is provided in body, fetch config from that URL
+    2. If manual fields (authorization_url, token_url) provided, use them
+    3. If server has pre-configured oauth_config, use that
+    4. Otherwise, attempt auto-discovery from server's base_url
+    
+    Performs Dynamic Client Registration (RFC 7591) when no client_id is found.
+    """
+    manual_config: OAuthDiscoveryResult | None = None
+    redirect_uri = os.getenv("MCP_OAUTH_REDIRECT_URI", "http://localhost:5173/oauth/callback")
+    
+    if body:
+        # Priority 1: Fetch from metadata URL if provided
+        if body.metadata_url:
+            from app.services.mcp_oauth_service import fetch_oauth_metadata
+            try:
+                manual_config = await fetch_oauth_metadata(body.metadata_url, redirect_uri)
+                logger.info("OAuth config fetched from metadata URL: %s", body.metadata_url)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to fetch OAuth metadata from {body.metadata_url}: {exc}"
+                )
+        # Priority 2: Use manual configuration if provided
+        elif body.authorization_url and body.token_url:
+            manual_config = OAuthDiscoveryResult(
+                authorization_url=body.authorization_url,
+                token_url=body.token_url,
+                client_id=body.client_id or "",
+                client_secret=body.client_secret,
+                scope=body.scope,
+                redirect_uri=redirect_uri,
+                registration_endpoint=None,
+            )
+            logger.info("Using manual OAuth configuration")
+    
+    return await initiate_oauth_flow(server_id, db, manual_config)
+
+
 # ── MCP Session Router ─────────────────────────────────────────────────────────
 McpSessionRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Sessions"])
 
@@ -169,7 +242,6 @@ async def list_mcp_sessions(
 
 @McpSessionRouter.post(
     "/{server_id}/sessions",
-    response_model=McpSessionRead,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_mcp_session(
@@ -177,7 +249,7 @@ async def create_mcp_session(
     body: McpSessionCreate,
     db: DbSession,
     _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
-) -> McpSession:
+) -> dict:
     server = await db.get(McpServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
@@ -192,12 +264,34 @@ async def create_mcp_session(
     session = McpSession(
         server_id=server_id,
         encrypted_credentials=encrypted_creds,
+        is_active=False,  # Start as inactive, will activate after connection test
         **session_data,
     )
     db.add(session)
     await db.flush()
     await db.refresh(session)
-    return session
+    
+    # Test connection
+    logger.info("Testing connection for new session %s", session.id)
+    test_result = await test_mcp_session_connection(server, session)
+    
+    # Update is_active based on test result
+    session.is_active = test_result.success
+    await db.flush()
+    await db.refresh(session)
+    
+    logger.info(
+        "Session %s connection test %s: %s",
+        session.id,
+        "succeeded" if test_result.success else "failed",
+        test_result.message
+    )
+    
+    # Return session with connection test result
+    return {
+        **McpSessionRead.model_validate(session).model_dump(),
+        "connection_test": test_result.to_dict()
+    }
 
 
 @McpSessionRouter.put(
@@ -254,9 +348,60 @@ async def delete_mcp_session(
     await db.delete(session)
 
 
+# ── MCP OAuth Router ───────────────────────────────────────────────────────────
+McpOAuthRouter = APIRouter(prefix="/mcp/oauth", tags=["MCP Hub — OAuth"])
+
+
+@McpOAuthRouter.get("/callback")
+async def oauth_callback(
+    code: str,
+    state: str,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+) -> dict:
+    """
+    Handle OAuth callback and exchange code for tokens.
+    Creates an MCP session with the acquired credentials.
+    """
+    return await _handle_oauth_callback(code=code, state=state, db=db)
+
+
 # ── MCP Tool Router ────────────────────────────────────────────────────────────
 McpToolRouter = APIRouter(prefix="/mcp/tools", tags=["MCP Hub — Tools"])
 
+@McpToolRouter.get("", response_model=list[McpToolRead])
+async def list_all_tools(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+) -> list[McpToolRead]:
+    result = await db.execute(
+        select(McpTool)
+        .options(selectinload(McpTool.server))
+        .join(McpServer, McpTool.server_id == McpServer.id)
+        .where(McpTool.is_active == True)  # noqa: E712
+        .order_by(McpServer.name, McpTool.name)
+    )
+    tools = result.scalars().all()
+    return [McpToolRead.from_orm_with_server(t) for t in tools]
+
+
+@McpToolRouter.get("/{tool_id}/skills", response_model=list[SkillRead])
+async def list_tool_skills(
+    tool_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+) -> list[Skill]:
+    tool = await db.get(McpTool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="MCP tool not found")
+    result = await db.execute(
+        select(Skill)
+        .options(selectinload(Skill.tool_bindings))
+        .join(SkillToolBinding, SkillToolBinding.skill_id == Skill.id)
+        .where(SkillToolBinding.tool_id == tool_id)
+        .order_by(Skill.name)
+    )
+    return list(result.scalars().all())
 
 @McpToolRouter.get("/{tool_id}/permissions", response_model=list[ToolPermissionRead])
 async def list_tool_permissions(

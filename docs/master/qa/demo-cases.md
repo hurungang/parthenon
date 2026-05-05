@@ -13,14 +13,22 @@
 - Chat > chat page shows agent type selector or session list
 - Conversation History > clicking a conversation expand button shows its turns
 - Gateway Configuration > gateway page shows agent type names
+- MCP Hub > MCP Hub shows server names from API
 - MCP Hub > MCP Hub has a register/add server button
+- MCP Session CRUD with new fields > MCP session API response includes identity_binding and credential_config
 - Notification Configuration > notification page shows channel names from API
 - Observability Dashboard > observability dashboard shows request rate metric
 - Result Repository > result repository shows result payload text
 - Schedule Manager > schedule manager shows schedule names from API
+- Skills > skills page lists skill names from API
 - Skills > skills page has create skill button
+- Skill editor with instructions and tool binding > skills API response includes instructions field
+- Skill editor with instructions and tool binding > create skill POST payload can include instructions field
+- SOPs > SOPs page lists SOP names from API
 - SOPs > clicking a SOP shows its steps
-- Setup Wizard > setup wizard has input fields for configuration
+- SOP editor with instructions and steps > SOP steps use skill_invocation type (not legacy skill)
+- SOP editor with instructions and steps > SOPs API response includes instructions field
+- SOP editor with instructions and steps > create SOP POST payload can include instructions field
 - Tags Management > renders tag definitions table
 - Roles Management > navigates to Roles tab and shows role data
 - Groups Management > groups tab shows group data
@@ -90,3 +98,12 @@
 | 38 | Add Statement Dialog | Admin expands a role, opens the Add Statement dialog, and sees resource type, effect, and actions dropdowns populated from the resource-type manifest API | improve-role-policy-management | role-policy-management.spec.ts |
 | 39 | JSON View | Admin clicks the View JSON icon on a role row and the JSONViewModal opens showing all policy statements as formatted read-only JSON with a Copy button | improve-role-policy-management | role-policy-management.spec.ts |
 | 40 | Role Clone | Admin clicks Clone on a role row — the Clone Role dialog opens pre-filled with the source role's name (including copy indicator) ready for editing before submission | improve-role-policy-management | role-policy-management.spec.ts |
+| 41 | MCP Hub — Server List | MCP Hub renders server list with server names and active/inactive status indicators | enhance-mcp-hub-skills-sops | mcp-hub.spec.ts |
+| 42 | MCP Session — Identity Binding | Session data carries `identity_binding` (agent/realm) and `credential_config` (required keys); `encrypted_credentials` is never exposed | enhance-mcp-hub-skills-sops | mcp-hub.spec.ts |
+| 43 | Skills — List with Names | Skills list shows all skill names loaded from the API | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
+| 44 | Skills — `instructions` Field | Skills API schema exposes the `instructions` field (agent-facing guidance) alongside `tool_ids` for multi-tool binding | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
+| 45 | Skills — Create with `instructions` | Skill creation POST payload accepts an `instructions` field for agent guidance | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
+| 46 | SOPs — List with Names | SOPs list renders SOP names, descriptions, and step counts from the API | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
+| 47 | SOP Steps — `skill_invocation` Type | SOP steps use the `skill_invocation` enum (not legacy `skill`) and expose `target_agent_type_id` and `step_config` fields | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
+| 48 | SOPs — `instructions` Field | SOPs API schema exposes the `instructions` field for workflow-level agent guidance; field is present even when `null` | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |
+| 49 | SOPs — Create with `instructions` | SOP creation POST payload accepts an `instructions` field for workflow guidance | enhance-mcp-hub-skills-sops | skills-sops.spec.ts |

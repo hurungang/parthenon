@@ -29,7 +29,7 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
         "actions": ["create", "read", "update", "delete", "execute"],
     },
     RT_MCP_SERVER: {
-        "actions": ["create", "read", "update", "delete", "execute"],
+        "actions": ["create", "read", "update", "delete", "execute", "manage"],
     },
     RT_CONVERSATION: {
         "actions": ["create", "read", "update", "delete"],
@@ -47,7 +47,7 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
         "actions": ["read", "manage"],
     },
     RT_ACCESS_REQUEST: {
-        "actions": ["create", "read", "approve", "reject"],
+        "actions": ["create", "read", "approve", "reject", "manage"],
     },
     RT_PERMISSIONS: {
         "actions": ["read", "manage"],

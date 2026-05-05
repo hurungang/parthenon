@@ -1,0 +1,39 @@
+h2. Problem Statement
+
+The current MVP agent for kiosk monitoring has proven valuable, but it is a one-off solution. To support future AI agent use cases and ensure secure, scalable operations, we need a robust platform framework. This framework must enable rapid onboarding of new agent modules, enforce strong security and identity controls, and provide operators with the tools to manage use cases and environments efficiently.
+
+h2. Goal
+
+Deliver a sustainable, extensible agentic platform framework that can host the MVP and future AI agent modules, with centralized management of security, identity, environment profiles, and user access.
+
+h2. Key Capabilities
+
+* Management portal for operators to manage use cases and run AI agents
+* Module-based architecture: each AI use case is a module with its own UI and setup requirements
+* Environment profile management: configure and select environment profiles per use case (e.g., test/prod, with separate secrets and identities)
+* Agent identity management: manage agent user identities and Keycloak integration for sign-in and token refresh
+* Trigger user identity passthrough: always pass the identity of the user who triggered the agent to the use case
+* User access control: manage permissions per use case and environment profile
+
+h2. High-level Acceptance Criteria
+
+# Operators can view, add, and manage AI agent modules via the management portal
+# Each module can declare its required secrets, agent identity, and settings
+# Operators can create and manage environment profiles for each use case, storing required secrets and agent identity
+# When running a use case, operators can select which environment profile to use
+# The system manages agent user identities, including sign-in and token refresh via Keycloak
+# The identity of the user who triggers an agent is always passed to the agent module
+# User access control is enforced per use case and environment profile; users can only access what they are permitted
+# All sensitive credentials and PII are protected according to security requirements
+
+h2. Out of Scope
+
+-- Implementation of individual agent modules beyond the MVP and initial framework
+-- Detailed UI/UX design or technical architecture decisions
+-- Integration with non-Keycloak identity providers
+
+h2. Dependencies & Constraints
+
+-- Requires integration with Keycloak for agent identity management
+-- Must comply with existing security and PII protection standards
+-- Dependent on continued support for the MVP kiosk monitoring agent as a module

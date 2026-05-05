@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_claims
-from app.core.resource_types import RT_PERMISSIONS
+from app.core.resource_types import RT_ACCESS_REQUEST
 from app.db.models.access_request import AccessRequest, AccessRequestStatus
 from app.db.models.access_request_batch import AccessRequestBatch
 from app.db.models.group import Group
@@ -128,7 +128,7 @@ async def list_pending_requests(
     # Check if user has permissions to manage permissions (admin-level access)
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_ACCESS_REQUEST, "manage")
 
     if has_manage_permission:
         result = await db.execute(
@@ -187,7 +187,7 @@ async def approve_request(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_ACCESS_REQUEST, "manage")
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
@@ -214,7 +214,7 @@ async def reject_request(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_ACCESS_REQUEST, "manage")
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
@@ -226,3 +226,4 @@ async def reject_request(
     svc = AccessRequestService()
     updated = await svc.reject_request(db, request_id, reviewer_id, body.rejection_reason)
     return await _enrich_request(db, updated)
+

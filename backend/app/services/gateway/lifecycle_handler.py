@@ -1,14 +1,20 @@
-"""Gateway Lifecycle Handler — orchestrates the gateway state machine."""
+"""Gateway Lifecycle Handler — orchestrates the gateway state machine.
+
+Extended in the Agent Runtime with Gateway change to route inbound agent launch
+requests through AgentSessionService.enqueue and return session IDs synchronously.
+The legacy synchronous execution path is retained for backward compatibility but
+all new agent launches use the asynchronous session queue.
+"""
 import asyncio
 import logging
+import uuid
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.agents import AgentInstanceStatus, AgentMode
+from app.db.models.agents import AgentInstanceStatus
 from app.services.agents.instance_manager import AgentInstanceManager, InstanceLimitError
-from app.services.agents.sop_executor import SopAgentExecutor
-from app.services.agents.skillful_executor import SkillfulAgentExecutor
+from app.services.agents.session_service import AgentSessionService
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +26,44 @@ _pending_answers: dict[str, asyncio.Queue] = {}
 
 class GatewayLifecycleHandler:
     """
-    Orchestrates the gateway state machine:
-    init → request (question → answer) → close
+    Orchestrates the gateway state machine.
+
+    New path (Phase 5): launch → enqueue session → return session_id asynchronously.
+    Legacy path: init → request (question → answer) → close (retained for compatibility).
     """
 
     def __init__(self) -> None:
         self._instance_manager = AgentInstanceManager()
-        self._sop_executor = SopAgentExecutor()
-        self._skillful_executor = SkillfulAgentExecutor()
+        self._session_service = AgentSessionService()
+
+    # ── New async launch path ──────────────────────────────────────────────────
+
+    async def launch(
+        self,
+        agent_type_id: uuid.UUID,
+        input_data: dict[str, Any] | None,
+        user_id: uuid.UUID | None,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """
+        Enqueue an agent session via the Session Queue and return the session ID
+        synchronously. The actual execution is asynchronous.
+
+        Returns:
+            {"session_id": "<uuid>"}
+        """
+        job = await self._session_service.enqueue(
+            agent_type_id=agent_type_id,
+            input_data=input_data,
+            user_id=user_id,
+            db=db,
+        )
+        logger.info(
+            "Gateway launch: enqueued session %s for type %s", job.id, agent_type_id
+        )
+        return {"session_id": str(job.id)}
+
+    # ── Legacy init/request/close path ────────────────────────────────────────
 
     async def init(
         self,
@@ -35,7 +71,7 @@ class GatewayLifecycleHandler:
         initiator_subject: str | None,
         db: AsyncSession,
     ) -> dict[str, Any]:
-        """Initialize an agent instance and return the session handle."""
+        """Initialize a legacy agent instance and return the session handle."""
         try:
             instance = await self._instance_manager.spawn(
                 agent_type_id=agent_type_id,
@@ -46,7 +82,6 @@ class GatewayLifecycleHandler:
         except InstanceLimitError as exc:
             raise ValueError(str(exc))
 
-        # Initialize question/answer queues for this session
         _pending_questions[instance.session_handle] = asyncio.Queue()
         _pending_answers[instance.session_handle] = asyncio.Queue()
 
@@ -64,29 +99,19 @@ class GatewayLifecycleHandler:
         context: dict[str, Any] | None,
         db: AsyncSession,
     ) -> dict[str, Any]:
-        """Forward a prompt to the agent instance and return its response."""
+        """Forward a prompt to the legacy agent instance."""
         instance = await self._instance_manager.get_by_handle(session_handle, db)
         if not instance:
             raise ValueError(f"Session handle not found: {session_handle}")
         if instance.status != AgentInstanceStatus.active:
             raise ValueError(f"Instance is not active (status={instance.status})")
 
-        from app.db.models.agents import AgentType
-        agent_type = await db.get(AgentType, instance.agent_type_id)
-        if not agent_type:
-            raise ValueError(f"Agent type not found: {instance.agent_type_id}")
-
-        if agent_type.mode == AgentMode.sop_agent:
-            result = await self._sop_executor.execute(
-                instance=instance, prompt=prompt, context=context, db=db
-            )
-        else:
-            result = await self._skillful_executor.execute(
-                instance=instance, prompt=prompt, context=context, db=db
-            )
-
+        # NOTE: Legacy synchronous execution path. New agents use the async job queue.
         return {
-            "response": result.get("answer", str(result)),
+            "response": (
+                "This agent type uses the legacy gateway path. "
+                "Use POST /api/v1/agents/sessions to launch agents via the async queue."
+            ),
             "instance_id": str(instance.id),
             "session_handle": session_handle,
             "has_question": False,
@@ -95,7 +120,7 @@ class GatewayLifecycleHandler:
     async def get_question(
         self, session_handle: str, timeout: float = 5.0
     ) -> dict[str, Any]:
-        """Long-poll for a pending agent question. Returns None if no question within timeout."""
+        """Long-poll for a pending agent question."""
         queue = _pending_questions.get(session_handle)
         if not queue:
             raise ValueError(f"Session handle not found: {session_handle}")
@@ -120,14 +145,13 @@ class GatewayLifecycleHandler:
     async def close(
         self, session_handle: str, db: AsyncSession
     ) -> dict[str, Any]:
-        """Close the agent instance and clean up the session."""
+        """Close the legacy agent instance and clean up the session."""
         instance = await self._instance_manager.get_by_handle(session_handle, db)
         if not instance:
             raise ValueError(f"Session handle not found: {session_handle}")
 
         await self._instance_manager.close(instance.id, db)
 
-        # Clean up queues
         _pending_questions.pop(session_handle, None)
         _pending_answers.pop(session_handle, None)
 

@@ -9,6 +9,11 @@ import { McpHubPage } from '../pages/mcp/McpHubPage'
 import { SkillListPage } from '../pages/skills/SkillListPage'
 import { SopListPage } from '../pages/skills/SopListPage'
 import { AgentManagementPage } from '../pages/agents/AgentManagementPage'
+import { AgentRoleListPage } from '../pages/agents/AgentRoleListPage'
+import { AgentIdentityListPage } from '../pages/agents/AgentIdentityListPage'
+import { AgentJobPage } from '../pages/agents/AgentJobPage'
+import { AgentOAuthCallbackPage } from '../pages/agents/AgentOAuthCallbackPage'
+import OAuthCallback from '../pages/OAuthCallback'
 import { GatewayConfigPage } from '../pages/gateway/GatewayConfigPage'
 import { ScheduleManagerPage } from '../pages/scheduling/ScheduleManagerPage'
 import { ConversationHistoryPage } from '../pages/conversations/ConversationHistoryPage'
@@ -70,6 +75,10 @@ function AppRoutes() {
       <Route path="/callback" element={<OidcCallback />} />
       <Route path="/setup" element={<SetupWizard />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
+      {/* Agent OAuth callback — opened in popup; must be accessible without app shell */}
+      <Route path="/agents/identities/oauth/callback" element={<AgentOAuthCallbackPage />} />
+      {/* MCP OAuth callback — opened in popup; must be accessible without app shell */}
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
 
       {/* Protected routes wrapped in AppShell */}
       <Route
@@ -85,6 +94,9 @@ function AppRoutes() {
         <Route path="/skills" element={<SkillListPage />} />
         <Route path="/sops" element={<SopListPage />} />
         <Route path="/agents" element={<AgentManagementPage />} />
+        <Route path="/agents/roles" element={<AgentRoleListPage />} />
+        <Route path="/agents/identities" element={<AgentIdentityListPage />} />
+        <Route path="/agents/sessions/:id" element={<AgentJobPage />} />
         <Route path="/gateway" element={<GatewayConfigPage />} />
         <Route path="/schedules" element={<ScheduleManagerPage />} />
         <Route path="/conversations" element={<ConversationHistoryPage />} />

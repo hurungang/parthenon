@@ -3,7 +3,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
@@ -11,6 +11,7 @@ from app.core.resource_types import RT_SKILL
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
+from app.db.models.agents import AgentRoleSkill
 from app.schemas.skills import SkillCreate, SkillRead, SkillUpdate
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,9 @@ async def list_skills(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
 ) -> list[Skill]:
-    result = await db.execute(select(Skill).order_by(Skill.name))
+    result = await db.execute(
+        select(Skill).options(selectinload(Skill.tool_bindings)).order_by(Skill.name)
+    )
     return list(result.scalars().all())
 
 
@@ -42,7 +45,11 @@ async def create_skill(
                 detail=f"MCP tool with id {tool_id} not found",
             )
 
-    skill = Skill(name=body.name, description=body.description)
+    skill = Skill(
+        name=body.name,
+        description=body.description,
+        instructions=body.instructions,
+    )
     db.add(skill)
     await db.flush()
 
@@ -54,8 +61,11 @@ async def create_skill(
         db.add(binding)
 
     await db.flush()
-    await db.refresh(skill)
-    return skill
+    # Reload with eager tool_bindings
+    result = await db.execute(
+        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill.id)
+    )
+    return result.scalar_one()
 
 
 @SkillRouter.get("/{skill_id}", response_model=SkillRead)
@@ -64,7 +74,10 @@ async def get_skill(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
 ) -> Skill:
-    skill = await db.get(Skill, skill_id)
+    result = await db.execute(
+        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill_id)
+    )
+    skill = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
     return skill
@@ -77,7 +90,10 @@ async def update_skill(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "update")),
 ) -> Skill:
-    skill = await db.get(Skill, skill_id)
+    result = await db.execute(
+        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill_id)
+    )
+    skill = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
@@ -95,11 +111,7 @@ async def update_skill(
                 )
 
         # Remove old bindings
-        existing_bindings = await db.execute(
-            select(SkillToolBinding).where(SkillToolBinding.skill_id == skill_id)
-        )
-        for binding in existing_bindings.scalars().all():
-            await db.delete(binding)
+        await db.execute(delete(SkillToolBinding).where(SkillToolBinding.skill_id == skill_id))
 
         # Create new bindings
         for order, tool_id in enumerate(body.tool_ids):
@@ -109,8 +121,11 @@ async def update_skill(
             db.add(binding)
 
     await db.flush()
-    await db.refresh(skill)
-    return skill
+    # Reload with eager tool_bindings
+    result = await db.execute(
+        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill_id)
+    )
+    return result.scalar_one()
 
 
 @SkillRouter.delete("/{skill_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -123,3 +138,40 @@ async def delete_skill(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
     await db.delete(skill)
+
+
+@SkillRouter.get("/{skill_id}/roles", response_model=list[uuid.UUID])
+async def get_skill_roles(
+    skill_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SKILL, "read")),
+) -> list[uuid.UUID]:
+    skill = await db.get(Skill, skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    result = await db.execute(
+        select(AgentRoleSkill.role_id).where(AgentRoleSkill.skill_id == skill_id)
+    )
+    return list(result.scalars().all())
+
+
+@SkillRouter.put("/{skill_id}/roles", response_model=list[uuid.UUID])
+async def set_skill_roles(
+    skill_id: uuid.UUID,
+    body: dict,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SKILL, "update")),
+) -> list[uuid.UUID]:
+    skill = await db.get(Skill, skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    role_ids: list[uuid.UUID] = [uuid.UUID(str(rid)) for rid in body.get("role_ids", [])]
+
+    # Atomically replace membership
+    await db.execute(delete(AgentRoleSkill).where(AgentRoleSkill.skill_id == skill_id))
+    for role_id in role_ids:
+        db.add(AgentRoleSkill(role_id=role_id, skill_id=skill_id))
+
+    await db.flush()
+    return role_ids

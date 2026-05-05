@@ -32,7 +32,7 @@ tooling:
 # Technology stack — context for agents, not prescriptive
 tech_stack:
   frontend: React 19 + TypeScript + Material-UI (MUI 7) + React Router 7 + Vite + i18next + OpenTelemetry
-  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry
+  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry + LangGraph
   database: PostgreSQL 16 — SQLAlchemy declarative models in backend/app/db/models/, Alembic migrations in backend/alembic/
   auth: OIDC/OAuth2 — supports Keycloak and Azure EntraID; JWT validation via python-jose; internal RBAC roles (user, agent, both)
   infra: Docker Compose (dev/self-hosted) + Kubernetes/Helm (production) + nginx reverse proxy + OTEL Collector

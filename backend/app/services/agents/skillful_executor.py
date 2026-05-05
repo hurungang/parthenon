@@ -3,12 +3,9 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.agents import AgentInstance, AgentMode, AgentSkillAssignment, AgentType
-from app.db.models.mcp_hub import McpTool
-from app.db.models.skills import Skill, SkillToolBinding
+from app.db.models.agents import AgentInstance, AgentType
 from app.services.agents.model_binding import ModelBindingLayer
 from app.services.skills.executor import SkillExecutor
 
@@ -57,18 +54,15 @@ class SkillfulAgentExecutor:
         if not agent_type:
             raise SkillfulAgentError(f"Agent type {instance.agent_type_id} not found")
 
-        if agent_type.mode != AgentMode.skillful_agent:
-            raise SkillfulAgentError(
-                f"Agent type '{agent_type.name}' is not a skillful-agent"
-            )
+        # NOTE: mode check removed; mode-based routing superseded by AgentRole in this change.
 
         # Load available skills for this agent type
         skill_defs, skill_map = await self._load_skills(agent_type.id, db)
 
         # Build initial message history
         messages: list[dict[str, str]] = []
-        if agent_type.system_prompt:
-            messages.append({"role": "system", "content": agent_type.system_prompt})
+        if agent_type.system_instruction:
+            messages.append({"role": "system", "content": agent_type.system_instruction})
         if context:
             messages.append(
                 {"role": "system", "content": f"Context: {json.dumps(context)}"}
@@ -149,41 +143,10 @@ class SkillfulAgentExecutor:
         self, agent_type_id: Any, db: AsyncSession
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """
-        Load skills assigned to this agent type and build LLM tool definitions.
+        Load skills for this agent type via its AgentRole.
 
-        Returns:
-            Tuple of (tool_definitions_list, skill_name_to_id_map).
+        NOTE: Skill resolution via AgentRole is implemented in Phase 4 (PermissionManager).
+        Returns empty lists until Phase 4 is complete.
         """
-        assignments_result = await db.execute(
-            select(AgentSkillAssignment).where(
-                AgentSkillAssignment.agent_type_id == agent_type_id
-            )
-        )
-        assignments = assignments_result.scalars().all()
-
-        skill_defs: list[dict[str, Any]] = []
-        skill_map: dict[str, Any] = {}
-
-        for assignment in assignments:
-            skill = await db.get(Skill, assignment.skill_id)
-            if not skill or not skill.is_active:
-                continue
-
-            skill_map[skill.name] = skill.id
-
-            skill_defs.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": skill.name,
-                        "description": skill.description or skill.name,
-                        "parameters": {
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    },
-                }
-            )
-
-        return skill_defs, skill_map
+        # TODO Phase 4: resolve skills via AgentType.role → AgentRoleSkill/AgentRoleSOP
+        return [], {}

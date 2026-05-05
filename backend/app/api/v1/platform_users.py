@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_PERMISSIONS
+from app.core.resource_types import RT_USER
 from app.db.models.group import Group
 from app.db.models.group_role import GroupRole
 from app.db.models.identity import Role
@@ -52,7 +52,7 @@ async def list_platform_users(
     db: DbSession,
     page: int = 1,
     page_size: int = 20,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "read")),
+    _: dict = Depends(require_permission(RT_USER, "read")),
 ) -> List[PlatformUserRead]:
     """Paginated list of platform users with role/group counts."""
     offset = (page - 1) * page_size
@@ -70,7 +70,7 @@ async def list_platform_users(
 async def get_platform_user(
     user_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "read")),
+    _: dict = Depends(require_permission(RT_USER, "read")),
 ) -> PlatformUserDetail:
     """Get a platform user with full role and group membership detail."""
     user = await _get_user_or_404(db, user_id)
@@ -119,7 +119,7 @@ async def assign_user_role(
     user_id: uuid.UUID,
     body: AssignUserRoleBody,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_USER, "manage")),
 ) -> Role:
     """Assign a direct role to a platform user."""
     await _get_user_or_404(db, user_id)
@@ -147,7 +147,7 @@ async def remove_user_role(
     user_id: uuid.UUID,
     role_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_USER, "manage")),
 ) -> None:
     """Remove a direct role from a platform user."""
     await _get_user_or_404(db, user_id)
@@ -169,7 +169,7 @@ async def add_user_to_group(
     user_id: uuid.UUID,
     body: AddUserToGroupBody,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_USER, "manage")),
 ) -> GroupMembershipRead:
     """Add a platform user to a group directly."""
     await _get_user_or_404(db, user_id)
@@ -204,7 +204,7 @@ async def remove_user_from_group(
     user_id: uuid.UUID,
     group_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_USER, "manage")),
 ) -> None:
     """Remove a platform user from a group."""
     await _get_user_or_404(db, user_id)
@@ -215,3 +215,4 @@ async def remove_user_from_group(
     if not row:
         raise HTTPException(status_code=404, detail="Group membership not found.")
     await db.delete(row)
+

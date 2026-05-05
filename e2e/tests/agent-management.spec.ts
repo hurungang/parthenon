@@ -5,12 +5,19 @@ const MOCK_AGENT_TYPES = [
   {
     id: 'at-1',
     name: 'Research Agent',
-    mode: 'skillful-agent',
+    description: '',
+    identity_id: null,
+    role_id: null,
     llm_provider: 'openai',
     llm_model: 'gpt-4o',
-    max_instances: 3,
+    system_instruction: null,
+    input_type: 'none',
+    input_schema: null,
+    output_type: 'markdown',
+    output_schema: null,
     is_active: true,
-    description: '',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
   },
 ]
 
@@ -24,8 +31,17 @@ test.describe('Agent Management', () => {
         route.fulfill({ status: 201, body: JSON.stringify(MOCK_AGENT_TYPES[0]) })
       }
     })
-    await page.route('**/api/v1/agents/types/*/instances', (route) =>
+    await page.route('**/api/v1/agents/types/**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPES[0]) })
+    )
+    await page.route('**/api/v1/agents/roles', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify([]) })
+    )
+    await page.route('**/api/v1/agents/identities', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify([]) })
+    )
+    await page.route('**/api/v1/agents/sessions', (route) =>
+      route.fulfill({ status: 201, body: JSON.stringify({ id: 'sess-1', status: 'queued' }) })
     )
   })
 
@@ -58,11 +74,11 @@ test.describe('Agent Management', () => {
     await expect(page.getByText('Research Agent')).toBeVisible()
   })
 
-  test('displays agent mode for each agent type', async ({ page }) => {
+  test('displays input_type for each agent type', async ({ page }) => {
     await page.goto('/agents')
     await page.waitForLoadState('load')
-    // Mode is translated: 'skillful-agent' mode renders as "Skillful Agent" chip
-    await expect(page.getByText('Skillful Agent')).toBeVisible()
+    // input_type 'none' is rendered as a chip in the agent type row
+    await expect(page.getByText('none')).toBeVisible()
   })
 
   test('shows create agent type button and opens dialog on click', async ({ page }) => {

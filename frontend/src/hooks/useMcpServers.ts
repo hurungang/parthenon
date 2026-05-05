@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../api/apiClient'
-import type { McpServer, McpSession, McpTool, SyncResult, ToolPermission } from '../types'
+import type { McpServer, McpSession, McpTool, Skill, SyncResult, ToolPermission } from '../types'
 
 const MCP_SERVERS_KEY = ['mcp', 'servers']
 
@@ -66,6 +66,27 @@ export function useToolPermissions(toolId: string) {
     queryKey: ['mcp', 'tools', toolId, 'permissions'],
     queryFn: async () => {
       const { data } = await apiClient.get<ToolPermission[]>(`/mcp/tools/${toolId}/permissions`)
+      return data
+    },
+    enabled: !!toolId,
+  })
+}
+
+export function useAllTools() {
+  return useQuery<McpTool[]>({
+    queryKey: ['mcp', 'tools'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<McpTool[]>('/mcp/tools')
+      return data
+    },
+  })
+}
+
+export function useToolSkills(toolId: string) {
+  return useQuery<Skill[]>({
+    queryKey: ['mcp', 'tools', toolId, 'skills'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Skill[]>(`/mcp/tools/${toolId}/skills`)
       return data
     },
     enabled: !!toolId,
