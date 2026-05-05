@@ -27,6 +27,12 @@ ENV/
 .env.*
 !.env.example
 
+# Corporate CA cert bundles (machine-local, not for version control)
+ca-bundle.crt
+cacert.pem
+*.local.pem
+*.local.crt
+
 # pytest
 .pytest_cache/
 .coverage

@@ -65,8 +65,9 @@ flowchart TB
 | **Communication Hub** | Central message broker for Web UI ↔ Agent and Agent ↔ Agent messaging |
 | **Agent Gateway** | Exposes agent types externally via a standard interaction lifecycle protocol |
 | **Agent Engine** | Manages agent type registry, instance lifecycle, model binding, and skill/SOP execution |
-| **Skill Engine** | Resolves and executes Skills and SOPs; dispatches tool calls to MCP Hub |
-| **MCP Hub** | Registers tool servers, syncs tools, manages sessions with identity bindings, and proxies tool calls |
+| **Skill Engine** | Resolves skills with role-based access enforcement; binds multiple tools per skill using server-slug namespacing; delegates SOP execution to the SOP Orchestrator |
+| **SOP Orchestrator** | Executes ordered SOP step sequences; routes skill-invocation steps to Skill Engine and agent-delegation steps to Agent Engine; supports per-step instruction guidance |
+| **MCP Hub** | Registers tool servers, syncs tools with tool-to-skill reverse mapping, manages named sessions per server with AES-256 credential encrypt/decrypt lifecycle, and proxies tool calls |
 | **Scheduling Engine** | Triggers prompts and SOPs on configured cron schedules |
 | **Notification Engine** | Sends outbound notifications via configured channels; exposed as invocable tools |
 | **Data Stores** | Relational store (config, conversations, results, job state) and cache/pubsub layer |

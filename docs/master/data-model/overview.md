@@ -198,14 +198,23 @@ erDiagram
         string slug
         string base_url
         enum status
+        datetime last_synced_at
+        datetime created_at
+        datetime updated_at
     }
     McpSession {
         uuid id
         uuid server_id
         string name
+        string description
         enum auth_type
+        string encrypted_credentials
         string identity_subject
+        json identity_binding
+        json credential_config
         boolean is_active
+        datetime created_at
+        datetime updated_at
     }
     McpTool {
         uuid id
@@ -236,7 +245,11 @@ erDiagram
     Skill {
         uuid id
         string name
+        string description
+        string instructions
         boolean is_active
+        datetime created_at
+        datetime updated_at
     }
     SkillToolBinding {
         uuid id
@@ -247,20 +260,30 @@ erDiagram
     Sop {
         uuid id
         string name
+        string description
+        string instructions
         boolean is_active
+        datetime created_at
+        datetime updated_at
     }
     SopStep {
         uuid id
         uuid sop_id
         int order
+        string name
+        string description
         enum step_type
         uuid skill_id
+        uuid target_agent_type_id
+        json step_config
+        datetime created_at
     }
 
     Skill ||--o{ SkillToolBinding : "invokes via"
     SkillToolBinding }o--|| McpTool : "calls"
     Sop ||--o{ SopStep : "composed of"
     SopStep }o--o| Skill : "executes"
+    SopStep }o--o| AgentType : "delegates to"
 ```
 
 **Source**: `backend/app/db/models/skills.py`
@@ -403,6 +426,7 @@ erDiagram
     Skill ||--o{ SkillToolBinding : "invokes via"
     Sop ||--o{ SopStep : "composed of"
     SopStep }o--o| Skill : "executes"
+    SopStep }o--o| AgentType : "delegates to"
     AgentType }o--o| Sop : "bound to"
     AgentType ||--o{ AgentSkillAssignment : "has"
     AgentSkillAssignment }o--|| Skill : "assigns"

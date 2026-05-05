@@ -109,3 +109,10 @@ class PermRoleDetailRead(PermRoleRead):
     """Role with full nested policy statements."""
 
     policy_statements: List[PolicyStatementRead] = Field(default_factory=list)
+
+
+class ResourceTypeRead(BaseModel):
+    """Read schema for a resource type manifest entry (used by /policy/resource-types)."""
+
+    resource_type: str
+    actions: List[str]

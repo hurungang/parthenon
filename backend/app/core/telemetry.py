@@ -322,8 +322,11 @@ def setup_telemetry(config: "TelemetrySettings") -> None:
             tracer_provider.add_span_processor(processor)
         trace.set_tracer_provider(tracer_provider)
     else:
-        from opentelemetry.trace import ProxyTracerProvider
-        trace.set_tracer_provider(ProxyTracerProvider())
+        # Use SDK TracerProvider (no processors) as the no-op provider.
+        # ProxyTracerProvider must NOT be used here: its get_tracer() calls the
+        # module-level _TRACER_PROVIDER.get_tracer(), which points back to itself
+        # when it is the global provider, causing infinite recursion.
+        trace.set_tracer_provider(TracerProvider(resource=resource))
         logger.info("Traces disabled — no-op TracerProvider registered")
 
     # Meter Provider

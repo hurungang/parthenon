@@ -40,6 +40,8 @@ class McpServer(Base):
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    # OAuth configuration for server-level authentication (auto-discovered or manually configured)
+    oauth_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[McpServerStatus] = mapped_column(
         Enum(McpServerStatus, name="mcp_server_status_enum"),
         nullable=False,
@@ -76,6 +78,7 @@ class McpSessionAuthType(str, enum.Enum):
     api_key = "api_key"
     bearer_token = "bearer_token"
     basic_auth = "basic_auth"
+    oauth2 = "oauth2"
     none = "none"
 
 
@@ -104,6 +107,19 @@ class McpSession(Base):
     encrypted_credentials: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Optional binding to an agent identity or role
     identity_subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Structured binding info for agent identity/role (extends identity_subject)
+    identity_binding: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Session-specific credential configuration (field shape, required keys)
+    credential_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # OAuth token expiry tracking
+    oauth_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    oauth_refresh_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # OAuth metadata (token_url, client_id, etc. for token refresh)
+    oauth_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

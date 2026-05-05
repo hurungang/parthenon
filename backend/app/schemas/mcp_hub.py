@@ -20,6 +20,7 @@ class McpServerUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     base_url: str | None = None
+    oauth_config: dict[str, Any] | None = None
     status: McpServerStatus | None = None
 
 
@@ -31,6 +32,7 @@ class McpServerRead(BaseModel):
     slug: str
     description: str | None
     base_url: str
+    oauth_config: dict[str, Any] | None
     status: McpServerStatus
     last_synced_at: datetime | None
     created_at: datetime
@@ -44,6 +46,8 @@ class McpSessionCreate(BaseModel):
     # Plaintext credentials — will be encrypted before storage
     credentials: dict[str, Any] | None = None
     identity_subject: str | None = None
+    identity_binding: dict[str, Any] | None = None
+    credential_config: dict[str, Any] | None = None
 
 
 class McpSessionUpdate(BaseModel):
@@ -53,6 +57,8 @@ class McpSessionUpdate(BaseModel):
     credentials: dict[str, Any] | None = None
     identity_subject: str | None = None
     is_active: bool | None = None
+    identity_binding: dict[str, Any] | None = None
+    credential_config: dict[str, Any] | None = None
 
 
 class McpSessionRead(BaseModel):
@@ -65,8 +71,12 @@ class McpSessionRead(BaseModel):
     auth_type: McpSessionAuthType
     identity_subject: str | None
     is_active: bool
+    identity_binding: dict[str, Any] | None
+    credential_config: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
+    # Connection test result (only present during creation/update)
+    connection_test: dict[str, Any] | None = None
     # Note: encrypted_credentials is intentionally excluded
 
 
@@ -75,6 +85,8 @@ class McpToolRead(BaseModel):
 
     id: uuid.UUID
     server_id: uuid.UUID
+    server_slug: str | None = None
+    server_name: str | None = None
     name: str
     original_name: str
     description: str | None
@@ -82,6 +94,18 @@ class McpToolRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def __get_validators__(cls):  # noqa: D105
+        yield cls.model_validate
+
+    @classmethod
+    def from_orm_with_server(cls, tool: Any) -> "McpToolRead":
+        obj = cls.model_validate(tool)
+        if hasattr(tool, "server") and tool.server is not None:
+            obj.server_slug = tool.server.slug
+            obj.server_name = tool.server.name
+        return obj
 
 
 class ToolPermissionCreate(BaseModel):

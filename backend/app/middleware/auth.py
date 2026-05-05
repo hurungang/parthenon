@@ -21,6 +21,7 @@ PUBLIC_PATHS: set[str] = {
     "/api/v1/setup/identity",
     "/api/v1/ping",
     "/api/v1/telemetry/config",
+    "/api/v1/agents/identities/oauth/callback",  # OAuth redirect from IdP (no bearer token)
 }
 
 

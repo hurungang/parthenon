@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_PERMISSIONS
+from app.core.resource_types import RT_TAG
 from app.db.session import DbSession
 from app.schemas.tags import TagDefinitionCreate, TagDefinitionRead, TagDefinitionUpdate
 from app.services.permissions.tag_registry import TagRegistry
@@ -31,7 +31,7 @@ async def list_tag_definitions(
 async def create_tag_definition(
     body: TagDefinitionCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_TAG, "manage")),
 ) -> object:
     """Create a tag definition. Admin only. Returns 409 if key+scope already exists."""
     return await TagRegistry().create_definition(
@@ -49,7 +49,7 @@ async def update_tag_definition(
     tag_id: uuid.UUID,
     body: TagDefinitionUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_TAG, "manage")),
 ) -> object:
     """Update a tag definition's description or allowed values. Admin only."""
     return await TagRegistry().update_definition(
@@ -65,7 +65,8 @@ async def update_tag_definition(
 async def delete_tag_definition(
     tag_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_TAG, "manage")),
 ) -> None:
     """Delete a tag definition. Admin only. Returns 409 if referenced by policy conditions."""
     await TagRegistry().delete_definition(db, tag_id=tag_id)
+

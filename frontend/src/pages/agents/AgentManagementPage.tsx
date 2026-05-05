@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -17,50 +18,94 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { useAgentTypes, useAgentInstances, useTerminateInstance } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import apiClient from '../../api/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  AgentTypeForm,
+  defaultAgentTypeFormValues,
+  type AgentTypeFormValues,
+} from './AgentTypeForm'
+import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
 import type { AgentType } from '../../types'
 
 /**
- * Agent management page — agent type list, creation, and active instance table.
+ * Agent management page — agent type list, creation/editing, active instance table,
+ * and session launch.
  */
 export function AgentManagementPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { data: agentTypes, isLoading, error } = useAgentTypes()
   const queryClient = useQueryClient()
   const terminateInstance = useTerminateInstance()
   const [selectedType, setSelectedType] = useState<AgentType | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    mode: 'skillful-agent' as 'sop-agent' | 'skillful-agent',
-    llm_provider: 'openai',
-    llm_model: 'gpt-4o',
-    llm_api_key: '',
-    max_instances: 5,
-    system_prompt: '',
-  })
+  const [editType, setEditType] = useState<AgentType | null>(null)
+  const [form, setForm] = useState<AgentTypeFormValues>(defaultAgentTypeFormValues)
+  const [launchType, setLaunchType] = useState<AgentType | null>(null)
+  const [launchOpen, setLaunchOpen] = useState(false)
 
   const { data: instances } = useAgentInstances(selectedType?.id ?? '')
+
+  const handleOpenCreate = () => {
+    setEditType(null)
+    setForm(defaultAgentTypeFormValues)
+    setDialogError(null)
+    setDialogOpen(true)
+  }
+
+  const handleOpenEdit = (at: AgentType) => {
+    setEditType(at)
+    setForm({
+      name: at.name,
+      description: at.description ?? '',
+      identity_id: at.identity_id ?? '',
+      role_id: at.role_id ?? '',
+      llm_provider: at.llm_provider,
+      llm_model: at.llm_model,
+      llm_api_key: '',
+      system_instruction: at.system_instruction ?? '',
+      input_type: at.input_type,
+      input_schema: at.input_schema ? JSON.stringify(at.input_schema, null, 2) : '',
+      output_type: at.output_type,
+      output_schema: at.output_schema ? JSON.stringify(at.output_schema, null, 2) : '',
+    })
+    setDialogError(null)
+    setDialogOpen(true)
+  }
 
   const handleSave = async () => {
     try {
       setDialogError(null)
-      await apiClient.post('/agents/types', form)
+      const body = {
+        name: form.name,
+        description: form.description || null,
+        identity_id: form.identity_id || null,
+        role_id: form.role_id || null,
+        llm_provider: form.llm_provider,
+        llm_model: form.llm_model,
+        llm_api_key: form.llm_api_key || null,
+        system_instruction: form.system_instruction || null,
+        input_type: form.input_type,
+        input_schema: form.input_schema ? JSON.parse(form.input_schema) : null,
+        output_type: form.output_type,
+        output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
+      }
+      if (editType) {
+        await apiClient.put(`/agents/types/${editType.id}`, body)
+      } else {
+        await apiClient.post('/agents/types', body)
+      }
       setDialogOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
     } catch (err) {
@@ -74,6 +119,11 @@ export function AgentManagementPage() {
     }
   }
 
+  const handleLaunch = (at: AgentType) => {
+    setLaunchType(at)
+    setLaunchOpen(true)
+  }
+
   const statusColor = (status: string) => {
     if (status === 'active') return 'success'
     if (status === 'error') return 'error'
@@ -85,7 +135,7 @@ export function AgentManagementPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" fontWeight={700}>{t('agents.title')}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
           {t('agents.createType')}
         </Button>
       </Box>
@@ -99,10 +149,11 @@ export function AgentManagementPage() {
             <TableHead>
               <TableRow>
                 <TableCell>{t('app.name')}</TableCell>
-                <TableCell>{t('agents.mode')}</TableCell>
+                <TableCell>{t('agents.types.inputType')}</TableCell>
+                <TableCell>{t('agents.types.outputType')}</TableCell>
                 <TableCell>{t('agents.llmModel')}</TableCell>
-                <TableCell>{t('agents.maxInstances')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
+                <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -115,14 +166,12 @@ export function AgentManagementPage() {
                 >
                   <TableCell>{at.name}</TableCell>
                   <TableCell>
-                    <Chip
-                      label={at.mode === 'sop-agent' ? t('agents.sopAgent') : t('agents.skillfulAgent')}
-                      size="small"
-                      color={at.mode === 'sop-agent' ? 'primary' : 'secondary'}
-                    />
+                    <Chip label={at.input_type} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={at.output_type} size="small" variant="outlined" />
                   </TableCell>
                   <TableCell>{at.llm_provider} / {at.llm_model}</TableCell>
-                  <TableCell>{at.max_instances}</TableCell>
                   <TableCell>
                     <Chip
                       label={at.is_active ? t('app.active') : t('app.inactive')}
@@ -130,11 +179,30 @@ export function AgentManagementPage() {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Box display="flex" gap={0.5}>
+                      <Tooltip title={t('agents.types.launch')}>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          aria-label={t('agents.types.launch')}
+                          onClick={() => handleLaunch(at)}
+                        >
+                          <PlayArrowIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('app.edit')}>
+                        <IconButton size="small" aria-label={t('app.edit')} onClick={() => handleOpenEdit(at)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
                 </TableRow>
               ))}
               {(agentTypes ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">{t('app.noData')}</TableCell>
+                  <TableCell colSpan={6} align="center">{t('app.noData')}</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -195,71 +263,51 @@ export function AgentManagementPage() {
         </Box>
       )}
 
-      {/* Create Agent Type Dialog */}
-      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('agents.createType')}</DialogTitle>
-        <DialogContent>
-          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            <TextField
-              label={t('app.name')}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel>{t('agents.mode')}</InputLabel>
-              <Select
-                value={form.mode}
-                label={t('agents.mode')}
-                onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value as typeof form.mode }))}
-              >
-                <MenuItem value="skillful-agent">{t('agents.skillfulAgent')}</MenuItem>
-                <MenuItem value="sop-agent">{t('agents.sopAgent')}</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label={t('agents.llmProvider')}
-              value={form.llm_provider}
-              onChange={(e) => setForm((f) => ({ ...f, llm_provider: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('agents.llmModel')}
-              value={form.llm_model}
-              onChange={(e) => setForm((f) => ({ ...f, llm_model: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('agents.apiKey')}
-              type="password"
-              value={form.llm_api_key}
-              onChange={(e) => setForm((f) => ({ ...f, llm_api_key: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('agents.maxInstances')}
-              type="number"
-              value={form.max_instances}
-              onChange={(e) => setForm((f) => ({ ...f, max_instances: parseInt(e.target.value) || 5 }))}
-              fullWidth
-              inputProps={{ min: 1, max: 100 }}
-            />
-            <TextField
-              label={t('agents.systemPrompt')}
-              value={form.system_prompt}
-              onChange={(e) => setForm((f) => ({ ...f, system_prompt: e.target.value }))}
-              fullWidth
-              multiline
-              rows={3}
-            />
+      {/* Create / Edit Agent Type Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onClose={() => { setDialogOpen(false); setDialogError(null) }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {editType ? t('agents.editType') : t('agents.createType')}
+        </DialogTitle>
+        <DialogContent dividers>
+          {dialogError ? (
+            <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+          ) : null}
+          <Box pt={1}>
+            <AgentTypeForm values={form} onChange={setForm} />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave}>{t('app.save')}</Button>
+          <Button onClick={() => { setDialogOpen(false); setDialogError(null) }}>
+            {t('app.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={!form.name.trim()}
+          >
+            {t('app.save')}
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Session Launch Dialog */}
+      {launchType && (
+        <AgentJobLaunchDialog
+          open={launchOpen}
+          agentType={launchType}
+          onClose={() => { setLaunchOpen(false); setLaunchType(null) }}
+          onLaunched={(sessionId) => {
+            setLaunchOpen(false)
+            setLaunchType(null)
+            void navigate(`/agents/sessions/${sessionId}`)
+          }}
+        />
+      )}
     </Box>
   )
 }

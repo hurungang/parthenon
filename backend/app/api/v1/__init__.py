@@ -2,11 +2,18 @@
 from fastapi import APIRouter
 
 from app.api.v1.user_access_requests import AccessRequestsRouter
-from app.api.v1.agents import AgentInstanceRouter, AgentTypeRouter
+from app.api.v1.agents import (
+    AgentIdentityRouter,
+    AgentInstanceRouter,
+    AgentJobRouter,
+    AgentOAuthRouter,
+    AgentRoleRouter,
+    AgentTypeRouter,
+)
 from app.api.v1.conversations import ConversationRouter
 from app.api.v1.user_groups import GroupsRouter
 from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
-from app.api.v1.mcp_hub import McpServerRouter, McpSessionRouter, McpToolRouter
+from app.api.v1.mcp_hub import McpServerRouter, McpSessionRouter, McpOAuthRouter, McpToolRouter
 from app.api.v1.notifications import NotificationRouter
 from app.api.v1.platform_users import PlatformUsersRouter
 from app.api.v1.policy import PolicyRouter
@@ -32,6 +39,7 @@ router.include_router(IdentityRouter)
 # MCP Hub
 router.include_router(McpServerRouter)
 router.include_router(McpSessionRouter)
+router.include_router(McpOAuthRouter)
 router.include_router(McpToolRouter)
 
 # Skills & SOPs
@@ -39,6 +47,10 @@ router.include_router(SkillRouter)
 router.include_router(SopRouter)
 
 # Agents
+router.include_router(AgentRoleRouter)
+router.include_router(AgentIdentityRouter)
+router.include_router(AgentOAuthRouter)
+router.include_router(AgentJobRouter)
 router.include_router(AgentTypeRouter)
 router.include_router(AgentInstanceRouter)
 

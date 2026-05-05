@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.agents import AgentInstance, AgentMode
+from app.db.models.agents import AgentInstance
 from app.services.skills.sop_orchestrator import SopOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -42,39 +42,14 @@ class SopAgentExecutor:
         Returns:
             Orchestrated SOP result.
         """
-        # Load agent type to get the bound SOP
+        # Load agent type — NOTE: SOP execution superseded by AgentJob/LangGraph in Phase 5.
         from app.db.models.agents import AgentType
 
         agent_type = await db.get(AgentType, instance.agent_type_id)
         if not agent_type:
             raise SopAgentError(f"Agent type {instance.agent_type_id} not found")
 
-        if agent_type.mode != AgentMode.sop_agent:
-            raise SopAgentError(
-                f"Agent type '{agent_type.name}' is not a sop-agent (mode={agent_type.mode})"
-            )
-
-        if not agent_type.sop_id:
-            raise SopAgentError(
-                f"sop-agent '{agent_type.name}' has no bound SOP"
-            )
-
-        logger.info(
-            "sop-agent instance %s executing SOP %s for prompt: %s...",
-            instance.id,
-            agent_type.sop_id,
-            prompt[:100],
+        raise SopAgentError(
+            f"SOP-based execution for agent type '{agent_type.name}' is not supported in "
+            "this version. Use the AgentJob queue (Phase 5) for agent execution."
         )
-
-        result = await self._orchestrator.execute(
-            sop_id=agent_type.sop_id,
-            prompt=prompt,
-            context=context,
-            db=db,
-        )
-
-        return {
-            "agent_type": agent_type.name,
-            "instance_id": str(instance.id),
-            "sop_result": result,
-        }

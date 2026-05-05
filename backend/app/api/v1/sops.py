@@ -9,6 +9,7 @@ from app.api.deps import require_permission
 from app.core.resource_types import RT_SKILL
 from app.db.session import DbSession
 from app.db.models.skills import Skill, Sop, SopStep
+from app.db.models.agents import AgentRoleSOP
 from app.schemas.skills import SopCreate, SopDetailRead, SopRead, SopStepCreate, SopStepRead, SopUpdate
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ async def replace_sop_steps(
     if not sop:
         raise HTTPException(status_code=404, detail="SOP not found")
 
-    # Validate skill IDs for skill steps
+    # Validate skill IDs for skill_invocation steps
     for step_data in body:
         if step_data.skill_id:
             skill = await db.get(Skill, step_data.skill_id)
@@ -135,7 +136,8 @@ async def replace_sop_steps(
             order=step_data.order if step_data.order is not None else idx,
             step_type=step_data.step_type,
             skill_id=step_data.skill_id,
-            delegate_agent_type_id=step_data.delegate_agent_type_id,
+            target_agent_type_id=step_data.target_agent_type_id,
+            step_config=step_data.step_config,
             name=step_data.name,
             description=step_data.description,
         )
@@ -147,3 +149,40 @@ async def replace_sop_steps(
         await db.refresh(step)
 
     return new_steps
+
+
+@SopRouter.get("/{sop_id}/roles", response_model=list[uuid.UUID])
+async def get_sop_roles(
+    sop_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SKILL, "read")),
+) -> list[uuid.UUID]:
+    sop = await db.get(Sop, sop_id)
+    if not sop:
+        raise HTTPException(status_code=404, detail="SOP not found")
+    result = await db.execute(
+        select(AgentRoleSOP.role_id).where(AgentRoleSOP.sop_id == sop_id)
+    )
+    return list(result.scalars().all())
+
+
+@SopRouter.put("/{sop_id}/roles", response_model=list[uuid.UUID])
+async def set_sop_roles(
+    sop_id: uuid.UUID,
+    body: dict,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SKILL, "update")),
+) -> list[uuid.UUID]:
+    sop = await db.get(Sop, sop_id)
+    if not sop:
+        raise HTTPException(status_code=404, detail="SOP not found")
+
+    role_ids: list[uuid.UUID] = [uuid.UUID(str(rid)) for rid in body.get("role_ids", [])]
+
+    # Atomically replace membership
+    await db.execute(delete(AgentRoleSOP).where(AgentRoleSOP.sop_id == sop_id))
+    for role_id in role_ids:
+        db.add(AgentRoleSOP(role_id=role_id, sop_id=sop_id))
+
+    await db.flush()
+    return role_ids

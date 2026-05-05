@@ -41,7 +41,7 @@ export interface Identity {
 // ── MCP Hub ────────────────────────────────────────────────────────────────────
 
 export type McpServerStatus = 'active' | 'inactive' | 'error'
-export type McpSessionAuthType = 'api_key' | 'bearer_token' | 'basic_auth' | 'none'
+export type McpSessionAuthType = 'api_key' | 'bearer_token' | 'basic_auth' | 'oauth2' | 'none'
 
 export interface McpServer {
   id: string
@@ -63,6 +63,8 @@ export interface McpSession {
   auth_type: McpSessionAuthType
   identity_subject: string | null
   is_active: boolean
+  identity_binding: Record<string, unknown> | null
+  credential_config: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -96,13 +98,15 @@ export interface SyncResult {
 
 // ── Skills & SOPs ──────────────────────────────────────────────────────────────
 
-export type SopStepType = 'skill' | 'agent_delegation'
+export type SopStepType = 'skill_invocation' | 'agent_delegation'
 
 export interface Skill {
   id: string
   name: string
   description: string | null
+  instructions: string | null
   is_active: boolean
+  tool_ids: string[]
   created_at: string
   updated_at: string
 }
@@ -113,7 +117,8 @@ export interface SopStep {
   order: number
   step_type: SopStepType
   skill_id: string | null
-  delegate_agent_type_id: string | null
+  target_agent_type_id: string | null
+  step_config: Record<string, unknown> | null
   name: string | null
   description: string | null
   created_at: string
@@ -123,6 +128,7 @@ export interface Sop {
   id: string
   name: string
   description: string | null
+  instructions: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -134,21 +140,62 @@ export interface SopDetail extends Sop {
 
 // ── Agents ─────────────────────────────────────────────────────────────────────
 
-export type AgentMode = 'sop-agent' | 'skillful-agent'
 export type AgentInstanceStatus = 'created' | 'active' | 'closed' | 'error'
+export type AgentIdentityType = 'realm_user'
+export type AgentIdentityStatus = 'active' | 'suspended' | 'deprovisioned'
+export type AgentJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+export type AgentInputType = 'none' | 'typed' | 'conversation'
+export type AgentOutputType = 'auto' | 'typed' | 'markdown'
+
+export interface AgentRole {
+  id: string
+  name: string
+  description: string | null
+  sop_ids: string[]
+  skill_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentIdentity {
+  id: string
+  name: string
+  identity_type: AgentIdentityType
+  realm_name: string | null
+  realm_username: string | null
+  status: AgentIdentityStatus
+  token_expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentJob {
+  id: string
+  agent_type_id: string
+  triggered_by_user_id: string | null
+  input_data: Record<string, unknown> | null
+  status: AgentJobStatus
+  started_at: string | null
+  completed_at: string | null
+  output_data: Record<string, unknown> | null
+  error_message: string | null
+  created_at: string
+}
 
 export interface AgentType {
   id: string
   name: string
   description: string | null
-  mode: AgentMode
+  identity_id: string | null
+  role_id: string | null
   llm_provider: string
   llm_model: string
-  sop_id: string | null
-  max_instances: number
+  system_instruction: string | null
+  input_type: AgentInputType
+  input_schema: Record<string, unknown> | null
+  output_type: AgentOutputType
+  output_schema: Record<string, unknown> | null
   is_active: boolean
-  system_prompt: string | null
-  identity_subject: string | null
   created_at: string
   updated_at: string
 }

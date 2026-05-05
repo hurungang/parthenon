@@ -34,6 +34,7 @@ class IdentityYamlConfig(BaseModel):
     jwt_algorithm: str = ""
     setup_complete: bool = False
     completed_at: str = ""  # ISO-8601
+    agent_realm_name: str = "ai_agents"  # Name of the dedicated agent realm
 
 
 class ConfigurationError(Exception):

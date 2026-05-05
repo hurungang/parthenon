@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 
 from app.api.deps import get_current_claims, require_permission
-from app.core.resource_types import RT_PERMISSIONS
+from app.core.resource_types import RT_GROUP
 from app.db.models.group import Group
 from app.db.models.group_role import GroupRole
 from app.db.models.identity import Role
@@ -89,7 +89,7 @@ async def list_groups(
 async def create_group(
     body: GroupCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_GROUP, "manage")),
 ) -> GroupRead:
     """Create a new group. Admin only."""
     existing = await db.execute(select(Group).where(Group.name == body.name))
@@ -138,7 +138,7 @@ async def update_group(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_GROUP, "manage")
 
     if not has_manage_permission:
         if platform_user_id is None or group.owner_id != platform_user_id:
@@ -157,7 +157,7 @@ async def update_group(
 async def delete_group(
     group_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_GROUP, "manage")),
 ) -> None:
     """Delete a group. Admin only."""
     group = await _get_group_or_404(db, group_id)
@@ -177,7 +177,7 @@ async def list_group_members(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_GROUP, "manage")
 
     if not has_manage_permission and (platform_user_id is None or group.owner_id != platform_user_id):
         raise HTTPException(status_code=403, detail="Not authorized.")
@@ -211,7 +211,7 @@ async def add_group_member(
     group_id: uuid.UUID,
     body: AddGroupMemberBody,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_GROUP, "manage")),
 ) -> GroupMemberRead:
     """Directly add a member to a group. Admin only."""
     await _get_group_or_404(db, group_id)
@@ -245,7 +245,7 @@ async def remove_group_member(
     group_id: uuid.UUID,
     user_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_GROUP, "manage")),
 ) -> None:
     """Remove a member from a group. Admin only."""
     await _get_group_or_404(db, group_id)
@@ -271,7 +271,7 @@ async def list_group_roles(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_GROUP, "manage")
 
     if not has_manage_permission and (platform_user_id is None or group.owner_id != platform_user_id):
         raise HTTPException(status_code=403, detail="Not authorized.")
@@ -294,7 +294,7 @@ async def assign_group_role(
     group_id: uuid.UUID,
     body: AssignGroupRoleBody,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_GROUP, "manage")),
 ) -> Role:
     """Assign a role to a group. Admin only. Returns 409 if already assigned."""
     await _get_group_or_404(db, group_id)
@@ -319,7 +319,7 @@ async def remove_group_role(
     group_id: uuid.UUID,
     role_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+    _: dict = Depends(require_permission(RT_GROUP, "manage")),
 ) -> None:
     """Remove a role from a group. Admin only."""
     await _get_group_or_404(db, group_id)
@@ -330,3 +330,4 @@ async def remove_group_role(
     if not row:
         raise HTTPException(status_code=404, detail="Role assignment not found.")
     await db.delete(row)
+

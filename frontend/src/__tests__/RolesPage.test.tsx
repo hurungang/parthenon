@@ -21,6 +21,7 @@ vi.mock('../hooks/usePermissions', () => ({
   useCreatePolicyStatement: () => ({ mutate: vi.fn(), isPending: false }),
   useDeletePolicyStatement: () => ({ mutate: vi.fn(), isPending: false }),
   useTagDefinitions: () => ({ data: [], isLoading: false }),
+  useCloneRole: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 vi.mock('../hooks/useTagValueOptions', () => ({

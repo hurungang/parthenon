@@ -95,6 +95,29 @@ $Script:ServiceConfig = @{
         StartCommand = {
             Write-Host "Starting backend API server..." -ForegroundColor Cyan
             $backendPath = Join-Path $Script:ProjectRoot "backend"
+
+            # Set SSL certificate bundle for corporate firewall CA (same pattern as myaider-app)
+            $caBundlePath = Join-Path $Script:ProjectRoot "ca-bundle.crt"
+            $cacertPath   = Join-Path $Script:ProjectRoot "cacert.pem"
+            if (Test-Path -Path $caBundlePath) {
+                Write-Host "  SSL: using ca-bundle.crt" -ForegroundColor Cyan
+                $env:REQUESTS_CA_BUNDLE = $caBundlePath
+                $env:SSL_CERT_FILE      = $caBundlePath
+                $env:CURL_CA_BUNDLE     = $caBundlePath
+            } elseif (Test-Path -Path $cacertPath) {
+                Write-Host "  SSL: using cacert.pem" -ForegroundColor Cyan
+                $env:REQUESTS_CA_BUNDLE = $cacertPath
+                $env:SSL_CERT_FILE      = $cacertPath
+                $env:CURL_CA_BUNDLE     = $cacertPath
+            } elseif ($env:REQUESTS_CA_BUNDLE) {
+                Write-Host "  SSL: using existing REQUESTS_CA_BUNDLE=$env:REQUESTS_CA_BUNDLE" -ForegroundColor Cyan
+                $env:SSL_CERT_FILE  = $env:REQUESTS_CA_BUNDLE
+                $env:CURL_CA_BUNDLE = $env:REQUESTS_CA_BUNDLE
+            } else {
+                Write-Host "  SSL: no CA bundle found — corporate firewall certs may cause SSL errors" -ForegroundColor Yellow
+                Write-Host "       Copy ca-bundle.crt to the project root or set REQUESTS_CA_BUNDLE" -ForegroundColor DarkYellow
+            }
+
             Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d $backendPath && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
             
             # Wait for backend to be ready
@@ -124,9 +147,9 @@ $Script:ServiceConfig = @{
                 ($_.ToString().Trim() -split '\s+')[-1]
             } | Select-Object -Unique
             
-            foreach ($pid in $pids) {
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                Write-Host "  Stopped process $pid"
+            foreach ($processId in $pids) {
+                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+                Write-Host "  Stopped process $processId"
             }
         }
     }

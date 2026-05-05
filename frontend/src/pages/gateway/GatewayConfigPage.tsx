@@ -47,7 +47,7 @@ export function GatewayConfigPage() {
             <TableHead>
               <TableRow>
                 <TableCell>{t('gateway.agentType')}</TableCell>
-                <TableCell>{t('agents.mode')}</TableCell>
+                <TableCell>{t('agents.types.inputType')}</TableCell>
                 <TableCell>{t('gateway.httpEndpoint')}</TableCell>
                 <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
@@ -58,7 +58,7 @@ export function GatewayConfigPage() {
                 return (
                   <TableRow key={at.id}>
                     <TableCell>{at.name}</TableCell>
-                    <TableCell>{at.mode}</TableCell>
+                    <TableCell>{at.input_type}</TableCell>
                     <TableCell>
                       <code style={{ fontSize: 12 }}>{initUrl}</code>
                     </TableCell>
