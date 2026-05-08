@@ -378,3 +378,116 @@ async def test_skill_create_without_instructions_is_nullable(db_session: AsyncSe
     await db_session.refresh(skill)
 
     assert skill.instructions is None
+
+
+# ── Default Skills Seeding ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_creates_save_result_in_db(db_session: AsyncSession):
+    """SkillSeeder creates save_result skill in the database when it does not exist."""
+    from app.services.skill_seeder import SkillSeeder
+    from sqlalchemy import select
+
+    seeder = SkillSeeder()
+    summary = await seeder.run(db_session)
+
+    assert summary["save_result"] == "created"
+
+    result = await db_session.execute(select(Skill).where(Skill.name == "save_result"))
+    skill = result.scalar_one_or_none()
+    assert skill is not None
+    assert skill.name == "save_result"
+    assert skill.description is not None
+    assert skill.instructions is not None
+    assert skill.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_creates_send_notification_in_db(db_session: AsyncSession):
+    """SkillSeeder creates send_notification skill in the database when it does not exist."""
+    from app.services.skill_seeder import SkillSeeder
+    from sqlalchemy import select
+
+    seeder = SkillSeeder()
+    summary = await seeder.run(db_session)
+
+    assert summary["send_notification"] == "created"
+
+    result = await db_session.execute(select(Skill).where(Skill.name == "send_notification"))
+    skill = result.scalar_one_or_none()
+    assert skill is not None
+    assert skill.name == "send_notification"
+    assert skill.description is not None
+    assert skill.instructions is not None
+    assert skill.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_both_default_skills_queryable_after_seed(db_session: AsyncSession):
+    """After seeding, both save_result and send_notification are queryable by name."""
+    from app.services.skill_seeder import SkillSeeder
+    from sqlalchemy import select
+
+    seeder = SkillSeeder()
+    await seeder.run(db_session)
+
+    result = await db_session.execute(
+        select(Skill).where(Skill.name.in_(["save_result", "send_notification"]))
+    )
+    skills = list(result.scalars().all())
+    names = {s.name for s in skills}
+    assert "save_result" in names
+    assert "send_notification" in names
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_is_idempotent_in_db(db_session: AsyncSession):
+    """Running SkillSeeder twice does not create duplicate default skills."""
+    from app.services.skill_seeder import SkillSeeder
+    from sqlalchemy import select, func
+
+    seeder = SkillSeeder()
+
+    # First seed — creates both skills
+    summary1 = await seeder.run(db_session)
+    assert summary1["save_result"] == "created"
+    assert summary1["send_notification"] == "created"
+
+    # Second seed — both already exist
+    summary2 = await seeder.run(db_session)
+    assert summary2["save_result"] == "exists"
+    assert summary2["send_notification"] == "exists"
+
+    # Count must still be exactly 1 each
+    count_result = await db_session.execute(
+        select(func.count()).select_from(Skill).where(Skill.name == "save_result")
+    )
+    assert count_result.scalar_one() == 1
+
+    count_result2 = await db_session.execute(
+        select(func.count()).select_from(Skill).where(Skill.name == "send_notification")
+    )
+    assert count_result2.scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_default_skill_is_mutable(db_session: AsyncSession):
+    """A user can update a default skill's instructions after seeding."""
+    from app.services.skill_seeder import SkillSeeder
+    from sqlalchemy import select
+
+    seeder = SkillSeeder()
+    await seeder.run(db_session)
+
+    result = await db_session.execute(select(Skill).where(Skill.name == "save_result"))
+    skill = result.scalar_one()
+    original_instructions = skill.instructions
+
+    skill.instructions = "Updated custom instructions for save_result."
+    await db_session.flush()
+    await db_session.refresh(skill)
+
+    assert skill.instructions == "Updated custom instructions for save_result."
+    assert skill.instructions != original_instructions
+

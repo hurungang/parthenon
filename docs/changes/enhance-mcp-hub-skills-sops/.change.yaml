@@ -1,8 +1,10 @@
 name: enhance-mcp-hub-skills-sops
 created_at: 2026-05-03
-status: master-updated
+status: in-progress
 completed_at: 2026-05-04
 master_updated_at: 2026-05-05
+refinement_in_progress: true
+refinement_started_at: 2026-05-06
 scope:
   has_ui_changes: true
   has_architecture_changes: true

@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.credential_vault import get_vault
+from app.core.ssl_context import get_ssl_context
 from app.db.models.mcp_hub import McpSession, McpSessionAuthType, McpTool
+from app.services.mcp.oauth_refresh import OAuthRefreshService
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ class McpProxyEngine:
         session_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Invoke a tool on its MCP server.
+        Invoke a tool on its MCP server using JSON-RPC 2.0 protocol.
 
         Args:
             tool: The McpTool record to invoke.
@@ -47,24 +49,102 @@ class McpProxyEngine:
         # Resolve the session
         mcp_session = await self._resolve_session(tool.server_id, session_id, db)
 
-        # Build the tool call URL
-        base_url = tool.server.base_url.rstrip("/")
-        call_url = f"{base_url}/tools/call"
+        # Auto-refresh OAuth token if needed (checks expiry and refreshes proactively)
+        if mcp_session.auth_type == McpSessionAuthType.oauth2:
+            refresh_service = OAuthRefreshService()
+            refresh_success = await refresh_service.check_and_refresh_if_needed(
+                mcp_session, db, buffer_minutes=5
+            )
+            if not refresh_success:
+                logger.error(
+                    "Failed to refresh OAuth token for session %s before tool call",
+                    mcp_session.id
+                )
+                raise McpProxyError(
+                    "OAuth token expired and refresh failed. Please re-authenticate the session."
+                )
+            # Refresh session object to get updated credentials
+            await db.refresh(mcp_session)
+
+        # Use the base_url exactly as stored - it's verified during registration
+        endpoint_url = tool.server.base_url.rstrip("/")
+
+        logger.info(
+            "MCP tool invocation: server=%s, endpoint=%s, tool=%s (original: %s)",
+            tool.server.name,
+            endpoint_url,
+            tool.name,
+            tool.original_name
+        )
 
         # Prepare headers with decrypted credentials
         headers = self._build_auth_headers(mcp_session)
+        
+        # Add MCP session ID to headers
+        logger.debug(
+            "Session %s identity_binding: %s",
+            mcp_session.id,
+            mcp_session.identity_binding if mcp_session.identity_binding else "None"
+        )
+        
+        if mcp_session.identity_binding and isinstance(mcp_session.identity_binding, dict):
+            mcp_session_id = mcp_session.identity_binding.get("mcp_session_id")
+            if mcp_session_id:
+                headers['Mcp-Session-Id'] = mcp_session_id
+                logger.info("Added Mcp-Session-Id header: %s...", mcp_session_id[:30])
+            else:
+                logger.warning(
+                    "Session %s has identity_binding but no mcp_session_id. "
+                    "This session needs to be re-authenticated to get MCP session ID.",
+                    mcp_session.id
+                )
+        else:
+            logger.warning(
+                "Session %s (auth_type=%s) has no identity_binding. "
+                "For OAuth2 sessions, re-authenticate to initialize MCP session.",
+                mcp_session.id,
+                mcp_session.auth_type.value
+            )
 
+        # Build JSON-RPC 2.0 payload
         payload = {
-            "name": tool.original_name,
-            "arguments": tool_input,
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": tool.original_name,
+                "arguments": tool_input,
+            }
         }
 
+        # Add Accept header for MCP servers that require both JSON and SSE support
+        headers["Accept"] = "application/json, text/event-stream"
+
+        logger.debug("MCP JSON-RPC payload: %s", json.dumps(payload, indent=2))
+
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(call_url, json=payload, headers=headers)
+            async with httpx.AsyncClient(timeout=60.0, verify=get_ssl_context()) as client:
+                response = await client.post(endpoint_url, json=payload, headers=headers)
+                
+                logger.debug("MCP response status: %d", response.status_code)
+                
+                if response.status_code >= 400:
+                    logger.error("MCP error response: %s", response.text[:500])
+                
                 response.raise_for_status()
-                result: dict[str, Any] = response.json()
-                return result
+                
+                # Parse JSON-RPC response
+                json_response: dict[str, Any] = response.json()
+                
+                # Check for JSON-RPC error
+                if "error" in json_response:
+                    error_msg = json_response["error"].get("message", "Unknown MCP error")
+                    logger.error("MCP JSON-RPC error for %s: %s", tool.name, error_msg)
+                    raise McpProxyError(f"MCP error: {error_msg}")
+                
+                # Return the result field from JSON-RPC response
+                return json_response.get("result", {})
+                
         except httpx.HTTPStatusError as exc:
             logger.error(
                 "Tool call failed for %s: HTTP %d", tool.name, exc.response.status_code
@@ -125,14 +205,27 @@ class McpProxyEngine:
         if session.auth_type == McpSessionAuthType.api_key:
             api_key = creds.get("api_key", "")
             headers["X-API-Key"] = api_key
+            logger.debug("Using API key authentication for session %s", session.id)
         elif session.auth_type == McpSessionAuthType.bearer_token:
             token = creds.get("token", "")
             headers["Authorization"] = f"Bearer {token}"
+            logger.debug("Using bearer token authentication for session %s", session.id)
+        elif session.auth_type == McpSessionAuthType.oauth2:
+            # OAuth2 uses access_token as Bearer token
+            access_token = creds.get("access_token", "")
+            if access_token:
+                headers["Authorization"] = f"Bearer {access_token}"
+                # Log token preview for debugging without exposing full token
+                token_preview = f"{access_token[:8]}...{access_token[-8:]}" if len(access_token) > 16 else "[short]"
+                logger.debug("Using OAuth2 access token for session %s: %s", session.id, token_preview)
+            else:
+                logger.warning("OAuth2 session %s has no access_token in credentials", session.id)
         elif session.auth_type == McpSessionAuthType.basic_auth:
             import base64
             user = creds.get("username", "")
             pwd = creds.get("password", "")
             encoded = base64.b64encode(f"{user}:{pwd}".encode()).decode()
             headers["Authorization"] = f"Basic {encoded}"
+            logger.debug("Using basic auth for session %s (user: %s)", session.id, user)
 
         return headers

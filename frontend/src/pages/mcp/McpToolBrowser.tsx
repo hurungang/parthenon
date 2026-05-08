@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Box,
+  Button,
   Chip,
   CircularProgress,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -16,10 +18,13 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { useAllTools, useMcpServers, useToolSkills } from '../../hooks/useMcpServers'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { TestMcpToolDialog } from './TestMcpToolDialog'
 import type { McpTool } from '../../types'
 
 function SkillChips({ toolId }: { toolId: string }) {
@@ -40,6 +45,7 @@ export function McpToolBrowser() {
   const { data: servers } = useMcpServers()
   const [search, setSearch] = useState('')
   const [serverFilter, setServerFilter] = useState('')
+  const [testingTool, setTestingTool] = useState<McpTool | null>(null)
 
   const serverMap = useMemo(() => {
     const m: Record<string, string> = {}
@@ -107,6 +113,7 @@ export function McpToolBrowser() {
                     <TableCell>{t('app.description')}</TableCell>
                     <TableCell>{t('skills.title')}</TableCell>
                     <TableCell>{t('app.status')}</TableCell>
+                    <TableCell>{t('app.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -126,6 +133,17 @@ export function McpToolBrowser() {
                           size="small"
                         />
                       </TableCell>
+                      <TableCell>
+                        <Tooltip title="Test Tool">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => setTestingTool(tool)}
+                          >
+                            <PlayArrowIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -137,6 +155,13 @@ export function McpToolBrowser() {
       {!isLoading && !error && Object.keys(grouped).length === 0 && (
         <Typography color="text.secondary">{t('app.noData')}</Typography>
       )}
+
+      {/* Test Tool Dialog */}
+      <TestMcpToolDialog
+        open={!!testingTool}
+        tool={testingTool}
+        onClose={() => setTestingTool(null)}
+      />
     </Box>
   )
 }

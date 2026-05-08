@@ -82,9 +82,7 @@ describe('McpSessionManager', () => {
       expect(screen.getByText('Primary Session')).toBeDefined()
     })
     // Click edit on first session
-    const editButtons = screen.getAllByTestId
-      ? screen.queryAllByRole('button')
-      : screen.getAllByRole('button')
+    const editButtons = screen.queryAllByRole('button')
     const editBtn = editButtons.find((b) => b.querySelector('svg'))
     if (editBtn) {
       fireEvent.click(editBtn)

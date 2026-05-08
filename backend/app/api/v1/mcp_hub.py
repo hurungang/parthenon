@@ -25,12 +25,15 @@ from app.schemas.mcp_hub import (
     McpSessionUpdate,
     McpToolRead,
     SyncResult,
+    TestToolRequest,
+    TestToolResponse,
     ToolPermissionCreate,
     ToolPermissionRead,
 )
 from app.schemas.mcp_oauth import OAuthDiscoveryResult, OAuthInitiateRequest
 from app.schemas.skills import SkillRead
 from app.services.mcp.tool_sync import ToolSyncService
+from app.services.mcp.oauth_refresh import OAuthRefreshService
 from app.services.mcp_oauth_service import initiate_oauth_flow, handle_oauth_callback as _handle_oauth_callback
 from app.services.mcp_session_test import test_mcp_session_connection
 
@@ -218,7 +221,11 @@ async def get_oauth_authorization_url(
             )
             logger.info("Using manual OAuth configuration")
     
-    return await initiate_oauth_flow(server_id, db, manual_config)
+    # Pass session metadata to OAuth flow
+    session_name = body.session_name if body else None
+    session_description = body.session_description if body else None
+    
+    return await initiate_oauth_flow(server_id, db, manual_config, session_name, session_description)
 
 
 # ── MCP Session Router ─────────────────────────────────────────────────────────
@@ -348,6 +355,51 @@ async def delete_mcp_session(
     await db.delete(session)
 
 
+@McpSessionRouter.post(
+    "/{server_id}/sessions/{session_id}/refresh-token",
+    response_model=McpSessionRead,
+)
+async def refresh_oauth_token(
+    server_id: uuid.UUID,
+    session_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+) -> McpSession:
+    """
+    Manually refresh OAuth access token for a session.
+    
+    Returns the updated session with new token expiry times.
+    """
+    result = await db.execute(
+        select(McpSession).where(
+            McpSession.id == session_id,
+            McpSession.server_id == server_id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="MCP session not found")
+    
+    if session.auth_type != McpSessionAuthType.oauth2:
+        raise HTTPException(
+            status_code=400,
+            detail="Token refresh is only supported for OAuth2 sessions"
+        )
+    
+    # Refresh the token
+    refresh_service = OAuthRefreshService()
+    success = await refresh_service.refresh_access_token(session, db)
+    
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to refresh OAuth token. Check session logs for details."
+        )
+    
+    await db.refresh(session)
+    return session
+
+
 # ── MCP OAuth Router ───────────────────────────────────────────────────────────
 McpOAuthRouter = APIRouter(prefix="/mcp/oauth", tags=["MCP Hub — OAuth"])
 
@@ -464,6 +516,62 @@ async def revoke_tool_permission(
     if not tp or tp.tool_id != tool_id:
         raise HTTPException(status_code=404, detail="Tool permission not found")
     await db.delete(tp)
+
+
+@McpToolRouter.post("/{tool_id}/test", response_model=TestToolResponse)
+async def test_mcp_tool(
+    tool_id: uuid.UUID,
+    request: TestToolRequest,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+) -> TestToolResponse:
+    """Test an MCP tool invocation with a specific session."""
+    from app.services.mcp.proxy import McpProxyEngine, McpProxyError
+    
+    # Load the tool
+    tool = await db.get(McpTool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    
+    # Load server relationship
+    await db.refresh(tool, ["server"])
+    
+    # Verify session exists and belongs to the same server
+    session = await db.get(McpSession, request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session.server_id != tool.server_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Session belongs to a different server. Tool server: {tool.server_id}, Session server: {session.server_id}"
+        )
+    
+    # Invoke the tool via proxy
+    proxy = McpProxyEngine()
+    try:
+        result = await proxy.call_tool(
+            tool=tool,
+            tool_input=request.tool_input,
+            db=db,
+            session_id=str(request.session_id),
+        )
+        return TestToolResponse(
+            success=True,
+            result=result,
+            raw_response=result,
+        )
+    except McpProxyError as exc:
+        return TestToolResponse(
+            success=False,
+            error=str(exc),
+        )
+    except Exception as exc:
+        logger.exception("Unexpected error testing tool %s", tool_id)
+        return TestToolResponse(
+            success=False,
+            error=f"Unexpected error: {str(exc)}",
+        )
 
 
 async def check_tool_permission(

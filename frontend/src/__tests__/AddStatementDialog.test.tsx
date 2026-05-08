@@ -6,6 +6,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import React from 'react'
+import { PolicyEffect } from '../types/permissions'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -204,7 +205,7 @@ describe('AddStatementDialog', () => {
   it('populates all form fields in edit mode from editingPolicy prop', async () => {
     const editingPolicy = {
       id: 'policy-edit-1',
-      effect: 'deny' as const,
+      effect: PolicyEffect.Deny,
       module: 'role',
       actions: [{ id: 'a1', action: 'manage' }],
       resources: [{ id: 'r1', resource_type: 'role', resource_id: 'role-xyz' }],
@@ -241,7 +242,7 @@ describe('AddStatementDialog', () => {
 
     const editingPolicy = {
       id: 'policy-to-update',
-      effect: 'allow' as const,
+      effect: PolicyEffect.Allow,
       module: 'agent',
       actions: [{ id: 'a1', action: 'read' }],
       resources: [],

@@ -107,6 +107,7 @@ async def test_toolsyncservice_uses_oauth2_session_credentials():
     mock_session.name = "oauth-session"
     mock_session.auth_type = McpSessionAuthType.oauth2
     mock_session.encrypted_credentials = "encrypted-blob"
+    mock_session.oauth_expires_at = None  # prevent datetime comparison TypeError
 
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(
@@ -316,6 +317,7 @@ async def test_toolsyncservice_gracefully_handles_vault_decrypt_failure():
     mock_session.name = "failing-session"
     mock_session.auth_type = McpSessionAuthType.oauth2
     mock_session.encrypted_credentials = "corrupted-blob"
+    mock_session.oauth_expires_at = None  # prevent datetime comparison TypeError
 
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(

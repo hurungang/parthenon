@@ -4,6 +4,10 @@ Extended in the Agent Runtime with Gateway change to route inbound agent launch
 requests through AgentSessionService.enqueue and return session IDs synchronously.
 The legacy synchronous execution path is retained for backward compatibility but
 all new agent launches use the asynchronous session queue.
+
+OAuth middleware (Phase 5.6a): validates agent identity access tokens on launch.
+Role-based tool exposure (Phase 5.6b): exposes only role-permitted tools with no
+descriptions or schemas, so agents rely fully on skill instructions.
 """
 import asyncio
 import logging
@@ -13,7 +17,9 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentInstanceStatus
+from app.services.agents.identity_service import AgentIdentityService, AgentOAuthError
 from app.services.agents.instance_manager import AgentInstanceManager, InstanceLimitError
+from app.services.agents.permission_manager import AgentPermissionManager
 from app.services.agents.session_service import AgentSessionService
 
 logger = logging.getLogger(__name__)
@@ -24,17 +30,157 @@ _pending_questions: dict[str, asyncio.Queue] = {}
 _pending_answers: dict[str, asyncio.Queue] = {}
 
 
+class AgentAuthError(Exception):
+    """Raised when agent identity token validation fails."""
+
+
 class GatewayLifecycleHandler:
     """
     Orchestrates the gateway state machine.
 
-    New path (Phase 5): launch → enqueue session → return session_id asynchronously.
+    New path (Phase 5): launch → validate identity token → enqueue session → return session_id.
+    Role-based tool exposure: tools are returned without descriptions/schemas.
     Legacy path: init → request (question → answer) → close (retained for compatibility).
     """
 
     def __init__(self) -> None:
         self._instance_manager = AgentInstanceManager()
         self._session_service = AgentSessionService()
+        self._permission_manager = AgentPermissionManager()
+        self._identity_service = AgentIdentityService()
+
+    # ── OAuth identity token validation ───────────────────────────────────────
+
+    async def validate_agent_identity_token(
+        self,
+        agent_type_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> None:
+        """
+        Validate that the AgentType's identity has a valid (non-expired) access token
+        and that the identity type is permitted by the assigned role.
+
+        Raises AgentAuthError if validation fails.
+        """
+        from sqlalchemy import select
+        from app.db.models.agents import AgentType, AgentIdentity, AgentRole
+        from datetime import datetime, UTC
+
+        result = await db.execute(
+            select(AgentType).where(AgentType.id == agent_type_id)
+        )
+        agent_type = result.scalar_one_or_none()
+        if not agent_type:
+            raise AgentAuthError(f"AgentType {agent_type_id} not found")
+
+        if not agent_type.identity_id:
+            logger.debug(
+                "AgentType %s has no identity — skipping OAuth token validation", agent_type_id
+            )
+            return
+
+        identity = await db.get(AgentIdentity, agent_type.identity_id)
+        if not identity:
+            raise AgentAuthError(
+                f"AgentIdentity {agent_type.identity_id} not found for AgentType {agent_type_id}"
+            )
+
+        # Check token is present and not expired
+        if not identity.access_token:
+            raise AgentAuthError(
+                f"AgentIdentity '{identity.name}' has no access token — "
+                "complete the OAuth sign-in flow first"
+            )
+        
+        # Auto-refresh if access token is expired and refresh token is available
+        if identity.token_expires_at and identity.token_expires_at < datetime.now(UTC):
+            if identity.refresh_token:
+                try:
+                    logger.info(
+                        "Access token expired for identity '%s' — attempting auto-refresh",
+                        identity.name,
+                    )
+                    await self._identity_service.refresh_token(identity.id, db)
+                    # Re-fetch identity after refresh to get updated token
+                    await db.refresh(identity)
+                    logger.info(
+                        "Successfully auto-refreshed token for identity '%s'", identity.name
+                    )
+                except AgentOAuthError as e:
+                    raise AgentAuthError(
+                        f"AgentIdentity '{identity.name}' access token has expired and "
+                        f"auto-refresh failed: {e}"
+                    )
+            else:
+                raise AgentAuthError(
+                    f"AgentIdentity '{identity.name}' access token has expired and "
+                    "no refresh token available — re-authentication required"
+                )
+
+        # Validate identity is explicitly assigned to the role
+        if agent_type.role_id:
+            from sqlalchemy import select
+            from app.db.models.agents import AgentRoleIdentity
+            
+            result = await db.execute(
+                select(AgentRoleIdentity).where(
+                    AgentRoleIdentity.role_id == agent_type.role_id,
+                    AgentRoleIdentity.identity_id == identity.id,
+                )
+            )
+            assignment = result.scalar_one_or_none()
+            
+            if not assignment:
+                role = await db.get(AgentRole, agent_type.role_id)
+                role_name = role.name if role else str(agent_type.role_id)
+                raise AgentAuthError(
+                    f"AgentIdentity '{identity.name}' is not assigned to role '{role_name}' — "
+                    f"identity must be explicitly assigned to the role before launching agents"
+                )
+
+        logger.debug(
+            "AgentIdentity '%s' token validated for AgentType %s", identity.name, agent_type_id
+        )
+
+    # ── Role-based tool exposure ───────────────────────────────────────────────
+
+    async def get_role_tools_for_agent(
+        self,
+        agent_type_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> list[dict[str, Any]]:
+        """
+        Return the list of tool stubs allowed for the AgentType's role.
+
+        Tools are exposed **without descriptions or input schemas** so that agents
+        rely fully on skill instructions rather than tool introspection.
+        Only the tool name (mcp_slug/tool_name) is returned.
+
+        Always includes the save_result system tool.
+        """
+        from sqlalchemy import select
+        from app.db.models.agents import AgentType
+
+        result = await db.execute(
+            select(AgentType).where(AgentType.id == agent_type_id)
+        )
+        agent_type = result.scalar_one_or_none()
+        if not agent_type or not agent_type.role_id:
+            # No role — only the save_result pseudo-tool is exposed
+            return [{"name": "save_result"}]
+
+        allowed_tools = await self._permission_manager.calculate_allowed_tools(
+            agent_type.role_id, db
+        )
+
+        # Expose tool names only — no descriptions or schemas
+        tool_stubs = [{"name": t} for t in sorted(allowed_tools)]
+        logger.info(
+            "Role-based tool exposure for AgentType %s: %d tools (no descriptions/schemas)",
+            agent_type_id,
+            len(tool_stubs),
+        )
+        return tool_stubs
 
     # ── New async launch path ──────────────────────────────────────────────────
 
@@ -46,12 +192,18 @@ class GatewayLifecycleHandler:
         db: AsyncSession,
     ) -> dict[str, Any]:
         """
-        Enqueue an agent session via the Session Queue and return the session ID
-        synchronously. The actual execution is asynchronous.
+        Validate agent identity OAuth token, enqueue an agent session, and return the
+        session ID synchronously. The actual execution is asynchronous.
 
         Returns:
             {"session_id": "<uuid>"}
+
+        Raises:
+            AgentAuthError: if the agent identity token is missing, expired, or
+                the identity type is not permitted by the role.
         """
+        await self.validate_agent_identity_token(agent_type_id, db)
+
         job = await self._session_service.enqueue(
             agent_type_id=agent_type_id,
             input_data=input_data,

@@ -26,6 +26,8 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
 import BadgeIcon from '@mui/icons-material/Badge'
+import TuneIcon from '@mui/icons-material/Tune'
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeart'
 import GatewayIcon from '@mui/icons-material/Router'
 import ScheduleIcon from '@mui/icons-material/Schedule'
 import HistoryIcon from '@mui/icons-material/History'
@@ -53,6 +55,8 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: 'nav.agents', path: '/agents', icon: <SmartToyIcon /> },
   { labelKey: 'nav.agentRoles', path: '/agents/roles', icon: <AssignmentIndIcon /> },
   { labelKey: 'nav.agentIdentities', path: '/agents/identities', icon: <BadgeIcon /> },
+  { labelKey: 'nav.modelConfigs', path: '/agents/model-configs', icon: <TuneIcon /> },
+  { labelKey: 'nav.agentInstances', path: '/agents/instances', icon: <MonitorHeartIcon /> },
   { labelKey: 'nav.gateway', path: '/gateway', icon: <GatewayIcon /> },
   { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
   { labelKey: 'nav.conversations', path: '/conversations', icon: <HistoryIcon /> },

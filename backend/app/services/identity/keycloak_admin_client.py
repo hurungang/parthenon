@@ -14,6 +14,8 @@ from typing import Optional
 
 import httpx
 
+from app.core.ssl_context import get_ssl_context
+
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
@@ -109,7 +111,7 @@ class KeycloakAdminClient:
             :class:`KeycloakAdminError` on auth failure.
         """
         url = f"{self._base_url}/realms/master/protocol/openid-connect/token"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -138,7 +140,7 @@ class KeycloakAdminClient:
     async def realm_exists(self, token: AdminToken, realm_name: str) -> bool:
         """Return True if *realm_name* already exists in Keycloak."""
         url = f"{self._base_url}/admin/realms/{realm_name}"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "GET",
@@ -177,7 +179,7 @@ class KeycloakAdminClient:
             "displayName": display_name or realm_name,
             "enabled": True,
         }
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -199,7 +201,7 @@ class KeycloakAdminClient:
     ) -> bool:
         """Return True if a client with *client_id* already exists in *realm_name*."""
         url = f"{self._base_url}/admin/realms/{realm_name}/clients"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "GET",
@@ -260,7 +262,7 @@ class KeycloakAdminClient:
         if not public_client:
             payload["serviceAccountsEnabled"] = True
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -286,7 +288,7 @@ class KeycloakAdminClient:
         if not keycloak_client_uuid:
             # Fall back: list clients and find by clientId
             list_url = f"{self._base_url}/admin/realms/{realm_name}/clients"
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
                 list_resp = await _request_with_retry(
                     client,
                     "GET",
@@ -302,7 +304,7 @@ class KeycloakAdminClient:
         secret_url = (
             f"{self._base_url}/admin/realms/{realm_name}/clients/{keycloak_client_uuid}/client-secret"
         )
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             secret_resp = await _request_with_retry(
                 client,
                 "GET",
@@ -346,7 +348,7 @@ class KeycloakAdminClient:
                 }
             ],
         }
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",

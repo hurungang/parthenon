@@ -27,7 +27,10 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import LoginIcon from '@mui/icons-material/Login'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import WarningIcon from '@mui/icons-material/Warning'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { McpSession, McpSessionAuthType } from '../../types'
@@ -131,8 +134,12 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
       setDialogError(null)
       
       // Get OAuth authorization URL from backend
-      const { data } = await apiClient.get<{ authorization_url: string }>(
-        `/mcp/servers/${serverId}/oauth/authorize`
+      const { data } = await apiClient.post<{ authorization_url: string }>(
+        `/mcp/servers/${serverId}/oauth/authorize`,
+        {
+          session_name: form.name,
+          session_description: form.description,
+        }
       )
       
       // Open popup for OAuth
@@ -202,6 +209,41 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
     }
   }
 
+  const refreshTokenMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const { data } = await apiClient.post(`/mcp/servers/${serverId}/sessions/${sessionId}/refresh-token`)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mcp', 'servers', serverId, 'sessions'] })
+    },
+  })
+
+  const getTokenStatus = (session: McpSession): { label: string; color: 'success' | 'warning' | 'error'; icon: React.ReactElement | undefined } => {
+    if (session.auth_type !== 'oauth2') {
+      return { label: 'N/A', color: 'success', icon: undefined }
+    }
+
+    if (!session.oauth_expires_at) {
+      return { label: t('mcp.sessions.tokenStatusUnknown'), color: 'warning', icon: <WarningIcon fontSize="small" /> }
+    }
+
+    const now = new Date()
+    const expiresAt = new Date(session.oauth_expires_at)
+    const hoursUntilExpiry = (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60)
+
+    if (hoursUntilExpiry < 0) {
+      return { label: t('mcp.sessions.tokenExpired'), color: 'error', icon: <WarningIcon fontSize="small" /> }
+    } else if (hoursUntilExpiry < 1) {
+      return { label: t('mcp.sessions.tokenExpiringSoon'), color: 'warning', icon: <WarningIcon fontSize="small" /> }
+    } else {
+      const expiryText = hoursUntilExpiry < 24
+        ? `${Math.floor(hoursUntilExpiry)}h`
+        : `${Math.floor(hoursUntilExpiry / 24)}d`
+      return { label: t('mcp.sessions.tokenValid', { time: expiryText }), color: 'success', icon: <CheckCircleIcon fontSize="small" /> }
+    }
+  }
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -222,40 +264,66 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
               <TableRow>
                 <TableCell>{t('app.name')}</TableCell>
                 <TableCell>{t('mcp.sessions.authType')}</TableCell>
+                <TableCell>{t('mcp.sessions.tokenStatus')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
                 <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {(sessions ?? []).map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>{s.name}</Typography>
-                    {s.description && (
-                      <Typography variant="caption" color="text.secondary">{s.description}</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell><code>{s.auth_type}</code></TableCell>
-                  <TableCell>
-                    <Chip
-                      label={s.is_active ? t('app.active') : t('app.inactive')}
-                      color={s.is_active ? 'success' : 'default'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => handleOpenEdit(s)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(s.id)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {(sessions ?? []).map((s) => {
+                const tokenStatus = getTokenStatus(s)
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500}>{s.name}</Typography>
+                      {s.description && (
+                        <Typography variant="caption" color="text.secondary">{s.description}</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell><code>{s.auth_type}</code></TableCell>
+                    <TableCell>
+                      {s.auth_type === 'oauth2' ? (
+                        <Chip
+                          label={tokenStatus.label}
+                          color={tokenStatus.color}
+                          size="small"
+                          icon={tokenStatus.icon}
+                        />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={s.is_active ? t('app.active') : t('app.inactive')}
+                        color={s.is_active ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {s.auth_type === 'oauth2' && (
+                        <IconButton
+                          size="small"
+                          onClick={() => refreshTokenMutation.mutate(s.id)}
+                          disabled={refreshTokenMutation.isPending}
+                          title={t('mcp.sessions.refreshToken')}
+                        >
+                          <RefreshIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      <IconButton size="small" onClick={() => handleOpenEdit(s)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => handleDelete(s.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
               {(sessions ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">{t('app.noData')}</TableCell>
+                  <TableCell colSpan={5} align="center">{t('app.noData')}</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -266,7 +334,7 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
       <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
         <DialogTitle>{editSession ? t('mcp.sessions.edit') : t('mcp.sessions.create')}</DialogTitle>
         <DialogContent>
-          {dialogError && <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />}
+          {dialogError != null && <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
               label={t('app.name')}

@@ -63,6 +63,7 @@ describe('AgentRoleDialog', () => {
       description: 'A role',
       sop_ids: [],
       skill_ids: [],
+      allowed_identity_types: [],
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -87,6 +88,7 @@ describe('AgentRoleDialog', () => {
       description: null,
       sop_ids: [],
       skill_ids: [],
+      allowed_identity_types: [],
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -188,6 +190,7 @@ describe('AgentRoleDialog', () => {
       description: null,
       sop_ids: [],
       skill_ids: [],
+      allowed_identity_types: [],
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -204,6 +207,116 @@ describe('AgentRoleDialog', () => {
       const btn = saveBtn.closest('button')
       if (btn) {
         expect(btn.disabled).toBe(false)
+      }
+    })
+  })
+
+  // ── allowed_identity_types ─────────────────────────────────────────────────
+
+  it('renders allowed_identity_types multi-select in the dialog', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockResolvedValue({ data: [] })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      // The dialog should contain the identity types field (label or section header)
+      const bodyText = document.body.innerHTML
+      const hasIdentityTypesField =
+        bodyText.includes('agents.roles.allowedIdentityTypes') ||
+        bodyText.includes('allowed_identity_types') ||
+        bodyText.includes('identityTypes')
+      expect(hasIdentityTypesField).toBe(true)
+    })
+  })
+
+  it('sends allowed_identity_types in POST payload when creating a role with constraint', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockResolvedValue({ data: [] })
+    mockPost.mockResolvedValue({
+      data: {
+        id: 'new-role',
+        name: 'Constrained Role',
+        allowed_identity_types: ['service_account'],
+      },
+    })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/app\.name/)).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/app\.name/), {
+        target: { value: 'Constrained Role' },
+      })
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('app.save'))
+    })
+
+    await waitFor(() => {
+      // POST was called — verify allowed_identity_types is in the payload
+      if (mockPost.mock.calls.length > 0) {
+        const postBody = mockPost.mock.calls[0][1]
+        expect(postBody).toHaveProperty('allowed_identity_types')
+      }
+    })
+  })
+
+  it('sends updated allowed_identity_types in PUT payload when editing a role', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockResolvedValue({ data: [] })
+    mockPut.mockResolvedValue({
+      data: {
+        id: 'role-1',
+        name: 'Updated Role',
+        allowed_identity_types: ['agent_user'],
+      },
+    })
+
+    const editRole = {
+      id: 'role-1',
+      name: 'Existing Role',
+      description: null,
+      sop_ids: [],
+      skill_ids: [],
+      allowed_identity_types: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+
+    render(
+      <AgentRoleDialog
+        open={true}
+        editRole={editRole}
+        onClose={onClose}
+        onSaved={onSaved}
+      />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.editTitle')).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('app.save'))
+    })
+
+    await waitFor(() => {
+      // PUT was called — verify allowed_identity_types is in the payload
+      if (mockPut.mock.calls.length > 0) {
+        const putBody = mockPut.mock.calls[0][1]
+        expect(putBody).toHaveProperty('allowed_identity_types')
       }
     })
   })

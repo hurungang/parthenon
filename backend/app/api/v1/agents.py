@@ -1,23 +1,26 @@
-"""Agent management API routers: AgentRole, AgentIdentity, AgentJob, AgentType, AgentInstance."""
+"""Agent management API routers: AgentRole, AgentIdentity, AgentJob, AgentType, AgentInstance, ModelConfig."""
 import json
 import uuid
 import logging
+from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 
 from app.api.deps import require_permission, get_current_claims
-from app.core.credential_vault import get_vault
 from app.core.resource_types import RT_AGENT
 from app.db.session import DbSession
 from app.db.models.agents import (
     AgentIdentity,
+    AgentInputType,
     AgentInstance,
     AgentInstanceStatus,
     AgentJob,
     AgentJobStatus,
     AgentRole,
     AgentType,
+    ModelConfig,
 )
 from app.schemas.agents import (
     AgentIdentityCreate,
@@ -28,12 +31,19 @@ from app.schemas.agents import (
     AgentJobCreate,
     AgentJobRead,
     AgentJobStatusRead,
+    AgentRoleAssignment,
     AgentRoleCreate,
+    AgentRoleIdentityAssignment,
     AgentRoleRead,
     AgentRoleUpdate,
     AgentTypeCreate,
     AgentTypeRead,
     AgentTypeUpdate,
+    ExecutionLogEntryRead,
+    ExecutionLogRead,
+    ModelConfigCreate,
+    ModelConfigRead,
+    ModelConfigUpdate,
 )
 from app.services.agents.identity_service import (
     AgentIdentityConflictError,
@@ -42,6 +52,11 @@ from app.services.agents.identity_service import (
     AgentOAuthError,
 )
 from app.services.agents.instance_manager import AgentInstanceManager
+from app.services.agents.model_config_service import (
+    ModelConfigConflictError,
+    ModelConfigNotFoundError,
+    ModelConfigService,
+)
 from app.services.agents.role_service import (
     AgentRoleConflictError,
     AgentRoleNotFoundError,
@@ -49,6 +64,7 @@ from app.services.agents.role_service import (
 )
 from app.services.agents.session_service import AgentSessionService
 from app.services.agents.permission_manager import AgentPermissionManager
+from app.services.gateway.lifecycle_handler import AgentAuthError, GatewayLifecycleHandler
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +73,8 @@ _role_service = AgentRoleService()
 _identity_service = AgentIdentityService()
 _session_service = AgentSessionService()
 _permission_manager = AgentPermissionManager()
+_model_config_service = ModelConfigService()
+_lifecycle_handler = GatewayLifecycleHandler()
 
 # Wire the permission manager into the role service so it can invalidate the cache
 _role_service._permission_manager = _permission_manager
@@ -67,6 +85,7 @@ AgentOAuthRouter = APIRouter(prefix="/agents", tags=["Agents"])
 AgentJobRouter = APIRouter(prefix="/agents/sessions", tags=["Agents"])
 AgentTypeRouter = APIRouter(prefix="/agents/types", tags=["Agents"])
 AgentInstanceRouter = APIRouter(prefix="/agents/instances", tags=["Agents"])
+ModelConfigRouter = APIRouter(prefix="/agents/model-configs", tags=["Agents"])
 
 
 # ── Agent Role Endpoints ───────────────────────────────────────────────────────
@@ -160,6 +179,124 @@ async def get_role_mcp_tools(
     return sorted(tools)
 
 
+@AgentRoleRouter.post("/{role_id}/identities", status_code=status.HTTP_204_NO_CONTENT)
+async def assign_identities_to_role(
+    role_id: uuid.UUID,
+    body: AgentRoleIdentityAssignment,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> None:
+    """Bulk-assign identities to an agent role."""
+    try:
+        await _role_service.assign_identities(role_id=role_id, identity_ids=body.identity_ids, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentRoleRouter.delete("/{role_id}/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_identity_from_role(
+    role_id: uuid.UUID,
+    identity_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> None:
+    """Remove a specific identity assignment from a role."""
+    try:
+        await _role_service.remove_identity(role_id=role_id, identity_id=identity_id, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentRoleRouter.get("/{role_id}/identities", response_model=list[AgentIdentityRead])
+async def list_role_identities(
+    role_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list:
+    """List all identities assigned to a role."""
+    try:
+        return await _role_service.list_identities(role_id=role_id, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ── Agent Role MCP Session Endpoints ───────────────────────────────────────────
+
+
+@AgentRoleRouter.post("/{role_id}/mcp-sessions", status_code=status.HTTP_204_NO_CONTENT)
+async def assign_mcp_session_to_role(
+    role_id: uuid.UUID,
+    body: dict,  # {mcp_session_id: str}
+    db: DbSession,
+    request: Request,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> None:
+    """Assign an MCP session to an agent role.
+    
+    Enforces one-session-per-server constraint.
+    """
+    try:
+        session_id = uuid.UUID(body["mcp_session_id"])
+        claims = get_current_claims(request)
+        user_id_str: str | None = claims.get("platform_user_id")
+        user_id = uuid.UUID(user_id_str) if user_id_str else None
+        await _role_service.assign_mcp_session(
+            role_id=role_id,
+            mcp_session_id=session_id,
+            assigned_by=user_id,
+            db=db,
+        )
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except KeyError:
+        raise HTTPException(status_code=400, detail="mcp_session_id required")
+
+
+@AgentRoleRouter.delete("/{role_id}/mcp-sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_mcp_session_from_role(
+    role_id: uuid.UUID,
+    session_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> None:
+    """Remove an MCP session assignment from a role."""
+    try:
+        await _role_service.remove_mcp_session(role_id=role_id, mcp_session_id=session_id, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentRoleRouter.get("/{role_id}/mcp-sessions")
+async def list_role_mcp_sessions(
+    role_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[dict]:
+    """List all MCP sessions assigned to a role."""
+    try:
+        return await _role_service.list_mcp_sessions(role_id=role_id, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentRoleRouter.get("/{role_id}/available-mcp-sessions")
+async def list_available_mcp_sessions_for_role(
+    role_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[dict]:
+    """List MCP sessions available for assignment to a role.
+    
+    Filtered by servers whose tools are used by the role's SOPs/Skills.
+    """
+    try:
+        return await _role_service.get_available_mcp_sessions(role_id=role_id, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ── Agent Identity Endpoints ───────────────────────────────────────────────────
 
 
@@ -232,6 +369,79 @@ async def delete_agent_identity(
         raise HTTPException(status_code=409, detail=str(exc))
 
 
+@AgentIdentityRouter.post("/{identity_id}/roles", status_code=status.HTTP_204_NO_CONTENT)
+async def assign_roles_to_identity(
+    identity_id: uuid.UUID,
+    body: AgentRoleAssignment,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> None:
+    """Bulk-assign roles to an agent identity."""
+    try:
+        await _identity_service.assign_roles(identity_id=identity_id, role_ids=body.role_ids, db=db)
+    except AgentIdentityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentIdentityRouter.delete("/{identity_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_role_from_identity(
+    identity_id: uuid.UUID,
+    role_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> None:
+    """Remove a specific role assignment from an identity."""
+    try:
+        await _identity_service.remove_role(identity_id=identity_id, role_id=role_id, db=db)
+    except AgentIdentityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentIdentityRouter.get("/{identity_id}/roles", response_model=list[AgentRoleRead])
+async def list_identity_roles(
+    identity_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list:
+    """List all roles assigned to an identity."""
+    try:
+        return await _identity_service.list_roles(identity_id=identity_id, db=db)
+    except AgentIdentityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@AgentIdentityRouter.post("/{identity_id}/refresh-token", response_model=AgentIdentityRead)
+async def refresh_identity_token(
+    identity_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> AgentIdentity:
+    """Refresh the access token for an agent identity using its stored refresh token."""
+    try:
+        return await _identity_service.refresh_token(identity_id=identity_id, db=db)
+    except AgentIdentityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except AgentOAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@AgentIdentityRouter.get("/{identity_id}/reauth-url")
+async def get_reauth_url(
+    identity_id: uuid.UUID,
+    request: Request,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> dict:
+    """Get an OAuth re-authentication URL for an expired identity."""
+    try:
+        url = await _identity_service.get_reauth_url(
+            identity_id=identity_id, request=request, db=db
+        )
+        return {"authorization_url": url}
+    except AgentIdentityNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ── Agent Session (Job) Endpoints ──────────────────────────────────────────────
 
 
@@ -242,17 +452,23 @@ async def launch_agent_session(
     request: Request,
     _: dict = Depends(require_permission(RT_AGENT, "execute")),
 ) -> AgentJob:
-    """Enqueue a new agent session. Returns 202 with session ID immediately."""
+    """Validate agent identity OAuth token, enqueue a new agent session, and return 202 with session ID."""
     claims = get_current_claims(request)
     user_id_str: str | None = claims.get("platform_user_id")
     user_id = uuid.UUID(user_id_str) if user_id_str else None
 
-    job = await _session_service.enqueue(
-        agent_type_id=body.agent_type_id,
-        input_data=body.input_data,
-        user_id=user_id,
-        db=db,
-    )
+    try:
+        result = await _lifecycle_handler.launch(
+            agent_type_id=body.agent_type_id,
+            input_data=body.input_data,
+            user_id=user_id,
+            db=db,
+        )
+    except AgentAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    session_id = uuid.UUID(result["session_id"])
+    job = await db.get(AgentJob, session_id)
     return job
 
 
@@ -260,14 +476,36 @@ async def launch_agent_session(
 async def list_agent_sessions(
     db: DbSession,
     request: Request,
+    status: Optional[AgentJobStatus] = Query(None, description="Filter by session status"),
+    from_date: Optional[str] = Query(None, alias="from_date", description="ISO 8601 datetime lower bound"),
+    to_date: Optional[str] = Query(None, alias="to_date", description="ISO 8601 datetime upper bound"),
+    agent_type_id: Optional[uuid.UUID] = Query(None, description="Filter by agent type"),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[AgentJob]:
-    """List sessions triggered by the current user."""
+    """List sessions triggered by the current user with optional filters."""
     claims = get_current_claims(request)
     user_id_str: str | None = claims.get("platform_user_id")
     user_id = uuid.UUID(user_id_str) if user_id_str else None
 
-    return await _session_service.list_sessions(user_id=user_id, db=db)
+    # Parse optional date bounds
+    from_dt: datetime | None = None
+    to_dt: datetime | None = None
+    try:
+        if from_date:
+            from_dt = datetime.fromisoformat(from_date)
+        if to_date:
+            to_dt = datetime.fromisoformat(to_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid date format: {exc}")
+
+    return await _session_service.list_sessions(
+        user_id=user_id,
+        status=status,
+        from_date=from_dt,
+        to_date=to_dt,
+        agent_type_id=agent_type_id,
+        db=db,
+    )
 
 
 @AgentJobRouter.get("/{session_id}", response_model=AgentJobStatusRead)
@@ -299,6 +537,80 @@ async def get_agent_session_result(
             detail=f"Session is not yet complete (status={job.status})",
         )
     return job
+
+
+@AgentJobRouter.get("/{session_id}/history", response_model=list[dict])
+async def get_agent_session_history(
+    session_id: uuid.UUID,
+    db: DbSession,
+    request: Request,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[dict]:
+    """Return the conversation history for a session.
+
+    Returns an empty list for task-type sessions.  Returns 404 if the session
+    does not exist.  Returns 403 if the session is not owned by the current user.
+    """
+    job = await _session_service.get_session(session_id, db)
+    if not job:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Ownership check
+    claims = get_current_claims(request)
+    user_id_str: str | None = claims.get("platform_user_id")
+    if user_id_str and job.triggered_by_user_id:
+        if str(job.triggered_by_user_id) != user_id_str:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    return job.conversation_history or []
+
+
+@AgentJobRouter.get("/{session_id}/logs", response_model=list[ExecutionLogEntryRead])
+async def get_session_execution_logs(
+    session_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list:
+    """Retrieve execution log entries for a session in chronological order."""
+    from app.db.models.session_logs import ExecutionLogEntry
+
+    job = await _session_service.get_session(session_id, db)
+    if not job:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = await db.execute(
+        select(ExecutionLogEntry)
+        .where(ExecutionLogEntry.session_id == session_id)
+        .order_by(ExecutionLogEntry.timestamp)
+    )
+    entries = result.scalars().all()
+    return [ExecutionLogEntryRead.model_validate(e) for e in entries]
+
+
+@AgentJobRouter.get("/{session_id}/execution-logs", response_model=list[ExecutionLogRead])
+async def get_session_prompt_logs(
+    session_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list:
+    """Return the system instruction and user prompt captured before the first LLM call.
+
+    Returns 404 if the session does not exist.
+    Returns an empty list if no prompt log has been captured yet (e.g. session is still queued).
+    """
+    from app.db.models.agents import AgentPromptLog
+
+    job = await _session_service.get_session(session_id, db)
+    if not job:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = await db.execute(
+        select(AgentPromptLog)
+        .where(AgentPromptLog.session_id == session_id)
+        .order_by(AgentPromptLog.logged_at)
+    )
+    entries = result.scalars().all()
+    return [ExecutionLogRead.model_validate(e) for e in entries]
 
 
 @AgentJobRouter.websocket("/{session_id}/chat")
@@ -341,24 +653,24 @@ async def create_agent_type(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentType:
-    encrypted_creds = None
-    if body.llm_api_key:
-        vault = get_vault()
-        encrypted_creds = vault.encrypt(json.dumps({"api_key": body.llm_api_key}))
-
+    if body.input_type == AgentInputType.none:
+        if not body.primary_sop_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Agent types with no input must specify a primary_sop_id",
+            )
     agent_type = AgentType(
         name=body.name,
         description=body.description,
         identity_id=body.identity_id,
         role_id=body.role_id,
-        llm_provider=body.llm_provider,
-        llm_model=body.llm_model,
-        encrypted_llm_credentials=encrypted_creds,
+        model_id=body.model_id,
         system_instruction=body.system_instruction,
         input_type=body.input_type,
         input_schema=body.input_schema,
         output_type=body.output_type,
         output_schema=body.output_schema,
+        primary_sop_id=body.primary_sop_id,
     )
     db.add(agent_type)
     await db.flush()
@@ -389,15 +701,22 @@ async def update_agent_type(
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
 
-    update_data = body.model_dump(exclude_unset=True, exclude={"llm_api_key"})
+    update_data = body.model_dump(exclude_unset=True)
+
+    # Determine effective input_type and role_id after applying the update
+    effective_input_type = update_data.get("input_type", agent_type.input_type)
+    effective_role_id = update_data.get("role_id", agent_type.role_id)
+
+    if effective_input_type == AgentInputType.none:
+        effective_primary_sop_id = update_data.get("primary_sop_id", agent_type.primary_sop_id)
+        if not effective_primary_sop_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Agent types with no input must specify a primary_sop_id",
+            )
+
     for field, value in update_data.items():
         setattr(agent_type, field, value)
-
-    if body.llm_api_key is not None:
-        vault = get_vault()
-        agent_type.encrypted_llm_credentials = vault.encrypt(
-            json.dumps({"api_key": body.llm_api_key})
-        )
 
     await db.flush()
     await db.refresh(agent_type)
@@ -560,4 +879,100 @@ async def agent_oauth_callback(
         except AgentOAuthError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
         return identity
+
+
+# ── ModelConfig Endpoints ──────────────────────────────────────────────────────
+
+
+@ModelConfigRouter.get("", response_model=list[ModelConfigRead])
+async def list_model_configs(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[ModelConfigRead]:
+    configs = await _model_config_service.list_model_configs(db)
+    return [ModelConfigRead.model_validate(c) for c in configs]
+
+
+@ModelConfigRouter.post("", response_model=ModelConfigRead, status_code=status.HTTP_201_CREATED)
+async def create_model_config(
+    body: ModelConfigCreate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "create")),
+) -> ModelConfigRead:
+    config = await _model_config_service.create_model_config(
+        display_name=body.display_name,
+        provider_type=body.provider_type,
+        api_base_url=body.api_base_url,
+        api_key=body.api_key,
+        enabled_models=body.enabled_models,
+        db=db,
+    )
+    return ModelConfigRead.model_validate(config)
+
+
+@ModelConfigRouter.get("/{config_id}", response_model=ModelConfigRead)
+async def get_model_config(
+    config_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> ModelConfigRead:
+    try:
+        config = await _model_config_service.get_model_config(config_id, db)
+    except ModelConfigNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return ModelConfigRead.model_validate(config)
+
+
+@ModelConfigRouter.put("/{config_id}", response_model=ModelConfigRead)
+async def update_model_config(
+    config_id: uuid.UUID,
+    body: ModelConfigUpdate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> ModelConfigRead:
+    try:
+        config = await _model_config_service.update_model_config(
+            config_id,
+            display_name=body.display_name,
+            provider_type=body.provider_type,
+            api_base_url=body.api_base_url,
+            api_key=body.api_key,
+            enabled_models=body.enabled_models,
+            db=db,
+        )
+    except ModelConfigNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return ModelConfigRead.model_validate(config)
+
+
+@ModelConfigRouter.delete("/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_model_config(
+    config_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "delete")),
+) -> None:
+    try:
+        await _model_config_service.delete_model_config(config_id, db)
+    except ModelConfigNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ModelConfigConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@ModelConfigRouter.get("/{config_id}/models", response_model=list[str])
+async def list_models_for_config(
+    config_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[str]:
+    """Return the available model names for this config by querying the live provider API.
+
+    Always queries the provider to get the full list of available models,
+    regardless of what's currently in enabled_models. This allows users to
+    update their model selection when clicking 'Fetch Models' in the UI.
+    """
+    try:
+        return await _model_config_service.list_models_for_config(config_id, db)
+    except ModelConfigNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 

@@ -142,7 +142,7 @@ describe('PolicyEditor', () => {
         created_at: '2024-01-01T00:00:00Z',
       },
     ]
-    mockRoleState = { policy_statements: policiesWithResources }
+    mockRoleState = { policy_statements: policiesWithResources as unknown as typeof mockPolicies }
 
     const PolicyEditor = (await import('../components/permissions/PolicyEditor')).default
     render(<PolicyEditor roleId="role-1" />, { wrapper: makeWrapper() })

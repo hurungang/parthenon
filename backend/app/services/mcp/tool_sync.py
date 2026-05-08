@@ -118,7 +118,8 @@ class ToolSyncService:
             # Refresh session object to get updated credentials
             await db.refresh(session)
         
-        mcp_url = f"{server.base_url.rstrip('/')}/mcp"
+        # Use the base_url exactly as stored - it's verified during registration
+        mcp_url = server.base_url.rstrip('/')
         jsonrpc_payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
 
         # Build authentication headers if session is provided

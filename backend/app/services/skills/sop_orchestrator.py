@@ -91,10 +91,10 @@ class SopOrchestrator:
         db: AsyncSession,
     ) -> dict[str, Any]:
         """Execute a single SOP step."""
-        if step.step_type == SopStepType.skill:
+        if step.step_type == SopStepType.skill_invocation:
             if not step.skill_id:
                 raise SopOrchestratorError(
-                    f"Step {step.id} is type 'skill' but has no skill_id"
+                    f"Step {step.id} is type 'skill_invocation' but has no skill_id"
                 )
             logger.info(
                 "Executing skill step (order=%d, skill_id=%s)", step.order, step.skill_id

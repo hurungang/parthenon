@@ -84,9 +84,18 @@ async def get_role(
     role_id: uuid.UUID,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PERMISSIONS, "read")),
-) -> Role:
-    """Get a single role by ID. Admin only."""
-    role = await db.get(Role, role_id)
+) -> PermRoleRead:
+    """Get a single role by ID with its policy statements. Admin only."""
+    result = await db.execute(
+        select(Role)
+        .where(Role.id == role_id)
+        .options(
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.actions),
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.resources),
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.tag_conditions),
+        )
+    )
+    role = result.scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found.")
     return role
@@ -217,6 +226,76 @@ async def create_policy_statement(
     return stmt_result.scalar_one()
 
 
+@RolesRouter.patch(
+    "/{role_id}/policies/{policy_id}",
+    response_model=PolicyStatementRead,
+)
+async def update_policy_statement(
+    role_id: uuid.UUID,
+    policy_id: uuid.UUID,
+    body: PolicyStatementCreate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+) -> PolicyStatement:
+    """Replace a policy statement's effect, module, actions, resources, and tag conditions. Admin only."""
+    stmt = await db.get(PolicyStatement, policy_id)
+    if not stmt or stmt.role_id != role_id:
+        raise HTTPException(status_code=404, detail="Policy statement not found.")
+
+    stmt.effect = body.effect
+    stmt.module = body.module
+    await db.flush()
+
+    # Delete existing children
+    existing_actions = await db.execute(
+        select(PolicyAction).where(PolicyAction.policy_statement_id == policy_id)
+    )
+    for action in existing_actions.scalars().all():
+        await db.delete(action)
+
+    existing_resources = await db.execute(
+        select(PolicyResource).where(PolicyResource.policy_statement_id == policy_id)
+    )
+    for resource in existing_resources.scalars().all():
+        await db.delete(resource)
+
+    existing_conditions = await db.execute(
+        select(PolicyTagCondition).where(PolicyTagCondition.policy_statement_id == policy_id)
+    )
+    for cond in existing_conditions.scalars().all():
+        await db.delete(cond)
+
+    await db.flush()
+
+    # Add new children
+    for action_body in body.actions:
+        db.add(PolicyAction(policy_statement_id=policy_id, action=action_body.action))
+    for resource_body in body.resources:
+        db.add(PolicyResource(
+            policy_statement_id=policy_id,
+            resource_type=resource_body.resource_type,
+            resource_id=resource_body.resource_id,
+        ))
+    for cond_body in body.tag_conditions:
+        db.add(PolicyTagCondition(
+            policy_statement_id=policy_id,
+            tag_key=cond_body.tag_key,
+            tag_value=cond_body.tag_value,
+        ))
+    await db.flush()
+
+    result = await db.execute(
+        select(PolicyStatement)
+        .where(PolicyStatement.id == policy_id)
+        .options(
+            selectinload(PolicyStatement.actions),
+            selectinload(PolicyStatement.resources),
+            selectinload(PolicyStatement.tag_conditions),
+        )
+    )
+    return result.scalar_one()
+
+
 @RolesRouter.delete(
     "/{role_id}/policies/{policy_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -232,3 +311,71 @@ async def delete_policy_statement(
     if not stmt or stmt.role_id != role_id:
         raise HTTPException(status_code=404, detail="Policy statement not found.")
     await db.delete(stmt)
+
+
+@RolesRouter.post(
+    "/{role_id}/clone",
+    response_model=PermRoleRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def clone_role(
+    role_id: uuid.UUID,
+    body: PermRoleCreate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
+) -> PermRoleRead:
+    """Clone a role, copying all policy statements. Admin only."""
+    source_result = await db.execute(
+        select(Role)
+        .where(Role.id == role_id)
+        .options(
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.actions),
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.resources),
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.tag_conditions),
+        )
+    )
+    source = source_result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source role not found.")
+
+    existing = await db.execute(select(Role).where(Role.name == body.name))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail=f"Role '{body.name}' already exists.")
+
+    cloned = Role(
+        name=body.name,
+        description=body.description if body.description is not None else source.description,
+    )
+    db.add(cloned)
+    await db.flush()
+
+    for stmt in source.policy_statements:
+        new_stmt = PolicyStatement(role_id=cloned.id, effect=stmt.effect, module=stmt.module)
+        db.add(new_stmt)
+        await db.flush()
+        for action in stmt.actions:
+            db.add(PolicyAction(policy_statement_id=new_stmt.id, action=action.action))
+        for resource in stmt.resources:
+            db.add(PolicyResource(
+                policy_statement_id=new_stmt.id,
+                resource_type=resource.resource_type,
+                resource_id=resource.resource_id,
+            ))
+        for cond in stmt.tag_conditions:
+            db.add(PolicyTagCondition(
+                policy_statement_id=new_stmt.id,
+                tag_key=cond.tag_key,
+                tag_value=cond.tag_value,
+            ))
+    await db.flush()
+
+    new_result = await db.execute(
+        select(Role)
+        .where(Role.id == cloned.id)
+        .options(
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.actions),
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.resources),
+            selectinload(Role.policy_statements).selectinload(PolicyStatement.tag_conditions),
+        )
+    )
+    return new_result.scalar_one()

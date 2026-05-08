@@ -58,7 +58,7 @@ export interface PolicyAction {
 export interface PolicyResource {
   id: string
   resource_type: string
-  resource_id?: string
+  resource_id?: string | null
 }
 
 export interface PolicyTagCondition {
@@ -81,8 +81,13 @@ export interface PolicyStatementCreate {
   effect: PolicyEffect
   module: string
   actions: { action: string }[]
-  resources: { resource_type: string; resource_id?: string }[]
+  resources: { resource_type: string; resource_id?: string | null }[]
   tag_conditions: { tag_key: string; tag_value: string }[]
+}
+
+export interface ResourceTypeDef {
+  resource_type: string
+  actions: string[]
 }
 
 export interface Role {
@@ -98,9 +103,15 @@ export interface Role {
   user_assignment_count: number
   group_assignment_count: number
   policies?: PolicyStatement[]
+  policy_statements?: PolicyStatement[]
 }
 
 export interface RoleCreate {
+  name: string
+  description?: string
+}
+
+export interface RoleCloneCreate {
   name: string
   description?: string
 }

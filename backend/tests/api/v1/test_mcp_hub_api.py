@@ -89,6 +89,7 @@ def _make_session(server_id=None, session_id=None):
     m.is_active = True
     m.created_at = now
     m.updated_at = now
+    m.connection_test = None
     # encrypted_credentials is present on the model but must not appear in responses
     m.encrypted_credentials = "ENCRYPTED:xyz"
     return m

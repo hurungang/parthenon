@@ -65,6 +65,8 @@ export interface McpSession {
   is_active: boolean
   identity_binding: Record<string, unknown> | null
   credential_config: Record<string, unknown> | null
+  oauth_expires_at: string | null
+  oauth_refresh_expires_at: string | null
   created_at: string
   updated_at: string
 }
@@ -104,7 +106,8 @@ export interface Skill {
   id: string
   name: string
   description: string | null
-  instructions: string | null
+  instructions?: string | null
+  instructions_with_tools?: string | null
   is_active: boolean
   tool_ids: string[]
   created_at: string
@@ -179,6 +182,7 @@ export interface AgentJob {
   completed_at: string | null
   output_data: Record<string, unknown> | null
   error_message: string | null
+  conversation_history: Array<{ role: string; content: string }> | null
   created_at: string
 }
 
@@ -188,16 +192,37 @@ export interface AgentType {
   description: string | null
   identity_id: string | null
   role_id: string | null
-  llm_provider: string
-  llm_model: string
+  model_id: string | null
   system_instruction: string | null
   input_type: AgentInputType
   input_schema: Record<string, unknown> | null
   output_type: AgentOutputType
   output_schema: Record<string, unknown> | null
+  primary_sop_id: string | null
   is_active: boolean
   created_at: string
   updated_at: string
+}
+
+export type ModelProviderType = 'openai' | 'anthropic' | 'litellm_proxy' | 'azure_openai'
+
+export interface ModelConfig {
+  id: string
+  display_name: string
+  provider_type: ModelProviderType
+  api_base_url: string | null
+  has_credentials: boolean
+  enabled_models: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ExecutionLogRead {
+  id: string
+  session_id: string
+  system_instruction: string | null
+  user_prompt: string | null
+  logged_at: string
 }
 
 export interface AgentInstance {

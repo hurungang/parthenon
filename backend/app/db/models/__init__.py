@@ -38,3 +38,4 @@ from app.db.models.group_role import GroupRole  # noqa: F401
 from app.db.models.user_group import UserGroup  # noqa: F401
 from app.db.models.access_request_batch import AccessRequestBatch  # noqa: F401
 from app.db.models.access_request import AccessRequest  # noqa: F401
+from app.db.models.session_logs import ExecutionLogEntry  # noqa: F401

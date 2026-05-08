@@ -18,7 +18,7 @@ from app.main import create_app
 from app.db.session import get_db
 from app.api.deps import require_permission
 from app.middleware.auth import JWTAuthMiddleware
-from app.core.resource_types import ResourceTypeManifest, RT_ROLE
+from app.core.resource_types import ResourceTypeManifest, RT_PERMISSIONS, RT_ROLE
 
 
 def _bypass_auth():
@@ -181,7 +181,7 @@ class TestGetRoleWithPolicies:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "read")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "read")] = _allow_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -235,7 +235,7 @@ class TestGetRoleWithPolicies:
 
         app = create_app()
         app.dependency_overrides[get_db] = db_dep
-        app.dependency_overrides[require_permission(RT_ROLE, "read")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "read")] = _allow_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -289,8 +289,8 @@ class TestUpdatePolicyStatement:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
-        app.dependency_overrides[require_permission(RT_ROLE, "read")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "read")] = _allow_override()
 
         updated_payload = {
             "effect": "deny",
@@ -360,8 +360,8 @@ class TestUpdatePolicyStatement:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
-        app.dependency_overrides[require_permission(RT_ROLE, "read")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "read")] = _allow_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -428,7 +428,7 @@ class TestUpdatePolicyStatement:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -455,7 +455,7 @@ class TestUpdatePolicyStatement:
 
         app = create_app()
         app.dependency_overrides[get_db] = db_dep
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _deny_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _deny_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -505,7 +505,7 @@ class TestCloneRole:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
 
         clone_name = f"clone-{source_id}"
         with _bypass_auth():
@@ -560,7 +560,7 @@ class TestCloneRole:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
 
         clone_name = f"clone-stmts-{source_id}"
         with _bypass_auth():
@@ -622,7 +622,7 @@ class TestCloneRole:
 
         app = create_app()
         app.dependency_overrides[get_db] = override
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -646,7 +646,7 @@ class TestCloneRole:
 
         app = create_app()
         app.dependency_overrides[get_db] = override
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -666,7 +666,7 @@ class TestCloneRole:
 
         app = create_app()
         app.dependency_overrides[get_db] = db_dep
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _deny_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _deny_override()
 
         with _bypass_auth():
             async with AsyncClient(
@@ -713,7 +713,7 @@ class TestCloneRole:
                     raise
 
         app.dependency_overrides[get_db] = get_test_db
-        app.dependency_overrides[require_permission(RT_ROLE, "manage")] = _allow_override()
+        app.dependency_overrides[require_permission(RT_PERMISSIONS, "manage")] = _allow_override()
 
         clone_name = f"clone-desc-{source_id}"
         with _bypass_auth():

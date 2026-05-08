@@ -1,6 +1,7 @@
 import {
   Box,
   FormControl,
+  FormHelperText,
   InputLabel,
   MenuItem,
   Select,
@@ -10,21 +11,21 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
-import type { AgentIdentity, AgentInputType, AgentOutputType, AgentRole } from '../../types'
+import type { AgentIdentity, AgentInputType, AgentOutputType, AgentRole, ModelConfig, Sop } from '../../types'
+import { JsonSchemaBuilder } from '../../components/JsonSchemaBuilder'
 
 export interface AgentTypeFormValues {
   name: string
   description: string
   identity_id: string
   role_id: string
-  llm_provider: string
-  llm_model: string
-  llm_api_key: string
+  model_id: string
   system_instruction: string
   input_type: AgentInputType
   input_schema: string
   output_type: AgentOutputType
   output_schema: string
+  primary_sop_id: string
 }
 
 export const defaultAgentTypeFormValues: AgentTypeFormValues = {
@@ -32,14 +33,13 @@ export const defaultAgentTypeFormValues: AgentTypeFormValues = {
   description: '',
   identity_id: '',
   role_id: '',
-  llm_provider: 'openai',
-  llm_model: 'gpt-4o',
-  llm_api_key: '',
+  model_id: '',
   system_instruction: '',
   input_type: 'none',
   input_schema: '',
   output_type: 'auto',
   output_schema: '',
+  primary_sop_id: '',
 }
 
 interface AgentTypeFormProps {
@@ -50,12 +50,22 @@ interface AgentTypeFormProps {
 /**
  * Reusable form for creating / editing an AgentType.
  * Covers all fields in the rearchitected AgentType schema.
+ * Identity is selected first; the role dropdown is then filtered by the
+ * identity's type via GET /agents/roles?allowed_for_identity_type=<type>.
  */
 export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
   const { t } = useTranslation()
 
   const set = <K extends keyof AgentTypeFormValues>(key: K, value: AgentTypeFormValues[K]) =>
     onChange({ ...values, [key]: value })
+
+  const { data: identities } = useQuery<AgentIdentity[]>({
+    queryKey: ['agents', 'identities'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
+      return data
+    },
+  })
 
   const { data: roles } = useQuery<AgentRole[]>({
     queryKey: ['agents', 'roles'],
@@ -65,13 +75,54 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
     },
   })
 
-  const { data: identities } = useQuery<AgentIdentity[]>({
-    queryKey: ['agents', 'identities'],
+  // Fetch roles assigned to the selected identity for validation
+  const { data: identityRoles } = useQuery<AgentRole[]>({
+    queryKey: ['agents', 'identities', values.identity_id, 'roles'],
     queryFn: async () => {
-      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
+      const { data } = await apiClient.get<AgentRole[]>(`/agents/identities/${values.identity_id}/roles`)
+      return data
+    },
+    enabled: !!values.identity_id,
+  })
+
+  // Warn if the selected role is not assigned to the selected identity
+  const selectedRoleIsAssigned =
+    !values.identity_id ||
+    !values.role_id ||
+    (identityRoles ?? []).some((r) => r.id === values.role_id)
+
+  const { data: modelConfigs } = useQuery<ModelConfig[]>({
+    queryKey: ['agents', 'model-configs'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ModelConfig[]>('/agents/model-configs')
       return data
     },
   })
+
+  const { data: sops } = useQuery<Sop[]>({
+    queryKey: ['sops'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Sop[]>('/sops')
+      return data
+    },
+    enabled: values.input_type === 'none',
+  })
+
+  // Build a flat list of { modelId, label } from all configs' enabled_models
+  const flatModels: { modelId: string; label: string }[] = (modelConfigs ?? []).flatMap((mc) =>
+    (mc.enabled_models ?? []).map((m) => ({
+      modelId: m,
+      label: `${m} (${mc.display_name})`,
+    }))
+  )
+
+  const selectedRole = (roles ?? []).find((r) => r.id === values.role_id)
+  const roleSops = (sops ?? []).filter((s) => (selectedRole?.sop_ids ?? []).includes(s.id))
+
+  // When identity changes: keep role if still valid, just update identity_id
+  const handleIdentityChange = (newIdentityId: string) => {
+    onChange({ ...values, identity_id: newIdentityId })
+  }
 
   return (
     <Box display="flex" flexDirection="column" gap={2}>
@@ -91,7 +142,22 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         rows={2}
       />
 
+      {/* Identity selector */}
       <FormControl fullWidth>
+        <InputLabel>{t('agents.types.identity')}</InputLabel>
+        <Select
+          value={values.identity_id}
+          label={t('agents.types.identity')}
+          onChange={(e) => handleIdentityChange(e.target.value)}
+        >
+          <MenuItem value=""><em>{t('agents.types.noIdentity')}</em></MenuItem>
+          {(identities ?? []).map((i) => (
+            <MenuItem key={i.id} value={i.id}>{i.name}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth error={!selectedRoleIsAssigned}>
         <InputLabel>{t('agents.types.role')}</InputLabel>
         <Select
           value={values.role_id}
@@ -103,41 +169,24 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
             <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
           ))}
         </Select>
+        {!selectedRoleIsAssigned && (
+          <FormHelperText>{t('agents.types.roleNotAssignedToIdentity')}</FormHelperText>
+        )}
       </FormControl>
 
       <FormControl fullWidth>
-        <InputLabel>{t('agents.types.identity')}</InputLabel>
+        <InputLabel>{t('agents.types.modelId')}</InputLabel>
         <Select
-          value={values.identity_id}
-          label={t('agents.types.identity')}
-          onChange={(e) => set('identity_id', e.target.value)}
+          value={values.model_id}
+          label={t('agents.types.modelId')}
+          onChange={(e) => set('model_id', e.target.value)}
         >
-          <MenuItem value=""><em>{t('agents.types.noIdentity')}</em></MenuItem>
-          {(identities ?? []).map((i) => (
-            <MenuItem key={i.id} value={i.id}>{i.name}</MenuItem>
+          <MenuItem value=""><em>{t('agents.types.noModel')}</em></MenuItem>
+          {flatModels.map((m) => (
+            <MenuItem key={m.modelId} value={m.modelId}>{m.label}</MenuItem>
           ))}
         </Select>
       </FormControl>
-
-      <TextField
-        label={t('agents.types.llmProvider')}
-        value={values.llm_provider}
-        onChange={(e) => set('llm_provider', e.target.value)}
-        fullWidth
-      />
-      <TextField
-        label={t('agents.types.llmModel')}
-        value={values.llm_model}
-        onChange={(e) => set('llm_model', e.target.value)}
-        fullWidth
-      />
-      <TextField
-        label={t('agents.types.apiKey')}
-        type="password"
-        value={values.llm_api_key}
-        onChange={(e) => set('llm_api_key', e.target.value)}
-        fullWidth
-      />
 
       <TextField
         label={t('agents.types.systemInstruction')}
@@ -153,7 +202,10 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         <Select
           value={values.input_type}
           label={t('agents.types.inputType')}
-          onChange={(e) => set('input_type', e.target.value as AgentInputType)}
+          onChange={(e) => {
+            const newType = e.target.value as AgentInputType
+            onChange({ ...values, input_type: newType, primary_sop_id: newType === 'none' ? values.primary_sop_id : '' })
+          }}
         >
           <MenuItem value="none">{t('agents.types.inputNone')}</MenuItem>
           <MenuItem value="typed">{t('agents.types.inputTyped')}</MenuItem>
@@ -161,21 +213,30 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         </Select>
       </FormControl>
 
+      {values.input_type === 'none' && (
+        <FormControl fullWidth required>
+          <InputLabel>{t('agents.types.form.primarySop')}</InputLabel>
+          <Select
+            value={values.primary_sop_id}
+            label={t('agents.types.form.primarySop')}
+            onChange={(e) => set('primary_sop_id', e.target.value)}
+          >
+            <MenuItem value=""><em>{t('agents.types.form.primarySopPlaceholder')}</em></MenuItem>
+            {roleSops.map((s) => (
+              <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+            ))}
+          </Select>
+          <FormHelperText>{t('agents.types.form.primarySopHelper')}</FormHelperText>
+        </FormControl>
+      )}
+
       {values.input_type === 'typed' && (
-        <Box>
-          <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-            {t('agents.types.inputSchema')}
-          </Typography>
-          <TextField
-            value={values.input_schema}
-            onChange={(e) => set('input_schema', e.target.value)}
-            fullWidth
-            multiline
-            rows={4}
-            placeholder='{"field": {"type": "string", "description": "..."}}'
-            inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
-          />
-        </Box>
+        <JsonSchemaBuilder
+          value={values.input_schema}
+          onChange={(schema) => set('input_schema', schema)}
+          label={t('agents.types.inputSchema')}
+          helperText={t('agents.types.schemaBuilder.inputSchemaHelper')}
+        />
       )}
 
       <FormControl fullWidth>
@@ -192,20 +253,12 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
       </FormControl>
 
       {values.output_type === 'typed' && (
-        <Box>
-          <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-            {t('agents.types.outputSchema')}
-          </Typography>
-          <TextField
-            value={values.output_schema}
-            onChange={(e) => set('output_schema', e.target.value)}
-            fullWidth
-            multiline
-            rows={4}
-            placeholder='{"result": {"type": "string"}}'
-            inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
-          />
-        </Box>
+        <JsonSchemaBuilder
+          value={values.output_schema}
+          onChange={(schema) => set('output_schema', schema)}
+          label={t('agents.types.outputSchema')}
+          helperText={t('agents.types.schemaBuilder.outputSchemaHelper')}
+        />
       )}
     </Box>
   )

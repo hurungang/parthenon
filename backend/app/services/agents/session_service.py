@@ -117,12 +117,27 @@ class AgentSessionService:
         return await db.get(AgentJob, session_id)
 
     async def list_sessions(
-        self, user_id: uuid.UUID | None, db: AsyncSession
+        self,
+        user_id: uuid.UUID | None,
+        db: AsyncSession,
+        status: AgentJobStatus | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        agent_type_id: uuid.UUID | None = None,
     ) -> list[AgentJob]:
-        """List AgentJobs triggered by the given user (or all if user_id is None)."""
+        """List AgentJobs triggered by the given user (or all if user_id is None),
+        with optional filters for status, date range, and agent type."""
         query = select(AgentJob).order_by(AgentJob.created_at.desc())
         if user_id is not None:
             query = query.where(AgentJob.triggered_by_user_id == user_id)
+        if status is not None:
+            query = query.where(AgentJob.status == status)
+        if from_date is not None:
+            query = query.where(AgentJob.created_at >= from_date)
+        if to_date is not None:
+            query = query.where(AgentJob.created_at <= to_date)
+        if agent_type_id is not None:
+            query = query.where(AgentJob.agent_type_id == agent_type_id)
         result = await db.execute(query)
         return list(result.scalars().all())
 

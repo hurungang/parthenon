@@ -140,8 +140,9 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
     <div class="nav-item active" data-title="Agent Roles" onclick="nav(this,'roles')"><span class="nav-icon">🎭</span>Agent Roles</div>
     <div class="nav-item" data-title="Identities" onclick="nav(this,'identities')"><span class="nav-icon">🔑</span>Identities</div>
+    <div class="nav-item" data-title="Model Configs" onclick="nav(this,'models')"><span class="nav-icon">🧠</span>Model Configs</div>
     <div class="nav-item" data-title="Agent Types" onclick="nav(this,'types')"><span class="nav-icon">🤖</span>Agent Types</div>
-    <div class="nav-item" data-title="Agent Sessions" onclick="nav(this,'sessions')"><span class="nav-icon">⚡</span>Agent Sessions</div>
+    <div class="nav-item" data-title="Instances" onclick="nav(this,'instances')"><span class="nav-icon">⚡</span>Instances</div>
   </nav>
 
   <!-- MAIN WRAPPER -->
@@ -245,6 +246,53 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
         </div>
       </div>
 
+      <!-- ── VIEW: MODELS ── -->
+      <div id="view-models" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Model Configurations</h2>
+            <div class="view-desc">Configure LLM providers, API endpoints, and secured credentials for agents.</div>
+          </div>
+          <button class="btn btn-primary" onclick="openDrawer('model-drawer')">＋ Create Configuration</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Configuration Name</th>
+                <th>Provider</th>
+                <th>Endpoint URL</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Enterprise Claude Proxy</td>
+                <td>LiteLLM</td>
+                <td>https://litellm.internal.corp</td>
+                <td><span class="chip chip-green">Connected</span></td>
+                <td class="actions-cell">
+                  <button class="btn btn-secondary btn-xs" onclick="openDrawer('model-drawer')">Edit</button>
+                  <button class="btn btn-danger btn-xs">Delete</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Azure OpenAI Std</td>
+                <td>Azure</td>
+                <td>https://my-aoai.openai.azure.com</td>
+                <td><span class="chip chip-green">Connected</span></td>
+                <td class="actions-cell">
+                  <button class="btn btn-secondary btn-xs" onclick="openDrawer('model-drawer')">Edit</button>
+                  <button class="btn btn-danger btn-xs">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- ── VIEW: TYPES ── -->
       <div id="view-types" class="view">
         <div class="view-header">
@@ -292,77 +340,104 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
         </div>
       </div>
 
-      <!-- ── VIEW: SESSIONS ── -->
-      <div id="view-sessions" class="view">
+      <!-- ── VIEW: INSTANCES ── -->
+      <div id="view-instances" class="view">
         <div class="view-header">
           <div>
-            <h2>Agent Sessions</h2>
-            <div class="view-desc">Monitor running, queued, and completed agent sessions. Conversational agents open a chat UI.</div>
+            <h2>Agent Instances</h2>
+            <div class="view-desc">Monitor running, queued, and completed agent instances. Drill down to view input, output, and execution history.</div>
           </div>
-          <button class="btn btn-success" onclick="openDrawer('start-session-drawer')">▶ Start Agent</button>
+          <button class="btn btn-success" onclick="openDrawer('start-instance-drawer')">▶ Start Instance</button>
         </div>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Agent Type</th>
-                <th>Mode</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Duration</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>#1A4B</td>
-                <td>Pull Request Reviewer</td>
-                <td><span class="chip chip-blue">Task</span></td>
-                <td><span class="chip chip-blue">Running</span></td>
-                <td>10:45 AM</td>
-                <td>00:45</td>
-                <td class="actions-cell">
-                  <button class="btn btn-secondary btn-xs" onclick="openDrawer('session-detail-drawer')">View Log</button>
-                  <button class="btn btn-danger btn-xs">Cancel</button>
-                </td>
-              </tr>
-              <tr>
-                <td>#1A4A</td>
-                <td>Pull Request Reviewer</td>
-                <td><span class="chip chip-blue">Task</span></td>
-                <td><span class="chip chip-green">Completed</span></td>
-                <td>10:00 AM</td>
-                <td>02:15</td>
-                <td class="actions-cell">
-                  <button class="btn btn-secondary btn-xs" onclick="openDrawer('session-detail-drawer')">View Result</button>
-                </td>
-              </tr>
-              <tr>
-                <td>#1A4C</td>
-                <td>Research Assistant</td>
-                <td><span class="chip chip-green">Chat</span></td>
-                <td><span class="chip chip-blue">Active</span></td>
-                <td>10:30 AM</td>
-                <td>00:25</td>
-                <td class="actions-cell">
-                  <button class="btn btn-primary btn-xs" onclick="openDrawer('chat-drawer')">💬 Open Chat</button>
-                </td>
-              </tr>
-              <tr>
-                <td>#1A49</td>
-                <td>Weekly Reporter</td>
-                <td><span class="chip chip-blue">Task</span></td>
-                <td><span class="chip chip-orange" style="background:#FEE2E2;color:#B91C1C">Failed</span></td>
-                <td>09:00 AM</td>
-                <td>00:10</td>
-                <td class="actions-cell">
-                  <button class="btn btn-secondary btn-xs" onclick="openDrawer('session-detail-drawer')">View Log</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="form-group" style="margin-bottom: 24px; display: flex; gap: 16px;">
+          <select class="form-control" style="width: 200px;">
+            <option>All Statuses</option>
+            <option>Running</option>
+            <option>Completed</option>
+            <option>Failed</option>
+            <option>Cancelled</option>
+          </select>
+          <select class="form-control" style="width: 200px;">
+            <option>Last 24 Hours</option>
+            <option>Last 7 Days</option>
+            <option>Last 30 Days</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px;">
+          <div class="card" style="margin-bottom: 0;">
+            <div class="card-header">
+              <h3>#1A4B</h3>
+              <span class="chip chip-blue">Running</span>
+            </div>
+            <div class="card-body">
+              <p style="font-weight:600; margin-bottom: 8px;">Pull Request Reviewer</p>
+              <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                <p>Started: 10:45 AM</p>
+                <p>Duration: 00:45</p>
+                <p>Mode: Task</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-xs" onclick="openDrawer('instance-detail-drawer')">View Details</button>
+                <button class="btn btn-danger btn-xs">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom: 0;">
+            <div class="card-header">
+              <h3>#1A4A</h3>
+              <span class="chip chip-green">Completed</span>
+            </div>
+            <div class="card-body">
+              <p style="font-weight:600; margin-bottom: 8px;">Pull Request Reviewer</p>
+              <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                <p>Started: 10:00 AM</p>
+                <p>Duration: 02:15</p>
+                <p>Mode: Task</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-xs" onclick="openDrawer('instance-detail-drawer')">View Details</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom: 0;">
+            <div class="card-header">
+              <h3>#1A4C</h3>
+              <span class="chip chip-blue" style="background:#E0E7FF;color:#3730A3">Active Chat</span>
+            </div>
+            <div class="card-body">
+              <p style="font-weight:600; margin-bottom: 8px;">Research Assistant</p>
+              <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                <p>Started: 10:30 AM</p>
+                <p>Duration: 00:25</p>
+                <p>Mode: Conversation</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary btn-xs" onclick="openDrawer('chat-drawer')">💬 Open Chat</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom: 0;">
+            <div class="card-header">
+              <h3>#1A49</h3>
+              <span class="chip" style="background:#FEE2E2;color:#B91C1C">Failed</span>
+            </div>
+            <div class="card-body">
+              <p style="font-weight:600; margin-bottom: 8px;">Weekly Reporter</p>
+              <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                <p>Started: 09:00 AM</p>
+                <p>Duration: 00:10</p>
+                <p>Mode: Task</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-xs" onclick="openDrawer('instance-detail-drawer')">View Details</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -477,6 +552,45 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
   </div>
 </div>
 
+<!-- MODEL EDITOR -->
+<div class="drawer" id="model-drawer">
+  <div class="drawer-header">
+    <h3>Configure Model Service</h3>
+    <button class="btn btn-secondary btn-xs" onclick="closeAllDrawers()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="form-group">
+      <label>Configuration Name</label>
+      <input type="text" class="form-control" value="Enterprise Claude Proxy">
+    </div>
+    <div class="form-group">
+      <label>Provider Type</label>
+      <select class="form-control">
+        <option>OpenAI (Direct)</option>
+        <option>Anthropic (Direct)</option>
+        <option>Azure OpenAI</option>
+        <option selected>LiteLLM Proxy</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>API Endpoint (Base URL)</label>
+      <input type="url" class="form-control" value="https://litellm.internal.corp">
+    </div>
+    <div class="form-group">
+      <label>API Key / Credentials</label>
+      <input type="password" class="form-control" value="************">
+      <div class="form-hint">Stored securely using encryption. Will not be displayed again.</div>
+    </div>
+    <div class="form-group">
+      <button class="btn btn-secondary" onclick="alert('Connection successful!')">Test Connection</button>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" onclick="closeAllDrawers()">Cancel</button>
+    <button class="btn btn-primary" onclick="closeAllDrawers()">Save Configuration</button>
+  </div>
+</div>
+
 <!-- TYPE EDITOR -->
 <div class="drawer" id="type-drawer">
   <div class="drawer-header">
@@ -502,6 +616,14 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
         <option>Data Analyst</option>
         <option>Content Writer</option>
       </select>
+    </div>
+    <div class="form-group">
+      <label>Model Configuration</label>
+      <select class="form-control">
+        <option selected>Enterprise Claude Proxy (LiteLLM)</option>
+        <option>Azure OpenAI Std</option>
+      </select>
+      <div class="form-hint">Select a pre-configured LLM provider to power this agent.</div>
     </div>
     <div class="form-group">
       <label>System Instructions</label>
@@ -554,9 +676,9 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 </div>
 
 <!-- SESSION START -->
-<div class="drawer" id="start-session-drawer">
+<div class="drawer" id="start-instance-drawer">
   <div class="drawer-header">
-    <h3>Start Agent Session</h3>
+    <h3>Start Agent Instance</h3>
     <button class="btn btn-secondary btn-xs" onclick="closeAllDrawers()">✕</button>
   </div>
   <div class="drawer-body">
@@ -579,14 +701,14 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
   </div>
   <div class="drawer-footer">
     <button class="btn btn-secondary" onclick="closeAllDrawers()">Cancel</button>
-    <button class="btn btn-success" onclick="closeAllDrawers();alert('Session Started!')">Launch Session</button>
+    <button class="btn btn-success" onclick="closeAllDrawers();alert('Instance Started!')">Launch Instance</button>
   </div>
 </div>
 
 <!-- SESSION DETAILS -->
-<div class="drawer drawer-wide" id="session-detail-drawer">
+<div class="drawer drawer-wide" id="instance-detail-drawer">
   <div class="drawer-header">
-    <h3>Session #1A4A</h3>
+    <h3>Instance #1A4A</h3>
     <span class="chip chip-green">Completed</span>
     <button class="btn btn-secondary btn-xs" onclick="closeAllDrawers()" style="margin-left:auto">✕</button>
   </div>

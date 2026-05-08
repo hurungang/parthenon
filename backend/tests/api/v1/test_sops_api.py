@@ -16,12 +16,14 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 os.environ.setdefault("CREDENTIAL_VAULT_KEY", "test-32-byte-key-for-aes-256-enc!")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.main import create_app
 from app.db.session import get_db
@@ -537,3 +539,139 @@ async def test_put_sop_roles_with_empty_list_removes_all():
 
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ── Real-DB regression: MissingGreenlet on sop.steps assignment ──────────────────
+#
+# BUG: GET /api/v1/sops/{sop_id} returns 500 when the SOP exists in the database.
+#
+# Root cause (sops.py line 58):
+#   sop.steps = list(steps_result.scalars().all())
+#
+# When `sop` is a real SQLAlchemy ORM object loaded via select(Sop), its `steps`
+# collection is in a lazy-unloaded state.  The assignment triggers SQLAlchemy's
+# collection instrumentation to initialise the *current* collection (so it can
+# fire backref events for items being removed).  That initialisation issues an
+# async SELECT query via `await_only()`.  Because there is no active greenlet at
+# that point, SQLAlchemy raises:
+#
+#   sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called;
+#   can't call await_only() here. Was IO attempted in an unexpected place?
+#
+# The mock-based tests above never trigger this because MagicMock has no ORM
+# instrumentation.  This test uses a real SQLite in-memory database.
+
+
+@pytest_asyncio.fixture(scope="function")
+async def _real_db_engine_for_sops_regression():
+    """Single-connection SQLite engine shared across all sessions in one test."""
+    from sqlalchemy.pool import StaticPool
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
+    async with engine.begin() as conn:
+        # Import all models so their tables are registered on Base.metadata
+        import app.db.models.skills  # noqa: F401
+        import app.db.models.agents  # noqa: F401
+        from app.db.session import Base
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    async with engine.begin() as conn:
+        from app.db.session import Base
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_get_sop_with_real_db_triggers_missing_greenlet(
+    _real_db_engine_for_sops_regression,
+):
+    """FAILING TEST — reproduces the MissingGreenlet 500 error on GET /sops/{id}.
+
+    The existing mock-based tests pass because MagicMock bypasses SQLAlchemy's
+    ORM collection instrumentation.  This test uses a real async SQLite session so
+    the lazy-load trap fires exactly as it does in production.
+
+    Expected behaviour (after fix): 200 with {"steps": [...]}
+    Actual behaviour (before fix):  500 — MissingGreenlet from sop.steps = list(...)
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from app.db.session import Base, get_db
+    from app.db.models.skills import Sop, SopStep
+
+    engine = _real_db_engine_for_sops_regression
+    SessionFactory = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    # ── Seed: create a SOP with two steps ────────────────────────────────────────
+    sop_id = uuid.uuid4()
+    async with SessionFactory() as setup_session:
+        sop = Sop(
+            id=sop_id,
+            name="Regression SOP",
+            description="Reproduces MissingGreenlet bug",
+        )
+        setup_session.add(sop)
+        await setup_session.flush()
+
+        step1 = SopStep(sop_id=sop_id, order=1, name="Step A", step_type="skill_invocation")
+        step2 = SopStep(sop_id=sop_id, order=2, name="Step B", step_type="skill_invocation")
+        setup_session.add_all([step1, step2])
+        await setup_session.commit()
+
+    # ── Wire the real engine into the FastAPI app ─────────────────────────────────
+    async def override_get_db():
+        async with SessionFactory() as session:
+            yield session
+
+    # Override require_permission to bypass PlatformUser DB lookup while still
+    # letting the request reach the actual endpoint code (where the bug lives).
+    from app.api.deps import require_permission
+    from app.core.resource_types import RT_SKILL
+
+    async def _allow_read():
+        return {"sub": "admin-sub", "roles": ["admin"]}
+
+    app = create_app()
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_permission(RT_SKILL, "read")] = _allow_read
+
+    # ── Act: call GET /api/v1/sops/{sop_id} with a real DB session ───────────────
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            try:
+                resp = await client.get(f"/api/v1/sops/{sop_id}")
+            except Exception as exc:
+                # The MissingGreenlet error propagates out of the ASGI transport
+                # before FastAPI can wrap it as a 500 response.  This is the bug.
+                pytest.fail(
+                    f"GET /api/v1/sops/{sop_id} raised {type(exc).__name__} "
+                    f"instead of returning HTTP 200.\n"
+                    f"Root cause — sop.steps = list(...) in get_sop() triggers "
+                    f"SQLAlchemy lazy-loading in an async context.\n"
+                    f"Exception: {exc}"
+                )
+
+    # ── Assert: expect 200 + two steps.
+    #    BEFORE the fix this assertion fails: resp.status_code == 500
+    #    because the endpoint raises MissingGreenlet from `sop.steps = list(...)`.
+    assert resp.status_code == 200, (
+        f"Expected 200 but got {resp.status_code}.\n"
+        f"Response body: {resp.text}\n"
+        "This confirms the MissingGreenlet bug: assigning to sop.steps on a real "
+        "ORM object triggers SQLAlchemy lazy-loading inside an async endpoint."
+    )
+    body = resp.json()
+    assert "steps" in body, f"'steps' key missing from response: {body}"
+    assert len(body["steps"]) == 2, (
+        f"Expected 2 steps but got {len(body['steps'])}: {body['steps']}"
+    )

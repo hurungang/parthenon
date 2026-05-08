@@ -12,7 +12,6 @@ import {
 import LoginIcon from '@mui/icons-material/Login'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import type { AgentIdentity } from '../../types'
 
 interface AgentIdentityDialogProps {
   open: boolean
@@ -108,13 +107,13 @@ export function AgentIdentityDialog({
     <Dialog
       open={open}
       onClose={() => { onClose(); setDialogError(null) }}
-      maxWidth="sm"
+      maxWidth="lg"
       fullWidth
     >
       <DialogTitle>{t('agents.identities.createTitle')}</DialogTitle>
 
       <DialogContent dividers>
-        {dialogError && (
+        {dialogError != null && (
           <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
         )}
 

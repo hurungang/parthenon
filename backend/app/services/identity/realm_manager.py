@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from app.core.config import get_settings
+from app.core.ssl_context import get_ssl_context
 from app.core.yaml_config import load_identity_yaml
 from app.services.identity.keycloak_admin_client import KeycloakAdminClient, KeycloakAdminError
 
@@ -169,7 +170,7 @@ class RealmManager:
             return
 
         url = f"{keycloak_base}/admin/realms/{realm_name}"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "PUT",
@@ -209,3 +210,4 @@ class RealmManager:
             return await kc.realm_exists(token, effective_realm_name)
         except KeycloakAdminError:
             return False
+

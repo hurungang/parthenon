@@ -17,11 +17,14 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import AssignmentIcon from '@mui/icons-material/Assignment'
 import DeleteIcon from '@mui/icons-material/Delete'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { AgentIdentityDialog } from './AgentIdentityDialog'
+import { AssignRolesToIdentityDialog } from './AssignRolesToIdentityDialog'
 import type { AgentIdentity } from '../../types'
 
 function statusColor(
@@ -33,6 +36,15 @@ function statusColor(
   return 'default'
 }
 
+function tokenStatusColor(
+  expiresAt: string,
+): 'success' | 'warning' | 'error' {
+  const diff = new Date(expiresAt).getTime() - Date.now()
+  if (diff <= 0) return 'error'
+  if (diff < 5 * 60 * 1000) return 'warning'
+  return 'success'
+}
+
 /**
  * Agent Identity list page — displays all OAuth-created agent identities.
  * Identities are created automatically via OAuth flow, not manually edited.
@@ -41,6 +53,8 @@ export function AgentIdentityListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [refreshingId, setRefreshingId] = useState<string | null>(null)
+  const [assignRolesIdentity, setAssignRolesIdentity] = useState<AgentIdentity | null>(null)
 
   const { data: identities, isLoading, error } = useQuery<AgentIdentity[]>({
     queryKey: ['agents', 'identities'],
@@ -58,6 +72,18 @@ export function AgentIdentityListPage() {
     if (confirm(t('agents.identities.deleteConfirm', { name }))) {
       await apiClient.delete(`/agents/identities/${id}`)
       await queryClient.invalidateQueries({ queryKey: ['agents', 'identities'] })
+    }
+  }
+
+  const handleRefreshToken = async (identity: AgentIdentity) => {
+    setRefreshingId(identity.id)
+    try {
+      await apiClient.post(`/agents/identities/${identity.id}/refresh-token`)
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'identities'] })
+    } catch {
+      // Token refresh failure — identity may need re-auth
+    } finally {
+      setRefreshingId(null)
     }
   }
 
@@ -91,15 +117,16 @@ export function AgentIdentityListPage() {
                 <TableCell>{t('agents.identities.realmName')}</TableCell>
                 <TableCell>{t('agents.identities.realmUsername')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
-                <TableCell>{t('agents.identities.oauthSection')}</TableCell>
+                <TableCell>{t('agents.identities.tokenStatus')}</TableCell>
                 <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {(identities ?? []).map((identity) => {
-                const isTokenActive =
-                  identity.token_expires_at != null &&
-                  new Date(identity.token_expires_at) > new Date()
+                const isTokenExpired =
+                  identity.token_expires_at == null ||
+                  new Date(identity.token_expires_at) <= new Date()
+                const isRefreshing = refreshingId === identity.id
                 return (
                   <TableRow key={identity.id} hover>
                     <TableCell>
@@ -126,8 +153,8 @@ export function AgentIdentityListPage() {
                       {identity.token_expires_at ? (
                         <Chip
                           size="small"
-                          color={isTokenActive ? 'success' : 'warning'}
-                          label={isTokenActive ? t('agents.identities.tokenActive') : t('agents.identities.tokenExpired')}
+                          color={tokenStatusColor(identity.token_expires_at)}
+                          label={isTokenExpired ? t('agents.identities.tokenExpired') : t('agents.identities.tokenActive')}
                         />
                       ) : (
                         <Typography variant="caption" color="text.secondary">
@@ -136,22 +163,49 @@ export function AgentIdentityListPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Tooltip title={t('app.delete')}>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleDelete(identity.id, identity.name)}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <Box display="flex" gap={0.5}>
+                        <Tooltip title={t('agents.identities.assignRoles')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => setAssignRolesIdentity(identity)}
+                          >
+                            <AssignmentIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {identity.token_expires_at && (
+                          <Tooltip title={t('agents.identities.refreshToken')}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRefreshToken(identity)}
+                                disabled={isRefreshing}
+                              >
+                                {isRefreshing ? (
+                                  <CircularProgress size={16} />
+                                ) : (
+                                  <RefreshIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        <Tooltip title={t('app.delete')}>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDelete(identity.id, identity.name)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 )
               })}
               {(identities ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={6} align="center">
                     <Typography color="text.secondary" py={3}>
                       {t('agents.identities.empty')}
                     </Typography>
@@ -170,6 +224,17 @@ export function AgentIdentityListPage() {
           await queryClient.invalidateQueries({ queryKey: ['agents', 'identities'] })
         }}
       />
+
+      {assignRolesIdentity && (
+        <AssignRolesToIdentityDialog
+          open={!!assignRolesIdentity}
+          identity={assignRolesIdentity}
+          onClose={() => setAssignRolesIdentity(null)}
+          onSaved={async () => {
+            setAssignRolesIdentity(null)
+          }}
+        />
+      )}
     </Box>
   )
 }

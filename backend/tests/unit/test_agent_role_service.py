@@ -8,7 +8,7 @@ from app.services.agents.role_service import (
     AgentRoleNotFoundError,
     AgentRoleConflictError,
 )
-from app.db.models.agents import AgentRole, AgentRoleSOP, AgentRoleSkill
+from app.db.models.agents import AgentRole, AgentRoleIdentity, AgentRoleSOP, AgentRoleSkill
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -345,3 +345,197 @@ async def test_set_assignments_deletes_existing_and_inserts_new():
     assert len(added) == 2
     assert any(isinstance(obj, AgentRoleSOP) for obj in added)
     assert any(isinstance(obj, AgentRoleSkill) for obj in added)
+
+
+# ── Identity Assignment ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_assign_identities_adds_new_records():
+    """assign_identities inserts AgentRoleIdentity records for each identity_id."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    identity_id_1 = uuid.uuid4()
+    identity_id_2 = uuid.uuid4()
+    role = _make_role(role_id=role_id)
+
+    # get_role returns the role
+    get_result = MagicMock()
+    get_result.scalar_one_or_none.return_value = role
+
+    # No existing assignment for either identity
+    empty_result = MagicMock()
+    empty_result.scalar_one_or_none.return_value = None
+
+    added = []
+
+    def capture_add(obj):
+        added.append(obj)
+
+    db = _mock_db()
+    db.add = capture_add
+    db.execute = AsyncMock(side_effect=[get_result, empty_result, empty_result])
+
+    await service.assign_identities(role_id, [identity_id_1, identity_id_2], db)
+
+    assigned = [a for a in added if isinstance(a, AgentRoleIdentity)]
+    assert len(assigned) == 2
+    assigned_ids = {a.identity_id for a in assigned}
+    assert identity_id_1 in assigned_ids
+    assert identity_id_2 in assigned_ids
+
+
+@pytest.mark.asyncio
+async def test_assign_identities_skips_duplicates():
+    """assign_identities does not insert duplicate AgentRoleIdentity records."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+    role = _make_role(role_id=role_id)
+
+    get_result = MagicMock()
+    get_result.scalar_one_or_none.return_value = role
+
+    # Existing assignment already present
+    existing_row = MagicMock(spec=AgentRoleIdentity)
+    existing_result = MagicMock()
+    existing_result.scalar_one_or_none.return_value = existing_row
+
+    added = []
+    db = _mock_db()
+    db.add = lambda obj: added.append(obj)
+    db.execute = AsyncMock(side_effect=[get_result, existing_result])
+
+    await service.assign_identities(role_id, [identity_id], db)
+
+    # Nothing new should have been added
+    assert len([a for a in added if isinstance(a, AgentRoleIdentity)]) == 0
+
+
+@pytest.mark.asyncio
+async def test_assign_identities_raises_not_found_for_missing_role():
+    """assign_identities raises AgentRoleNotFoundError when role does not exist."""
+    service = AgentRoleService()
+
+    not_found_result = MagicMock()
+    not_found_result.scalar_one_or_none.return_value = None
+
+    db = _mock_db()
+    db.execute = AsyncMock(return_value=not_found_result)
+
+    with pytest.raises(AgentRoleNotFoundError):
+        await service.assign_identities(uuid.uuid4(), [uuid.uuid4()], db)
+
+
+@pytest.mark.asyncio
+async def test_remove_identity_deletes_assignment_record():
+    """remove_identity deletes the AgentRoleIdentity row when it exists."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+    role = _make_role(role_id=role_id)
+
+    get_result = MagicMock()
+    get_result.scalar_one_or_none.return_value = role
+
+    assignment_row = MagicMock(spec=AgentRoleIdentity)
+    assignment_result = MagicMock()
+    assignment_result.scalar_one_or_none.return_value = assignment_row
+
+    db = _mock_db()
+    db.execute = AsyncMock(side_effect=[get_result, assignment_result])
+
+    await service.remove_identity(role_id, identity_id, db)
+
+    db.delete.assert_called_once_with(assignment_row)
+
+
+@pytest.mark.asyncio
+async def test_remove_identity_no_op_when_not_assigned():
+    """remove_identity does nothing when the identity is not assigned to the role."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+    role = _make_role(role_id=role_id)
+
+    get_result = MagicMock()
+    get_result.scalar_one_or_none.return_value = role
+
+    # No assignment row found
+    empty_result = MagicMock()
+    empty_result.scalar_one_or_none.return_value = None
+
+    db = _mock_db()
+    db.execute = AsyncMock(side_effect=[get_result, empty_result])
+
+    # Should not raise
+    await service.remove_identity(role_id, identity_id, db)
+
+    db.delete.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_identities_returns_assigned_identities():
+    """list_identities returns AgentIdentity records joined via agent_role_identities."""
+    from app.db.models.agents import AgentIdentity
+
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    role = _make_role(role_id=role_id)
+
+    get_result = MagicMock()
+    get_result.scalar_one_or_none.return_value = role
+
+    identity_a = MagicMock(spec=AgentIdentity)
+    identity_a.name = "Bot A"
+    identity_b = MagicMock(spec=AgentIdentity)
+    identity_b.name = "Bot B"
+
+    list_result = MagicMock()
+    list_result.scalars.return_value.all.return_value = [identity_a, identity_b]
+
+    db = _mock_db()
+    db.execute = AsyncMock(side_effect=[get_result, list_result])
+
+    identities = await service.list_identities(role_id, db)
+
+    assert len(identities) == 2
+    names = [i.name for i in identities]
+    assert "Bot A" in names
+    assert "Bot B" in names
+
+
+@pytest.mark.asyncio
+async def test_is_identity_assigned_returns_true_when_present():
+    """is_identity_assigned returns True when the join record exists."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+
+    assignment_result = MagicMock()
+    assignment_result.scalar_one_or_none.return_value = MagicMock(spec=AgentRoleIdentity)
+
+    db = _mock_db()
+    db.execute = AsyncMock(return_value=assignment_result)
+
+    result = await service.is_identity_assigned(role_id, identity_id, db)
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_is_identity_assigned_returns_false_when_absent():
+    """is_identity_assigned returns False when no join record exists."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    identity_id = uuid.uuid4()
+
+    no_assignment = MagicMock()
+    no_assignment.scalar_one_or_none.return_value = None
+
+    db = _mock_db()
+    db.execute = AsyncMock(return_value=no_assignment)
+
+    result = await service.is_identity_assigned(role_id, identity_id, db)
+
+    assert result is False

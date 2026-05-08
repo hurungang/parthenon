@@ -135,8 +135,22 @@ app = create_app()
 async def startup_event() -> None:
     """Run startup tasks including bootstrap seeding and session dispatcher."""
     await _run_bootstrap()
+    await _run_skill_seeder()
     await _initialize_agent_realm()
     await _start_session_dispatcher()
+
+
+async def _run_skill_seeder() -> None:
+    """Idempotently seed default platform skills (save_result, send_notification)."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.skill_seeder import SkillSeeder
+        async with AsyncSessionLocal() as db:
+            summary = await SkillSeeder().run(db)
+            await db.commit()
+        logger.info("SkillSeeder complete: %s", summary)
+    except Exception:
+        logger.exception("SkillSeeder failed; application will continue without default skills.")
 
 
 async def _initialize_agent_realm() -> None:

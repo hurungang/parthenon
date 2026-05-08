@@ -2,7 +2,7 @@
 
 ## Overview
 
-This change introduces the Agent Runtime (powered by **LangGraph**), Agent Permission Manager, and Agent Session Queue as new core components, and extends the Communication Hub to serve as the Agent Gateway. The implementation rearchitects agent permission management from direct SOP/Skill bindings on AgentType to a role-based model via the new AgentRole entity, and replaces synchronous agent execution with a fully asynchronous session-queue pattern.
+This change introduces the Agent Runtime (powered by the **LangChain deep agent** framework), Agent Permission Manager, and Agent Session Queue as new core components, and extends the Communication Hub to serve as the Agent Gateway. The implementation rearchitects agent permission management from direct SOP/Skill bindings on AgentType to a role-based model via the new AgentRole entity, and replaces synchronous agent execution with a fully asynchronous session-queue pattern. Execution logs capture the full system instruction and user prompt before the first LLM call for complete traceability.
 
 ## Task Checklist
 
@@ -10,64 +10,119 @@ This change introduces the Agent Runtime (powered by **LangGraph**), Agent Permi
 - [x] 1.1 — Add AgentRole, AgentRoleSOP, AgentRoleSkill models
 - [x] 1.2 — Add AgentIdentity model
 - [x] 1.3 — Add AgentJob model (AgentSession)
-- [x] 1.4 — Migrate AgentType fields (add identity_id, role_id, input_type, output_type; remove mode, sop_id, identity_subject, system_prompt, max_instances)
+- [x] 1.3a — Add allowed_identity_types field to AgentRole model (JSON array, defaults to []) ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 1.3b — DROP allowed_identity_types column from agent_roles table
+- [x] 1.3c — CREATE agent_role_identities join table (role_id, identity_id, assigned_at, assigned_by, unique constraint)
+- [x] 1.3d — Generate Alembic migration for schema changes
+- [x] 1.4 — Migrate AgentType fields (add identity_id, role_id, input_type, output_type; remove mode, sop_id, identity_subject, system_prompt, max_instances) ⚠️ NEEDS REWORK
 - [x] 1.5 — Remove AgentSkillAssignment model
 - [x] 1.6 — Generate and verify Alembic migration
 - [x] 1.7 — Add Alembic migration to add OAuth token fields to AgentIdentity schema
+- [x] 1.8 — Add ModelConfig model (provider, model_name, encrypted credentials, config) ⚠️ NEEDS REWORK
+- [x] 1.9 — Update AgentType model: remove LLM fields, add model_id FK ⚠️ NEEDS REWORK
+- [x] 1.10 — Add conversation_history field to AgentJob model
+- [x] 1.11 — Generate and verify Alembic migration for ModelConfig and AgentType updates
 
 ### Phase 2 — Backend Schemas and CRUD Services
 - [x] 2.1 — Pydantic schemas for AgentRole CRUD
+- [x] 2.1a — Update AgentRoleCreate and AgentRoleUpdate schemas to include allowed_identity_types field ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 2.1b — REMOVE allowed_identity_types from AgentRoleCreate/Update/Read schemas
+- [x] 2.1c — ADD AgentRoleIdentityAssignment schema
 - [x] 2.2 — Pydantic schemas for AgentIdentity CRUD
 - [x] 2.3 — Pydantic schemas for AgentSession (create, read, status)
-- [x] 2.4 — Update AgentType schemas to match rearchitected fields
+- [x] 2.4 — Update AgentType schemas to match rearchitected fields ⚠️ NEEDS REWORK
 - [x] 2.5 — AgentRole CRUD service (create, list, get, update, delete)
 - [x] 2.6 — AgentIdentity CRUD service
 - [x] 2.7 — RealmManager: initialize and configure agent realm in OIDC provider
 - [x] 2.8 — TokenRefreshService: background agent token refresh
+- [x] 2.9 — Pydantic schemas for ModelConfig CRUD
+- [x] 2.10 — ModelConfigService CRUD with credential encryption
+- [x] 2.11 — Add `fetch_available_models(config_id)` method to ModelConfigService
 
 ### Phase 3 — Backend API Endpoints
 - [x] 3.1 — Agent Role endpoints (GET/POST/PUT/DELETE /agents/roles)
+- [x] 3.1a — Add query param support to GET /agents/roles endpoint for filtering by allowed_for_identity_type ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 3.1b — Add identity→role validation in AgentRuntimeExecutor.run() before session execution ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 3.1c — ADD endpoints: POST/DELETE/GET /agents/roles/{id}/identities
+- [x] 3.1d — ADD endpoints: POST/DELETE/GET /agents/identities/{id}/roles
+- [x] 3.1e — ADD endpoints: POST /agents/identities/{id}/refresh-token, GET /agents/identities/{id}/reauth-url
+- [x] 3.1f — REMOVE allowed_for_identity_type filter from GET /agents/roles
 - [x] 3.2 — Agent Identity endpoints (GET/POST/DELETE /agents/identities)
-- [x] 3.3 — Agent Session endpoints (POST launch, GET status, GET result, WebSocket for conversational)
+- [x] 3.3 — Agent Session endpoints (POST launch, GET status, GET result, WebSocket for conversational) ⚠️ NEEDS REWORK
 - [x] 3.4 — Permission preview endpoint (GET /agents/roles/{id}/mcp-tools)
-- [x] 3.5 — Update existing AgentType endpoints to use new schema
+- [x] 3.5 — Update existing AgentType endpoints (use model_id not model_config_id) ⚠️ NEEDS REWORK
 - [x] 3.6 — OAuth authorize and callback endpoints for agent identity
+- [x] 3.7 — ModelConfig CRUD endpoints (GET/POST/PUT/DELETE /agents/model-configs) + GET /agents/model-configs/{id}/models ⚠️ NEEDS REWORK
+- [ ] 3.8 — Update AgentSession list endpoint with status, date, and agent_type filters
+- [ ] 3.9 — Add conversation history endpoint (GET /agents/sessions/{id}/history)
 
 ### Phase 4 — Agent Permission Manager
 - [x] 4.1 — PermissionManager service: resolve AgentRole → SOPs → Skills → MCP tools
 - [x] 4.2 — Skill dependency graph traversal (SOP → Skills → Tool list)
 - [x] 4.3 — Directly-assigned Skill → Tool resolution
 - [x] 4.4 — Combined allow-set calculation and caching
+- [x] 4.4a — Fix tool identifier format in _resolve_tools_from_skills(): use mcp_slug/tool_name (not server_slug:tool_name)
+- [x] 4.4b — Remove incorrect prefix stripping logic in runtime_executor._load_tool_definitions()
+- [x] 4.4c — UPDATE permission_manager: remove any allowed_identity_types logic
+- [x] 4.4d — UPDATE runtime_executor validation: check agent_role_identities membership
+- [x] 4.4e — ADD identity_service methods: refresh_token(), get_reauth_url()
+- [x] 4.4f — ADD role_service methods: assign_identities(), remove_identity(), list_identities()
 - [x] 4.5 — Per-request permission enforcement hook for Agent Runtime
 
-### Phase 5 — LangGraph Setup and Agent Session Queue
-- [x] 5.1 — Install LangGraph dependency (`pip install langgraph`)
-- [x] 5.2 — Define base LangGraph state schemas for task and conversational agents
+### Phase 5 — LangChain Deep Agent Setup and Session Queue
+- [x] 5.1 — Replace `langgraph` with `langchain` + `langchain-community` in pyproject.toml
+- [x] 5.2 — Define LangChain agent loop context dataclasses (TaskAgentLoop, ConversationalAgentLoop) in agent_loop.py
 - [x] 5.3 — AgentSession persistence service (enqueue, update status, persist result)
 - [x] 5.4 — Session dispatcher: routes queued sessions to Agent Runtime workers
-- [x] 5.5 — Agent Runtime executor: orchestrates LangGraph state graphs with LLM + Skill execution within permission boundaries
+- [x] 5.5 — Agent Runtime executor: observe-reason-act loop via LangChain deep agent framework
 - [x] 5.6 — Communication Hub gateway extension: accept launch requests, return session ID, route results, maintain WebSocket for conversational agents
+- [x] 5.6a — Add OAuth middleware to Communication Hub for agent identity token validation
+- [x] 5.6b — Implement role-based tool filtering in LifecycleHandler (expose tools without descriptions/schemas)
 - [x] 5.7 — Result persistence via Result Repository (save_result MCP tool)
-- [x] 5.8 — OTEL instrumentation for all session state transitions, LangGraph node transitions, and runtime actions
+- [x] 5.8 — OTEL instrumentation for session state transitions and LangChain agent.observe/agent.reason/agent.act spans
 - [x] 5.9 — Bootstrap agent realm initialization via RealmManager
+- [x] 5.10 — Replace LangGraph with LangChain deep agent observe-reason-act loop in `runtime_executor.py`
+- [x] 5.11 — Add `AgentPromptLog` model and capture full system instruction and user prompt before first LLM call
 
 ### Phase 6 — Frontend UI Components
 - [x] 6.1 — Agent Role list page (table with SOP/Skill chips, MCP tool count)
 - [x] 6.2 — Agent Role create/edit dialog (SOP and Skill multi-select, real-time MCP tool preview)
 - [x] 6.3 — Agent Identity list and create/edit dialog
 - [x] 6.4 — Update Agent Type form (identity_id, role_id, input_type, output_type, system_instruction)
+- [x] 6.4a — Update AgentTypeForm: identity selector first, role selector filtered by identity type ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 6.4b — Add allowed_identity_types multi-select to AgentRoleDialog ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 6.4c — Add i18n keys for new fields (allowed_identity_types, identity type labels) ⚠️ NEEDS REWORK - ARCHITECTURAL CORRECTION
+- [x] 6.4d — CREATE AssignIdentitiesToRoleDialog component
+- [x] 6.4e — CREATE AssignRolesToIdentityDialog component
+- [x] 6.4f — UPDATE AgentRoleDialog: remove allowed_identity_types, add assigned identities table
+- [x] 6.4g — UPDATE AgentIdentityListPage: add token status and management buttons
+- [x] 6.4h — UPDATE AgentTypeForm: remove role filtering, add identity-role validation
+- [x] 6.4i — ADD i18n keys for new components and actions
 - [x] 6.5 — Agent Session launch dialog (collect input per input_type, submit async)
-- [x] 6.6 — Agent Session status and result view (polling for task agents, chat interface for conversational agents, status indicator, structured/markdown result)
-- [x] 6.7 — Navigation wiring: Agent Roles and Agent Identities added to sidebar/routes
-- [x] 6.8 — i18n strings for all new UI text
+- [x] 6.6 — Agent Session status and result view (polling for task agents, chat interface for conversational agents, status indicator, structured/markdown result) ⚠️ NEEDS REWORK
+- [x] 6.7 — Navigation wiring: Agent Roles and Agent Identities added to sidebar/routes ⚠️ NEEDS REWORK
+- [x] 6.8 — i18n strings for all new UI text ⚠️ NEEDS REWORK
 - [x] 6.9 — OAuth redirect handling in frontend (AgentOAuthCallbackPage, AppRouter route, i18n keys)
+- [x] 6.10 — ModelConfigListPage (table with provider/model chips, credential indicator)
+- [x] 6.11 — ModelConfigDialog with provider-specific credential fields and encryption ⚠️ NEEDS REWORK
+- [x] 6.12 — Update AgentTypeForm to replace LLM fields with model_id dropdown ⚠️ NEEDS REWORK
+- [ ] 6.13 — AgentInstanceDashboard with status filtering, date range, and execution history
+- [ ] 6.14 — Update AgentJobPage for conversation history display
+- [ ] 6.15 — Update navigation wiring for ModelConfigListPage and AgentInstanceDashboard
+- [ ] 6.16 — Add i18n strings for model config, dashboard filters, and conversation history
+- [x] 6.17 — Update `AgentJobPage` to display execution logs (system instruction and user prompt)
+- [x] 6.18 — Add `useExecutionLogs(sessionId)` hook for fetching execution logs by `session_id`
 
 ### Phase 7 — Integration and Testing
-- [x] 7.1 — Backend unit tests: AgentRole CRUD, PermissionManager resolution, AgentSession state machine, LangGraph graph execution
-- [x] 7.2 — Backend integration tests: full session lifecycle against real database (schema verified with alembic upgrade head)
+- [x] 7.1 — Backend unit tests: AgentRole CRUD, PermissionManager resolution, AgentSession state machine, LangChain observe-reason-act loop
+- [x] 7.2 — Backend integration tests: full session lifecycle against real database; execution_logs table schema; AgentPromptLog persistence
 - [x] 7.3 — Frontend unit tests: Role editor, MCP tool preview panel, Session launch/status components
 - [x] 7.4 — E2E tests: agent role management, agent type configuration, session launch and result polling, conversational agent chat UI
 - [x] 7.5 — E2E integration variant: at least one test hits real backend (no page.route() mocks) to validate migration
+- [ ] 7.6 — Backend unit tests: ModelConfigService CRUD, credential encryption round-trip, referential integrity rejection
+- [ ] 7.7 — Frontend unit tests: AgentInstanceDashboard filtering, status counts, pagination
+- [ ] 7.8 — Frontend unit tests: ModelConfigDialog provider fields, AgentJobPage conversation history
+- [ ] 7.9 — E2E tests: model config management, instance dashboard filtering, conversation history display
 
 ---
 
@@ -93,7 +148,9 @@ Add `AgentJob` model to `backend/app/db/models/agents.py` with fields: `id`, `ag
 
 **Done when**: Model is importable; relationship from `AgentType` to `AgentJob` resolves correctly.
 
-### 1.4 — Migrate AgentType fields
+### 1.4 — Migrate AgentType fields ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Remove any remaining LLM-specific fields (e.g., `llm_provider`, `llm_model`, `llm_api_key`) from `AgentType` and add `model_config_id` (FK → model_configs, nullable) plus `relationship()` to `ModelConfig`. See task 1.9 for the rework implementation.
 
 Update `AgentType` in `backend/app/db/models/agents.py`: add `identity_id` (FK → agent_identities, nullable), `role_id` (FK → agent_roles, nullable), `system_instruction` (Text), `input_type` (enum: `none`, `typed`, `conversation`), `input_schema` (JSON), `output_type` (enum: `auto`, `typed`, `markdown`), `output_schema` (JSON). Remove `mode`, `sop_id`, `identity_subject`, `system_prompt`, `max_instances`. Update `relationship()` declarations accordingly.
 
@@ -119,6 +176,36 @@ Generate a new Alembic migration that alters the `agent_identities` table: add `
 
 ---
 
+### 1.8 — Add ModelConfig model ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add `enabled_models` (JSON array of model name strings, nullable) field to `ModelConfig`. This stores the subset of models the provider config has been configured to make available for selection on agent types. See tasks 2.11, 3.7, 6.11.
+
+Add `ModelConfig` model to `backend/app/db/models/agents.py` with fields: `id`, `name` (display name, VARCHAR), `provider` (enum: `openai`, `anthropic`, `azure_openai`, `ollama`, `custom`), `model_name` (VARCHAR), `description` (Text, nullable), `encrypted_credentials` (TEXT, nullable, AES-256 encrypted JSON of provider-specific API credentials), `config` (JSON, nullable, non-secret settings such as `temperature`, `max_tokens`, `api_base`), `enabled_models` (JSON array, nullable, list of model name strings enabled for this config), `created_at`, `updated_at`. Add `ModelProvider` enum. Add `relationship()` back-reference from `AgentType` to `ModelConfig`.
+
+**Done when**: `ModelConfig` is importable; `ModelProvider` enum is registered; `Base.metadata.tables` contains `model_configs`; `ModelConfig.enabled_models` is accessible and accepts a list of strings.
+
+### 1.9 — Update AgentType model: remove LLM fields, add model_id FK ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Use `model_id` (VARCHAR, stores the selected model name string from the enabled models list) in addition to `model_config_id` (FK). The `AgentType` holds a FK to `model_configs` for which provider config to use, and separately stores `model_id` as the specific model chosen from `ModelConfig.enabled_models`. See tasks 1.8, 2.11, 3.5, 6.12.
+
+Update `AgentType` in `backend/app/db/models/agents.py`: add `model_config_id` (FK → model_configs, nullable), `model_id` (VARCHAR, nullable, the specific model name selected from the config's enabled models), and `relationship("ModelConfig", back_populates="agent_types")`. Remove any LLM-specific fields (e.g., `llm_provider`, `llm_model`, `llm_api_key`) that were part of the prior design.
+
+**Done when**: `AgentType.model_config_id` and `AgentType.model_id` are both present; `model_config` relationship resolves correctly; no LLM-specific field definitions remain in the class.
+
+### 1.10 — Add conversation_history field to AgentJob model
+
+Update `AgentJob` in `backend/app/db/models/agents.py`: add `conversation_history` (JSON, nullable) to store the ordered message thread for conversational agent sessions. Each entry is a dict with `role` (`user` | `assistant` | `tool`) and `content`.
+
+**Done when**: `AgentJob.conversation_history` is accessible; ORM correctly serialises and deserialises JSON message lists; existing `AgentJob` rows are unaffected (nullable column).
+
+### 1.11 — Generate and verify Alembic migration for ModelConfig and AgentType updates
+
+Run `alembic revision --autogenerate -m "add-model-config-agent-type-model-config-id-conversation-history"`. Review the generated migration for: `model_configs` table creation with all fields, `model_config_id` FK column added to `agent_types`, `conversation_history` JSON column added to `agent_jobs`, `modelprovider` enum creation, and any LLM-specific column drops. Run `alembic upgrade head` and verify with `alembic current`.
+
+**Done when**: Migration applies without error; `model_configs` table exists in the database; `agent_types.model_config_id` and `agent_jobs.conversation_history` columns are present in `information_schema.columns`.
+
+---
+
 ## Phase 2 — Backend Schemas and CRUD Services
 
 ### 2.1 — Pydantic schemas for AgentRole CRUD
@@ -141,7 +228,9 @@ Add `AgentJobCreate` (agent_type_id, input_data), `AgentJobRead` (all fields), a
 
 **Done when**: All three schemas are importable and serialise correctly from ORM instances.
 
-### 2.4 — Update AgentType schemas
+### 2.4 — Update AgentType schemas ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add `model_config_id` (Optional UUID) to `AgentTypeCreate` and `AgentTypeUpdate`. Add `model_config` (Optional nested `ModelConfigRead`, read-only) to `AgentTypeRead`. Remove any LLM-specific fields from all three schemas. See task 2.9 for the `ModelConfigRead` schema definition.
 
 Update `AgentTypeCreate`, `AgentTypeUpdate`, and `AgentTypeRead` in `backend/app/schemas/agents.py` to reflect new fields (`identity_id`, `role_id`, `system_instruction`, `input_type`, `input_schema`, `output_type`, `output_schema`) and remove old fields (`mode`, `sop_id`, `skill_ids`, `identity_subject`, `system_prompt`, `max_instances`). Add `AgentInputType` and `AgentOutputType` enums.
 
@@ -175,6 +264,26 @@ Create `backend/app/services/agents/token_refresh_service.py` with `TokenRefresh
 
 ---
 
+### 2.9 — Pydantic schemas for ModelConfig CRUD
+
+Add `ModelConfigCreate` (name, provider, model_name, description, credentials: dict | None, config: dict | None), `ModelConfigUpdate` (all fields optional), and `ModelConfigRead` (all fields; `encrypted_credentials` is never exposed — return `has_credentials: bool` instead) to `backend/app/schemas/agents.py`. Import `ModelProvider` enum. `ModelConfigCreate.credentials` is a plain dict that `ModelConfigService` encrypts before storage.
+
+**Done when**: Schemas import without errors; `ModelConfigRead.model_validate(orm_obj)` returns `has_credentials=True` when `encrypted_credentials` is set; `ModelConfigRead` schema has no `encrypted_credentials` field.
+
+### 2.10 — ModelConfigService CRUD with credential encryption
+
+Add `ModelConfigService` to `backend/app/services/agents/` with async methods: `create_model_config` (encrypts `credentials` dict with `ENCRYPTION_MASTER_KEY` via AES-256 before storing as `encrypted_credentials`), `list_model_configs`, `get_model_config`, `update_model_config` (re-encrypts credentials when provided), `delete_model_config` (raises `ValidationError` if any `AgentType` references this config). Use the same AES-256 encryption helper as the MCP connector service.
+
+**Done when**: Service methods pass unit tests; credentials are stored as encrypted ciphertext; plaintext credentials are never persisted; `delete_model_config` raises when referenced by an `AgentType`.
+
+### 2.11 — Add `fetch_available_models(config_id)` method to ModelConfigService
+
+Add `fetch_available_models(config_id: UUID, db: AsyncSession) → list[str]` to `ModelConfigService`. The method loads the `ModelConfig` record and returns `enabled_models` (the stored list of enabled model name strings). If `enabled_models` is null or empty, return an empty list. This method is called by the 3.7 endpoint to serve the model picker in the frontend.
+
+**Done when**: Method returns the `enabled_models` list from the record; returns `[]` when the field is null; unit test covers both cases.
+
+---
+
 ## Phase 3 — Backend API Endpoints
 
 ### 3.1 — Agent Role endpoints
@@ -191,7 +300,9 @@ Add `AgentIdentityRouter` to `backend/app/api/v1/agents.py` with endpoints: `GET
 
 **Done when**: All endpoints are reachable and return typed responses matching `AgentIdentityRead`.
 
-### 3.3 — Agent Session endpoints
+### 3.3 — Agent Session endpoints ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Update `GET /agents/sessions` to accept optional query parameters (`status`, `from_date`, `to_date`, `agent_type_id`) and return a paginated response. Add `GET /agents/sessions/{id}/history` for conversation history. See tasks 3.8 and 3.9 for rework implementation.
 
 Add session endpoints to `backend/app/api/v1/agents.py`: `POST /agents/sessions` (enqueue, returns 202 + session ID), `GET /agents/sessions/{id}` (status), `GET /agents/sessions/{id}/result` (full output once completed), `GET /agents/sessions` (list for current user). For conversational agents, add WebSocket endpoint `WS /agents/sessions/{id}/chat`. Register in `backend/app/main.py`.
 
@@ -203,17 +314,41 @@ Add `GET /agents/roles/{id}/mcp-tools` to `AgentRoleRouter`. Calls `PermissionMa
 
 **Done when**: Endpoint returns the correct tool list for a role with assigned SOPs and Skills in an integration test.
 
-### 3.5 — Update AgentType endpoints
+### 3.5 — Update AgentType endpoints ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Update `AgentTypeRouter` handlers to accept both `model_config_id` (FK to the config) and `model_id` (the specific model name string selected from enabled models) in create/update payloads, and return both fields in read responses. Remove any remaining LLM-specific field handling. See tasks 1.9, 2.9, and the 2.4 rework.
 
 Update existing `AgentTypeRouter` handlers in `backend/app/api/v1/agents.py` to accept and return the rearchitected `AgentTypeCreate`/`AgentTypeRead` schemas. Remove all references to `mode`, `sop_id`, `skill_ids`, `identity_subject`, `system_prompt`, and `max_instances`.
 
-**Done when**: `GET /agents/types` and `POST /agents/types` pass integration tests using new schema; old field names return 422 if sent.
+**Done when**: `GET /agents/types` and `POST /agents/types` pass integration tests using new schema with `model_config_id` + `model_id`; old field names return 422 if sent.
 
 ### 3.6 — OAuth authorize and callback endpoints for agent identity
 
 Add `AgentOAuthRouter` to `backend/app/api/v1/agents.py`. Implement `GET /agents/identities/oauth/authorize?identity_id=<uuid>` that validates the identity record, generates the OAuth authorization URL against the configured agent realm, encodes `identity_id` in the `state` parameter, and returns `AgentIdentityOAuthAuthorizeResponse`. Implement `GET /agents/oauth/callback?code=...&state=...` that validates the state, calls `AgentIdentityService.complete_oauth_flow`, and returns the updated `AgentIdentityRead`. Register the router in `backend/app/main.py`. Both endpoints require `RT_AGENT` permission.
 
 **Done when**: The authorize endpoint returns a valid authorization URL in an integration test; the callback endpoint processes a valid code, updates identity tokens, and returns `AgentIdentityRead` with `token_expires_at` populated.
+
+---
+
+### 3.7 — ModelConfig CRUD endpoints ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add `GET /agents/model-configs/{id}/models` endpoint that calls `ModelConfigService.fetch_available_models(config_id)` and returns the list of enabled model name strings. This endpoint is used by the frontend AgentTypeForm model picker. See tasks 1.8, 2.11, 6.12.
+
+Add `ModelConfigRouter` to `backend/app/api/v1/agents.py` with endpoints: `GET /agents/model-configs` (list all, returns `list[ModelConfigRead]`), `POST /agents/model-configs` (create, returns 201 + `ModelConfigRead`), `GET /agents/model-configs/{id}` (get one), `PUT /agents/model-configs/{id}` (update), `DELETE /agents/model-configs/{id}` (delete, 409 if referenced by an agent type), `GET /agents/model-configs/{id}/models` (returns `list[str]` of enabled model names, 200 with `[]` if none configured). All require `RT_AGENT` permission. `GET` responses use `ModelConfigRead` — raw credentials are never returned. Register the router in `backend/app/main.py`.
+
+**Done when**: All six endpoints return correct HTTP status codes; `GET` and `GET /{id}` response body contains `has_credentials` not `encrypted_credentials`; `DELETE` returns 409 when the config is referenced by an `AgentType`; `GET /{id}/models` returns the enabled model list or `[]`.
+
+### 3.8 — Update AgentSession list endpoint with status and date filters
+
+Update `GET /agents/sessions` in `backend/app/api/v1/agents.py` to accept optional query params: `status` (enum `AgentJobStatus`), `from_date` (ISO 8601 datetime string), `to_date` (ISO 8601 datetime string), `agent_type_id` (UUID). Apply filters to the database query. Return a paginated response schema with `total: int`, `page: int`, `page_size: int`, and `items: list[AgentJobRead]`.
+
+**Done when**: Requests with each filter param return only matching sessions; unfiltered request returns all sessions for the current user; pagination fields present in all responses; integration test covers at least two filter combinations.
+
+### 3.9 — Add conversation history endpoint
+
+Add `GET /agents/sessions/{id}/history` to `backend/app/api/v1/agents.py`. Returns `conversation_history` (JSON array) from the `AgentJob` record. Returns 200 with empty array if `conversation_history` is null, 404 if session not found, 403 if not owned by the current user. Requires `RT_AGENT` permission.
+
+**Done when**: Endpoint returns the full message thread for a completed conversational session; returns `[]` for task-type sessions with no history; ownership access control validated in an integration test.
 
 ---
 
@@ -251,7 +386,7 @@ Integrate `AgentPermissionManager.calculate_allowed_tools` into the Agent Runtim
 
 ---
 
-## Phase 5 — LangGraph Setup and Agent Session Queue
+## Phase 5 — LangChain Deep Agent Setup and Session Queue
 
 ### 5.3 — AgentSession persistence service
 
@@ -265,7 +400,9 @@ Create `backend/app/services/agents/session_dispatcher.py`. Implement a backgrou
 
 **Done when**: A queued session transitions to `running` within the dispatch interval and then to `completed` or `failed` after executor returns.
 
-### 5.5 — Agent Runtime executor with LangGraph
+### 5.5 — Agent Runtime executor with LangGraph ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Replace LangGraph state graph implementation with LangChain deep agent observe-reason-act loop. See task 5.10 for the rework implementation.
 
 Update `backend/app/services/agents/` to implement `AgentRuntimeExecutor.run(session: AgentSession)` powered by **LangGraph**: fetches the `AgentType` and its `AgentRole`, calls `AgentPermissionManager.calculate_allowed_tools`, authenticates using `AgentIdentity` OIDC credentials, constructs a LangGraph state machine for the agent type (task vs conversational), and executes the graph with the allowed tool set. Persists the result. Removes the old `sop_executor.py` / `skillful_executor.py` split in favour of the role-governed LangGraph-based unified path.
 
@@ -283,7 +420,9 @@ Ensure the `save_result` MCP tool is available in the allowed tool set for all a
 
 **Done when**: Completed sessions have a corresponding record in the results table accessible via `GET /agents/sessions/{id}/result`.
 
-### 5.8 — OTEL instrumentation with LangGraph support
+### 5.8 — OTEL instrumentation with LangGraph support ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Update OTEL instrumentation to instrument LangChain deep agent loop iterations (observe, reason, act steps) instead of LangGraph node transitions. See task 5.10.
 
 Add OpenTelemetry spans and structured log events to `AgentSessionService` (enqueue, state transitions), `AgentRuntimeExecutor` (session start, LangGraph node transitions, skill calls, tool calls, session end), and `AgentPermissionManager` (allow/deny decisions). Follow the project's OTEL conventions from `config/telemetry.yaml`.
 
@@ -294,6 +433,18 @@ Add OpenTelemetry spans and structured log events to `AgentSessionService` (enqu
 Update the platform bootstrap sequence (first-run setup wizard and startup path) to call `RealmManager.initialize_agent_realm` using `agent_realm_name` from `config/identity.yaml` (default `ai_agents`). Extend `config/identity.yaml` schema with the `agent_realm_name` field and update the setup wizard to collect and write it. When `provider_type = keycloak_bundled`, run `initialize_agent_realm` automatically on startup if the realm does not exist; when `provider_type = external`, log a warning that the agent realm must be pre-configured manually.
 
 **Done when**: On first run with `keycloak_bundled` provider, the agent realm is present in Keycloak with correct token policies; `config/identity.yaml` contains `agent_realm_name`; startup logs confirm realm initialization was attempted.
+
+### 5.10 — Replace LangGraph with LangChain deep agent in `runtime_executor.py`
+
+> ⚠️ **REWORK REQUIRED** (replaces 5.1, 5.2, 5.5): Uninstall `langgraph`; install `langchain` and `langchain-community`. Update `pyproject.toml` to reflect the dependency change. Replace LangGraph `TypedDict` state schemas in `agent_state.py` with LangChain deep agent loop structures in `backend/app/services/agents/agent_loop.py`. Rewrite `AgentRuntimeExecutor.run(session)` to use the LangChain deep agent observe-reason-act loop: (1) **Observe** — load session context, resolved tool set, and `AgentIdentity` credentials; (2) **Reason** — call LLM with system instruction and conversation history; (3) **Act** — dispatch allowed tool calls via MCP, enforce permission boundary, append results to context; loop until the agent signals completion or max-iterations is exceeded. Update 5.8 OTEL instrumentation to trace observe/reason/act steps instead of LangGraph node transitions.
+
+**Done when**: `AgentRuntimeExecutor.run()` uses LangChain deep agent loop; `langgraph` removed from `pyproject.toml` and `langchain`/`langchain-community` added; existing session lifecycle integration tests pass with the new executor; OTEL traces include observe/reason/act spans.
+
+### 5.11 — Add `ExecutionLogEntry` model and capture full prompt logging before first LLM call
+
+Add `ExecutionLogEntry` SQLAlchemy model to `backend/app/db/models/agents.py` (table: `execution_log_entries`) with fields: `id` (UUID), `session_id` (FK → agent_jobs), `system_instruction` (TEXT), `user_prompt` (TEXT), `logged_at` (TIMESTAMPTZ). Add `ExecutionLogRead` Pydantic schema to `backend/app/schemas/agents.py`. Update `AgentRuntimeExecutor.run()` to write an `ExecutionLogEntry` record before the first LLM call, capturing the fully-rendered system instruction and user prompt. Add `GET /agents/sessions/{id}/execution-logs` endpoint returning `list[ExecutionLogRead]`, requiring `RT_AGENT` permission. Generate and apply Alembic migration for the new table.
+
+**Done when**: An `ExecutionLogEntry` record is persisted for every session before the first LLM call; `GET /agents/sessions/{id}/execution-logs` returns the entry with correct field values; migration applied cleanly with `alembic upgrade head`; unit test verifies `system_instruction` and `user_prompt` are captured correctly.
 
 ---
 
@@ -319,7 +470,9 @@ Create `frontend/src/pages/agents/AgentIdentityListPage.tsx` and `AgentIdentityD
 
 **Done when**: List page fetches and renders identities; dialog creates and edits via `POST`/`PUT /agents/identities`.
 
-### 6.4 — Update Agent Type form
+### 6.4 — Update Agent Type form ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Replace any inline LLM configuration fields with a `model_config_id` select dropdown populated from `GET /agents/model-configs`. Display the selected config’s provider and model name as a read-only subtitle beneath the dropdown. See task 6.12 for the rework implementation.
 
 Update `frontend/src/pages/agents/AgentTypeForm.tsx` to replace removed fields (`mode`, `sop_id`, `skill_ids`, `identity_subject`, `system_prompt`, `max_instances`) with the new fields: `identity_id` (select from identities), `role_id` (select from roles), `system_instruction` (textarea), `input_type` (select enum), `input_schema` (JSON editor, shown when `input_type = typed`), `output_type` (select enum), `output_schema` (JSON editor, shown when `output_type = typed`). All UI text via i18n.
 
@@ -331,19 +484,25 @@ Create `frontend/src/pages/agents/AgentSessionLaunchDialog.tsx`. Opens from the 
 
 **Done when**: Launching a session with each `input_type` variant posts correctly; session ID is shown to the user immediately; conversational agents open chat UI.
 
-### 6.6 — Agent Session status and result view
+### 6.6 — Agent Session status and result view ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add a “Conversation History” section below the status indicator for sessions with `input_type = conversation`. Fetch history from `GET /agents/sessions/{id}/history` and render as role-based message bubbles (user left, assistant right, tool calls collapsible). See task 6.14 for the rework implementation.
 
 Create `frontend/src/pages/agents/AgentJobPage.tsx`. Display session metadata (agent type, triggered by, timestamps), live status indicator with polling (`GET /agents/sessions/{id}` every 3 seconds while `status = queued | running`) **for task agents**, and a chat interface (similar to VS Code chat sessions) **for conversational agents**. Result section renders as structured data or markdown depending on `output_type` when completed.
 
 **Done when**: Page polls correctly for task agents and stops on terminal status; conversational agents show chat UI with message history; result renders in both `typed` and `markdown` formats.
 
-### 6.7 — Navigation wiring
+### 6.7 — Navigation wiring ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add routes and sidebar items for `ModelConfigListPage` (`/agents/model-configs`) and `AgentInstanceDashboard` (`/agents/dashboard`). See task 6.15 for the rework implementation.
 
 Add route entries in `frontend/src/app/` for: `/agents/roles` → `AgentRoleListPage`, `/agents/identities` → `AgentIdentityListPage`, `/agents/sessions/:id` → `AgentJobPage`. Add sidebar navigation items for "Agent Roles" and "Agent Identities" under the Agents section.
 
 **Done when**: All new routes resolve correctly; sidebar items navigate to the correct pages; active state highlights correctly.
 
-### 6.8 — i18n strings
+### 6.8 — i18n strings ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add i18n keys for model config fields (provider display names, credential field labels), `AgentInstanceDashboard` filter labels and status badge text, and conversation history section headings. See task 6.16 for the rework implementation.
 
 Add all new UI text keys to `frontend/src/i18n/` locale files (English at minimum). Cover all labels, headings, dialog titles, button labels, status values, error messages, and empty state text introduced in 6.1–6.7.
 
@@ -356,18 +515,80 @@ Add an `AgentOAuthCallbackPage` component at route `/agents/identities/oauth/cal
 **Done when**: Clicking "Sign In as Agent" opens the Keycloak agent realm login; after sign-in the identity shows `status: active` and `token_expires_at` is populated; popup closes cleanly; all OAuth flow strings go through i18n.
 
 ---
+### 6.10 — ModelConfigListPage
 
+Create `frontend/src/pages/agents/ModelConfigListPage.tsx`. Display a table listing all model configs with columns: Name, Provider (styled chip), Model Name, Config summary (temperature / max_tokens if set), Credentials (`has_credentials` indicator), Actions (edit, delete). Fetch from `GET /agents/model-configs`. Add a toolbar button to open `ModelConfigDialog` for creation. Handle loading and empty states. Delete action shows a confirmation dialog.
+
+**Done when**: Page renders model configs with all columns; provider shown as a styled chip; `has_credentials` renders as a Yes/No indicator; delete confirmation dialog fires before calling `DELETE /agents/model-configs/{id}`.
+
+### 6.11 — ModelConfigDialog with provider-specific credential fields ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Add a "Fetch Models" button in the dialog. When clicked, it calls `GET /agents/model-configs/{id}/models` (using the current saved config) and displays the returned model names as a checkbox list under an "Enabled Models" section. The user selects which models to enable; the selection is saved back to `ModelConfig.enabled_models` via `PUT /agents/model-configs/{id}`. The Fetch Models button is only active in edit mode (config already saved). See tasks 1.8, 2.11, 3.7.
+
+Create `frontend/src/pages/agents/ModelConfigDialog.tsx`. Fields: `name` (text), `provider` (select from `ModelProvider` values), `model_name` (text), `description` (textarea), `config` (JSON editor for temperature / max_tokens / api_base), a collapsible "Credentials" section with provider-specific inputs: API key field for `openai`/`anthropic`; deployment name + endpoint + API key for `azure_openai`; base URL for `ollama`/`custom`, and an "Enabled Models" section with a "Fetch Models" button (edit mode only) that populates a checkbox list of available models. In edit mode, credential fields show a masked placeholder when credentials are already stored. Follow the Dialog Error Handling Standard.
+
+**Done when**: Dialog creates and updates model configs via `POST`/`PUT /agents/model-configs`; credential fields switch correctly based on provider selection; existing credentials display a masked placeholder; "Fetch Models" button fetches and renders model checkboxes; enabled model selection is persisted; form validates required fields before submission.
+
+### 6.12 — Update AgentTypeForm to replace LLM fields with model_id dropdown ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Replace the single `model_config_id` dropdown approach with a two-step picker. First, a `model_config_id` select chooses the provider config. Once selected, call `GET /agents/model-configs/{id}/models` to retrieve the enabled models list and render a second `model_id` dropdown populated from that list. The form submits both `model_config_id` and `model_id`. If the config has no enabled models, show an inline warning prompting the user to configure models in ModelConfigDialog. See tasks 1.9, 2.11, 3.7.
+
+Update `frontend/src/pages/agents/AgentTypeForm.tsx`: remove any inline LLM configuration fields (provider, model name, API key). Add a `model_config_id` select dropdown that fetches options from `GET /agents/model-configs` and displays each option as `<name> — <provider>`. When a config is selected, fetch its enabled models via `GET /agents/model-configs/{id}/models` and populate a `model_id` dropdown with those model names. All UI text via i18n.
+
+**Done when**: `model_config_id` dropdown populates from the API; selecting a config triggers the models fetch and populates the `model_id` dropdown; form submits with both `model_config_id` and `model_id`; no inline LLM fields remain; empty enabled-models warning shown when list is empty; both dropdowns clear correctly when config selection is cleared.
+
+### 6.13 — AgentInstanceDashboard with status filtering and execution history
+
+Create `frontend/src/pages/agents/AgentInstanceDashboard.tsx`. Features: status filter chips row (All / Queued / Running / Completed / Failed), date range picker (`from_date`, `to_date`), agent type filter dropdown. Table columns: Agent Type, Status (coloured badge), Triggered By, Started At, Duration (calculated from `started_at` / `completed_at`), Actions (link to `AgentJobPage`). Summary bar showing per-status counts. Fetch from `GET /agents/sessions` with active filters as query params. Support pagination (page size selector, page navigation). Handle loading and empty states.
+
+**Done when**: Dashboard renders and filters the session list correctly; each filter change triggers an API refetch with the correct query params; status count summary updates with filters applied; pagination controls work; empty state displayed when no sessions match.
+
+### 6.14 — Update AgentJobPage for conversation history display
+
+Update `frontend/src/pages/agents/AgentJobPage.tsx`: for sessions with `input_type = conversation`, add a “Conversation History” section below the status indicator. Fetch history from `GET /agents/sessions/{id}/history`. Render messages as role-based bubbles: user messages aligned left, assistant messages aligned right, tool call entries collapsible. Add a “Refresh History” button. The history section is only visible when `input_type = conversation`; hidden for task-type sessions.
+
+**Done when**: History section renders for conversational sessions; messages display with role-correct styling; tool call entries expand/collapse; section is absent for task-type sessions; empty state shown when history array is empty.
+
+### 6.15 — Update navigation wiring for ModelConfigListPage and AgentInstanceDashboard
+
+Update `frontend/src/app/` router and sidebar: add route `/agents/model-configs` → `ModelConfigListPage`, add route `/agents/dashboard` → `AgentInstanceDashboard`. Add sidebar navigation items “Model Configs” and “Agent Dashboard” under the Agents section, ordered after existing Agent items.
+
+**Done when**: Both new routes resolve correctly in the browser; sidebar items navigate to the correct pages; active state highlights on the current route.
+
+### 6.16 — Add i18n strings for model config, dashboard, and conversation history
+
+Add all new UI text keys to `frontend/src/i18n/` locale files (English at minimum) for components 6.10–6.14. Cover: model config field labels (`providers.*` namespace), credential section headings, `AgentInstanceDashboard` filter labels, status badge text, summary bar labels, conversation history section heading, role labels (`user`, `assistant`, `tool`), and empty state text for dashboard and history.
+
+**Done when**: No hardcoded strings in components 6.10–6.14; all new keys present in the English locale file; no keys missing (verified by exhaustive review or i18n lint).
+
+### 6.17 — Update `AgentJobPage` to display execution logs
+
+Update `frontend/src/pages/agents/AgentJobPage.tsx`: add an “Execution Log” collapsible section that displays the `system_instruction` and `user_prompt` captured from `ExecutionLogEntry`. Fetch via `useExecutionLogs(sessionId)`. The section is always present (collapsed by default) for any session. Render `system_instruction` and `user_prompt` as pre-formatted text blocks with copy-to-clipboard buttons. Add i18n keys under `agents.sessions.executionLog.*` for all section labels.
+
+**Done when**: Execution Log section renders in `AgentJobPage`; collapsed by default; system instruction and user prompt display correctly; copy buttons work; all text goes through i18n.
+
+### 6.18 — Add `useExecutionLogs(sessionId)` hook for fetching execution logs
+
+Create `frontend/src/hooks/useExecutionLogs.ts`. Implement `useExecutionLogs(sessionId: string | null): { logs: ExecutionLogRead[], loading: boolean, error: unknown }`. Calls `GET /agents/sessions/{id}/execution-logs` when `sessionId` is non-null; returns an empty array while loading or on error. Add `ExecutionLogRead` TypeScript interface to `frontend/src/types/index.ts` with fields: `id`, `session_id`, `system_instruction`, `user_prompt`, `logged_at`.
+
+**Done when**: Hook returns `ExecutionLogRead[]` for a valid session ID; returns `[]` for a null `sessionId`; unit test verifies fetch trigger and correct loading/error states.
+
+---
 ## Phase 7 — Integration and Testing
 
-### 7.1 — Backend unit tests
+### 7.1 — Backend unit tests ⚠️ NEEDS REWORK
+
+> ⚠️ **REWORK REQUIRED**: Replace LangGraph graph execution test assertions with LangChain deep agent loop assertions. Add `test_execution_log.py` to verify `ExecutionLogEntry` creation and prompt capture. See tasks 5.10–5.11.
 
 Add tests in `backend/tests/unit/` and `backend/tests/services/` covering: `AgentRoleService` CRUD, `AgentIdentityService` referential integrity check, `AgentPermissionManager` tool resolution with SOP and direct Skill paths, `AgentJobService` all four status transitions.
 
 **Done when**: All new unit tests pass; coverage for new service modules ≥ 80%.
 
-### 7.2 — Backend integration tests
+### 7.2 — Backend integration tests ⚠️ NEEDS REWORK
 
-Add tests in `backend/tests/integration/` that: apply `alembic upgrade head` as a fixture step, create a role with SOPs/Skills, launch a session, confirm it transitions to `completed` with output (with LangGraph state traces visible), and verify schema correctness by querying `information_schema.columns` for new columns. Include negative tests for permission denial.
+> ⚠️ **REWORK REQUIRED**: Replace LangGraph state trace assertions with LangChain deep agent loop trace assertions. Add assertion that `ExecutionLogEntry` is persisted and populated for the session. See tasks 5.10–5.11.
+
+Add tests in `backend/tests/integration/` that: apply `alembic upgrade head` as a fixture step, create a role with SOPs/Skills, launch a session, confirm it transitions to `completed` with output (with LangChain deep agent loop traces visible), and verify schema correctness by querying `information_schema.columns` for new columns. Include negative tests for permission denial.
 
 **Done when**: Integration tests pass against the real database; `alembic upgrade head` completes as part of test setup.
 
@@ -391,6 +612,32 @@ Add at least one `test.describe('Real Backend Integration — Agent Session Life
 
 ---
 
+### 7.6 — Backend unit tests: ModelConfigService and credential security
+
+Add tests in `backend/tests/unit/` and `backend/tests/services/` covering: `ModelConfigService.create_model_config` stores encrypted (not plaintext) credentials; `ModelConfigService.get_model_config` returns `has_credentials=True` when credentials are present; `ModelConfigService.update_model_config` re-encrypts credentials on update; `ModelConfigService.delete_model_config` raises `ValidationError` when an `AgentType` references the config; credential AES-256 encrypt-then-decrypt round-trip produces the original dict.
+
+**Done when**: All new unit tests pass; coverage for `ModelConfigService` ≥ 80%; no test accesses raw plaintext credentials after `create`.
+
+### 7.7 — Frontend unit tests: AgentInstanceDashboard filtering
+
+Add tests in `frontend/src/__tests__/` covering: `AgentInstanceDashboard` — clicking a status filter chip triggers `GET /agents/sessions?status=<value>` with the correct param; clearing the date range removes date params from the next fetch; agent type filter dropdown change triggers refetch; status count summary renders correct numbers from mock response; pagination `page` param increments on next-page click; empty state component renders when `items: []`.
+
+**Done when**: All dashboard unit tests pass; filter-to-query-param mapping verified for all filter combinations; no regressions in existing tests.
+
+### 7.8 — Frontend unit tests: ModelConfigDialog and AgentJobPage conversation history
+
+Add tests in `frontend/src/__tests__/` covering: `ModelConfigDialog` — selecting `openai` provider shows API key field only; selecting `azure_openai` shows deployment name, endpoint, and API key fields; edit mode with `has_credentials=true` renders a masked placeholder in credential fields; form prevents submission when required fields are empty. `AgentJobPage` — conversation history section renders when `input_type = conversation`; history section is absent when `input_type = task`; messages render with correct role-based layout; tool call entries collapse by default and expand on click.
+
+**Done when**: All new frontend unit tests pass with no regressions.
+
+### 7.9 — E2E tests: model config management, instance dashboard filtering, conversation history
+
+Add test suites to `e2e/tests/agent-runtime.spec.ts` (or a new `e2e/tests/model-config.spec.ts`): **Model Config Management** — create a model config with credentials, verify it appears in the list with `has_credentials` indicator, edit to update description, delete with confirmation. **Agent Instance Dashboard** — launch two sessions of different statuses, apply status filter, verify only matching rows appear, clear filter. **Conversation History** — navigate to a completed conversational session, verify the history section renders message bubbles with correct role styling. Use `page.route()` mocks for speed.
+
+**Done when**: All new E2E tests pass in the `chromium` project against the dev configuration; no flaky assertions.
+
+---
+
 ## Completion Checklist
 
 - [ ] All Alembic migrations applied and verified with `alembic current`
@@ -403,3 +650,12 @@ Add at least one `test.describe('Real Backend Integration — Agent Session Life
 - [ ] OTEL instrumentation verified end-to-end
 - [ ] Architecture master docs updated per `architecture.md` instructions
 - [ ] No references to removed fields (`mode`, `sop_id`, `identity_subject`, `system_prompt`, `max_instances`, `AgentSkillAssignment`) remain in codebase
+- [ ] ModelConfig credentials never stored or returned in plaintext
+- [ ] AgentInstanceDashboard filter-to-query-param mapping verified in unit tests
+- [ ] Conversation history endpoint covered by integration test
+- [ ] ModelConfigListPage and AgentInstanceDashboard routes wired in navigation
+- [ ] All NEEDS REWORK tasks completed and original tasks re-verified
+- [ ] `langgraph` removed from `pyproject.toml`; `langchain` and `langchain-community` installed and verified
+- [ ] `ExecutionLogEntry` persisted for every agent session before first LLM call
+- [ ] `GET /agents/sessions/{id}/execution-logs` endpoint verified in unit and integration tests
+- [ ] `AgentJobPage` execution log section renders `system_instruction` and `user_prompt` correctly
