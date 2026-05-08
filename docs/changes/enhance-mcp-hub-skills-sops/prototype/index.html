@@ -906,6 +906,54 @@ strong{font-weight:600}
             </div>
           </div>
         </div>
+        
+        <!-- Generated Tool Reference Section -->
+        <div class="card mb-4">
+          <div class="card-header" style="cursor:pointer;user-select:none" onclick="var b=document.getElementById('tool-ref-body'),i=this.querySelector('.toggle-icon');if(b.style.display==='none'){b.style.display='block';i.style.transform='rotate(0deg)';}else{b.style.display='none';i.style.transform='rotate(-90deg)';}">
+            <h3 style="display:flex;align-items:center;gap:8px">
+              <span class="toggle-icon" style="font-size:12px;transition:transform var(--transition);transform:rotate(-90deg)">▼</span>
+              Generated Tool Reference
+            </h3>
+            <span class="chip chip-gray">Read-only</span>
+          </div>
+          <div class="card-body" id="tool-ref-body" style="display:none;background:#F8FAFC;border-radius:0 0 var(--radius) var(--radius);border-top:1px solid var(--border);">
+            <div class="text-sm text-secondary" style="margin-bottom:16px">This schema represents the selected tools and will be automatically appended to the agent's system prompt instructions.</div>
+            
+            <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--text-primary)">filesystem.read_file</div>
+            <div class="result-content" style="margin-bottom:16px;background:#F1F5F9;border-color:#E2E8F0;padding:12px">
+{
+  "name": "read_file",
+  "description": "Read file contents from path",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Absolute path to the file to read"
+      }
+    },
+    "required": ["path"]
+  }
+}</div>
+
+            <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--text-primary)">filesystem.list_directory</div>
+            <div class="result-content" style="margin-bottom:0;background:#F1F5F9;border-color:#E2E8F0;padding:12px">
+{
+  "name": "list_directory",
+  "description": "List directory contents",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Absolute path to the directory"
+      }
+    },
+    "required": ["path"]
+  }
+}</div>
+          </div>
+        </div>
       </div>
       <div>
         <div class="card">

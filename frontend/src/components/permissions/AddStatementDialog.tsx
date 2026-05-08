@@ -177,7 +177,7 @@ export default function AddStatementDialog({
           actions: editingPolicy.actions.map((a) => a.action),
           resources: editingPolicy.resources.map((r) => ({
             resource_type: r.resource_type,
-            resource_id: r.resource_id,
+            resource_id: r.resource_id ?? null,
           })),
           tagConditions: editingPolicy.tag_conditions.map((tc) => ({
             tag_key: tc.tag_key,

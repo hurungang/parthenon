@@ -29,6 +29,8 @@ class OAuthInitiateRequest(BaseModel):
     client_id: str | None = None
     client_secret: str | None = None
     scope: str | None = None
+    session_name: str | None = None
+    session_description: str | None = None
 
 
 class OAuthInitiateResponse(BaseModel):

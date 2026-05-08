@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
@@ -271,6 +271,45 @@ describe('AgentJobPage', () => {
     await waitFor(() => {
       // Chat interface renders a send button
       expect(screen.getByText('agents.sessions.send')).toBeDefined()
+    })
+  })
+
+  it('renders message history in chat interface for conversational agent', async () => {
+    // Provide messages via the chat session hook mock
+    vi.doMock('../hooks/useChatSession', () => ({
+      useChatSession: () => ({
+        messages: [
+          { id: 'msg-1', role: 'user', content: 'Hello agent', timestamp: '2026-01-01T00:00:01Z' },
+          { id: 'msg-2', role: 'assistant', content: 'Hello! How can I help?', timestamp: '2026-01-01T00:00:02Z' },
+        ],
+        sendMessage: vi.fn(),
+        connected: true,
+      }),
+    }))
+
+    mockGet.mockResolvedValue({
+      data: {
+        id: 'sess-abc',
+        agent_type_id: 'at-1',
+        triggered_by_user_id: null,
+        input_data: { message: 'Hello agent' },
+        status: 'completed',
+        started_at: '2026-01-01T00:00:01Z',
+        completed_at: '2026-01-01T00:00:05Z',
+        output_data: null,
+        error_message: null,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    // Re-import after mock update
+    vi.resetModules()
+    const { AgentJobPage } = await import('../pages/agents/AgentJobPage')
+    render(<AgentJobPage />, { wrapper })
+
+    await waitFor(() => {
+      // Messages from the hook should render in the chat view
+      expect(screen.getByText('Hello agent')).toBeDefined()
     })
   })
 })

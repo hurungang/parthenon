@@ -10,9 +10,14 @@ import {
   DialogTitle,
   TextField,
   Typography,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
+import CodeIcon from '@mui/icons-material/Code'
+import EditIcon from '@mui/icons-material/Edit'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { DynamicSchemaForm } from '../../components/DynamicSchemaForm'
 import type { AgentJob, AgentType } from '../../types'
 
 interface AgentJobLaunchDialogProps {
@@ -41,10 +46,14 @@ export function AgentJobLaunchDialog({
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [submitting, setSubmitting] = useState(false)
   const [inputText, setInputText] = useState('')
+  const [typedInputData, setTypedInputData] = useState<Record<string, any>>({})
+  const [useRawJson, setUseRawJson] = useState(false)
 
   useEffect(() => {
     if (open) {
       setInputText('')
+      setTypedInputData({})
+      setUseRawJson(false)
       setDialogError(null)
     }
   }, [open])
@@ -57,10 +66,14 @@ export function AgentJobLaunchDialog({
       let inputData: Record<string, unknown> | null = null
 
       if (agentType.input_type === 'typed') {
-        try {
-          inputData = inputText.trim() ? (JSON.parse(inputText) as Record<string, unknown>) : null
-        } catch {
-          throw new Error(t('agents.sessions.invalidJson'))
+        if (useRawJson) {
+          try {
+            inputData = inputText.trim() ? (JSON.parse(inputText) as Record<string, unknown>) : null
+          } catch {
+            throw new Error(t('agents.sessions.invalidJson'))
+          }
+        } else {
+          inputData = Object.keys(typedInputData).length > 0 ? typedInputData : null
         }
       } else if (agentType.input_type === 'conversation') {
         inputData = { message: inputText }
@@ -87,7 +100,7 @@ export function AgentJobLaunchDialog({
     <Dialog
       open={open}
       onClose={() => { onClose(); setDialogError(null) }}
-      maxWidth="sm"
+      maxWidth="lg"
       fullWidth
     >
       <DialogTitle>
@@ -106,36 +119,56 @@ export function AgentJobLaunchDialog({
 
           {agentType.input_type === 'typed' && (
             <Box>
-              <Typography variant="body2" color="text.secondary" mb={1}>
-                {t('agents.sessions.typedInputHint')}
-              </Typography>
-              {schemaHint && (
-                <Box
-                  component="pre"
-                  sx={{
-                    bgcolor: 'grey.50',
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    p: 1,
-                    fontSize: 12,
-                    overflow: 'auto',
-                    mb: 1,
-                  }}
-                >
-                  {schemaHint}
+              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="body2" color="text.secondary">
+                  {useRawJson
+                    ? t('agents.sessions.typedInputHintRaw')
+                    : t('agents.sessions.typedInputHint')}
+                </Typography>
+                <Tooltip title={useRawJson ? t('agents.sessions.useFormInput') : t('agents.sessions.useRawJson')}>
+                  <IconButton size="small" onClick={() => setUseRawJson(!useRawJson)}>
+                    {useRawJson ? <EditIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+
+              {useRawJson ? (
+                <Box>
+                  {schemaHint && (
+                    <Box
+                      component="pre"
+                      sx={{
+                        bgcolor: 'grey.50',
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1,
+                        fontSize: 12,
+                        overflow: 'auto',
+                        mb: 1,
+                      }}
+                    >
+                      {schemaHint}
+                    </Box>
+                  )}
+                  <TextField
+                    label={t('agents.sessions.inputData')}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    fullWidth
+                    multiline
+                    rows={5}
+                    placeholder='{"key": "value"}'
+                    inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
+                  />
                 </Box>
+              ) : (
+                <DynamicSchemaForm
+                  schema={agentType.input_schema || ''}
+                  value={typedInputData}
+                  onChange={setTypedInputData}
+                />
               )}
-              <TextField
-                label={t('agents.sessions.inputData')}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                fullWidth
-                multiline
-                rows={5}
-                placeholder='{"key": "value"}'
-                inputProps={{ style: { fontFamily: 'monospace', fontSize: 13 } }}
-              />
             </Box>
           )}
 

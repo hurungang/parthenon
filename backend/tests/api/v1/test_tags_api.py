@@ -17,6 +17,7 @@ from app.main import create_app
 from app.db.session import get_db
 from app.api.deps import require_admin, require_permission
 from app.middleware.auth import JWTAuthMiddleware
+from app.core.resource_types import RT_TAG
 
 _REGISTRY_PATH = "app.api.v1.user_tags.TagRegistry"
 
@@ -108,6 +109,7 @@ async def test_create_tag_definition_as_admin_returns_201():
     app = create_app()
     _, db_dep = _db_override()
     app.dependency_overrides[get_db] = db_dep
+    app.dependency_overrides[require_permission(RT_TAG, "manage")] = _admin_override()
 
     now = dt.utcnow()
     tag_id = uuid.uuid4()
@@ -160,6 +162,7 @@ async def test_delete_tag_definition_as_admin_returns_204():
     _, db_dep = _db_override()
     tag_id = uuid.uuid4()
     app.dependency_overrides[get_db] = db_dep
+    app.dependency_overrides[require_permission(RT_TAG, "manage")] = _admin_override()
 
     with patch(_REGISTRY_PATH) as MockRegistry, _bypass_auth(), _mock_permission_engine_allow():
         mock_reg = MockRegistry.return_value
@@ -180,6 +183,7 @@ async def test_create_tag_definition_with_allowed_values_returns_201():
     app = create_app()
     _, db_dep = _db_override()
     app.dependency_overrides[get_db] = db_dep
+    app.dependency_overrides[require_permission(RT_TAG, "manage")] = _admin_override()
 
     now = dt.utcnow()
     tag_id = uuid.uuid4()
@@ -233,6 +237,7 @@ async def test_update_tag_definition_add_values_returns_200():
     _, db_dep = _db_override()
     tag_id = uuid.uuid4()
     app.dependency_overrides[get_db] = db_dep
+    app.dependency_overrides[require_permission(RT_TAG, "manage")] = _admin_override()
 
     now = dt.utcnow()
     value_id_1 = uuid.uuid4()

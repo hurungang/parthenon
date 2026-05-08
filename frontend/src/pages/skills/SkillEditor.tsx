@@ -8,6 +8,7 @@ import {
   Checkbox,
   CircularProgress,
   Chip,
+  Collapse,
   FormControlLabel,
   IconButton,
   Stack,
@@ -15,6 +16,8 @@ import {
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { useAllTools, useMcpServers } from '../../hooks/useMcpServers'
@@ -37,10 +40,21 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([])
   const [editorError, setEditorError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
+  const [toolRefOpen, setToolRefOpen] = useState(false)
 
   const { data: allTools } = useAllTools()
   const { data: servers } = useMcpServers()
   const { data: currentRoleIds } = useSkillRoles(skill?.id ?? '')
+
+  // Fetch full skill detail (includes instructions + instructions_with_tools) when editing
+  const { data: skillDetail } = useQuery<Skill>({
+    queryKey: ['skills', skill?.id],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Skill>(`/skills/${skill!.id}`)
+      return data
+    },
+    enabled: !!skill?.id,
+  })
 
   const { data: allRoles } = useQuery<AgentRole[]>({
     queryKey: ['agents', 'roles'],
@@ -64,7 +78,15 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
       setSelectedToolIds([])
     }
     setEditorError(null)
+    setToolRefOpen(false)
   }, [skill])
+
+  // Populate instructions from detail fetch (detail has the full instructions field)
+  useEffect(() => {
+    if (skillDetail) {
+      setForm((f) => ({ ...f, instructions: skillDetail.instructions ?? '' }))
+    }
+  }, [skillDetail])
 
   // Load existing role memberships when editing
   useEffect(() => {
@@ -131,6 +153,16 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
     }
   }
 
+  // Extract just the ## Tools section from instructions_with_tools (if present)
+  const toolSection = useMemo(() => {
+    const iwt = skillDetail?.instructions_with_tools
+    if (!iwt) return null
+    const marker = '\n\n## Tools'
+    const idx = iwt.indexOf(marker)
+    if (idx === -1) return null
+    return iwt.slice(idx + 2) // strip leading \n\n
+  }, [skillDetail])
+
   return (
     <Box sx={{ borderLeft: 1, borderColor: 'divider', pl: 3, minWidth: 480 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -140,7 +172,7 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
         <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
       </Box>
 
-      {editorError && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
+      {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
 
       <Stack spacing={2}>
         {/* Basic Info */}
@@ -175,6 +207,51 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
                 size="small"
                 helperText={t('skills.editor.instructionsHint')}
               />
+
+              {/* Generated Tool Reference (read-only, collapsible) */}
+              {skill && (
+                <Box>
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setToolRefOpen((o) => !o)}
+                  >
+                    <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ flexGrow: 1 }}>
+                      {t('skills.editor.generatedToolReference')}
+                    </Typography>
+                    <IconButton size="small" tabIndex={-1}>
+                      {toolRefOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                  <Collapse in={toolRefOpen}>
+                    <Box
+                      component="pre"
+                      sx={{
+                        mt: 1,
+                        p: 1.5,
+                        bgcolor: 'action.hover',
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        color: 'text.secondary',
+                        maxHeight: 320,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {toolSection
+                        ? toolSection
+                        : <Typography variant="caption" color="text.disabled" component="span">{t('skills.noTools')}</Typography>
+                      }
+                    </Box>
+                    <Typography variant="caption" color="text.disabled">
+                      {t('skills.editor.generatedToolReferenceHint')}
+                    </Typography>
+                  </Collapse>
+                </Box>
+              )}
             </Stack>
           </CardContent>
         </Card>

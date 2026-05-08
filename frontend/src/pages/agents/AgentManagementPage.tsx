@@ -71,14 +71,13 @@ export function AgentManagementPage() {
       description: at.description ?? '',
       identity_id: at.identity_id ?? '',
       role_id: at.role_id ?? '',
-      llm_provider: at.llm_provider,
-      llm_model: at.llm_model,
-      llm_api_key: '',
+      model_id: at.model_id ?? '',
       system_instruction: at.system_instruction ?? '',
       input_type: at.input_type,
       input_schema: at.input_schema ? JSON.stringify(at.input_schema, null, 2) : '',
       output_type: at.output_type,
       output_schema: at.output_schema ? JSON.stringify(at.output_schema, null, 2) : '',
+      primary_sop_id: at.primary_sop_id ?? '',
     })
     setDialogError(null)
     setDialogOpen(true)
@@ -87,19 +86,22 @@ export function AgentManagementPage() {
   const handleSave = async () => {
     try {
       setDialogError(null)
+      if (form.input_type === 'none' && !form.primary_sop_id) {
+        setDialogError(new Error(t('agents.types.form.primarySopRequired')))
+        return
+      }
       const body = {
         name: form.name,
         description: form.description || null,
         identity_id: form.identity_id || null,
         role_id: form.role_id || null,
-        llm_provider: form.llm_provider,
-        llm_model: form.llm_model,
-        llm_api_key: form.llm_api_key || null,
+        model_id: form.model_id || null,
         system_instruction: form.system_instruction || null,
         input_type: form.input_type,
         input_schema: form.input_schema ? JSON.parse(form.input_schema) : null,
         output_type: form.output_type,
         output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
+        primary_sop_id: form.input_type === 'none' ? (form.primary_sop_id || null) : null,
       }
       if (editType) {
         await apiClient.put(`/agents/types/${editType.id}`, body)
@@ -171,7 +173,7 @@ export function AgentManagementPage() {
                   <TableCell>
                     <Chip label={at.output_type} size="small" variant="outlined" />
                   </TableCell>
-                  <TableCell>{at.llm_provider} / {at.llm_model}</TableCell>
+                  <TableCell>{at.model_id ?? '—'}</TableCell>
                   <TableCell>
                     <Chip
                       label={at.is_active ? t('app.active') : t('app.inactive')}
@@ -267,7 +269,7 @@ export function AgentManagementPage() {
       <Dialog
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setDialogError(null) }}
-        maxWidth="sm"
+        maxWidth="lg"
         fullWidth
       >
         <DialogTitle>

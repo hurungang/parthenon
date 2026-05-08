@@ -15,13 +15,16 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
+from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
+from app.core.ssl_context import get_ssl_context
 from app.core.yaml_config import load_identity_yaml
-from app.db.models.agents import AgentIdentity, AgentIdentityStatus, AgentIdentityType, AgentType
+from app.db.models.agents import AgentIdentity, AgentIdentityStatus, AgentIdentityType, AgentRole, AgentRoleIdentity, AgentType
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +237,7 @@ class AgentIdentityService:
         token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
 
         token_data: dict
-        async with httpx.AsyncClient(timeout=30.0) as http_client:
+        async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
             response = await http_client.post(
                 token_url,
                 data={
@@ -404,3 +407,165 @@ class AgentIdentityService:
             )
 
         return identity
+
+    # ── Role Assignment Methods ────────────────────────────────────────────────
+
+    async def assign_roles(
+        self,
+        identity_id: uuid.UUID,
+        role_ids: list[uuid.UUID],
+        db: AsyncSession,
+    ) -> None:
+        """Bulk-assign roles to an identity. Skips duplicates."""
+        identity = await self.get_identity(identity_id, db)
+
+        for role_id in role_ids:
+            existing = await db.execute(
+                select(AgentRoleIdentity).where(
+                    AgentRoleIdentity.role_id == role_id,
+                    AgentRoleIdentity.identity_id == identity_id,
+                )
+            )
+            if existing.scalar_one_or_none() is None:
+                db.add(AgentRoleIdentity(role_id=role_id, identity_id=identity_id))
+
+        await db.flush()
+        logger.info("Assigned %d role(s) to identity %s", len(role_ids), identity_id)
+
+    async def remove_role(
+        self,
+        identity_id: uuid.UUID,
+        role_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> None:
+        """Remove a specific role assignment from an identity."""
+        await self.get_identity(identity_id, db)  # Validates identity exists
+
+        result = await db.execute(
+            select(AgentRoleIdentity).where(
+                AgentRoleIdentity.role_id == role_id,
+                AgentRoleIdentity.identity_id == identity_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            await db.delete(row)
+            await db.flush()
+        logger.info("Removed role %s from identity %s", role_id, identity_id)
+
+    async def list_roles(
+        self,
+        identity_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> list[AgentRole]:
+        """List all AgentRole records assigned to an identity."""
+        await self.get_identity(identity_id, db)  # Validates identity exists
+
+        result = await db.execute(
+            select(AgentRole)
+            .options(
+                selectinload(AgentRole.sop_assignments),
+                selectinload(AgentRole.skill_assignments),
+            )
+            .join(AgentRoleIdentity, AgentRoleIdentity.role_id == AgentRole.id)
+            .where(AgentRoleIdentity.identity_id == identity_id)
+            .order_by(AgentRole.name)
+        )
+        return list(result.scalars().all())
+
+    # ── Token Refresh Methods ──────────────────────────────────────────────────
+
+    async def refresh_token(
+        self,
+        identity_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> AgentIdentity:
+        """Refresh the access token using the stored refresh token.
+
+        Decrypts the stored refresh token, calls the IdP token endpoint with
+        grant_type=refresh_token, re-encrypts the new token pair, and persists.
+
+        Raises:
+            AgentIdentityNotFoundError: If identity not found.
+            AgentOAuthError: If refresh token is missing or the request fails.
+        """
+        identity = await self.get_identity(identity_id, db)
+
+        vault = get_vault()
+        if not identity.refresh_token:
+            raise AgentOAuthError(
+                f"Identity {identity_id} has no refresh token stored — re-authentication required"
+            )
+
+        refresh_token_plain = vault.decrypt(identity.refresh_token)
+        keycloak_base = _keycloak_base_url()
+        realm = identity.realm_name or _agent_realm_name()
+        client_id = _agent_realm_client_id()
+        token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
+
+        async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
+            response = await http_client.post(
+                token_url,
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": client_id,
+                    "refresh_token": refresh_token_plain,
+                },
+            )
+
+        if response.status_code != 200:
+            logger.error(
+                "Token refresh failed for identity %s: HTTP %s — %s",
+                identity_id,
+                response.status_code,
+                response.text[:200],
+            )
+            raise AgentOAuthError(
+                f"Token refresh failed (HTTP {response.status_code}): {response.text[:200]}"
+            )
+
+        token_data = response.json()
+        access_token_plain: str = token_data["access_token"]
+        new_refresh_token_plain: str | None = token_data.get("refresh_token")
+        expires_in: int = int(token_data.get("expires_in", 300))
+
+        identity.access_token = vault.encrypt(access_token_plain)
+        if new_refresh_token_plain:
+            identity.refresh_token = vault.encrypt(new_refresh_token_plain)
+        identity.token_expires_at = datetime.fromtimestamp(
+            datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
+        )
+        identity.status = AgentIdentityStatus.active
+
+        await db.flush()
+        await db.refresh(identity)
+        logger.info(
+            "Token refreshed for identity %s; new token_expires_at=%s",
+            identity_id,
+            identity.token_expires_at,
+        )
+        return identity
+
+    async def get_reauth_url(
+        self,
+        identity_id: uuid.UUID,
+        request: Request,
+        db: AsyncSession,
+    ) -> str:
+        """Generate an OAuth re-authentication URL for an identity.
+
+        Uses the same authorize URL flow as initial authentication, embedding
+        the identity_id in the state parameter so the callback can locate the record.
+
+        Returns:
+            Full authorization URL for the admin's browser redirect.
+        """
+        identity = await self.get_identity(identity_id, db)
+
+        # Build redirect URI from the incoming request
+        base_url = str(request.base_url).rstrip("/")
+        redirect_uri = f"{base_url}/api/v1/agents/oauth/callback"
+
+        state = str(identity_id)
+        return self.get_oauth_authorize_url(state=state, redirect_uri=redirect_uri)
+

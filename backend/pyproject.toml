@@ -35,8 +35,9 @@ dependencies = [
     "aiosmtplib>=3.0.0",
     "slack-sdk>=3.30.0",
     "pymsteams>=0.2.2",
-    # Agent runtime
-    "langgraph>=0.3.0",
+    # Agent runtime — LangChain deep agent framework (LangGraph removed)
+    "langchain>=0.3.0",
+    "langchain-community>=0.3.0",
     # Rate limiting
     "slowapi>=0.1.9",
     # OTEL

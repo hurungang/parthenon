@@ -31,7 +31,7 @@ Available scenarios (from `e2e/tests/`):
 - `scheduling` — job scheduling
 - `results` — results viewing
 - `agent-management` — agent configuration and management
-- `agent-runtime` — agent roles, identities, session launch, and session tracking
+- `agent-runtime` — agent roles, identities, model configs, session launch, instance dashboard, and conversation history
 - `agent-bootstrap` — agent realm initialization and OAuth-based identity creation
 - `gateway` — gateway / agent types configuration
 - `mcp-hub` — MCP hub management

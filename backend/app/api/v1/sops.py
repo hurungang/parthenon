@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, delete
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
 from app.core.resource_types import RT_SKILL
@@ -46,16 +47,11 @@ async def get_sop(
     _: dict = Depends(require_permission(RT_SKILL, "read")),
 ) -> Sop:
     result = await db.execute(
-        select(Sop).where(Sop.id == sop_id)
+        select(Sop).where(Sop.id == sop_id).options(selectinload(Sop.steps))
     )
     sop = result.scalar_one_or_none()
     if not sop:
         raise HTTPException(status_code=404, detail="SOP not found")
-    # Load steps
-    steps_result = await db.execute(
-        select(SopStep).where(SopStep.sop_id == sop_id).order_by(SopStep.order)
-    )
-    sop.steps = list(steps_result.scalars().all())
     return sop
 
 

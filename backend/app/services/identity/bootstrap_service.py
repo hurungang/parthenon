@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
+from app.core.ssl_context import get_ssl_context
 from app.core.yaml_config import IdentityYamlConfig
 from app.core.yaml_writer import write_identity_yaml
 from app.db.models.identity_provider_config import IdentityProviderConfig
@@ -135,7 +136,7 @@ class IdentityBootstrapService:
 
         # 1. Validate reachability
         try:
-            async with httpx.AsyncClient(timeout=10.0) as http_client:
+            async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as http_client:
                 resp = await http_client.get(f"{keycloak_url}/health/ready")
                 if resp.status_code >= 500:
                     raise httpx.HTTPStatusError(
@@ -302,7 +303,7 @@ class IdentityBootstrapService:
 
         # 1. Fetch discovery document
         try:
-            async with httpx.AsyncClient(timeout=15.0) as http_client:
+            async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as http_client:
                 resp = await http_client.get(discovery_url)
                 resp.raise_for_status()
                 discovery_doc: dict = resp.json()
@@ -416,3 +417,4 @@ class IdentityBootstrapService:
             logger.info("OIDC client reloaded for provider: %s", provider_url)
         except Exception as exc:
             logger.warning("Failed to reload OIDC client: %s", exc)
+

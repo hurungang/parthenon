@@ -6,7 +6,6 @@ import {
   Card,
   CardContent,
   Checkbox,
-  CircularProgress,
   FormControl,
   FormControlLabel,
   IconButton,
@@ -201,7 +200,7 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
         <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
       </Box>
 
-      {editorError && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
+      {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
 
       <Stack spacing={2}>
         {/* Basic Info */}

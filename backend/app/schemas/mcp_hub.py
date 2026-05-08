@@ -73,6 +73,8 @@ class McpSessionRead(BaseModel):
     is_active: bool
     identity_binding: dict[str, Any] | None
     credential_config: dict[str, Any] | None
+    oauth_expires_at: datetime | None = None
+    oauth_refresh_expires_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     # Connection test result (only present during creation/update)
@@ -127,3 +129,29 @@ class SyncResult(BaseModel):
     tools_updated: int
     tools_deactivated: int
     total_active: int
+
+
+class TestToolRequest(BaseModel):
+    """Request to test an MCP tool invocation."""
+    
+    session_id: uuid.UUID
+    """The MCP session ID to use for authentication."""
+    
+    tool_input: dict[str, Any]
+    """The input arguments for the tool."""
+
+
+class TestToolResponse(BaseModel):
+    """Response from testing an MCP tool."""
+    
+    success: bool
+    """Whether the tool invocation succeeded."""
+    
+    result: dict[str, Any] | None = None
+    """The tool result if successful."""
+    
+    error: str | None = None
+    """Error message if failed."""
+    
+    raw_response: dict[str, Any] | None = None
+    """The complete raw response from the MCP server."""

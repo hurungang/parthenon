@@ -132,7 +132,7 @@ class AgentPermissionManager:
                 select(SopStep.skill_id)
                 .where(
                     SopStep.sop_id.in_(sop_ids),
-                    SopStep.step_type == SopStepType.skill,
+                    SopStep.step_type == SopStepType.skill_invocation,
                     SopStep.skill_id.isnot(None),
                 )
             )
@@ -180,11 +180,8 @@ class AgentPermissionManager:
 
         allowed: set[str] = set()
         for tool in tools:
-            # Use "server_slug:tool_name" as the qualified identifier
-            if tool.server:
-                identifier = f"{tool.server.slug}:{tool.name}"
-            else:
-                identifier = tool.name
+            # Use the namespaced tool name directly: "mcp_slug/tool_name" (McpTool.name format)
+            identifier = tool.name
             allowed.add(identifier)
 
         return allowed

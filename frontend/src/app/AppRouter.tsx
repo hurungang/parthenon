@@ -13,6 +13,8 @@ import { AgentRoleListPage } from '../pages/agents/AgentRoleListPage'
 import { AgentIdentityListPage } from '../pages/agents/AgentIdentityListPage'
 import { AgentJobPage } from '../pages/agents/AgentJobPage'
 import { AgentOAuthCallbackPage } from '../pages/agents/AgentOAuthCallbackPage'
+import { ModelConfigListPage } from '../pages/agents/ModelConfigListPage'
+import { AgentInstanceDashboardPage } from '../pages/agents/AgentInstanceDashboardPage'
 import OAuthCallback from '../pages/OAuthCallback'
 import { GatewayConfigPage } from '../pages/gateway/GatewayConfigPage'
 import { ScheduleManagerPage } from '../pages/scheduling/ScheduleManagerPage'
@@ -97,6 +99,8 @@ function AppRoutes() {
         <Route path="/agents/roles" element={<AgentRoleListPage />} />
         <Route path="/agents/identities" element={<AgentIdentityListPage />} />
         <Route path="/agents/sessions/:id" element={<AgentJobPage />} />
+        <Route path="/agents/model-configs" element={<ModelConfigListPage />} />
+        <Route path="/agents/instances" element={<AgentInstanceDashboardPage />} />
         <Route path="/gateway" element={<GatewayConfigPage />} />
         <Route path="/schedules" element={<ScheduleManagerPage />} />
         <Route path="/conversations" element={<ConversationHistoryPage />} />

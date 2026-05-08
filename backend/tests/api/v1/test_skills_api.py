@@ -2,11 +2,13 @@
 
 Tests cover:
 - Create/update skill with instructions field
-- GET /skills returns tool_ids array
-- GET /skills/{id} returns instructions with persisted value
+- GET /skills returns tool_ids array and instructions_with_tools
+- GET /skills/{id} returns instructions, instructions_with_tools, and tool section assembly
+- instructions_with_tools is read-only (ignored if sent in request body)
 - GET /skills/{id}/roles returns role IDs
 - PUT /skills/{id}/roles atomically replaces role membership
 - PUT /skills/{id}/roles with empty list removes all memberships
+- SkillSeeder creates save_result and send_notification default skills (idempotent)
 """
 from __future__ import annotations
 
@@ -59,12 +61,19 @@ def _make_skill(skill_id=None, instructions=None, tool_ids=None):
     m.is_active = True
     m.created_at = now
     m.updated_at = now
-    # Tool bindings
+    # instructions_with_tools must be None/str so Pydantic model_validate succeeds
+    m.instructions_with_tools = None
+    # Tool bindings — each binding has a proper tool mock with serializable attributes
     bindings = []
     for i, tid in enumerate(tool_ids or []):
         b = MagicMock()
         b.tool_id = tid
         b.order = i
+        t = MagicMock()
+        t.name = f"tool-{i}"
+        t.description = None
+        t.input_schema = None  # None → assemble_tool_section omits schema block (no JSON error)
+        b.tool = t
         bindings.append(b)
     m.tool_bindings = bindings
     return m
@@ -121,8 +130,8 @@ async def test_list_skills_returns_tool_ids_array():
 
 
 @pytest.mark.asyncio
-async def test_list_skills_includes_instructions_field():
-    """GET /skills response includes instructions field."""
+async def test_list_skills_includes_instructions_with_tools_field():
+    """GET /skills response includes instructions_with_tools field for each skill."""
     skill = _make_skill(instructions="Use this skill to summarise documents.")
     mock_db, db_dep = _db_with_skill(skill, scalar_all=[skill])
 
@@ -135,7 +144,8 @@ async def test_list_skills_includes_instructions_field():
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body[0]["instructions"] == "Use this skill to summarise documents."
+    # SkillRead has instructions_with_tools (not instructions — use GET /skills/{id} for that)
+    assert "instructions_with_tools" in body[0]
 
 
 # ── Get Skill ────────────────────────────────────────────────────────────────────
@@ -345,3 +355,299 @@ async def test_put_skill_roles_with_empty_list_removes_all():
     assert resp.status_code == 200
     body = resp.json()
     assert body == []
+
+
+# ── instructions_with_tools field ─────────────────────────────────────────────
+
+
+def _make_binding_with_tool(
+    tool_id=None,
+    order: int = 0,
+    name: str = "search",
+    description: str | None = "Searches the web",
+    input_schema: dict | None = None,
+):
+    """Create a properly-mocked SkillToolBinding with an attached McpTool mock."""
+    b = MagicMock()
+    b.tool_id = tool_id or uuid.uuid4()
+    b.order = order
+    t = MagicMock()
+    t.name = name
+    t.description = description
+    t.input_schema = input_schema  # None → schema block omitted by assemble_tool_section
+    b.tool = t
+    return b
+
+
+@pytest.mark.asyncio
+async def test_get_skill_returns_instructions_with_tools_when_has_bindings():
+    """GET /skills/{id} instructions_with_tools includes Tool Section when bindings exist."""
+    skill_id = uuid.uuid4()
+    binding = _make_binding_with_tool(name="internal-tools/search", description="Searches the web")
+    skill = _make_skill(skill_id=skill_id, instructions="Use search for all queries.")
+    skill.tool_bindings = [binding]
+
+    mock_db, db_dep = _db_with_skill(skill)
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(f"/api/v1/skills/{skill_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "instructions_with_tools" in body
+    iwt = body["instructions_with_tools"]
+    assert iwt is not None
+    assert "## Tools" in iwt
+    assert "internal-tools/search" in iwt
+    assert "Use search for all queries." in iwt
+
+
+@pytest.mark.asyncio
+async def test_get_skill_instructions_with_tools_equals_instructions_when_no_bindings():
+    """GET /skills/{id} instructions_with_tools equals instructions when no tool bindings."""
+    skill_id = uuid.uuid4()
+    skill = _make_skill(skill_id=skill_id, instructions="Static instructions only.")
+    skill.tool_bindings = []
+
+    mock_db, db_dep = _db_with_skill(skill)
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(f"/api/v1/skills/{skill_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["instructions_with_tools"] == "Static instructions only."
+    assert "## Tools" not in (body["instructions_with_tools"] or "")
+
+
+@pytest.mark.asyncio
+async def test_get_skill_instructions_with_tools_is_null_when_no_bindings_and_no_instructions():
+    """GET /skills/{id} instructions_with_tools is null when skill has no instructions and no tools."""
+    skill_id = uuid.uuid4()
+    skill = _make_skill(skill_id=skill_id, instructions=None)
+    skill.tool_bindings = []
+
+    mock_db, db_dep = _db_with_skill(skill)
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(f"/api/v1/skills/{skill_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["instructions_with_tools"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_skill_tool_section_includes_tool_description_and_schema():
+    """GET /skills/{id} tool section includes the tool's description and JSON schema."""
+    skill_id = uuid.uuid4()
+    schema = {"type": "object", "properties": {"query": {"type": "string"}}}
+    binding = _make_binding_with_tool(
+        name="web/search",
+        description="Full-text web search",
+        input_schema=schema,
+    )
+    skill = _make_skill(skill_id=skill_id, instructions="Search the web.")
+    skill.tool_bindings = [binding]
+
+    mock_db, db_dep = _db_with_skill(skill)
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(f"/api/v1/skills/{skill_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    iwt = body["instructions_with_tools"]
+    assert "Full-text web search" in iwt
+    assert "Input Schema" in iwt
+    assert "query" in iwt
+
+
+@pytest.mark.asyncio
+async def test_post_skill_ignores_instructions_with_tools_in_request():
+    """POST /skills body with instructions_with_tools is accepted; field is ignored (read-only)."""
+    skill = _make_skill(instructions="My instructions.")
+    mock_db, db_dep = _db_with_skill(skill)
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    payload = {
+        "name": "Test Skill",
+        "instructions": "My instructions.",
+        "instructions_with_tools": "INJECTED — should be ignored",
+        "tool_ids": [],
+    }
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/api/v1/skills", json=payload)
+
+    assert resp.status_code == 201
+    body = resp.json()
+    # instructions_with_tools is computed, not stored from request
+    assert body.get("instructions_with_tools") != "INJECTED — should be ignored"
+
+
+@pytest.mark.asyncio
+async def test_list_skills_instructions_with_tools_present_for_each_skill():
+    """GET /skills list response includes instructions_with_tools for every skill."""
+    binding = _make_binding_with_tool(name="tool-a", description="Tool A")
+    skill1 = _make_skill(instructions="Skill 1 instructions.")
+    skill1.tool_bindings = [binding]
+    skill2 = _make_skill(instructions=None)
+    skill2.tool_bindings = []
+
+    mock_db, db_dep = _db_with_skill(skill1, scalar_all=[skill1, skill2])
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/v1/skills")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    for item in body:
+        assert "instructions_with_tools" in item
+
+
+# ── Default skills seeding ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_creates_save_result_skill():
+    """SkillSeeder.run() creates save_result skill on a clean database."""
+    from app.services.skill_seeder import SkillSeeder
+    from app.db.models.skills import Skill
+
+    no_skill_result = MagicMock()
+    no_skill_result.scalar_one_or_none = MagicMock(return_value=None)
+    no_tool_result = MagicMock()
+    no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            no_skill_result,  # save_result: skill existence check
+            no_tool_result,   # save_result: tool lookup
+            no_skill_result,  # send_notification: skill existence check
+            no_tool_result,   # send_notification: tool lookup
+        ]
+    )
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.rollback = AsyncMock()
+
+    seeder = SkillSeeder()
+    summary = await seeder.run(mock_session)
+
+    assert summary["save_result"] == "created"
+    added_skills = [
+        call.args[0]
+        for call in mock_session.add.call_args_list
+        if isinstance(call.args[0], Skill)
+    ]
+    assert any(s.name == "save_result" for s in added_skills)
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_creates_send_notification_skill():
+    """SkillSeeder.run() creates send_notification skill on a clean database."""
+    from app.services.skill_seeder import SkillSeeder
+    from app.db.models.skills import Skill
+
+    no_skill_result = MagicMock()
+    no_skill_result.scalar_one_or_none = MagicMock(return_value=None)
+    no_tool_result = MagicMock()
+    no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        side_effect=[
+            no_skill_result,
+            no_tool_result,
+            no_skill_result,
+            no_tool_result,
+        ]
+    )
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.rollback = AsyncMock()
+
+    seeder = SkillSeeder()
+    summary = await seeder.run(mock_session)
+
+    assert summary["send_notification"] == "created"
+    added_skills = [
+        call.args[0]
+        for call in mock_session.add.call_args_list
+        if isinstance(call.args[0], Skill)
+    ]
+    assert any(s.name == "send_notification" for s in added_skills)
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_is_idempotent_when_skills_already_exist():
+    """SkillSeeder.run() returns 'exists' for skills already in the database (no duplicates)."""
+    from app.services.skill_seeder import SkillSeeder
+
+    existing_save_result = MagicMock()
+    existing_save_result.name = "save_result"
+    existing_send_notification = MagicMock()
+    existing_send_notification.name = "send_notification"
+
+    exists_save = MagicMock()
+    exists_save.scalar_one_or_none = MagicMock(return_value=existing_save_result)
+    exists_notif = MagicMock()
+    exists_notif.scalar_one_or_none = MagicMock(return_value=existing_send_notification)
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(side_effect=[exists_save, exists_notif])
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.rollback = AsyncMock()
+
+    seeder = SkillSeeder()
+    summary = await seeder.run(mock_session)
+
+    assert summary["save_result"] == "exists"
+    assert summary["send_notification"] == "exists"
+    mock_session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_skill_seeder_returns_both_default_skill_names():
+    """SkillSeeder.run() summary contains entries for both save_result and send_notification."""
+    from app.services.skill_seeder import SkillSeeder
+
+    no_skill_result = MagicMock()
+    no_skill_result.scalar_one_or_none = MagicMock(return_value=None)
+    no_tool_result = MagicMock()
+    no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        side_effect=[no_skill_result, no_tool_result, no_skill_result, no_tool_result]
+    )
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.rollback = AsyncMock()
+
+    seeder = SkillSeeder()
+    summary = await seeder.run(mock_session)
+
+    assert "save_result" in summary
+    assert "send_notification" in summary

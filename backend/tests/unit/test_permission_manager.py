@@ -29,7 +29,8 @@ def _make_execute_rows(*rows) -> MagicMock:
 
 def _make_tool(name: str, server_slug: str) -> MagicMock:
     tool = MagicMock()
-    tool.name = name
+    # McpTool.name stores the namespaced identifier: "mcp_slug/tool_name"
+    tool.name = f"{server_slug}/{name}"
     tool.server = MagicMock()
     tool.server.slug = server_slug
     return tool
@@ -137,8 +138,8 @@ def test_check_tool_allowed_passes_when_in_set():
     pm = AgentPermissionManager()
     role_id = uuid.uuid4()
 
-    # Should not raise
-    pm.check_tool_allowed("my-server:list_files", {"my-server:list_files", "save_result"}, role_id)
+    # Tool identifiers use mcp_slug/tool_name format (slash separator)
+    pm.check_tool_allowed("my-server/list_files", {"my-server/list_files", "save_result"}, role_id)
 
 
 def test_check_tool_allowed_raises_permission_denied():
@@ -149,9 +150,28 @@ def test_check_tool_allowed_raises_permission_denied():
     role_id = uuid.uuid4()
 
     with pytest.raises(PermissionDeniedError) as exc_info:
-        pm.check_tool_allowed("evil-server:drop_database", {"save_result"}, role_id)
+        pm.check_tool_allowed("evil-server/drop_database", {"save_result"}, role_id)
 
-    assert "evil-server:drop_database" in str(exc_info.value)
+    assert "evil-server/drop_database" in str(exc_info.value)
+
+
+def test_tool_identifiers_use_slash_separator():
+    """Tool identifiers must use '/' separator (mcp_slug/tool_name), not ':' (legacy format)."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    role_id = uuid.uuid4()
+
+    valid_identifier = "supabase/get_project"
+    legacy_identifier = "supabase:get_project"
+
+    # Valid slash-format is allowed
+    pm.check_tool_allowed(valid_identifier, {valid_identifier, "save_result"}, role_id)
+
+    # Legacy colon-format should NOT be in the allowed set (slash format is the only format)
+    from app.services.agents.permission_manager import PermissionDeniedError
+    with pytest.raises(PermissionDeniedError):
+        pm.check_tool_allowed(legacy_identifier, {valid_identifier, "save_result"}, role_id)
 
 
 def test_check_tool_allowed_save_result_always_passes():
@@ -200,7 +220,8 @@ async def test_resolve_allowed_tools_with_direct_skill():
 
     allowed = await pm.calculate_allowed_tools(role_id, db)
 
-    assert "fs-server:read_file" in allowed
+    # Tool identifiers use mcp_slug/tool_name format (slash separator)
+    assert "fs-server/read_file" in allowed
     assert "save_result" in allowed
 
 
@@ -256,8 +277,8 @@ async def test_resolve_allowed_tools_deduplicates():
     ])
 
     allowed = await pm.calculate_allowed_tools(role_id, db)
-    # Should appear only once
-    assert list(allowed).count("hub:shared_tool") == 1
+    # Should appear only once; tool identifiers use mcp_slug/tool_name format
+    assert list(allowed).count("hub/shared_tool") == 1
 
 
 # ── Circular SOP dependency ────────────────────────────────────────────────────
@@ -296,4 +317,5 @@ async def test_resolve_no_infinite_recursion_without_circular_sop():
 
     # Must complete without error or infinite recursion
     allowed = await pm.calculate_allowed_tools(role_id, db)
-    assert "analytics:analyze" in allowed
+    # Tool identifiers use mcp_slug/tool_name format (slash separator)
+    assert "analytics/analyze" in allowed

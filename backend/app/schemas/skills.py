@@ -30,9 +30,9 @@ class SkillRead(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
-    instructions: str | None
     is_active: bool
     tool_ids: list[uuid.UUID] = []
+    instructions_with_tools: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -44,6 +44,12 @@ class SkillRead(BaseModel):
             sorted_bindings = sorted(bindings, key=lambda b: b.order)
             data.tool_ids = [b.tool_id for b in sorted_bindings]
         return data
+
+
+class SkillDetailRead(SkillRead):
+    """Extended skill response used by GET /skills/{id}; includes editable instructions field."""
+
+    instructions: str | None = None
 
 
 class SopStepCreate(BaseModel):

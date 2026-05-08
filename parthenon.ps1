@@ -118,7 +118,9 @@ $Script:ServiceConfig = @{
                 Write-Host "       Copy ca-bundle.crt to the project root or set REQUESTS_CA_BUNDLE" -ForegroundColor DarkYellow
             }
 
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d $backendPath && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+            # Use venv Python to ensure all dependencies are available
+            $venvPython = Join-Path $Script:ProjectRoot ".venv\Scripts\python.exe"
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d $backendPath && `"$venvPython`" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
             
             # Wait for backend to be ready
             Start-Sleep -Seconds 8

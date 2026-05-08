@@ -9,6 +9,7 @@ from app.api.v1.agents import (
     AgentOAuthRouter,
     AgentRoleRouter,
     AgentTypeRouter,
+    ModelConfigRouter,
 )
 from app.api.v1.conversations import ConversationRouter
 from app.api.v1.user_groups import GroupsRouter
@@ -53,6 +54,7 @@ router.include_router(AgentOAuthRouter)
 router.include_router(AgentJobRouter)
 router.include_router(AgentTypeRouter)
 router.include_router(AgentInstanceRouter)
+router.include_router(ModelConfigRouter)
 
 # Supporting modules
 router.include_router(ScheduleRouter)

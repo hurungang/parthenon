@@ -383,6 +383,8 @@ async def initiate_oauth_flow(
     server_id: UUID,
     db: AsyncSession,
     manual_config: OAuthDiscoveryResult | None = None,
+    session_name: str | None = None,
+    session_description: str | None = None,
 ) -> dict:
     """Auto-discover OAuth config and generate an authorization URL for an MCP server.
 
@@ -400,6 +402,8 @@ async def initiate_oauth_flow(
         server_id: UUID of the McpServer to authorize.
         db: Async SQLAlchemy session.
         manual_config: Optional manual OAuth configuration to use instead of discovery.
+        session_name: Optional user-provided name for the session to create.
+        session_description: Optional user-provided description for the session.
 
     Returns:
         {"authorization_url": str}
@@ -490,6 +494,8 @@ async def initiate_oauth_flow(
         "client_secret": discovery_result.client_secret,
         "token_url": discovery_result.token_url,
         "redirect_uri": redirect_uri,
+        "session_name": session_name,
+        "session_description": session_description,
         "expires_at": (
             datetime.now(tz=timezone.utc) + timedelta(minutes=_STATE_TTL_MINUTES)
         ).isoformat(),
@@ -511,6 +517,93 @@ async def initiate_oauth_flow(
         discovery_result.client_id,
     )
     return {"authorization_url": authorization_url}
+
+
+async def _initialize_mcp_session(base_url: str, access_token: str) -> str:
+    """Initialize an MCP session with the server and get the session ID.
+    
+    After OAuth authentication, some MCP servers require an initialization handshake
+    to establish a session. This function attempts to call the initialize endpoint.
+    If initialization is not supported or fails, generates a UUID instead.
+    
+    Args:
+        base_url: Base URL of the MCP server
+        access_token: OAuth access token for authentication
+        
+    Returns:
+        MCP session ID string
+    """
+    endpoint = base_url.rstrip("/")
+    
+    # MCP protocol initialize payload
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "Parthenon MCP Hub",
+                "version": "1.0.0"
+            }
+        }
+    }
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {access_token}"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0, verify=_ssl_context or True) as client:
+            logger.debug("Initializing MCP session at %s", endpoint)
+            logger.debug("MCP initialize payload: %s", json.dumps(payload))
+            response = await client.post(endpoint, json=payload, headers=headers)
+            
+            logger.debug("MCP initialize response status: %d", response.status_code)
+            logger.debug("MCP initialize response headers: %s", dict(response.headers))
+            
+            response.raise_for_status()
+            
+            result = response.json()
+            logger.debug("MCP initialize response: %s", result)
+            
+            # Extract session ID from response headers (Supabase MCP pattern)
+            mcp_session_id = response.headers.get("Mcp-Session-Id")
+            
+            if not mcp_session_id:
+                # Try to extract from response body if not in headers
+                if isinstance(result, dict):
+                    mcp_session_id = result.get("sessionId") or result.get("session_id")
+            
+            if not mcp_session_id:
+                logger.warning("MCP server did not return session ID, using generated UUID")
+                import uuid
+                mcp_session_id = str(uuid.uuid4())
+            
+            logger.info("MCP session initialized with ID: %s", mcp_session_id[:16] + "...")
+            return mcp_session_id
+            
+    except httpx.HTTPStatusError as exc:
+        logger.warning(
+            "MCP initialize endpoint returned HTTP %d (this may be expected for some servers): %s",
+            exc.response.status_code,
+            exc.response.text[:200]
+        )
+        # Generate a UUID since initialize is not supported or failed
+        import uuid
+        generated_id = str(uuid.uuid4())
+        logger.info("Generated MCP session ID (initialize not supported): %s", generated_id[:16] + "...")
+        return generated_id
+    except httpx.HTTPError as exc:
+        logger.warning("MCP initialize failed (network error): %s", exc)
+        # Generate a UUID as fallback
+        import uuid
+        generated_id = str(uuid.uuid4())
+        logger.info("Generated MCP session ID (network error): %s", generated_id[:16] + "...")
+        return generated_id
 
 
 async def handle_oauth_callback(
@@ -615,10 +708,16 @@ async def handle_oauth_callback(
         logger.error("OAuth token exchange error for server %s: %s", server_id_str, exc)
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {exc}")
 
+    # Extract access token from response for immediate use
+    access_token = tokens.get("access_token")
+    if not access_token:
+        logger.error("OAuth token response missing access_token for server %s", server_id_str)
+        raise HTTPException(status_code=400, detail="Token response missing access_token")
+
     # ── 3. Encrypt credentials ─────────────────────────────────────────────────
     vault = get_vault()
     credentials_json = json.dumps({
-        "access_token": tokens.get("access_token"),
+        "access_token": access_token,
         "refresh_token": tokens.get("refresh_token"),
         "expires_in": tokens.get("expires_in"),
     })
@@ -651,17 +750,44 @@ async def handle_oauth_callback(
     if client_secret:
         oauth_metadata["client_secret"] = client_secret
 
-    # ── 4. Create MCP session ──────────────────────────────────────────────────
-    session_name = f"OAuth Session {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+    # ── 4. Get server to initialize MCP session ────────────────────────────────
+    from app.db.models.mcp_hub import McpServer
+    from sqlalchemy import select
+    
+    server_result = await db.execute(select(McpServer).where(McpServer.id == UUID(server_id_str)))
+    server = server_result.scalar_one_or_none()
+    if not server:
+        logger.error("Server %s not found for OAuth callback", server_id_str)
+        raise HTTPException(status_code=404, detail="MCP server not found")
+
+    # ── 5. Initialize MCP session with server and get session ID ───────────────
+    # Use user-provided name from state, or generate a default name
+    state_data = mcp_oauth_states.get(state, {})
+    user_provided_name = state_data.get("session_name")
+    user_provided_desc = state_data.get("session_description")
+    
+    session_name = user_provided_name or f"OAuth Session {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+    session_description = user_provided_desc or "Created via OAuth flow"
+    
+    # Initialize MCP session with the server to get MCP session ID
+    mcp_session_id = await _initialize_mcp_session(server.base_url, access_token)
+    
+    # Store MCP session ID in identity_binding
+    identity_binding = {
+        "mcp_session_id": mcp_session_id
+    }
+    
+    # ── 6. Create database session record ──────────────────────────────────────
     session = McpSession(
         server_id=UUID(server_id_str),
         name=session_name,
-        description="Created via OAuth flow",
+        description=session_description,
         auth_type=McpSessionAuthType.oauth2,
         encrypted_credentials=encrypted_creds,
         oauth_expires_at=oauth_expires_at,
         oauth_refresh_expires_at=oauth_refresh_expires_at,
         oauth_metadata=oauth_metadata,
+        identity_binding=identity_binding,
     )
     try:
         db.add(session)
@@ -671,27 +797,20 @@ async def handle_oauth_callback(
         logger.error("Failed to create MCP session for server %s: %s", server_id_str, exc)
         raise HTTPException(status_code=500, detail="Failed to create MCP session")
 
-    # ── 5. Automatically sync tools from server ────────────────────────────────
-    from app.db.models.mcp_hub import McpServer
+    # ── 7. Automatically sync tools from server ────────────────────────────────
     from app.services.mcp.tool_sync import ToolSyncService
-    from sqlalchemy import select
-    
-    # Get the server to sync tools
-    server_result = await db.execute(select(McpServer).where(McpServer.id == UUID(server_id_str)))
-    server = server_result.scalar_one_or_none()
     
     sync_result = {"added": 0, "updated": 0, "deactivated": 0}
-    if server:
-        try:
-            logger.info(f"Automatically syncing tools for server {server_id_str} after OAuth success")
-            sync_service = ToolSyncService()
-            sync_result = await sync_service.sync(server, db, session=session)
-            logger.info(f"Tool sync completed: {sync_result}")
-        except Exception as sync_exc:
-            # Log error but don't fail the OAuth flow
-            logger.warning(f"Tool sync failed for server {server_id_str}: {sync_exc}")
+    try:
+        logger.info(f"Automatically syncing tools for server {server_id_str} after OAuth success")
+        sync_service = ToolSyncService()
+        sync_result = await sync_service.sync(server, db, session=session)
+        logger.info(f"Tool sync completed: {sync_result}")
+    except Exception as sync_exc:
+        # Log error but don't fail the OAuth flow
+        logger.warning(f"Tool sync failed for server {server_id_str}: {sync_exc}")
 
-    # ── 6. Clean up state (prevent replay) ────────────────────────────────────
+    # ── 8. Clean up state (prevent replay) ────────────────────────────────────
     mcp_oauth_states.pop(state, None)
 
     logger.info(

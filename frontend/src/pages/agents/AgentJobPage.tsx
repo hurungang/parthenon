@@ -7,16 +7,23 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Divider,
+  IconButton,
   Paper,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import SendIcon from '@mui/icons-material/Send'
 import apiClient from '../../api/apiClient'
 import { useChatSession } from '../../hooks/useChatSession'
+import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { SessionExecutionLogsDialog } from './SessionExecutionLogsDialog'
 import type { AgentJob, AgentJobStatus } from '../../types'
 
 const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed']
@@ -46,8 +53,13 @@ export function AgentJobPage() {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<unknown>(null)
   const [chatInput, setChatInput] = useState('')
+  const [showLogs, setShowLogs] = useState(false)
+  const [execLogExpanded, setExecLogExpanded] = useState(false)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // Execution logs (system instruction + user prompt) via dedicated hook
+  const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(id ?? null)
 
   // Determine if this is a conversational session based on status flow
   // (we'll fetch the agent type info implicitly from output format)
@@ -156,6 +168,9 @@ export function AgentJobPage() {
               color={statusColor(session.status)}
               size="small"
             />
+            <Button variant="outlined" size="small" onClick={() => setShowLogs(true)}>
+              {t('agents.sessions.viewExecutionLogs')}
+            </Button>
           </Box>
         </Box>
 
@@ -331,6 +346,43 @@ export function AgentJobPage() {
         </Paper>
       )}
 
+      {/* Conversation History (read-only, for completed conversational sessions) */}
+      {session.conversation_history && session.conversation_history.length > 0 && isTerminal && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6" mb={2}>{t('agents.sessions.conversationHistory')}</Typography>
+          <Box display="flex" flexDirection="column" gap={1.5}>
+            {session.conversation_history.map((msg, idx) => (
+              <Box
+                key={idx}
+                alignSelf={msg.role === 'user' ? 'flex-end' : 'flex-start'}
+                sx={{ maxWidth: '80%' }}
+              >
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.25}
+                  textAlign={msg.role === 'user' ? 'right' : 'left'}>
+                  {msg.role}
+                </Typography>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    px: 1.5,
+                    py: 1,
+                    bgcolor: msg.role === 'user' ? 'primary.50' : msg.role === 'tool' ? 'grey.100' : 'background.paper',
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{ whiteSpace: 'pre-wrap', fontFamily: msg.role === 'tool' ? 'monospace' : undefined }}
+                  >
+                    {msg.content}
+                  </Typography>
+                </Paper>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+      )}
+
       {/* Queued / Running state for task agents */}
       {!isConversational && !isTerminal && (
         <Paper sx={{ p: 3, textAlign: 'center' }}>
@@ -345,6 +397,122 @@ export function AgentJobPage() {
           </Typography>
         </Paper>
       )}
+
+      <SessionExecutionLogsDialog
+        open={showLogs}
+        sessionId={id ?? null}
+        onClose={() => setShowLogs(false)}
+      />
+
+      {/* Execution Log — collapsible, shows system instruction + user prompt */}
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Box
+          display="flex"
+          justifyContent="space-between"
+          alignItems="center"
+          onClick={() => setExecLogExpanded((v) => !v)}
+          sx={{ cursor: 'pointer', userSelect: 'none' }}
+        >
+          <Typography variant="h6">{t('agents.sessions.executionLog.title')}</Typography>
+          <ExpandMoreIcon
+            sx={{
+              transform: execLogExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s',
+            }}
+          />
+        </Box>
+        <Collapse in={execLogExpanded}>
+          <Divider sx={{ my: 2 }} />
+          {execLogsLoading ? (
+            <CircularProgress size={16} />
+          ) : execLogs.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('agents.sessions.executionLog.empty')}
+            </Typography>
+          ) : (
+            execLogs.map((log) => (
+              <Box key={log.id} display="flex" flexDirection="column" gap={2}>
+                {log.system_instruction != null && (
+                  <Box>
+                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        {t('agents.sessions.executionLog.systemInstruction')}
+                      </Typography>
+                      <Tooltip title={t('agents.sessions.executionLog.copy')}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void navigator.clipboard.writeText(log.system_instruction ?? '')
+                          }}
+                        >
+                          <ContentCopyIcon fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    <Box
+                      component="pre"
+                      sx={{
+                        bgcolor: 'grey.50',
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 2,
+                        overflow: 'auto',
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        m: 0,
+                      }}
+                    >
+                      {log.system_instruction}
+                    </Box>
+                  </Box>
+                )}
+                {log.user_prompt != null && (
+                  <Box>
+                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                        {t('agents.sessions.executionLog.userPrompt')}
+                      </Typography>
+                      <Tooltip title={t('agents.sessions.executionLog.copy')}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void navigator.clipboard.writeText(log.user_prompt ?? '')
+                          }}
+                        >
+                          <ContentCopyIcon fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    <Box
+                      component="pre"
+                      sx={{
+                        bgcolor: 'grey.50',
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 2,
+                        overflow: 'auto',
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        m: 0,
+                      }}
+                    >
+                      {log.user_prompt}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            ))
+          )}
+        </Collapse>
+      </Paper>
     </Box>
   )
 }

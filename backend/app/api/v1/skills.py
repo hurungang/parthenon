@@ -1,6 +1,8 @@
 """Skills API router — CRUD for skills with MCP tool binding validation."""
+import json
 import uuid
 import logging
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, delete
@@ -12,30 +14,108 @@ from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
 from app.db.models.agents import AgentRoleSkill
-from app.schemas.skills import SkillCreate, SkillRead, SkillUpdate
+from app.schemas.skills import SkillCreate, SkillDetailRead, SkillRead, SkillUpdate
 
 logger = logging.getLogger(__name__)
 
 SkillRouter = APIRouter(prefix="/skills", tags=["Skills"])
 
 
+@dataclass
+class _ToolRecord:
+    name: str
+    description: str | None
+    input_schema: dict | None
+
+
+def assemble_tool_section(tools: list[_ToolRecord]) -> str:
+    """Build a read-only Tool Section markdown block from a list of tool records.
+
+    Returns an empty string when no tools are provided.
+    """
+    if not tools:
+        return ""
+
+    lines: list[str] = ["## Tools"]
+    for tool in tools:
+        lines.append(f"\n### `{tool.name}`")
+        if tool.description:
+            lines.append(tool.description)
+        if tool.input_schema:
+            lines.append("\n**Input Schema:**")
+            lines.append("```json")
+            lines.append(json.dumps(tool.input_schema, indent=2))
+            lines.append("```")
+    return "\n".join(lines)
+
+
+def _build_skill_read(skill: Skill) -> SkillRead:
+    """Construct a SkillRead response with computed instructions_with_tools."""
+    tool_records = [
+        _ToolRecord(
+            name=binding.tool.name,
+            description=binding.tool.description,
+            input_schema=binding.tool.input_schema,
+        )
+        for binding in sorted(skill.tool_bindings, key=lambda b: b.order)
+        if binding.tool is not None
+    ]
+    tool_section = assemble_tool_section(tool_records)
+    if tool_section:
+        instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
+    else:
+        instructions_with_tools = skill.instructions
+
+    skill_read = SkillRead.model_validate(skill)
+    skill_read.instructions_with_tools = instructions_with_tools
+    return skill_read
+
+
+def _build_skill_detail_read(skill: Skill) -> SkillDetailRead:
+    """Construct a SkillDetailRead response with computed instructions_with_tools."""
+    tool_records = [
+        _ToolRecord(
+            name=binding.tool.name,
+            description=binding.tool.description,
+            input_schema=binding.tool.input_schema,
+        )
+        for binding in sorted(skill.tool_bindings, key=lambda b: b.order)
+        if binding.tool is not None
+    ]
+    tool_section = assemble_tool_section(tool_records)
+    if tool_section:
+        instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
+    else:
+        instructions_with_tools = skill.instructions
+
+    skill_detail = SkillDetailRead.model_validate(skill)
+    skill_detail.instructions_with_tools = instructions_with_tools
+    return skill_detail
+
+
+_SKILL_LOAD_OPTIONS = [
+    selectinload(Skill.tool_bindings).selectinload(SkillToolBinding.tool)
+]
+
+
 @SkillRouter.get("", response_model=list[SkillRead])
 async def list_skills(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
-) -> list[Skill]:
+) -> list[SkillRead]:
     result = await db.execute(
-        select(Skill).options(selectinload(Skill.tool_bindings)).order_by(Skill.name)
+        select(Skill).options(*_SKILL_LOAD_OPTIONS).order_by(Skill.name)
     )
-    return list(result.scalars().all())
+    skills = list(result.scalars().all())
+    return [_build_skill_read(s) for s in skills]
 
 
-@SkillRouter.post("", response_model=SkillRead, status_code=status.HTTP_201_CREATED)
+@SkillRouter.post("", response_model=SkillDetailRead, status_code=status.HTTP_201_CREATED)
 async def create_skill(
     body: SkillCreate,
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "create")),
-) -> Skill:
+) -> SkillDetailRead:
     # Validate all tool IDs exist
     for tool_id in body.tool_ids:
         tool = await db.get(McpTool, tool_id)
@@ -61,37 +141,37 @@ async def create_skill(
         db.add(binding)
 
     await db.flush()
-    # Reload with eager tool_bindings
+    # Reload with eager tool_bindings + tool objects
     result = await db.execute(
-        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill.id)
+        select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill.id)
     )
-    return result.scalar_one()
+    return _build_skill_detail_read(result.scalar_one())
 
 
-@SkillRouter.get("/{skill_id}", response_model=SkillRead)
+@SkillRouter.get("/{skill_id}", response_model=SkillDetailRead)
 async def get_skill(
     skill_id: uuid.UUID,
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
-) -> Skill:
+) -> SkillDetailRead:
     result = await db.execute(
-        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill_id)
+        select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
     )
     skill = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
-    return skill
+    return _build_skill_detail_read(skill)
 
 
-@SkillRouter.put("/{skill_id}", response_model=SkillRead)
+@SkillRouter.put("/{skill_id}", response_model=SkillDetailRead)
 async def update_skill(
     skill_id: uuid.UUID,
     body: SkillUpdate,
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "update")),
-) -> Skill:
+) -> SkillDetailRead:
     result = await db.execute(
-        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill_id)
+        select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
     )
     skill = result.scalar_one_or_none()
     if not skill:
@@ -121,11 +201,11 @@ async def update_skill(
             db.add(binding)
 
     await db.flush()
-    # Reload with eager tool_bindings
+    # Reload with eager tool_bindings + tool objects
     result = await db.execute(
-        select(Skill).options(selectinload(Skill.tool_bindings)).where(Skill.id == skill_id)
+        select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
     )
-    return result.scalar_one()
+    return _build_skill_detail_read(result.scalar_one())
 
 
 @SkillRouter.delete("/{skill_id}", status_code=status.HTTP_204_NO_CONTENT)
