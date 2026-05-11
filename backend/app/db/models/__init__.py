@@ -8,6 +8,8 @@ from app.db.models.agents import (  # noqa: F401
     AgentIdentity,
     AgentInstance,
     AgentJob,
+    AgentPlan,
+    AgentPlanStatus,
     AgentRole,
     AgentRoleSkill,
     AgentRoleSOP,

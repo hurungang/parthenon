@@ -458,12 +458,13 @@ describe('ModelConfigDialog', () => {
     )
 
     // Wait for the dialog and password field to render
+    // MUI Dialog renders into a portal (document.body), not inside container
     await waitFor(() => {
-      const apiKeyInput = container.querySelector('input[type="password"]')
+      const apiKeyInput = document.querySelector('input[type="password"]')
       expect(apiKeyInput).not.toBeNull()
     })
 
-    const apiKeyInput = container.querySelector('input[type="password"]') as HTMLInputElement
+    const apiKeyInput = document.querySelector('input[type="password"]') as HTMLInputElement
     fireEvent.change(apiKeyInput, { target: { value: 'sk-new-key-123' } })
 
     fireEvent.click(screen.getByText('app.save'))

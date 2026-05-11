@@ -84,6 +84,14 @@ class AgentInstanceStatus(str, enum.Enum):
     error = "error"
 
 
+class AgentPlanStatus(str, enum.Enum):
+    """Lifecycle status of an agent plan generation attempt."""
+
+    pending = "pending"
+    success = "success"
+    failed = "failed"
+
+
 # ── Role Models ───────────────────────────────────────────────────────────────
 
 
@@ -429,6 +437,9 @@ class AgentType(Base):
     jobs: Mapped[list["AgentJob"]] = relationship(
         "AgentJob", back_populates="agent_type", cascade="all, delete-orphan"
     )
+    plan: Mapped["AgentPlan | None"] = relationship(
+        "AgentPlan", back_populates="agent_type", uselist=False, cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<AgentType id={self.id} name={self.name}>"
@@ -542,6 +553,54 @@ class AgentPromptLog(Base):
 
     def __repr__(self) -> str:
         return f"<AgentPromptLog id={self.id} session_id={self.session_id}>"
+
+
+# ── AgentPlan ─────────────────────────────────────────────────────────────────
+
+
+class AgentPlan(Base):
+    """Stores the most recent LLM-generated implementation plan for an agent type."""
+
+    __tablename__ = "agent_plans"
+    __table_args__ = (
+        UniqueConstraint("agent_type_id", name="uq_agent_plans_agent_type_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    agent_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    plan_steps: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    topology: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    generation_status: Mapped[AgentPlanStatus] = mapped_column(
+        Enum(AgentPlanStatus, name="agent_plan_status_enum"), nullable=False
+    )
+    generation_error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    agent_config_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    agent_type: Mapped["AgentType"] = relationship(
+        "AgentType", back_populates="plan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentPlan id={self.id} agent_type_id={self.agent_type_id} status={self.generation_status}>"
 
 
 # Resolve forward references

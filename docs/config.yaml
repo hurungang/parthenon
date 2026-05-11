@@ -32,9 +32,9 @@ tooling:
 # Technology stack — context for agents, not prescriptive
 tech_stack:
   frontend: React 19 + TypeScript + Material-UI (MUI 7) + React Router 7 + Vite + i18next + OpenTelemetry
-  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry + LangGraph
+  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry + LangChain (deep agent framework)
   database: PostgreSQL 16 — SQLAlchemy declarative models in backend/app/db/models/, Alembic migrations in backend/alembic/
-  auth: OIDC/OAuth2 — supports Keycloak and Azure EntraID; JWT validation via python-jose; internal RBAC roles (user, agent, both)
+  auth: OIDC/OAuth2 — supports Keycloak and Azure EntraID; JWT validation via python-jose; internal RBAC roles (user, agent, both); dual-realm topology (user realm + agent realm)
   infra: Docker Compose (dev/self-hosted) + Kubernetes/Helm (production) + nginx reverse proxy + OTEL Collector
 
 # Key project conventions — agents follow these when making decisions
@@ -63,12 +63,17 @@ domain:
   - "MCP Sessions: multiple named sessions can be defined per MCP server with different identity/credential bindings; a session can be mapped to an agent identity or a role"
   - "Skills: named invocable units that wrap one or more MCP tool calls; Skills are the permission-grantable unit for agents"
   - "SOPs (Standard Operating Procedures): higher-level Skills composed of multiple Skills with sequencing logic; may involve agent-to-agent delegation"
-  - "Agent types: 'sop-agent' (bound to one SOP, follows it strictly) or 'skillful-agent' (unbound, uses available skills based on user input)"
-  - "Agent instances: each agent type has a max-instance limit; each inbound request spawns a new instance up to the limit"
-  - "Agent Gateway: exposes agent types via a lifecycle protocol (init, request, question, answer, close) over MCP or HTTP"
-  - "Communication Hub: central broker for Web UI ↔ agent and agent ↔ agent messaging"
+  - "Agent Roles: permission sets that grant agents access to specific SOPs and/or Skills; roles resolve to a complete set of allowed MCP tools; agent identities are explicitly assigned to roles via many-to-many relationships"
+  - "Agent Identities: first-class OIDC user accounts in a dedicated agent realm (e.g., ai_agents); provisioned via OAuth sign-in; tokens stored encrypted and refreshed automatically; each identity can be assigned to multiple roles"
+  - "Agent Types: define agent configuration including identity, role, model, system instruction, input/output types; each agent execution validates that the identity is assigned to the role before proceeding"
+  - "Model Configurations: centrally managed LLM provider configs (OpenAI, Anthropic, LiteLLM proxy, etc.) with encrypted credentials and enabled model lists; agent types reference model IDs that are resolved to configs at runtime"
+  - "Agent Sessions: asynchronous execution units tracked from submission through completion; each session is an agent instance in the dashboard; powered by LangChain deep agent framework (observe-reason-act loop)"
+  - "Agent Gateway: Communication Hub extended to handle agent execution requests, session tracking, and result routing; enforces OAuth authentication and role-based tool filtering"
+  - "Communication Hub: central broker for Web UI ↔ agent and agent ↔ agent messaging; also serves as Agent Gateway for session management"
+  - "Execution Logs: full system instruction and user prompt captured for every agent run before first LLM call; visible in UI for audit and traceability"
   - "Result Repository: a default MCP tool ('save_result') available to all SOPs/agents to persist structured outputs"
   - "Notification integrations: pluggable channels (email, Slack, Teams, webhook) exposed as MCP tools"
   - "Observability: OTEL traces, metrics, and structured logs emitted by all components; collected via OTEL Collector; shipped to configurable backends (Prometheus, Jaeger, Loki, etc.)"
   - "Schedule management: cron-based scheduling for prompts and SOPs; managed via the admin UI; backed by a persistent job store"
   - "Conversation history: every interaction (user→agent, agent→agent, agent→tool) is persisted to the conversation store for audit and replay"
+  - "Agent Plan Mode: when an Agent Type is saved, an LLM automatically generates a step-by-step implementation plan based on the agent's instruction, role, SOPs, and skills; the plan is displayed in a preview modal with a visual topology diagram showing agent→identity→role→SOP→skill→tool relationships; the saved plan is loaded during agent execution and injected into the agent's system context to guide compliant, predictable behavior"

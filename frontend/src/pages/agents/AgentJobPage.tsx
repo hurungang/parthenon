@@ -7,24 +7,19 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Collapse,
   Divider,
-  IconButton,
   Paper,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import SendIcon from '@mui/icons-material/Send'
 import apiClient from '../../api/apiClient'
 import { useChatSession } from '../../hooks/useChatSession'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import { SessionExecutionLogsDialog } from './SessionExecutionLogsDialog'
-import type { AgentJob, AgentJobStatus } from '../../types'
+import { LogViewer } from '../../components/logs/LogViewer'
+import type { AgentJob, AgentJobStatus, ExecutionLogEntry } from '../../types'
 
 const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed']
 const POLL_INTERVAL_MS = 3_000
@@ -37,24 +32,32 @@ function statusColor(status: AgentJobStatus): 'default' | 'warning' | 'info' | '
   return 'default'
 }
 
+export interface AgentJobPageProps {
+  /** Optional session ID for embedded usage. If not provided, reads from URL params. */
+  sessionId?: string
+}
+
 /**
  * AgentJobPage — shows status and result for a single agent session.
  *
  * - Task agents: polls GET /agents/sessions/{id} every 3s until terminal status,
  *   then renders the result (structured JSON or markdown).
  * - Conversational agents: opens a WebSocket chat interface for interactive Q&A.
+ * - Can be used standalone (with URL params) or embedded in a dialog (with sessionId prop).
  */
-export function AgentJobPage() {
-  const { id } = useParams<{ id: string }>()
+export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {}) {
+  const { id: urlId } = useParams<{ id: string }>()
   const { t } = useTranslation()
   const navigate = useNavigate()
+
+  // Use prop if provided, otherwise fall back to URL param
+  const id = sessionIdProp ?? urlId
 
   const [session, setSession] = useState<AgentJob | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<unknown>(null)
   const [chatInput, setChatInput] = useState('')
-  const [showLogs, setShowLogs] = useState(false)
-  const [execLogExpanded, setExecLogExpanded] = useState(false)
+  const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -89,12 +92,23 @@ export function AgentJobPage() {
     }
   }, [id])
 
+  const fetchLogEntries = useCallback(async () => {
+    if (!id) return
+    try {
+      const { data } = await apiClient.get<ExecutionLogEntry[]>(`/agents/sessions/${id}/logs`)
+      setLogEntries(data)
+    } catch {
+      // Log entries are best-effort; do not surface errors in main page error state
+    }
+  }, [id])
+
   useEffect(() => {
     void fetchSession()
+    void fetchLogEntries()
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
     }
-  }, [fetchSession])
+  }, [fetchSession, fetchLogEntries])
 
   // Start polling when session is in a non-terminal status
   useEffect(() => {
@@ -130,9 +144,11 @@ export function AgentJobPage() {
   if (fetchError) {
     return (
       <Box>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/agents')} sx={{ mb: 2 }}>
-          {t('app.back')}
-        </Button>
+        {!sessionIdProp && (
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/agents')} sx={{ mb: 2 }}>
+            {t('app.back')}
+          </Button>
+        )}
         <PermissionDeniedAlert error={fetchError} fallbackMessage={t('app.error')} />
       </Box>
     )
@@ -144,9 +160,11 @@ export function AgentJobPage() {
 
   return (
     <Box>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/agents')} sx={{ mb: 2 }}>
-        {t('app.back')}
-      </Button>
+      {!sessionIdProp && (
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/agents')} sx={{ mb: 2 }}>
+          {t('app.back')}
+        </Button>
+      )}
 
       {/* Session Metadata */}
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -168,9 +186,6 @@ export function AgentJobPage() {
               color={statusColor(session.status)}
               size="small"
             />
-            <Button variant="outlined" size="small" onClick={() => setShowLogs(true)}>
-              {t('agents.sessions.viewExecutionLogs')}
-            </Button>
           </Box>
         </Box>
 
@@ -398,121 +413,14 @@ export function AgentJobPage() {
         </Paper>
       )}
 
-      <SessionExecutionLogsDialog
-        open={showLogs}
-        sessionId={id ?? null}
-        onClose={() => setShowLogs(false)}
-      />
-
-      {/* Execution Log — collapsible, shows system instruction + user prompt */}
-      <Paper sx={{ p: 3, mt: 3 }}>
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="center"
-          onClick={() => setExecLogExpanded((v) => !v)}
-          sx={{ cursor: 'pointer', userSelect: 'none' }}
-        >
-          <Typography variant="h6">{t('agents.sessions.executionLog.title')}</Typography>
-          <ExpandMoreIcon
-            sx={{
-              transform: execLogExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s',
-            }}
-          />
-        </Box>
-        <Collapse in={execLogExpanded}>
-          <Divider sx={{ my: 2 }} />
-          {execLogsLoading ? (
-            <CircularProgress size={16} />
-          ) : execLogs.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              {t('agents.sessions.executionLog.empty')}
-            </Typography>
-          ) : (
-            execLogs.map((log) => (
-              <Box key={log.id} display="flex" flexDirection="column" gap={2}>
-                {log.system_instruction != null && (
-                  <Box>
-                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        {t('agents.sessions.executionLog.systemInstruction')}
-                      </Typography>
-                      <Tooltip title={t('agents.sessions.executionLog.copy')}>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            void navigator.clipboard.writeText(log.system_instruction ?? '')
-                          }}
-                        >
-                          <ContentCopyIcon fontSize="inherit" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                    <Box
-                      component="pre"
-                      sx={{
-                        bgcolor: 'grey.50',
-                        border: 1,
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                        p: 2,
-                        overflow: 'auto',
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        m: 0,
-                      }}
-                    >
-                      {log.system_instruction}
-                    </Box>
-                  </Box>
-                )}
-                {log.user_prompt != null && (
-                  <Box>
-                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                        {t('agents.sessions.executionLog.userPrompt')}
-                      </Typography>
-                      <Tooltip title={t('agents.sessions.executionLog.copy')}>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            void navigator.clipboard.writeText(log.user_prompt ?? '')
-                          }}
-                        >
-                          <ContentCopyIcon fontSize="inherit" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                    <Box
-                      component="pre"
-                      sx={{
-                        bgcolor: 'grey.50',
-                        border: 1,
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                        p: 2,
-                        overflow: 'auto',
-                        fontSize: 13,
-                        fontFamily: 'monospace',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        m: 0,
-                      }}
-                    >
-                      {log.user_prompt}
-                    </Box>
-                  </Box>
-                )}
-              </Box>
-            ))
-          )}
-        </Collapse>
-      </Paper>
+      {/* Log Viewer — replaces the old collapsible Execution Log section and the SessionExecutionLogsDialog */}
+      {!execLogsLoading && execLogs.length > 0 && session && (
+        <LogViewer
+          executionLog={execLogs[0]}
+          entries={logEntries}
+          sessionStatus={session.status}
+        />
+      )}
     </Box>
   )
 }

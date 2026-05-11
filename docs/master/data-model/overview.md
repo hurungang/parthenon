@@ -294,34 +294,111 @@ erDiagram
 
 ```mermaid
 erDiagram
+    ModelConfig {
+        uuid id
+        string name
+        enum provider_type
+        string api_endpoint
+        string api_key_encrypted
+        json enabled_models
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+    AgentRole {
+        uuid id
+        string name
+        string description
+        datetime created_at
+        datetime updated_at
+    }
+    AgentRoleIdentity {
+        uuid role_id
+        uuid identity_id
+        datetime assigned_at
+        uuid assigned_by
+        datetime created_at
+    }
+    AgentRoleSOP {
+        uuid role_id
+        uuid sop_id
+    }
+    AgentRoleSkill {
+        uuid role_id
+        uuid skill_id
+    }
+    AgentRoleMcpSession {
+        uuid role_id
+        uuid mcp_session_id
+        uuid server_id
+        datetime assigned_at
+        uuid assigned_by
+    }
+    AgentIdentity {
+        uuid id
+        string name
+        enum identity_type
+        string auth_provider
+        string realm_name
+        string access_token_encrypted
+        string refresh_token_encrypted
+        datetime token_expiry
+        enum status
+        datetime created_at
+        datetime updated_at
+    }
     AgentType {
         uuid id
         string name
-        enum mode
-        string llm_provider
-        string llm_model
-        uuid sop_id
-        int max_instances
+        string description
+        uuid identity_id
+        uuid role_id
+        string model_id
+        string system_instruction
+        enum input_type
+        json input_schema
+        enum output_type
+        json output_schema
         boolean is_active
-        string identity_subject
+        datetime created_at
+        datetime updated_at
     }
-    AgentInstance {
+    AgentSession {
         uuid id
         uuid agent_type_id
+        uuid triggered_by_user_id
+        json input_data
         enum status
-        string session_handle
-        string initiator_subject
-    }
-    AgentSkillAssignment {
-        uuid id
-        uuid agent_type_id
-        uuid skill_id
+        datetime started_at
+        datetime completed_at
+        json output_data
+        json conversation_history
+        string error_message
+        datetime created_at
     }
 
-    AgentType ||--o{ AgentInstance : "spawns"
-    AgentType ||--o{ AgentSkillAssignment : "has"
-    AgentType }o--o| Sop : "bound to"
-    AgentSkillAssignment }o--|| Skill : "assigns"
+    AgentRole ||--o{ AgentRoleSOP : "grants access to"
+    AgentRole ||--o{ AgentRoleSkill : "grants access to"
+    AgentRole ||--o{ AgentRoleIdentity : "can be assumed by"
+    AgentRole ||--o{ AgentRoleMcpSession : "provides MCP context via"
+    AgentIdentity ||--o{ AgentRoleIdentity : "can assume"
+    AgentPlan {
+        uuid id
+        uuid agent_type_id
+        json plan_steps
+        json topology
+        enum generation_status
+        string generation_error
+        string agent_config_hash
+        datetime generated_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    AgentType }o--|| AgentRole : "governed by"
+    AgentType }o--|| AgentIdentity : "authenticates as"
+    AgentSession }o--|| AgentType : "executes"
+    AgentType ||--o| AgentPlan : "has current plan"
 ```
 
 **Source**: `backend/app/db/models/agents.py`
@@ -427,13 +504,16 @@ erDiagram
     Sop ||--o{ SopStep : "composed of"
     SopStep }o--o| Skill : "executes"
     SopStep }o--o| AgentType : "delegates to"
-    AgentType }o--o| Sop : "bound to"
-    AgentType ||--o{ AgentSkillAssignment : "has"
-    AgentSkillAssignment }o--|| Skill : "assigns"
-    AgentType ||--o{ AgentInstance : "spawns"
-    AgentInstance ||--o{ ConversationSession : "handles"
+    AgentType }o--|| AgentRole : "governed by"
+    AgentRole ||--o{ AgentRoleSOP : "grants access to"
+    AgentRoleSOP }o--|| Sop : "references"
+    AgentRole ||--o{ AgentRoleSkill : "grants access to"
+    AgentRoleSkill }o--|| Skill : "references"
+    AgentRole ||--o{ AgentRoleMcpSession : "provides MCP context via"
+    AgentRoleMcpSession }o--|| McpSession : "references"
+    AgentType }o--|| AgentIdentity : "authenticates as"
+    AgentType ||--o{ AgentSession : "executes via"
     AgentType ||--o{ ResultRecord : "produces"
-    AgentInstance ||--o{ ResultRecord : "produces"
     ScheduledJob ||--o{ JobExecution : "triggers"
     Role ||--o{ PolicyStatement : "contains"
     PlatformUser }o--o{ Role : "assigned via"

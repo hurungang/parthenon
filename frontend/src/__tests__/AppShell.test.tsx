@@ -57,7 +57,7 @@ describe('AppShell', () => {
   it('renders Agents nav item', async () => {
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
-    const items = screen.getAllByText('nav.agents')
+    const items = screen.getAllByText('nav.aiAgent')
     expect(items.length).toBeGreaterThanOrEqual(1)
   })
 

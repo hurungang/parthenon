@@ -95,3 +95,59 @@ Document the following before re-attempting the deployment:
 Update the relevant deployment documentation if the runbook or environment variable reference contributed to the failure.
 
 Only re-attempt the deployment after the root cause is understood and the fix is in place.
+
+---
+
+## Change-Specific Rollback: Agent Runtime with Gateway
+
+Use this section when rolling back the **Implement Agent Runtime with Gateway** deployment. Execute steps R1–R5 in order after completing Steps 1–2 of the general procedure above.
+
+### Trigger Conditions
+
+Initiate this rollback if any of the following occur after deploying this change:
+
+- Platform API health check fails and cannot be restored by restart
+- `agent-session-worker` fails to dequeue sessions and the Redis queue (`AGENT_SESSION_QUEUE_NAME`) length grows unbounded
+- LangGraph dependency issues or state machine errors prevent session execution
+- Database migration `df2225d787c5` caused unexpected constraint violations or data loss
+- The Agent Gateway (Communication Hub) returns 5xx errors for all inbound lifecycle requests
+
+### Step R1 — Revert Communication Hub
+
+Deploy the previous `communication-hub` image. Remove `AGENT_GATEWAY_BASE_URL` and `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` from its environment.
+
+**Completion condition:** Communication Hub health check passes; WebSocket messaging for existing conversations is restored.
+
+### Step R2 — Stop Agent Session Worker
+
+Stop and remove the `agent-session-worker` container.
+
+**Completion condition:** No worker containers are running. Sessions remaining in the Redis list at `AGENT_SESSION_QUEUE_NAME` will stay queued; discard or replay them after the incident is resolved.
+
+### Step R3 — Revert Platform API
+
+Deploy the previous `platform-api` image. Remove all `AGENT_RUNTIME_*`, `AGENT_SESSION_*`, `AGENT_PERMISSION_*`, and `AGENT_GATEWAY_*` environment variables.
+
+**Completion condition:** Platform API health check passes; existing endpoints respond normally.
+
+### Step R4 — Database Rollback (conditional)
+
+Run only if migration `df2225d787c5` must be reversed.
+
+```bash
+alembic downgrade -1
+```
+
+> **Warning — data loss:** This will drop the `agent_role`, `agent_role_sop`, `agent_role_skill`, `agent_identity`, and `agent_session` tables and revert `agent_type` column changes. Any data entered via the new agent admin UI will be permanently lost. Confirm with the team before executing.
+
+**Completion condition:** `alembic current` reports the previous migration ID. The `agent_role` table does not exist. The `agent_type` table has its original columns (`sop_id`, `identity_subject`, `system_prompt`, `mode`).
+
+### Step R5 — Flush Permission Cache
+
+Remove all Agent Permission Manager cache keys from Redis to prevent stale data from affecting a subsequent redeployment attempt.
+
+```bash
+redis-cli --scan --pattern 'agentperm:*' | xargs redis-cli del
+```
+
+**Completion condition:** No keys matching `agentperm:*` exist in Redis.

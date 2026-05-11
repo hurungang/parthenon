@@ -18,6 +18,7 @@ from app.db.models.user_role import UserRole
 from app.db.session import DbSession
 from app.schemas.perm_roles import (
     PermRoleCreate,
+    PermRoleDetailRead,
     PermRoleRead,
     PermRoleUpdate,
     PolicyStatementCreate,
@@ -79,12 +80,12 @@ async def create_role(
     return role
 
 
-@RolesRouter.get("/{role_id}", response_model=PermRoleRead)
+@RolesRouter.get("/{role_id}", response_model=PermRoleDetailRead)
 async def get_role(
     role_id: uuid.UUID,
     db: DbSession,
     _: dict = Depends(require_permission(RT_PERMISSIONS, "read")),
-) -> PermRoleRead:
+) -> PermRoleDetailRead:
     """Get a single role by ID with its policy statements. Admin only."""
     result = await db.execute(
         select(Role)
@@ -325,6 +326,11 @@ async def clone_role(
     _: dict = Depends(require_permission(RT_PERMISSIONS, "manage")),
 ) -> PermRoleRead:
     """Clone a role, copying all policy statements. Admin only."""
+    source = await db.get(Role, role_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source role not found.")
+
+    # Load full source with policy_statements for copying
     source_result = await db.execute(
         select(Role)
         .where(Role.id == role_id)
@@ -334,9 +340,7 @@ async def clone_role(
             selectinload(Role.policy_statements).selectinload(PolicyStatement.tag_conditions),
         )
     )
-    source = source_result.scalar_one_or_none()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source role not found.")
+    source = source_result.scalar_one()
 
     existing = await db.execute(select(Role).where(Role.name == body.name))
     if existing.scalar_one_or_none() is not None:

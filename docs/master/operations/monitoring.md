@@ -35,6 +35,22 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Telemetry System** | `GET /api/v1/telemetry/config` response code | `4xx`/`5xx` responses cause the frontend to fall back to a no-op OTEL provider — browser spans will not be sent |
 | **Telemetry System** | Trace throughput in Jaeger | A sudden drop to zero may indicate exporter misconfiguration or Collector unavailability |
 | **Telemetry System** | Prometheus scrape target `otel-collector:8889` (`up` metric) | Gaps indicate a Collector pipeline stall; metrics delivery is interrupted |
+| **Agent Session Queue** | `agent.session.queue_depth` | Number of sessions in `queued` state; growing depth indicates dispatcher stall or concurrency saturation |
+| **Agent Session Queue** | `agent.session.dispatch_latency` (p50, p99) | Time from session enqueue to first dispatch attempt; p99 > 30 s triggers alert |
+| **Agent Session Queue** | `agent.session.failures_total` | Sessions reaching the `failed` terminal state; rate > 5/min is critical |
+| **Agent Session Queue** | `agent.session.timeouts_total` | Sessions that exceeded the configured execution timeout; any sustained non-zero rate requires attention |
+| **Agent Session Queue** | `agent.session.completed_total` | Sessions reaching `completed`; used to derive the success rate: `completed / (completed + failed)` — alert if < 0.95 |
+| **Agent Runtime** | `agent.runtime.active_sessions` | Sessions currently in `running` state; alert if it exceeds the configured `max_concurrent_sessions` |
+| **Agent Runtime** | `agent.runtime.execution_duration` (p50, p99) | Total wall-clock time per session from dispatch to completion; p99 > configured session timeout triggers alert |
+| **Agent Runtime** | `agent.runtime.permission_denials_total` | Tool call attempts denied by the Permission Manager; any sustained non-zero rate requires role assignment review |
+| **Agent Runtime** | `agent.runtime.llm_call_duration` (p99) | Time waiting for LLM inference response; p99 > 60 s indicates LLM provider latency issues |
+| **Agent Runtime** | `agent.runtime.langgraph_node_transitions_total` | Total LangGraph state node transitions across all sessions; used for operational diagnostics |
+| **Agent Runtime** | `agent.runtime.langgraph_errors_total` | LangGraph state machine errors (invalid transitions, missing nodes); any non-zero rate requires investigation |
+| **Agent Permission Manager** | `agent.permission.cache_hits_total` | Permission resolution requests served from LRU cache |
+| **Agent Permission Manager** | `agent.permission.cache_misses_total` | Permission resolution requests that required a full DB query |
+| **Agent Permission Manager** | `agent.permission.cache_hit_rate` (derived) | `cache_hits / (cache_hits + cache_misses)`; below 80% indicates frequent role mutations or undersized cache |
+| **Agent Permission Manager** | `agent.permission.resolution_duration` (p99) | Time to resolve the full SOP → Skill → MCP tool graph; p99 > 500 ms triggers alert |
+| **Agent Identity** | `agent.identity.token_refresh_failures_total` | Failed OIDC token refresh attempts for agent client credentials; any sustained rate is critical |
 
 ---
 
@@ -58,6 +74,18 @@ Low-level component health. Include: PostgreSQL active connection count, Postgre
 ### Telemetry System
 Telemetry pipeline health. Include: OTEL Collector health endpoint status over time, backend `[TELEMETRY ERROR]` log event count, `GET /api/v1/telemetry/config` error rate, file exporter disk usage (when file exporter is active), and trace throughput in Jaeger as a time series.
 
+### Agent Runtime Dashboard
+Agent runtime execution health. Add alongside the existing Agent Engine and MCP Hub dashboards. Panels:
+
+- **Session Queue Depth** — `agent.session.queue_depth` as a time series with a horizontal threshold line at the alert level.
+- **Session Throughput** — `agent.session.completed_total` and `agent.session.failures_total` as stacked bars; failure rate as a percentage line overlay.
+- **Session Dispatch Latency** — `agent.session.dispatch_latency` p50 and p99 as a dual-line time series.
+- **Active Runtime Sessions** — `agent.runtime.active_sessions` gauge with max-concurrent marker.
+- **Execution Duration** — `agent.runtime.execution_duration` p99 histogram.
+- **LangGraph Node Transitions** — `agent.runtime.langgraph_node_transitions_total` counter rate for operational insights.
+- **Permission Cache Hit Rate** — Derived from `agent.permission.cache_hits_total` and `agent.permission.cache_misses_total`; alert annotation when below 80%.
+- **Permission Denials** — `agent.runtime.permission_denials_total` rate; alert annotations when non-zero.
+
 ---
 
 ## Alerts to Configure
@@ -77,3 +105,15 @@ Telemetry pipeline health. Include: OTEL Collector health endpoint status over t
 | Frontend config endpoint error | `GET /api/v1/telemetry/config` returning 5xx for > 5 minutes | Warning |
 
 Route Warning alerts to the operations on-call channel. Route Critical alerts to the on-call engineer with immediate escalation.
+
+### Agent Runtime Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `AgentSessionQueueBacklog` | `agent.session.queue_depth > 50` for 5 min | Warning | Check `SessionDispatcher` health; verify backend process is running |
+| `AgentSessionFailureSpike` | `rate(agent.session.failures_total) > 5/min` for 2 min | Critical | Inspect session failure logs; check OIDC and MCP connectivity |
+| `AgentPermissionDenialDetected` | `rate(agent.runtime.permission_denials_total) > 0` for 5 min | Warning | Review agent role assignments; check for misconfigured role |
+| `AgentPermissionCacheDegraded` | `agent.permission.cache_hit_rate < 0.80` for 10 min | Warning | Check for unusual role mutation frequency; consider increasing LRU cache size |
+| `AgentIdentityTokenFailure` | `rate(agent.identity.token_refresh_failures_total) > 0` for 2 min | Critical | Verify OIDC provider connectivity; check agent client credentials in identity provider |
+| `AgentSessionTimeout` | `rate(agent.session.timeouts_total) > 0` for 5 min | Warning | Inspect timed-out sessions; check LLM provider latency and MCP server responsiveness |
+| `LangGraphStateErrors` | `rate(agent.runtime.langgraph_errors_total) > 0` for 2 min | Critical | Inspect LangGraph state machine errors; validate agent type configurations |

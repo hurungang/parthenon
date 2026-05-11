@@ -22,20 +22,22 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
-import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import { useAgentTypes, useAgentInstances, useTerminateInstance } from '../../hooks/useAgentTypes'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import { useAgentTypes } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import apiClient from '../../api/apiClient'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AgentTypeForm,
   defaultAgentTypeFormValues,
   type AgentTypeFormValues,
 } from './AgentTypeForm'
 import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
-import type { AgentType } from '../../types'
+import PlanPreviewModal from '../../components/agents/PlanPreviewModal'
+import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
+import type { AgentIdentity, AgentPlan, AgentRole, AgentType } from '../../types'
 
 /**
  * Agent management page — agent type list, creation/editing, active instance table,
@@ -46,16 +48,35 @@ export function AgentManagementPage() {
   const navigate = useNavigate()
   const { data: agentTypes, isLoading, error } = useAgentTypes()
   const queryClient = useQueryClient()
-  const terminateInstance = useTerminateInstance()
-  const [selectedType, setSelectedType] = useState<AgentType | null>(null)
+
+  // Role and identity name resolution for table columns
+  const { data: allRoles } = useQuery<AgentRole[]>({
+    queryKey: ['agents', 'roles'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentRole[]>('/agents/roles')
+      return data
+    },
+  })
+  const { data: allIdentities } = useQuery<AgentIdentity[]>({
+    queryKey: ['agents', 'identities'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
+      return data
+    },
+  })
+  const roleMap = new Map((allRoles ?? []).map((r) => [r.id, r.name]))
+  const identityMap = new Map((allIdentities ?? []).map((i) => [i.id, i.name]))
+  const [detailsDialogTypeId, setDetailsDialogTypeId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [editType, setEditType] = useState<AgentType | null>(null)
   const [form, setForm] = useState<AgentTypeFormValues>(defaultAgentTypeFormValues)
   const [launchType, setLaunchType] = useState<AgentType | null>(null)
   const [launchOpen, setLaunchOpen] = useState(false)
-
-  const { data: instances } = useAgentInstances(selectedType?.id ?? '')
+  const [planData, setPlanData] = useState<AgentPlan | null>(null)
+  const [planModalOpen, setPlanModalOpen] = useState(false)
+  const [planAgentTypeName, setPlanAgentTypeName] = useState('')
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null)
 
   const handleOpenCreate = () => {
     setEditType(null)
@@ -103,21 +124,24 @@ export function AgentManagementPage() {
         output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
         primary_sop_id: form.input_type === 'none' ? (form.primary_sop_id || null) : null,
       }
+      let savedAgentType: AgentType
       if (editType) {
-        await apiClient.put(`/agents/types/${editType.id}`, body)
+        const res = await apiClient.put<AgentType>(`/agents/types/${editType.id}`, body)
+        savedAgentType = res.data
       } else {
-        await apiClient.post('/agents/types', body)
+        const res = await apiClient.post<AgentType>('/agents/types', body)
+        savedAgentType = res.data
       }
       setDialogOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+      // Show plan preview if a plan was generated
+      if (savedAgentType.plan) {
+        setPlanData(savedAgentType.plan)
+        setPlanAgentTypeName(savedAgentType.name)
+        setPlanModalOpen(true)
+      }
     } catch (err) {
       setDialogError(err)
-    }
-  }
-
-  const handleTerminate = async (instanceId: string) => {
-    if (confirm(t('agents.terminateConfirm'))) {
-      await terminateInstance.mutateAsync(instanceId)
     }
   }
 
@@ -126,11 +150,16 @@ export function AgentManagementPage() {
     setLaunchOpen(true)
   }
 
-  const statusColor = (status: string) => {
-    if (status === 'active') return 'success'
-    if (status === 'error') return 'error'
-    if (status === 'closed') return 'default'
-    return 'warning'
+  const handlePreviewPlan = async (at: AgentType) => {
+    setPreviewLoading(at.id)
+    try {
+      const res = await apiClient.get<AgentType>(`/agents/types/${at.id}`)
+      setPlanData(res.data.plan ?? null)
+      setPlanAgentTypeName(res.data.name)
+      setPlanModalOpen(true)
+    } finally {
+      setPreviewLoading(null)
+    }
   }
 
   return (
@@ -155,6 +184,8 @@ export function AgentManagementPage() {
                 <TableCell>{t('agents.types.outputType')}</TableCell>
                 <TableCell>{t('agents.llmModel')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
+                <TableCell>{t('agents.types.role')}</TableCell>
+                <TableCell>{t('agents.types.identity')}</TableCell>
                 <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
@@ -162,8 +193,8 @@ export function AgentManagementPage() {
               {(agentTypes ?? []).map((at) => (
                 <TableRow
                   key={at.id}
-                  selected={selectedType?.id === at.id}
-                  onClick={() => setSelectedType(at)}
+                  selected={detailsDialogTypeId === at.id}
+                  onClick={() => setDetailsDialogTypeId(at.id)}
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell>{at.name}</TableCell>
@@ -181,6 +212,16 @@ export function AgentManagementPage() {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {at.role_id ? (roleMap.get(at.role_id) ?? '—') : '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {at.identity_id ? (identityMap.get(at.identity_id) ?? '—') : '—'}
+                    </Typography>
+                  </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Box display="flex" gap={0.5}>
                       <Tooltip title={t('agents.types.launch')}>
@@ -193,6 +234,21 @@ export function AgentManagementPage() {
                           <PlayArrowIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      {at.plan && (
+                        <Tooltip title={t('agents.plan.previewButton')}>
+                          <IconButton
+                            size="small"
+                            color="secondary"
+                            aria-label={t('agents.plan.previewButton')}
+                            onClick={() => void handlePreviewPlan(at)}
+                            disabled={previewLoading === at.id}
+                          >
+                            {previewLoading === at.id
+                              ? <CircularProgress size={16} color="inherit" />
+                              : <VisibilityIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title={t('app.edit')}>
                         <IconButton size="small" aria-label={t('app.edit')} onClick={() => handleOpenEdit(at)}>
                           <EditIcon fontSize="small" />
@@ -212,58 +268,15 @@ export function AgentManagementPage() {
         </TableContainer>
       )}
 
-      {/* Active instances for selected agent type */}
-      {selectedType && (
-        <Box>
-          <Typography variant="h6" mb={2}>
-            {t('agents.instances')} — {selectedType.name}
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Instance ID</TableCell>
-                  <TableCell>{t('app.status')}</TableCell>
-                  <TableCell>{t('app.createdAt')}</TableCell>
-                  <TableCell>{t('app.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(instances ?? []).map((inst) => (
-                  <TableRow key={inst.id}>
-                    <TableCell><code>{inst.id.substring(0, 8)}…</code></TableCell>
-                    <TableCell>
-                      <Chip
-                        label={inst.status}
-                        color={statusColor(inst.status) as 'success' | 'error' | 'default' | 'warning'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{new Date(inst.created_at).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Tooltip title={t('agents.terminate')}>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleTerminate(inst.id)}
-                          disabled={inst.status === 'closed'}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(instances ?? []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">{t('app.noData')}</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
+      {/* Agent Type Details Dialog */}
+      <AgentTypeDetailsDialog
+        open={detailsDialogTypeId !== null}
+        agentTypeId={detailsDialogTypeId}
+        onClose={() => {
+          setDetailsDialogTypeId(null)
+          void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+        }}
+      />
 
       {/* Create / Edit Agent Type Dialog */}
       <Dialog
@@ -310,6 +323,13 @@ export function AgentManagementPage() {
           }}
         />
       )}
+
+      <PlanPreviewModal
+        open={planModalOpen}
+        onClose={() => setPlanModalOpen(false)}
+        plan={planData}
+        agentTypeName={planAgentTypeName}
+      />
     </Box>
   )
 }

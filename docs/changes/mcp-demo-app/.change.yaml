@@ -1,0 +1,16 @@
+name: mcp-demo-app
+created_at: 2026-05-11
+status: in-progress
+scope:
+  has_ui_changes: false
+  has_architecture_changes: true
+  has_db_changes: false
+  has_deployment_changes: true
+  has_operations_changes: true
+agents_complete:
+  product_owner: false
+  ux_specialist: skipped
+  architect: false
+  database_designer: skipped
+  developer: false
+  tester: false

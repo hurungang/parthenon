@@ -89,3 +89,74 @@ export async function mockIdentityStatus(page: Page) {
     })
   )
 }
+
+/**
+ * Login via UI by navigating to Keycloak login page and filling credentials.
+ * Used for tests that need real authentication (e.g., permission error tests).
+ * 
+ * This function does NOT mock any API endpoints - it relies entirely on the real backend
+ * for the OIDC flow to work correctly.
+ * 
+ * @param page - Playwright page object
+ * @param username - Keycloak username (optional, defaults to E2E_TEST_USERNAME env var or 'testuser')
+ * @param password - Keycloak password (optional, defaults to E2E_TEST_PASSWORD env var or 'testuser')
+ */
+export async function loginViaUI(
+  page: Page,
+  username: string = process.env.E2E_TEST_USERNAME || 'testuser',
+  password: string = process.env.E2E_TEST_PASSWORD || 'testuser'
+) {
+  // Do NOT mock anything - we need real backend for OIDC flow
+  
+  // Navigate to app root - should redirect to /login
+  await page.goto('/')
+  await page.waitForLoadState('networkidle')
+  
+  // Wait for /login page to load
+  await page.waitForURL('**/login', { timeout: 5000 })
+  
+  // Click the "Sign In" button to initiate OIDC redirect
+  await page.click('button:has-text("Sign In")')
+  
+  // Wait for Keycloak login page (OIDC redirect)
+  await page.waitForURL('**/realms/**/protocol/openid-connect/**', { timeout: 15000 })
+  
+  // Fill in credentials
+  await page.fill('input[name="username"]', username)
+  await page.fill('input[name="password"]', password)
+  
+  // Submit the form by pressing Enter (more reliable than clicking submit button)
+  await page.press('input[name="password"]', 'Enter')
+  
+  // Wait a moment for Keycloak to process
+  await page.waitForTimeout(1000)
+  
+  console.log('After Enter keypress, URL:', page.url())
+  
+  // Wait for redirect to app (callback or main page)
+  // This should happen automatically after Keycloak processes the auth
+  await page.waitForURL((url) => url.href.includes('localhost:5173'), { timeout: 30000 })
+  
+  console.log('Redirected to app:', page.url())
+  
+  // If we're at /callback, wait for the final redirect to dashboard/agents/mcp
+  if (page.url().includes('/callback')) {
+    console.log('At /callback, waiting for final redirect...')
+    await page.waitForURL(/^\/(dashboard|agents|mcp)/, { timeout: 15000 })
+  }
+  
+  console.log('Login complete. Final URL:', page.url())
+}
+
+/**
+ * Get test credentials from environment variables.
+ * Used by test suites that need real authentication.
+ * 
+ * @returns Object with username and password
+ */
+export function getTestCredentials() {
+  return {
+    username: process.env.E2E_TEST_USERNAME || 'testuser',
+    password: process.env.E2E_TEST_PASSWORD || 'testuser'
+  }
+}

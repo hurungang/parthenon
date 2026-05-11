@@ -1,0 +1,1703 @@
+
+Running 324 tests using 1 worker
+
+  Γ£ÿ    1 [chromium] ΓÇ║ tests\access-control.spec.ts:45:7 ΓÇ║ Permission Denied: Snackbar ΓÇ║ 403 on agent create triggers permission-denied snackbar (10.8s)
+  Γ£ÿ    2 [chromium] ΓÇ║ tests\access-control.spec.ts:89:7 ΓÇ║ Permission Denied: Snackbar ΓÇ║ 403 on MCP server delete triggers snackbar with resource ID context (6.0s)
+  Γ£ÿ    3 [chromium] ΓÇ║ tests\access-control.spec.ts:126:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ clicking Request Access in snackbar opens pre-filled modal (9.9s)
+  Γ£ÿ    4 [chromium] ΓÇ║ tests\access-control.spec.ts:178:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ user can submit access request with justification and sees confirmation (10.2s)
+  Γ£ÿ    5 [chromium] ΓÇ║ tests\access-control.spec.ts:246:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ submitting access request without justification shows validation error (9.9s)
+  Γ£ô    6 [chromium] ΓÇ║ tests\access-control.spec.ts:292:7 ΓÇ║ AccessDeniedPage ΓÇ║ renders at /access-denied with lock icon and action buttons (2.5s)
+  Γ£ô    7 [chromium] ΓÇ║ tests\access-control.spec.ts:320:7 ΓÇ║ AccessDeniedPage ΓÇ║ renders permission details when router state is injected (2.6s)
+  Γ£ô    8 [chromium] ΓÇ║ tests\access-control.spec.ts:361:7 ΓÇ║ AccessDeniedPage ΓÇ║ Request Access button on AccessDeniedPage opens RequestPermissionModal (2.3s)
+  Γ£ÿ    9 [chromium] ΓÇ║ tests\access-control.spec.ts:433:7 ΓÇ║ Group-Role Assignment ΓÇ║ ManageGroupRoles dialog opens and shows assigned roles (9.3s)
+  Γ£ÿ   10 [chromium] ΓÇ║ tests\access-control.spec.ts:482:7 ΓÇ║ Group-Role Assignment ΓÇ║ Admin can assign a role to a group and dialog reflects the change (9.3s)
+  Γ£ÿ   11 [chromium] ΓÇ║ tests\access-control.spec.ts:554:7 ΓÇ║ Group-Role Assignment ΓÇ║ Admin can remove a role from a group (8.9s)
+  Γ£ÿ   12 [chromium] ΓÇ║ tests\access-control.spec.ts:613:7 ΓÇ║ Group-Role Assignment ΓÇ║ Non-admin attempting Manage Roles sees permission error with actual details (9.2s)
+  Γ£ÿ   13 [chromium] ΓÇ║ tests\access-control.spec.ts:662:7 ΓÇ║ Error Message Detail ΓÇ║ API error detail from backend is shown verbatim ΓÇö not a generic fallback (8.8s)
+  Γ£ÿ   14 [chromium] ΓÇ║ tests\access-control.spec.ts:737:7 ΓÇ║ Error Message Detail ΓÇ║ 403 permission-denied snackbar shows resource type, action, and ID ΓÇö not just "Access Denied" (10.4s)
+  Γ£ô   15 [chromium] ΓÇ║ tests\access-control.spec.ts:770:7 ΓÇ║ Error Message Detail ΓÇ║ 500 server error shows most specific available message rather than empty (3.9s)
+  Γ£ô   16 [chromium] ΓÇ║ tests\access-control.spec.ts:857:7 ΓÇ║ Group-Optional Access Request Flow ΓÇ║ user with no groups sees informational alert in request dialog and can submit with justification only (3.6s)
+  Γ£ô   17 [chromium] ΓÇ║ tests\access-control.spec.ts:931:7 ΓÇ║ Group-Optional Access Request Flow ΓÇ║ admin sees "Unassigned" chip in pending requests table for group-less request (2.6s)
+  Γ£ô   18 [chromium] ΓÇ║ tests\access-control.spec.ts:946:7 ΓÇ║ Group-Optional Access Request Flow ΓÇ║ admin can assign a group and approve a group-less request (3.9s)
+  Γ£ô   19 [chromium] ΓÇ║ tests\access-control.spec.ts:1038:7 ΓÇ║ Group-Optional Access Request Flow ΓÇ║ admin cannot approve a group-less request without selecting a group (3.2s)
+  Γ£ô   20 [chromium] ΓÇ║ tests\access-control.spec.ts:1077:7 ΓÇ║ Group-Optional Access Request Flow ΓÇ║ user's My Requests list shows assigned group name after approval (2.7s)
+  Γ£ô   21 [chromium] ΓÇ║ tests\accessibility.spec.ts:57:7 ΓÇ║ Accessibility ΓÇ║ Color contrast meets WCAG AA standards (1.9s)
+  Γ£ô   22 [chromium] ΓÇ║ tests\accessibility.spec.ts:73:7 ΓÇ║ Accessibility ΓÇ║ Focus indicators are visible (1.4s)
+  Γ£ô   23 [chromium] ΓÇ║ tests\accessibility.spec.ts:101:7 ΓÇ║ Accessibility ΓÇ║ No critical accessibility violations (1.9s)
+  Γ£ô   24 [chromium] ΓÇ║ tests\accessibility.spec.ts:133:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Raw log toggle has accessible label via FormControlLabel (2.8s)
+  Γ£ô   25 [chromium] ΓÇ║ tests\accessibility.spec.ts:147:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible working steps section has aria-expanded attribute (2.9s)
+  Γ£ô   26 [chromium] ΓÇ║ tests\accessibility.spec.ts:160:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section is keyboard-navigable with Tab (3.0s)
+  Γ£ô   27 [chromium] ΓÇ║ tests\accessibility.spec.ts:176:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Enter key (2.8s)
+  Γ£ô   28 [chromium] ΓÇ║ tests\accessibility.spec.ts:191:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Space key (3.0s)
+  Γ£ô   29 [chromium] ΓÇ║ tests\accessibility.spec.ts:206:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Raw log block has ARIA label when visible (3.0s)
+  Γ£ô   30 [chromium] ΓÇ║ tests\accessibility.spec.ts:221:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Copy button has ARIA label when in raw mode (3.0s)
+  Γ£ô   31 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:21:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Mocked ΓÇ║ health endpoint reports identity provider status (1.7s)
+  Γ£ô   32 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:39:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Mocked ΓÇ║ agent identities page loads when realm is initialized (mocked) (2.3s)
+  Γ£ô   33 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:67:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Mocked ΓÇ║ realm name column displays configured agent realm (2.3s)
+  Γ£ô   34 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:116:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Real Keycloak Integration ΓÇ║ agent realm openid-configuration is reachable after bootstrap (222ms)
+  Γ£ô   35 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:138:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Real Keycloak Integration ΓÇ║ user realm openid-configuration is still reachable after agent realm bootstrap (450ms)
+  -   36 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:155:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Real Keycloak Integration ΓÇ║ backend health reports agent_realm_initialized: true after bootstrap
+  Γ£ô   37 [chromium] ΓÇ║ tests\agent-logs.spec.ts:160:7 ΓÇ║ Agent Log Viewer ΓÇ║ LogViewer renders on completed session page (3.0s)
+  Γ£ô   38 [chromium] ΓÇ║ tests\agent-logs.spec.ts:169:7 ΓÇ║ Agent Log Viewer ΓÇ║ Summary panel displays identity and role from system instruction (3.6s)
+  Γ£ô   39 [chromium] ΓÇ║ tests\agent-logs.spec.ts:180:7 ΓÇ║ Agent Log Viewer ΓÇ║ Summary panel displays SOPs/skills as chips (3.3s)
+  Γ£ô   40 [chromium] ΓÇ║ tests\agent-logs.spec.ts:193:7 ΓÇ║ Agent Log Viewer ΓÇ║ Summary panel shows success result badge for completed session (3.5s)
+  Γ£ô   41 [chromium] ΓÇ║ tests\agent-logs.spec.ts:203:7 ΓÇ║ Agent Log Viewer ΓÇ║ "View Execution Logs" button/dialog is NOT present (regression check) (3.0s)
+  Γ£ô   42 [chromium] ΓÇ║ tests\agent-logs.spec.ts:214:7 ΓÇ║ Agent Log Viewer ΓÇ║ Agent Working Steps section is collapsed by default (3.6s)
+  Γ£ô   43 [chromium] ΓÇ║ tests\agent-logs.spec.ts:227:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand working steps section reveals step rows (3.6s)
+  Γ£ô   44 [chromium] ΓÇ║ tests\agent-logs.spec.ts:247:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse working steps section hides step rows (4.3s)
+  Γ£ô   45 [chromium] ΓÇ║ tests\agent-logs.spec.ts:275:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand individual step detail block (3.8s)
+  Γ£ô   46 [chromium] ΓÇ║ tests\agent-logs.spec.ts:302:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse individual step detail block (3.2s)
+  Γ£ô   47 [chromium] ΓÇ║ tests\agent-logs.spec.ts:331:7 ΓÇ║ Agent Log Viewer ΓÇ║ Toggle to raw mode hides friendly panels (3.2s)
+  Γ£ô   48 [chromium] ΓÇ║ tests\agent-logs.spec.ts:347:7 ΓÇ║ Agent Log Viewer ΓÇ║ Toggle to raw mode shows monospace raw log block (2.9s)
+  Γ£ô   49 [chromium] ΓÇ║ tests\agent-logs.spec.ts:366:7 ΓÇ║ Agent Log Viewer ΓÇ║ Raw mode copy button is visible (2.9s)
+  Γ£ô   50 [chromium] ΓÇ║ tests\agent-logs.spec.ts:381:7 ΓÇ║ Agent Log Viewer ΓÇ║ Toggle back to friendly mode restores panels (3.0s)
+  Γ£ô   51 [chromium] ΓÇ║ tests\agent-logs.spec.ts:400:7 ΓÇ║ Agent Log Viewer ΓÇö Edge Cases ΓÇ║ Empty log entries ΓÇö no crash (2.7s)
+  Γ£ô   52 [chromium] ΓÇ║ tests\agent-logs.spec.ts:436:7 ΓÇ║ Agent Log Viewer ΓÇö Edge Cases ΓÇ║ Special characters in log messages ΓÇö displays without XSS (3.0s)
+  Γ£ô   53 [chromium] ΓÇ║ tests\agent-logs.spec.ts:473:7 ΓÇ║ Agent Log Viewer ΓÇö Edge Cases ΓÇ║ No execution logs ΓÇö LogViewer not rendered (2.9s)
+  Γ£ô   54 [chromium] ΓÇ║ tests\agent-management.spec.ts:48:7 ΓÇ║ Agent Management ΓÇ║ Agent management page renders without crashing (2.0s)
+  Γ£ô   55 [chromium] ΓÇ║ tests\agent-management.spec.ts:56:7 ΓÇ║ Agent Management ΓÇ║ Agent management page has content (2.4s)
+  Γ£ô   56 [chromium] ΓÇ║ tests\agent-management.spec.ts:63:7 ΓÇ║ Agent Management ΓÇ║ Agent management page has at least one button (2.3s)
+  Γ£ô   57 [chromium] ΓÇ║ tests\agent-management.spec.ts:70:7 ΓÇ║ Agent Management ΓÇ║ displays list of agent types from API (2.2s)
+  Γ£ô   58 [chromium] ΓÇ║ tests\agent-management.spec.ts:77:7 ΓÇ║ Agent Management ΓÇ║ displays input_type for each agent type (2.3s)
+  Γ£ô   59 [chromium] ΓÇ║ tests\agent-management.spec.ts:84:7 ΓÇ║ Agent Management ΓÇ║ shows create agent type button and opens dialog on click (2.6s)
+  Γ£ô   60 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:182:7 ΓÇ║ AI Agent nav group ΓÇ║ shows AI Agent nav group in sidebar (2.9s)
+  Γ£ô   61 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:191:7 ΓÇ║ AI Agent nav group ΓÇ║ nav group is expanded by default and shows child items (2.8s)
+  Γ£ô   62 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:208:7 ΓÇ║ AI Agent nav group ΓÇ║ collapses and expands nav group on header click (3.6s)
+  Γ£ô   63 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:231:7 ΓÇ║ AI Agent nav group ΓÇ║ clicking Agent Executions navigates to /agents/executions (3.2s)
+  Γ£ô   64 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:246:7 ΓÇ║ AI Agent nav group ΓÇ║ clicking Agent Roles navigates to /agents/roles (2.9s)
+  Γ£ô   65 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:257:7 ΓÇ║ AI Agent nav group ΓÇ║ clicking Agent Identities navigates to /agents/identities (2.8s)
+  Γ£ô   66 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:270:7 ΓÇ║ Agent Executions page ΓÇ║ navigating to /agents/instances redirects to /agents/executions (3.0s)
+  Γ£ô   67 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:278:7 ΓÇ║ Agent Executions page ΓÇ║ Agent Executions page shows the page title (2.7s)
+  Γ£ô   68 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:289:7 ΓÇ║ Agent Executions page ΓÇ║ agent type filter dropdown is visible on executions page (2.9s)
+  Γ£ô   69 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:298:7 ΓÇ║ Agent Executions page ΓÇ║ selecting agent type filter refetches sessions (3.4s)
+  Γ£ô   70 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:333:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ clicking agent type row opens details dialog (3.1s)
+  Γ£ô   71 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:348:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ dialog shows agent type name and Details tab (3.0s)
+  Γ£ô   72 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:369:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ dialog Details tab shows agent metadata (3.1s)
+  Γ£ô   73 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:385:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ switching to Plan Preview tab shows no-plan placeholder when plan is null (3.2s)
+  Γ£ô   74 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:403:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ Plan Preview tab shows plan steps when plan is populated (3.0s)
+  Γ£ô   75 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:427:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ Execution Logs tab shows sessions filtered by agent type (3.1s)
+  Γ£ô   76 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:441:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ "View All Executions" button opens executions dialog (3.3s)
+  Γ£ô   77 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:471:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ clicking identity name in Details tab opens identity view dialog (3.1s)
+  Γ£ô   78 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:489:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ identity view dialog has Edit button that navigates to identities page (3.3s)
+  Γ£ô   79 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:516:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ clicking role name in Details tab opens role view dialog (3.2s)
+  Γ£ô   80 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:531:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ role view dialog has Edit button that opens role edit form (3.3s)
+  Γ£ô   81 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:556:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ closing dialog via close button works (3.4s)
+  Γ£ô   82 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:574:7 ΓÇ║ Nav menu order ΓÇ║ Agent Roles and Agent Identities appear above Agent Types in the nav (2.9s)
+  Γ£ô   83 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:605:7 ΓÇ║ Agent Types table columns ΓÇ║ Agent Types table has Role and Identity column headers (2.7s)
+  Γ£ô   84 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:616:7 ΓÇ║ Agent Types table columns ΓÇ║ Role column shows resolved role name for agent type (2.6s)
+  Γ£ô   85 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:625:7 ΓÇ║ Agent Types table columns ΓÇ║ Identity column shows resolved identity name for agent type (2.8s)
+  Γ£ô   86 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:125:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Create agent type with plan: modal opens with steps and diagram after save (3.7s)
+  Γ£ô   87 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:162:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Create agent type with plan: topology section visible in modal (3.6s)
+  Γ£ô   88 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:189:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Dismiss plan modal: modal closes and agent type row appears in table (4.2s)
+  Γ£ô   89 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:238:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Update agent type: PlanPreviewModal opens with updated plan on save (2.9s)
+  Γ£ô   90 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:277:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Failed plan: modal opens with error message when generation_status is failed (3.7s)
+  Γ£ô   91 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:314:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Plan modal does not reopen after dismissal without another save (4.6s)
+  -   92 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:363:7 ΓÇ║ Real Backend Integration ΓÇö Agent Plan Mode ΓÇ║ POST /api/v1/agents/types returns plan field in response
+  Γ£ô   93 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:180:7 ΓÇ║ Agent Role Management ΓÇ║ renders agent roles page with role list (2.2s)
+  Γ£ô   94 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:187:7 ΓÇ║ Agent Role Management ΓÇ║ renders page without errors (1.9s)
+  Γ£ô   95 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:195:7 ΓÇ║ Agent Role Management ΓÇ║ opens create role dialog when Add Role button is clicked (2.6s)
+  Γ£ô   96 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:245:7 ΓÇ║ Agent Identity Management ΓÇ║ renders agent identities page with identity list (2.2s)
+  Γ£ô   97 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:251:7 ΓÇ║ Agent Identity Management ΓÇ║ renders realm_name column values (2.3s)
+  Γ£ô   98 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:257:7 ΓÇ║ Agent Identity Management ΓÇ║ renders realm_username column values (2.2s)
+  Γ£ô   99 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:263:7 ΓÇ║ Agent Identity Management ΓÇ║ renders token active chip for identity with active token (2.2s)
+  Γ£ô  100 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:271:7 ΓÇ║ Agent Identity Management ΓÇ║ renders identity status chip (2.2s)
+  Γ£ô  101 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:277:7 ΓÇ║ Agent Identity Management ΓÇ║ OAuth sign-in button appears in create dialog (2.4s)
+  Γ£ô  102 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:322:7 ΓÇ║ Agent Type Configuration ΓÇ║ renders agent type with input_type chip (2.3s)
+  Γ£ô  103 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:330:7 ΓÇ║ Agent Type Configuration ΓÇ║ does NOT render old mode or max_instances fields (2.3s)
+  Γ£ô  104 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:338:7 ΓÇ║ Agent Type Configuration ΓÇ║ agent type mock data uses model_id string (no model_config_id) (2.4s)
+  Γ£ô  105 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:346:7 ΓÇ║ Agent Type Configuration ΓÇ║ model_id is rendered in agent type detail if present (2.2s)
+  Γ£ô  106 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:384:7 ΓÇ║ Agent Session Launch ΓÇ║ opens launch dialog when launch button is clicked (2.3s)
+  Γ£ô  107 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:403:7 ΓÇ║ Agent Session Status ΓÇ║ renders queued session status page (2.3s)
+  Γ£ô  108 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:416:7 ΓÇ║ Agent Session Status ΓÇ║ renders completed session with result (2.4s)
+  Γ£ô  109 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:433:7 ΓÇ║ Agent Session Status ΓÇ║ renders failed session with error (2.1s)
+  -  110 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:459:7 ΓÇ║ Real Backend Integration ΓÇö Agent Runtime Migration ΓÇ║ backend health endpoint responds (validates backend is running)
+  -  111 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:483:7 ΓÇ║ Real Backend Integration ΓÇö Agent Runtime Migration ΓÇ║ GET /agents/roles returns valid response (validates DB schema)
+  -  112 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:506:7 ΓÇ║ Real Backend Integration ΓÇö Agent Runtime Migration ΓÇ║ GET /agents/model-configs returns valid response (validates model_configs table with enabled_models)
+  Γ£ô  113 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:563:7 ΓÇ║ Model Config CRUD ΓÇ║ renders model configs page with config list (2.1s)
+  Γ£ô  114 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:570:7 ΓÇ║ Model Config CRUD ΓÇ║ renders provider type chip for openai config (2.7s)
+  Γ£ô  115 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:576:7 ΓÇ║ Model Config CRUD ΓÇ║ renders provider type chip for litellm_proxy config (2.2s)
+  Γ£ô  116 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:582:7 ΓÇ║ Model Config CRUD ΓÇ║ does NOT expose raw encrypted key value in the table (2.1s)
+  Γ£ô  117 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:589:7 ΓÇ║ Model Config CRUD ΓÇ║ opens create dialog when Add Config button clicked (2.2s)
+  Γ£ô  118 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:602:7 ΓÇ║ Model Config CRUD ΓÇ║ edit dialog does not pre-fill API key field (2.2s)
+  Γ£ô  119 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:619:7 ΓÇ║ Model Config CRUD ΓÇ║ shows 409 conflict error when deleting a referenced config (2.2s)
+  Γ£ô  120 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:646:7 ΓÇ║ Model Config CRUD ΓÇ║ mock data includes enabled_models on model config responses (2.1s)
+  Γ£ô  121 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:657:7 ΓÇ║ Model Config CRUD ΓÇ║ Fetch Models button appears in edit dialog for model config (2.2s)
+  Γ£ô  122 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:690:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ renders all instances in the dashboard table (2.5s)
+  Γ£ô  123 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:697:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ renders status chips for all sessions (2.5s)
+  Γ£ô  124 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:704:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ shows status filter dropdown (2.7s)
+  Γ£ô  125 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:711:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ shows time range filter inputs (2.5s)
+  Γ£ô  126 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:719:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ shows empty state when no instances match filters (2.1s)
+  Γ£ô  127 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:733:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ clicking instance row navigates to detail page (2.2s)
+  Γ£ô  128 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:772:7 ΓÇ║ Conversation History Display ΓÇ║ renders chat interface for conversational session (2.2s)
+  Γ£ô  129 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:782:7 ΓÇ║ Conversation History Display ΓÇ║ renders session metadata (session ID and status) for completed conversational session (2.3s)
+  Γ£ô  130 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:790:7 ΓÇ║ Conversation History Display ΓÇ║ task session shows result for completed non-conversational session (2.3s)
+  Γ£ô  131 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:819:7 ΓÇ║ Agent Role Identity Constraints ΓÇ║ create role with identity type constraint ΓÇö allowed_identity_types persisted (3.9s)
+  Γ£ô  132 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:871:7 ΓÇ║ Agent Role Identity Constraints ΓÇ║ assigning role with incompatible identity type shows validation error (2.6s)
+  Γ£ô  133 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:909:7 ΓÇ║ Agent Role Identity Constraints ΓÇ║ assigning role with compatible identity type succeeds (2.4s)
+  Γ£ô  134 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:966:7 ΓÇ║ Identity-First Role Selection ΓÇ║ selecting identity filters role dropdown to compatible roles only (2.4s)
+  Γ£ô  135 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:1018:7 ΓÇ║ Identity-First Role Selection ΓÇ║ changing identity selection clears previously selected role (2.5s)
+  Γ£ÿ  136 [chromium] ΓÇ║ tests\auth.spec.ts:38:7 ΓÇ║ Authentication ΓÇ║ unauthenticated user sees the login page (410ms)
+  Γ£ÿ  137 [chromium] ΓÇ║ tests\auth.spec.ts:44:7 ΓÇ║ Authentication ΓÇ║ login page renders without JavaScript errors (427ms)
+  Γ£ÿ  138 [chromium] ΓÇ║ tests\auth.spec.ts:53:7 ΓÇ║ Authentication ΓÇ║ login page has a clickable action button (421ms)
+  Γ£ÿ  139 [chromium] ΓÇ║ tests\auth.spec.ts:62:7 ΓÇ║ Authentication ΓÇ║ unauthenticated request to protected route redirects to login (449ms)
+  Γ£ÿ  140 [chromium] ΓÇ║ tests\auth.spec.ts:76:7 ΓÇ║ Authentication ΓÇ║ clearing token on logout redirects to login (519ms)
+  Γ£ô  141 [chromium] ΓÇ║ tests\chat.spec.ts:41:7 ΓÇ║ Chat ΓÇ║ chat page renders without crashing (1.7s)
+  Γ£ô  142 [chromium] ΓÇ║ tests\chat.spec.ts:49:7 ΓÇ║ Chat ΓÇ║ chat page does not redirect to login (1.7s)
+  Γ£ô  143 [chromium] ΓÇ║ tests\chat.spec.ts:55:7 ΓÇ║ Chat ΓÇ║ chat page has a message input area (2.2s)
+  Γ£ô  144 [chromium] ΓÇ║ tests\chat.spec.ts:67:7 ΓÇ║ Chat ΓÇ║ chat page displays agent greeting message from API (2.2s)
+  Γ£ô  145 [chromium] ΓÇ║ tests\chat.spec.ts:81:7 ΓÇ║ Chat ΓÇ║ chat page shows agent type selector or session list (2.2s)
+  Γ£ô  146 [chromium] ΓÇ║ tests\chat.spec.ts:97:7 ΓÇ║ Chat ΓÇ║ chat page send button is present and enabled (2.1s)
+  Γ£ô  147 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:30:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ unauthenticated connection is rejected with 401 (1.6s)
+  Γ£ô  148 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:39:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ connection with invalid token is rejected with 401 (1.6s)
+  Γ£ÿ  149 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:54:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ connection with valid token but wrong role claim is rejected with 403 (1.6s)
+  Γ£ÿ  150 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:70:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ valid token with correct role receives tool list with no descriptions or schemas (2.2s)
+  Γ£ô  151 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:115:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ tool list entries use mcp_slug/tool_name format ΓÇö no colon format (2.2s)
+  Γ£ô  152 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:157:7 ΓÇ║ Real Backend Integration ΓÇö Communication Hub Auth ΓÇ║ unauthenticated request to hub connect returns 401 from real backend (332ms)
+  Γ£ô  153 [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:177:7 ΓÇ║ Real Backend Integration ΓÇö Communication Hub Auth ΓÇ║ request with invalid Bearer token returns 401 from real backend (34ms)
+  Γ£ô  154 [chromium] ΓÇ║ tests\component-theming.spec.ts:9:7 ΓÇ║ Component Theming ΓÇ║ Cards have 12px border radius (1.4s)
+  Γ£ô  155 [chromium] ΓÇ║ tests\component-theming.spec.ts:24:7 ΓÇ║ Component Theming ΓÇ║ AppBar is white with border-bottom (1.3s)
+  Γ£ô  156 [chromium] ΓÇ║ tests\component-theming.spec.ts:47:7 ΓÇ║ Component Theming ΓÇ║ Buttons show correct styles (1.3s)
+  Γ£ô  157 [chromium] ΓÇ║ tests\conversations.spec.ts:48:7 ΓÇ║ Conversation History ΓÇ║ conversation history page renders without crashing (1.9s)
+  Γ£ô  158 [chromium] ΓÇ║ tests\conversations.spec.ts:56:7 ΓÇ║ Conversation History ΓÇ║ conversation history page does not redirect to login (1.9s)
+  Γ£ô  159 [chromium] ΓÇ║ tests\conversations.spec.ts:62:7 ΓÇ║ Conversation History ΓÇ║ conversation history page lists sessions from API (2.3s)
+  Γ£ô  160 [chromium] ΓÇ║ tests\conversations.spec.ts:70:7 ΓÇ║ Conversation History ΓÇ║ shows turn count for sessions (2.5s)
+  Γ£ô  161 [chromium] ΓÇ║ tests\conversations.spec.ts:76:7 ΓÇ║ Conversation History ΓÇ║ clicking a conversation expand button shows its turns (2.1s)
+  Γ£ô  162 [chromium] ΓÇ║ tests\conversations.spec.ts:92:7 ΓÇ║ Conversation History ΓÇ║ conversation history shows both user and agent turns when expanded (2.1s)
+  Γ£ô  163 [chromium] ΓÇ║ tests\dashboard.spec.ts:19:7 ΓÇ║ Dashboard ΓÇ║ dashboard page renders without crashing (1.8s)
+  Γ£ô  164 [chromium] ΓÇ║ tests\dashboard.spec.ts:27:7 ΓÇ║ Dashboard ΓÇ║ dashboard page has content (2.1s)
+  Γ£ô  165 [chromium] ΓÇ║ tests\dashboard.spec.ts:34:7 ΓÇ║ Dashboard ΓÇ║ dashboard renders app shell layout with header (2.1s)
+  Γ£ô  166 [chromium] ΓÇ║ tests\dashboard.spec.ts:41:7 ΓÇ║ Dashboard ΓÇ║ dashboard displays app title or welcome content (2.0s)
+  Γ£ô  167 [chromium] ΓÇ║ tests\dashboard.spec.ts:54:7 ΓÇ║ Dashboard ΓÇ║ dashboard has page content area (2.0s)
+  Γ£ô  168 [chromium] ΓÇ║ tests\dashboard.spec.ts:62:7 ΓÇ║ Dashboard ΓÇ║ dashboard has navigation sidebar with nav items (2.1s)
+  Γ£ô  169 [chromium] ΓÇ║ tests\dashboard.spec.ts:77:7 ΓÇ║ Dashboard ΓÇ║ dashboard navigation links are clickable (2.1s)
+Starting test...
+Navigating to /
+Waiting for button
+Test complete
+  Γ£ô  170 [chromium] ΓÇ║ tests\debug-auth.spec.ts:4:7 ΓÇ║ Debug Authentication ΓÇ║ debug unauthenticated user sees the login page (21.2s)
+Execution logs route hit!
+Log entries route hit!
+Execution logs route hit!
+Log entries route hit!
+=== CONSOLE MESSAGES ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+=== LogViewer visible: [33mtrue[39m ===
+=== PAGE HTML (first 2000 chars) ===
+<!DOCTYPE html><html lang="en"><head><meta name="emotion-insertion-point" content="">
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="/vite.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parthenon AI Harness</title>
+  <style type="text/css" data-vite-dev-id="C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend/node_modules/@fontsource/inter/300.css">/* inter-cyrillic-ext-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url(/node_modules/@fontsource/inter/files/inter-cyrillic-ext-300-normal.woff2) format('woff2'), url(/node_modules/@fontsource/inter/files/inter-cyrillic-ext-300-normal.woff) format('woff');
+  unicode-range: U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F;
+}
+
+/* inter-cyrillic-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url(/node_modules/@fontsource/inter/files/inter-cyrillic-300-normal.woff2) format('woff2'), url(/node_modules/@fontsource/inter/files/inter-cyrillic-300-normal.woff) format('woff');
+  unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+
+/* inter-greek-ext-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url(/node_modules/@fontsource/inter/files/inter-greek-ext-300-normal.woff2) format('woff2'), url(/node_modules/@fontsource/inter/files/inter-greek-ext-300-normal.woff) format('woff');
+  unicode-range: U+1F00-1FFF;
+}
+
+/* inter-greek-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src:
+  Γ£ô  171 [chromium] ΓÇ║ tests\debug-logs.spec.ts:6:5 ΓÇ║ Debug LogViewer render (4.8s)
+  Γ£ô  172 [chromium] ΓÇ║ tests\gateway.spec.ts:16:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway config page renders without crashing (1.8s)
+  Γ£ô  173 [chromium] ΓÇ║ tests\gateway.spec.ts:24:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway config page does not redirect to login (1.9s)
+  Γ£ô  174 [chromium] ΓÇ║ tests\gateway.spec.ts:30:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows agent type names (2.3s)
+  Γ£ô  175 [chromium] ΓÇ║ tests\gateway.spec.ts:36:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows HTTP endpoint path (2.3s)
+  Γ£ÿ  176 [chromium] ΓÇ║ tests\gateway.spec.ts:42:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows MCP tool names (6.8s)
+  Γ£ô  177 [chromium] ΓÇ║ tests\gateway.spec.ts:48:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page has interactive elements for configuration (2.1s)
+  Γ£ô  178 [chromium] ΓÇ║ tests\health.spec.ts:9:7 ΓÇ║ App Health ΓÇ║ app root loads and renders an HTML body (2.2s)
+  Γ£ô  179 [chromium] ΓÇ║ tests\health.spec.ts:15:7 ΓÇ║ App Health ΓÇ║ app renders a root element (1.3s)
+  Γ£ô  180 [chromium] ΓÇ║ tests\health.spec.ts:21:7 ΓÇ║ App Health ΓÇ║ no unhandled JavaScript errors on load (2.3s)
+  Γ£ô  181 [chromium] ΓÇ║ tests\health.spec.ts:35:7 ΓÇ║ App Health ΓÇ║ page title is set (1.2s)
+  Γ£ô  182 [chromium] ΓÇ║ tests\health.spec.ts:41:7 ΓÇ║ App Health ΓÇ║ navigating to unknown path renders something (2.3s)
+  Γ£ô  183 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:37:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub page renders without crashing (1.9s)
+  Γ£ô  184 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:45:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub page does not redirect to login (1.9s)
+  Γ£ô  185 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:51:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows server names from API (2.2s)
+  Γ£ô  186 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:57:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows second server in list (2.2s)
+  Γ£ô  187 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:63:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows server status indicators (2.2s)
+  Γ£ô  188 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:76:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub has a register/add server button (2.4s)
+  Γ£ô  189 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:136:7 ΓÇ║ MCP Session CRUD with new fields ΓÇ║ MCP session API response includes identity_binding and credential_config (1.9s)
+  Γ£ô  190 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:152:7 ΓÇ║ MCP Session CRUD with new fields ΓÇ║ MCP session API response does not include encrypted_credentials (1.9s)
+  Γ£ô  191 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:172:7 ΓÇ║ MCP Session CRUD with new fields ΓÇ║ MCP Hub page renders with session mock in place (2.4s)
+  Γ£ô  192 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:247:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ MCP Hub renders OAuth server with oauth_config (2.2s)
+  Γ£ô  193 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:256:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ OAuth server shows oauth_config present in API response (2.4s)
+  Γ£ô  194 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:267:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ OAuth session has auth_type=oauth2 in response (1.9s)
+  Γ£ô  195 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:280:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ OAuth session response does not include encrypted_credentials (2.2s)
+  Γ£ô  196 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:289:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ oauth_config on server does not include client_secret in API response (2.2s)
+  Γ£ô  197 [chromium] ΓÇ║ tests\notifications.spec.ts:49:7 ΓÇ║ Notification Configuration ΓÇ║ notification config page renders without crashing (1.8s)
+  Γ£ô  198 [chromium] ΓÇ║ tests\notifications.spec.ts:57:7 ΓÇ║ Notification Configuration ΓÇ║ notification config page does not redirect to login (1.8s)
+  Γ£ô  199 [chromium] ΓÇ║ tests\notifications.spec.ts:63:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows channel names from API (2.3s)
+  Γ£ô  200 [chromium] ΓÇ║ tests\notifications.spec.ts:69:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows second channel in list (2.3s)
+  Γ£ô  201 [chromium] ΓÇ║ tests\notifications.spec.ts:75:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows channel types (2.4s)
+  Γ£ô  202 [chromium] ΓÇ║ tests\notifications.spec.ts:82:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows event log with event types (2.2s)
+  Γ£ô  203 [chromium] ΓÇ║ tests\notifications.spec.ts:96:7 ΓÇ║ Notification Configuration ΓÇ║ notification page has add channel button (2.2s)
+  Γ£ô  204 [chromium] ΓÇ║ tests\observability.spec.ts:18:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard renders without crashing (1.8s)
+  Γ£ô  205 [chromium] ΓÇ║ tests\observability.spec.ts:26:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard does not redirect to login (1.9s)
+  Γ£ô  206 [chromium] ΓÇ║ tests\observability.spec.ts:32:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard shows request rate metric (2.3s)
+  Γ£ô  207 [chromium] ΓÇ║ tests\observability.spec.ts:45:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard shows latency metric (2.2s)
+  Γ£ô  208 [chromium] ΓÇ║ tests\observability.spec.ts:58:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard has external tool links (2.1s)
+  Γ£ô  209 [chromium] ΓÇ║ tests\observability.spec.ts:71:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard tabs or sections are navigable (2.1s)
+  Γ£ô  210 [chromium] ΓÇ║ tests\observability.spec.ts:97:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app starts successfully with telemetry enabled (2.2s)
+  Γ£ô  211 [chromium] ΓÇ║ tests\observability.spec.ts:141:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app initializes telemetry from backend config (2.2s)
+  Γ£ô  212 [chromium] ΓÇ║ tests\observability.spec.ts:184:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app starts successfully with telemetry disabled (2.1s)
+  Γ£ô  213 [chromium] ΓÇ║ tests\observability.spec.ts:231:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app degrades gracefully when telemetry config fetch fails (2.2s)
+  Γ£ÿ  214 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:62:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with valid code exchanges token and lands on /dashboard (2.7s)
+  Γ£ÿ  215 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:95:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback without code redirects to /login (2.8s)
+  Γ£ÿ  216 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:104:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with failed token exchange redirects to /login (2.8s)
+  Γ£ÿ  217 [chromium] ΓÇ║ tests\oidc-callback.spec.ts:118:7 ΓÇ║ OIDC Callback Flow ΓÇ║ clicking login button initiates OIDC redirect (2.8s)
+  Γ£ô  218 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Dashboard uses theme consistently (1.8s)
+  Γ£ô  219 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ MCP Hub uses theme consistently (1.8s)
+  Γ£ô  220 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Skills uses theme consistently (1.8s)
+  Γ£ô  221 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Agents uses theme consistently (1.9s)
+  Γ£ô  222 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Conversations uses theme consistently (1.9s)
+  Γ£ÿ  223 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Agents page shows structured permission error (243ms)
+  Γ£ÿ  224 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ MCP Hub page shows structured permission error (298ms)
+  Γ£ÿ  225 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Skills page shows structured permission error (305ms)
+  Γ£ÿ  226 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ SOPs page shows structured permission error (308ms)
+  Γ£ÿ  227 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Schedules page shows structured permission error (301ms)
+  Γ£ÿ  228 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Conversations page shows structured permission error (276ms)
+  Γ£ÿ  229 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Results page shows structured permission error (447ms)
+  Γ£ÿ  230 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Notifications page shows structured permission error (331ms)
+  Γ£ÿ  231 [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Gateway page shows structured permission error (318ms)
+  Γ£ÿ  232 [chromium] ΓÇ║ tests\permission-errors.spec.ts:102:7 ΓÇ║ Permission Error Handling ΓÇ║ Tags page (in permissions tab) shows structured permission error (311ms)
+  Γ£ÿ  233 [chromium] ΓÇ║ tests\permission-errors.spec.ts:123:7 ΓÇ║ Permission Error Handling ΓÇ║ Roles page (in permissions tab) shows structured permission error (286ms)
+  Γ£ÿ  234 [chromium] ΓÇ║ tests\permission-errors.spec.ts:144:7 ΓÇ║ Permission Error Handling ΓÇ║ Groups page (in permissions tab) shows structured permission error (339ms)
+  Γ£ÿ  235 [chromium] ΓÇ║ tests\permission-errors.spec.ts:165:7 ΓÇ║ Permission Error Handling ΓÇ║ Users page (in permissions tab) shows structured permission error (286ms)
+  Γ£ÿ  236 [chromium] ΓÇ║ tests\permission-errors.spec.ts:186:7 ΓÇ║ Permission Error Handling ΓÇ║ Dialog permission errors show structured message (example: Agents page) (294ms)
+  Γ£ÿ  237 [chromium] ΓÇ║ tests\permission-errors.spec.ts:232:7 ΓÇ║ Permission Error Handling ΓÇ║ Access Requests page is accessible without permissions (323ms)
+  Γ£ÿ  238 [chromium] ΓÇ║ tests\permission-errors.spec.ts:252:7 ΓÇ║ Permission Error Handling ΓÇ║ Request Access link navigation works (313ms)
+  Γ£ô  239 [chromium] ΓÇ║ tests\permissions.spec.ts:51:7 ΓÇ║ Permissions Page ΓÇ║ navigates to /permissions and renders page (2.0s)
+  Γ£ô  240 [chromium] ΓÇ║ tests\permissions.spec.ts:58:7 ΓÇ║ Permissions Page ΓÇ║ renders tabs for tag/role/group/user/access management (2.8s)
+  Γ£ô  241 [chromium] ΓÇ║ tests\permissions.spec.ts:68:7 ΓÇ║ Permissions Page ΓÇ║ shows page without crashes (2.5s)
+  Γ£ô  242 [chromium] ΓÇ║ tests\permissions.spec.ts:86:7 ΓÇ║ Tags Management ΓÇ║ renders tag definitions table (2.6s)
+  Γ£ô  243 [chromium] ΓÇ║ tests\permissions.spec.ts:101:7 ΓÇ║ Tags Management ΓÇ║ Add Tag button is present on Tags tab (2.7s)
+  Γ£ô  244 [chromium] ΓÇ║ tests\permissions.spec.ts:117:7 ΓÇ║ Roles Management ΓÇ║ navigates to Roles tab and shows role data (2.8s)
+  Γ£ô  245 [chromium] ΓÇ║ tests\permissions.spec.ts:151:7 ΓÇ║ Groups Management ΓÇ║ groups tab shows group data (2.8s)
+  Γ£ô  246 [chromium] ΓÇ║ tests\permissions.spec.ts:176:7 ΓÇ║ Access Request Flow ΓÇ║ access requests tab renders (2.7s)
+  Γ£ô  247 [chromium] ΓÇ║ tests\permissions.spec.ts:197:7 ΓÇ║ User Access Management ΓÇ║ users tab shows user data (2.8s)
+  Γ£ô  248 [chromium] ΓÇ║ tests\permissions.spec.ts:235:7 ΓÇ║ Bug Reproduction: Group View Members ΓÇ║ View Members button for groups should open members drawer (4.3s)
+  Γ£ÿ  249 [chromium] ΓÇ║ tests\permissions.spec.ts:286:7 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing role policy as JSON (9.4s)
+  Γ£ÿ  250 [chromium] ΓÇ║ tests\permissions.spec.ts:316:7 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing individual policy items (9.4s)
+  Γ£ô  251 [chromium] ΓÇ║ tests\results.spec.ts:33:7 ΓÇ║ Result Repository ΓÇ║ result repository page renders without crashing (1.7s)
+  Γ£ô  252 [chromium] ΓÇ║ tests\results.spec.ts:41:7 ΓÇ║ Result Repository ΓÇ║ result repository page does not redirect to login (1.7s)
+  Γ£ô  253 [chromium] ΓÇ║ tests\results.spec.ts:47:7 ΓÇ║ Result Repository ΓÇ║ result repository shows result payload text (2.2s)
+  Γ£ô  254 [chromium] ΓÇ║ tests\results.spec.ts:60:7 ΓÇ║ Result Repository ΓÇ║ result repository shows tags for results (2.1s)
+  Γ£ô  255 [chromium] ΓÇ║ tests\results.spec.ts:72:7 ΓÇ║ Result Repository ΓÇ║ result repository shows content types (2.1s)
+  Γ£ô  256 [chromium] ΓÇ║ tests\results.spec.ts:84:7 ΓÇ║ Result Repository ΓÇ║ result repository has filter or search capability (2.1s)
+  Γ£ô  257 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:227:7 ΓÇ║ Roles Page ΓÇ║ roles page shows role names from API (2.3s)
+  Γ£ô  258 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:245:7 ΓÇ║ JSONViewModal ΓÇ║ View JSON button opens modal with formatted JSON (4.3s)
+  Γ£ô  259 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:289:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog pre-fills source role name with Copy prefix (2.5s)
+  Γ£ô  260 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:324:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog submission creates new role and closes (2.9s)
+  Γ£ô  261 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:362:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog shows error on 409 duplicate name (2.6s)
+  Γ£ô  262 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:418:7 ΓÇ║ PolicyEditor ΓÇ║ expanding a role row shows PolicyEditor with statements (3.5s)
+  Γ£ô  263 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:433:7 ΓÇ║ PolicyEditor ΓÇ║ Add Statement button is visible in PolicyEditor (2.7s)
+  Γ£ô  264 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:460:7 ΓÇ║ AddStatementDialog ΓÇ║ Add Statement dialog opens with resource type dropdown (2.7s)
+  Γ£ô  265 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:483:7 ΓÇ║ AddStatementDialog ΓÇ║ Add Statement dialog shows Resource IDs section (2.6s)
+  Γ£ô  266 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:516:7 ΓÇ║ PolicyEditor Resource IDs ΓÇ║ policy cards display resource ID chips in resource_type:resource_id format (2.3s)
+  Γ£ô  267 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:605:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit button opens dialog pre-filled with existing policy data (2.6s)
+  Γ£ô  268 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:637:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit dialog calls PATCH endpoint on save (2.8s)
+  Γ£ô  269 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:701:7 ΓÇ║ Real Backend Integration ΓÇ║ GET /api/v1/policy/resource-types returns 200 with resource types (362ms)
+  Γ£ô  270 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:725:7 ΓÇ║ Real Backend Integration ΓÇ║ POST /api/v1/user-roles/{id}/clone returns 401 without auth (14ms)
+  Γ£ô  271 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:744:7 ΓÇ║ Real Backend Integration ΓÇ║ GET /api/v1/user-roles/{id} returns 401 without auth (policy_statements endpoint protected) (17ms)
+  Γ£ô  272 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:765:7 ΓÇ║ Real Backend Integration ΓÇ║ PATCH /api/v1/user-roles/{role_id}/policies/{policy_id} returns 401 without auth (edit endpoint protected) (14ms)
+  Γ£ô  273 [chromium] ΓÇ║ tests\scheduling.spec.ts:52:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager page renders without crashing (1.9s)
+  Γ£ô  274 [chromium] ΓÇ║ tests\scheduling.spec.ts:60:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager page does not redirect to login (1.9s)
+  Γ£ô  275 [chromium] ΓÇ║ tests\scheduling.spec.ts:66:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows schedule names from API (2.0s)
+  Γ£ô  276 [chromium] ΓÇ║ tests\scheduling.spec.ts:72:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows inactive schedule (2.1s)
+  Γ£ô  277 [chromium] ΓÇ║ tests\scheduling.spec.ts:78:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows cron expressions (2.2s)
+  Γ£ô  278 [chromium] ΓÇ║ tests\scheduling.spec.ts:91:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows active vs inactive status (2.2s)
+  Γ£ô  279 [chromium] ΓÇ║ tests\scheduling.spec.ts:103:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager has create schedule button (2.2s)
+  Γ£ô  280 [chromium] ΓÇ║ tests\scheduling.spec.ts:115:7 ΓÇ║ Schedule Manager ΓÇ║ schedule execution history is available (2.1s)
+  Γ£ÿ  281 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:77:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ navigates to /setup when identity is NOT_CONFIGURED (406ms)
+  Γ£ÿ  282 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:87:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ does NOT redirect to /setup when already CONFIGURED (438ms)
+  Γ£ÿ  283 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:99:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 shows all three provider radio buttons (422ms)
+  Γ£ÿ  284 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:107:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 Next button advances to Keycloak config by default (399ms)
+  Γ£ÿ  285 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:114:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ selecting Azure EntraID and clicking Next shows OIDC config (408ms)
+  Γ£ÿ  286 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:130:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ bundled Keycloak happy path completes and shows success (410ms)
+  Γ£ÿ  287 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:163:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ 502 from server shows keycloak unreachable error (440ms)
+  Γ£ÿ  288 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:182:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Try Again button returns to config step (484ms)
+  Γ£ÿ  289 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:203:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Configure button is disabled when required fields are empty (447ms)
+  Γ£ô  290 [chromium] ΓÇ║ tests\skills-sops.spec.ts:38:7 ΓÇ║ Skills ΓÇ║ skills page renders without crashing (1.9s)
+  Γ£ô  291 [chromium] ΓÇ║ tests\skills-sops.spec.ts:46:7 ΓÇ║ Skills ΓÇ║ skills page does not redirect to login (1.8s)
+  Γ£ô  292 [chromium] ΓÇ║ tests\skills-sops.spec.ts:52:7 ΓÇ║ Skills ΓÇ║ skills page lists skill names from API (2.2s)
+  Γ£ô  293 [chromium] ΓÇ║ tests\skills-sops.spec.ts:58:7 ΓÇ║ Skills ΓÇ║ skills page shows all skills including Send Email (2.2s)
+  Γ£ô  294 [chromium] ΓÇ║ tests\skills-sops.spec.ts:64:7 ΓÇ║ Skills ΓÇ║ skills page shows skill descriptions (2.2s)
+  Γ£ô  295 [chromium] ΓÇ║ tests\skills-sops.spec.ts:76:7 ΓÇ║ Skills ΓÇ║ skills page shows active vs inactive status (2.2s)
+  Γ£ô  296 [chromium] ΓÇ║ tests\skills-sops.spec.ts:88:7 ΓÇ║ Skills ΓÇ║ skills page has create skill button (3.4s)
+  Γ£ô  297 [chromium] ΓÇ║ tests\skills-sops.spec.ts:128:7 ΓÇ║ SOPs ΓÇ║ SOPs page renders without crashing (1.9s)
+  Γ£ô  298 [chromium] ΓÇ║ tests\skills-sops.spec.ts:136:7 ΓÇ║ SOPs ΓÇ║ SOPs page does not redirect to login (1.9s)
+  Γ£ô  299 [chromium] ΓÇ║ tests\skills-sops.spec.ts:142:7 ΓÇ║ SOPs ΓÇ║ SOPs page lists SOP names from API (2.2s)
+  Γ£ô  300 [chromium] ΓÇ║ tests\skills-sops.spec.ts:148:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows second SOP in list (2.2s)
+  Γ£ô  301 [chromium] ΓÇ║ tests\skills-sops.spec.ts:154:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows step count for SOPs (2.2s)
+  Γ£ô  302 [chromium] ΓÇ║ tests\skills-sops.spec.ts:167:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows SOP descriptions (2.1s)
+  Γ£ô  303 [chromium] ΓÇ║ tests\skills-sops.spec.ts:179:7 ΓÇ║ SOPs ΓÇ║ clicking a SOP shows its steps (2.2s)
+  Γ£ô  304 [chromium] ΓÇ║ tests\skills-sops.spec.ts:230:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ skills page loads with instructions in skill data (2.3s)
+  Γ£ô  305 [chromium] ΓÇ║ tests\skills-sops.spec.ts:239:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ skills API response includes tool_ids array (1.8s)
+  Γ£ô  306 [chromium] ΓÇ║ tests\skills-sops.spec.ts:260:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ skills API response includes instructions field (1.9s)
+  Γ£ô  307 [chromium] ΓÇ║ tests\skills-sops.spec.ts:279:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ create skill POST payload can include instructions field (2.9s)
+  Γ£ô  308 [chromium] ΓÇ║ tests\skills-sops.spec.ts:362:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOPs page loads with instructions in sop data (2.3s)
+  Γ£ô  309 [chromium] ΓÇ║ tests\skills-sops.spec.ts:371:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOP steps use skill_invocation type (not legacy skill) (1.4s)
+  Γ£ô  310 [chromium] ΓÇ║ tests\skills-sops.spec.ts:379:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOP steps schema includes target_agent_type_id and step_config (1.3s)
+  Γ£ô  311 [chromium] ΓÇ║ tests\skills-sops.spec.ts:385:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOPs API response includes instructions field (1.8s)
+  Γ£ô  312 [chromium] ΓÇ║ tests\skills-sops.spec.ts:403:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ create SOP POST payload can include instructions field (2.9s)
+  Γ£ô  313 [chromium] ΓÇ║ tests\skills-sops.spec.ts:469:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ instructions_with_tools API contract includes Tool Section marker (1.4s)
+  Γ£ô  314 [chromium] ΓÇ║ tests\skills-sops.spec.ts:480:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ GET /skills/{id} mock returns instructions_with_tools with schema details (2.2s)
+  Γ£ô  315 [chromium] ΓÇ║ tests\skills-sops.spec.ts:508:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ skills page renders without error when skill has tool section data (2.2s)
+  Γ£ô  316 [chromium] ΓÇ║ tests\skills-sops.spec.ts:517:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ instructions_with_tools is read-only: tool section is not user-editable text (3.5s)
+[Real Backend Test] Backend not running at http://localhost:8000 ΓÇö default skills verification skipped.
+  Γ£ô  317 [chromium] ΓÇ║ tests\skills-sops.spec.ts:576:7 ΓÇ║ Real Backend Integration ΓÇö Default Skills ΓÇ║ default skills save_result and send_notification are present after seeding (815ms)
+  Γ£ÿ  318 [chromium] ΓÇ║ tests\tag-management.spec.ts:11:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ create tag with allowed values and verify they are saved (30.1s)
+  Γ£ÿ  319 [chromium] ΓÇ║ tests\tag-management.spec.ts:133:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ update tag and add more allowed values (30.1s)
+  Γ£ÿ  320 [chromium] ΓÇ║ tests\tag-management.spec.ts:253:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding duplicate allowed values (30.1s)
+  Γ£ÿ  321 [chromium] ΓÇ║ tests\tag-management.spec.ts:294:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding empty allowed values (30.1s)
+  Γ£ô  322 [chromium] ΓÇ║ tests\theme-application.spec.ts:10:7 ΓÇ║ Theme Application ΓÇ║ Inter font is applied globally (1.4s)
+  Γ£ô  323 [chromium] ΓÇ║ tests\theme-application.spec.ts:21:7 ΓÇ║ Theme Application ΓÇ║ Primary color is indigo on active navigation (1.3s)
+  Γ£ô  324 [chromium] ΓÇ║ tests\theme-application.spec.ts:37:7 ΓÇ║ Theme Application ΓÇ║ Background colors match theme (1.4s)
+
+
+  1) [chromium] ΓÇ║ tests\access-control.spec.ts:45:7 ΓÇ║ Permission Denied: Snackbar ΓÇ║ 403 on agent create triggers permission-denied snackbar 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('alert').filter({ hasText: /permission|denied|agent/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('alert').filter({ hasText: /permission|denied|agent/i }).first()[22m
+
+
+      80 |     // PermissionErrorSnackbar should appear (MUI Snackbar uses role="alert" for the Alert)
+      81 |     const snackbar = page.getByRole('alert').filter({ hasText: /permission|denied|agent/i }).first()
+    > 82 |     await expect(snackbar).toBeVisible({ timeout: 5000 })
+         |                            ^
+      83 |
+      84 |     // "Request Access" button should be present inside the alert
+      85 |     const requestAccessBtn = snackbar.getByRole('button', { name: /request access/i })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:82:28
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Permission--77a47--permission-denied-snackbar-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Permission--77a47--permission-denied-snackbar-chromium\error-context.md
+
+  2) [chromium] ΓÇ║ tests\access-control.spec.ts:89:7 ΓÇ║ Permission Denied: Snackbar ΓÇ║ 403 on MCP server delete triggers snackbar with resource ID context 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /request access/i }).first()
+    Expected: visible
+    Timeout: 3000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 3000ms[22m
+    [2m  - waiting for getByRole('button', { name: /request access/i }).first()[22m
+
+
+      111 |     // "Request Access" action button should be in the snackbar
+      112 |     const requestAccessBtn = page.getByRole('button', { name: /request access/i }).first()
+    > 113 |     await expect(requestAccessBtn).toBeVisible({ timeout: 3000 })
+          |                                    ^
+      114 |   })
+      115 | })
+      116 |
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:113:36
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Permission--a431e-ar-with-resource-ID-context-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Permission--a431e-ar-with-resource-ID-context-chromium\error-context.md
+
+  3) [chromium] ΓÇ║ tests\access-control.spec.ts:126:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ clicking Request Access in snackbar opens pre-filled modal 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /request access/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /request access/i }).first()[22m
+
+
+      149 |     // Wait for snackbar, then click "Request Access"
+      150 |     const requestAccessBtn = page.getByRole('button', { name: /request access/i }).first()
+    > 151 |     await expect(requestAccessBtn).toBeVisible({ timeout: 5000 })
+          |                                    ^
+      152 |     await requestAccessBtn.click()
+      153 |
+      154 |     // RequestPermissionModal should open ΓÇö look for dialog with "Request Elevated Access" title
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:151:36
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Permission--b3e86-kbar-opens-pre-filled-modal-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Permission--b3e86-kbar-opens-pre-filled-modal-chromium\error-context.md
+
+  4) [chromium] ΓÇ║ tests\access-control.spec.ts:178:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ user can submit access request with justification and sees confirmation 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /request access/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /request access/i }).first()[22m
+
+
+      219 |     // Click "Request Access" in snackbar
+      220 |     const requestAccessBtn = page.getByRole('button', { name: /request access/i }).first()
+    > 221 |     await expect(requestAccessBtn).toBeVisible({ timeout: 5000 })
+          |                                    ^
+      222 |     await requestAccessBtn.click()
+      223 |
+      224 |     // Modal opens
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:221:36
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Permission--97889-ation-and-sees-confirmation-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Permission--97889-ation-and-sees-confirmation-chromium\error-context.md
+
+  5) [chromium] ΓÇ║ tests\access-control.spec.ts:246:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ submitting access request without justification shows validation error 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /request access/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /request access/i }).first()[22m
+
+
+      264 |
+      265 |     const requestAccessBtn = page.getByRole('button', { name: /request access/i }).first()
+    > 266 |     await expect(requestAccessBtn).toBeVisible({ timeout: 5000 })
+          |                                    ^
+      267 |     await requestAccessBtn.click()
+      268 |
+      269 |     const dialog = page.getByRole('dialog')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:266:36
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Permission--ffefe-tion-shows-validation-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Permission--ffefe-tion-shows-validation-error-chromium\error-context.md
+
+  6) [chromium] ΓÇ║ tests\access-control.spec.ts:433:7 ΓÇ║ Group-Role Assignment ΓÇ║ ManageGroupRoles dialog opens and shows assigned roles 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /manage roles/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /manage roles/i }).first()[22m
+
+
+      469 |     // Find and click the "Manage Roles" button for the group
+      470 |     const manageRolesBtn = page.getByRole('button', { name: /manage roles/i }).first()
+    > 471 |     await expect(manageRolesBtn).toBeVisible({ timeout: 5000 })
+          |                                  ^
+      472 |     await manageRolesBtn.click()
+      473 |
+      474 |     // Manage Roles dialog should open
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:471:34
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Group-Role--7ef91-ns-and-shows-assigned-roles-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Group-Role--7ef91-ns-and-shows-assigned-roles-chromium\error-context.md
+
+  7) [chromium] ΓÇ║ tests\access-control.spec.ts:482:7 ΓÇ║ Group-Role Assignment ΓÇ║ Admin can assign a role to a group and dialog reflects the change 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /manage roles/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /manage roles/i }).first()[22m
+
+
+      523 |
+      524 |     const manageRolesBtn = page.getByRole('button', { name: /manage roles/i }).first()
+    > 525 |     await expect(manageRolesBtn).toBeVisible({ timeout: 5000 })
+          |                                  ^
+      526 |     await manageRolesBtn.click()
+      527 |
+      528 |     const dialog = page.getByRole('dialog')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:525:34
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Group-Role--24f76--dialog-reflects-the-change-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Group-Role--24f76--dialog-reflects-the-change-chromium\error-context.md
+
+  8) [chromium] ΓÇ║ tests\access-control.spec.ts:554:7 ΓÇ║ Group-Role Assignment ΓÇ║ Admin can remove a role from a group 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /manage roles/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /manage roles/i }).first()[22m
+
+
+      588 |
+      589 |     const manageRolesBtn = page.getByRole('button', { name: /manage roles/i }).first()
+    > 590 |     await expect(manageRolesBtn).toBeVisible({ timeout: 5000 })
+          |                                  ^
+      591 |     await manageRolesBtn.click()
+      592 |
+      593 |     const dialog = page.getByRole('dialog')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:590:34
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Group-Role--dba23--remove-a-role-from-a-group-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Group-Role--dba23--remove-a-role-from-a-group-chromium\error-context.md
+
+  9) [chromium] ΓÇ║ tests\access-control.spec.ts:613:7 ΓÇ║ Group-Role Assignment ΓÇ║ Non-admin attempting Manage Roles sees permission error with actual details 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /manage roles/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /manage roles/i }).first()[22m
+
+
+      638 |
+      639 |     const manageRolesBtn = page.getByRole('button', { name: /manage roles/i }).first()
+    > 640 |     await expect(manageRolesBtn).toBeVisible({ timeout: 5000 })
+          |                                  ^
+      641 |     await manageRolesBtn.click()
+      642 |
+      643 |     const dialog = page.getByRole('dialog')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:640:34
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Group-Role--4f6a4-n-error-with-actual-details-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Group-Role--4f6a4-n-error-with-actual-details-chromium\error-context.md
+
+  10) [chromium] ΓÇ║ tests\access-control.spec.ts:662:7 ΓÇ║ Error Message Detail ΓÇ║ API error detail from backend is shown verbatim ΓÇö not a generic fallback 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /manage roles/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /manage roles/i }).first()[22m
+
+
+      699 |
+      700 |     const manageRolesBtn = page.getByRole('button', { name: /manage roles/i }).first()
+    > 701 |     await expect(manageRolesBtn).toBeVisible({ timeout: 5000 })
+          |                                  ^
+      702 |     await manageRolesBtn.click()
+      703 |
+      704 |     const dialog = page.getByRole('dialog')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:701:34
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Error-Messa-492b4-im-ΓÇö-not-a-generic-fallback-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Error-Messa-492b4-im-ΓÇö-not-a-generic-fallback-chromium\error-context.md
+
+  11) [chromium] ΓÇ║ tests\access-control.spec.ts:737:7 ΓÇ║ Error Message Detail ΓÇ║ 403 permission-denied snackbar shows resource type, action, and ID ΓÇö not just "Access Denied" 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('alert').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('alert').first()[22m
+
+
+      758 |
+      759 |     const alert = page.getByRole('alert').first()
+    > 760 |     await expect(alert).toBeVisible({ timeout: 5000 })
+          |                         ^
+      761 |
+      762 |     const alertText = await alert.textContent()
+      763 |     // Must NOT be just a generic fallback
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\access-control.spec.ts:760:25
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\access-control-Error-Messa-55486-D-ΓÇö-not-just-Access-Denied--chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\access-control-Error-Messa-55486-D-ΓÇö-not-just-Access-Denied--chromium\error-context.md
+
+  12) [chromium] ΓÇ║ tests\auth.spec.ts:38:7 ΓÇ║ Authentication ΓÇ║ unauthenticated user sees the login page 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "load"[22m
+
+
+      38 |   test('unauthenticated user sees the login page', async ({ page }) => {
+      39 |     await page.addInitScript(() => { localStorage.removeItem('access_token') })
+    > 40 |     await page.goto('/')
+         |                ^
+      41 |     await expect(page.locator('button').first()).toBeVisible({ timeout: 10000 })
+      42 |   })
+      43 |
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\auth.spec.ts:40:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\auth-Authentication-unauthenticated-user-sees-the-login-page-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\auth-Authentication-unauthenticated-user-sees-the-login-page-chromium\error-context.md
+
+  13) [chromium] ΓÇ║ tests\auth.spec.ts:44:7 ΓÇ║ Authentication ΓÇ║ login page renders without JavaScript errors 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "load"[22m
+
+
+      46 |     page.on('pageerror', (err) => errors.push(err.message))
+      47 |     await page.addInitScript(() => { localStorage.removeItem('access_token') })
+    > 48 |     await page.goto('/')
+         |                ^
+      49 |     await page.waitForLoadState('networkidle')
+      50 |     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
+      51 |   })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\auth.spec.ts:48:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\auth-Authentication-login--8b475-s-without-JavaScript-errors-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\auth-Authentication-login--8b475-s-without-JavaScript-errors-chromium\error-context.md
+
+  14) [chromium] ΓÇ║ tests\auth.spec.ts:53:7 ΓÇ║ Authentication ΓÇ║ login page has a clickable action button 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "load"[22m
+
+
+      53 |   test('login page has a clickable action button', async ({ page }) => {
+      54 |     await page.addInitScript(() => { localStorage.removeItem('access_token') })
+    > 55 |     await page.goto('/')
+         |                ^
+      56 |     await page.waitForLoadState('networkidle')
+      57 |     const btn = page.getByRole('button').first()
+      58 |     await expect(btn).toBeVisible()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\auth.spec.ts:55:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\auth-Authentication-login-page-has-a-clickable-action-button-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\auth-Authentication-login-page-has-a-clickable-action-button-chromium\error-context.md
+
+  15) [chromium] ΓÇ║ tests\auth.spec.ts:62:7 ΓÇ║ Authentication ΓÇ║ unauthenticated request to protected route redirects to login 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/dashboard
+    Call log:
+    [2m  - navigating to "http://localhost:5173/dashboard", waiting until "load"[22m
+
+
+      62 |   test('unauthenticated request to protected route redirects to login', async ({ page }) => {
+      63 |     await page.addInitScript(() => { localStorage.removeItem('access_token') })
+    > 64 |     await page.goto('/dashboard')
+         |                ^
+      65 |     await page.waitForLoadState('networkidle')
+      66 |     // Should either redirect to /login or show login UI, not the protected content
+      67 |     const url = page.url()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\auth.spec.ts:64:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\auth-Authentication-unauth-01d07-ed-route-redirects-to-login-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\auth-Authentication-unauth-01d07-ed-route-redirects-to-login-chromium\error-context.md
+
+  16) [chromium] ΓÇ║ tests\auth.spec.ts:76:7 ΓÇ║ Authentication ΓÇ║ clearing token on logout redirects to login 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/login
+    Call log:
+    [2m  - navigating to "http://localhost:5173/login", waiting until "load"[22m
+
+
+      80 |     )
+      81 |     const { FAKE_TOKEN } = await import('./_helpers')
+    > 82 |     await page.goto('/login')
+         |                ^
+      83 |     await page.evaluate((token) => { localStorage.setItem('access_token', token) }, FAKE_TOKEN)
+      84 |     await page.goto('/dashboard')
+      85 |     await page.waitForLoadState('load')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\auth.spec.ts:82:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\auth-Authentication-cleari-f04b2-n-logout-redirects-to-login-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\auth-Authentication-cleari-f04b2-n-logout-redirects-to-login-chromium\error-context.md
+
+  17) [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:54:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ connection with valid token but wrong role claim is rejected with 403 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m403[39m
+    Received: [31m401[39m
+
+      65 |       headers: { Authorization: 'Bearer valid.but.unauthorized.role.token' },
+      66 |     })
+    > 67 |     expect(response.status()).toBe(403)
+         |                               ^
+      68 |   })
+      69 |
+      70 |   test('valid token with correct role receives tool list with no descriptions or schemas', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\communication-hub-auth.spec.ts:67:31
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\communication-hub-auth-Com-08681--claim-is-rejected-with-403-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\communication-hub-auth-Com-08681--claim-is-rejected-with-403-chromium\error-context.md
+
+  18) [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:70:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ valid token with correct role receives tool list with no descriptions or schemas 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m200[39m
+    Received: [31m401[39m
+
+      92 |       headers: { Authorization: `Bearer ${FAKE_TOKEN}` },
+      93 |     })
+    > 94 |     expect(response.status()).toBe(200)
+         |                               ^
+      95 |
+      96 |     const body = await response.json()
+      97 |     const tools: Array<Record<string, unknown>> = body.tools ?? []
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\communication-hub-auth.spec.ts:94:31
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\communication-hub-auth-Com-d034c--no-descriptions-or-schemas-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\communication-hub-auth-Com-d034c--no-descriptions-or-schemas-chromium\error-context.md
+
+  19) [chromium] ΓÇ║ tests\gateway.spec.ts:42:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows MCP tool names 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByText('skillful')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByText('skillful')[22m
+
+
+      43 |     await page.goto('/gateway')
+      44 |     await page.waitForLoadState('load')
+    > 45 |     await expect(page.getByText('skillful')).toBeVisible()
+         |                                              ^
+      46 |   })
+      47 |
+      48 |   test('gateway page has interactive elements for configuration', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\gateway.spec.ts:45:46
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\gateway-Gateway-Configurat-39d81-y-page-shows-MCP-tool-names-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\gateway-Gateway-Configurat-39d81-y-page-shows-MCP-tool-names-chromium\error-context.md
+
+  20) [chromium] ΓÇ║ tests\oidc-callback.spec.ts:62:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with valid code exchanges token and lands on /dashboard 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4173/login
+    Call log:
+    [2m  - navigating to "http://localhost:4173/login", waiting until "load"[22m
+
+
+      78 |
+      79 |     // Navigate to any page first to set sessionStorage
+    > 80 |     await page.goto(`${BASE}/login`)
+         |                ^
+      81 |     await page.waitForLoadState('load')
+      82 |
+      83 |     // Set the PKCE code verifier in sessionStorage (required by OidcCallback page)
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\oidc-callback.spec.ts:80:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\oidc-callback-OIDC-Callbac-d4bd7-oken-and-lands-on-dashboard-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\oidc-callback-OIDC-Callbac-d4bd7-oken-and-lands-on-dashboard-chromium\error-context.md
+
+  21) [chromium] ΓÇ║ tests\oidc-callback.spec.ts:95:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback without code redirects to /login 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4173/callback
+    Call log:
+    [2m  - navigating to "http://localhost:4173/callback", waiting until "load"[22m
+
+
+       96 |     await mockInfra(page)
+       97 |
+    >  98 |     await page.goto(`${BASE}/callback`)
+          |                ^
+       99 |     await page.waitForLoadState('networkidle')
+      100 |
+      101 |     await expect(page).toHaveURL(/\/login/, { timeout: 5000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\oidc-callback.spec.ts:98:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\oidc-callback-OIDC-Callbac-de1ae-out-code-redirects-to-login-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\oidc-callback-OIDC-Callbac-de1ae-out-code-redirects-to-login-chromium\error-context.md
+
+  22) [chromium] ΓÇ║ tests\oidc-callback.spec.ts:104:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with failed token exchange redirects to /login 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4173/callback?code=bad-code
+    Call log:
+    [2m  - navigating to "http://localhost:4173/callback?code=bad-code", waiting until "load"[22m
+
+
+      110 |     )
+      111 |
+    > 112 |     await page.goto(`${BASE}/callback?code=bad-code`)
+          |                ^
+      113 |     await page.waitForLoadState('networkidle')
+      114 |
+      115 |     await expect(page).toHaveURL(/\/login/, { timeout: 5000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\oidc-callback.spec.ts:112:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\oidc-callback-OIDC-Callbac-7bbc1-exchange-redirects-to-login-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\oidc-callback-OIDC-Callbac-7bbc1-exchange-redirects-to-login-chromium\error-context.md
+
+  23) [chromium] ΓÇ║ tests\oidc-callback.spec.ts:118:7 ΓÇ║ OIDC Callback Flow ΓÇ║ clicking login button initiates OIDC redirect 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4173/login
+    Call log:
+    [2m  - navigating to "http://localhost:4173/login", waiting until "load"[22m
+
+
+      126 |     }).catch(() => null) // may be blocked by route abort ΓÇö that's ok
+      127 |
+    > 128 |     await page.goto(`${BASE}/login`)
+          |                ^
+      129 |     await page.waitForLoadState('networkidle')
+      130 |
+      131 |     const loginBtn = page.getByRole('button').first()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\oidc-callback.spec.ts:128:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\oidc-callback-OIDC-Callbac-7e9a0-ton-initiates-OIDC-redirect-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\oidc-callback-OIDC-Callbac-7e9a0-ton-initiates-OIDC-redirect-chromium\error-context.md
+
+  24) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Agents page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-8c00f-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-8c00f-structured-permission-error-chromium\error-context.md
+
+  25) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ MCP Hub page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-b511b-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-b511b-structured-permission-error-chromium\error-context.md
+
+  26) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Skills page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-1f32e-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-1f32e-structured-permission-error-chromium\error-context.md
+
+  27) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ SOPs page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-691c7-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-691c7-structured-permission-error-chromium\error-context.md
+
+  28) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Schedules page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-96c0d-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-96c0d-structured-permission-error-chromium\error-context.md
+
+  29) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Conversations page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-42091-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-42091-structured-permission-error-chromium\error-context.md
+
+  30) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Results page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-e266a-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-e266a-structured-permission-error-chromium\error-context.md
+
+  31) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Notifications page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-5ba31-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-5ba31-structured-permission-error-chromium\error-context.md
+
+  32) [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Gateway page shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-23cb3-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-23cb3-structured-permission-error-chromium\error-context.md
+
+  33) [chromium] ΓÇ║ tests\permission-errors.spec.ts:102:7 ΓÇ║ Permission Error Handling ΓÇ║ Tags page (in permissions tab) shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-625cc-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-625cc-structured-permission-error-chromium\error-context.md
+
+  34) [chromium] ΓÇ║ tests\permission-errors.spec.ts:123:7 ΓÇ║ Permission Error Handling ΓÇ║ Roles page (in permissions tab) shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-56635-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-56635-structured-permission-error-chromium\error-context.md
+
+  35) [chromium] ΓÇ║ tests\permission-errors.spec.ts:144:7 ΓÇ║ Permission Error Handling ΓÇ║ Groups page (in permissions tab) shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-cb945-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-cb945-structured-permission-error-chromium\error-context.md
+
+  36) [chromium] ΓÇ║ tests\permission-errors.spec.ts:165:7 ΓÇ║ Permission Error Handling ΓÇ║ Users page (in permissions tab) shows structured permission error 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-7f1f9-structured-permission-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-7f1f9-structured-permission-error-chromium\error-context.md
+
+  37) [chromium] ΓÇ║ tests\permission-errors.spec.ts:186:7 ΓÇ║ Permission Error Handling ΓÇ║ Dialog permission errors show structured message (example: Agents page) 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-7c103-essage-example-Agents-page--chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-7c103-essage-example-Agents-page--chromium\error-context.md
+
+  38) [chromium] ΓÇ║ tests\permission-errors.spec.ts:232:7 ΓÇ║ Permission Error Handling ΓÇ║ Access Requests page is accessible without permissions 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-6df27-essible-without-permissions-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-6df27-essible-without-permissions-chromium\error-context.md
+
+  39) [chromium] ΓÇ║ tests\permission-errors.spec.ts:252:7 ΓÇ║ Permission Error Handling ΓÇ║ Request Access link navigation works 
+
+    TypeError: (0 , _helpers.loginViaUI) is not a function
+
+      14 |   test.beforeEach(async ({ page }) => {
+      15 |     // Login as testuser who has no permissions
+    > 16 |     await loginViaUI(page, 'testuser', 'testuser')
+         |                     ^
+      17 |   })
+      18 |
+      19 |   const pagesToTest = [
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permission-errors.spec.ts:16:21
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permission-errors-Permissi-a8e48-ccess-link-navigation-works-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permission-errors-Permissi-a8e48-ccess-link-navigation-works-chromium\error-context.md
+
+  40) [chromium] ΓÇ║ tests\permissions.spec.ts:286:7 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing role policy as JSON 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: /edit.*json/i })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('button', { name: /edit.*json/i })[22m
+
+
+      305 |     // Should see an "Edit as JSON" button or similar
+      306 |     const editJsonButton = page.getByRole('button', { name: /edit.*json/i })
+    > 307 |     await expect(editJsonButton).toBeVisible()
+          |                                  ^
+      308 |
+      309 |     // Click and should see a JSON editor (textarea with monospace)
+      310 |     await editJsonButton.click()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permissions.spec.ts:307:34
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permissions-Bug-Reproducti-5c88b-editing-role-policy-as-JSON-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permissions-Bug-Reproducti-5c88b-editing-role-policy-as-JSON-chromium\error-context.md
+
+  41) [chromium] ΓÇ║ tests\permissions.spec.ts:316:7 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing individual policy items 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('.MuiChip-root').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('.MuiChip-root').first()[22m
+
+
+      335 |     // Should see action chips with delete capability
+      336 |     const actionChips = page.locator('.MuiChip-root')
+    > 337 |     await expect(actionChips.first()).toBeVisible()
+          |                                       ^
+      338 |
+      339 |     // Should see delete icon on chip (MUI Chip with onDelete shows CancelIcon)
+      340 |     const chipDeleteIcon = page.locator('.MuiChip-deleteIcon').first()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\permissions.spec.ts:337:39
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\permissions-Bug-Reproducti-7f453-ing-individual-policy-items-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\permissions-Bug-Reproducti-7f453-ing-individual-policy-items-chromium\error-context.md
+
+  42) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:77:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ navigates to /setup when identity is NOT_CONFIGURED 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "load"[22m
+
+
+      77 |   test('navigates to /setup when identity is NOT_CONFIGURED', async ({ page }) => {
+      78 |     await mockNotConfigured(page)
+    > 79 |     await page.goto('/')
+         |                ^
+      80 |     await page.waitForURL('**/setup', { timeout: 5000 }).catch(() => {
+      81 |       // May already be at /setup or redirect handled differently ΓÇö fallback check
+      82 |     })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:79:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--0eaba--identity-is-NOT-CONFIGURED-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--0eaba--identity-is-NOT-CONFIGURED-chromium\error-context.md
+
+  43) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:87:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ does NOT redirect to /setup when already CONFIGURED 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/
+    Call log:
+    [2m  - navigating to "http://localhost:5173/", waiting until "load"[22m
+
+
+      87 |   test('does NOT redirect to /setup when already CONFIGURED', async ({ page }) => {
+      88 |     await mockConfigured(page)
+    > 89 |     await page.goto('/')
+         |                ^
+      90 |     await page.waitForLoadState('networkidle')
+      91 |     // Should NOT show the setup wizard title
+      92 |     await expect(page.getByText('Identity Provider Setup')).not.toBeVisible()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:89:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--229fa-tup-when-already-CONFIGURED-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--229fa-tup-when-already-CONFIGURED-chromium\error-context.md
+
+  44) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:99:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 shows all three provider radio buttons 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+       99 |   test('step 1 shows all three provider radio buttons', async ({ page }) => {
+      100 |     await mockNotConfigured(page)
+    > 101 |     await page.goto('/setup')
+          |                ^
+      102 |     await expect(page.getByText('Bundled Keycloak (Recommended)')).toBeVisible()
+      103 |     await expect(page.getByText('External Keycloak')).toBeVisible()
+      104 |     await expect(page.getByText('Azure EntraID')).toBeVisible()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:101:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--6d51d-hree-provider-radio-buttons-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--6d51d-hree-provider-radio-buttons-chromium\error-context.md
+
+  45) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:107:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 Next button advances to Keycloak config by default 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+      107 |   test('step 1 Next button advances to Keycloak config by default', async ({ page }) => {
+      108 |     await mockNotConfigured(page)
+    > 109 |     await page.goto('/setup')
+          |                ^
+      110 |     await page.getByRole('button', { name: 'Next' }).click()
+      111 |     await expect(page.getByPlaceholder('http://localhost:8080')).toBeVisible()
+      112 |   })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:109:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--1ac0d--Keycloak-config-by-default-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--1ac0d--Keycloak-config-by-default-chromium\error-context.md
+
+  46) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:114:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ selecting Azure EntraID and clicking Next shows OIDC config 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+      114 |   test('selecting Azure EntraID and clicking Next shows OIDC config', async ({ page }) => {
+      115 |     await mockNotConfigured(page)
+    > 116 |     await page.goto('/setup')
+          |                ^
+      117 |     await page.getByText('Azure EntraID').click()
+      118 |     await page.getByRole('button', { name: 'Next' }).click()
+      119 |     await expect(
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:116:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--5bfbd-king-Next-shows-OIDC-config-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--5bfbd-king-Next-shows-OIDC-config-chromium\error-context.md
+
+  47) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:130:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ bundled Keycloak happy path completes and shows success 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+      131 |     await mockNotConfigured(page)
+      132 |     await mockProvisionSuccess(page)
+    > 133 |     await page.goto('/setup')
+          |                ^
+      134 |
+      135 |     // Step 1 ΓåÆ Next
+      136 |     await page.getByRole('button', { name: 'Next' }).click()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:133:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--ab84b-completes-and-shows-success-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--ab84b-completes-and-shows-success-chromium\error-context.md
+
+  48) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:163:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ 502 from server shows keycloak unreachable error 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+      164 |     await mockNotConfigured(page)
+      165 |     await mockProvision502(page)
+    > 166 |     await page.goto('/setup')
+          |                ^
+      167 |
+      168 |     await page.getByRole('button', { name: 'Next' }).click()
+      169 |     await page.getByPlaceholder('http://localhost:8080').fill('http://localhost:8082')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:166:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--6b473--keycloak-unreachable-error-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--6b473--keycloak-unreachable-error-chromium\error-context.md
+
+  49) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:182:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Try Again button returns to config step 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+      183 |     await mockNotConfigured(page)
+      184 |     await mockProvision502(page)
+    > 185 |     await page.goto('/setup')
+          |                ^
+      186 |
+      187 |     await page.getByRole('button', { name: 'Next' }).click()
+      188 |     await page.getByPlaceholder('http://localhost:8080').fill('http://localhost:8082')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:185:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--7ec60-tton-returns-to-config-step-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--7ec60-tton-returns-to-config-step-chromium\error-context.md
+
+  50) [chromium] ΓÇ║ tests\setup-wizard.spec.ts:203:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Configure button is disabled when required fields are empty 
+
+    Error: page.goto: net::ERR_FAILED at http://localhost:5173/setup
+    Call log:
+    [2m  - navigating to "http://localhost:5173/setup", waiting until "load"[22m
+
+
+      203 |   test('Configure button is disabled when required fields are empty', async ({ page }) => {
+      204 |     await mockNotConfigured(page)
+    > 205 |     await page.goto('/setup')
+          |                ^
+      206 |     await page.getByRole('button', { name: 'Next' }).click()
+      207 |     const submitBtn = page.getByRole('button', { name: 'Configure' })
+      208 |     await expect(submitBtn).toBeDisabled()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\setup-wizard.spec.ts:205:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\setup-wizard-Setup-Wizard--01bee-n-required-fields-are-empty-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\setup-wizard-Setup-Wizard--01bee-n-required-fields-are-empty-chromium\error-context.md
+
+  51) [chromium] ΓÇ║ tests\tag-management.spec.ts:11:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ create tag with allowed values and verify they are saved 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="dialog"]') to be visible[22m
+    [2m    58 ├ù locator resolved to 2 elements. Proceeding with the first one: <div role="dialog" tabindex="-1" aria-modal="true" class="MuiPaper-root MuiPaper-elevation MuiPaper-elevation16 MuiDrawer-paper MuiDrawer-paperAnchorLeft css-1vbwpjo-MuiPaper-root-MuiDrawer-paper">ΓÇª</div>[22m
+
+
+      83 |
+      84 |     // Wait for dialog to open
+    > 85 |     await page.waitForSelector('[role="dialog"]')
+         |                ^
+      86 |
+      87 |     // Fill in tag details
+      88 |     await page.getByLabel(/key/i).first().fill('environment')
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\tag-management.spec.ts:85:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\tag-management-Tag-Managem-25d9d-s-and-verify-they-are-saved-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\tag-management-Tag-Managem-25d9d-s-and-verify-they-are-saved-chromium\error-context.md
+
+  52) [chromium] ΓÇ║ tests\tag-management.spec.ts:133:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ update tag and add more allowed values 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="dialog"]') to be visible[22m
+    [2m    58 ├ù locator resolved to 2 elements. Proceeding with the first one: <div role="dialog" tabindex="-1" aria-modal="true" class="MuiPaper-root MuiPaper-elevation MuiPaper-elevation16 MuiDrawer-paper MuiDrawer-paperAnchorLeft css-1vbwpjo-MuiPaper-root-MuiDrawer-paper">ΓÇª</div>[22m
+
+
+      221 |
+      222 |     // Wait for dialog to open
+    > 223 |     await page.waitForSelector('[role="dialog"]')
+          |                ^
+      224 |
+      225 |     // Verify existing values are shown
+      226 |     await expect(page.locator('text=dev').first()).toBeVisible()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\tag-management.spec.ts:223:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\tag-management-Tag-Managem-7cf3b-and-add-more-allowed-values-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\tag-management-Tag-Managem-7cf3b-and-add-more-allowed-values-chromium\error-context.md
+
+  53) [chromium] ΓÇ║ tests\tag-management.spec.ts:253:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding duplicate allowed values 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="dialog"]') to be visible[22m
+    [2m    58 ├ù locator resolved to 2 elements. Proceeding with the first one: <div role="dialog" tabindex="-1" aria-modal="true" class="MuiPaper-root MuiPaper-elevation MuiPaper-elevation16 MuiDrawer-paper MuiDrawer-paperAnchorLeft css-1vbwpjo-MuiPaper-root-MuiDrawer-paper">ΓÇª</div>[22m
+
+
+      280 |     // Click Edit button
+      281 |     await page.locator('[data-testid="EditIcon"]').first().click()
+    > 282 |     await page.waitForSelector('[role="dialog"]')
+          |                ^
+      283 |
+      284 |     // Try to add duplicate value
+      285 |     const valueInput = page.getByPlaceholder(/value/i).first()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\tag-management.spec.ts:282:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\tag-management-Tag-Managem-2fc83-ng-duplicate-allowed-values-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\tag-management-Tag-Managem-2fc83-ng-duplicate-allowed-values-chromium\error-context.md
+
+  54) [chromium] ΓÇ║ tests\tag-management.spec.ts:294:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding empty allowed values 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForSelector: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="dialog"]') to be visible[22m
+    [2m    58 ├ù locator resolved to 2 elements. Proceeding with the first one: <div role="dialog" tabindex="-1" aria-modal="true" class="MuiPaper-root MuiPaper-elevation MuiPaper-elevation16 MuiDrawer-paper MuiDrawer-paperAnchorLeft css-1vbwpjo-MuiPaper-root-MuiDrawer-paper">ΓÇª</div>[22m
+
+
+      306 |     // Click "Add Tag" button
+      307 |     await page.getByRole('button', { name: /add tag/i }).click()
+    > 308 |     await page.waitForSelector('[role="dialog"]')
+          |                ^
+      309 |
+      310 |     const addValueButton = page.getByRole('button', { name: /add value/i })
+      311 |
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\tag-management.spec.ts:308:16
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\tag-management-Tag-Managem-e3e46-adding-empty-allowed-values-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\tag-management-Tag-Managem-e3e46-adding-empty-allowed-values-chromium\error-context.md
+
+  54 failed
+    [chromium] ΓÇ║ tests\access-control.spec.ts:45:7 ΓÇ║ Permission Denied: Snackbar ΓÇ║ 403 on agent create triggers permission-denied snackbar 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:89:7 ΓÇ║ Permission Denied: Snackbar ΓÇ║ 403 on MCP server delete triggers snackbar with resource ID context 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:126:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ clicking Request Access in snackbar opens pre-filled modal 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:178:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ user can submit access request with justification and sees confirmation 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:246:7 ΓÇ║ Permission Denied: Request Access Flow ΓÇ║ submitting access request without justification shows validation error 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:433:7 ΓÇ║ Group-Role Assignment ΓÇ║ ManageGroupRoles dialog opens and shows assigned roles 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:482:7 ΓÇ║ Group-Role Assignment ΓÇ║ Admin can assign a role to a group and dialog reflects the change 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:554:7 ΓÇ║ Group-Role Assignment ΓÇ║ Admin can remove a role from a group 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:613:7 ΓÇ║ Group-Role Assignment ΓÇ║ Non-admin attempting Manage Roles sees permission error with actual details 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:662:7 ΓÇ║ Error Message Detail ΓÇ║ API error detail from backend is shown verbatim ΓÇö not a generic fallback 
+    [chromium] ΓÇ║ tests\access-control.spec.ts:737:7 ΓÇ║ Error Message Detail ΓÇ║ 403 permission-denied snackbar shows resource type, action, and ID ΓÇö not just "Access Denied" 
+    [chromium] ΓÇ║ tests\auth.spec.ts:38:7 ΓÇ║ Authentication ΓÇ║ unauthenticated user sees the login page 
+    [chromium] ΓÇ║ tests\auth.spec.ts:44:7 ΓÇ║ Authentication ΓÇ║ login page renders without JavaScript errors 
+    [chromium] ΓÇ║ tests\auth.spec.ts:53:7 ΓÇ║ Authentication ΓÇ║ login page has a clickable action button 
+    [chromium] ΓÇ║ tests\auth.spec.ts:62:7 ΓÇ║ Authentication ΓÇ║ unauthenticated request to protected route redirects to login 
+    [chromium] ΓÇ║ tests\auth.spec.ts:76:7 ΓÇ║ Authentication ΓÇ║ clearing token on logout redirects to login 
+    [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:54:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ connection with valid token but wrong role claim is rejected with 403 
+    [chromium] ΓÇ║ tests\communication-hub-auth.spec.ts:70:7 ΓÇ║ Communication Hub OAuth Enforcement (mocked) ΓÇ║ valid token with correct role receives tool list with no descriptions or schemas 
+    [chromium] ΓÇ║ tests\gateway.spec.ts:42:7 ΓÇ║ Gateway Configuration ΓÇ║ gateway page shows MCP tool names 
+    [chromium] ΓÇ║ tests\oidc-callback.spec.ts:62:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with valid code exchanges token and lands on /dashboard 
+    [chromium] ΓÇ║ tests\oidc-callback.spec.ts:95:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback without code redirects to /login 
+    [chromium] ΓÇ║ tests\oidc-callback.spec.ts:104:7 ΓÇ║ OIDC Callback Flow ΓÇ║ callback with failed token exchange redirects to /login 
+    [chromium] ΓÇ║ tests\oidc-callback.spec.ts:118:7 ΓÇ║ OIDC Callback Flow ΓÇ║ clicking login button initiates OIDC redirect 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Agents page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ MCP Hub page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Skills page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ SOPs page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Schedules page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Conversations page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Results page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Notifications page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:77:9 ΓÇ║ Permission Error Handling ΓÇ║ Gateway page shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:102:7 ΓÇ║ Permission Error Handling ΓÇ║ Tags page (in permissions tab) shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:123:7 ΓÇ║ Permission Error Handling ΓÇ║ Roles page (in permissions tab) shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:144:7 ΓÇ║ Permission Error Handling ΓÇ║ Groups page (in permissions tab) shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:165:7 ΓÇ║ Permission Error Handling ΓÇ║ Users page (in permissions tab) shows structured permission error 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:186:7 ΓÇ║ Permission Error Handling ΓÇ║ Dialog permission errors show structured message (example: Agents page) 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:232:7 ΓÇ║ Permission Error Handling ΓÇ║ Access Requests page is accessible without permissions 
+    [chromium] ΓÇ║ tests\permission-errors.spec.ts:252:7 ΓÇ║ Permission Error Handling ΓÇ║ Request Access link navigation works 
+    [chromium] ΓÇ║ tests\permissions.spec.ts:286:7 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing role policy as JSON 
+    [chromium] ΓÇ║ tests\permissions.spec.ts:316:7 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing individual policy items 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:77:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ navigates to /setup when identity is NOT_CONFIGURED 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:87:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ does NOT redirect to /setup when already CONFIGURED 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:99:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 shows all three provider radio buttons 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:107:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 Next button advances to Keycloak config by default 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:114:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ selecting Azure EntraID and clicking Next shows OIDC config 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:130:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ bundled Keycloak happy path completes and shows success 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:163:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ 502 from server shows keycloak unreachable error 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:182:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Try Again button returns to config step 
+    [chromium] ΓÇ║ tests\setup-wizard.spec.ts:203:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Configure button is disabled when required fields are empty 
+    [chromium] ΓÇ║ tests\tag-management.spec.ts:11:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ create tag with allowed values and verify they are saved 
+    [chromium] ΓÇ║ tests\tag-management.spec.ts:133:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ update tag and add more allowed values 
+    [chromium] ΓÇ║ tests\tag-management.spec.ts:253:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding duplicate allowed values 
+    [chromium] ΓÇ║ tests\tag-management.spec.ts:294:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding empty allowed values 
+  5 skipped
+  265 passed (17.6m)

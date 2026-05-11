@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission, get_current_claims
 from app.core.resource_types import RT_AGENT
@@ -57,6 +58,7 @@ from app.services.agents.model_config_service import (
     ModelConfigNotFoundError,
     ModelConfigService,
 )
+from app.services.agents.plan_generation_service import PlanGenerationService
 from app.services.agents.role_service import (
     AgentRoleConflictError,
     AgentRoleNotFoundError,
@@ -75,6 +77,7 @@ _session_service = AgentSessionService()
 _permission_manager = AgentPermissionManager()
 _model_config_service = ModelConfigService()
 _lifecycle_handler = GatewayLifecycleHandler()
+_plan_generation_service = PlanGenerationService()
 
 # Wire the permission manager into the role service so it can invalidate the cache
 _role_service._permission_manager = _permission_manager
@@ -642,9 +645,12 @@ async def agent_session_chat(
 async def list_agent_types(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "read")),
-) -> list[AgentType]:
-    result = await db.execute(select(AgentType).order_by(AgentType.name))
-    return list(result.scalars().all())
+) -> list[AgentTypeRead]:
+    result = await db.execute(
+        select(AgentType).order_by(AgentType.name).options(selectinload(AgentType.plan))
+    )
+    agents = list(result.scalars().all())
+    return [AgentTypeRead.model_validate(a) for a in agents]
 
 
 @AgentTypeRouter.post("", response_model=AgentTypeRead, status_code=status.HTTP_201_CREATED)
@@ -652,7 +658,7 @@ async def create_agent_type(
     body: AgentTypeCreate,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
-) -> AgentType:
+) -> AgentTypeRead:
     if body.input_type == AgentInputType.none:
         if not body.primary_sop_id:
             raise HTTPException(
@@ -675,7 +681,18 @@ async def create_agent_type(
     db.add(agent_type)
     await db.flush()
     await db.refresh(agent_type)
-    return agent_type
+
+    # Generate plan after commit (non-blocking — failures are recorded, not raised)
+    await _plan_generation_service.generate_plan(agent_type, db)
+
+    # Reload with plan relationship eagerly loaded so the response includes the plan
+    result = await db.execute(
+        select(AgentType)
+        .where(AgentType.id == agent_type.id)
+        .options(selectinload(AgentType.plan))
+    )
+    agent_type = result.scalar_one()
+    return AgentTypeRead.model_validate(agent_type)
 
 
 @AgentTypeRouter.get("/{type_id}", response_model=AgentTypeRead)
@@ -683,11 +700,16 @@ async def get_agent_type(
     type_id: uuid.UUID,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "read")),
-) -> AgentType:
-    agent_type = await db.get(AgentType, type_id)
+) -> AgentTypeRead:
+    result = await db.execute(
+        select(AgentType)
+        .where(AgentType.id == type_id)
+        .options(selectinload(AgentType.plan))
+    )
+    agent_type = result.scalar_one_or_none()
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
-    return agent_type
+    return AgentTypeRead.model_validate(agent_type)
 
 
 @AgentTypeRouter.put("/{type_id}", response_model=AgentTypeRead)
@@ -696,7 +718,7 @@ async def update_agent_type(
     body: AgentTypeUpdate,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
-) -> AgentType:
+) -> AgentTypeRead:
     agent_type = await db.get(AgentType, type_id)
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
@@ -720,7 +742,18 @@ async def update_agent_type(
 
     await db.flush()
     await db.refresh(agent_type)
-    return agent_type
+
+    # Regenerate plan after update (non-blocking — failures are recorded, not raised)
+    await _plan_generation_service.generate_plan(agent_type, db)
+
+    # Reload with plan relationship eagerly loaded so the response includes the plan
+    result = await db.execute(
+        select(AgentType)
+        .where(AgentType.id == agent_type.id)
+        .options(selectinload(AgentType.plan))
+    )
+    agent_type = result.scalar_one()
+    return AgentTypeRead.model_validate(agent_type)
 
 
 @AgentTypeRouter.delete("/{type_id}", status_code=status.HTTP_204_NO_CONTENT)

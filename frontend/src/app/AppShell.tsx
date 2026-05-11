@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
   AppBar,
   Box,
+  Collapse,
   CssBaseline,
   Divider,
   Drawer,
@@ -36,6 +37,8 @@ import NotificationsIcon from '@mui/icons-material/Notifications'
 import MonitorIcon from '@mui/icons-material/Monitor'
 import LogoutIcon from '@mui/icons-material/Logout'
 import SecurityIcon from '@mui/icons-material/Security'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import { useAuthStore } from '../stores/authStore'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
 
@@ -47,24 +50,39 @@ interface NavItem {
   icon: React.ReactNode
 }
 
+interface NavGroup {
+  groupKey: string
+  labelKey: string
+  icon: React.ReactNode
+  children: NavItem[]
+}
+
 const NAV_ITEMS: NavItem[] = [
   { labelKey: 'nav.dashboard', path: '/dashboard', icon: <DashboardIcon /> },
   { labelKey: 'nav.mcpHub', path: '/mcp', icon: <HubIcon /> },
   { labelKey: 'nav.skills', path: '/skills', icon: <BuildIcon /> },
   { labelKey: 'nav.sops', path: '/sops', icon: <AccountTreeIcon /> },
-  { labelKey: 'nav.agents', path: '/agents', icon: <SmartToyIcon /> },
-  { labelKey: 'nav.agentRoles', path: '/agents/roles', icon: <AssignmentIndIcon /> },
-  { labelKey: 'nav.agentIdentities', path: '/agents/identities', icon: <BadgeIcon /> },
   { labelKey: 'nav.modelConfigs', path: '/agents/model-configs', icon: <TuneIcon /> },
-  { labelKey: 'nav.agentInstances', path: '/agents/instances', icon: <MonitorHeartIcon /> },
   { labelKey: 'nav.gateway', path: '/gateway', icon: <GatewayIcon /> },
   { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
-  { labelKey: 'nav.conversations', path: '/conversations', icon: <HistoryIcon /> },
   { labelKey: 'nav.results', path: '/results', icon: <FolderIcon /> },
   { labelKey: 'nav.notifications', path: '/notifications', icon: <NotificationsIcon /> },
   { labelKey: 'nav.observability', path: '/observability', icon: <MonitorIcon /> },
   { labelKey: 'nav.permissions', path: '/user-permissions', icon: <SecurityIcon /> },
 ]
+
+const AI_AGENT_GROUP: NavGroup = {
+  groupKey: 'aiAgent',
+  labelKey: 'nav.aiAgent',
+  icon: <SmartToyIcon />,
+  children: [
+    { labelKey: 'nav.agentRoles', path: '/agents/roles', icon: <AssignmentIndIcon /> },
+    { labelKey: 'nav.agentIdentities', path: '/agents/identities', icon: <BadgeIcon /> },
+    { labelKey: 'nav.agentTypes', path: '/agents', icon: <SmartToyIcon /> },
+    { labelKey: 'nav.agentExecutions', path: '/agents/executions', icon: <MonitorHeartIcon /> },
+    { labelKey: 'nav.agentLogs', path: '/conversations', icon: <HistoryIcon /> },
+  ],
+}
 
 /**
  * Top-level layout: navigation drawer, header, and outlet for page content.
@@ -75,8 +93,12 @@ export function AppShell() {
   const location = useLocation()
   const { claims, logout } = useAuthStore()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [aiAgentGroupExpanded, setAiAgentGroupExpanded] = useState(true)
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen)
+
+  const isAiAgentGroupActive =
+    location.pathname.startsWith('/agents') || location.pathname === '/conversations'
 
   const drawerContent = (
     <Box>
@@ -87,7 +109,49 @@ export function AppShell() {
       </Toolbar>
       <Divider />
       <List>
-        {NAV_ITEMS.map((item) => (
+        {/* Items before AI Agent group (Dashboard through Model Configs) */}
+        {NAV_ITEMS.slice(0, 5).map((item) => (
+          <ListItem key={item.path} disablePadding>
+            <ListItemButton
+              selected={location.pathname === item.path}
+              onClick={() => { navigate(item.path); setMobileOpen(false) }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={t(item.labelKey)} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+
+        {/* AI Agent collapsible group */}
+        <ListItem disablePadding>
+          <ListItemButton
+            selected={isAiAgentGroupActive && !aiAgentGroupExpanded}
+            onClick={() => setAiAgentGroupExpanded((prev) => !prev)}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>{AI_AGENT_GROUP.icon}</ListItemIcon>
+            <ListItemText primary={t(AI_AGENT_GROUP.labelKey)} />
+            {aiAgentGroupExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </ListItemButton>
+        </ListItem>
+        <Collapse in={aiAgentGroupExpanded} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {AI_AGENT_GROUP.children.map((child) => (
+              <ListItem key={child.path} disablePadding>
+                <ListItemButton
+                  selected={location.pathname === child.path}
+                  onClick={() => { navigate(child.path); setMobileOpen(false) }}
+                  sx={{ pl: 4 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 36 }}>{child.icon}</ListItemIcon>
+                  <ListItemText primary={t(child.labelKey)} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+
+        {/* Items after AI Agent group (Gateway onwards) */}
+        {NAV_ITEMS.slice(5).map((item) => (
           <ListItem key={item.path} disablePadding>
             <ListItemButton
               selected={location.pathname === item.path}

@@ -82,10 +82,10 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | `components` | object | MUI component style overrides | `frontend/src/theme/components.ts` |
 | `ThemeProvider` | component | Injects theme into React context | `frontend/src/main.tsx` |
 | `CssBaseline` | component | Global CSS reset applying theme background | `frontend/src/main.tsx` |
-| `AppShell` | component | Top-level layout — sidebar drawer, AppBar, page outlet; mounts `PermissionErrorSnackbar` globally | `frontend/src/app/AppShell.tsx` |
+| `AppShell` | component | Top-level layout — sidebar drawer, AppBar, page outlet; mounts `PermissionErrorSnackbar` globally; sidebar nav uses a mixed structure of flat `NavItem` entries and collapsible `NavGroup` entries; the "AI Agent" group (Roles, Identities, Types, Executions, Logs) is managed with `aiAgentGroupExpanded` local state | `frontend/src/app/AppShell.tsx` |
 | `DRAWER_WIDTH` | const | Sidebar pixel width — 260 px | `frontend/src/app/AppShell.tsx` |
-| `NAV_ITEMS` | const | Navigation item definitions (path, icon, i18n key) | `frontend/src/app/AppShell.tsx` |
-| `AppRouter` | component | Route configuration; first-run redirect guard (`getIdentityStatus` on mount); registers `/access-denied` route for `AccessDeniedPage` | `frontend/src/app/AppRouter.tsx` |
+| `NAV_ITEMS` | const | Navigation descriptors: mixed array of flat `NavItem` and `NavGroup` objects; `NavGroup` has `groupKey`, `labelKey`, `icon`, and `children: NavItem[]`; the "AI Agent" group is a `NavGroup` positioned after Model Configs | `frontend/src/app/AppShell.tsx` |
+| `AppRouter` | component | Route configuration; first-run redirect guard (`getIdentityStatus` on mount); registers `/agents/executions` route and `/agents/instances` → `/agents/executions` redirect for backward compatibility; registers `/access-denied` route for `AccessDeniedPage` | `frontend/src/app/AppRouter.tsx` |
 | `index.css` | stylesheet | Global root layout rules (font-family removed, Inter via MUI theme) | `frontend/src/styles/index.css` |
 
 ### API Client & Permission Error Infrastructure
