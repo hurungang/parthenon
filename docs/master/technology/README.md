@@ -13,7 +13,7 @@ This section contains per-module technology specifications for every backend, fr
 | [identity](modules/identity/tech-spec.md) | RBAC layer (Roles, Permissions, Identities); identity provider bootstrap for bundled Keycloak, external Keycloak, and Azure EntraID; setup wizard and first-run redirect guard |
 | [mcp-hub](modules/mcp-hub/tech-spec.md) | External MCP server registration, tool catalogue sync under slug namespaces, encrypted session management, and tool-call proxy engine |
 | [skills](modules/skills/tech-spec.md) | Skill and SOP definition management; Skill Executor for MCP tool invocation; SOP Orchestrator for ordered multi-step execution |
-| [agents](modules/agents/tech-spec.md) | Agent type definitions, instance lifecycle management with max-instance enforcement, LLM model binding, and SOP/Skillful agent executors |
+| [agents](modules/agents/tech-spec.md) | Agent type definitions, role-governed permissions, first-class OIDC agent identities, asynchronous session queue (AgentJob), LangChain deep agent runtime executor, model configuration management, and background session dispatcher |
 | [gateway](modules/gateway/tech-spec.md) | External-facing agent lifecycle protocol (init/request/question/answer/close) over HTTP and MCP transports; endpoint registry |
 | [comm-hub](modules/comm-hub/tech-spec.md) | Redis-backed message broker, WebSocket server bridging browser clients, inter-agent routing, and session context management |
 | [scheduling](modules/scheduling/tech-spec.md) | APScheduler cron engine with PostgreSQL job store; scheduled job CRUD, pause/resume, and execution history |

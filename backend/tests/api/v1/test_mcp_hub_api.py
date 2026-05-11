@@ -729,7 +729,7 @@ async def test_oauth_authorize_includes_scope_when_configured():
 @pytest.mark.asyncio
 async def test_oauth_callback_with_valid_code_creates_session():
     """GET /mcp/oauth/callback with valid code+state creates MCP session with oauth2 auth_type."""
-    from app.api.v1.mcp_hub import _mcp_oauth_states
+    from app.services.mcp_oauth_service import mcp_oauth_states as _mcp_oauth_states
 
     server_id = _server_id()
     state = "test-state-token-abc123"
@@ -778,6 +778,7 @@ async def test_oauth_callback_with_valid_code_creates_session():
 
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json = MagicMock(return_value=mock_token_response)
         mock_post.return_value = mock_response
@@ -816,7 +817,7 @@ async def test_oauth_callback_with_invalid_state_returns_400():
 @pytest.mark.asyncio
 async def test_oauth_callback_state_is_consumed_after_use():
     """OAuth state token is consumed on first use — replay returns 400."""
-    from app.api.v1.mcp_hub import _mcp_oauth_states
+    from app.services.mcp_oauth_service import mcp_oauth_states as _mcp_oauth_states
 
     server_id = _server_id()
     state = "one-time-state-token-xyz"
@@ -855,6 +856,7 @@ async def test_oauth_callback_state_is_consumed_after_use():
 
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json = MagicMock(return_value=mock_token_response)
         mock_post.return_value = mock_response
@@ -881,7 +883,7 @@ async def test_oauth_callback_state_is_consumed_after_use():
 @pytest.mark.asyncio
 async def test_oauth_callback_encrypts_tokens_before_storing():
     """OAuth callback stores encrypted tokens — vault encrypt is called."""
-    from app.api.v1.mcp_hub import _mcp_oauth_states
+    from app.services.mcp_oauth_service import mcp_oauth_states as _mcp_oauth_states
 
     server_id = _server_id()
     state = "encrypt-test-state"
@@ -918,11 +920,12 @@ async def test_oauth_callback_encrypts_tokens_before_storing():
 
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json = MagicMock(return_value={"access_token": "tok", "token_type": "Bearer"})
         mock_post.return_value = mock_response
 
-        with patch("app.api.v1.mcp_hub.get_vault") as mock_vault:
+        with patch("app.core.credential_vault.get_vault") as mock_vault:
             mock_encrypt = MagicMock(return_value="ENCRYPTED:tokens")
             mock_vault.return_value.encrypt = mock_encrypt
 

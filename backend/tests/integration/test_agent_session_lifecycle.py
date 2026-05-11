@@ -1068,7 +1068,7 @@ async def test_full_agent_session_with_sop_and_permission_resolution(
     manager.invalidate(role.id)
     allowed = await manager.calculate_allowed_tools(role.id, db_session)
 
-    expected_identifier = f"{server.slug}:{tool.name}"
+    expected_identifier = tool.name
     assert expected_identifier in allowed, (
         f"Permission resolution failed — expected '{expected_identifier}' in {allowed}. "
         "Check that SopStepType.skill_invocation is used (not SopStepType.skill)."

@@ -12,8 +12,73 @@ from app.db.models.agents import (
     AgentInstanceStatus,
     AgentJobStatus,
     AgentOutputType,
+    AgentPlanStatus,
     ModelProvider,
 )
+
+
+# ── Plan / Topology Schemas ────────────────────────────────────────────────────
+
+
+class PlanStepRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    order: int
+    type: str
+    name: str
+    description: str | None = None
+
+
+class TopologyNodeRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: str
+    type: str
+    label: str
+    meta: dict[str, Any] | None = None
+    usage: str | None = None
+
+
+class TopologyEdgeRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    source: str
+    target: str
+    label: str | None = None
+    style: str | None = None
+
+
+class AgentPlanRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    agent_type_id: uuid.UUID
+    plan_steps: list[PlanStepRead] = []
+    topology_nodes: list[TopologyNodeRead] = []
+    topology_edges: list[TopologyEdgeRead] = []
+    generation_status: AgentPlanStatus
+    generation_error: str | None = None
+    agent_config_hash: str | None = None
+    generated_at: datetime | None = None
+
+    @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "AgentPlanRead":  # type: ignore[override]
+        """Extract topology_nodes/topology_edges from the JSON topology column."""
+        if hasattr(obj, "topology"):  # ORM AgentPlan object
+            topology: dict[str, Any] = obj.topology or {}
+            data = {
+                "id": obj.id,
+                "agent_type_id": obj.agent_type_id,
+                "plan_steps": obj.plan_steps or [],
+                "topology_nodes": topology.get("nodes", []),
+                "topology_edges": topology.get("edges", []),
+                "generation_status": obj.generation_status,
+                "generation_error": obj.generation_error,
+                "agent_config_hash": obj.agent_config_hash,
+                "generated_at": obj.generated_at,
+            }
+            return super().model_validate(data, **kwargs)
+        return super().model_validate(obj, **kwargs)
 
 
 # ── Agent Role Schemas ─────────────────────────────────────────────────────────
@@ -246,6 +311,45 @@ class AgentTypeRead(BaseModel):
     primary_sop_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    plan: AgentPlanRead | None = None
+
+    @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "AgentTypeRead":  # type: ignore[override]
+        """Build from ORM object, safely loading the plan relationship only when available."""
+        if hasattr(obj, "__tablename__"):  # SQLAlchemy ORM instance
+            from sqlalchemy import inspect as sa_inspect
+
+            plan: AgentPlanRead | None = None
+            try:
+                insp = sa_inspect(obj)
+                # Only access the plan relationship if it has already been loaded
+                if "plan" not in insp.unloaded:
+                    plan_orm = obj.plan
+                    if plan_orm is not None:
+                        plan = AgentPlanRead.model_validate(plan_orm)
+            except Exception:
+                pass  # Relationship not loaded or inspect failed — leave plan as None
+
+            data = {
+                "id": obj.id,
+                "name": obj.name,
+                "description": obj.description,
+                "identity_id": obj.identity_id,
+                "role_id": obj.role_id,
+                "model_id": obj.model_id,
+                "is_active": obj.is_active,
+                "system_instruction": obj.system_instruction,
+                "input_type": obj.input_type,
+                "input_schema": obj.input_schema,
+                "output_type": obj.output_type,
+                "output_schema": obj.output_schema,
+                "primary_sop_id": obj.primary_sop_id,
+                "created_at": obj.created_at,
+                "updated_at": obj.updated_at,
+                "plan": plan,
+            }
+            return super().model_validate(data, **kwargs)
+        return super().model_validate(obj, **kwargs)
 
 
 # ── Agent Instance Schemas (legacy) ───────────────────────────────────────────

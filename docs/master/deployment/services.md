@@ -15,8 +15,8 @@ This inventory applies to both deployment targets:
 | API Gateway | `nginx` | Reverse proxy routing all inbound HTTP and WebSocket traffic to the appropriate backend services; TLS termination in production |
 | Platform API | `platform-api` | Central FastAPI application hosting all REST endpoints for identity, MCP Hub, skills, agents, scheduling, conversations, results, and notifications; delegates JWT validation to the OIDC provider |
 | Keycloak | `parthenon-keycloak` | Bundled OpenID Connect identity provider; manages the Parthenon realm, clients, and user accounts; Admin REST API used by the Bootstrap Service during automated provisioning. Only deployed when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. |
-| Communication Hub | `communication-hub` | Redis-backed WebSocket broker for Web UI ↔ Agent bidirectional messaging and Agent ↔ Agent inter-service messaging |
-| Agent Gateway | `agent-gateway` | External-facing lifecycle protocol endpoint (init/request/question/answer/close) for agent interactions over HTTP and MCP transports |
+| Communication Hub | `communication-hub` | Redis-backed WebSocket broker for Web UI ↔ Agent bidirectional messaging and Agent ↔ Agent inter-service messaging; hosts the Agent Gateway lifecycle protocol endpoints (init/request/question/answer/close) and maintains bidirectional WebSocket connections for conversational agents (replaces the former standalone `agent-gateway` container) |
+| Agent Session Worker | `agent-session-worker` | Background worker that polls the Redis session queue (`AGENT_SESSION_QUEUE_NAME`), dispatches sessions to the Agent Runtime (LangGraph), and updates session state in PostgreSQL; requires LangGraph (`pip install langgraph`); scales horizontally via multiple replicas; does not expose an HTTP port |
 | Agent Engine | `agent-engine` | Agent type registry, instance lifecycle management with max-instance enforcement, LLM model binding, and dispatch to SOP or Skillful executors |
 | Skill Engine | `skill-engine` | Skill and SOP resolution; dispatches MCP tool calls via the MCP Hub proxy; orchestrates multi-step SOP execution |
 | MCP Hub | `mcp-hub` | External MCP tool server registry, periodic tool catalogue sync, encrypted session credential management, and tool-call proxy |
@@ -41,12 +41,14 @@ redis ─────┤         │
                                ├──► agent-engine
                                ├──► scheduling-engine
                                ├──► notification-engine
-                               ├──► communication-hub
-                               └──► agent-gateway
-                                         │
-nginx ◄───────────────────────────────────┘
+                               └──► communication-hub (+ Agent Gateway)
+
+postgres ──┐
+redis ─────┴──► agent-session-worker
+
+nginx ◄──── all HTTP-facing services
 web-ui ◄──── nginx
 otel-collector ◄──── (all services emit OTLP)
 ```
 
-All backend services depend on `postgres` and `redis` being healthy. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, `platform-api` also depends on `keycloak` being healthy before it starts. `platform-api` must be running before the domain services listed above start. `nginx` must be deployed after all backend services are healthy. `web-ui` requires `nginx` (the API Gateway) to be reachable.
+All backend services depend on `postgres` and `redis` being healthy. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, `platform-api` also depends on `keycloak` being healthy before it starts. `platform-api` must be running before the domain services listed above start. `nginx` must be deployed after all backend services are healthy. `web-ui` requires `nginx` (the API Gateway) to be reachable. `agent-session-worker` depends on `postgres` and `redis`; it reads from the Redis session queue written by `platform-api` and does not expose an HTTP port.

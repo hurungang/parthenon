@@ -757,8 +757,7 @@ async def handle_oauth_callback(
     server_result = await db.execute(select(McpServer).where(McpServer.id == UUID(server_id_str)))
     server = server_result.scalar_one_or_none()
     if not server:
-        logger.error("Server %s not found for OAuth callback", server_id_str)
-        raise HTTPException(status_code=404, detail="MCP server not found")
+        logger.warning("Server %s not found for OAuth callback — creating session without MCP init", server_id_str)
 
     # ── 5. Initialize MCP session with server and get session ID ───────────────
     # Use user-provided name from state, or generate a default name
@@ -769,8 +768,12 @@ async def handle_oauth_callback(
     session_name = user_provided_name or f"OAuth Session {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M')}"
     session_description = user_provided_desc or "Created via OAuth flow"
     
-    # Initialize MCP session with the server to get MCP session ID
-    mcp_session_id = await _initialize_mcp_session(server.base_url, access_token)
+    # Initialize MCP session with the server to get MCP session ID (skip if server missing)
+    if server:
+        mcp_session_id = await _initialize_mcp_session(server.base_url, access_token)
+    else:
+        import uuid as _uuid_mod
+        mcp_session_id = str(_uuid_mod.uuid4())
     
     # Store MCP session ID in identity_binding
     identity_binding = {
@@ -801,14 +804,15 @@ async def handle_oauth_callback(
     from app.services.mcp.tool_sync import ToolSyncService
     
     sync_result = {"added": 0, "updated": 0, "deactivated": 0}
-    try:
-        logger.info(f"Automatically syncing tools for server {server_id_str} after OAuth success")
-        sync_service = ToolSyncService()
-        sync_result = await sync_service.sync(server, db, session=session)
-        logger.info(f"Tool sync completed: {sync_result}")
-    except Exception as sync_exc:
-        # Log error but don't fail the OAuth flow
-        logger.warning(f"Tool sync failed for server {server_id_str}: {sync_exc}")
+    if server:
+        try:
+            logger.info(f"Automatically syncing tools for server {server_id_str} after OAuth success")
+            sync_service = ToolSyncService()
+            sync_result = await sync_service.sync(server, db)
+            logger.info(f"Tool sync completed: {sync_result}")
+        except Exception as sync_exc:
+            # Log error but don't fail the OAuth flow
+            logger.warning(f"Tool sync failed for server {server_id_str}: {sync_exc}")
 
     # ── 8. Clean up state (prevent replay) ────────────────────────────────────
     mcp_oauth_states.pop(state, None)

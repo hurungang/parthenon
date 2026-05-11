@@ -340,6 +340,10 @@ class KeycloakAdminClient:
         payload: dict[str, object] = {
             "username": username,
             "enabled": True,
+            "email": f"{username}@test.local",
+            "emailVerified": True,
+            "firstName": "Test",
+            "lastName": "User",
             "credentials": [
                 {
                     "type": "password",
@@ -368,3 +372,90 @@ class KeycloakAdminClient:
                 f"(HTTP {response.status_code}): {response.text[:200]}",
             )
         logger.info("User %r created in realm %r", username, realm_name)
+
+    async def get_user_by_username(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        username: str,
+    ) -> str | None:
+        """Get user ID by username.
+
+        Args:
+            token: Valid admin token.
+            realm_name: Target realm.
+            username: Username to search for.
+
+        Returns:
+            User ID if found, None otherwise.
+        """
+        url = f"{self._base_url}/admin/realms/{realm_name}/users"
+        params = {"username": username, "exact": "true"}
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            response = await _request_with_retry(
+                client,
+                "GET",
+                url,
+                params=params,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+
+        if response.status_code != 200:
+            logger.warning(
+                "Failed to search for user %r in realm %r (HTTP %d)",
+                username,
+                realm_name,
+                response.status_code,
+            )
+            return None
+
+        users = response.json()
+        if not users:
+            return None
+
+        return str(users[0]["id"])
+
+    async def delete_user(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        username: str,
+    ) -> bool:
+        """Delete a user from *realm_name*.
+
+        Args:
+            token: Valid admin token.
+            realm_name: Target realm.
+            username: Username to delete.
+
+        Returns:
+            True if user was deleted, False if user not found.
+        """
+        # First, get the user ID
+        user_id = await self.get_user_by_username(token, realm_name, username)
+        if not user_id:
+            logger.info("User %r not found in realm %r — nothing to delete", username, realm_name)
+            return False
+
+        url = f"{self._base_url}/admin/realms/{realm_name}/users/{user_id}"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            response = await _request_with_retry(
+                client,
+                "DELETE",
+                url,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+
+        if response.status_code == 204:
+            logger.info("User %r deleted from realm %r", username, realm_name)
+            return True
+
+        if response.status_code == 404:
+            logger.info("User %r not found in realm %r", username, realm_name)
+            return False
+
+        raise KeycloakAdminError(
+            "user_deletion_failed",
+            f"Failed to delete user {username!r} from realm {realm_name!r} "
+            f"(HTTP {response.status_code}): {response.text[:200]}",
+        )

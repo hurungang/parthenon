@@ -156,6 +156,7 @@ export interface AgentRole {
   description: string | null
   sop_ids: string[]
   skill_ids: string[]
+  allowed_identity_types: string[]
   created_at: string
   updated_at: string
 }
@@ -186,6 +187,42 @@ export interface AgentJob {
   created_at: string
 }
 
+export type AgentPlanStatus = 'pending' | 'success' | 'failed'
+
+export interface PlanStep {
+  order: number
+  type: string
+  name: string
+  description: string | null
+}
+
+export interface TopologyNode {
+  id: string
+  type: string
+  label: string
+  meta?: Record<string, unknown>
+  usage?: string
+}
+
+export interface TopologyEdge {
+  source: string
+  target: string
+  label?: string
+  style?: string
+}
+
+export interface AgentPlan {
+  id: string
+  agent_type_id: string
+  plan_steps: PlanStep[]
+  topology_nodes: TopologyNode[]
+  topology_edges: TopologyEdge[]
+  generation_status: AgentPlanStatus
+  generation_error: string | null
+  agent_config_hash: string | null
+  generated_at: string | null
+}
+
 export interface AgentType {
   id: string
   name: string
@@ -202,6 +239,7 @@ export interface AgentType {
   is_active: boolean
   created_at: string
   updated_at: string
+  plan?: AgentPlan | null
 }
 
 export type ModelProviderType = 'openai' | 'anthropic' | 'litellm_proxy' | 'azure_openai'
@@ -387,4 +425,63 @@ export interface AuthState {
   isLoading: boolean
   token: string | null
   claims: AuthClaims | null
+}
+
+// ── Log Viewer ─────────────────────────────────────────────────────────────────
+
+export interface ExecutionLogEntry {
+  id: string
+  timestamp: string
+  event_type: string
+  log_level: string
+  message: string
+  data: Record<string, unknown>
+}
+
+export type WorkingStepIconType = 'llm' | 'tool' | 'success' | 'error' | 'info'
+
+export interface WorkingStepDetail {
+  label: string
+  content: string
+}
+
+export interface WorkingStep {
+  id: string
+  iconType: WorkingStepIconType
+  message: string
+  timestamp: string
+  detail: WorkingStepDetail | null
+}
+
+export interface WorkingStepSpan {
+  id: string
+  title: string
+  iconType: WorkingStepIconType
+  children: (WorkingStep | WorkingStepSpan)[]
+  collapsed: boolean
+}
+
+export interface LogSummary {
+  identity: string | null
+  role: string | null
+  model: string | null
+  sopsSkills: string[]
+  planCompleted: number
+  planTotal: number
+  resultStatus: 'success' | 'failure' | 'running' | 'unknown'
+  startedAt: string | null
+  completedAt: string | null
+  durationMs: number | null
+}
+
+export interface StructuredLog {
+  summary: LogSummary
+  spans: WorkingStepSpan[]
+  workingSteps: WorkingStep[]
+  rawLog: string
+}
+
+export interface LogPresenterOptions {
+  /** Actual session status from AgentJob — overrides inferred status from logs */
+  sessionStatus?: AgentJobStatus
 }

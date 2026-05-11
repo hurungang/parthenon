@@ -40,10 +40,13 @@
     "skills": "Skills",
     "sops": "SOPs",
     "agents": "Agents",
+    "aiAgent": "AI Agent",
+    "agentTypes": "Agent Types",
+    "agentExecutions": "Agent Executions",
+    "agentLogs": "Agent Logs",
     "agentRoles": "Agent Roles",
     "agentIdentities": "Agent Identities",
     "modelConfigs": "Model Configs",
-    "agentInstances": "Agent Instances",
     "gateway": "Gateway",
     "schedules": "Schedules",
     "conversations": "Conversations",
@@ -228,6 +231,7 @@
     "terminateConfirm": "Are you sure you want to terminate this instance?",
     "roles": {
       "title": "Agent Roles",
+      "viewTitle": "Agent Role",
       "subtitle": "Define permission roles that control which SOPs, Skills, and MCP tools agents can use",
       "create": "Create Agent Role",
       "createTitle": "Create Agent Role",
@@ -260,6 +264,7 @@
     },
     "identities": {
       "title": "Agent Identities",
+      "viewTitle": "Agent Identity",
       "subtitle": "Manage agent user accounts in the dedicated agent realm for OAuth-based identity",
       "create": "Create Agent Identity",
       "createTitle": "Create Agent Identity",
@@ -308,6 +313,18 @@
       "outputMarkdown": "Markdown Text",
       "outputSchema": "Output Schema (JSON)",
       "launch": "Launch Session",
+      "detailsTab": "Details",
+      "planPreviewTab": "Plan Preview",
+      "executionLogsTab": "Execution Logs",
+      "dialogTitle": "Agent Type Details",
+      "viewIdentity": "View Identity",
+      "viewRole": "View Role",
+      "runAgent": "Run Agent",
+      "noPlan": "No plan generated yet. Save the agent type to generate a plan.",
+      "noDescription": "No description",
+      "systemPrompt": "System Prompt",
+      "primarySop": "Primary SOP",
+      "viewAllExecutions": "View All Executions",
       "form": {
         "primarySop": "Primary SOP",
         "primarySopPlaceholder": "Select a SOP",
@@ -348,6 +365,8 @@
       "initialMessagePlaceholder": "Type your first message to the agent…",
       "invalidJson": "Input data is not valid JSON.",
       "sessionTitle": "Agent Session",
+      "dashboardTitle": "Agent Executions",
+      "detailsTitle": "Execution Details",
       "statusQueued": "Queued",
       "statusRunning": "Running",
       "statusCompleted": "Completed",
@@ -365,8 +384,11 @@
       "disconnected": "Disconnected",
       "pollingHint": "Refreshing every 3 seconds…",
       "conversationHistory": "Conversation History",
-      "dashboardTitle": "Agent Instances",
+      "dashboardTitle": "Agent Executions",
       "dashboardSubtitle": "Monitor and inspect all agent execution sessions",
+      "filterByType": "Filter by Agent Type",
+      "allTypes": "All Agent Types",
+      "viewAllExecutions": "View All Executions",
       "dashboardEmpty": "No sessions found matching the current filters.",
       "sessionId": "Session ID",
       "view": "View",
@@ -385,6 +407,41 @@
         "systemInstruction": "System Instruction",
         "userPrompt": "User Prompt",
         "copy": "Copy to clipboard"
+      },
+      "logViewer": {
+        "title": "Execution Log",
+        "noLogs": "No logs available for this session.",
+        "loading": "Loading execution logs...",
+        "rawLogAriaLabel": "Raw execution log output",
+        "summary": {
+          "title": "Execution Summary",
+          "identity": "Identity",
+          "role": "Role",
+          "model": "Model",
+          "duration": "Duration",
+          "sopsSkills": "SOPs / Skills",
+          "planProgress": "Plan Progress",
+          "planProgressValue": "{{completed}} / {{total}} Steps Completed",
+          "resultStatus": "Result",
+          "statusSuccess": "Success",
+          "statusFailure": "Failed",
+          "statusRunning": "Running",
+          "statusUnknown": "Unknown",
+          "notAvailable": "N/A"
+        },
+        "workingSteps": {
+          "title": "Agent Working Steps",
+          "showSteps": "Show {{count}} Working Steps",
+          "hideSteps": "Hide Working Steps",
+          "empty": "No working steps recorded."
+        },
+        "rawToggle": {
+          "friendly": "Friendly",
+          "raw": "Raw Output",
+          "ariaLabel": "Toggle between friendly and raw log views",
+          "copyToClipboard": "Copy Raw Log",
+          "copied": "Copied!"
+        }
       }
     },
     "modelConfigs": {
@@ -414,6 +471,31 @@
       "selectEnabledModels": "Select which models agents can use from this provider:",
       "deleteConfirm": "Delete model config \"{{name}}\"? This cannot be undone.",
       "empty": "No model configurations defined. Create one to get started."
+    },
+    "plan": {
+      "previewTitle": "Agent Plan Preview — {{agentTypeName}}",
+      "previewButton": "Preview Plan",
+      "loading": "Loading plan...",
+      "steps": "Implementation Steps",
+      "noSteps": "No steps generated",
+      "topology": "Agent Topology",
+      "generationFailed": "Plan generation failed",
+      "generationFailedDetail": "{{error}}",
+      "close": "Close",
+      "showUnusedSkills": "Show Unused Skills",
+      "stepTypes": {
+        "sop_invocation": "SOP Invocation",
+        "skill_invocation": "Skill Invocation",
+        "tool_call": "Tool Call"
+      },
+      "nodeTypes": {
+        "agent": "Agent",
+        "identity": "Identity",
+        "role": "Agent Role",
+        "sop": "SOP",
+        "skill": "Skill",
+        "tool": "Tool"
+      }
     }
   },
   "gateway": {

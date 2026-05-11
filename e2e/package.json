@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
+    "test:e2e": "playwright test --config=playwright.dev.config.ts",
+    "test:e2e:auth-required": "playwright test tests/auth-required --config=playwright.dev.config.ts --workers=1",
     "test:ui": "playwright test --ui",
     "test:report": "playwright show-report"
   },

@@ -67,7 +67,7 @@ test.describe('Setup Wizard — full user journey', () => {
   test.beforeEach(async ({ page }) => {
     // Block telemetry and other non-local requests
     await page.route('http://localhost:4318/**', (route) => route.fulfill({ status: 200, body: '{}' }))
-    await page.route(/^https?:\/\/(?!localhost:4173)/, (route) => route.abort())
+    await page.route(/^https?:\/\/(?!localhost:5173)/, (route) => route.abort())
   })
 
   // -----------------------------------------------------------------------

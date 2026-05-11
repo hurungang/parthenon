@@ -13,6 +13,7 @@ This section contains all operational reference material for running and maintai
 | **MCP Hub** | Tool call rate heatmap by tool and session, error rate, latency p99 |
 | **Scheduling Engine** | Triggered vs. completed job counts over time, scheduler queue depth trend |
 | **Infrastructure** | PostgreSQL connection count and query latency, Redis memory and eviction rate, OTEL Collector throughput |
+| **Agent Runtime** | Session queue depth, session throughput and failure rate, dispatch latency, active runtime sessions, execution duration, LangGraph node transitions, permission cache hit rate, permission denials |
 
 For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
 
@@ -52,3 +53,4 @@ The following endpoints must be included in production readiness checklists and 
 | [scheduling-job-stuck.md](runbooks/scheduling-job-stuck.md) | Scheduled job triggered but never completes; scheduler queue depth growing |
 | [communication-hub-disconnect.md](runbooks/communication-hub-disconnect.md) | Web UI shows disconnected state; agent responses stop; repeated `WebSocket disconnect` in logs |
 | [telemetry.md](runbooks/telemetry.md) | Telemetry init failure at startup; no spans in Jaeger; frontend OTEL not initialising; file exporter disk pressure; Logfire or custom exporter credential errors; log level not applying |
+| [agent-runtime.md](runbooks/agent-runtime.md) | Resolving stuck sessions, permission failures, OAuth expiry, timeouts, and queue backlogs in the Agent Runtime with LangGraph |

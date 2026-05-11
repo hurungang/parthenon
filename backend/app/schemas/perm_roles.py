@@ -107,6 +107,8 @@ class PermRoleRead(BaseModel):
 
 class PermRoleDetailRead(PermRoleRead):
     """Role with full nested policy statements."""
+    
+    model_config = {"from_attributes": True}
 
     policy_statements: List[PolicyStatementRead] = Field(default_factory=list)
 

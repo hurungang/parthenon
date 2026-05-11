@@ -11,6 +11,10 @@ Update this table whenever new components are added or new log events are instru
 | **Skill Engine** | Skill resolution success and failure; SOP step execution (each step start and result); agent delegation events |
 | **MCP Hub** | Tool server registration; tool sync results (tools added, updated, removed); session credential resolution (no credential values logged); tool call dispatch and result (error details only, never payload data) |
 | **Agent Gateway** | Lifecycle protocol events (init, request, question, answer, close); session handle issuance; consumer authentication failures |
+| **Agent Runtime — SessionDispatcher** | Dispatcher poll cycles (`dispatcher.poll`); session dispatched to executor; stalled session warnings (`dispatcher.stalled`); max concurrency reached events |
+| **Agent Runtime — AgentRuntimeExecutor** | Session status transitions (queued → running → completed/failed/timeout); LangGraph node transitions (`langgraph.node_transition`); LangGraph state machine errors |
+| **Agent Runtime — AgentPermissionManager** | Permission cache hits and misses; full permission graph resolution; permission denied events; cache invalidation on role change |
+| **Agent Runtime — AgentSessionService** | Session lifecycle events: enqueued, dispatched, running, completed, failed, timeout |
 | **Communication Hub** | WebSocket connect and disconnect (with session ID and client identifier); message routing events; delivery failures |
 | **Scheduling Engine** | Job trigger events (job ID, target agent type, cron expression); job completion (duration, status); missed or skipped executions (with reason); job store errors |
 | **Notification Engine** | Notification dispatch attempt (channel type, recipient summary); delivery success and failure per channel (failure includes error detail) |
@@ -72,6 +76,65 @@ Useful LogQL queries:
 ### Jaeger (Distributed Traces)
 
 Use the `trace_id` from any log line to jump directly to the correlated distributed trace in the Jaeger UI. This cross-reference is the primary tool for debugging multi-component failures where a single request spans several services.
+
+---
+
+## Agent Runtime Log Events
+
+### Log Sources
+
+| Component | Log Source | Access |
+|-----------|-----------|--------|
+| `SessionDispatcher` | `backend` container stdout | `docker compose logs backend` or Loki: `{service="backend"} |= "session_dispatcher"` |
+| `AgentRuntimeExecutor` | `backend` container stdout | `docker compose logs backend` or Loki: `{service="backend"} |= "runtime_executor"` |
+| `AgentPermissionManager` | `backend` container stdout | Loki: `{service="backend"} |= "permission_manager"` |
+| `AgentSessionService` | `backend` container stdout | Loki: `{service="backend"} |= "agent_session_service"` |
+| `LifecycleHandler` (Gateway) | `backend` container stdout | Loki: `{service="backend"} |= "lifecycle_handler"` |
+
+### Agent Session Lifecycle Events
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `session.enqueued` | INFO | `session_id`, `agent_type_id`, `triggered_by` | Session inserted with `status=queued` |
+| `session.dispatched` | INFO | `session_id`, `agent_type_id`, `role_id` | `SessionDispatcher` picks up and hands to `AgentRuntimeExecutor` |
+| `session.running` | INFO | `session_id`, `started_at` | Session status updated to `running` |
+| `session.completed` | INFO | `session_id`, `duration_ms`, `output_size_bytes` | Session reached `completed` state |
+| `session.failed` | ERROR | `session_id`, `error`, `duration_ms` | Session reached `failed` state; `error` contains the exception summary |
+| `session.timeout` | WARN | `session_id`, `timeout_s`, `elapsed_ms` | Session exceeded the configured execution timeout |
+| `langgraph.node_transition` | DEBUG | `session_id`, `from_node`, `to_node`, `state_snapshot` | LangGraph state machine transitions between nodes |
+
+### Permission Evaluation Events
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `permission.cache_hit` | DEBUG | `role_id`, `tool_count` | Permission resolved from LRU cache |
+| `permission.cache_miss` | DEBUG | `role_id` | Cache miss; DB query initiated |
+| `permission.resolved` | INFO | `role_id`, `tool_count`, `duration_ms` | Full permission graph resolved from DB |
+| `permission.denied` | WARN | `job_id`, `role_id`, `tool_id` | Agent attempted to call a tool not in its allowed set |
+| `permission.cache_invalidated` | INFO | `role_id` | Role was updated or deleted; cache entry evicted |
+
+### OAuth Identity Validation Events
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `identity.token_acquired` | DEBUG | `identity_id`, `identity_type` | Agent client credentials successfully exchanged for access token |
+| `identity.token_refresh` | DEBUG | `identity_id` | Existing token refreshed before expiry |
+| `identity.token_refresh_failed` | ERROR | `identity_id`, `oidc_error` | Token refresh failed; includes OIDC provider error detail |
+| `identity.token_expired` | WARN | `identity_id`, `job_id` | Token discovered to have expired mid-execution |
+
+### Session Queue Worker Events
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `dispatcher.poll` | DEBUG | `queued_count`, `worker_slots_available` | Each poll cycle of the `SessionDispatcher` background worker |
+| `dispatcher.stalled` | WARN | `session_id`, `stalled_for_s` | A session has been `running` longer than the stall threshold |
+| `dispatcher.max_concurrency_reached` | INFO | `active_sessions` | Worker skipped dispatch because concurrency limit was reached |
+
+### Trace Correlation
+
+All agent session operations are wrapped in an OpenTelemetry trace. The `trace_id` appears in every log line emitted during the session's execution span. Use the `trace_id` from a session failure log to locate the full distributed trace in Jaeger, which shows the complete call graph:
+
+`LifecycleHandler → AgentSessionService → SessionDispatcher → AgentRuntimeExecutor → AgentPermissionManager → LangGraph State Graph → Skill Engine → MCP Hub`
 
 ---
 

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Execution Logs — Parthenon</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN CONTENT ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+
+/* ── VIEWS ── */
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-icon{background:none;border:none;padding:5px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--text-secondary)}
+.btn-icon:hover{background:var(--bg);color:var(--text-primary)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:20px}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── CHIPS / BADGES ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-gray{background:#F1F5F9;color:#475569}
+
+/* ── TOGGLE ── */
+.toggle-wrapper{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500}
+.toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:36px;height:20px;background:#CBD5E1;border-radius:10px;transition:background var(--transition);position:relative}
+.toggle-slider::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+.toggle-slider{background:var(--primary)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(16px)}
+
+/* ── LOGS SPECIFIC ── */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px}
+.summary-item{background:#F8FAFC;border:1px solid var(--border);border-radius:6px;padding:12px 16px}
+.summary-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.summary-value{font-size:14px;font-weight:500;color:var(--text-primary);display:flex;align-items:center;gap:8px}
+
+.collapsible-group{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
+.collapsible-header{background:#F8FAFC;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;font-weight:600;font-size:14px}
+.collapsible-header:hover{background:#F1F5F9}
+.collapsible-header .chevron{transition:transform 0.2s}
+.collapsible-group.open .collapsible-header .chevron{transform:rotate(90deg)}
+.collapsible-content{display:none;padding:16px;border-top:1px solid var(--border);background:var(--surface)}
+.collapsible-group.open .collapsible-content{display:block}
+
+.log-step{display:flex;gap:12px;margin-bottom:16px}
+.log-step:last-child{margin-bottom:0}
+.log-icon{width:28px;height:28px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.log-icon.success{background:#DCFCE7;color:#15803D}
+.log-icon.error{background:#FEE2E2;color:#B91C1C}
+.log-content{flex:1}
+.log-msg{font-size:13.5px;font-weight:500;margin-top:4px}
+.log-time{font-size:11px;color:var(--text-secondary)}
+
+.detail-block{margin-top:8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.detail-header{padding:8px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:6px}
+.detail-header:hover{background:#F1F5F9}
+.detail-body{display:none;padding:12px;border-top:1px solid var(--border);font-family:monospace;font-size:12px;color:var(--text-primary);background:#fff;white-space:pre-wrap;overflow-x:auto}
+.detail-block.open .detail-body{display:block}
+.detail-block.open .detail-header .chevron{transform:rotate(90deg)}
+
+.raw-log-view{display:none;background:#0F172A;border-radius:var(--radius);padding:16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.6;color:#E2E8F0;overflow-x:auto;max-height:600px;overflow-y:auto}
+.raw-log-view.active{display:block}
+
+.user-view{display:block}
+.user-view.hidden{display:none}
+
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:24px;font-size:12px;font-weight:600;background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0}
+.status-badge.error{background:#FEE2E2;color:#B91C1C;border-color:#FECACA}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <h1>⚡ Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+    <div class="nav-item" onclick="nav('dashboard')"><span class="nav-icon">🏠</span>Dashboard</div>
+    <div class="nav-item active"><span class="nav-icon">💡</span>Session Logs</div>
+    <div class="nav-item" onclick="nav('mcp-hub')"><span class="nav-icon">🔌</span>MCP Hub</div>
+  </nav>
+
+  <!-- MAIN WRAPPER -->
+  <div class="main-wrapper">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-title">Agent Execution Log</div>
+      <div class="topbar-actions">
+        <div class="avatar" title="Alex Harper">AH</div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="view-header">
+        <div>
+          <h2>Task: Analyze Sales Data</h2>
+          <div class="view-desc">Session ID: sess_9f8a7b6c5d4e3f2a • May 10, 2026, 14:32 PM</div>
+        </div>
+        <div class="toggle-wrapper">
+          <span style="color:var(--text-secondary)">Friendly</span>
+          <label class="toggle">
+            <input type="checkbox" id="log-toggle" onchange="toggleLogView(this)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="color:var(--text-secondary)">Raw Output</span>
+        </div>
+      </div>
+
+      <!-- USER FRIENDLY VIEW -->
+      <div id="user-view" class="user-view">
+        
+        <!-- Summary Section -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Execution Summary</h3>
+            <div class="status-badge"><span>✓</span> Success</div>
+          </div>
+          <div class="card-body">
+            <div class="summary-grid">
+              <div class="summary-item">
+                <div class="summary-label">Identity Used</div>
+                <div class="summary-value">alex_harper_admin</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">Role</div>
+                <div class="summary-value"><span class="chip chip-blue">analyst</span></div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">Model</div>
+                <div class="summary-value">gemini-3.1-pro</div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">SOPs / Skills</div>
+                <div class="summary-value">
+                  <span class="chip chip-gray">db-report</span>
+                </div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">Implementation Plan</div>
+                <div class="summary-value">3/3 Steps Completed</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Logs Section -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Execution Details</h3>
+          </div>
+          <div class="card-body" style="padding: 16px 20px">
+            
+            <div class="log-step">
+              <div class="log-icon success">✓</div>
+              <div class="log-content">
+                <div style="display:flex; justify-content:space-between; align-items:center">
+                  <div class="log-msg">Context loaded successfully</div>
+                  <div class="log-time">14:32:01</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Collapsible Working Steps -->
+            <!-- Note: "collapsed by default" as per PRD -->
+            <div class="collapsible-group">
+              <div class="collapsible-header" onclick="toggleCollapse(this)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="chevron">▶</span>
+                  Agent Working Steps (LLM Iterations)
+                </div>
+                <span class="chip chip-blue">3 Iterations</span>
+              </div>
+              <div class="collapsible-content">
+                
+                <div class="log-step">
+                  <div class="log-icon">⚙️</div>
+                  <div class="log-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center">
+                      <div class="log-msg">Generated implementation plan</div>
+                      <div class="log-time">14:32:05</div>
+                    </div>
+                    <div class="detail-block">
+                      <div class="detail-header" onclick="toggleCollapse(this)">
+                        <span class="chevron">▶</span> View Plan Details
+                      </div>
+                      <div class="detail-body">1. Query database for Q1 sales data
+2. Format data into markdown table
+3. Save report to file</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="log-step">
+                  <div class="log-icon">🛠️</div>
+                  <div class="log-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center">
+                      <div class="log-msg">Used tool: query_database</div>
+                      <div class="log-time">14:32:09</div>
+                    </div>
+                    <div class="detail-block">
+                      <div class="detail-header" onclick="toggleCollapse(this)">
+                        <span class="chevron">▶</span> View Tool Input/Output
+                      </div>
+                      <div class="detail-body">Input:
+{
+  "query": "SELECT region, SUM(amount) FROM sales WHERE quarter = 'Q1' GROUP BY region"
+}
+
+Output:
+[
+  {"region": "North America", "amount": 150000},
+  {"region": "EMEA", "amount": 95000}
+]</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="log-step">
+                  <div class="log-icon">🛠️</div>
+                  <div class="log-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center">
+                      <div class="log-msg">Used tool: write_file</div>
+                      <div class="log-time">14:32:12</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="log-step">
+              <div class="log-icon success">✓</div>
+              <div class="log-content">
+                <div style="display:flex; justify-content:space-between; align-items:center">
+                  <div class="log-msg">Task completed successfully</div>
+                  <div class="log-time">14:32:15</div>
+                </div>
+                <div class="detail-block">
+                  <div class="detail-header" onclick="toggleCollapse(this)">
+                    <span class="chevron">▶</span> View Final Result
+                  </div>
+                  <div class="detail-body">Report saved to 'reports/Q1_sales.md'. The table contains regional breakdowns as requested.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- RAW LOG VIEW -->
+      <div id="raw-view" class="raw-log-view">
+[2026-05-10T14:32:01.102Z] INFO [AgentRunner] Session initialized. sess_9f8a7b6c5d4e3f2a
+[2026-05-10T14:32:01.150Z] DEBUG [AgentRunner] Loading Identity: alex_harper_admin. Role: analyst.
+[2026-05-10T14:32:01.200Z] DEBUG [SkillManager] Injecting skill: db-report
+[2026-05-10T14:32:02.000Z] INFO [AgentRunner] Context loaded successfully.
+[2026-05-10T14:32:02.100Z] DEBUG [LLMClient] Invoking model gemini-3.1-pro...
+[2026-05-10T14:32:05.400Z] INFO [LLMAction] Generated implementation plan.
+[2026-05-10T14:32:06.000Z] DEBUG [LLMClient] Invoking model gemini-3.1-pro...
+[2026-05-10T14:32:09.112Z] INFO [ToolCall] Executing query_database...
+[2026-05-10T14:32:09.255Z] DEBUG [ToolCall] Output received from query_database: 44 bytes bytes.
+[2026-05-10T14:32:10.000Z] DEBUG [LLMClient] Invoking model gemini-3.1-pro...
+[2026-05-10T14:32:12.180Z] INFO [ToolCall] Executing write_file...
+[2026-05-10T14:32:12.200Z] DEBUG [ToolCall] Output received from write_file: Success.
+[2026-05-10T14:32:13.000Z] DEBUG [LLMClient] Invoking model gemini-3.1-pro...
+[2026-05-10T14:32:15.500Z] INFO [AgentRunner] Task completed successfully. Status: success.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleCollapse(el) {
+    const parent = el.parentElement;
+    parent.classList.toggle('open');
+  }
+
+  function toggleLogView(checkbox) {
+    const userView = document.getElementById('user-view');
+    const rawView = document.getElementById('raw-view');
+    
+    if (checkbox.checked) {
+      userView.classList.add('hidden');
+      rawView.classList.add('active');
+    } else {
+      userView.classList.remove('hidden');
+      rawView.classList.remove('active');
+    }
+  }
+
+  function nav(view) {
+    // Dummy navigation for the prototype
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    if (event && event.currentTarget) {
+      event.currentTarget.classList.add('active');
+    }
+  }
+</script>
+</body>
+</html>

@@ -33,9 +33,57 @@ Update this file whenever a new service is added or a variable is changed or rem
 
 | Variable | Description | Secret |
 |----------|-------------|--------|
-| `AGENT_ENGINE_DEFAULT_MAX_INSTANCES` | Platform-wide default cap on concurrent instances per agent type (overridable per type) | |
+| `AGENT_ENGINE_DEFAULT_MAX_INSTANCES` | Platform-wide default cap on concurrent instances per agent type (overridable per type). **Superseded** by `AGENT_RUNTIME_MAX_CONCURRENT_SESSIONS` for overall session concurrency; retain for per-type cap enforcement via the Agent Runtime until fully migrated. | |
 | `AGENT_ENGINE_RESULT_STORE_TOOL_NAME` | Name of the default result-persistence MCP tool exposed to all agents (typically `save_result`) | |
 | `LLM_REQUEST_TIMEOUT_SECONDS` | Timeout in seconds applied to all outbound LLM provider API calls | |
+
+---
+
+## Agent Runtime
+
+Variables that control the Agent Runtime subsystem. All apply to the `platform-api` container.
+
+| Variable | Description | Secret |
+|----------|-------------|--------|
+| `AGENT_RUNTIME_MAX_CONCURRENT_SESSIONS` | Maximum number of agent sessions that can execute simultaneously across all agent types; limits resource saturation at the runtime level | |
+| `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS` | Wall-clock timeout applied to a single agent session execution; sessions exceeding this are marked `failed` and their runtime instances are reclaimed | |
+| `AGENT_RUNTIME_OIDC_TOKEN_ENDPOINT` | Token endpoint used by the Agent Runtime to exchange agent client credentials for access tokens before executing OIDC-authenticated tool calls | |
+
+---
+
+## Agent Session Queue
+
+Variables that govern the Redis session dispatch queue shared between the `platform-api` and the `agent-session-worker` background process. Set identically on both containers.
+
+| Variable | Description | Secret |
+|----------|-------------|--------|
+| `AGENT_SESSION_QUEUE_NAME` | Redis list key used as the primary session dispatch queue between the Platform API and the Agent Runtime worker; must be consistent across all horizontally scaled worker instances | |
+| `AGENT_SESSION_QUEUE_RESULT_TTL_SECONDS` | Time-to-live for persisted session results in Redis before they are evicted; results are also stored in PostgreSQL for long-term audit | |
+| `AGENT_SESSION_WORKER_CONCURRENCY` | Number of parallel session consumer threads (or async tasks) within a single `agent-session-worker` container; tune with `AGENT_RUNTIME_MAX_CONCURRENT_SESSIONS` to avoid over-scheduling | |
+
+> **LangGraph dependency:** The `agent-session-worker` container requires the **LangGraph** Python package (`pip install langgraph`) for agent state machine execution. Ensure this package is installed in the worker container image before deploying.
+
+---
+
+## Agent Permission Manager
+
+Variables for the Permission Manager's Redis permission cache. Apply to the `platform-api` container.
+
+| Variable | Description | Secret |
+|----------|-------------|--------|
+| `AGENT_PERMISSION_CACHE_TTL_SECONDS` | TTL for cached permission calculations (role → SOP → Skill → MCP tool resolution) stored in Redis; lower values increase consistency at the cost of more frequent recalculation | |
+| `AGENT_PERMISSION_CACHE_ENABLED` | Set to `false` to disable Redis caching of permission decisions; intended only for debugging — always `true` in production | |
+
+---
+
+## Communication Hub
+
+Variables for the `communication-hub` container, including the Agent Gateway lifecycle protocol extension.
+
+| Variable | Description | Secret |
+|----------|-------------|--------|
+| `AGENT_GATEWAY_BASE_URL` | Public base URL at which the Agent Gateway lifecycle endpoints are reachable; used when constructing callback URIs returned to callers | |
+| `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | Timeout for inbound agent execution requests before the gateway returns a timeout error; should be greater than `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS` | |
 
 ---
 

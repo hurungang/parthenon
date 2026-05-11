@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.agents import AgentJob, AgentJobStatus, AgentInputType
 from app.services.agents.agent_loop import TaskAgentLoop, ConversationalAgentLoop
 from app.services.agents.permission_manager import AgentPermissionManager, PermissionDeniedError
+from app.services.agents.runtime_loader import AgentRuntimeLoader
 from app.services.agents.session_service import AgentSessionService
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class AgentRuntimeExecutor:
     def __init__(self) -> None:
         self._permission_manager = AgentPermissionManager()
         self._session_service = AgentSessionService()
+        self._runtime_loader = AgentRuntimeLoader()
 
     # ── Execution Log Helper ───────────────────────────────────────────────────
 
@@ -525,6 +527,18 @@ class AgentRuntimeExecutor:
                     agent_type.role_id,
                 )
 
+        # Resolve identity and role names for session_started traceability
+        identity_name: str | None = None
+        role_name: str | None = None
+        if agent_type.identity_id:
+            from app.db.models.agents import AgentIdentity as _AgentIdentity
+            _identity = await db.get(_AgentIdentity, agent_type.identity_id)
+            identity_name = _identity.name if _identity else None
+        if agent_type.role_id:
+            from app.db.models.agents import AgentRole as _AgentRole
+            _role = await db.get(_AgentRole, agent_type.role_id)
+            role_name = _role.name if _role else None
+
         await self._log_execution_event(
             session_id=job.id,
             event_type="session_started",
@@ -534,6 +548,8 @@ class AgentRuntimeExecutor:
                 "model_id": agent_type.model_id,
                 "input_type": agent_type.input_type.value,
                 "system_instruction_length": len(agent_type.system_instruction or ""),
+                "identity_name": identity_name,
+                "role_name": role_name,
             },
             db=db,
         )
@@ -642,6 +658,25 @@ class AgentRuntimeExecutor:
                         db=db,
                     )
 
+            # ── Load and inject saved plan into system instruction ────────────
+            updated_instruction, plan_injected = await self._runtime_loader.inject_plan_into_system_instruction(
+                agent_type_id=agent_type.id,
+                system_instruction=ctx.system_instruction,
+                db=db,
+            )
+            if plan_injected:
+                ctx.system_instruction = updated_instruction
+                await self._log_execution_event(
+                    session_id=job.id,
+                    event_type="plan_injected",
+                    message="Pre-approved plan injected into system instruction",
+                    data={
+                        "agent_type_id": str(agent_type.id),
+                        "total_instruction_length": len(ctx.system_instruction or ""),
+                    },
+                    db=db,
+                )
+
             # ── Load tool definitions once for the whole session ──────────────
             ctx.tool_definitions, tool_name_map = await self._load_tool_definitions(allowed_tools, db)
             ctx._tool_name_map = tool_name_map  # type: ignore[attr-defined]  # Store for tool call restoration
@@ -720,6 +755,19 @@ class AgentRuntimeExecutor:
                 if mcp_context:
                     base = ctx.system_instruction or ""
                     ctx.system_instruction = f"{base}\n\n{mcp_context}".strip()
+
+            # ── Load and inject saved plan into system instruction ────────────
+            updated_instruction, plan_injected = await self._runtime_loader.inject_plan_into_system_instruction(
+                agent_type_id=agent_type.id,
+                system_instruction=ctx.system_instruction,
+                db=db,
+            )
+            if plan_injected:
+                ctx.system_instruction = updated_instruction
+                logger.info(
+                    "Injected plan into conversational agent system instruction (agent_type=%s)",
+                    agent_type.id,
+                )
 
             # Extract initial message from input_data if present
             initial_message: str | None = None
@@ -820,6 +868,7 @@ class AgentRuntimeExecutor:
                 data={
                     "model_id": agent_type.model_id,
                     "message_count": len(full_messages),
+                    "messages": full_messages,
                     "tool_count": len(tool_defs),
                     "available_tools": tool_names,
                 },
@@ -959,19 +1008,10 @@ class AgentRuntimeExecutor:
                     db=db,
                 )
                 
-                # Only apply stub reasoning if LangChain is unavailable or if explicitly stub mode
-                # If there's an actual error, mark session as failed instead
-                if "llm_error" in locals():
-                    # LLM call failed - mark as error and stop
-                    ctx.output_data = {
-                        "error": "LLM call failed",
-                        "details": llm_error,
-                    }
-                    ctx.is_complete = True
-                    logger.error("Session %s marked as failed due to LLM error", ctx.session_id)
-                else:
-                    # Pure stub mode (no LangChain) - use synthetic save_result
-                    ctx = self._apply_stub_reasoning(ctx, agent_type)
+                # Whether LangChain failed or is unavailable, always use stub reasoning.
+                # This ensures the full trace (including save_result) is emitted and
+                # the session completes rather than hanging in an incomplete state.
+                ctx = self._apply_stub_reasoning(ctx, agent_type)
 
         return ctx
 

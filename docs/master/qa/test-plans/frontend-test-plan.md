@@ -55,6 +55,7 @@ Core pages and flows verified to render correctly:
 |------|-----------|
 | Authentication flows | e2e/tests/auth.spec.ts |
 | Dashboard / app shell | e2e/tests/dashboard.spec.ts |
+| Agent navigation structure, AI Agent nav group | e2e/tests/agent-navigation.spec.ts |
 | Agent Management | e2e/tests/agent-management.spec.ts |
 | Chat | e2e/tests/chat.spec.ts |
 | Conversations | e2e/tests/conversations.spec.ts |
@@ -80,3 +81,4 @@ Core pages and flows verified to render correctly:
 | Change | Description | Added |
 |--------|-------------|-------|
 | apply-material-theme | Material UI theming: Inter font, indigo palette, component overrides, WCAG AA | 2026-04-30 |
+| unified-agent-navigation | Added agent-navigation.spec.ts to General UI Smoke table | 2026-05-10 |

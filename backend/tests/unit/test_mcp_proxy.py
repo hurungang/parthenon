@@ -41,7 +41,8 @@ async def test_proxy_engine_resolves_session_and_returns_result():
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_response = MagicMock()
-        mock_response.json.return_value = expected_result
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": expected_result}
         mock_response.raise_for_status = MagicMock()
         mock_http.post = AsyncMock(return_value=mock_response)
 

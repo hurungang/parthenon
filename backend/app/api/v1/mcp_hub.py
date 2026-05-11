@@ -34,7 +34,7 @@ from app.schemas.mcp_oauth import OAuthDiscoveryResult, OAuthInitiateRequest
 from app.schemas.skills import SkillRead
 from app.services.mcp.tool_sync import ToolSyncService
 from app.services.mcp.oauth_refresh import OAuthRefreshService
-from app.services.mcp_oauth_service import initiate_oauth_flow, handle_oauth_callback as _handle_oauth_callback
+from app.services.mcp_oauth_service import initiate_oauth_flow, handle_oauth_callback as _handle_oauth_callback, mcp_oauth_states as _mcp_oauth_states
 from app.services.mcp_session_test import test_mcp_session_connection
 
 logger = logging.getLogger(__name__)
@@ -175,7 +175,7 @@ async def list_server_tools(
     return list(result.scalars().all())
 
 
-@McpServerRouter.post("/{server_id}/oauth/authorize")
+@McpServerRouter.get("/{server_id}/oauth/authorize")
 async def get_oauth_authorization_url(
     server_id: uuid.UUID,
     db: DbSession,
@@ -220,6 +220,27 @@ async def get_oauth_authorization_url(
                 registration_endpoint=None,
             )
             logger.info("Using manual OAuth configuration")
+
+    # When no manual config provided, validate server's oauth_config before attempting discovery
+    if manual_config is None:
+        server = await db.get(McpServer, server_id)
+        if not server:
+            raise HTTPException(status_code=404, detail="MCP server not found")
+        if not server.oauth_config:
+            raise HTTPException(
+                status_code=400,
+                detail="OAuth not configured for this server. "
+                "Please configure the server's oauth_config or provide manual OAuth parameters.",
+            )
+        oauth_cfg = server.oauth_config
+        auth_url = oauth_cfg.get("authorization_url")
+        client_id = oauth_cfg.get("client_id")
+        if auth_url and not client_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Incomplete OAuth configuration: client_id is required. "
+                "Please provide a complete oauth_config or use manual configuration.",
+            )
     
     # Pass session metadata to OAuth flow
     session_name = body.session_name if body else None
@@ -409,11 +430,11 @@ async def oauth_callback(
     code: str,
     state: str,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
 ) -> dict:
     """
     Handle OAuth callback and exchange code for tokens.
     Creates an MCP session with the acquired credentials.
+    State token provides CSRF protection — no additional auth needed.
     """
     return await _handle_oauth_callback(code=code, state=state, db=db)
 

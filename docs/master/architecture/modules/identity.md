@@ -68,3 +68,51 @@ flowchart TB
 |---|---|
 | **Bundled Keycloak** | Keycloak runs as a Docker Compose service alongside the platform; provisioned automatically on first run |
 | **External OIDC** | Operator supplies an existing OIDC provider URL and client credentials during setup; no Keycloak container is started |
+
+## Dual-Realm Topology
+
+The identity provider manages two realms. The `parthenon` realm serves human users and platform clients. The `ai_agents` realm hosts agent user identities — the credentials used by the Agent Runtime to authenticate each agent instance. Both realms are initialised by the Identity Bootstrap Service on first deploy; the bootstrap is idempotent so re-running against an already-provisioned provider is safe.
+
+The `ai_agents` realm name is configurable in `identity.yaml`; operators can substitute any realm name or point the agent identity flows to a different realm in an external IdP.
+
+```mermaid
+flowchart TB
+    subgraph Setup Path
+        WZ[Setup Wizard UI]
+        CLI[CLI Entrypoint]
+        SAPI[Setup API]
+        IBS[Identity Bootstrap Service]
+    end
+
+    subgraph Runtime Path
+        CFG[Config Layer]
+        YCL[YAML Config Loader]
+        OIDCC[OIDC Client]
+    end
+
+    subgraph Config Store
+        YF[identity.yaml]
+    end
+
+    subgraph IdP[Identity Provider]
+        UserRealm[parthenon realm]
+        AgentRealm[ai_agents realm]
+    end
+
+    WZ -->|setup request| SAPI
+    CLI --> IBS
+    SAPI --> IBS
+    IBS -->|Admin REST API| UserRealm
+    IBS -->|Admin REST API| AgentRealm
+    IBS -->|write| YF
+    YCL -->|read| YF
+    CFG --> YCL
+    OIDCC -->|reads provider URL| CFG
+    OIDCC -->|JWKS / token validation| UserRealm
+    OIDCC -->|JWKS / token validation| AgentRealm
+```
+
+| Realm | Hosts | Used By |
+|---|---|---|
+| **parthenon** | Human user accounts, platform OIDC client | Platform API, Web UI login, Permission Engine |
+| **ai_agents** | Agent user accounts, token settings | Agent Runtime (execution), Communication Hub (gateway auth), Token Refresh Service |
