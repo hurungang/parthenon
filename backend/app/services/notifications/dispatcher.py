@@ -1,4 +1,8 @@
-"""Notification Dispatcher — dispatches notifications via configured channels."""
+"""Notification Dispatcher — legacy channel dispatch (retained for NotificationHook).
+
+New code should use NotificationService instead.
+"""
+import asyncio
 import json
 import logging
 import smtplib
@@ -17,71 +21,23 @@ from app.db.models.notifications import (
     NotificationChannel,
     NotificationEvent,
 )
+from app.services.notifications.mcp_tool import (
+    SEND_NOTIFICATION_TOOL,
+    GET_RECIPIENT_GROUP_TOOL,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class NotificationDispatcher:
     """
-    Dispatches outbound notifications to configured channels:
-    email, Slack, Teams, webhook.
-    Each channel type is also exposed as an MCP tool.
+    Legacy dispatcher used only by NotificationHook for permission-domain sends.
+    New dispatch logic lives in NotificationService + channel providers.
+
+    MCP_TOOLS now exposes the unified send_notification and get_recipient_group tools.
     """
 
-    MCP_TOOLS = [
-        {
-            "name": "notify_email",
-            "description": "Send an email notification via a configured email channel.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "channel_id": {"type": "string"},
-                    "recipient": {"type": "string"},
-                    "subject": {"type": "string"},
-                    "body": {"type": "string"},
-                },
-                "required": ["channel_id", "recipient", "subject", "body"],
-            },
-        },
-        {
-            "name": "notify_slack",
-            "description": "Send a Slack notification via a configured Slack channel.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "channel_id": {"type": "string"},
-                    "body": {"type": "string"},
-                    "recipient": {"type": "string", "description": "Slack channel or user ID"},
-                },
-                "required": ["channel_id", "body"],
-            },
-        },
-        {
-            "name": "notify_teams",
-            "description": "Send a Microsoft Teams notification via a configured Teams channel.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "channel_id": {"type": "string"},
-                    "body": {"type": "string"},
-                },
-                "required": ["channel_id", "body"],
-            },
-        },
-        {
-            "name": "notify_webhook",
-            "description": "Send a webhook notification via a configured webhook channel.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "channel_id": {"type": "string"},
-                    "body": {"type": "string"},
-                    "recipient": {"type": "string", "description": "Override webhook URL"},
-                },
-                "required": ["channel_id", "body"],
-            },
-        },
-    ]
+    MCP_TOOLS = [SEND_NOTIFICATION_TOOL, GET_RECIPIENT_GROUP_TOOL]
 
     async def dispatch(
         self,

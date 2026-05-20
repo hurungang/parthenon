@@ -17,7 +17,7 @@ erDiagram
         uuid server_id
         string name
         string description
-        enum auth_type
+        enum auth_type "api_key|bearer_token|basic_auth|oauth2|none|passthrough"
         string encrypted_credentials
         string identity_subject
         json identity_binding
@@ -49,6 +49,6 @@ erDiagram
 | Entity | Description |
 |--------|-------------|
 | **McpServer** | A registered external tool server with a unique slug; its status (active/inactive) is tracked by the platform. |
-| **McpSession** | A named connection configuration on a server that carries a specific identity, credential binding, and session-level config for outbound calls; supports structured identity binding and per-session credential configuration. |
+| **McpSession** | A named connection configuration on a server that carries a specific identity, credential binding, and session-level config for outbound calls; supports structured identity binding and per-session credential configuration. `auth_type` may be `passthrough`, in which case the executing agent's identity is forwarded at call time and no credentials are stored. |
 | **McpTool** | A capability synced from an external server; namespaced under the server's slug to ensure platform-wide uniqueness. |
 | **ToolPermission** | Grants a Role or Identity the right to invoke a specific tool. |

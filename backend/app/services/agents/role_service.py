@@ -1,13 +1,15 @@
 """AgentRole CRUD service — manages AgentRole with SOP/Skill assignments."""
+from __future__ import annotations
+
 import logging
 import uuid
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.models.agents import AgentIdentity, AgentRole, AgentRoleIdentity, AgentRoleMcpSession, AgentRoleSOP, AgentRoleSkill, AgentType
+from app.services.agents.tool_naming import parse_tool_name
 
 logger = logging.getLogger(__name__)
 
@@ -390,8 +392,21 @@ class AgentRoleService:
             # No MCP tools needed, return empty list
             return []
         
-        # Extract server slugs from tool names (format: "server_slug/tool_name")
-        server_slugs = list(set(name.split("/")[0] for name in tool_names if "/" in name))
+        # Extract server slugs from canonical names (server____tool) with legacy slash fallback.
+        server_slugs: list[str] = []
+        for name in tool_names:
+            try:
+                server_slug, _ = parse_tool_name(name)
+                if server_slug != "system":
+                    server_slugs.append(server_slug)
+                continue
+            except ValueError:
+                pass
+
+            if "/" in name:
+                server_slugs.append(name.split("/", 1)[0])
+
+        server_slugs = list(set(server_slugs))
         
         if not server_slugs:
             return []
@@ -415,6 +430,7 @@ class AgentRoleService:
                 "server_id": str(server.id),
                 "server_name": server.name,
                 "server_slug": server.slug,
+                "auth_type": session.auth_type.value,
             })
         
         return sessions

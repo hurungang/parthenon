@@ -11,12 +11,10 @@ If no plan exists or generation_status != success, the agent runs without plan g
 import json
 import logging
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.db.models.agents import AgentPlan, AgentPlanStatus
+if TYPE_CHECKING:
+    from app.agent_runtime.data_client import ControlCenterDataClient
 
 logger = logging.getLogger(__name__)
 
@@ -37,26 +35,22 @@ class AgentRuntimeLoader:
     and injects the plan into the agent's system context.
     """
 
-    async def load_plan_for_agent_type(
-        self, agent_type_id: uuid.UUID, db: AsyncSession
-    ) -> AgentPlan | None:
-        """
-        Fetch the successful plan for the given agent type.
+    async def load_plan_for_agent_type_via_client(
+        self,
+        agent_type_id: uuid.UUID,
+        data_client: "ControlCenterDataClient",
+    ) -> dict[str, Any] | None:
+        """Fetch the successful plan via Control Center data API.
 
-        Returns None if no plan exists or the plan has a failed/pending status.
+        Returns a plan dict (plan_steps, topology, generation_status, generated_at)
+        or None if no successful plan exists.
         """
-        result = await db.execute(
-            select(AgentPlan).where(
-                AgentPlan.agent_type_id == agent_type_id,
-                AgentPlan.generation_status == AgentPlanStatus.success,
-            )
-        )
-        plan = result.scalar_one_or_none()
+        plan = await data_client.get_agent_plan(agent_type_id)
         if plan:
             logger.info(
-                "Loaded saved plan for agent_type=%s (%d steps)",
+                "Loaded saved plan for agent_type=%s via CC (%d steps)",
                 agent_type_id,
-                len(plan.plan_steps or []),
+                len(plan.get("plan_steps") or []),
             )
         else:
             logger.debug(
@@ -65,14 +59,20 @@ class AgentRuntimeLoader:
             )
         return plan
 
-    def format_plan_for_injection(self, plan: AgentPlan) -> str:
+    def format_plan_for_injection(self, plan: Any) -> str:
         """
         Format the plan steps as a human-readable text block for injection into
         the agent's system instruction.
 
+        Accepts either an AgentPlan ORM object or a plain dict returned by the
+        Control Center data API.
+
         Returns an empty string if plan_steps is empty or None.
         """
-        steps: list[dict[str, Any]] = plan.plan_steps or []
+        if isinstance(plan, dict):
+            steps: list[dict[str, Any]] = plan.get("plan_steps") or []
+        else:
+            steps = plan.plan_steps or []
         if not steps:
             return ""
 
@@ -89,25 +89,26 @@ class AgentRuntimeLoader:
         lines.append(_PLAN_FOOTER)
         return "\n".join(lines)
 
-    async def inject_plan_into_system_instruction(
+    async def inject_plan_into_system_instruction_via_client(
         self,
         agent_type_id: uuid.UUID,
         system_instruction: str | None,
-        db: AsyncSession,
+        data_client: "ControlCenterDataClient",
     ) -> tuple[str | None, bool]:
-        """
-        Load the saved plan and append it to the system instruction if found.
+        """Load the saved plan and append it to the system instruction.
+
+        Uses Control Center data API instead of direct DB access.
 
         Args:
             agent_type_id: The UUID of the agent type being executed.
             system_instruction: The current system instruction string (may be None).
-            db: Active async database session.
+            data_client: ControlCenterDataClient for fetching plan data.
 
         Returns:
             Tuple of (updated_system_instruction, plan_was_injected).
             If no plan is found, returns the original system_instruction and False.
         """
-        plan = await self.load_plan_for_agent_type(agent_type_id, db)
+        plan = await self.load_plan_for_agent_type_via_client(agent_type_id, data_client)
         if not plan:
             return system_instruction, False
 
@@ -119,7 +120,7 @@ class AgentRuntimeLoader:
         updated = f"{base}{plan_text}".strip()
         logger.info(
             "Injected plan (%d steps) into system instruction for agent_type=%s",
-            len(plan.plan_steps or []),
+            len(plan.get("plan_steps") or []) if isinstance(plan, dict) else 0,
             agent_type_id,
         )
         return updated, True

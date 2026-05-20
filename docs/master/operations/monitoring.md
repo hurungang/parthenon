@@ -51,6 +51,39 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Agent Permission Manager** | `agent.permission.cache_hit_rate` (derived) | `cache_hits / (cache_hits + cache_misses)`; below 80% indicates frequent role mutations or undersized cache |
 | **Agent Permission Manager** | `agent.permission.resolution_duration` (p99) | Time to resolve the full SOP → Skill → MCP tool graph; p99 > 500 ms triggers alert |
 | **Agent Identity** | `agent.identity.token_refresh_failures_total` | Failed OIDC token refresh attempts for agent client credentials; any sustained rate is critical |
+| **MCP Demo App** | `mcp_demo.startup.registration_success` | 1 if Hub registration succeeded at startup, 0 if failed; alert on any non-1 value after container start |
+| **MCP Demo App** | `mcp_demo.auth.token_refresh_failures_total` | Failed Keycloak client credentials grant attempts; alert on any sustained non-zero rate |
+| **MCP Demo App** | `mcp_demo.auth.jwks_fetch_failures_total` | Failed Keycloak JWKS endpoint fetches; alert on any sustained non-zero rate |
+| **MCP Demo App** | `mcp_demo.auth.jwt_validation_failures_total` | Incoming agent JWTs that failed signature/expiry/issuer check; alert on any sustained non-zero rate |
+| **MCP Demo App** | `mcp_demo.tool.calls_total` | Total `helloWorld` tool invocations (label: `status=success\|error`); alert if error rate > 10% sustained for 5 min |
+| **MCP Demo App** | `mcp_demo.http.request_duration` | HTTP request latency for `/mcp` and `/health` endpoints (p99); alert if p99 > 5 s |
+| **MCP Hub — Passthrough Sessions** | Active passthrough session count | Number of `mcp_session` rows with `auth_type = 'passthrough'`; used for trend monitoring and capacity planning |
+| **MCP Hub — Passthrough Sessions** | Passthrough session creation rate | New passthrough sessions per hour; spike > 100/hour may indicate abuse |
+| **MCP Hub — Passthrough Sessions** | Passthrough session creation failures | Failed passthrough session creates per hour; > 10/hour warrants investigation |
+| **MCP Hub — Passthrough Sessions** | Passthrough tool call success rate | Successful vs. failed tool calls for passthrough sessions; alert if < 95% |
+| **MCP Hub — Passthrough Sessions** | JWT extraction rate | Percentage of incoming requests where middleware successfully extracts `raw_token`; < 99% indicates middleware regression |
+| **MCP Hub — Passthrough Sessions** | JWKS cache hit rate | Keycloak JWKS cache hits for passthrough JWT validation; < 90% indicates cache misconfiguration or excessive key rotation |
+| **MCP Hub — Passthrough Sessions** | JWT expiry rate | Percentage of passthrough tool calls rejected because the forwarded JWT is expired; > 5% warrants investigation |
+| **MCP Hub — Passthrough Sessions** | Passthrough tool call latency p99 | End-to-end time for tool calls via passthrough sessions; alert if p99 > 5 s |
+| **Certificate Authority** | CA certificate expiration date | Alert 6 months before expiry; CA cert is valid for 10 years; check via `GET /api/v1/certificates/ca` response field `expires_at` |
+| **Certificate Authority** | Active agent instance certificate count by status | Count of `agent_instance_certificates` rows grouped by `status` (active, revoked, expired); used for capacity and health overview |
+| **Certificate Authority** | Certificates expiring within 6 hours | Count of `active` agent certificates with `expires_at` within 6 hours; non-zero count indicates imminent renewal risk |
+| **Certificate Authority** | Certificate renewal failure rate | Log-based counter on `cert.renewal_failed` events; any non-zero rate is critical — agent runtime shuts down gracefully after expiry |
+| **Certificate Authority** | Certificate validation failure rate | Rate of `cert.validation.failed` WARN log events labelled by `outcome` (expired, revoked, invalid); non-zero rate requires investigation |
+| **Notification Service** | `notification_sent_total` (labels: `channel_type`, `status`) | Total notification delivery attempts per channel type; use to track delivery volume and per-channel error rates |
+| **Notification Service** | `notification_delivery_duration_seconds` (p99, labels: `channel_type`) | End-to-end delivery time per channel type; high p99 for `SMTP` indicates relay latency; high p99 for `WEBHOOK` indicates target server slowness |
+| **Notification Service** | `notification_retry_total` (labels: `channel_type`) | Cumulative retries per channel; elevated rate indicates unstable downstream channel provider |
+| **Notification Service** | `notification_channel_health` (gauge, labels: `channel_id`, `channel_type`) | 1 = channel last delivery successful; 0 = channel last delivery failed; use for per-channel health dashboard |
+| **Notification Service** | `notification_partial_failure_total` | Notifications where at least one (but not all) channels failed; non-zero rate indicates multi-channel reliability issues |
+| **Control Center** | `parthenon_cc_api_request_total` (labels: `endpoint`, `status`) | Total API requests to Control Center REST endpoints |
+| **Control Center** | `parthenon_cc_cert_issue_total` (labels: `service`) | Certificates issued to Agent Runtime and Communication Hub; tracks bootstrap and renewal events |
+| **Control Center** | `parthenon_cc_cert_renewal_failures_total` (labels: `service`) | Failed certificate renewal requests; any sustained non-zero rate is critical |
+| **Agent Runtime** | `parthenon_ar_session_total` (labels: `status`) | Agent sessions completed per status (`completed`, `failed`, `timeout`) |
+| **Agent Runtime** | `parthenon_ar_tool_call_total` (labels: `server`, `tool`, `status`) | Tool calls forwarded to CommHub by the Agent Runtime executor |
+| **Communication Hub** | `parthenon_ch_tool_routed_total` (labels: `routing` = `system` or `mcp`) | Tool calls routed by NameResolver; tracks system vs MCP routing split |
+| **Communication Hub** | `parthenon_ch_name_resolver_errors_total` | NameResolver failures (unknown server, malformed name) |
+| **Communication Hub** | `parthenon_ch_cert_validation_failures_total` | Agent certificates that failed validation at CommHub; any non-zero rate requires investigation |
+| **Agent Identities (Security Segregation)** | `token_status = 'refresh_failed'` count | Count of agent identities with `token_status = 'refresh_failed'`; any non-zero value pages on-call immediately |
 
 ---
 
@@ -63,7 +96,17 @@ Single-pane health summary intended for on-call operators. Include: Platform API
 Detailed agent execution view. Include: instance count per agent type as a stacked time series, instance creation and destruction rates, and an agent response latency histogram showing p50 and p99 percentiles.
 
 ### MCP Hub
-Tool call analysis view. Include: tool call rate as a heatmap bucketed by tool name and session, tool call error rate as a percentage, and tool call latency p99 as a time series.
+Tool call analysis view. Include: tool call rate as a heatmap bucketed by tool name and session, tool call error rate as a percentage, tool call latency p99 as a time series, and a passthrough session panel group (see below).
+
+### MCP Hub — Passthrough Sessions
+Add as a panel group within the MCP Hub dashboard. Panels:
+
+- **Active Passthrough Sessions** — Count of `mcp_session` rows with `auth_type = 'passthrough'`; time-series trend for capacity planning.
+- **Passthrough Tool Call Rate** — Rate of tool calls for passthrough sessions; stacked by `success`/`error` status.
+- **Passthrough Tool Success Rate** — `success / total` percentage; alert annotation at < 95%.
+- **JWT Extraction Rate** — Percentage of requests where middleware successfully extracts `raw_token`; alert annotation at < 99%.
+- **JWKS Cache Hit Rate** — Gauge showing Keycloak JWKS cache hit percentage; alert annotation at < 80%.
+- **Passthrough Tool Latency** — p99 time series for end-to-end passthrough tool call duration; alert annotation at > 5 s.
 
 ### Scheduling Engine
 Schedule health view. Include: triggered job count and completed job count overlaid on the same time axis (divergence is immediately visible), and scheduler queue depth trend.
@@ -117,3 +160,52 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `AgentIdentityTokenFailure` | `rate(agent.identity.token_refresh_failures_total) > 0` for 2 min | Critical | Verify OIDC provider connectivity; check agent client credentials in identity provider |
 | `AgentSessionTimeout` | `rate(agent.session.timeouts_total) > 0` for 5 min | Warning | Inspect timed-out sessions; check LLM provider latency and MCP server responsiveness |
 | `LangGraphStateErrors` | `rate(agent.runtime.langgraph_errors_total) > 0` for 2 min | Critical | Inspect LangGraph state machine errors; validate agent type configurations |
+
+### Notification Service Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `NotificationChannelFailureSpike` | `rate(notification_sent_total{status="failed"}) / rate(notification_sent_total) > 0.10` for 5 min | Warning | Check individual channel logs; test connectivity to external provider |
+| `NotificationDeliveryLatencyHigh` | `notification_delivery_duration_seconds{quantile="0.99"} > 10` for 5 min | Warning | Identify slow channel type; check provider rate limits or network latency |
+| `NotificationChannelDown` | `notification_channel_health == 0` for 10 min | Critical | Channel consistently failing; check channel credentials and external provider status |
+| `NotificationRetryStorm` | `rate(notification_retry_total) > 50/min` for 5 min | Warning | High retry rate across channels; check provider availability and backoff configuration |
+
+### Service-to-Service Trust Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `AgentRuntimeCertExpiringSoon` | Control Center reports AR cert expiring < 1 hour | Warning | Trigger manual cert renewal; check AR service health |
+| `CommHubCertExpiringSoon` | Control Center reports CommHub cert expiring < 1 hour | Warning | Trigger manual cert renewal; check CommHub service health |
+| `CertRenewalFailure` | `rate(parthenon_cc_cert_renewal_failures_total) > 0` for 2 min | Critical | AR or CommHub cannot renew cert; service will shut down after expiry |
+| `CommHubNameResolverErrors` | `rate(parthenon_ch_name_resolver_errors_total) > 0` for 5 min | Warning | Agents sending malformed tool names or unknown server IDs; check agent code |
+| `CommHubCertValidationFailures` | `rate(parthenon_ch_cert_validation_failures_total) > 0` for 5 min | Critical | Potential unauthorized tool calls; check for compromised agent certs |
+
+### MCP Demo App Alerts
+
+Metrics are emitted via OpenTelemetry; panels live in the **MCP Demo App** panel group on the MCP Hub Grafana dashboard.
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|---------|
+| `MCPDemoRegistrationFailed` | `mcp_demo.startup.registration_success == 0` at startup | Critical | Check Hub connectivity and API key; see Hub registration runbook |
+| `MCPDemoJWTValidationFailures` | `rate(mcp_demo.auth.jwt_validation_failures_total) > 0` for 5 min | Warning | Verify calling agent is using `ai_agents` realm tokens; check JWKS cache |
+| `MCPDemoKeycloakTokenFailure` | `rate(mcp_demo.auth.token_refresh_failures_total) > 0` for 2 min | Critical | Verify Keycloak `ai_agents` realm is reachable; check client secret rotation |
+| `MCPDemoHighToolErrorRate` | Tool call error rate > 10% for 5 min | Warning | Inspect tool invocation logs; correlate with JWT validation failures |
+
+### Passthrough Session Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `PassthroughJWTValidationFailureSpike` | JWT validation failures > 10% over 5 minutes | Critical | Check Keycloak JWKS endpoint availability; see [passthrough-session.md](runbooks/passthrough-session.md) |
+| `PassthroughSessionCreationFailures` | Session creation failures > 20/hour | Warning | Check database constraints and backend logs; verify `auth_type = 'passthrough'` enum migration is applied |
+| `PassthroughHighToolLatency` | Passthrough tool call latency p99 > 5 s | Warning | Check MCP server performance and network latency to upstream MCP server |
+| `PassthroughJWKSCacheDegraded` | JWKS cache hit rate < 80% over 10 min | Warning | Review JWKS cache TTL configuration in `backend/app/auth.py` |
+| `PassthroughSessionCreationRateAnomaly` | New passthrough sessions > 100/hour | Warning | Review session creation logs for potential abuse patterns |
+
+### Certificate Security Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `CACertificateExpirySoon` | CA certificate expires within 6 months | Warning | Begin CA rotation planning; check `GET /api/v1/certificates/ca` `expires_at` field |
+| `AgentCertRenewalFailure` | `cert.renewal_failed` ERROR log present | Critical | Certificate will expire without intervention; re-provision immediately; see [certificate-security.md](runbooks/certificate-security.md) |
+| `AgentCertExpired` | `cert.validation.failed` WARN with `outcome = expired` sustained | Critical | Agent runtime shutting down; manually issue replacement certificate; see [certificate-security.md](runbooks/certificate-security.md) |
+| `AgentIdentityRefreshFailed` | Count of `agent_identities.token_status = 'refresh_failed'` > 0 | Critical | Agent identity requires manual re-authorization via Admin UI → Agent Identities; see [certificate-security.md](runbooks/certificate-security.md) |

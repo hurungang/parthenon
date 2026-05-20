@@ -9,14 +9,18 @@ import type { ExecutionLogRead } from '../types'
  * Returns an empty array when `sessionId` is null or while the request is in
  * flight.  On error, the hook returns an empty array and exposes the error.
  */
-export function useExecutionLogs(sessionId: string | null): {
+export function useExecutionLogs(sessionId: string | null, refetchTrigger?: number): {
   logs: ExecutionLogRead[]
   loading: boolean
   error: unknown
+  refetch: () => void
 } {
   const [logs, setLogs] = useState<ExecutionLogRead[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const [refetchCounter, setRefetchCounter] = useState(0)
+
+  const refetch = () => setRefetchCounter((c) => c + 1)
 
   useEffect(() => {
     if (!sessionId) {
@@ -47,7 +51,7 @@ export function useExecutionLogs(sessionId: string | null): {
     return () => {
       cancelled = true
     }
-  }, [sessionId])
+  }, [sessionId, refetchCounter, refetchTrigger])
 
-  return { logs, loading, error }
+  return { logs, loading, error, refetch }
 }

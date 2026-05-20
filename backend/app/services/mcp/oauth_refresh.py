@@ -97,6 +97,7 @@ class OAuthRefreshService:
                     logger.error("Refresh token expired for session %s", session.id)
                     session.is_active = False
                     await db.flush()
+                    await db.commit()
                     return False
 
             # Call token endpoint to refresh
@@ -127,6 +128,7 @@ class OAuthRefreshService:
                         if response.status_code in (400, 401):
                             session.is_active = False
                             await db.flush()
+                            await db.commit()
                         return False
 
                     new_tokens: dict[str, Any] = response.json()
@@ -173,6 +175,7 @@ class OAuthRefreshService:
                         logger.warning("Invalid refresh_expires_in in refresh response: %s", refresh_expires_in)
 
                 await db.flush()
+                await db.commit()
                 logger.info("Successfully refreshed OAuth token for session %s", session.id)
                 return True
 

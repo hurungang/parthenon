@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -23,6 +24,7 @@ interface McpSessionInfo {
   server_id: string
   server_name: string
   server_slug: string
+  auth_type: string
 }
 
 interface AssignMcpSessionsToRoleDialogProps {
@@ -80,17 +82,21 @@ export function AssignMcpSessionsToRoleDialog({
     }
   }, [open, assignedSessions])
 
-  const toggle = (sessionId: string, serverSlug: string) => {
+  const toggle = (sessionId: string, serverSlug: string, isPassthrough: boolean) => {
     setSelectedIds((prev) => {
       if (prev.includes(sessionId)) {
         // Deselect this session
         return prev.filter((id) => id !== sessionId)
       } else {
-        // Select this session, but first remove any other session from the same server
-        const sessionsFromSameServer = (availableSessions ?? [])
-          .filter((s) => s.server_slug === serverSlug)
+        if (isPassthrough) {
+          // Passthrough sessions can coexist with other sessions on the same server
+          return [...prev, sessionId]
+        }
+        // Non-passthrough: enforce one-session-per-server (remove other non-passthrough sessions from same server)
+        const nonPassthroughFromSameServer = (availableSessions ?? [])
+          .filter((s) => s.server_slug === serverSlug && s.auth_type !== 'passthrough')
           .map((s) => s.id)
-        return [...prev.filter((id) => !sessionsFromSameServer.includes(id)), sessionId]
+        return [...prev.filter((id) => !nonPassthroughFromSameServer.includes(id)), sessionId]
       }
     })
   }
@@ -189,12 +195,15 @@ export function AssignMcpSessionsToRoleDialog({
                           <Checkbox
                             size="small"
                             checked={selectedIds.includes(session.id)}
-                            onChange={() => toggle(session.id, serverSlug)}
+                            onChange={() => toggle(session.id, serverSlug, session.auth_type === 'passthrough')}
                           />
                         }
                         label={
-                          <Box>
+                          <Box display="flex" alignItems="center" gap={1}>
                             <Typography variant="body2">{session.name}</Typography>
+                            {session.auth_type === 'passthrough' && (
+                              <Chip label="Passthrough" color="info" size="small" />
+                            )}
                             {selectedIds.includes(session.id) && (
                               <Typography variant="caption" color="primary">
                                 {t('agents.roles.selectedForServer')}

@@ -14,10 +14,11 @@ export interface ChatMessage {
  * Manages WebSocket connection lifecycle, inbound message queue,
  * pending question state, and reconnection for a chat session.
  */
-export function useChatSession(sessionId: string | null) {
+export function useChatSession(sessionId: string | null, convSessionId?: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [connected, setConnected] = useState(false)
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
+  const [sessionTitle, setSessionTitle] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -25,7 +26,10 @@ export function useChatSession(sessionId: string | null) {
     if (!sessionId) return
 
     const token = localStorage.getItem('access_token')
-    const wsUrl = `${API_CONFIG.WS_BASE_URL}/sessions/${sessionId}?token=${token ?? ''}`
+    let wsUrl = `${API_CONFIG.WS_BASE_URL}/sessions/${sessionId}?token=${token ?? ''}`
+    if (convSessionId) {
+      wsUrl += `&conv_session_id=${convSessionId}`
+    }
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
@@ -34,19 +38,28 @@ export function useChatSession(sessionId: string | null) {
     ws.onmessage = (event: MessageEvent<string>) => {
       try {
         const data = JSON.parse(event.data) as {
-          sender_role: ChatRole
-          content: string
-          timestamp: string
+          type?: string
+          title?: string
+          sender_role?: ChatRole
+          content?: string
+          timestamp?: string
         }
+
+        // Handle title_update server event without adding it to messages
+        if (data.type === 'title_update' && data.title) {
+          setSessionTitle(data.title)
+          return
+        }
+
         const msg: ChatMessage = {
           id: crypto.randomUUID(),
-          role: data.sender_role,
-          content: data.content,
-          timestamp: data.timestamp,
+          role: data.sender_role ?? 'agent',
+          content: data.content ?? '',
+          timestamp: data.timestamp ?? new Date().toISOString(),
         }
         setMessages((prev) => [...prev, msg])
-        if (data.sender_role === 'agent' && data.content.startsWith('?')) {
-          setPendingQuestion(data.content)
+        if (data.sender_role === 'agent' && (data.content ?? '').startsWith('?')) {
+          setPendingQuestion(data.content ?? null)
         }
       } catch {
         // ignore parse errors
@@ -55,12 +68,12 @@ export function useChatSession(sessionId: string | null) {
 
     ws.onclose = () => {
       setConnected(false)
-      // Auto-reconnect after 3s
-      reconnectTimerRef.current = setTimeout(connect, 3000)
+      // Don't auto-reconnect - let the component decide if it needs to reconnect
+      // Auto-reconnect can cause issues when dialog is closed
     }
 
     ws.onerror = () => ws.close()
-  }, [sessionId])
+  }, [sessionId, convSessionId])
 
   useEffect(() => {
     connect()
@@ -72,7 +85,7 @@ export function useChatSession(sessionId: string | null) {
 
   const sendMessage = useCallback((content: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(content)
+      wsRef.current.send(JSON.stringify({ message: content }))
       const msg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -86,5 +99,5 @@ export function useChatSession(sessionId: string | null) {
 
   const clearMessages = useCallback(() => setMessages([]), [])
 
-  return { messages, connected, pendingQuestion, sendMessage, clearMessages }
+  return { messages, connected, pendingQuestion, sessionTitle, sendMessage, clearMessages }
 }

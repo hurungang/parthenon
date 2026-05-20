@@ -4,6 +4,12 @@ Parthenon supports file-based configuration as an alternative (or complement) to
 
 ---
 
+## Services With No Configuration Files
+
+**`mcp-demo-app`** — The MCP Demo App has no configuration files. All configuration is supplied exclusively via environment variables. See [environment-variables.md](environment-variables.md) for the full variable reference.
+
+---
+
 ## Resolution Order
 
 For all settings that support both environment variables and a configuration file, the resolution order is:

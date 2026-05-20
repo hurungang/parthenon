@@ -1,4 +1,6 @@
 """AgentSessionService — manages AgentJob lifecycle: enqueue, status transitions, persistence."""
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -7,7 +9,6 @@ from typing import Any
 from fastapi import WebSocket
 from opentelemetry import trace
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentJob, AgentJobStatus
 
@@ -146,6 +147,7 @@ class AgentSessionService:
         session_id: uuid.UUID,
         websocket: WebSocket,
         db: AsyncSession,
+        conv_session_id: uuid.UUID | None = None,
     ) -> None:
         """
         Maintain a bidirectional WebSocket connection for conversational agents.
@@ -153,16 +155,26 @@ class AgentSessionService:
         Messages from the client are forwarded to the runtime executor's chat queue.
         Responses from the executor are forwarded back to the client.
 
+        When conv_session_id is provided, the first user message triggers
+        SessionAutoNamer as a background task, which pushes a title_update event
+        to this client when complete.
+
         This is a simplified implementation; production would use Redis pub/sub.
         """
+        import asyncio
+
+        from app.services.conversations.auto_namer import SessionAutoNamer
+
         with tracer.start_as_current_span(
             "session_service.chat_websocket",
             attributes={"session_id": str(session_id)},
         ):
+            message_count = 0
             try:
                 while True:
                     data = await websocket.receive_json()
                     message = data.get("message", "")
+                    message_count += 1
                     logger.debug("Chat message for session %s: %s", session_id, message)
 
                     # Echo acknowledgement — real implementation dispatches to runtime
@@ -171,8 +183,44 @@ class AgentSessionService:
                         "session_id": str(session_id),
                         "message": "Message received — processing",
                     })
+
+                    # Trigger auto-naming after the first user message
+                    if message_count == 1 and conv_session_id and message:
+                        asyncio.create_task(
+                            self._auto_name_and_push(
+                                conv_session_id=conv_session_id,
+                                first_message=message,
+                                websocket=websocket,
+                            )
+                        )
             except Exception as exc:
                 logger.debug("Chat WebSocket closed for session %s: %s", session_id, exc)
+
+    async def _auto_name_and_push(
+        self,
+        conv_session_id: uuid.UUID,
+        first_message: str,
+        websocket: WebSocket,
+    ) -> None:
+        """Background task: generate a session title and push title_update to the WebSocket."""
+        from app.db.session import AsyncSessionLocal
+        from app.db.models.conversations import ConversationSession
+        from app.services.conversations.auto_namer import SessionAutoNamer
+
+        try:
+            async with AsyncSessionLocal() as db:
+                conv_session = await db.get(ConversationSession, conv_session_id)
+                agent_type_id = conv_session.agent_type_id if conv_session else None
+                namer = SessionAutoNamer()
+                title = await namer.generate_and_save(
+                    session_id=conv_session_id,
+                    first_user_message=first_message,
+                    agent_type_id=agent_type_id,
+                    db=db,
+                )
+            await websocket.send_json({"type": "title_update", "title": title})
+        except Exception as exc:
+            logger.warning("Auto-naming background task failed: %s", exc)
 
     # ── Internal helpers ───────────────────────────────────────────────────────
 

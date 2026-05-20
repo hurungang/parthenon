@@ -3,18 +3,19 @@ import json
 import os
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
 from app.core.resource_types import RT_MCP_SERVER
 from app.db.session import DbSession
-from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission, McpSessionAuthType
+from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission, McpSessionAuthType, McpServerStatus
 from app.db.models.skills import Skill, SkillToolBinding
 from app.schemas.mcp_hub import (
     McpServerCreate,
@@ -36,10 +37,209 @@ from app.services.mcp.tool_sync import ToolSyncService
 from app.services.mcp.oauth_refresh import OAuthRefreshService
 from app.services.mcp_oauth_service import initiate_oauth_flow, handle_oauth_callback as _handle_oauth_callback, mcp_oauth_states as _mcp_oauth_states
 from app.services.mcp_session_test import test_mcp_session_connection
+from app.services.agents.tool_naming import build_tool_name
 
 logger = logging.getLogger(__name__)
 
-# ── MCP Server Router ──────────────────────────────────────────────────────────
+# ── System (virtual) server constants ─────────────────────────────────────────
+SYSTEM_SERVER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+SYSTEM_TOOL_SAVE_RESULT_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
+SYSTEM_TOOL_SEND_NOTIFICATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000003")
+SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID = uuid.UUID("00000000-0000-0000-0000-000000000004")
+
+# Set of all system tool IDs for validation
+SYSTEM_TOOL_IDS = {
+    SYSTEM_TOOL_SAVE_RESULT_ID,
+    SYSTEM_TOOL_SEND_NOTIFICATION_ID,
+    SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
+}
+
+def _system_server_read() -> McpServerRead:
+    """Return a virtual McpServerRead for built-in system tools."""
+    now = datetime.now(timezone.utc)
+    return McpServerRead(
+        id=SYSTEM_SERVER_ID,
+        name="System",
+        slug="system",
+        description="Built-in system tools available to all agents",
+        base_url="",
+        oauth_config=None,
+        status=McpServerStatus.active,
+        last_synced_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+def _system_tool_reads() -> list[McpToolRead]:
+    """Return virtual McpToolRead objects for built-in system tools."""
+    now = datetime.now(timezone.utc)
+    return [
+        McpToolRead(
+            id=SYSTEM_TOOL_SAVE_RESULT_ID,
+            server_id=SYSTEM_SERVER_ID,
+            server_slug="system",
+            server_name="System",
+            name="system____save_result",
+            original_name="save_result",
+            description=(
+                "Save the final result of agent execution. Always provide a clear title. "
+                "Use content format that matches the agent output_type "
+                "(markdown -> markdown text, typed -> structured JSON)."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Human-readable result title (required)",
+                    },
+                    "content": {
+                        "description": (
+                            "Result body. Use markdown text when output_type=markdown; "
+                            "use structured JSON value when output_type=typed."
+                        ),
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "object"},
+                            {"type": "array"},
+                            {"type": "number"},
+                            {"type": "boolean"},
+                        ],
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "enum": ["text", "markdown", "json"],
+                        "description": (
+                            "Optional explicit format override. If omitted, the system uses "
+                            "the agent output_type to infer format."
+                        ),
+                    },
+                },
+                "required": ["title", "content"],
+            },
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
+        McpToolRead(
+            id=SYSTEM_TOOL_SEND_NOTIFICATION_ID,
+            server_id=SYSTEM_SERVER_ID,
+            server_slug="system",
+            server_name="System",
+            name="system____send_notification",
+            original_name="send_notification",
+            description="Send a notification to specified channels",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "recipient_group_id": {
+                        "type": "string",
+                        "description": "ID of the recipient group to send the notification to",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Notification subject / title",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Notification body content",
+                    },
+                },
+                "required": ["recipient_group_id", "subject", "body"],
+            },
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
+        McpToolRead(
+            id=SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
+            server_id=SYSTEM_SERVER_ID,
+            server_slug="system",
+            server_name="System",
+            name="system____get_recipient_group",
+            original_name="get_recipient_group",
+            description="Retrieve recipient group information including channels and properties",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the recipient group to retrieve",
+                    },
+                },
+                "required": ["name"],
+            },
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+
+
+async def seed_system_tools(db: "AsyncSession") -> None:
+    """Idempotently seed the system server and its built-in tools into the database.
+
+    Safe to call multiple times — uses INSERT OR IGNORE / upsert-style logic so
+    re-runs on startup don't duplicate rows or raise integrity errors.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession  # local import avoids circular refs
+
+    # ── Seed system server ────────────────────────────────────────────────────
+    existing_server = await db.get(McpServer, SYSTEM_SERVER_ID)
+    if not existing_server:
+        system_server = McpServer(
+            id=SYSTEM_SERVER_ID,
+            name="System",
+            slug="system",
+            description="Built-in system tools available to all agents",
+            base_url="",
+            status=McpServerStatus.active,
+        )
+        db.add(system_server)
+        await db.flush()
+        logger.info("System server seeded (id=%s)", SYSTEM_SERVER_ID)
+
+    # ── Seed system tools ─────────────────────────────────────────────────────
+    _system_tools_to_seed = [
+        (
+            SYSTEM_TOOL_SAVE_RESULT_ID,
+            "system____save_result",
+            "save_result",
+            "Save the final result of agent execution",
+        ),
+        (
+            SYSTEM_TOOL_SEND_NOTIFICATION_ID,
+            "system____send_notification",
+            "send_notification",
+            "Send a notification to specified channels",
+        ),
+        (
+            SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
+            "system____get_recipient_group",
+            "get_recipient_group",
+            "Retrieve recipient group information including channels and properties",
+        ),
+    ]
+
+    for tool_id, name, original_name, description in _system_tools_to_seed:
+        existing_tool = await db.get(McpTool, tool_id)
+        if not existing_tool:
+            tool = McpTool(
+                id=tool_id,
+                server_id=SYSTEM_SERVER_ID,
+                name=name,
+                original_name=original_name,
+                description=description,
+                input_schema=None,
+                is_active=True,
+            )
+            db.add(tool)
+            logger.info("System tool seeded: %s (id=%s)", name, tool_id)
+
+    await db.flush()
+    await db.commit()
+
+
 McpServerRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Servers"])
 
 
@@ -47,9 +247,10 @@ McpServerRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Servers"])
 async def list_mcp_servers(
     db: DbSession,
     _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
-) -> list[McpServer]:
+) -> list:
     result = await db.execute(select(McpServer).order_by(McpServer.name))
-    return list(result.scalars().all())
+    db_servers = list(result.scalars().all())
+    return [_system_server_read()] + db_servers
 
 
 @McpServerRouter.post("", response_model=McpServerRead, status_code=status.HTTP_201_CREATED)
@@ -58,6 +259,12 @@ async def create_mcp_server(
     db: DbSession,
     _: dict = Depends(require_permission(RT_MCP_SERVER, "create")),
 ) -> McpServer:
+    # Reject reserved slugs — "system" is used for built-in system tools
+    if body.slug == "system":
+        raise HTTPException(
+            status_code=409,
+            detail="The slug 'system' is reserved for built-in system tools",
+        )
     # Enforce slug uniqueness
     existing = await db.execute(select(McpServer).where(McpServer.slug == body.slug))
     if existing.scalar_one_or_none():
@@ -282,6 +489,23 @@ async def create_mcp_session(
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
+    # Passthrough sessions: skip credential encryption, skip connection test, activate immediately
+    if body.auth_type == McpSessionAuthType.passthrough:
+        session_data = body.model_dump(exclude={"credentials"})
+        session = McpSession(
+            server_id=server_id,
+            encrypted_credentials=None,
+            is_active=True,
+            **session_data,
+        )
+        db.add(session)
+        await db.flush()
+        await db.refresh(session)
+        return {
+            **McpSessionRead.model_validate(session).model_dump(),
+            "connection_test": {"success": True, "message": "Passthrough session — no credential test required"},
+        }
+
     # Encrypt credentials before storage
     encrypted_creds = None
     if body.credentials:
@@ -455,7 +679,24 @@ async def list_all_tools(
         .order_by(McpServer.name, McpTool.name)
     )
     tools = result.scalars().all()
-    return [McpToolRead.from_orm_with_server(t) for t in tools]
+    db_tool_reads: list[McpToolRead] = []
+    for tool in tools:
+        tool_read = McpToolRead.from_orm_with_server(tool)
+        # Backward compatibility: normalize legacy "server/tool" names in responses.
+        if "/" in tool_read.name and tool_read.server_slug:
+            _, bare_name = tool_read.name.split("/", 1)
+            tool_read.name = build_tool_name(tool_read.server_slug, bare_name)
+        db_tool_reads.append(tool_read)
+    all_tools = _system_tool_reads() + db_tool_reads
+    # Deduplicate by tool ID — system tools are both returned as virtual objects
+    # AND seeded into the DB, so without dedup they appear twice in the response.
+    seen_ids: set[uuid.UUID] = set()
+    deduped: list[McpToolRead] = []
+    for tool in all_tools:
+        if tool.id not in seen_ids:
+            seen_ids.add(tool.id)
+            deduped.append(tool)
+    return deduped
 
 
 @McpToolRouter.get("/{tool_id}/skills", response_model=list[SkillRead])
@@ -542,8 +783,9 @@ async def revoke_tool_permission(
 @McpToolRouter.post("/{tool_id}/test", response_model=TestToolResponse)
 async def test_mcp_tool(
     tool_id: uuid.UUID,
-    request: TestToolRequest,
+    body: TestToolRequest,
     db: DbSession,
+    http_request: Request,
     _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
 ) -> TestToolResponse:
     """Test an MCP tool invocation with a specific session."""
@@ -556,26 +798,107 @@ async def test_mcp_tool(
     
     # Load server relationship
     await db.refresh(tool, ["server"])
-    
-    # Verify session exists and belongs to the same server
-    session = await db.get(McpSession, request.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    if session.server_id != tool.server_id:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Session belongs to a different server. Tool server: {tool.server_id}, Session server: {session.server_id}"
+
+    # Determine which session to use and whether it is passthrough
+    if body.session_id is not None:
+        session = await db.get(McpSession, body.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if session.server_id != tool.server_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Session belongs to a different server. Tool server: {tool.server_id}, Session server: {session.server_id}",
+            )
+    else:
+        # No session_id provided — look up the first active session for this server
+        from sqlalchemy import select as _select
+        result = await db.execute(
+            _select(McpSession).where(
+                McpSession.server_id == tool.server_id,
+                McpSession.is_active == True,  # noqa: E712
+            ).limit(1)
         )
+        session = result.scalar_one_or_none()
+        if not session:
+            raise HTTPException(status_code=404, detail="No active session found for this tool's server")
+        # Non-passthrough sessions require an explicit session_id
+        if session.auth_type != McpSessionAuthType.passthrough:
+            raise HTTPException(
+                status_code=400,
+                detail="session_id is required for non-passthrough sessions",
+            )
+
+    is_passthrough = session.auth_type == McpSessionAuthType.passthrough
+
+    # For passthrough: get the agent identity token
+    agent_jwt: str | None = None
+    if is_passthrough:
+        if not body.agent_subject:
+            raise HTTPException(
+                status_code=400,
+                detail="Passthrough tool test requires an agent_subject (agent identity ID or username)",
+            )
+        
+        # Load the agent identity by ID (UUID) or username (realm_username)
+        from app.db.models.agents import AgentIdentity
+        from app.services.agents.identity_service import AgentIdentityService, AgentIdentityNotFoundError, AgentOAuthError
+        from app.core.credential_vault import get_vault
+        from datetime import datetime, timezone
+        
+        # Try parsing as UUID first
+        identity: AgentIdentity | None = None
+        try:
+            identity_id = uuid.UUID(body.agent_subject)
+            identity = await db.get(AgentIdentity, identity_id)
+        except ValueError:
+            # Not a UUID, try looking up by realm_username
+            from sqlalchemy import select as _select
+            result = await db.execute(
+                _select(AgentIdentity).where(
+                    AgentIdentity.realm_username == body.agent_subject
+                )
+            )
+            identity = result.scalar_one_or_none()
+        
+        if not identity:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent identity '{body.agent_subject}' not found",
+            )
+        
+        # Check if token needs refresh (expired or within 5 minutes of expiration)
+        vault = get_vault()
+        now = datetime.now(timezone.utc)
+        needs_refresh = (
+            not identity.access_token
+            or not identity.token_expires_at
+            or (identity.token_expires_at - now).total_seconds() < 300
+        )
+        
+        if needs_refresh:
+            logger.info("Refreshing token for agent identity %s before tool test", identity.id)
+            identity_service = AgentIdentityService()
+            try:
+                identity = await identity_service.refresh_token(identity.id, db)
+            except (AgentIdentityNotFoundError, AgentOAuthError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to refresh agent identity token: {str(exc)}",
+                )
+        
+        # Decrypt and use the agent's access token
+        agent_jwt = vault.decrypt(identity.access_token)
+        logger.info("Using agent identity %s (%s) token for passthrough tool test", identity.id, identity.realm_username)
     
     # Invoke the tool via proxy
     proxy = McpProxyEngine()
     try:
         result = await proxy.call_tool(
             tool=tool,
-            tool_input=request.tool_input,
+            tool_input=body.tool_input,
             db=db,
-            session_id=str(request.session_id),
+            session_id=str(session.id),
+            agent_jwt=agent_jwt,
         )
         return TestToolResponse(
             success=True,

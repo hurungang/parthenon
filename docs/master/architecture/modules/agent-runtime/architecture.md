@@ -4,17 +4,21 @@
 
 The Agent Runtime is the platform's execution core for agent sessions. It is powered by the **LangChain deep agent** framework and runs each session as an observe → reason → act loop, coordinating permission evaluation, model resolution, skill execution, and execution log capture. The Agent Session Queue decouples request acceptance from runtime execution, enabling asynchronous, scalable session processing. The Agent Permission Manager enforces role-scoped tool access on every session dispatch.
 
+**Security model:** Agent Runtime instances authenticate using X.509 **agent-instance certificates** (mutual TLS). On startup, the runtime loads its certificate and CA root certificate from the configured paths. It requests agent metadata (SOPs, skills, instructions, model configs) from the Control Center using its agent-instance certificate — responses contain no identity tokens. For tool execution, the runtime presents its certificate to the Communication Hub; the hub calls the Control Center to validate the certificate and obtain fresh identity tokens. The Agent Runtime is cryptographically blocked from accessing Control Center internal APIs (certificate type enforcement returns 403 Forbidden).
+
 ## Component Architecture
 
 ```mermaid
 flowchart TB
-    CH[Communication Hub]
+    CH["Communication Hub<br/>(service cert)"]
+    CC[Control Center]
 
     subgraph RuntimeLayer[Agent Runtime]
         AJQ[Agent Session Queue]
         AR[Agent Runtime Core]
         APM[Agent Permission Manager]
         ARL[Agent Runtime Loader]
+        Cert[Certificate Store]
     end
 
     subgraph PermGraph[Permission Resolution]
@@ -33,6 +37,8 @@ flowchart TB
 
     CH -->|execution request| AJQ
     AJQ -->|dispatch session| AR
+    AR -->|"mTLS agent-instance cert<br/>GET /agent/metadata"| CC
+    CC -->|"metadata only (no tokens)"| AR
     AR -->|evaluate permissions| APM
     APM --> Role
     Role --> SOPs
@@ -47,6 +53,7 @@ flowchart TB
     APM -.->|real-time preview| UI
     ARL -->|load saved plan| AP
     ARL -->|inject plan into context| AR
+    Cert -->|agent-instance cert| AR
 ```
 
 ## Agent Session Queue

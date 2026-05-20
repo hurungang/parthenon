@@ -22,7 +22,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
-import type { AgentJob, AgentJobStatus } from '../../types'
+import type { AgentJob, AgentJobStatus, ConversationSession } from '../../types'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
@@ -57,6 +57,29 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
 
   // When a prop is supplied (embedded in dialog), use that; otherwise use local state
   const effectiveAgentTypeId = agentTypeIdProp ?? filterAgentTypeId
+
+  // Check if the effective agent type is conversational
+  const effectiveAgentType = (agentTypes ?? []).find((at) => at.id === effectiveAgentTypeId)
+  const isConversationAgent = effectiveAgentType?.input_type === 'conversation'
+
+  // Fetch conversation sessions when viewing a conversation-type agent
+  const { data: convSessions } = useQuery<ConversationSession[]>({
+    queryKey: ['conversations', effectiveAgentTypeId],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ConversationSession[]>(
+        `/conversations?agent_type_id=${effectiveAgentTypeId}`,
+      )
+      return data
+    },
+    enabled: isConversationAgent && !!effectiveAgentTypeId,
+  })
+
+  // Build a Map<agentJobId, sessionTitle> for fast lookup
+  const jobToSessionTitle = new Map<string, string | null>(
+    (convSessions ?? []).flatMap((s) =>
+      s.agent_job_id ? [[s.agent_job_id, s.title]] : [],
+    ),
+  )
 
   const queryParams = new URLSearchParams()
   if (filterStatus) queryParams.set('status', filterStatus)
@@ -183,6 +206,7 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
                 <TableCell>{t('agents.sessions.createdAt')}</TableCell>
                 <TableCell>{t('agents.sessions.startedAt')}</TableCell>
                 <TableCell>{t('agents.sessions.completedAt')}</TableCell>
+                {isConversationAgent && <TableCell>{t('conversations.sessions.dashboardColumn')}</TableCell>}
                 <TableCell align="right">{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
@@ -216,6 +240,15 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
                       {session.completed_at ? new Date(session.completed_at).toLocaleString() : '—'}
                     </Typography>
                   </TableCell>
+                  {isConversationAgent && (
+                    <TableCell>
+                      <Typography variant="body2">
+                        {jobToSessionTitle.has(session.id)
+                          ? (jobToSessionTitle.get(session.id) ?? '—')
+                          : '—'}
+                      </Typography>
+                    </TableCell>
+                  )}
                   <TableCell align="right">
                     <Button
                       size="small"

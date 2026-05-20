@@ -33,6 +33,7 @@ class McpProxyEngine:
         tool_input: dict[str, Any],
         db: AsyncSession,
         session_id: str | None = None,
+        agent_jwt: str | None = None,
     ) -> dict[str, Any]:
         """
         Invoke a tool on its MCP server using JSON-RPC 2.0 protocol.
@@ -42,6 +43,7 @@ class McpProxyEngine:
             tool_input: Input parameters for the tool.
             db: Database session.
             session_id: Optional specific session ID to use; otherwise uses the first active session.
+            agent_jwt: Optional raw JWT for passthrough sessions — forwarded as Bearer token.
 
         Returns:
             Structured tool result as a dict.
@@ -77,8 +79,8 @@ class McpProxyEngine:
             tool.original_name
         )
 
-        # Prepare headers with decrypted credentials
-        headers = self._build_auth_headers(mcp_session)
+        # Prepare headers with decrypted credentials (or passthrough JWT)
+        headers = self._build_auth_headers(mcp_session, agent_jwt=agent_jwt)
         
         # Add MCP session ID to headers
         logger.debug(
@@ -99,12 +101,13 @@ class McpProxyEngine:
                     mcp_session.id
                 )
         else:
-            logger.warning(
-                "Session %s (auth_type=%s) has no identity_binding. "
-                "For OAuth2 sessions, re-authenticate to initialize MCP session.",
-                mcp_session.id,
-                mcp_session.auth_type.value
-            )
+            # Only warn for OAuth2 sessions — passthrough sessions don't need identity_binding
+            if mcp_session.auth_type == McpSessionAuthType.oauth2:
+                logger.warning(
+                    "OAuth2 session %s has no identity_binding. "
+                    "Re-authenticate to initialize MCP session.",
+                    mcp_session.id
+                )
 
         # Build JSON-RPC 2.0 payload
         payload = {
@@ -186,9 +189,23 @@ class McpProxyEngine:
             raise McpProxyError(f"No active session found for server {server_id}")
         return session
 
-    def _build_auth_headers(self, session: McpSession) -> dict[str, str]:
-        """Build auth headers by decrypting session credentials."""
+    def _build_auth_headers(self, session: McpSession, agent_jwt: str | None = None) -> dict[str, str]:
+        """Build auth headers by decrypting session credentials.
+        
+        For passthrough sessions, injects agent_jwt directly as Bearer token
+        without touching encrypted_credentials.
+        """
         headers: dict[str, str] = {"Content-Type": "application/json"}
+
+        # Passthrough: forward the caller's JWT as Bearer — skip credential decryption
+        if session.auth_type == McpSessionAuthType.passthrough:
+            if not agent_jwt:
+                raise McpProxyError(
+                    "Passthrough session requires a caller JWT but none was provided"
+                )
+            headers["Authorization"] = f"Bearer {agent_jwt}"
+            logger.debug("Using passthrough JWT for session %s", session.id)
+            return headers
 
         if not session.encrypted_credentials:
             return headers

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -39,7 +40,7 @@ interface McpSessionManagerProps {
   serverId: string
 }
 
-const AUTH_TYPES: McpSessionAuthType[] = ['api_key', 'bearer_token', 'basic_auth', 'oauth2', 'none']
+const AUTH_TYPES: McpSessionAuthType[] = ['api_key', 'bearer_token', 'basic_auth', 'oauth2', 'none', 'passthrough']
 
 interface SessionForm {
   name: string
@@ -124,6 +125,7 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
         // For OAuth2, credentials are set via popup flow, not here
         return null
       case 'none':
+      case 'passthrough':
       default:
         return null
     }
@@ -188,7 +190,8 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
         name: form.name,
         description: form.description || null,
         auth_type: form.auth_type,
-        credentials: buildCredentials(),
+        // Passthrough sessions never include credentials
+        credentials: form.auth_type === 'passthrough' ? null : buildCredentials(),
       }
       if (editSession) {
         await apiClient.put(`/mcp/servers/${serverId}/sessions/${editSession.id}`, payload)
@@ -218,6 +221,44 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
       queryClient.invalidateQueries({ queryKey: ['mcp', 'servers', serverId, 'sessions'] })
     },
   })
+
+  /** Returns true if the OAuth refresh token is still valid (not expired). */
+  const isRefreshTokenValid = (session: McpSession): boolean => {
+    if (!session.oauth_refresh_expires_at) return false
+    return new Date(session.oauth_refresh_expires_at) > new Date()
+  }
+
+  /** Triggers the OAuth re-authorization popup flow for an existing session. */
+  const handleSessionReauth = async (session: McpSession) => {
+    try {
+      const { data } = await apiClient.post<{ authorization_url: string }>(
+        `/mcp/servers/${serverId}/oauth/authorize`,
+        { session_name: session.name, session_description: session.description }
+      )
+      const popup = window.open(
+        data.authorization_url,
+        'mcpReauth',
+        'width=600,height=700,menubar=no,toolbar=no,location=yes,status=no'
+      )
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return
+        if (event.data?.type === 'MCP_OAUTH_SUCCESS') {
+          window.removeEventListener('message', handleMessage)
+          popup?.close()
+          await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers', serverId, 'sessions'] })
+        }
+      }
+      window.addEventListener('message', handleMessage)
+      const check = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(check)
+          window.removeEventListener('message', handleMessage)
+        }
+      }, 500)
+    } catch {
+      // Reauth initiation failed
+    }
+  }
 
   const getTokenStatus = (session: McpSession): { label: string; color: 'success' | 'warning' | 'error'; icon: React.ReactElement | undefined } => {
     if (session.auth_type !== 'oauth2') {
@@ -280,7 +321,12 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                         <Typography variant="caption" color="text.secondary">{s.description}</Typography>
                       )}
                     </TableCell>
-                    <TableCell><code>{s.auth_type}</code></TableCell>
+                    <TableCell>
+                      <code>{s.auth_type}</code>
+                      {s.auth_type === 'passthrough' && (
+                        <Chip label={t('mcp.sessions.passthrough')} color="info" size="small" sx={{ ml: 1 }} />
+                      )}
+                    </TableCell>
                     <TableCell>
                       {s.auth_type === 'oauth2' ? (
                         <Chip
@@ -302,14 +348,28 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
                     </TableCell>
                     <TableCell>
                       {s.auth_type === 'oauth2' && (
-                        <IconButton
-                          size="small"
-                          onClick={() => refreshTokenMutation.mutate(s.id)}
-                          disabled={refreshTokenMutation.isPending}
-                          title={t('mcp.sessions.refreshToken')}
-                        >
-                          <RefreshIcon fontSize="small" />
-                        </IconButton>
+                        isRefreshTokenValid(s) ? (
+                          /* Refresh token is valid — green refresh button */
+                          <IconButton
+                            size="small"
+                            color="success"
+                            onClick={() => refreshTokenMutation.mutate(s.id)}
+                            disabled={refreshTokenMutation.isPending}
+                            title={t('mcp.sessions.refreshToken')}
+                          >
+                            <RefreshIcon fontSize="small" />
+                          </IconButton>
+                        ) : (
+                          /* Refresh token expired or missing — red reauth button */
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleSessionReauth(s)}
+                            title={t('mcp.sessions.reauthenticate')}
+                          >
+                            <LoginIcon fontSize="small" />
+                          </IconButton>
+                        )
                       )}
                       <IconButton size="small" onClick={() => handleOpenEdit(s)}>
                         <EditIcon fontSize="small" />
@@ -436,6 +496,12 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
               <Typography variant="body2" color="text.secondary">
                 {t('mcp.sessions.noAuthRequired')}
               </Typography>
+            )}
+
+            {form.auth_type === 'passthrough' && (
+              <Alert severity="info">
+                {t('mcp.sessions.passthroughInfo')}
+              </Alert>
             )}
           </Box>
         </DialogContent>

@@ -62,9 +62,9 @@ export function SkillListPage() {
   }
 
   return (
-    <Box display="flex" gap={2} alignItems="flex-start">
+    <Box>
       {/* Main list */}
-      <Box flex={1} minWidth={0}>
+      <Box>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h4" fontWeight={700}>
             {t('skills.title')}
@@ -153,14 +153,12 @@ export function SkillListPage() {
         )}
       </Box>
 
-      {/* In-page editor panel */}
-      {editorSkill !== undefined && (
-        <SkillEditor
-          skill={editorSkill}
-          onClose={() => setEditorSkill(undefined)}
-          onSaved={() => setEditorSkill(undefined)}
-        />
-      )}
+      <SkillEditor
+        open={editorSkill !== undefined}
+        skill={editorSkill ?? null}
+        onClose={() => setEditorSkill(undefined)}
+        onSaved={() => setEditorSkill(undefined)}
+      />
     </Box>
   )
 }

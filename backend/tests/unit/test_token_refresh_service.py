@@ -280,3 +280,113 @@ async def test_refresh_expiring_soon_returns_zero_when_no_identities_due():
     count = await service.refresh_expiring_soon(db)
 
     assert count == 0
+
+
+# ── Commit persistence ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_commits_changes_to_database():
+    """refresh_token must call db.commit() so tokens survive session close.
+
+    This is the critical regression test for the 'tokens not persisted' bug.
+    Without db.commit(), refreshed tokens are only held in the session's
+    identity map and are lost when the session closes.
+    """
+    service = TokenRefreshService()
+    identity_id = uuid.uuid4()
+    identity = _make_identity(identity_id=identity_id)
+
+    db = _mock_db()
+    db.get = AsyncMock(return_value=identity)
+
+    mock_http_response = MagicMock()
+    mock_http_response.status_code = 200
+    mock_http_response.json.return_value = {
+        "access_token": "new-access-token",
+        "refresh_token": "new-refresh-token",
+        "expires_in": 300,
+    }
+
+    mock_vault = MagicMock()
+    mock_vault.decrypt.return_value = "plain-refresh-token"
+    mock_vault.encrypt.side_effect = lambda s: f"enc:{s}"
+
+    with (
+        patch("app.services.agents.token_refresh_service._keycloak_base_url", return_value="http://localhost:8082"),
+        patch("app.services.agents.token_refresh_service._agent_realm_name", return_value="ai_agents"),
+        patch("app.services.agents.token_refresh_service._agent_realm_client_id", return_value="parthenon-api"),
+        patch("app.services.agents.token_refresh_service.get_vault", return_value=mock_vault),
+        patch("httpx.AsyncClient") as mock_http_client_cls,
+    ):
+        mock_http_client = AsyncMock()
+        mock_http_client.post = AsyncMock(return_value=mock_http_response)
+        mock_http_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        await service.refresh_token(identity_id, db)
+
+    # CRITICAL: db.commit() must be awaited exactly once to persist refreshed tokens
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_refresh_expiring_soon_commits_all_refreshes():
+    """refresh_expiring_soon must commit after each identity refresh.
+
+    Verifies that bulk token refresh sweeps commit each identity independently,
+    so a later failure does not undo a previously persisted refresh.
+    """
+    service = TokenRefreshService()
+
+    id1 = uuid.uuid4()
+    id2 = uuid.uuid4()
+    identity1 = _make_identity(
+        identity_id=id1,
+        token_expires_at=datetime.now(timezone.utc) - timedelta(seconds=60),
+    )
+    identity2 = _make_identity(
+        identity_id=id2,
+        token_expires_at=datetime.now(timezone.utc) - timedelta(seconds=30),
+    )
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [identity1, identity2]
+
+    db = _mock_db()
+    db.execute = AsyncMock(return_value=mock_result)
+    # refresh_token calls db.get once per identity
+    db.get = AsyncMock(side_effect=[identity1, identity2])
+
+    mock_http_response = MagicMock()
+    mock_http_response.status_code = 200
+    mock_http_response.json.return_value = {
+        "access_token": "new-access-token",
+        "refresh_token": "new-refresh-token",
+        "expires_in": 300,
+    }
+
+    mock_vault = MagicMock()
+    mock_vault.decrypt.return_value = "plain-refresh-token"
+    mock_vault.encrypt.side_effect = lambda s: f"enc:{s}"
+
+    with (
+        patch("app.services.agents.token_refresh_service._keycloak_base_url", return_value="http://localhost:8082"),
+        patch("app.services.agents.token_refresh_service._agent_realm_name", return_value="ai_agents"),
+        patch("app.services.agents.token_refresh_service._agent_realm_client_id", return_value="parthenon-api"),
+        patch("app.services.agents.token_refresh_service.get_vault", return_value=mock_vault),
+        patch("httpx.AsyncClient") as mock_http_client_cls,
+    ):
+        mock_http_client = AsyncMock()
+        mock_http_client.post = AsyncMock(return_value=mock_http_response)
+        mock_http_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        count = await service.refresh_expiring_soon(db)
+
+    assert count == 2
+    # One commit per identity — verifies each refresh is persisted independently
+    assert db.commit.await_count == 2
+    # Both identities must have their tokens updated
+    assert identity1.access_token == "enc:new-access-token"
+    assert identity2.access_token == "enc:new-access-token"

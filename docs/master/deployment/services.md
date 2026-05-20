@@ -12,20 +12,26 @@ This inventory applies to both deployment targets:
 
 | Service | Container / Pod Name | Role |
 |---------|----------------------|------|
-| API Gateway | `nginx` | Reverse proxy routing all inbound HTTP and WebSocket traffic to the appropriate backend services; TLS termination in production |
-| Platform API | `platform-api` | Central FastAPI application hosting all REST endpoints for identity, MCP Hub, skills, agents, scheduling, conversations, results, and notifications; delegates JWT validation to the OIDC provider |
-| Keycloak | `parthenon-keycloak` | Bundled OpenID Connect identity provider; manages the Parthenon realm, clients, and user accounts; Admin REST API used by the Bootstrap Service during automated provisioning. Only deployed when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. |
-| Communication Hub | `communication-hub` | Redis-backed WebSocket broker for Web UI ↔ Agent bidirectional messaging and Agent ↔ Agent inter-service messaging; hosts the Agent Gateway lifecycle protocol endpoints (init/request/question/answer/close) and maintains bidirectional WebSocket connections for conversational agents (replaces the former standalone `agent-gateway` container) |
-| Agent Session Worker | `agent-session-worker` | Background worker that polls the Redis session queue (`AGENT_SESSION_QUEUE_NAME`), dispatches sessions to the Agent Runtime (LangGraph), and updates session state in PostgreSQL; requires LangGraph (`pip install langgraph`); scales horizontally via multiple replicas; does not expose an HTTP port |
-| Agent Engine | `agent-engine` | Agent type registry, instance lifecycle management with max-instance enforcement, LLM model binding, and dispatch to SOP or Skillful executors |
-| Skill Engine | `skill-engine` | Skill and SOP resolution; dispatches MCP tool calls via the MCP Hub proxy; orchestrates multi-step SOP execution |
-| MCP Hub | `mcp-hub` | External MCP tool server registry, periodic tool catalogue sync, encrypted session credential management, and tool-call proxy |
-| Scheduling Engine | `scheduling-engine` | APScheduler-based cron trigger service backed by the PostgreSQL job store; fires agent prompts and SOP runs on schedule |
-| Notification Engine | `notification-engine` | Outbound notification dispatcher for email, Slack, Teams, and generic webhook channels; registers each channel as an invocable MCP tool |
+| API Gateway | `nginx` | Reverse proxy routing all inbound HTTP and WebSocket traffic to Control Center and Communication Hub; TLS termination in production |
+| Control Center | `control-center` | Sole owner of the PostgreSQL database. Hosts the Platform REST API (identity, MCP Hub, skills, agents, scheduling, notifications, conversations, results), acts as Certificate Authority (issues X.509 certs to Agent Runtime and Communication Hub), manages identity tokens, and triggers execution and message dispatch on peer services. |
+| Agent Runtime | `agent-runtime` | Stateless LangChain executor. Receives execution triggers from Control Center over mTLS. Fetches all agent context (plan, skills, model config) from Control Center data APIs. Executes the observe-reason-act loop. Posts results back to Control Center. No direct database access. |
+| Communication Hub | `communication-hub` | Message broker and agent gateway. Accepts Web UI WebSocket connections authenticated by JWT. Receives message dispatch commands from Control Center over mTLS. Validates agent certificates and resolves identity per tool call via Control Center. Routes all tool calls using the unified `server____tool` convention — `system____*` to internal handlers, `<server>____*` to MCP Hub. No direct database access. |
+| Keycloak | `parthenon-keycloak` | Bundled OpenID Connect identity provider; manages the `parthenon` realm (human users) and `ai_agents` realm (agent identities); Admin REST API used during provisioning. Only deployed when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. |
 | Web UI | `web-ui` | React/Vite SPA providing admin configuration modules, real-time operations dashboards, observability panels, and user-to-agent chat |
-| OTEL Collector | `otel-collector` | Receives OTLP telemetry (traces, metrics, logs) from all backend and frontend services; fans out to Prometheus, Jaeger, and Loki backends |
-| PostgreSQL | `postgres` | Primary relational data store for all platform configuration, conversation history, result records, scheduled job state, and identity data |
-| Redis | `redis` | In-memory data store serving as the cache layer, pub/sub backbone for the Communication Hub, and session context store |
+| OTEL Collector | `otel-collector` | Receives OTLP telemetry (traces, metrics, logs) from all services; fans out to Prometheus, Jaeger, and Loki backends |
+| PostgreSQL | `postgres` | Primary relational data store — accessed only by Control Center |
+| Redis | `redis` | In-memory data store for Control Center cache/pubsub, Communication Hub session context, and Agent Session Queue |
+| MCP Demo App | `parthenon-mcp-demo-app` | Standalone MCP server demonstrating end-to-end agent identity propagation; authenticates with the `ai_agents` realm; registers with the MCP Hub under slug `demo`; exposes the `helloWorld` tool |
+
+---
+
+## Data Access Boundaries
+
+| Service | Database | Redis |
+|---------|----------|-------|
+| **Control Center** | Direct read/write (sole owner) | Read/write (cache, pubsub) |
+| **Agent Runtime** | None — all data via Control Center APIs | None |
+| **Communication Hub** | None — all data via Control Center APIs | Read/write (session context, pubsub) |
 
 ---
 
@@ -36,19 +42,14 @@ postgres ──┐
            ├──► keycloak (bundled only)
 redis ─────┤         │
            │         ▼
-           └──► platform-api ──┬──► mcp-hub
-                               ├──► skill-engine
-                               ├──► agent-engine
-                               ├──► scheduling-engine
-                               ├──► notification-engine
-                               └──► communication-hub (+ Agent Gateway)
+           └──► control-center ──┬──► agent-runtime
+                                 └──► communication-hub
 
-postgres ──┐
-redis ─────┴──► agent-session-worker
+agent-runtime ──────────────────────► communication-hub (tool calls)
 
-nginx ◄──── all HTTP-facing services
+nginx ◄──── control-center, communication-hub
 web-ui ◄──── nginx
 otel-collector ◄──── (all services emit OTLP)
 ```
 
-All backend services depend on `postgres` and `redis` being healthy. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, `platform-api` also depends on `keycloak` being healthy before it starts. `platform-api` must be running before the domain services listed above start. `nginx` must be deployed after all backend services are healthy. `web-ui` requires `nginx` (the API Gateway) to be reachable. `agent-session-worker` depends on `postgres` and `redis`; it reads from the Redis session queue written by `platform-api` and does not expose an HTTP port.
+All services depend on `postgres` and `redis` being healthy. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, Control Center also depends on `keycloak`. Agent Runtime and Communication Hub bootstrap by requesting certificates from Control Center — Control Center must be healthy before they start. `nginx` must be deployed after all backend services are healthy. `mcp-demo-app` depends on `keycloak` (healthy) and `control-center` (healthy).

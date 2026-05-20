@@ -69,3 +69,57 @@ async def test_proxy_engine_raises_when_no_session():
 
     with pytest.raises(McpProxyError, match="No active session"):
         await engine.call_tool(mock_tool, {}, mock_db)
+
+
+# ── Passthrough auth header tests (Task 3.5) ──────────────────────────────────
+
+
+def test_build_auth_headers_passthrough_injects_jwt():
+    """_build_auth_headers() returns Bearer <jwt> for passthrough sessions."""
+    from app.services.mcp.proxy import McpProxyEngine
+    from app.db.models.mcp_hub import McpSessionAuthType
+
+    engine = McpProxyEngine()
+
+    mock_session = MagicMock()
+    mock_session.id = uuid.uuid4()
+    mock_session.auth_type = McpSessionAuthType.passthrough
+    mock_session.encrypted_credentials = None
+
+    headers = engine._build_auth_headers(mock_session, agent_jwt="my.agent.jwt")
+
+    assert headers["Authorization"] == "Bearer my.agent.jwt"
+    assert headers["Content-Type"] == "application/json"
+
+
+def test_build_auth_headers_passthrough_raises_without_jwt():
+    """_build_auth_headers() raises McpProxyError when passthrough session has no JWT."""
+    from app.services.mcp.proxy import McpProxyEngine, McpProxyError
+    from app.db.models.mcp_hub import McpSessionAuthType
+
+    engine = McpProxyEngine()
+
+    mock_session = MagicMock()
+    mock_session.id = uuid.uuid4()
+    mock_session.auth_type = McpSessionAuthType.passthrough
+    mock_session.encrypted_credentials = None
+
+    with pytest.raises(McpProxyError, match="Passthrough session requires a caller JWT"):
+        engine._build_auth_headers(mock_session, agent_jwt=None)
+
+
+def test_build_auth_headers_passthrough_raises_with_empty_jwt():
+    """_build_auth_headers() raises McpProxyError when JWT is empty string."""
+    from app.services.mcp.proxy import McpProxyEngine, McpProxyError
+    from app.db.models.mcp_hub import McpSessionAuthType
+
+    engine = McpProxyEngine()
+
+    mock_session = MagicMock()
+    mock_session.id = uuid.uuid4()
+    mock_session.auth_type = McpSessionAuthType.passthrough
+    mock_session.encrypted_credentials = None
+
+    with pytest.raises(McpProxyError, match="Passthrough session requires a caller JWT"):
+        engine._build_auth_headers(mock_session, agent_jwt="")
+

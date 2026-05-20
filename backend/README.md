@@ -2,6 +2,10 @@
 
 The Parthenon backend is a Python 3.11+ FastAPI application with async SQLAlchemy 2, PostgreSQL 16, and Redis.
 
+Contributors working in this package must follow the repository CLA flow before
+their pull requests can be merged. See [../CLA.md](../CLA.md) and
+[../CONTRIBUTING.md](../CONTRIBUTING.md).
+
 ## Structure
 
 ```

@@ -7,6 +7,7 @@ import httpx
 from jose import JWTError, jwt
 
 from app.core.config import get_settings
+from app.core.ssl_context import get_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class OIDCClient:
         discovery_url = f"{self._provider_url}/.well-known/openid-configuration"
         logger.debug("OIDC: Fetching discovery document from %s", discovery_url)
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
             response = await client.get(discovery_url)
             response.raise_for_status()
             config: dict[str, Any] = response.json()
@@ -61,7 +62,7 @@ class OIDCClient:
         jwks_uri = await self._get_jwks_uri()
         logger.debug("OIDC: Fetching JWKS from %s", jwks_uri)
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
             response = await client.get(jwks_uri)
             response.raise_for_status()
             data: dict[str, Any] = response.json()
@@ -139,7 +140,7 @@ class OIDCClient:
             logger.warning("OIDC: Token has expired (exp=%s, now=%s, diff=%s seconds)", exp, now_ts, now_ts - exp)
             raise OIDCError("Token has expired")
 
-        logger.info("OIDC: Token validation successful for sub=%s", claims.get("sub"))
+        logger.debug("OIDC: Token validation successful for sub=%s", claims.get("sub"))
         return claims
 
     def clear_cache(self) -> None:

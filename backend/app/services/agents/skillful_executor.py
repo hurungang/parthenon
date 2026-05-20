@@ -1,9 +1,9 @@
 """Skillful Agent Executor — LLM reasoning loop with skill selection and invocation."""
+from __future__ import annotations
+
 import json
 import logging
 from typing import Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentInstance, AgentType
 from app.services.agents.model_binding import ModelBindingLayer

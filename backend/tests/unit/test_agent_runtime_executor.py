@@ -453,88 +453,115 @@ async def test_run_skips_when_status_not_running():
     executor._execute_job.assert_not_called()
 
 
-# ── Permission boundary enforcement ────────────────────────────────────────────
+# ── Permission boundary enforcement (data_client API) ─────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_run_marks_failed_on_permission_denied():
-    """When _execute_job raises PermissionDeniedError, session is marked failed."""
+    """When _run_task_loop_ar raises PermissionDeniedError, data_client.mark_session_failed is called."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
     from app.services.agents.permission_manager import PermissionDeniedError
-    from app.db.models.agents import AgentJobStatus
 
     executor = AgentRuntimeExecutor()
     session_id = uuid.uuid4()
     role_id = uuid.uuid4()
+    agent_type_id = uuid.uuid4()
 
-    job = MagicMock()
-    job.status = AgentJobStatus.running
-    job.id = session_id
-
-    db = AsyncMock()
-    db.get = AsyncMock(return_value=job)
+    data_client = AsyncMock()
+    data_client.get_session.return_value = {
+        "id": str(session_id),
+        "agent_type_id": str(agent_type_id),
+        "input_data": {},
+    }
+    data_client.get_agent_context.return_value = {
+        "system_instruction": None,
+        "tool_definitions": [],
+        "skills": [],
+        "sops": [],
+        "role_name": None,
+        "model_id": None,
+        "allowed_tools": [],
+        "input_type": "none",
+    }
 
     perm_error = PermissionDeniedError("evil:drop_db", role_id)
-    executor._execute_job = AsyncMock(side_effect=perm_error)
-    executor._session_service.mark_failed = AsyncMock(return_value=job)
-    executor._persist_result = AsyncMock()
+    executor._run_task_loop_ar = AsyncMock(side_effect=perm_error)
 
-    await executor.run(session_id, db)
+    await executor.run(session_id, data_client)
 
-    executor._session_service.mark_failed.assert_called_once()
-    call_args = executor._session_service.mark_failed.call_args
+    data_client.mark_session_failed.assert_called_once()
+    call_args = data_client.mark_session_failed.call_args
     assert "Permission denied" in call_args[0][1]
 
 
 @pytest.mark.asyncio
 async def test_run_marks_failed_on_generic_exception():
-    """When _execute_job raises an unexpected exception, session is marked failed."""
+    """When _run_task_loop_ar raises an unexpected exception, data_client.mark_session_failed is called."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
-    from app.db.models.agents import AgentJobStatus
 
     executor = AgentRuntimeExecutor()
     session_id = uuid.uuid4()
-    job = MagicMock()
-    job.status = AgentJobStatus.running
-    job.id = session_id
+    agent_type_id = uuid.uuid4()
 
-    db = AsyncMock()
-    db.get = AsyncMock(return_value=job)
+    data_client = AsyncMock()
+    data_client.get_session.return_value = {
+        "id": str(session_id),
+        "agent_type_id": str(agent_type_id),
+        "input_data": {},
+    }
+    data_client.get_agent_context.return_value = {
+        "system_instruction": None,
+        "tool_definitions": [],
+        "skills": [],
+        "sops": [],
+        "role_name": None,
+        "model_id": None,
+        "allowed_tools": [],
+        "input_type": "none",
+    }
 
-    executor._execute_job = AsyncMock(side_effect=RuntimeError("Unexpected crash"))
-    executor._session_service.mark_failed = AsyncMock(return_value=job)
-    executor._persist_result = AsyncMock()
+    executor._run_task_loop_ar = AsyncMock(side_effect=RuntimeError("Unexpected crash"))
 
-    await executor.run(session_id, db)
+    await executor.run(session_id, data_client)
 
-    executor._session_service.mark_failed.assert_called_once()
-    call_args = executor._session_service.mark_failed.call_args
+    data_client.mark_session_failed.assert_called_once()
+    call_args = data_client.mark_session_failed.call_args
     assert "Unexpected crash" in call_args[0][1]
 
 
 @pytest.mark.asyncio
 async def test_run_marks_completed_on_success():
-    """When _execute_job returns output, session is marked completed with that output."""
+    """When _run_task_loop_ar returns output, data_client.mark_session_completed is called."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
-    from app.db.models.agents import AgentJobStatus
 
     executor = AgentRuntimeExecutor()
     session_id = uuid.uuid4()
-    job = MagicMock()
-    job.status = AgentJobStatus.running
-    job.id = session_id
-
-    db = AsyncMock()
-    db.get = AsyncMock(return_value=job)
+    agent_type_id = uuid.uuid4()
 
     output = {"answer": "42"}
-    executor._execute_job = AsyncMock(return_value=output)
-    executor._persist_result = AsyncMock()
-    executor._session_service.mark_completed = AsyncMock(return_value=job)
 
-    await executor.run(session_id, db)
+    data_client = AsyncMock()
+    data_client.get_session.return_value = {
+        "id": str(session_id),
+        "agent_type_id": str(agent_type_id),
+        "input_data": {},
+    }
+    data_client.get_agent_context.return_value = {
+        "system_instruction": None,
+        "tool_definitions": [],
+        "skills": [],
+        "sops": [],
+        "role_name": None,
+        "model_id": None,
+        "allowed_tools": [],
+        "input_type": "none",
+    }
 
-    executor._session_service.mark_completed.assert_called_once_with(session_id, output, db)
+    executor._run_task_loop_ar = AsyncMock(return_value=output)
+
+    await executor.run(session_id, data_client)
+
+    data_client.mark_session_completed.assert_called_once_with(session_id, output)
 
 
 # ── Identity-role assignment validation ───────────────────────────────────────
@@ -647,3 +674,94 @@ async def test_execute_job_succeeds_when_identity_assigned_to_role():
     result = await executor._execute_job(job, db)
 
     assert result == {"answer": "ok"}
+
+
+# ── Passthrough session path (Task 6.3) ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_execute_mcp_tool_passthrough_calls_proxy_with_agent_jwt():
+    """_execute_mcp_tool() passes agent_jwt to proxy.call_tool() for passthrough sessions."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+    from app.services.mcp.proxy import McpProxyEngine
+
+    executor = AgentRuntimeExecutor()
+
+    server_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    tool_id = uuid.uuid4()
+
+    mock_tool = MagicMock()
+    mock_tool.name = "mcp-demo/greet"
+    mock_tool.original_name = "greet"
+    mock_tool.server_id = server_id
+    mock_tool.server = MagicMock()
+    mock_tool.server.name = "MCP Demo"
+
+    # Session map includes passthrough auth_type
+    role_mcp_sessions = {
+        str(server_id): {
+            "session_id": str(session_id),
+            "auth_type": "passthrough",
+        }
+    }
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_tool
+    mock_db.execute = AsyncMock(return_value=mock_result)
+    mock_db.refresh = AsyncMock()
+
+    agent_type_id = str(uuid.uuid4())
+    fake_jwt = "header.payload.signature"
+
+    with patch.object(executor, "_get_agent_identity_jwt", new=AsyncMock(return_value=fake_jwt)):
+        with patch.object(McpProxyEngine, "call_tool", new=AsyncMock(return_value={"ok": True})) as mock_call:
+            result = await executor._execute_mcp_tool(
+                "mcp-demo/greet", {}, mock_db, role_mcp_sessions, agent_type_id=agent_type_id
+            )
+
+    assert result == {"result": {"ok": True}}
+    mock_call.assert_called_once()
+    call_kwargs = mock_call.call_args[1]
+    assert call_kwargs["agent_jwt"] == fake_jwt
+    assert call_kwargs["session_id"] == str(session_id)
+
+
+@pytest.mark.asyncio
+async def test_execute_mcp_tool_passthrough_returns_error_when_no_jwt():
+    """_execute_mcp_tool() returns error dict when passthrough has no agent JWT."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+
+    server_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+
+    mock_tool = MagicMock()
+    mock_tool.name = "mcp-demo/greet"
+    mock_tool.server_id = server_id
+    mock_tool.server = MagicMock()
+    mock_tool.server.name = "MCP Demo"
+
+    role_mcp_sessions = {
+        str(server_id): {
+            "session_id": str(session_id),
+            "auth_type": "passthrough",
+        }
+    }
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_tool
+    mock_db.execute = AsyncMock(return_value=mock_result)
+    mock_db.refresh = AsyncMock()
+
+    with patch.object(executor, "_get_agent_identity_jwt", new=AsyncMock(return_value=None)):
+        result = await executor._execute_mcp_tool(
+            "mcp-demo/greet", {}, mock_db, role_mcp_sessions, agent_type_id="some-agent-type"
+        )
+
+    assert "error" in result
+    assert "Passthrough session" in result["error"]
+

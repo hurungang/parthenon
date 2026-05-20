@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -11,6 +13,9 @@ import {
   Divider,
   IconButton,
   Link,
+  List,
+  ListItem,
+  ListItemText,
   Tab,
   Table,
   TableBody,
@@ -19,21 +24,28 @@ import {
   TableHead,
   TableRow,
   Tabs,
+  Tooltip,
   Typography,
 } from '@mui/material'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import CloseIcon from '@mui/icons-material/Close'
+import EditIcon from '@mui/icons-material/Edit'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAgentType } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import AgentPlanContent from './AgentPlanContent'
+import TopologyDiagramRenderer from './TopologyDiagramRenderer'
 import { AgentJobLaunchDialog } from '../../pages/agents/AgentJobLaunchDialog'
 import { AgentRoleViewDialog } from './AgentRoleViewDialog'
 import { AgentIdentityViewDialog } from './AgentIdentityViewDialog'
 import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
+import { ConversationSessionsTab } from './ConversationSessionsTab'
+import { ConversationDialog } from './ConversationDialog'
 import apiClient from '../../api/apiClient'
-import type { AgentIdentity, AgentJob, AgentJobStatus, AgentRole } from '../../types'
+import { canonicalizeToolName } from '../../utils/toolNaming'
+import type { AgentIdentity, AgentJob, AgentJobStatus, AgentRole, McpTool, Skill, Sop, SopDetail, TopologyNode, TopologyEdge } from '../../types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +87,8 @@ interface AgentTypeDetailsDialogProps {
   open: boolean
   agentTypeId: string | null
   onClose: () => void
+  /** Which tab to select when the dialog opens. Defaults to 0 (Details). */
+  initialTab?: number
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -87,11 +101,15 @@ export function AgentTypeDetailsDialog({
   open,
   agentTypeId,
   onClose,
+  initialTab = 0,
 }: AgentTypeDetailsDialogProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState(0)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [launchOpen, setLaunchOpen] = useState(false)
+  const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
   const [roleViewOpen, setRoleViewOpen] = useState(false)
   const [identityViewOpen, setIdentityViewOpen] = useState(false)
   const [executionsDialogOpen, setExecutionsDialogOpen] = useState(false)
@@ -101,10 +119,10 @@ export function AgentTypeDetailsDialog({
   // Reset tab and error when dialog opens
   useEffect(() => {
     if (open) {
-      setActiveTab(0)
+      setActiveTab(initialTab)
       setDialogError(null)
     }
-  }, [open])
+  }, [open, initialTab])
 
   const {
     data: agentType,
@@ -150,6 +168,129 @@ export function AgentTypeDetailsDialog({
     enabled: open && !!agentType?.identity_id,
   })
 
+  // Agent Preview: SOPs and Skills — only fetched for conversation agents on tab 1
+  const isConversation = agentType?.input_type === 'conversation'
+
+  const { data: allSops } = useQuery<Sop[]>({
+    queryKey: ['sops'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Sop[]>('/sops')
+      return data
+    },
+    enabled: open && isConversation && activeTab === 1,
+  })
+
+  const { data: allSkills } = useQuery<Skill[]>({
+    queryKey: ['skills'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Skill[]>('/skills')
+      return data
+    },
+    enabled: open && isConversation && activeTab === 1,
+  })
+
+  // Fetch SOP details (with steps) to derive SOP→Skill relationships
+  const currentRole = allRoles?.find((r) => r.id === agentType?.role_id)
+  const roleSopIds = (allSops ?? [])
+    .filter((s) => currentRole?.sop_ids.includes(s.id))
+    .map((s) => s.id)
+
+  const { data: sopDetails } = useQuery<SopDetail[]>({
+    queryKey: ['sops', 'details', roleSopIds],
+    queryFn: async () => {
+      const results = await Promise.all(
+        roleSopIds.map((id) => apiClient.get<SopDetail>(`/sops/${id}`).then((r) => r.data)),
+      )
+      return results
+    },
+    enabled: open && isConversation && activeTab === 1 && roleSopIds.length > 0,
+  })
+
+  // Fetch all MCP tools to resolve tool names from skill.tool_ids
+  const { data: allMcpTools } = useQuery<McpTool[]>({
+    queryKey: ['mcp', 'tools'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<McpTool[]>('/mcp/tools')
+      return data
+    },
+    enabled: open && isConversation && activeTab === 1,
+  })
+  const roleSops = (allSops ?? []).filter((s) => currentRole?.sop_ids.includes(s.id))
+  const roleSkills = (allSkills ?? []).filter((s) => currentRole?.skill_ids.includes(s.id))
+  const planGeneratedAt = agentType?.plan?.generated_at ? new Date(agentType.plan.generated_at) : null
+
+  const latestPreviewDefinitionUpdate = useMemo(() => {
+    const timestamps = [
+      currentRole?.updated_at,
+      ...roleSops.map((sop) => sop.updated_at),
+      ...roleSkills.map((skill) => skill.updated_at),
+    ]
+      .filter((value): value is string => !!value)
+      .map((value) => new Date(value).getTime())
+      .filter((value) => !Number.isNaN(value))
+
+    if (timestamps.length === 0) {
+      return null
+    }
+
+    return new Date(Math.max(...timestamps))
+  }, [currentRole?.updated_at, roleSops, roleSkills])
+
+  const staleDefinitionLabels = useMemo(() => {
+    if (!planGeneratedAt) {
+      return [] as string[]
+    }
+
+    const labels: string[] = []
+
+    if (currentRole?.updated_at && new Date(currentRole.updated_at) > planGeneratedAt) {
+      labels.push('role')
+    }
+
+    if (roleSops.some((sop) => new Date(sop.updated_at) > planGeneratedAt)) {
+      labels.push('SOPs')
+    }
+
+    if (roleSkills.some((skill) => new Date(skill.updated_at) > planGeneratedAt)) {
+      labels.push('skills')
+    }
+
+    return labels
+  }, [currentRole?.updated_at, planGeneratedAt, roleSops, roleSkills])
+
+  const staleDefinitionsMessage = useMemo(() => {
+    if (staleDefinitionLabels.length === 0) {
+      return null
+    }
+
+    if (staleDefinitionLabels.length === 1) {
+      return `This plan is older than the current ${staleDefinitionLabels[0]} definition.`
+    }
+
+    const lastLabel = staleDefinitionLabels[staleDefinitionLabels.length - 1]
+    const leadingLabels = staleDefinitionLabels.slice(0, -1).join(', ')
+    return `This plan is older than the current ${leadingLabels}, and ${lastLabel} definitions.`
+  }, [staleDefinitionLabels])
+
+  const planIsStale = !!planGeneratedAt && !!latestPreviewDefinitionUpdate && latestPreviewDefinitionUpdate > planGeneratedAt
+
+  const regeneratePlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!agentTypeId) {
+        throw new Error('Agent type not selected')
+      }
+      const { data } = await apiClient.post(`/agents/types/${agentTypeId}/regenerate-plan`)
+      return data
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'types', agentTypeId] })
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+    },
+    onError: (error) => {
+      setDialogError(error)
+    },
+  })
+
   const roleName = agentType?.role_id
     ? (allRoles?.find((r) => r.id === agentType.role_id)?.name ?? agentType.role_id)
     : null
@@ -158,9 +299,102 @@ export function AgentTypeDetailsDialog({
     ? (allIdentities?.find((i) => i.id === agentType.identity_id)?.name ?? agentType.identity_id)
     : null
 
+  // Build topology nodes/edges for conversation agents (no plan required)
+  const { convTopologyNodes, convTopologyEdges } = useMemo<{
+    convTopologyNodes: TopologyNode[]
+    convTopologyEdges: TopologyEdge[]
+  }>(() => {
+    if (!agentType || !isConversation) return { convTopologyNodes: [], convTopologyEdges: [] }
+
+    const nodes: TopologyNode[] = []
+    const edges: TopologyEdge[] = []
+    const addedSkillIds = new Set<string>()
+    const addedToolIds = new Set<string>()
+
+    nodes.push({ id: 'agent', type: 'agent', label: agentType.name })
+
+    if (agentType.identity_id && identityName) {
+      nodes.push({ id: 'identity', type: 'identity', label: identityName })
+      edges.push({ source: 'agent', target: 'identity' })
+    }
+
+    if (agentType.role_id && roleName) {
+      nodes.push({ id: 'role', type: 'role', label: roleName })
+      edges.push({ source: 'agent', target: 'role' })
+
+      // Helper: add skill node + its tool nodes, then return the skill node id
+      const addSkillWithTools = (skill: Skill): string => {
+        const skillNodeId = `skill_${skill.id}`
+        if (!addedSkillIds.has(skill.id)) {
+          addedSkillIds.add(skill.id)
+          nodes.push({ id: skillNodeId, type: 'skill', label: skill.name })
+          skill.tool_ids.forEach((toolId) => {
+            if (!addedToolIds.has(toolId)) {
+              addedToolIds.add(toolId)
+              const tool = (allMcpTools ?? []).find((t) => t.id === toolId)
+              if (tool) {
+                nodes.push({ id: `tool_${toolId}`, type: 'tool', label: canonicalizeToolName(tool.name) })
+              }
+            }
+            if (addedToolIds.has(toolId)) {
+              edges.push({ source: skillNodeId, target: `tool_${toolId}` })
+            }
+          })
+        }
+        return skillNodeId
+      }
+
+      // Track which skills are reached via SOP steps (to avoid duplicate role→skill edges)
+      const sopSkillIds = new Set<string>()
+
+      roleSops.forEach((sop) => {
+        const sopNodeId = `sop_${sop.id}`
+        nodes.push({ id: sopNodeId, type: 'sop', label: sop.name })
+        edges.push({ source: 'role', target: sopNodeId })
+
+        const detail = (sopDetails ?? []).find((d) => d.id === sop.id)
+        if (detail) {
+          detail.steps
+            .filter((step) => step.step_type === 'skill_invocation' && step.skill_id)
+            .forEach((step) => {
+              const skillId = step.skill_id!
+              sopSkillIds.add(skillId)
+              const skill = (allSkills ?? []).find((s) => s.id === skillId)
+              if (skill) {
+                const skillNodeId = addSkillWithTools(skill)
+                edges.push({ source: sopNodeId, target: skillNodeId })
+              }
+            })
+        }
+      })
+
+      // Skills directly on role but not reachable via any SOP step → connect to role
+      roleSkills
+        .filter((skill) => !sopSkillIds.has(skill.id))
+        .forEach((skill) => {
+          const skillNodeId = addSkillWithTools(skill)
+          edges.push({ source: 'role', target: skillNodeId })
+        })
+    }
+
+    return { convTopologyNodes: nodes, convTopologyEdges: edges }
+  }, [agentType, isConversation, identityName, roleName, roleSops, roleSkills, sopDetails, allSkills, allMcpTools])
+
   const handleClose = () => {
     setDialogError(null)
     onClose()
+  }
+
+  const handleEdit = () => {
+    if (agentType) {
+      // Navigate to agents page with state to open edit dialog
+      navigate('/agents', { 
+        state: { 
+          editAgentType: agentType
+        } 
+      })
+      onClose()
+    }
   }
 
   const handleViewAllExecutions = () => {
@@ -180,9 +414,20 @@ export function AgentTypeDetailsDialog({
           <Typography variant="h6" component="span">
             {agentType ? agentType.name : t('agents.types.dialogTitle')}
           </Typography>
-          <IconButton size="small" onClick={handleClose} aria-label={t('app.close')}>
-            <CloseIcon />
-          </IconButton>
+          <Box>
+            {agentType && (
+              <Tooltip title={t('app.edit')}>
+                <IconButton size="small" onClick={handleEdit} aria-label={t('app.edit')}>
+                  <EditIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title={t('app.close')}>
+              <IconButton size="small" onClick={handleClose} aria-label={t('app.close')}>
+                <CloseIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </DialogTitle>
 
         <DialogContent dividers sx={{ p: 0 }}>
@@ -213,7 +458,7 @@ export function AgentTypeDetailsDialog({
                     aria-controls="agent-details-tabpanel-0"
                   />
                   <Tab
-                    label={t('agents.types.planPreviewTab')}
+                    label={t('agents.types.agentPreviewTab')}
                     id="agent-details-tab-1"
                     aria-controls="agent-details-tabpanel-1"
                   />
@@ -222,6 +467,13 @@ export function AgentTypeDetailsDialog({
                     id="agent-details-tab-2"
                     aria-controls="agent-details-tabpanel-2"
                   />
+                  {agentType.input_type === 'conversation' && (
+                    <Tab
+                      label={t('conversations.sessions.tabLabel')}
+                      id="agent-details-tab-3"
+                      aria-controls="agent-details-tabpanel-3"
+                    />
+                  )}
                 </Tabs>
               </Box>
 
@@ -356,22 +608,119 @@ export function AgentTypeDetailsDialog({
 
                   {/* Action buttons */}
                   <Box display="flex" gap={1} flexWrap="wrap">
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={() => setLaunchOpen(true)}
-                    >
-                      {t('agents.types.runAgent')}
-                    </Button>
+                    {isConversation ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => setConversationDialogOpen(true)}
+                      >
+                        {t('agents.types.startChat')}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => setLaunchOpen(true)}
+                      >
+                        {t('agents.types.runAgent')}
+                      </Button>
+                    )}
                   </Box>
                 </TabPanel>
 
-                {/* ── Tab 1: Plan Preview ──────────────────────────────────── */}
+                {/* ── Tab 1: Plan Preview OR Agent Preview ──────────────── */}
                 <TabPanel value={activeTab} index={1}>
-                  <AgentPlanContent
-                    plan={agentType.plan}
-                    noPlanMessage={t('agents.types.noPlan')}
-                  />
+                  {planIsStale && (
+                    <Box display="flex" gap={1} alignItems="stretch" sx={{ mb: 2 }}>
+                      <Alert severity="warning" sx={{ flex: 1, alignItems: 'center' }}>
+                        {staleDefinitionsMessage}
+                      </Alert>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<RefreshIcon />}
+                        onClick={() => void regeneratePlanMutation.mutateAsync()}
+                        disabled={regeneratePlanMutation.isPending}
+                      >
+                        Regenerate plan
+                      </Button>
+                    </Box>
+                  )}
+
+                  {!planIsStale && (
+                    <Box display="flex" justifyContent="flex-end" sx={{ mb: 2 }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<RefreshIcon />}
+                        onClick={() => void regeneratePlanMutation.mutateAsync()}
+                        disabled={regeneratePlanMutation.isPending}
+                      >
+                        Regenerate plan
+                      </Button>
+                    </Box>
+                  )}
+
+                  {isConversation ? (
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom>
+                        {t('agents.plan.topology')}
+                      </Typography>
+                      <TopologyDiagramRenderer
+                        nodes={convTopologyNodes}
+                        edges={convTopologyEdges}
+                      />
+
+                      <Divider sx={{ my: 2 }} />
+
+                      <Typography variant="subtitle2" gutterBottom>
+                        {t('agents.types.agentSops')}
+                      </Typography>
+                      {roleSops.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary" mb={2}>
+                          {t('agents.types.noSopsAssigned')}
+                        </Typography>
+                      ) : (
+                        <List dense disablePadding sx={{ mb: 2 }}>
+                          {roleSops.map((sop) => (
+                            <ListItem key={sop.id} disableGutters>
+                              <ListItemText
+                                primary={sop.name}
+                                secondary={sop.description ?? undefined}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+
+                      <Divider sx={{ my: 1.5 }} />
+
+                      <Typography variant="subtitle2" gutterBottom>
+                        {t('agents.types.agentSkills')}
+                      </Typography>
+                      {roleSkills.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {t('agents.types.noSkillsAssigned')}
+                        </Typography>
+                      ) : (
+                        <List dense disablePadding>
+                          {roleSkills.map((skill) => (
+                            <ListItem key={skill.id} disableGutters>
+                              <ListItemText
+                                primary={skill.name}
+                                secondary={skill.description ?? undefined}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+                    </Box>
+                  ) : (
+                    <AgentPlanContent
+                      plan={agentType.plan}
+                      noPlanMessage={t('agents.types.noPlan')}
+                    />
+                  )}
                 </TabPanel>
 
                 {/* ── Tab 2: Execution Logs ────────────────────────────────── */}
@@ -447,6 +796,13 @@ export function AgentTypeDetailsDialog({
                     </Button>
                   </Box>
                 </TabPanel>
+
+                {/* ── Tab 3: Sessions (conversation agents only) ───────────── */}
+                {agentType.input_type === 'conversation' && agentTypeId && (
+                  <TabPanel value={activeTab} index={3}>
+                    <ConversationSessionsTab agentTypeId={agentTypeId} onClose={onClose} />
+                  </TabPanel>
+                )}
               </Box>
             </>
           )}
@@ -454,9 +810,9 @@ export function AgentTypeDetailsDialog({
       </Dialog>
 
       {/* Launch dialog — mounted inside so it shares the agent type context */}
-      {agentType && (
+      {agentType && launchOpen && (
         <AgentJobLaunchDialog
-          open={launchOpen}
+          open={true}
           agentType={agentType}
           onClose={() => setLaunchOpen(false)}
           onLaunched={(sessionId) => {
@@ -468,36 +824,53 @@ export function AgentTypeDetailsDialog({
       )}
 
       {/* Role view dialog */}
-      <AgentRoleViewDialog
-        open={roleViewOpen}
-        roleId={agentType?.role_id ?? null}
-        onClose={() => setRoleViewOpen(false)}
-      />
+      {roleViewOpen && (
+        <AgentRoleViewDialog
+          open={true}
+          roleId={agentType?.role_id ?? null}
+          onClose={() => setRoleViewOpen(false)}
+        />
+      )}
 
       {/* Identity view dialog */}
-      <AgentIdentityViewDialog
-        open={identityViewOpen}
-        identityId={agentType?.identity_id ?? null}
-        onClose={() => setIdentityViewOpen(false)}
-      />
+      {identityViewOpen && (
+        <AgentIdentityViewDialog
+          open={true}
+          identityId={agentType?.identity_id ?? null}
+          onClose={() => setIdentityViewOpen(false)}
+        />
+      )}
 
       {/* Agent executions dialog */}
-      <AgentExecutionsDialog
-        open={executionsDialogOpen}
-        onClose={() => setExecutionsDialogOpen(false)}
-        agentTypeId={agentTypeId ?? undefined}
-        agentTypeName={agentType?.name}
-      />
+      {executionsDialogOpen && (
+        <AgentExecutionsDialog
+          open={true}
+          onClose={() => setExecutionsDialogOpen(false)}
+          agentTypeId={agentTypeId ?? undefined}
+          agentTypeName={agentType?.name}
+        />
+      )}
 
       {/* Agent execution details dialog */}
-      {selectedSessionId && (
+      {selectedSessionId && executionDetailsDialogOpen && (
         <AgentExecutionDetailsDialog
-          open={executionDetailsDialogOpen}
+          open={true}
           onClose={() => {
             setExecutionDetailsDialogOpen(false)
             setSelectedSessionId(null)
           }}
           sessionId={selectedSessionId}
+        />
+      )}
+
+      {/* Conversation dialog */}
+      {conversationDialogOpen && (
+        <ConversationDialog
+          open={true}
+          sessionId={null}
+          agentTypeId={agentTypeId ?? ''}
+          agentTypeName={agentType?.name ?? 'Agent'}
+          onClose={() => setConversationDialogOpen(false)}
         />
       )}
     </>

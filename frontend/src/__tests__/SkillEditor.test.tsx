@@ -1,31 +1,28 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { SkillEditor } from '../pages/skills/SkillEditor'
+import { useAllTools, useMcpServers } from '../hooks/useMcpServers'
+import { useSkillRoles } from '../hooks/useSkills'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
 
 vi.mock('../hooks/useMcpServers', () => ({
-  useAllTools: () => ({ data: [
-    { id: 'tool-1', server_id: 'srv-1', name: 'search', original_name: 'search', description: 'Searches', is_active: true, input_schema: {}, server_slug: 'internal-tools', server_name: 'Internal Tools', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-    { id: 'tool-2', server_id: 'srv-1', name: 'summarise', original_name: 'summarise', description: 'Summarises', is_active: true, input_schema: {}, server_slug: 'internal-tools', server_name: 'Internal Tools', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-  ], isLoading: false }),
-  useMcpServers: () => ({ data: [
-    { id: 'srv-1', name: 'Internal Tools', slug: 'internal-tools', base_url: 'http://mcp.internal', status: 'active' },
-  ], isLoading: false }),
+  useAllTools: vi.fn(),
+  useMcpServers: vi.fn(),
 }))
 
 vi.mock('../hooks/useSkills', () => ({
-  useSkillRoles: () => ({ data: ['role-1'], isLoading: false }),
+  useSkillRoles: vi.fn(),
 }))
 
 vi.mock('../api/apiClient', () => ({
   default: {
-    get: vi.fn((url: string) => {
+    get: vi.fn().mockImplementation((url: string) => {
       if (url === '/agents/roles') return Promise.resolve({ data: [
         { id: 'role-1', name: 'Admin Role', description: 'Admins', role_type: 'user', is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
       ]})
@@ -49,8 +46,16 @@ vi.mock('../api/apiClient', () => ({
   },
 }))
 
+const TOOLS = [
+  { id: 'tool-1', server_id: 'srv-1', name: 'search', original_name: 'search', description: 'Searches', is_active: true, input_schema: {}, server_slug: 'internal-tools', server_name: 'Internal Tools', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+  { id: 'tool-2', server_id: 'srv-1', name: 'summarise', original_name: 'summarise', description: 'Summarises', is_active: true, input_schema: {}, server_slug: 'internal-tools', server_name: 'Internal Tools', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+]
+const SERVERS = [
+  { id: 'srv-1', name: 'Internal Tools', slug: 'internal-tools', base_url: 'http://mcp.internal', status: 'active' },
+]
+
 function wrapper({ children }: { children: React.ReactNode }) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return (
     <QueryClientProvider client={qc}>
       <MemoryRouter>{children}</MemoryRouter>
@@ -58,16 +63,23 @@ function wrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Set up default hook return values before each test
+beforeEach(() => {
+  vi.mocked(useAllTools).mockReturnValue({ data: TOOLS, isLoading: false } as any)
+  vi.mocked(useMcpServers).mockReturnValue({ data: SERVERS, isLoading: false } as any)
+  vi.mocked(useSkillRoles).mockReturnValue({ data: ['role-1'], isLoading: false } as any)
+})
+
+afterEach(() => {
+  vi.clearAllTimers()
+})
+
 const mockOnClose = vi.fn()
 const mockOnSaved = vi.fn()
 
 describe('SkillEditor — new skill', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it('renders the skill editor panel', async () => {
-    render(<SkillEditor skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const inputs = screen.queryAllByRole('textbox')
       expect(inputs.length).toBeGreaterThanOrEqual(1)
@@ -75,7 +87,7 @@ describe('SkillEditor — new skill', () => {
   })
 
   it('renders the instructions field', async () => {
-    render(<SkillEditor skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const textareas = screen.queryAllByRole('textbox')
       expect(textareas.length).toBeGreaterThan(0)
@@ -83,7 +95,7 @@ describe('SkillEditor — new skill', () => {
   })
 
   it('renders tool selection section grouped by server', async () => {
-    render(<SkillEditor skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const checkboxes = screen.queryAllByRole('checkbox')
       expect(checkboxes.length).toBeGreaterThan(0)
@@ -91,7 +103,7 @@ describe('SkillEditor — new skill', () => {
   })
 
   it('renders close button', async () => {
-    render(<SkillEditor skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const buttons = screen.queryAllByRole('button')
       expect(buttons.length).toBeGreaterThan(0)
@@ -99,7 +111,7 @@ describe('SkillEditor — new skill', () => {
   })
 
   it('renders save button', async () => {
-    render(<SkillEditor skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const buttons = screen.queryAllByRole('button')
       expect(buttons.length).toBeGreaterThan(0)
@@ -119,12 +131,8 @@ describe('SkillEditor — editing existing skill', () => {
     updated_at: '2026-01-01T00:00:00Z',
   }
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it('pre-populates the name field', async () => {
-    render(<SkillEditor skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const inputs = screen.queryAllByRole('textbox')
       expect(inputs.length).toBeGreaterThan(0)
@@ -132,7 +140,7 @@ describe('SkillEditor — editing existing skill', () => {
   })
 
   it('pre-populates the instructions field', async () => {
-    render(<SkillEditor skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const inputs = screen.queryAllByRole('textbox')
       expect(inputs.length).toBeGreaterThan(0)
@@ -140,7 +148,7 @@ describe('SkillEditor — editing existing skill', () => {
   })
 
   it('renders role assignment sidebar with loaded roles', async () => {
-    render(<SkillEditor skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const checkboxes = screen.queryAllByRole('checkbox')
       expect(checkboxes.length).toBeGreaterThan(0)
@@ -148,7 +156,7 @@ describe('SkillEditor — editing existing skill', () => {
   })
 
   it('renders without runtime errors', async () => {
-    render(<SkillEditor skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SkillEditor open={true} skill={existingSkill as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const container = document.body
       expect(container).toBeDefined()
@@ -183,13 +191,9 @@ describe('SkillEditor — Generated Tool Reference section', () => {
     updated_at: '2026-01-01T00:00:00Z',
   }
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   it('renders Generated Tool Reference section label when editing an existing skill', async () => {
     render(
-      <SkillEditor skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <SkillEditor open={true} skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -200,7 +204,7 @@ describe('SkillEditor — Generated Tool Reference section', () => {
   })
 
   it('does not render Generated Tool Reference section for new skill (null prop)', async () => {
-    render(<SkillEditor skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
     await waitFor(() => {
       const label = screen.queryByText('skills.editor.generatedToolReference')
       expect(label).toBeNull()
@@ -209,7 +213,7 @@ describe('SkillEditor — Generated Tool Reference section', () => {
 
   it('renders a collapsible toggle button next to the section label', async () => {
     render(
-      <SkillEditor skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <SkillEditor open={true} skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -221,7 +225,7 @@ describe('SkillEditor — Generated Tool Reference section', () => {
 
   it('section content area uses a pre element (read-only, not a textarea or input)', async () => {
     render(
-      <SkillEditor skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <SkillEditor open={true} skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -240,7 +244,7 @@ describe('SkillEditor — Generated Tool Reference section', () => {
     // sk-no-tools is not handled by the mock → returns { data: [] }
     // toolSection = null → shows skills.noTools
     render(
-      <SkillEditor skill={SKILL_WITHOUT_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <SkillEditor open={true} skill={SKILL_WITHOUT_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -253,7 +257,7 @@ describe('SkillEditor — Generated Tool Reference section', () => {
     // sk-1 mock returns instructions_with_tools with ## Tools — after query loads,
     // the pre element shows the tool section content
     render(
-      <SkillEditor skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <SkillEditor open={true} skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -267,7 +271,7 @@ describe('SkillEditor — Generated Tool Reference section', () => {
 
   it('section is structurally distinct from the editable instructions textarea', async () => {
     render(
-      <SkillEditor skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
+      <SkillEditor open={true} skill={SKILL_WITH_TOOL_SECTION as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {

@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
+from app.db.session import DbSession, get_db
 from app.schemas.errors import PermissionDeniedDetail, RequiredPermission
 
 # Cache of (module, action) → _dep function so the same callable is returned
@@ -110,3 +110,71 @@ def require_permission(module: str, action: str) -> Callable:
 
     _permission_dep_cache[(module, action)] = _dep
     return _dep
+
+
+async def require_service_certificate(
+    request: Request,
+    db: DbSession,
+) -> dict:
+    """Require a valid service certificate (for /internal/* endpoints).
+
+    Extracts the client certificate from the ``X-Client-Certificate`` request
+    header, validates it against the CA, and enforces that it is a *service*
+    certificate (CN prefix ``service:``).
+
+    Task 4.1: Returns **401 Unauthorized** when the certificate is absent or
+    cryptographically invalid (expired, bad signature, revoked).
+
+    Task 4.5: Returns **403 Forbidden** when the certificate is
+    cryptographically valid but carries a ``CN=agent-instance:*`` subject,
+    distinguishing an explicit capability boundary violation from a generic
+    auth failure.  This prevents compromised agent containers from accessing
+    internal Control Center APIs.
+
+    Returns:
+        Dict with ``cert_type`` and ``service_name`` on success.
+
+    Raises:
+        HTTPException 401 — certificate absent or invalid.
+        HTTPException 403 — certificate is a valid agent-instance cert, which
+            is explicitly blocked from ``/internal/*`` routes.
+    """
+    from app.services.certificate_authority import CertificateAuthorityService, CertificateType
+
+    cert_pem = request.headers.get("X-Client-Certificate")
+    if not cert_pem:
+        raise HTTPException(
+            status_code=401,
+            detail="Service certificate required — no client certificate provided",
+        )
+
+    # Decode escaped newlines from HTTP header format
+    cert_pem = cert_pem.replace("\\n", "\n")
+
+    ca_service = CertificateAuthorityService()
+    result = await ca_service.validate(cert_pem, db, "internal-api", "internal-access")
+    if not result.valid:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid certificate: {result.reason}",
+        )
+
+    # Task 4.5: agent-instance certs are explicitly forbidden (403, not 401) so
+    # that the distinction between "no credential" and "wrong credential type"
+    # is visible in audit logs and client error handling.
+    if result.cert_type == CertificateType.agent_instance:
+        raise HTTPException(
+            status_code=403,
+            detail="Agent-instance certificates are not permitted on /internal/* endpoints",
+        )
+
+    if result.cert_type != CertificateType.service:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                f"Service certificate required — received "
+                f"{result.cert_type or 'unknown'} certificate"
+            ),
+        )
+
+    return {"cert_type": result.cert_type, "service_name": result.service_name}

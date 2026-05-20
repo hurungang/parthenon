@@ -41,7 +41,7 @@ export interface Identity {
 // ── MCP Hub ────────────────────────────────────────────────────────────────────
 
 export type McpServerStatus = 'active' | 'inactive' | 'error'
-export type McpSessionAuthType = 'api_key' | 'bearer_token' | 'basic_auth' | 'oauth2' | 'none'
+export type McpSessionAuthType = 'api_key' | 'bearer_token' | 'basic_auth' | 'oauth2' | 'none' | 'passthrough'
 
 export interface McpServer {
   id: string
@@ -135,6 +135,7 @@ export interface Sop {
   is_active: boolean
   created_at: string
   updated_at: string
+  required_skill_ids?: string[]
 }
 
 export interface SopDetail extends Sop {
@@ -169,6 +170,7 @@ export interface AgentIdentity {
   realm_username: string | null
   status: AgentIdentityStatus
   token_expires_at: string | null
+  has_refresh_token: boolean
   created_at: string
   updated_at: string
 }
@@ -305,7 +307,7 @@ export interface JobExecution {
 
 // ── Conversations ──────────────────────────────────────────────────────────────
 
-export type ConversationStatus = 'active' | 'closed' | 'error'
+export type ConversationStatus = 'active' | 'closed' | 'archived' | 'error'
 export type TurnRole = 'user' | 'agent' | 'tool' | 'system'
 
 export interface ToolCallRecord {
@@ -329,15 +331,21 @@ export interface ConversationTurn {
   tool_calls: ToolCallRecord[]
 }
 
+export interface ConversationSessionCreate {
+  agent_type_id: string
+}
+
 export interface ConversationSession {
   id: string
-  agent_instance_id: string | null
   agent_type_id: string | null
-  initiator_subject: string | null
+  triggered_by_user_id: string | null
+  agent_job_id: string | null
+  title: string | null
   channel: string
   status: ConversationStatus
   turn_count: number
   created_at: string
+  updated_at: string
   closed_at: string | null
 }
 
@@ -361,8 +369,22 @@ export interface ResultRecord {
 
 // ── Notifications ──────────────────────────────────────────────────────────────
 
-export type ChannelType = 'email' | 'slack' | 'teams' | 'webhook'
+export type ChannelType = 'SMTP' | 'SENDGRID' | 'RESEND' | 'TEAMS_WEBHOOK' | 'SLACK_WEBHOOK'
 export type DeliveryStatus = 'pending' | 'delivered' | 'failed'
+export type SourceType = 'SOP' | 'AGENT' | 'MANUAL'
+
+export interface ChannelPropertyRead {
+  id: string
+  key: string
+  is_secret: boolean
+  value?: string | null  // Only populated for non-secret properties
+}
+
+export interface ChannelPropertyWrite {
+  key: string
+  value: string
+  is_secret: boolean
+}
 
 export interface NotificationChannel {
   id: string
@@ -372,6 +394,39 @@ export interface NotificationChannel {
   is_active: boolean
   created_at: string
   updated_at: string
+  properties: ChannelPropertyRead[]
+}
+
+export interface GroupChannelMappingRead {
+  id: string
+  channel_id: string
+}
+
+export interface RecipientGroup {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  channel_mappings: GroupChannelMappingRead[]
+}
+
+export interface NotificationLog {
+  id: string
+  group_id: string | null
+  channel_id: string
+  source_type: SourceType
+  source_id: string | null
+  subject: string | null
+  body: string
+  recipient: string | null
+  status: DeliveryStatus
+  error: string | null
+  metadata_: Record<string, unknown> | null
+  created_at: string
+  delivered_at: string | null
 }
 
 export interface NotificationEvent {

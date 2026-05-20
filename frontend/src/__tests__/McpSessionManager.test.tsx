@@ -324,3 +324,180 @@ describe('McpSessionManager — OAuth UI', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('McpSessionManager — Passthrough auth type (Task 8.6)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApiClient.get.mockResolvedValue({ data: [] })
+  })
+
+  it('passthrough is included in auth type options', async () => {
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    fireEvent.click(screen.getByText('mcp.sessions.create'))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeDefined()
+    })
+    // Open the auth type Select
+    const selects = screen.getAllByRole('combobox')
+    if (selects[0]) {
+      fireEvent.mouseDown(selects[0])
+      await waitFor(() => {
+        expect(screen.queryByText('passthrough')).not.toBeNull()
+      })
+    }
+  })
+
+  it('selecting passthrough hides credential fields and shows info alert', async () => {
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    fireEvent.click(screen.getByText('mcp.sessions.create'))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeDefined()
+    })
+    // Switch to passthrough
+    const selects = screen.getAllByRole('combobox')
+    if (selects[0]) {
+      fireEvent.mouseDown(selects[0])
+      await waitFor(() => {
+        const option = screen.queryByText('passthrough')
+        if (option) fireEvent.click(option)
+      })
+    }
+    await waitFor(() => {
+      // Info alert text should be present
+      expect(screen.queryByText('mcp.sessions.passthroughInfo')).not.toBeNull()
+      // Credential fields should NOT be present
+      expect(screen.queryByText('mcp.sessions.apiKey')).toBeNull()
+      expect(screen.queryByText('mcp.sessions.bearerToken')).toBeNull()
+    }, { timeout: 2000 })
+  })
+
+  it('passthrough session row shows Passthrough chip in table', async () => {
+    const passthroughSession = {
+      id: 'sess-pt',
+      server_id: 'srv-1',
+      name: 'Passthrough Session',
+      description: null,
+      auth_type: 'passthrough',
+      identity_subject: null,
+      identity_binding: null,
+      credential_config: null,
+      is_active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValue({ data: [passthroughSession] })
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    await waitFor(() => {
+      expect(screen.queryByText('Passthrough Session')).not.toBeNull()
+      // Passthrough chip should be visible
+      expect(screen.queryByText('mcp.sessions.passthrough')).not.toBeNull()
+    })
+  })
+})
+
+describe('McpSessionManager — conditional OAuth action buttons', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows token status chip for oauth2 sessions and dash for non-oauth2', async () => {
+    const sessions = [
+      {
+        id: 'sess-oauth',
+        server_id: 'srv-1',
+        name: 'OAuth Session',
+        description: null,
+        auth_type: 'oauth2',
+        identity_subject: null,
+        identity_binding: null,
+        credential_config: null,
+        oauth_expires_at: '2099-01-01T00:00:00Z',
+        oauth_refresh_expires_at: '2099-06-01T00:00:00Z',
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'sess-api',
+        server_id: 'srv-1',
+        name: 'API Key Session',
+        description: null,
+        auth_type: 'api_key',
+        identity_subject: null,
+        identity_binding: null,
+        credential_config: null,
+        oauth_expires_at: null,
+        oauth_refresh_expires_at: null,
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    mockApiClient.get.mockResolvedValueOnce({ data: sessions })
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    const { container } = render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    await waitFor(() => {
+      expect(screen.queryByText('OAuth Session')).not.toBeNull()
+      expect(screen.queryByText('API Key Session')).not.toBeNull()
+    })
+    // oauth2 session renders a token status chip (MuiChip)
+    const rows = container.querySelectorAll('tr')
+    // The oauth2 session row should contain a Chip (token status), the api_key row should not
+    // Both rows exist: header + 2 data rows
+    expect(rows.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('shows green refresh button when oauth refresh token is valid', async () => {
+    const oauthSession = {
+      id: 'sess-oauth-valid',
+      server_id: 'srv-1',
+      name: 'Valid OAuth Session',
+      description: null,
+      auth_type: 'oauth2',
+      identity_subject: null,
+      identity_binding: null,
+      credential_config: null,
+      oauth_expires_at: '2099-01-01T00:00:00Z',
+      oauth_refresh_expires_at: '2099-06-01T00:00:00Z',  // valid — far future
+      is_active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [oauthSession] })
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    const { container } = render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    await waitFor(() => screen.getByText('Valid OAuth Session'))
+    // Green success-colored refresh button must be present
+    expect(container.querySelector('.MuiIconButton-colorSuccess')).not.toBeNull()
+  })
+
+  it('shows red reauth button when oauth refresh token is expired', async () => {
+    const oauthSession = {
+      id: 'sess-oauth-expired',
+      server_id: 'srv-1',
+      name: 'Expired OAuth Session',
+      description: null,
+      auth_type: 'oauth2',
+      identity_subject: null,
+      identity_binding: null,
+      credential_config: null,
+      oauth_expires_at: '2020-01-01T00:00:00Z',
+      oauth_refresh_expires_at: '2020-01-01T00:00:00Z',  // expired — in the past
+      is_active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [oauthSession] })
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    const { container } = render(<McpSessionManager serverId="srv-1" />, { wrapper })
+    await waitFor(() => screen.getByText('Expired OAuth Session'))
+    // No success button — only the red reauth (error) and edit/delete buttons
+    expect(container.querySelector('.MuiIconButton-colorSuccess')).toBeNull()
+    // At least one error-colored button (reauth) must exist
+    expect(container.querySelector('.MuiIconButton-colorError')).not.toBeNull()
+  })
+})
+

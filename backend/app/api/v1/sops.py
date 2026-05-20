@@ -23,7 +23,8 @@ async def list_sops(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
 ) -> list[Sop]:
-    result = await db.execute(select(Sop).order_by(Sop.name))
+    # Load steps relationship so SopRead can populate required_skill_ids
+    result = await db.execute(select(Sop).options(selectinload(Sop.steps)).order_by(Sop.name))
     return list(result.scalars().all())
 
 

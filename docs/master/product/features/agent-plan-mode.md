@@ -27,6 +27,7 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - As a Compliance Officer, I want to review the agent's plan and associated SOPs/skills, so that I can approve agents for production use.
 - As a Developer, I want to ensure the agent's plan aligns with integration requirements, so that downstream systems are not impacted by misconfiguration.
 
+
 ## 5. Acceptance Criteria
 
 - When a user saves an Agent Type, the system automatically invokes an LLM to generate a clear, step-by-step implementation plan based on the agent's instruction, role SOPs, and skills.
@@ -34,6 +35,7 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - A topology diagram visually shows the Agent Role, SOPs, Skills, and Tools that will be used, with clear relationships.
 - Users can preview the full plan and diagram in the "Plan Preview" tab of the Agent Type Details dialog before finalizing the agent save.
 - The saved plan is loaded into the agent's execution context during runtime, guiding the agent to follow the pre-approved workflow.
+- Plan preview and execution context support both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - The plan and diagram update automatically if the agent's configuration, role, SOPs, or skills change (triggers re-generation on save).
 - All UI text is internationalized via i18next.
 - The feature is accessible and usable on both desktop and tablet devices.

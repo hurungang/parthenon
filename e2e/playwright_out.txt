@@ -1,0 +1,1164 @@
+
+Running 385 tests using 1 worker
+
+  Γ£ô    1 [chromium] ΓÇ║ tests\accessibility.spec.ts:57:7 ΓÇ║ Accessibility ΓÇ║ Color contrast meets WCAG AA standards (1.4s)
+  Γ£ô    2 [chromium] ΓÇ║ tests\accessibility.spec.ts:73:7 ΓÇ║ Accessibility ΓÇ║ Focus indicators are visible (1.1s)
+  Γ£ô    3 [chromium] ΓÇ║ tests\accessibility.spec.ts:101:7 ΓÇ║ Accessibility ΓÇ║ No critical accessibility violations (1.3s)
+  Γ£ô    4 [chromium] ΓÇ║ tests\accessibility.spec.ts:133:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Raw log toggle has accessible label via FormControlLabel (2.1s)
+  Γ£ÿ    5 [chromium] ΓÇ║ tests\accessibility.spec.ts:147:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible working steps section has aria-expanded attribute (7.1s)
+  Γ£ô    6 [chromium] ΓÇ║ tests\accessibility.spec.ts:160:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section is keyboard-navigable with Tab (2.2s)
+  Γ£ÿ    7 [chromium] ΓÇ║ tests\accessibility.spec.ts:176:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Enter key (5.1s)
+  Γ£ÿ    8 [chromium] ΓÇ║ tests\accessibility.spec.ts:191:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Space key (5.2s)
+  Γ£ô    9 [chromium] ΓÇ║ tests\accessibility.spec.ts:206:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Raw log block has ARIA label when visible (2.4s)
+  Γ£ô   10 [chromium] ΓÇ║ tests\accessibility.spec.ts:221:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Copy button has ARIA label when in raw mode (2.2s)
+  Γ£ô   11 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:21:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Mocked ΓÇ║ health endpoint reports identity provider status (1.3s)
+  Γ£ô   12 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:39:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Mocked ΓÇ║ agent identities page loads when realm is initialized (mocked) (1.7s)
+  Γ£ô   13 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:67:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Mocked ΓÇ║ realm name column displays configured agent realm (1.7s)
+  Γ£ô   14 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:116:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Real Keycloak Integration ΓÇ║ agent realm openid-configuration is reachable after bootstrap (212ms)
+  Γ£ô   15 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:138:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Real Keycloak Integration ΓÇ║ user realm openid-configuration is still reachable after agent realm bootstrap (136ms)
+  -   16 [chromium] ΓÇ║ tests\agent-bootstrap.spec.ts:155:7 ΓÇ║ Agent Realm Bootstrap ΓÇö Real Keycloak Integration ΓÇ║ backend health reports agent_realm_initialized: true after bootstrap
+  Γ£ô   17 [chromium] ΓÇ║ tests\agent-identity-token-refresh.spec.ts:14:7 ΓÇ║ Real Backend Integration ΓÇö Token Refresh Persistence ΓÇ║ backend health check confirms API is reachable (8ms)
+  Γ£ô   18 [chromium] ΓÇ║ tests\agent-identity-token-refresh.spec.ts:22:7 ΓÇ║ Real Backend Integration ΓÇö Token Refresh Persistence ΓÇ║ refresh-token endpoint exists and requires authentication (not 404) (8ms)
+  Γ£ô   19 [chromium] ΓÇ║ tests\agent-identity-token-refresh.spec.ts:38:7 ΓÇ║ Real Backend Integration ΓÇö Token Refresh Persistence ΓÇ║ agent identities endpoint exists and requires authentication (8ms)
+  Γ£ô   20 [chromium] ΓÇ║ tests\agent-identity-token-refresh.spec.ts:84:7 ΓÇ║ Agent Identity ΓÇö conditional action buttons (mocked) ΓÇ║ shows green refresh button for identity with valid refresh token (1.6s)
+  Γ£ô   21 [chromium] ΓÇ║ tests\agent-identity-token-refresh.spec.ts:108:7 ΓÇ║ Agent Identity ΓÇö conditional action buttons (mocked) ΓÇ║ shows red reauth button for identity with no refresh token (1.7s)
+  Γ£ô   22 [chromium] ΓÇ║ tests\agent-identity-token-refresh.spec.ts:132:7 ΓÇ║ Agent Identity ΓÇö conditional action buttons (mocked) ΓÇ║ clicking green refresh button calls refresh-token API (1.7s)
+  Γ£ô   23 [chromium] ΓÇ║ tests\agent-logs.spec.ts:160:7 ΓÇ║ Agent Log Viewer ΓÇ║ LogViewer renders on completed session page (2.2s)
+  Γ£ô   24 [chromium] ΓÇ║ tests\agent-logs.spec.ts:169:7 ΓÇ║ Agent Log Viewer ΓÇ║ Summary panel displays identity and role from system instruction (2.2s)
+  Γ£ô   25 [chromium] ΓÇ║ tests\agent-logs.spec.ts:180:7 ΓÇ║ Agent Log Viewer ΓÇ║ Summary panel displays SOPs/skills as chips (2.2s)
+  Γ£ô   26 [chromium] ΓÇ║ tests\agent-logs.spec.ts:193:7 ΓÇ║ Agent Log Viewer ΓÇ║ Summary panel shows success result badge for completed session (2.3s)
+  Γ£ô   27 [chromium] ΓÇ║ tests\agent-logs.spec.ts:203:7 ΓÇ║ Agent Log Viewer ΓÇ║ "View Execution Logs" button/dialog is NOT present (regression check) (2.2s)
+  Γ£ô   28 [chromium] ΓÇ║ tests\agent-logs.spec.ts:214:7 ΓÇ║ Agent Log Viewer ΓÇ║ Agent Working Steps section is collapsed by default (2.4s)
+  Γ£ÿ   29 [chromium] ΓÇ║ tests\agent-logs.spec.ts:227:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand working steps section reveals step rows (30.1s)
+  Γ£ÿ   30 [chromium] ΓÇ║ tests\agent-logs.spec.ts:247:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse working steps section hides step rows (30.1s)
+  Γ£ÿ   31 [chromium] ΓÇ║ tests\agent-logs.spec.ts:275:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand individual step detail block (30.1s)
+  Γ£ÿ   32 [chromium] ΓÇ║ tests\agent-logs.spec.ts:302:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse individual step detail block (30.1s)
+  Γ£ô   33 [chromium] ΓÇ║ tests\agent-logs.spec.ts:331:7 ΓÇ║ Agent Log Viewer ΓÇ║ Toggle to raw mode hides friendly panels (2.3s)
+  Γ£ô   34 [chromium] ΓÇ║ tests\agent-logs.spec.ts:347:7 ΓÇ║ Agent Log Viewer ΓÇ║ Toggle to raw mode shows monospace raw log block (2.2s)
+  Γ£ô   35 [chromium] ΓÇ║ tests\agent-logs.spec.ts:366:7 ΓÇ║ Agent Log Viewer ΓÇ║ Raw mode copy button is visible (2.3s)
+  Γ£ô   36 [chromium] ΓÇ║ tests\agent-logs.spec.ts:381:7 ΓÇ║ Agent Log Viewer ΓÇ║ Toggle back to friendly mode restores panels (2.2s)
+  Γ£ô   37 [chromium] ΓÇ║ tests\agent-logs.spec.ts:400:7 ΓÇ║ Agent Log Viewer ΓÇö Edge Cases ΓÇ║ Empty log entries ΓÇö no crash (2.1s)
+  Γ£ô   38 [chromium] ΓÇ║ tests\agent-logs.spec.ts:436:7 ΓÇ║ Agent Log Viewer ΓÇö Edge Cases ΓÇ║ Special characters in log messages ΓÇö displays without XSS (2.1s)
+  Γ£ô   39 [chromium] ΓÇ║ tests\agent-logs.spec.ts:473:7 ΓÇ║ Agent Log Viewer ΓÇö Edge Cases ΓÇ║ No execution logs ΓÇö LogViewer not rendered (2.1s)
+  Γ£ô   40 [chromium] ΓÇ║ tests\agent-management.spec.ts:48:7 ΓÇ║ Agent Management ΓÇ║ Agent management page renders without crashing (1.6s)
+  Γ£ô   41 [chromium] ΓÇ║ tests\agent-management.spec.ts:56:7 ΓÇ║ Agent Management ΓÇ║ Agent management page has content (1.6s)
+  Γ£ô   42 [chromium] ΓÇ║ tests\agent-management.spec.ts:63:7 ΓÇ║ Agent Management ΓÇ║ Agent management page has at least one button (1.7s)
+  Γ£ô   43 [chromium] ΓÇ║ tests\agent-management.spec.ts:70:7 ΓÇ║ Agent Management ΓÇ║ displays list of agent types from API (1.7s)
+  Γ£ô   44 [chromium] ΓÇ║ tests\agent-management.spec.ts:77:7 ΓÇ║ Agent Management ΓÇ║ displays input_type for each agent type (1.8s)
+  Γ£ô   45 [chromium] ΓÇ║ tests\agent-management.spec.ts:84:7 ΓÇ║ Agent Management ΓÇ║ shows create agent type button and opens dialog on click (1.7s)
+  Γ£ô   46 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:182:7 ΓÇ║ AI Agent nav group ΓÇ║ shows AI Agent nav group in sidebar (2.1s)
+  Γ£ÿ   47 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:191:7 ΓÇ║ AI Agent nav group ΓÇ║ nav group is expanded by default and shows child items (12.2s)
+  Γ£ÿ   48 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:208:7 ΓÇ║ AI Agent nav group ΓÇ║ collapses and expands nav group on header click (12.4s)
+  Γ£ô   49 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:231:7 ΓÇ║ AI Agent nav group ΓÇ║ clicking Agent Executions navigates to /agents/executions (3.1s)
+  Γ£ô   50 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:246:7 ΓÇ║ AI Agent nav group ΓÇ║ clicking Agent Roles navigates to /agents/roles (2.5s)
+  Γ£ô   51 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:257:7 ΓÇ║ AI Agent nav group ΓÇ║ clicking Agent Identities navigates to /agents/identities (2.2s)
+  Γ£ô   52 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:270:7 ΓÇ║ Agent Executions page ΓÇ║ navigating to /agents/instances redirects to /agents/executions (2.4s)
+  Γ£ô   53 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:278:7 ΓÇ║ Agent Executions page ΓÇ║ Agent Executions page shows the page title (2.3s)
+  Γ£ô   54 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:289:7 ΓÇ║ Agent Executions page ΓÇ║ agent type filter dropdown is visible on executions page (2.5s)
+  Γ£ô   55 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:298:7 ΓÇ║ Agent Executions page ΓÇ║ selecting agent type filter refetches sessions (2.6s)
+  Γ£ô   56 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:333:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ clicking agent type row opens details dialog (2.2s)
+  Γ£ÿ   57 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:348:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ dialog shows agent type name and Details tab (12.6s)
+  Γ£ô   58 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:369:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ dialog Details tab shows agent metadata (2.4s)
+  Γ£ÿ   59 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:385:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ switching to Plan Preview tab shows no-plan placeholder when plan is null (30.1s)
+  Γ£ÿ   60 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:403:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ Plan Preview tab shows plan steps when plan is populated (30.1s)
+  Γ£ô   61 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:427:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ Execution Logs tab shows sessions filtered by agent type (2.5s)
+  Γ£ô   62 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:441:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ "View All Executions" button opens executions dialog (2.5s)
+  Γ£ô   63 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:471:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ clicking identity name in Details tab opens identity view dialog (2.4s)
+  Γ£ô   64 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:489:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ identity view dialog has Edit button that navigates to identities page (2.5s)
+  Γ£ô   65 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:516:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ clicking role name in Details tab opens role view dialog (2.4s)
+  Γ£ô   66 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:531:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ role view dialog has Edit button that opens role edit form (2.6s)
+  Γ£ô   67 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:556:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ closing dialog via close button works (2.3s)
+  Γ£ÿ   68 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:574:7 ΓÇ║ Nav menu order ΓÇ║ Agent Roles and Agent Identities appear above Agent Types in the nav (30.1s)
+  Γ£ô   69 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:605:7 ΓÇ║ Agent Types table columns ΓÇ║ Agent Types table has Role and Identity column headers (2.2s)
+  Γ£ô   70 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:616:7 ΓÇ║ Agent Types table columns ΓÇ║ Role column shows resolved role name for agent type (2.2s)
+  Γ£ô   71 [chromium] ΓÇ║ tests\agent-navigation.spec.ts:625:7 ΓÇ║ Agent Types table columns ΓÇ║ Identity column shows resolved identity name for agent type (2.3s)
+  Γ£ô   72 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:125:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Create agent type with plan: modal opens with steps and diagram after save (2.8s)
+  Γ£ô   73 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:162:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Create agent type with plan: topology section visible in modal (2.9s)
+  Γ£ô   74 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:189:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Dismiss plan modal: modal closes and agent type row appears in table (3.0s)
+  Γ£ô   75 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:238:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Update agent type: PlanPreviewModal opens with updated plan on save (2.3s)
+  Γ£ÿ   76 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:277:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Failed plan: modal opens with error message when generation_status is failed (10.4s)
+  Γ£ô   77 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:314:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Plan modal does not reopen after dismissal without another save (3.0s)
+  -   78 [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:363:7 ΓÇ║ Real Backend Integration ΓÇö Agent Plan Mode ΓÇ║ POST /api/v1/agents/types returns plan field in response
+  Γ£ô   79 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:180:7 ΓÇ║ Agent Role Management ΓÇ║ renders agent roles page with role list (1.8s)
+  Γ£ô   80 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:187:7 ΓÇ║ Agent Role Management ΓÇ║ renders page without errors (1.3s)
+  Γ£ô   81 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:195:7 ΓÇ║ Agent Role Management ΓÇ║ opens create role dialog when Add Role button is clicked (2.0s)
+  Γ£ô   82 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:245:7 ΓÇ║ Agent Identity Management ΓÇ║ renders agent identities page with identity list (1.7s)
+  Γ£ô   83 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:251:7 ΓÇ║ Agent Identity Management ΓÇ║ renders realm_name column values (1.6s)
+  Γ£ô   84 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:257:7 ΓÇ║ Agent Identity Management ΓÇ║ renders realm_username column values (1.6s)
+  Γ£ô   85 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:263:7 ΓÇ║ Agent Identity Management ΓÇ║ renders token active chip for identity with active token (1.8s)
+  Γ£ô   86 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:271:7 ΓÇ║ Agent Identity Management ΓÇ║ renders identity status chip (1.6s)
+  Γ£ô   87 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:277:7 ΓÇ║ Agent Identity Management ΓÇ║ OAuth sign-in button appears in create dialog (1.7s)
+  Γ£ô   88 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:322:7 ΓÇ║ Agent Type Configuration ΓÇ║ renders agent type with input_type chip (1.9s)
+  Γ£ô   89 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:330:7 ΓÇ║ Agent Type Configuration ΓÇ║ does NOT render old mode or max_instances fields (1.6s)
+  Γ£ô   90 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:338:7 ΓÇ║ Agent Type Configuration ΓÇ║ agent type mock data uses model_id string (no model_config_id) (1.6s)
+  Γ£ô   91 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:346:7 ΓÇ║ Agent Type Configuration ΓÇ║ model_id is rendered in agent type detail if present (1.7s)
+  Γ£ô   92 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:384:7 ΓÇ║ Agent Session Launch ΓÇ║ opens launch dialog when launch button is clicked (1.7s)
+  Γ£ô   93 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:403:7 ΓÇ║ Agent Session Status ΓÇ║ renders queued session status page (1.6s)
+  Γ£ô   94 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:416:7 ΓÇ║ Agent Session Status ΓÇ║ renders completed session with result (1.7s)
+  Γ£ô   95 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:433:7 ΓÇ║ Agent Session Status ΓÇ║ renders failed session with error (1.8s)
+  -   96 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:459:7 ΓÇ║ Real Backend Integration ΓÇö Agent Runtime Migration ΓÇ║ backend health endpoint responds (validates backend is running)
+  -   97 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:483:7 ΓÇ║ Real Backend Integration ΓÇö Agent Runtime Migration ΓÇ║ GET /agents/roles returns valid response (validates DB schema)
+  -   98 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:506:7 ΓÇ║ Real Backend Integration ΓÇö Agent Runtime Migration ΓÇ║ GET /agents/model-configs returns valid response (validates model_configs table with enabled_models)
+  Γ£ô   99 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:563:7 ΓÇ║ Model Config CRUD ΓÇ║ renders model configs page with config list (1.7s)
+  Γ£ô  100 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:570:7 ΓÇ║ Model Config CRUD ΓÇ║ renders provider type chip for openai config (1.6s)
+  Γ£ô  101 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:576:7 ΓÇ║ Model Config CRUD ΓÇ║ renders provider type chip for litellm_proxy config (1.9s)
+  Γ£ô  102 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:582:7 ΓÇ║ Model Config CRUD ΓÇ║ does NOT expose raw encrypted key value in the table (1.7s)
+  Γ£ô  103 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:589:7 ΓÇ║ Model Config CRUD ΓÇ║ opens create dialog when Add Config button clicked (1.6s)
+  Γ£ô  104 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:602:7 ΓÇ║ Model Config CRUD ΓÇ║ edit dialog does not pre-fill API key field (1.9s)
+  Γ£ô  105 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:619:7 ΓÇ║ Model Config CRUD ΓÇ║ shows 409 conflict error when deleting a referenced config (1.7s)
+  Γ£ô  106 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:646:7 ΓÇ║ Model Config CRUD ΓÇ║ mock data includes enabled_models on model config responses (1.6s)
+  Γ£ô  107 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:657:7 ΓÇ║ Model Config CRUD ΓÇ║ Fetch Models button appears in edit dialog for model config (1.6s)
+  Γ£ô  108 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:690:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ renders all instances in the dashboard table (2.0s)
+  Γ£ô  109 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:697:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ renders status chips for all sessions (2.0s)
+  Γ£ô  110 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:704:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ shows status filter dropdown (2.3s)
+  Γ£ô  111 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:711:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ shows time range filter inputs (1.8s)
+  Γ£ô  112 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:719:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ shows empty state when no instances match filters (1.6s)
+  Γ£ô  113 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:733:7 ΓÇ║ Agent Instance Dashboard ΓÇ║ clicking instance row navigates to detail page (1.7s)
+  Γ£ô  114 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:772:7 ΓÇ║ Conversation History Display ΓÇ║ renders chat interface for conversational session (1.9s)
+  Γ£ô  115 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:782:7 ΓÇ║ Conversation History Display ΓÇ║ renders session metadata (session ID and status) for completed conversational session (1.6s)
+  Γ£ô  116 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:790:7 ΓÇ║ Conversation History Display ΓÇ║ task session shows result for completed non-conversational session (1.6s)
+  Γ£ô  117 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:819:7 ΓÇ║ Agent Role Identity Constraints ΓÇ║ create role with identity type constraint ΓÇö allowed_identity_types persisted (2.8s)
+  Γ£ô  118 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:871:7 ΓÇ║ Agent Role Identity Constraints ΓÇ║ assigning role with incompatible identity type shows validation error (1.8s)
+  Γ£ô  119 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:909:7 ΓÇ║ Agent Role Identity Constraints ΓÇ║ assigning role with compatible identity type succeeds (2.1s)
+  Γ£ô  120 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:966:7 ΓÇ║ Identity-First Role Selection ΓÇ║ selecting identity filters role dropdown to compatible roles only (2.0s)
+  Γ£ô  121 [chromium] ΓÇ║ tests\agent-runtime.spec.ts:1018:7 ΓÇ║ Identity-First Role Selection ΓÇ║ changing identity selection clears previously selected role (1.9s)
+  Γ£ô  122 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:55:7 ΓÇ║ Real Backend Integration ΓÇö Certificate Authentication Flow ΓÇ║ CA certificate endpoint is reachable and requires authentication (not 404) (326ms)
+  Γ£ô  123 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:65:7 ΓÇ║ Real Backend Integration ΓÇö Certificate Authentication Flow ΓÇ║ certificate issue endpoint requires admin authentication (not 404) (8ms)
+  Γ£ô  124 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:79:7 ΓÇ║ Real Backend Integration ΓÇö Certificate Authentication Flow ΓÇ║ certificate revoke endpoint requires admin authentication (not 404) (6ms)
+  Γ£ô  125 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:98:7 ΓÇ║ Mocked ΓÇö Certificate Authentication: Issue response excludes identity tokens ΓÇ║ certificate issue response has cert/key but never identity tokens (1.1s)
+  Γ£ô  126 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:136:7 ΓÇ║ Real Backend Integration ΓÇö Metadata Security (AC-1) ΓÇ║ internal certificate validate endpoint is wired (not 404) (19ms)
+  Γ£ô  127 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:152:7 ΓÇ║ Mocked ΓÇö Metadata Security: zero identity tokens in Agent Runtime boundary ΓÇ║ certificate validate response: identifies agent but never returns identity tokens (1.1s)
+  Γ£ô  128 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:183:7 ΓÇ║ Mocked ΓÇö Metadata Security: zero identity tokens in Agent Runtime boundary ΓÇ║ authorization response: identity_token present at Communication Hub boundary (not Agent Runtime) (1.0s)
+  Γ£ô  129 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:224:7 ΓÇ║ Real Backend Integration ΓÇö Tool Authorization Endpoint ΓÇ║ internal authorize tool-call endpoint is wired (not 404) (14ms)
+  Γ£ô  130 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:249:7 ΓÇ║ Mocked ΓÇö Tool Authorization Decision Outcomes ΓÇ║ authorized=true: response contains identity_token for Communication Hub (998ms)
+  Γ£ô  131 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:274:7 ΓÇ║ Mocked ΓÇö Tool Authorization Decision Outcomes ΓÇ║ authorized=false: insufficient permissions ΓÇö no token, includes reason (1.0s)
+  Γ£ô  132 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:300:7 ΓÇ║ Mocked ΓÇö Tool Authorization Decision Outcomes ΓÇ║ authorized=false: invalid certificate ΓÇö no token, reason identifies failure (1.1s)
+  Γ£ô  133 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:333:7 ΓÇ║ Real Backend Integration ΓÇö Certificate Revocation ΓÇ║ revoke endpoint exists and requires admin authentication (not 404) (10ms)
+  Γ£ô  134 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:352:7 ΓÇ║ Mocked ΓÇö Certificate Revocation Response and Downstream Effects ΓÇ║ revocation response includes serial_number, revoked_at, and reason (1.0s)
+  Γ£ô  135 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:374:7 ΓÇ║ Mocked ΓÇö Certificate Revocation Response and Downstream Effects ΓÇ║ after revocation: certificate validate returns valid=false with revoked reason (981ms)
+  Γ£ô  136 [chromium] ΓÇ║ tests\agent-security-segregation.spec.ts:404:7 ΓÇ║ Mocked ΓÇö Certificate Revocation Response and Downstream Effects ΓÇ║ after revocation: tool authorization returns unauthorized with revoked reason (1.0s)
+  Γ£ô  137 [chromium] ΓÇ║ tests\chat.spec.ts:41:7 ΓÇ║ Chat ΓÇ║ chat page renders without crashing (1.3s)
+  Γ£ô  138 [chromium] ΓÇ║ tests\chat.spec.ts:49:7 ΓÇ║ Chat ΓÇ║ chat page does not redirect to login (1.5s)
+  Γ£ô  139 [chromium] ΓÇ║ tests\chat.spec.ts:55:7 ΓÇ║ Chat ΓÇ║ chat page has a message input area (1.5s)
+  Γ£ô  140 [chromium] ΓÇ║ tests\chat.spec.ts:67:7 ΓÇ║ Chat ΓÇ║ chat page displays agent greeting message from API (1.5s)
+  Γ£ô  141 [chromium] ΓÇ║ tests\chat.spec.ts:81:7 ΓÇ║ Chat ΓÇ║ chat page shows agent type selector or session list (1.6s)
+  Γ£ô  142 [chromium] ΓÇ║ tests\chat.spec.ts:97:7 ΓÇ║ Chat ΓÇ║ chat page send button is present and enabled (1.6s)
+  Γ£ô  143 [chromium] ΓÇ║ tests\comm-hub-websocket.spec.ts:7:7 ΓÇ║ Communication Hub WebSocket Tests ΓÇ║ Communication Hub health endpoint responds correctly (334ms)
+  Γ£ô  144 [chromium] ΓÇ║ tests\comm-hub-websocket.spec.ts:16:7 ΓÇ║ Communication Hub WebSocket Tests ΓÇ║ Control Center health endpoint responds correctly (314ms)
+  Γ£ô  145 [chromium] ΓÇ║ tests\comm-hub-websocket.spec.ts:24:7 ΓÇ║ Communication Hub WebSocket Tests ΓÇ║ Control Center does NOT have WebSocket on /ws path (6ms)
+  Γ£ô  146 [chromium] ΓÇ║ tests\component-theming.spec.ts:9:7 ΓÇ║ Component Theming ΓÇ║ Cards have 12px border radius (1.1s)
+  Γ£ô  147 [chromium] ΓÇ║ tests\component-theming.spec.ts:24:7 ΓÇ║ Component Theming ΓÇ║ AppBar is white with border-bottom (986ms)
+  Γ£ô  148 [chromium] ΓÇ║ tests\component-theming.spec.ts:47:7 ΓÇ║ Component Theming ΓÇ║ Buttons show correct styles (959ms)
+  Γ£ô  149 [chromium] ΓÇ║ tests\conversation-sessions.spec.ts:184:7 ΓÇ║ Conversation Sessions (Mocked) ΓÇ║ Sessions tab is visible for conversation-type agents (2.2s)
+  Γ£ô  150 [chromium] ΓÇ║ tests\conversation-sessions.spec.ts:195:7 ΓÇ║ Conversation Sessions (Mocked) ΓÇ║ Sessions tab shows session list (2.3s)
+  Γ£ô  151 [chromium] ΓÇ║ tests\conversation-sessions.spec.ts:204:7 ΓÇ║ Conversation Sessions (Mocked) ΓÇ║ Resume navigates to chat page with session history (2.1s)
+  Γ£ô  152 [chromium] ΓÇ║ tests\conversation-sessions.spec.ts:213:7 ΓÇ║ Conversation Sessions (Mocked) ΓÇ║ End session shows confirmation dialog (2.3s)
+  -  153 [chromium] ΓÇ║ tests\conversation-sessions.spec.ts:239:7 ΓÇ║ Real Backend Integration ΓÇö Conversation Sessions ΓÇ║ POST /conversations creates session; POST /end closes it
+  Γ£ô  154 [chromium] ΓÇ║ tests\conversations.spec.ts:48:7 ΓÇ║ Conversation History ΓÇ║ conversation history page renders without crashing (1.3s)
+  Γ£ô  155 [chromium] ΓÇ║ tests\conversations.spec.ts:56:7 ΓÇ║ Conversation History ΓÇ║ conversation history page does not redirect to login (1.4s)
+  Γ£ô  156 [chromium] ΓÇ║ tests\conversations.spec.ts:62:7 ΓÇ║ Conversation History ΓÇ║ conversation history page lists sessions from API (1.7s)
+  Γ£ô  157 [chromium] ΓÇ║ tests\conversations.spec.ts:70:7 ΓÇ║ Conversation History ΓÇ║ shows turn count for sessions (1.8s)
+  Γ£ô  158 [chromium] ΓÇ║ tests\conversations.spec.ts:76:7 ΓÇ║ Conversation History ΓÇ║ clicking a conversation expand button shows its turns (1.9s)
+  Γ£ô  159 [chromium] ΓÇ║ tests\conversations.spec.ts:92:7 ΓÇ║ Conversation History ΓÇ║ conversation history shows both user and agent turns when expanded (1.7s)
+  Γ£ô  160 [chromium] ΓÇ║ tests\dashboard.spec.ts:19:7 ΓÇ║ Dashboard ΓÇ║ dashboard page renders without crashing (1.4s)
+  Γ£ô  161 [chromium] ΓÇ║ tests\dashboard.spec.ts:27:7 ΓÇ║ Dashboard ΓÇ║ dashboard page has content (1.6s)
+  Γ£ô  162 [chromium] ΓÇ║ tests\dashboard.spec.ts:34:7 ΓÇ║ Dashboard ΓÇ║ dashboard renders app shell layout with header (1.6s)
+  Γ£ô  163 [chromium] ΓÇ║ tests\dashboard.spec.ts:41:7 ΓÇ║ Dashboard ΓÇ║ dashboard displays app title or welcome content (1.5s)
+  Γ£ô  164 [chromium] ΓÇ║ tests\dashboard.spec.ts:54:7 ΓÇ║ Dashboard ΓÇ║ dashboard has page content area (1.7s)
+  Γ£ô  165 [chromium] ΓÇ║ tests\dashboard.spec.ts:62:7 ΓÇ║ Dashboard ΓÇ║ dashboard has navigation sidebar with nav items (1.5s)
+  Γ£ô  166 [chromium] ΓÇ║ tests\dashboard.spec.ts:77:7 ΓÇ║ Dashboard ΓÇ║ dashboard navigation links are clickable (1.6s)
+Starting test...
+Navigating to /
+Waiting for button
+Test complete
+  Γ£ô  167 [chromium] ΓÇ║ tests\debug-auth.spec.ts:4:7 ΓÇ║ Debug Authentication ΓÇ║ debug unauthenticated user sees the login page (20.9s)
+Execution logs route hit!
+Log entries route hit!
+Execution logs route hit!
+Log entries route hit!
+Log entries route hit!
+Execution logs route hit!
+=== CONSOLE MESSAGES ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+=== LogViewer visible: [33mtrue[39m ===
+=== PAGE HTML (first 2000 chars) ===
+<!DOCTYPE html><html lang="en"><head><meta name="emotion-insertion-point" content="">
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="/vite.svg">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parthenon AI Harness</title>
+  <style type="text/css" data-vite-dev-id="C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend/node_modules/@fontsource/inter/300.css">/* inter-cyrillic-ext-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url(/node_modules/@fontsource/inter/files/inter-cyrillic-ext-300-normal.woff2) format('woff2'), url(/node_modules/@fontsource/inter/files/inter-cyrillic-ext-300-normal.woff) format('woff');
+  unicode-range: U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F;
+}
+
+/* inter-cyrillic-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url(/node_modules/@fontsource/inter/files/inter-cyrillic-300-normal.woff2) format('woff2'), url(/node_modules/@fontsource/inter/files/inter-cyrillic-300-normal.woff) format('woff');
+  unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+
+/* inter-greek-ext-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url(/node_modules/@fontsource/inter/files/inter-greek-ext-300-normal.woff2) format('woff2'), url(/node_modules/@fontsource/inter/files/inter-greek-ext-300-normal.woff) format('woff');
+  unicode-range: U+1F00-1FFF;
+}
+
+/* inter-greek-300-normal */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src:
+  Γ£ô  168 [chromium] ΓÇ║ tests\debug-logs.spec.ts:6:5 ΓÇ║ Debug LogViewer render (4.3s)
+  Γ£ô  169 [chromium] ΓÇ║ tests\health.spec.ts:9:7 ΓÇ║ App Health ΓÇ║ app root loads and renders an HTML body (2.0s)
+  Γ£ô  170 [chromium] ΓÇ║ tests\health.spec.ts:15:7 ΓÇ║ App Health ΓÇ║ app renders a root element (946ms)
+  Γ£ô  171 [chromium] ΓÇ║ tests\health.spec.ts:21:7 ΓÇ║ App Health ΓÇ║ no unhandled JavaScript errors on load (2.0s)
+  Γ£ô  172 [chromium] ΓÇ║ tests\health.spec.ts:35:7 ΓÇ║ App Health ΓÇ║ page title is set (852ms)
+  Γ£ô  173 [chromium] ΓÇ║ tests\health.spec.ts:41:7 ΓÇ║ App Health ΓÇ║ navigating to unknown path renders something (2.0s)
+  Γ£ô  174 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:37:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub page renders without crashing (1.4s)
+  Γ£ô  175 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:45:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub page does not redirect to login (1.4s)
+  Γ£ô  176 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:51:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows server names from API (1.7s)
+  Γ£ô  177 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:57:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows second server in list (2.0s)
+  Γ£ô  178 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:63:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub shows server status indicators (1.7s)
+  Γ£ô  179 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:76:7 ΓÇ║ MCP Hub ΓÇ║ MCP Hub has a register/add server button (1.9s)
+  Γ£ô  180 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:136:7 ΓÇ║ MCP Session CRUD with new fields ΓÇ║ MCP session API response includes identity_binding and credential_config (1.5s)
+  Γ£ô  181 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:152:7 ΓÇ║ MCP Session CRUD with new fields ΓÇ║ MCP session API response does not include encrypted_credentials (1.5s)
+  Γ£ô  182 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:172:7 ΓÇ║ MCP Session CRUD with new fields ΓÇ║ MCP Hub page renders with session mock in place (1.7s)
+  Γ£ô  183 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:247:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ MCP Hub renders OAuth server with oauth_config (1.7s)
+  Γ£ô  184 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:256:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ OAuth server shows oauth_config present in API response (1.8s)
+  Γ£ô  185 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:267:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ OAuth session has auth_type=oauth2 in response (1.3s)
+  Γ£ô  186 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:280:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ OAuth session response does not include encrypted_credentials (1.6s)
+  Γ£ô  187 [chromium] ΓÇ║ tests\mcp-hub.spec.ts:289:7 ΓÇ║ MCP OAuth Session Creation Flow ΓÇ║ oauth_config on server does not include client_secret in API response (1.7s)
+  Γ£ÿ  188 [chromium] ΓÇ║ tests\mcp-tool-validation.spec.ts:4:7 ΓÇ║ MCP Tool Call Validation ΓÇ║ agent can successfully call MCP tools (supabase and hello-world) (30.1s)
+  Γ£ô  189 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:39:7 ΓÇ║ Notification Channel Management ΓÇ║ channel list page renders without crashing (2.2s)
+  Γ£ô  190 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:54:7 ΓÇ║ Notification Channel Management ΓÇ║ renders channel names from API (2.0s)
+  Γ£ô  191 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:66:7 ΓÇ║ Notification Channel Management ΓÇ║ renders channel type chips (2.2s)
+  Γ£ô  192 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:79:7 ΓÇ║ Notification Channel Management ΓÇ║ add channel button is visible (2.0s)
+  Γ£ô  193 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:91:7 ΓÇ║ Notification Channel Management ΓÇ║ opens create channel dialog on add button click (2.2s)
+  Γ£ô  194 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:106:7 ΓÇ║ Notification Channel Management ΓÇ║ create channel updates list without page reload (2.7s)
+  Γ£ô  195 [chromium] ΓÇ║ tests\notifications\channel-management.spec.ts:138:7 ΓÇ║ Notification Channel Management ΓÇ║ delete channel removes it from list (2.2s)
+  Γ£ô  196 [chromium] ΓÇ║ tests\notifications\notification-sending.spec.ts:55:7 ΓÇ║ Notification Log Page ΓÇ║ log page renders without crashing (2.1s)
+  Γ£ô  197 [chromium] ΓÇ║ tests\notifications\notification-sending.spec.ts:70:7 ΓÇ║ Notification Log Page ΓÇ║ renders log subjects from API (2.1s)
+  Γ£ô  198 [chromium] ΓÇ║ tests\notifications\notification-sending.spec.ts:82:7 ΓÇ║ Notification Log Page ΓÇ║ renders status filter chips (2.0s)
+  Γ£ô  199 [chromium] ΓÇ║ tests\notifications\notification-sending.spec.ts:95:7 ΓÇ║ Notification Log Page ΓÇ║ clicking a log row opens the detail view (2.4s)
+  Γ£ô  200 [chromium] ΓÇ║ tests\notifications\notification-sending.spec.ts:111:7 ΓÇ║ Notification Log Page ΓÇ║ page renders with empty log list (2.2s)
+  Γ£ô  201 [chromium] ΓÇ║ tests\notifications\notification-sending.spec.ts:123:7 ΓÇ║ Notification Log Page ΓÇ║ page does not redirect to login when authenticated (3.0s)
+  -  202 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:53:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ backend health endpoint returns 200
+  -  203 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:63:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ notification channels endpoint returns 200
+  -  204 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:74:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ notification recipient-groups endpoint returns 200
+  -  205 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:84:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ notification logs endpoint returns 200
+  -  206 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:94:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ notification channels endpoint rejects unauthenticated requests with 401 or 403
+  -  207 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:102:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ notification logs endpoint rejects unauthenticated requests with 401 or 403
+  -  208 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:110:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ POST channel without auth returns 401 or 403
+  -  209 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:124:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ POST recipient group without auth returns 401 or 403
+  -  210 [chromium] ΓÇ║ tests\notifications\real-backend-integration.spec.ts:137:7 ΓÇ║ Real Backend Integration - Notifications ΓÇ║ GET non-existent channel returns 404
+  Γ£ô  211 [chromium] ΓÇ║ tests\notifications\recipient-group-management.spec.ts:49:7 ΓÇ║ Recipient Group Management ΓÇ║ group list page renders without crashing (2.3s)
+  Γ£ô  212 [chromium] ΓÇ║ tests\notifications\recipient-group-management.spec.ts:67:7 ΓÇ║ Recipient Group Management ΓÇ║ renders group names and slugs (2.8s)
+  Γ£ô  213 [chromium] ΓÇ║ tests\notifications\recipient-group-management.spec.ts:85:7 ΓÇ║ Recipient Group Management ΓÇ║ renders channel count for each group (2.2s)
+  Γ£ô  214 [chromium] ΓÇ║ tests\notifications\recipient-group-management.spec.ts:102:7 ΓÇ║ Recipient Group Management ΓÇ║ add group button is visible (2.1s)
+  Γ£ô  215 [chromium] ΓÇ║ tests\notifications\recipient-group-management.spec.ts:117:7 ΓÇ║ Recipient Group Management ΓÇ║ create group updates list without page reload (2.7s)
+  Γ£ô  216 [chromium] ΓÇ║ tests\notifications\recipient-group-management.spec.ts:148:7 ΓÇ║ Recipient Group Management ΓÇ║ delete group removes it from list (2.3s)
+  Γ£ô  217 [chromium] ΓÇ║ tests\notifications.spec.ts:49:7 ΓÇ║ Notification Configuration ΓÇ║ notification config page renders without crashing (1.7s)
+  Γ£ô  218 [chromium] ΓÇ║ tests\notifications.spec.ts:57:7 ΓÇ║ Notification Configuration ΓÇ║ notification config page does not redirect to login (1.8s)
+  Γ£ô  219 [chromium] ΓÇ║ tests\notifications.spec.ts:63:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows channel names from API (1.6s)
+  Γ£ô  220 [chromium] ΓÇ║ tests\notifications.spec.ts:69:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows second channel in list (1.6s)
+  Γ£ô  221 [chromium] ΓÇ║ tests\notifications.spec.ts:75:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows channel types (1.8s)
+  Γ£ô  222 [chromium] ΓÇ║ tests\notifications.spec.ts:82:7 ΓÇ║ Notification Configuration ΓÇ║ notification page shows event log with event types (1.7s)
+  Γ£ô  223 [chromium] ΓÇ║ tests\notifications.spec.ts:96:7 ΓÇ║ Notification Configuration ΓÇ║ notification page has add channel button (1.6s)
+  Γ£ô  224 [chromium] ΓÇ║ tests\observability.spec.ts:18:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard renders without crashing (1.5s)
+  Γ£ô  225 [chromium] ΓÇ║ tests\observability.spec.ts:26:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard does not redirect to login (1.4s)
+  Γ£ô  226 [chromium] ΓÇ║ tests\observability.spec.ts:32:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard shows request rate metric (1.5s)
+  Γ£ô  227 [chromium] ΓÇ║ tests\observability.spec.ts:45:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard shows latency metric (1.6s)
+  Γ£ô  228 [chromium] ΓÇ║ tests\observability.spec.ts:58:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard has external tool links (1.9s)
+  Γ£ô  229 [chromium] ΓÇ║ tests\observability.spec.ts:71:7 ΓÇ║ Observability Dashboard ΓÇ║ observability dashboard tabs or sections are navigable (1.7s)
+  Γ£ô  230 [chromium] ΓÇ║ tests\observability.spec.ts:97:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app starts successfully with telemetry enabled (2.0s)
+  Γ£ô  231 [chromium] ΓÇ║ tests\observability.spec.ts:141:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app initializes telemetry from backend config (2.3s)
+  Γ£ô  232 [chromium] ΓÇ║ tests\observability.spec.ts:184:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app starts successfully with telemetry disabled (2.0s)
+  Γ£ô  233 [chromium] ΓÇ║ tests\observability.spec.ts:231:7 ΓÇ║ Telemetry Configuration System ΓÇ║ app degrades gracefully when telemetry config fetch fails (2.0s)
+  Γ£ô  234 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Dashboard uses theme consistently (1.6s)
+  Γ£ô  235 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ MCP Hub uses theme consistently (1.6s)
+  Γ£ô  236 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Skills uses theme consistently (1.8s)
+  Γ£ô  237 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Agents uses theme consistently (1.8s)
+  Γ£ô  238 [chromium] ΓÇ║ tests\page-consistency.spec.ts:20:9 ΓÇ║ Page Consistency ΓÇ║ Conversations uses theme consistently (1.6s)
+  Γ£ô  239 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:124:7 ΓÇ║ Passthrough Sessions ΓÇö Mocked ΓÇ║ MCP Hub page renders without crashing with passthrough session (1.6s)
+  Γ£ô  240 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:134:7 ΓÇ║ Passthrough Sessions ΓÇö Mocked ΓÇ║ passthrough session chip displayed in session table (2.2s)
+  Γ£ô  241 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:160:7 ΓÇ║ Passthrough Sessions ΓÇö Mocked ΓÇ║ passthrough session auth_type value is correct in API response (1.3s)
+  Γ£ô  242 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:175:7 ΓÇ║ Passthrough Sessions ΓÇö Mocked ΓÇ║ creating passthrough session excludes credentials from payload (2.0s)
+  Γ£ô  243 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:279:7 ΓÇ║ Real Backend Integration ΓÇö Passthrough Sessions ΓÇ║ passthrough enum value exists in backend ΓÇö McpSessionAuthType.passthrough is valid (1.4s)
+  Γ£ô  244 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:312:7 ΓÇ║ Real Backend Integration ΓÇö Passthrough Sessions ΓÇ║ passthrough tool test returns 400 for unauthenticated caller via real API (1.4s)
+  Γ£ô  245 [chromium] ΓÇ║ tests\passthrough-sessions.spec.ts:351:7 ΓÇ║ Real Backend Integration ΓÇö Passthrough Sessions ΓÇ║ passthrough session creation with credentials is rejected by real backend ΓÇö AC-1 validation (1.3s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  246 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ Agents page shows structured permission error (5.5s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  247 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ MCP Hub page shows structured permission error (5.4s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  248 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ Skills page shows structured permission error (5.6s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  249 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ SOPs page shows structured permission error (5.4s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  250 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ Schedules page shows structured permission error (5.3s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  251 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ Conversations page shows structured permission error (5.4s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  252 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ Results page shows structured permission error (5.4s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  253 [chromium] ΓÇ║ tests\permission-errors.spec.ts:80:9 ΓÇ║ Permission Error Handling ΓÇ║ Gateway page shows structured permission error (5.4s)
+  -  254 [chromium] ΓÇ║ tests\permission-errors.spec.ts:105:8 ΓÇ║ Permission Error Handling ΓÇ║ Tags page (in permissions tab) shows structured permission error
+  -  255 [chromium] ΓÇ║ tests\permission-errors.spec.ts:127:8 ΓÇ║ Permission Error Handling ΓÇ║ Roles page (in permissions tab) shows structured permission error
+  -  256 [chromium] ΓÇ║ tests\permission-errors.spec.ts:149:8 ΓÇ║ Permission Error Handling ΓÇ║ Groups page (in permissions tab) shows structured permission error
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  257 [chromium] ΓÇ║ tests\permission-errors.spec.ts:171:7 ΓÇ║ Permission Error Handling ΓÇ║ Users page (in permissions tab) shows structured permission error (6.5s)
+  -  258 [chromium] ΓÇ║ tests\permission-errors.spec.ts:192:8 ΓÇ║ Permission Error Handling ΓÇ║ Dialog permission errors show structured message (example: Agents page)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  259 [chromium] ΓÇ║ tests\permission-errors.spec.ts:240:7 ΓÇ║ Permission Error Handling ΓÇ║ Access Requests page is accessible without permissions (4.6s)
+After Enter keypress, URL: http://localhost:5173/dashboard
+Redirected to app: http://localhost:5173/dashboard
+Login complete. Final URL: http://localhost:5173/dashboard
+  Γ£ô  260 [chromium] ΓÇ║ tests\permission-errors.spec.ts:260:7 ΓÇ║ Permission Error Handling ΓÇ║ Request Access link navigation works (5.5s)
+  Γ£ô  261 [chromium] ΓÇ║ tests\permissions.spec.ts:51:7 ΓÇ║ Permissions Page ΓÇ║ navigates to /permissions and renders page (1.3s)
+  Γ£ô  262 [chromium] ΓÇ║ tests\permissions.spec.ts:58:7 ΓÇ║ Permissions Page ΓÇ║ renders tabs for tag/role/group/user/access management (2.2s)
+  Γ£ô  263 [chromium] ΓÇ║ tests\permissions.spec.ts:68:7 ΓÇ║ Permissions Page ΓÇ║ shows page without crashes (2.1s)
+  Γ£ô  264 [chromium] ΓÇ║ tests\permissions.spec.ts:86:7 ΓÇ║ Tags Management ΓÇ║ renders tag definitions table (2.1s)
+  Γ£ô  265 [chromium] ΓÇ║ tests\permissions.spec.ts:101:7 ΓÇ║ Tags Management ΓÇ║ Add Tag button is present on Tags tab (2.5s)
+  Γ£ô  266 [chromium] ΓÇ║ tests\permissions.spec.ts:117:7 ΓÇ║ Roles Management ΓÇ║ navigates to Roles tab and shows role data (2.1s)
+  Γ£ô  267 [chromium] ΓÇ║ tests\permissions.spec.ts:151:7 ΓÇ║ Groups Management ΓÇ║ groups tab shows group data (2.2s)
+  Γ£ô  268 [chromium] ΓÇ║ tests\permissions.spec.ts:176:7 ΓÇ║ Access Request Flow ΓÇ║ access requests tab renders (2.2s)
+  Γ£ô  269 [chromium] ΓÇ║ tests\permissions.spec.ts:197:7 ΓÇ║ User Access Management ΓÇ║ users tab shows user data (2.2s)
+  Γ£ô  270 [chromium] ΓÇ║ tests\permissions.spec.ts:235:7 ΓÇ║ Bug Reproduction: Group View Members ΓÇ║ View Members button for groups should open members drawer (3.8s)
+  -  271 [chromium] ΓÇ║ tests\permissions.spec.ts:286:8 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing role policy as JSON
+  -  272 [chromium] ΓÇ║ tests\permissions.spec.ts:317:8 ΓÇ║ Bug Reproduction: Role Policy Management ΓÇ║ should allow editing individual policy items
+  Γ£ô  273 [chromium] ΓÇ║ tests\results.spec.ts:33:7 ΓÇ║ Result Repository ΓÇ║ result repository page renders without crashing (1.4s)
+  Γ£ô  274 [chromium] ΓÇ║ tests\results.spec.ts:41:7 ΓÇ║ Result Repository ΓÇ║ result repository page does not redirect to login (1.4s)
+  Γ£ô  275 [chromium] ΓÇ║ tests\results.spec.ts:47:7 ΓÇ║ Result Repository ΓÇ║ result repository shows result payload text (1.7s)
+  Γ£ô  276 [chromium] ΓÇ║ tests\results.spec.ts:60:7 ΓÇ║ Result Repository ΓÇ║ result repository shows tags for results (1.5s)
+  Γ£ô  277 [chromium] ΓÇ║ tests\results.spec.ts:72:7 ΓÇ║ Result Repository ΓÇ║ result repository shows content types (1.5s)
+  Γ£ô  278 [chromium] ΓÇ║ tests\results.spec.ts:84:7 ΓÇ║ Result Repository ΓÇ║ result repository has filter or search capability (1.8s)
+  Γ£ô  279 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:227:7 ΓÇ║ Roles Page ΓÇ║ roles page shows role names from API (1.8s)
+  Γ£ô  280 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:245:7 ΓÇ║ JSONViewModal ΓÇ║ View JSON button opens modal with formatted JSON (2.8s)
+  Γ£ô  281 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:289:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog pre-fills source role name with Copy prefix (1.9s)
+  Γ£ô  282 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:324:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog submission creates new role and closes (2.3s)
+  Γ£ÿ  283 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:362:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog shows error on 409 duplicate name (30.0s)
+  Γ£ô  284 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:418:7 ΓÇ║ PolicyEditor ΓÇ║ expanding a role row shows PolicyEditor with statements (2.8s)
+  Γ£ô  285 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:433:7 ΓÇ║ PolicyEditor ΓÇ║ Add Statement button is visible in PolicyEditor (2.3s)
+  Γ£ô  286 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:460:7 ΓÇ║ AddStatementDialog ΓÇ║ Add Statement dialog opens with resource type dropdown (2.4s)
+  Γ£ÿ  287 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:483:7 ΓÇ║ AddStatementDialog ΓÇ║ Add Statement dialog shows Resource IDs section (7.0s)
+  Γ£ô  288 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:516:7 ΓÇ║ PolicyEditor Resource IDs ΓÇ║ policy cards display resource ID chips in resource_type:resource_id format (2.0s)
+  Γ£ÿ  289 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:605:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit button opens dialog pre-filled with existing policy data (6.9s)
+  Γ£ÿ  290 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:637:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit dialog calls PATCH endpoint on save (30.0s)
+  Γ£ô  291 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:701:7 ΓÇ║ Real Backend Integration ΓÇ║ GET /api/v1/policy/resource-types returns 200 with resource types (356ms)
+  Γ£ô  292 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:725:7 ΓÇ║ Real Backend Integration ΓÇ║ POST /api/v1/user-roles/{id}/clone returns 401 without auth (10ms)
+  Γ£ô  293 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:744:7 ΓÇ║ Real Backend Integration ΓÇ║ GET /api/v1/user-roles/{id} returns 401 without auth (policy_statements endpoint protected) (13ms)
+  Γ£ô  294 [chromium] ΓÇ║ tests\role-policy-management.spec.ts:765:7 ΓÇ║ Real Backend Integration ΓÇ║ PATCH /api/v1/user-roles/{role_id}/policies/{policy_id} returns 401 without auth (edit endpoint protected) (8ms)
+  Γ£ô  295 [chromium] ΓÇ║ tests\scheduling.spec.ts:52:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager page renders without crashing (1.5s)
+  Γ£ô  296 [chromium] ΓÇ║ tests\scheduling.spec.ts:60:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager page does not redirect to login (1.4s)
+  Γ£ô  297 [chromium] ΓÇ║ tests\scheduling.spec.ts:66:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows schedule names from API (1.6s)
+  Γ£ô  298 [chromium] ΓÇ║ tests\scheduling.spec.ts:72:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows inactive schedule (1.9s)
+  Γ£ô  299 [chromium] ΓÇ║ tests\scheduling.spec.ts:78:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows cron expressions (1.6s)
+  Γ£ô  300 [chromium] ΓÇ║ tests\scheduling.spec.ts:91:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager shows active vs inactive status (1.8s)
+  Γ£ô  301 [chromium] ΓÇ║ tests\scheduling.spec.ts:103:7 ΓÇ║ Schedule Manager ΓÇ║ schedule manager has create schedule button (2.5s)
+  Γ£ô  302 [chromium] ΓÇ║ tests\scheduling.spec.ts:115:7 ΓÇ║ Schedule Manager ΓÇ║ schedule execution history is available (1.5s)
+  Γ£ÿ  303 [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:125:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ creates a skill with only save_result system tool ΓÇö no duplicate tools in picker (1.7s)
+  Γ£ÿ  304 [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:177:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ triggering a simple agent with save_result produces a completed job (9.8s)
+  Γ£ÿ  305 [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:233:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ save_result system tool appears in agent skill preview after selection (7.3s)
+  Γ£ô  306 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:77:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ navigates to /setup when identity is NOT_CONFIGURED (1.6s)
+  Γ£ô  307 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:87:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ does NOT redirect to /setup when already CONFIGURED (1.7s)
+  Γ£ô  308 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:99:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 shows all three provider radio buttons (1.2s)
+  Γ£ô  309 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:107:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ step 1 Next button advances to Keycloak config by default (1.8s)
+  Γ£ô  310 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:114:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ selecting Azure EntraID and clicking Next shows OIDC config (1.2s)
+  Γ£ô  311 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:130:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ bundled Keycloak happy path completes and shows success (1.5s)
+  Γ£ô  312 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:163:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ 502 from server shows keycloak unreachable error (1.5s)
+  Γ£ô  313 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:182:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Try Again button returns to config step (2.2s)
+  Γ£ô  314 [chromium] ΓÇ║ tests\setup-wizard.spec.ts:203:7 ΓÇ║ Setup Wizard ΓÇö full user journey ΓÇ║ Configure button is disabled when required fields are empty (1.4s)
+  Γ£ô  315 [chromium] ΓÇ║ tests\skills-sops.spec.ts:38:7 ΓÇ║ Skills ΓÇ║ skills page renders without crashing (1.4s)
+  Γ£ô  316 [chromium] ΓÇ║ tests\skills-sops.spec.ts:46:7 ΓÇ║ Skills ΓÇ║ skills page does not redirect to login (1.5s)
+  Γ£ô  317 [chromium] ΓÇ║ tests\skills-sops.spec.ts:52:7 ΓÇ║ Skills ΓÇ║ skills page lists skill names from API (2.5s)
+  Γ£ô  318 [chromium] ΓÇ║ tests\skills-sops.spec.ts:58:7 ΓÇ║ Skills ΓÇ║ skills page shows all skills including Send Email (1.7s)
+  Γ£ô  319 [chromium] ΓÇ║ tests\skills-sops.spec.ts:64:7 ΓÇ║ Skills ΓÇ║ skills page shows skill descriptions (1.9s)
+  Γ£ô  320 [chromium] ΓÇ║ tests\skills-sops.spec.ts:76:7 ΓÇ║ Skills ΓÇ║ skills page shows active vs inactive status (2.3s)
+  Γ£ô  321 [chromium] ΓÇ║ tests\skills-sops.spec.ts:88:7 ΓÇ║ Skills ΓÇ║ skills page has create skill button (2.7s)
+  Γ£ô  322 [chromium] ΓÇ║ tests\skills-sops.spec.ts:128:7 ΓÇ║ SOPs ΓÇ║ SOPs page renders without crashing (1.4s)
+  Γ£ô  323 [chromium] ΓÇ║ tests\skills-sops.spec.ts:136:7 ΓÇ║ SOPs ΓÇ║ SOPs page does not redirect to login (1.6s)
+  Γ£ô  324 [chromium] ΓÇ║ tests\skills-sops.spec.ts:142:7 ΓÇ║ SOPs ΓÇ║ SOPs page lists SOP names from API (2.2s)
+  Γ£ô  325 [chromium] ΓÇ║ tests\skills-sops.spec.ts:148:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows second SOP in list (1.7s)
+  Γ£ô  326 [chromium] ΓÇ║ tests\skills-sops.spec.ts:154:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows step count for SOPs (1.7s)
+  Γ£ô  327 [chromium] ΓÇ║ tests\skills-sops.spec.ts:167:7 ΓÇ║ SOPs ΓÇ║ SOPs page shows SOP descriptions (2.0s)
+  Γ£ô  328 [chromium] ΓÇ║ tests\skills-sops.spec.ts:179:7 ΓÇ║ SOPs ΓÇ║ clicking a SOP shows its steps (1.6s)
+  Γ£ô  329 [chromium] ΓÇ║ tests\skills-sops.spec.ts:230:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ skills page loads with instructions in skill data (1.8s)
+  Γ£ô  330 [chromium] ΓÇ║ tests\skills-sops.spec.ts:239:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ skills API response includes tool_ids array (1.3s)
+  Γ£ô  331 [chromium] ΓÇ║ tests\skills-sops.spec.ts:260:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ skills API response includes instructions field (1.7s)
+  Γ£ô  332 [chromium] ΓÇ║ tests\skills-sops.spec.ts:279:7 ΓÇ║ Skill editor with instructions and tool binding ΓÇ║ create skill POST payload can include instructions field (2.3s)
+  Γ£ô  333 [chromium] ΓÇ║ tests\skills-sops.spec.ts:362:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOPs page loads with instructions in sop data (1.7s)
+  Γ£ô  334 [chromium] ΓÇ║ tests\skills-sops.spec.ts:371:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOP steps use skill_invocation type (not legacy skill) (1.1s)
+  Γ£ô  335 [chromium] ΓÇ║ tests\skills-sops.spec.ts:379:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOP steps schema includes target_agent_type_id and step_config (1.0s)
+  Γ£ô  336 [chromium] ΓÇ║ tests\skills-sops.spec.ts:385:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ SOPs API response includes instructions field (1.3s)
+  Γ£ô  337 [chromium] ΓÇ║ tests\skills-sops.spec.ts:403:7 ΓÇ║ SOP editor with instructions and steps ΓÇ║ create SOP POST payload can include instructions field (2.5s)
+  Γ£ô  338 [chromium] ΓÇ║ tests\skills-sops.spec.ts:469:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ instructions_with_tools API contract includes Tool Section marker (1.1s)
+  Γ£ô  339 [chromium] ΓÇ║ tests\skills-sops.spec.ts:480:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ GET /skills/{id} mock returns instructions_with_tools with schema details (1.8s)
+  Γ£ô  340 [chromium] ΓÇ║ tests\skills-sops.spec.ts:508:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ skills page renders without error when skill has tool section data (1.7s)
+  Γ£ô  341 [chromium] ΓÇ║ tests\skills-sops.spec.ts:517:7 ΓÇ║ Skill editor ΓÇö Generated Tool Reference section ΓÇ║ instructions_with_tools is read-only: tool section is not user-editable text (2.4s)
+[Real Backend Test] Backend not running at http://localhost:8000 ΓÇö default skills verification skipped.
+  Γ£ô  342 [chromium] ΓÇ║ tests\skills-sops.spec.ts:576:7 ΓÇ║ Real Backend Integration ΓÇö Default Skills ΓÇ║ default skills save_result and send_notification are present after seeding (353ms)
+  Γ£ô  343 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:155:7 ΓÇ║ System tools in skill editor ΓÇ║ skills page loads without errors (1.4s)
+  Γ£ÿ  344 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:164:7 ΓÇ║ System tools in skill editor ΓÇ║ mcp/tools API response includes system tools (1.6s)
+  Γ£ô  345 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:188:7 ΓÇ║ System tools in skill editor ΓÇ║ system tool IDs follow expected UUID format (210ms)
+  Γ£ô  346 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:211:7 ΓÇ║ System tools in skill editor ΓÇ║ skill tool_ids can include system tool UUIDs in API contract (177ms)
+  Γ£ô  347 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:224:7 ΓÇ║ Create skill with system tools ΓÇ║ POST to /api/v1/skills with system tool IDs returns 201 (2.3s)
+  Γ£ô  348 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:266:7 ΓÇ║ Create skill with system tools ΓÇ║ skill created with system tools shows correct tool count (1.7s)
+  Γ£ô  349 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:292:7 ΓÇ║ Create skill with system tools ΓÇ║ POST payload with only system tool IDs is valid API contract (145ms)
+  Γ£ô  350 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:312:7 ΓÇ║ Edit skill with system tools ΓÇ║ skill detail response includes system tool IDs (144ms)
+  Γ£ô  351 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:321:7 ΓÇ║ Edit skill with system tools ΓÇ║ PUT with updated system tools sends valid payload (1.7s)
+  Γ£ô  352 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:353:7 ΓÇ║ Edit skill with system tools ΓÇ║ removing system tool updates tool_ids in response (142ms)
+  Γ£ô  353 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:381:7 ΓÇ║ Mixed system and regular MCP tools ΓÇ║ API contract supports mixed system and regular tool IDs in skill (143ms)
+  Γ£ô  354 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:388:7 ΓÇ║ Mixed system and regular MCP tools ΓÇ║ mcp/tools response includes both system and regular tools (144ms)
+  Γ£ô  355 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:396:7 ΓÇ║ Mixed system and regular MCP tools ΓÇ║ mixed skill instructions_with_tools includes all tool names (136ms)
+  Γ£ô  356 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:401:7 ΓÇ║ Mixed system and regular MCP tools ΓÇ║ skills page shows mixed skill in list (2.5s)
+  Γ£ô  357 [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:408:7 ΓÇ║ Mixed system and regular MCP tools ΓÇ║ POST payload with mixed tool IDs is valid API contract (1.3s)
+CREATE TAG PAYLOAD: {
+  "key": "environment",
+  "scope": "global",
+  "description": "Environment tag",
+  "allowed_values": [
+    "dev",
+    "prod",
+    "staging"
+  ]
+}
+  Γ£ô  358 [chromium] ΓÇ║ tests\tag-management.spec.ts:11:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ create tag with allowed values and verify they are saved (3.1s)
+UPDATE TAG PAYLOAD: {
+  "description": "Environment tag",
+  "add_values": [
+    "staging"
+  ],
+  "remove_values": []
+}
+  Γ£ô  359 [chromium] ΓÇ║ tests\tag-management.spec.ts:133:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ update tag and add more allowed values (2.9s)
+  Γ£ô  360 [chromium] ΓÇ║ tests\tag-management.spec.ts:253:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding duplicate allowed values (2.2s)
+  Γ£ô  361 [chromium] ΓÇ║ tests\tag-management.spec.ts:296:7 ΓÇ║ Tag Management - Allowed Values ΓÇ║ prevent adding empty allowed values (2.5s)
+  -  362 [chromium] ΓÇ║ tests\test-login-flow.spec.ts:3:6 ΓÇ║ debug login flow
+  Γ£ô  363 [chromium] ΓÇ║ tests\theme-application.spec.ts:10:7 ΓÇ║ Theme Application ΓÇ║ Inter font is applied globally (1.0s)
+  Γ£ô  364 [chromium] ΓÇ║ tests\theme-application.spec.ts:21:7 ΓÇ║ Theme Application ΓÇ║ Primary color is indigo on active navigation (1.0s)
+  Γ£ô  365 [chromium] ΓÇ║ tests\theme-application.spec.ts:37:7 ΓÇ║ Theme Application ΓÇ║ Background colors match theme (1.0s)
+  Γ£ô  366 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:73:7 ΓÇ║ Three-Service Architecture ΓÇö Mocked Tests ΓÇ║ Control Center health endpoint returns service name (2.1s)
+  Γ£ô  367 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:89:7 ΓÇ║ Three-Service Architecture ΓÇö Mocked Tests ΓÇ║ Dashboard loads successfully with three-service backend (2.0s)
+  Γ£ô  368 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:116:7 ΓÇ║ Three-Service Architecture ΓÇö Mocked Tests ΓÇ║ Agent execution triggers show correct status (2.1s)
+  Γ£ô  369 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:153:7 ΓÇ║ Three-Service Architecture ΓÇö Mocked Tests ΓÇ║ Certificate monitoring data visible in health check (2.1s)
+  Γ£ô  370 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:176:7 ΓÇ║ Three-Service Architecture ΓÇö Mocked Tests ΓÇ║ WebSocket connection to Communication Hub works via frontend (3.1s)
+  Γ£ô  371 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:210:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Control Center health check passes (371ms)
+  Γ£ô  372 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:225:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Agent Runtime health check passes (330ms)
+  Γ£ô  373 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:242:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Communication Hub health check passes (323ms)
+  Γ£ô  374 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:257:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ All three services are healthy simultaneously (20ms)
+  Γ£ô  375 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:289:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Control Center /internal/bootstrap is accessible (wrong key returns 401) (22ms)
+  Γ£ô  376 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:311:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Agent Runtime /execute endpoint requires authentication (26ms)
+  Γ£ô  377 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:330:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Communication Hub /internal/dispatch requires authentication (14ms)
+  Γ£ô  378 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:349:7 ΓÇ║ Real Backend Integration ΓÇö Three-Service Architecture ΓÇ║ Certificate expiry monitoring: AR cert_expires_at is in the future (13ms)
+  Γ£ô  379 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:385:7 ΓÇ║ Full Workflow E2E ΓÇö Three-Service Stack ΓÇ║ User can view dashboard when all three services are running (2.0s)
+  Γ£ô  380 [chromium] ΓÇ║ tests\three-service-architecture.spec.ts:404:7 ΓÇ║ Full Workflow E2E ΓÇö Three-Service Stack ΓÇ║ Health page shows all service statuses (2.1s)
+  Γ£ô  381 [chromium] ΓÇ║ tests\websocket-communication-hub.spec.ts:15:7 ΓÇ║ WebSocket Communication Hub Integration ΓÇ║ Verify Communication Hub serves WebSocket endpoint (153ms)
+  Γ£ô  382 [chromium] ΓÇ║ tests\websocket-communication-hub.spec.ts:25:7 ΓÇ║ WebSocket Communication Hub Integration ΓÇ║ Verify Control Center does NOT serve WebSocket endpoint (186ms)
+  Γ£ô  383 [chromium] ΓÇ║ tests\websocket-communication-hub.spec.ts:45:7 ΓÇ║ WebSocket Communication Hub Integration ΓÇ║ Frontend connects to Communication Hub for conversational agent (3.1s)
+  Γ£ô  384 [chromium] ΓÇ║ tests\websocket-communication-hub.spec.ts:126:7 ΓÇ║ WebSocket Communication Hub Integration ΓÇ║ WebSocket URL configuration points to Communication Hub (1.1s)
+  Γ£ô  385 [chromium] ΓÇ║ tests\websocket-communication-hub.spec.ts:150:7 ΓÇ║ WebSocket Real Backend Integration ΓÇ║ Real WebSocket connection to Communication Hub succeeds (2.1s)
+
+
+  1) [chromium] ΓÇ║ tests\accessibility.spec.ts:147:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible working steps section has aria-expanded attribute 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveAttribute[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('[role="button"][aria-expanded]').first()
+    Expected: [32m"[7mfals[27me"[39m
+    Received: [31m"[7mtru[27me"[39m
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toHaveAttribute" with timeout 5000ms[22m
+    [2m  - waiting for locator('[role="button"][aria-expanded]').first()[22m
+    [2m    9 ├ù locator resolved to <div tabindex="0" role="button" aria-expanded="true" class="MuiBox-root css-1gxcaok">ΓÇª</div>[22m
+    [2m      - unexpected value "true"[22m
+
+
+      155 |     const toggleEl = page.locator('[role="button"][aria-expanded]').first()
+      156 |     await expect(toggleEl).toBeVisible({ timeout: 5000 })
+    > 157 |     await expect(toggleEl).toHaveAttribute('aria-expanded', 'false')
+          |                            ^
+      158 |   })
+      159 |
+      160 |   test('Collapsible section is keyboard-navigable with Tab', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\accessibility.spec.ts:157:28
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\accessibility-Accessibilit-9f7c9-has-aria-expanded-attribute-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\accessibility-Accessibilit-9f7c9-has-aria-expanded-attribute-chromium\error-context.md
+
+  2) [chromium] ΓÇ║ tests\accessibility.spec.ts:176:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Enter key 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveAttribute[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('[role="button"][aria-expanded]').first()
+    Expected: [32m"[7mtru[27me"[39m
+    Received: [31m"[7mfals[27me"[39m
+    Timeout:  3000ms
+
+    Call log:
+    [2m  - Expect "toHaveAttribute" with timeout 3000ms[22m
+    [2m  - waiting for locator('[role="button"][aria-expanded]').first()[22m
+    [2m    7 ├ù locator resolved to <div tabindex="0" role="button" aria-expanded="false" class="MuiBox-root css-1gxcaok">ΓÇª</div>[22m
+    [2m      - unexpected value "false"[22m
+
+
+      186 |     // Press Enter to expand
+      187 |     await page.keyboard.press('Enter')
+    > 188 |     await expect(toggleEl).toHaveAttribute('aria-expanded', 'true', { timeout: 3000 })
+          |                            ^
+      189 |   })
+      190 |
+      191 |   test('Collapsible section responds to Space key', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\accessibility.spec.ts:188:28
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\accessibility-Accessibilit-a7101-ction-responds-to-Enter-key-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\accessibility-Accessibilit-a7101-ction-responds-to-Enter-key-chromium\error-context.md
+
+  3) [chromium] ΓÇ║ tests\accessibility.spec.ts:191:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Space key 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveAttribute[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator:  locator('[role="button"][aria-expanded]').first()
+    Expected: [32m"[7mtru[27me"[39m
+    Received: [31m"[7mfals[27me"[39m
+    Timeout:  3000ms
+
+    Call log:
+    [2m  - Expect "toHaveAttribute" with timeout 3000ms[22m
+    [2m  - waiting for locator('[role="button"][aria-expanded]').first()[22m
+    [2m    7 ├ù locator resolved to <div tabindex="0" role="button" aria-expanded="false" class="MuiBox-root css-1gxcaok">ΓÇª</div>[22m
+    [2m      - unexpected value "false"[22m
+
+
+      201 |     // Press Space to expand
+      202 |     await page.keyboard.press(' ')
+    > 203 |     await expect(toggleEl).toHaveAttribute('aria-expanded', 'true', { timeout: 3000 })
+          |                            ^
+      204 |   })
+      205 |
+      206 |   test('Raw log block has ARIA label when visible', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\accessibility.spec.ts:203:28
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\accessibility-Accessibilit-f4366-ction-responds-to-Space-key-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\accessibility-Accessibilit-f4366-ction-responds-to-Space-key-chromium\error-context.md
+
+  4) [chromium] ΓÇ║ tests\agent-logs.spec.ts:227:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand working steps section reveals step rows 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="button"]').filter({ hasText: /show.*working steps/i }).first()[22m
+
+
+      238 |       .filter({ hasText: /show.*working steps/i })
+      239 |       .first()
+    > 240 |     await toggleEl.click()
+          |                    ^
+      241 |
+      242 |     // After expanding, step messages should be visible
+      243 |     await expect(page.getByText('Initial LLM reasoning call')).toBeVisible({ timeout: 5000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-logs.spec.ts:240:20
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-logs-Agent-Log-Viewe-463e8-s-section-reveals-step-rows-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-logs-Agent-Log-Viewe-463e8-s-section-reveals-step-rows-chromium\error-context.md
+
+  5) [chromium] ΓÇ║ tests\agent-logs.spec.ts:247:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse working steps section hides step rows 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="button"]').filter({ hasText: /show.*working steps/i }).first()[22m
+
+
+      257 |       .filter({ hasText: /show.*working steps/i })
+      258 |       .first()
+    > 259 |     await toggleEl.click()
+          |                    ^
+      260 |     await expect(page.getByText('Initial LLM reasoning call')).toBeVisible({ timeout: 5000 })
+      261 |
+      262 |     // Collapse by clicking again
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-logs.spec.ts:259:20
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-logs-Agent-Log-Viewe-9eaf0-eps-section-hides-step-rows-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-logs-Agent-Log-Viewe-9eaf0-eps-section-hides-step-rows-chromium\error-context.md
+
+  6) [chromium] ΓÇ║ tests\agent-logs.spec.ts:275:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand individual step detail block 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="button"]').filter({ hasText: /show.*working steps/i }).first()[22m
+
+
+      285 |       .filter({ hasText: /show.*working steps/i })
+      286 |       .first()
+    > 287 |     await toggleEl.click()
+          |                    ^
+      288 |
+      289 |     // Find a step that has a detail expand button (tool_call with data)
+      290 |     await expect(page.getByText('Calling QueryTool with SQL query')).toBeVisible({ timeout: 5000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-logs.spec.ts:287:20
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-logs-Agent-Log-Viewe-89623-ndividual-step-detail-block-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-logs-Agent-Log-Viewe-89623-ndividual-step-detail-block-chromium\error-context.md
+
+  7) [chromium] ΓÇ║ tests\agent-logs.spec.ts:302:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse individual step detail block 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('[role="button"]').filter({ hasText: /show.*working steps/i }).first()[22m
+
+
+      312 |       .filter({ hasText: /show.*working steps/i })
+      313 |       .first()
+    > 314 |       .click()
+          |        ^
+      315 |
+      316 |     await expect(page.getByText('Calling QueryTool with SQL query')).toBeVisible({ timeout: 5000 })
+      317 |
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-logs.spec.ts:314:8
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-logs-Agent-Log-Viewe-28ec1-ndividual-step-detail-block-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-logs-Agent-Log-Viewe-28ec1-ndividual-step-detail-block-chromium\error-context.md
+
+  8) [chromium] ΓÇ║ tests\agent-navigation.spec.ts:191:7 ΓÇ║ AI Agent nav group ΓÇ║ nav group is expanded by default and shows child items 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: 'Agent Types' })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for getByRole('button', { name: 'Agent Types' })[22m
+
+
+      195 |
+      196 |     // Child items should be visible when group is expanded (default)
+    > 197 |     await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 10000 })
+          |                                                                     ^
+      198 |     await expect(page.getByRole('button', { name: 'Agent Executions' })).toBeVisible({
+      199 |       timeout: 10000,
+      200 |     })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-navigation.spec.ts:197:69
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-navigation-AI-Agent--71e8a-fault-and-shows-child-items-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-navigation-AI-Agent--71e8a-fault-and-shows-child-items-chromium\error-context.md
+
+  9) [chromium] ΓÇ║ tests\agent-navigation.spec.ts:208:7 ΓÇ║ AI Agent nav group ΓÇ║ collapses and expands nav group on header click 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('button', { name: 'Agent Types' })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for getByRole('button', { name: 'Agent Types' })[22m
+
+
+      212 |
+      213 |     // Verify "Agent Types" is visible (expanded)
+    > 214 |     await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 10000 })
+          |                                                                     ^
+      215 |
+      216 |     // Click the group header to collapse
+      217 |     await page.getByRole('button', { name: /AI Agent/i }).click()
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-navigation.spec.ts:214:69
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-navigation-AI-Agent--5fef1-s-nav-group-on-header-click-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-navigation-AI-Agent--5fef1-s-nav-group-on-header-click-chromium\error-context.md
+
+  10) [chromium] ΓÇ║ tests\agent-navigation.spec.ts:348:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ dialog shows agent type name and Details tab 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('tab', { name: 'Plan Preview' })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for getByRole('tab', { name: 'Plan Preview' })[22m
+
+
+      363 |     // Three tabs should be visible
+      364 |     await expect(page.getByRole('tab', { name: 'Details' })).toBeVisible({ timeout: 10000 })
+    > 365 |     await expect(page.getByRole('tab', { name: 'Plan Preview' })).toBeVisible({ timeout: 10000 })
+          |                                                                   ^
+      366 |     await expect(page.getByRole('tab', { name: 'Execution Logs' })).toBeVisible({ timeout: 10000 })
+      367 |   })
+      368 |
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-navigation.spec.ts:365:67
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-navigation-Agent-Typ-25eaa-t-type-name-and-Details-tab-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-navigation-Agent-Typ-25eaa-t-type-name-and-Details-tab-chromium\error-context.md
+
+  11) [chromium] ΓÇ║ tests\agent-navigation.spec.ts:385:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ switching to Plan Preview tab shows no-plan placeholder when plan is null 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('tab', { name: 'Plan Preview' })[22m
+
+
+      393 |     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
+      394 |
+    > 395 |     await page.getByRole('tab', { name: 'Plan Preview' }).click()
+          |                                                           ^
+      396 |
+      397 |     // Should show placeholder text
+      398 |     await expect(page.getByRole('dialog').getByText(/No plan generated/i)).toBeVisible({
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-navigation.spec.ts:395:59
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-navigation-Agent-Typ-23ac1-aceholder-when-plan-is-null-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-navigation-Agent-Typ-23ac1-aceholder-when-plan-is-null-chromium\error-context.md
+
+  12) [chromium] ΓÇ║ tests\agent-navigation.spec.ts:403:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ Plan Preview tab shows plan steps when plan is populated 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('tab', { name: 'Plan Preview' })[22m
+
+
+      419 |     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
+      420 |
+    > 421 |     await page.getByRole('tab', { name: 'Plan Preview' }).click()
+          |                                                           ^
+      422 |
+      423 |     // Plan step name should be visible
+      424 |     await expect(page.getByText('Gather Sources')).toBeVisible({ timeout: 10000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-navigation.spec.ts:421:59
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-navigation-Agent-Typ-e376c-teps-when-plan-is-populated-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-navigation-Agent-Typ-e376c-teps-when-plan-is-populated-chromium\error-context.md
+
+  13) [chromium] ΓÇ║ tests\agent-navigation.spec.ts:574:7 ΓÇ║ Nav menu order ΓÇ║ Agent Roles and Agent Identities appear above Agent Types in the nav 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.boundingBox: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('button', { name: 'Agent Types' })[22m
+
+
+      586 |       (await page.getByRole('button', { name: 'Agent Identities' }).boundingBox())?.y ?? 0
+      587 |     const typesY =
+    > 588 |       (await page.getByRole('button', { name: 'Agent Types' }).boundingBox())?.y ?? 0
+          |                                                                ^
+      589 |     const executionsY =
+      590 |       (await page.getByRole('button', { name: 'Agent Executions' }).boundingBox())?.y ?? 0
+      591 |     const logsY =
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-navigation.spec.ts:588:64
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-navigation-Nav-menu--4b2aa-bove-Agent-Types-in-the-nav-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-navigation-Nav-menu--4b2aa-bove-Agent-Types-in-the-nav-chromium\error-context.md
+
+  14) [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:277:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Failed plan: modal opens with error message when generation_status is failed 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByText('LLM provider unavailable ΓÇö no model config found')
+    Expected: visible
+    Timeout: 8000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 8000ms[22m
+    [2m  - waiting for getByText('LLM provider unavailable ΓÇö no model config found')[22m
+
+
+      309 |     await expect(
+      310 |       page.getByText('LLM provider unavailable ΓÇö no model config found')
+    > 311 |     ).toBeVisible({ timeout: 8000 })
+          |       ^
+      312 |   })
+      313 |
+      314 |   test('Plan modal does not reopen after dismissal without another save', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\agent-plan-mode.spec.ts:311:7
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\agent-plan-mode-Agent-Plan-e83ff-generation-status-is-failed-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\agent-plan-mode-Agent-Plan-e83ff-generation-status-is-failed-chromium\error-context.md
+
+  15) [chromium] ΓÇ║ tests\mcp-tool-validation.spec.ts:4:7 ΓÇ║ MCP Tool Call Validation ΓÇ║ agent can successfully call MCP tools (supabase and hello-world) 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.fill: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('input[name="username"]')[22m
+
+
+       5 |     // Login first
+       6 |     await page.goto('http://localhost:5173')
+    >  7 |     await page.locator('input[name="username"]').fill('admin')
+         |                                                  ^
+       8 |     await page.locator('input[name="password"]').fill('admin')
+       9 |     await page.locator('button[type="submit"]').click()
+      10 |     await page.waitForURL('**/#/projects', { timeout: 10000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\mcp-tool-validation.spec.ts:7:50
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\mcp-tool-validation-MCP-To-06584-s-supabase-and-hello-world--chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\mcp-tool-validation-MCP-To-06584-s-supabase-and-hello-world--chromium\error-context.md
+
+  16) [chromium] ΓÇ║ tests\role-policy-management.spec.ts:362:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog shows error on 409 duplicate name 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('dialog').locator('button').filter({ hasText: /clone/i }).first()[22m
+    [2m    - locator resolved to <button tabindex="0" type="button" class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary css-ryqd62-MuiButtonBase-root-MuiButton-root">Clone Role</button>[22m
+    [2m    - waiting for" http://localhost:5173/login" navigation to finish...[22m
+    [2m    - navigated to "http://localhost:5173/login"[22m
+
+
+      399 |     const submitBtn = dialog.locator('button').filter({ hasText: /clone/i }).first()
+      400 |     if (await submitBtn.isEnabled()) {
+    > 401 |       await submitBtn.click()
+          |                       ^
+      402 |       // Dialog should remain open after error
+      403 |       await expect(dialog).toBeVisible({ timeout: 3000 })
+      404 |     }
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\role-policy-management.spec.ts:401:23
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\role-policy-management-Clo-d5f2e-error-on-409-duplicate-name-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\role-policy-management-Clo-d5f2e-error-on-409-duplicate-name-chromium\error-context.md
+
+  17) [chromium] ΓÇ║ tests\role-policy-management.spec.ts:483:7 ΓÇ║ AddStatementDialog ΓÇ║ Add Statement dialog shows Resource IDs section 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('dialog')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('dialog')[22m
+
+
+      498 |
+      499 |     const dialog = page.getByRole('dialog')
+    > 500 |     await expect(dialog).toBeVisible({ timeout: 5000 })
+          |                          ^
+      501 |
+      502 |     // Resource IDs section must be visible in the dialog
+      503 |     await expect(dialog.getByText(/resource.*id/i).first()).toBeVisible({ timeout: 3000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\role-policy-management.spec.ts:500:26
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\role-policy-management-Add-f223d--shows-Resource-IDs-section-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\role-policy-management-Add-f223d--shows-Resource-IDs-section-chromium\error-context.md
+
+  18) [chromium] ΓÇ║ tests\role-policy-management.spec.ts:605:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit button opens dialog pre-filled with existing policy data 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('dialog')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('dialog')[22m
+
+
+      629 |
+      630 |     const dialog = page.getByRole('dialog')
+    > 631 |     await expect(dialog).toBeVisible({ timeout: 5000 })
+          |                          ^
+      632 |
+      633 |     // Dialog title must indicate edit mode (not add mode)
+      634 |     await expect(dialog.getByText(/edit.*policy|Edit Policy Statement/i)).toBeVisible({ timeout: 3000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\role-policy-management.spec.ts:631:26
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\role-policy-management-Edi-b5b6e-d-with-existing-policy-data-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\role-policy-management-Edi-b5b6e-d-with-existing-policy-data-chromium\error-context.md
+
+  19) [chromium] ΓÇ║ tests\role-policy-management.spec.ts:637:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit dialog calls PATCH endpoint on save 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('button', { name: /^edit$/i }).first()[22m
+    [2m    - locator resolved to <button tabindex="0" type="button" class="MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeSmall MuiButton-textSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeSmall MuiButton-textSizeSmall MuiButton-colorPrimary css-1nyanq1-MuiButtonBase-root-MuiButton-root">Edit</button>[22m
+    [2m  - attempting click action[22m
+    [2m    - waiting for element to be visible, enabled and stable[22m
+    [2m    - element is visible, enabled and stable[22m
+    [2m    - scrolling into view if needed[22m
+    [2m    - done scrolling[22m
+    [2m  - element was detached from the DOM, retrying[22m
+    [2m    - waiting for" http://localhost:5173/login" navigation to finish...[22m
+    [2m    - navigated to "http://localhost:5173/login"[22m
+
+
+      679 |     }
+      680 |
+    > 681 |     await editBtn.click()
+          |                   ^
+      682 |
+      683 |     const dialog = page.getByRole('dialog')
+      684 |     await expect(dialog).toBeVisible({ timeout: 5000 })
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\role-policy-management.spec.ts:681:19
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\role-policy-management-Edi-5c67f-alls-PATCH-endpoint-on-save-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\role-policy-management-Edi-5c67f-alls-PATCH-endpoint-on-save-chromium\error-context.md
+
+  20) [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:125:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ creates a skill with only save_result system tool ΓÇö no duplicate tools in picker 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByText(/system/i)
+    Expected: visible
+    Error: strict mode violation: getByText(/system/i) resolved to 3 elements:
+        1) <p id="_r_b_-helper-text" class="MuiFormHelperText-root MuiFormHelperText-sizeSmall MuiFormHelperText-contained css-13wpinq-MuiFormHelperText-root">System instructions passed to the agent when thisΓÇª</p> aka getByText('System instructions passed to')
+        2) <span class="MuiChip-label MuiChip-labelSmall css-txwpof-MuiChip-label">system</span> aka getByText('system', { exact: true })
+        3) <code>system/save_result</code> aka getByText('system/save_result')
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByText(/system/i)[22m
+
+
+      146 |
+      147 |     // Wait for the skill editor dialog to appear with the tool picker
+    > 148 |     await expect(page.getByText(/system/i)).toBeVisible({ timeout: 5000 })
+          |                                             ^
+      149 |
+      150 |     // Count how many times 'system/save_result' appears in the tool picker
+      151 |     // Phase 10 fix ensures the API returns exactly 1 entry (no duplicates)
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\service-decomposition\simple-agent.spec.ts:148:45
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\service-decomposition-simp-7112e-o-duplicate-tools-in-picker-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\service-decomposition-simp-7112e-o-duplicate-tools-in-picker-chromium\error-context.md
+
+  21) [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:177:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ triggering a simple agent with save_result produces a completed job 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByText(/completed/i)
+    Expected: visible
+    Timeout: 8000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 8000ms[22m
+    [2m  - waiting for getByText(/completed/i)[22m
+
+
+      208 |
+      209 |     // After triggering, a job should be created and visible
+    > 210 |     await expect(page.getByText(/completed/i)).toBeVisible({ timeout: 8000 })
+          |                                                ^
+      211 |   })
+      212 |
+      213 |   test('save_result system tool appears in agent skill preview after selection', async ({ page }) => {
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\service-decomposition\simple-agent.spec.ts:210:48
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\service-decomposition-simp-9e0b9-lt-produces-a-completed-job-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\service-decomposition-simp-9e0b9-lt-produces-a-completed-job-chromium\error-context.md
+
+  22) [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:233:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ save_result system tool appears in agent skill preview after selection 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByText('system/save_result')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByText('system/save_result')[22m
+
+
+      254 |     // (the display format used in the UI after Phase 10)
+      255 |     // Either in the dialog or in the skills preview, this text should be visible
+    > 256 |     await expect(page.getByText('system/save_result')).toBeVisible({ timeout: 5000 })
+          |                                                        ^
+      257 |   })
+      258 | })
+      259 |
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\service-decomposition\simple-agent.spec.ts:256:56
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\service-decomposition-simp-28269-ill-preview-after-selection-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\service-decomposition-simp-28269-ill-preview-after-selection-chromium\error-context.md
+
+  23) [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:164:7 ΓÇ║ System tools in skill editor ΓÇ║ mcp/tools API response includes system tools 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mnot[2m.[22mtoBeNull[2m()[22m
+
+    Received: [31mnull[39m
+
+      179 |
+      180 |     // Verify the mock data contract has system tools
+    > 181 |     expect(toolsResponse).not.toBeNull()
+          |                               ^
+      182 |     const systemTools = (toolsResponse as object[]).filter(
+      183 |       (t: object) => (t as { server_slug: string }).server_slug === 'system'
+      184 |     )
+        at C:\Users\rhu\source\personal\coding-workspace\Parthenon\e2e\tests\skills-system-tools.spec.ts:181:31
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\skills-system-tools-System-0840a-ponse-includes-system-tools-chromium\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\skills-system-tools-System-0840a-ponse-includes-system-tools-chromium\error-context.md
+
+  23 failed
+    [chromium] ΓÇ║ tests\accessibility.spec.ts:147:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible working steps section has aria-expanded attribute 
+    [chromium] ΓÇ║ tests\accessibility.spec.ts:176:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Enter key 
+    [chromium] ΓÇ║ tests\accessibility.spec.ts:191:7 ΓÇ║ Accessibility ΓÇö Log Viewer Controls ΓÇ║ Collapsible section responds to Space key 
+    [chromium] ΓÇ║ tests\agent-logs.spec.ts:227:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand working steps section reveals step rows 
+    [chromium] ΓÇ║ tests\agent-logs.spec.ts:247:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse working steps section hides step rows 
+    [chromium] ΓÇ║ tests\agent-logs.spec.ts:275:7 ΓÇ║ Agent Log Viewer ΓÇ║ Expand individual step detail block 
+    [chromium] ΓÇ║ tests\agent-logs.spec.ts:302:7 ΓÇ║ Agent Log Viewer ΓÇ║ Collapse individual step detail block 
+    [chromium] ΓÇ║ tests\agent-navigation.spec.ts:191:7 ΓÇ║ AI Agent nav group ΓÇ║ nav group is expanded by default and shows child items 
+    [chromium] ΓÇ║ tests\agent-navigation.spec.ts:208:7 ΓÇ║ AI Agent nav group ΓÇ║ collapses and expands nav group on header click 
+    [chromium] ΓÇ║ tests\agent-navigation.spec.ts:348:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ dialog shows agent type name and Details tab 
+    [chromium] ΓÇ║ tests\agent-navigation.spec.ts:385:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ switching to Plan Preview tab shows no-plan placeholder when plan is null 
+    [chromium] ΓÇ║ tests\agent-navigation.spec.ts:403:7 ΓÇ║ Agent Type Details Dialog ΓÇ║ Plan Preview tab shows plan steps when plan is populated 
+    [chromium] ΓÇ║ tests\agent-navigation.spec.ts:574:7 ΓÇ║ Nav menu order ΓÇ║ Agent Roles and Agent Identities appear above Agent Types in the nav 
+    [chromium] ΓÇ║ tests\agent-plan-mode.spec.ts:277:7 ΓÇ║ Agent Plan Mode ΓÇö Mocked ΓÇ║ Failed plan: modal opens with error message when generation_status is failed 
+    [chromium] ΓÇ║ tests\mcp-tool-validation.spec.ts:4:7 ΓÇ║ MCP Tool Call Validation ΓÇ║ agent can successfully call MCP tools (supabase and hello-world) 
+    [chromium] ΓÇ║ tests\role-policy-management.spec.ts:362:7 ΓÇ║ CloneRoleDialog ΓÇ║ Clone dialog shows error on 409 duplicate name 
+    [chromium] ΓÇ║ tests\role-policy-management.spec.ts:483:7 ΓÇ║ AddStatementDialog ΓÇ║ Add Statement dialog shows Resource IDs section 
+    [chromium] ΓÇ║ tests\role-policy-management.spec.ts:605:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit button opens dialog pre-filled with existing policy data 
+    [chromium] ΓÇ║ tests\role-policy-management.spec.ts:637:7 ΓÇ║ Edit Policy Statement ΓÇ║ Edit dialog calls PATCH endpoint on save 
+    [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:125:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ creates a skill with only save_result system tool ΓÇö no duplicate tools in picker 
+    [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:177:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ triggering a simple agent with save_result produces a completed job 
+    [chromium] ΓÇ║ tests\service-decomposition\simple-agent.spec.ts:233:7 ΓÇ║ Issue 5 ΓÇö Simple Agent E2E: save_result System Tool Only (FIX-20260518-140000) ΓÇ║ save_result system tool appears in agent skill preview after selection 
+    [chromium] ΓÇ║ tests\skills-system-tools.spec.ts:164:7 ΓÇ║ System tools in skill editor ΓÇ║ mcp/tools API response includes system tools 
+  22 skipped
+  340 passed (18.0m)

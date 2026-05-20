@@ -1,7 +1,7 @@
 """SkillSeeder — idempotent initializer for default platform skills.
 
-Creates the `save_result` and `send_notification` skills on application startup
-or via the `seed-skills` CLI command if they do not already exist.
+Creates the `save_result`, `send_notification`, and `get_recipient_group` skills
+on application startup or via the `seed-skills` CLI command if they do not already exist.
 """
 from __future__ import annotations
 
@@ -37,6 +37,16 @@ _DEFAULT_SKILLS: list[dict] = [
             "and message payload. Ensure the channel is active before invoking."
         ),
         "tool_names": ["send_notification"],
+    },
+    {
+        "name": "get_recipient_group",
+        "description": "Retrieves information about notification recipient groups.",
+        "instructions": (
+            "Use this skill to retrieve details about a notification recipient group, "
+            "including which channels are configured and their recipient properties. "
+            "Call this before sending notifications to verify the group exists."
+        ),
+        "tool_names": ["get_recipient_group"],
     },
 ]
 

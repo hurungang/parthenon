@@ -31,6 +31,33 @@ Env defaults for local dev (`frontend/.env.local`):
 - `VITE_OIDC_CLIENT_ID=parthenon-api-ui`
 - `VITE_API_BASE_URL=http://localhost:8000/api/v1`
 
+## Running Frontend Vitest Tests (Windows / Copilot CLI)
+
+**NEVER run `npx vitest run` with a terminal reporter inside the Copilot CLI agent.**  
+Vitest's default and verbose reporters use ANSI escape sequences that overflow/deadlock the Copilot CLI's stdout pipe on Windows, causing the process to hang indefinitely after ~988 lines of output. This affects all Vitest versions including 4.x. (See: https://github.com/github/copilot-cli/issues/3308)
+
+**Always use the JSON reporter writing directly to a file:**
+
+```powershell
+cd frontend
+npx vitest run --reporter=json --outputFile=vitest_results.json
+Write-Host "EXIT: $LASTEXITCODE"
+```
+
+Then read the results:
+```powershell
+$j = Get-Content frontend/vitest_results.json | ConvertFrom-Json
+Write-Host "Passed: $($j.numPassedTests) / $($j.numTotalTests)  Failed: $($j.numFailedTests)"
+```
+
+To see which tests failed:
+```powershell
+$j.testResults | Where-Object { $_.status -eq 'failed' } | ForEach-Object {
+    Write-Host $_.testFilePath
+    $_.assertionResults | Where-Object { $_.status -eq 'failed' } | ForEach-Object { Write-Host "  × $($_.fullName)" }
+}
+```
+
 ## temporary test scripts
 
 temporary test scripts for quick local testing of auth flows, etc. must be saved under `scripts/` and should be named descriptively (e.g. `test-auth-flows.ps1`) to avoid confusion with production scripts. These are not intended for long-term use and can be deleted after testing is complete.

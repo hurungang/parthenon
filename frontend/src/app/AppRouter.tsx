@@ -21,6 +21,9 @@ import { ScheduleManagerPage } from '../pages/scheduling/ScheduleManagerPage'
 import { ConversationHistoryPage } from '../pages/conversations/ConversationHistoryPage'
 import { ResultRepositoryPage } from '../pages/results/ResultRepositoryPage'
 import { NotificationConfigPage } from '../pages/notifications/NotificationConfigPage'
+import { ChannelListPage } from '../pages/notifications/ChannelListPage'
+import { RecipientGroupListPage } from '../pages/notifications/RecipientGroupListPage'
+import { NotificationLogPage } from '../pages/notifications/NotificationLogPage'
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard'
 import { ChatPage } from '../pages/chat/ChatPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -107,8 +110,12 @@ function AppRoutes() {
         <Route path="/conversations" element={<ConversationHistoryPage />} />
         <Route path="/results" element={<ResultRepositoryPage />} />
         <Route path="/notifications" element={<NotificationConfigPage />} />
+        <Route path="/admin/notifications/channels" element={<ChannelListPage />} />
+        <Route path="/admin/notifications/groups" element={<RecipientGroupListPage />} />
+        <Route path="/admin/notifications/logs" element={<NotificationLogPage />} />
         <Route path="/observability" element={<ObservabilityDashboard />} />
         <Route path="/chat/:agentTypeId?" element={<ChatPage />} />
+        <Route path="/agents/:agentTypeId/chat/:sessionId" element={<ChatPage />} />
         <Route path="/permissions/access-requests" element={<AccessRequestsPage />} />
         <Route path="/user-permissions/*" element={<PermissionsPage />} />
       </Route>

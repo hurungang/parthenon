@@ -29,8 +29,9 @@ def _make_execute_rows(*rows) -> MagicMock:
 
 def _make_tool(name: str, server_slug: str) -> MagicMock:
     tool = MagicMock()
-    # McpTool.name stores the namespaced identifier: "mcp_slug/tool_name"
-    tool.name = f"{server_slug}/{name}"
+    # McpTool.name stores the canonical namespaced identifier: "mcp_slug____tool_name"
+    tool.name = f"{server_slug}____{name}"
+    tool.original_name = name
     tool.server = MagicMock()
     tool.server.slug = server_slug
     return tool
@@ -68,12 +69,13 @@ async def test_calculate_allowed_tools_cache_miss_then_hit():
     allowed_second = await pm.calculate_allowed_tools(role_id, db)
 
     assert allowed_first == allowed_second
-    assert "save_result" in allowed_first  # always injected
+    # Phase 10: save_result is no longer auto-injected; empty role → empty set
+    assert allowed_first == set()
 
 
 @pytest.mark.asyncio
-async def test_calculate_allowed_tools_always_includes_save_result():
-    """save_result is always in the allowed set regardless of role assignments."""
+async def test_calculate_allowed_tools_empty_when_no_skills():
+    """Phase 10: save_result is no longer auto-injected; an empty role returns an empty set."""
     from app.services.agents.permission_manager import AgentPermissionManager
 
     pm = AgentPermissionManager()
@@ -87,7 +89,7 @@ async def test_calculate_allowed_tools_always_includes_save_result():
     ])
 
     allowed = await pm.calculate_allowed_tools(role_id, db)
-    assert "save_result" in allowed
+    assert allowed == set()
 
 
 # ── Cache invalidation ─────────────────────────────────────────────────────────
@@ -138,8 +140,8 @@ def test_check_tool_allowed_passes_when_in_set():
     pm = AgentPermissionManager()
     role_id = uuid.uuid4()
 
-    # Tool identifiers use mcp_slug/tool_name format (slash separator)
-    pm.check_tool_allowed("my-server/list_files", {"my-server/list_files", "save_result"}, role_id)
+    # Tool identifiers use canonical server____tool format.
+    pm.check_tool_allowed("my-server____list_files", {"my-server____list_files", "save_result"}, role_id)
 
 
 def test_check_tool_allowed_raises_permission_denied():
@@ -155,20 +157,20 @@ def test_check_tool_allowed_raises_permission_denied():
     assert "evil-server/drop_database" in str(exc_info.value)
 
 
-def test_tool_identifiers_use_slash_separator():
-    """Tool identifiers must use '/' separator (mcp_slug/tool_name), not ':' (legacy format)."""
+def test_tool_identifiers_use_canonical_separator():
+    """Tool identifiers must use canonical '____' separator (mcp_slug____tool_name)."""
     from app.services.agents.permission_manager import AgentPermissionManager
 
     pm = AgentPermissionManager()
     role_id = uuid.uuid4()
 
-    valid_identifier = "supabase/get_project"
+    valid_identifier = "supabase____get_project"
     legacy_identifier = "supabase:get_project"
 
-    # Valid slash-format is allowed
+    # Canonical format is allowed
     pm.check_tool_allowed(valid_identifier, {valid_identifier, "save_result"}, role_id)
 
-    # Legacy colon-format should NOT be in the allowed set (slash format is the only format)
+    # Legacy colon-format should NOT be in the allowed set.
     from app.services.agents.permission_manager import PermissionDeniedError
     with pytest.raises(PermissionDeniedError):
         pm.check_tool_allowed(legacy_identifier, {valid_identifier, "save_result"}, role_id)
@@ -220,9 +222,9 @@ async def test_resolve_allowed_tools_with_direct_skill():
 
     allowed = await pm.calculate_allowed_tools(role_id, db)
 
-    # Tool identifiers use mcp_slug/tool_name format (slash separator)
-    assert "fs-server/read_file" in allowed
-    assert "save_result" in allowed
+    # Tool identifiers use canonical server____tool format.
+    assert "fs-server____read_file" in allowed
+    # Phase 10: save_result is no longer auto-injected into the allowed set
 
 
 @pytest.mark.asyncio
@@ -241,7 +243,8 @@ async def test_resolve_allowed_tools_empty_when_no_assignments():
     ])
 
     allowed = await pm.calculate_allowed_tools(role_id, db)
-    assert allowed == {"save_result"}
+    # Phase 10: save_result is no longer auto-injected; empty role → empty set
+    assert allowed == set()
 
 
 @pytest.mark.asyncio
@@ -277,8 +280,8 @@ async def test_resolve_allowed_tools_deduplicates():
     ])
 
     allowed = await pm.calculate_allowed_tools(role_id, db)
-    # Should appear only once; tool identifiers use mcp_slug/tool_name format
-    assert list(allowed).count("hub/shared_tool") == 1
+    # Should appear only once; tool identifiers use canonical server____tool format.
+    assert list(allowed).count("hub____shared_tool") == 1
 
 
 # ── Circular SOP dependency ────────────────────────────────────────────────────
@@ -317,5 +320,5 @@ async def test_resolve_no_infinite_recursion_without_circular_sop():
 
     # Must complete without error or infinite recursion
     allowed = await pm.calculate_allowed_tools(role_id, db)
-    # Tool identifiers use mcp_slug/tool_name format (slash separator)
-    assert "analytics/analyze" in allowed
+    # Tool identifiers use canonical server____tool format.
+    assert "analytics____analyze" in allowed

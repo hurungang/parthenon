@@ -3,7 +3,8 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints, model_validator
+from sqlalchemy import inspect as sa_inspect
 
 from app.db.models.agents import (
     AgentIdentityStatus,
@@ -111,14 +112,27 @@ class AgentRoleRead(BaseModel):
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "AgentRoleRead":  # type: ignore[override]
-        """Extract sop_ids / skill_ids from ORM relationship lists."""
-        if hasattr(obj, "sop_assignments") and hasattr(obj, "skill_assignments"):
+        """Extract sop_ids / skill_ids without triggering lazy relationship loads."""
+        if hasattr(obj, "__tablename__"):
+            sop_ids: list[uuid.UUID] = []
+            skill_ids: list[uuid.UUID] = []
+
+            try:
+                insp = sa_inspect(obj)
+                if "sop_assignments" not in insp.unloaded:
+                    sop_ids = [a.sop_id for a in obj.sop_assignments]
+                if "skill_assignments" not in insp.unloaded:
+                    skill_ids = [a.skill_id for a in obj.skill_assignments]
+            except Exception:
+                # Keep default empty lists when inspection is unavailable.
+                pass
+
             data = {
                 "id": obj.id,
                 "name": obj.name,
                 "description": obj.description,
-                "sop_ids": [a.sop_id for a in obj.sop_assignments],
-                "skill_ids": [a.skill_id for a in obj.skill_assignments],
+                "sop_ids": sop_ids,
+                "skill_ids": skill_ids,
                 "created_at": obj.created_at,
                 "updated_at": obj.updated_at,
             }
@@ -166,8 +180,28 @@ class AgentIdentityRead(BaseModel):
     realm_username: str | None
     status: AgentIdentityStatus
     token_expires_at: datetime | None
+    has_refresh_token: bool = False  # True when an encrypted refresh token is stored
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _compute_has_refresh_token(cls, v: Any) -> Any:
+        """Derive has_refresh_token from the ORM model without exposing the encrypted token."""
+        if not isinstance(v, dict) and hasattr(v, "refresh_token"):
+            return {
+                "id": v.id,
+                "name": v.name,
+                "identity_type": v.identity_type,
+                "realm_name": v.realm_name,
+                "realm_username": v.realm_username,
+                "status": v.status,
+                "token_expires_at": v.token_expires_at,
+                "has_refresh_token": v.refresh_token is not None,
+                "created_at": v.created_at,
+                "updated_at": v.updated_at,
+            }
+        return v
 
 
 class AgentIdentityOAuthAuthorizeResponse(BaseModel):

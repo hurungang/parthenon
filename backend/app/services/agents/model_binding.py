@@ -1,14 +1,17 @@
 """Model Binding Layer — resolves LLM provider config from ModelConfig and sends prompts."""
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from sqlalchemy import select
 
 from app.core.credential_vault import get_vault
+from app.core.ssl_context import get_ssl_context
 from app.db.models.agents import AgentType, ModelConfig, ModelProvider
-from app.db.session import AsyncSession
+
+if TYPE_CHECKING:
+    from app.agent_runtime.data_client import ControlCenterDataClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +35,12 @@ class ModelBindingLayer:
     """
 
     async def resolve_model_config(
-        self, model_id: str, db: AsyncSession
+        self, model_id: str, db: "AsyncSession"
     ) -> ModelConfig:
         """Find the ModelConfig whose enabled_models list contains model_id.
+
+        Used by Control Center (has DB access).  Agent Runtime uses
+        ``fetch_model_config_via_client`` instead.
 
         Raises ModelBindingError if no config has the model enabled.
         """
@@ -47,6 +53,79 @@ class ModelBindingLayer:
             f"No ModelConfig found with model '{model_id}' in its enabled_models list. "
             "Add the model to a provider configuration's enabled models first."
         )
+
+    async def fetch_model_config_via_client(
+        self, model_config_id: str, data_client: "ControlCenterDataClient"
+    ) -> dict[str, Any]:
+        """Return model config dict with decrypted credentials from Control Center.
+
+        Used by Agent Runtime (no DB access).  model_config_id is a UUID string
+        resolved by the CC agent context endpoint.
+
+        Returns dict with keys: id, display_name, provider_type, api_base_url,
+        api_key (decrypted), enabled_models.
+        """
+        import uuid
+
+        return await data_client.get_model_config(uuid.UUID(model_config_id))
+
+    async def complete_from_context(
+        self,
+        model_id: str,
+        model_config_dict: dict[str, Any],
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Send a chat completion using context dicts from the CC data API.
+
+        Used by Agent Runtime where there are no ORM objects.
+
+        Args:
+            model_id: The model identifier string (e.g. "gpt-4o").
+            model_config_dict: Dict from ``data_client.get_model_config()``.
+                Keys: provider_type, api_base_url, api_key (decrypted).
+            messages: Chat messages.
+            tools: Optional tool definitions.
+            max_tokens: Maximum tokens in the response.
+        """
+        provider = model_config_dict.get("provider_type")
+        base_url = model_config_dict.get("api_base_url")
+        api_key = model_config_dict.get("api_key")  # already decrypted by CC
+
+        if provider in ("openai", "litellm_proxy"):
+            endpoint = (
+                f"{base_url.rstrip('/')}/chat/completions" if base_url else OPENAI_DEFAULT_ENDPOINT
+            )
+            return await self._call_openai_compat(
+                api_key=api_key,
+                model=model_id,
+                endpoint=endpoint,
+                messages=messages,
+                tools=tools,
+                max_tokens=max_tokens,
+            )
+        elif provider == "anthropic":
+            return await self._call_anthropic(
+                api_key=api_key,
+                model=model_id,
+                messages=messages,
+                max_tokens=max_tokens,
+            )
+        elif provider == "azure_openai":
+            if not base_url:
+                raise ModelBindingError("azure_openai provider requires api_base_url")
+            endpoint = f"{base_url.rstrip('/')}/openai/deployments/{model_id}/chat/completions?api-version=2024-02-01"
+            return await self._call_openai_compat(
+                api_key=api_key,
+                model=model_id,
+                endpoint=endpoint,
+                messages=messages,
+                tools=tools,
+                max_tokens=max_tokens,
+            )
+        else:
+            raise ModelBindingError(f"Unsupported provider: {provider}")
 
     async def complete(
         self,
@@ -156,7 +235,7 @@ class ModelBindingLayer:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, verify=get_ssl_context()) as client:
             response = await client.post(endpoint, json=payload, headers=headers)
             if response.status_code >= 400:
                 # Capture error details from response body
@@ -204,7 +283,7 @@ class ModelBindingLayer:
         if api_key:
             headers["x-api-key"] = api_key
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, verify=get_ssl_context()) as client:
             response = await client.post(ANTHROPIC_DEFAULT_ENDPOINT, json=payload, headers=headers)
             if response.status_code >= 400:
                 # Capture error details from response body

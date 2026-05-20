@@ -26,7 +26,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 |-----------|-------------|
 | `AgentSessionService` | Enqueues sessions (`INSERT` with `status = queued`), manages state transitions (`queued → running → completed / failed`), persists results; tracks `conversation_history` for conversational agents |
 | `SessionDispatcher` | Background worker; polls `queued` sessions using `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor`; manages concurrency |
-| `AgentRuntimeExecutor` | Orchestrates agent execution using the LangChain deep agent observe-reason-act loop; validates that the agent identity is assigned to the agent role via `agent_role_identities` before execution; raises `PermissionDeniedError` if not; captures `ExecutionLogEntry` (system instruction + user prompt) before first LLM call; loads MCP session context from role's assigned sessions and injects pre-configured parameters into the system instruction; persists result via `save_result` |
+| `AgentRuntimeExecutor` | Orchestrates agent execution using the LangChain deep agent observe-reason-act loop; validates that the agent identity is assigned to the agent role via `agent_role_identities` before execution; raises `PermissionDeniedError` if not; captures `ExecutionLogEntry` (system instruction + user prompt) before first LLM call; loads MCP session context from role's assigned sessions and injects pre-configured parameters into the system instruction; detects passthrough sessions and retrieves the executing agent's identity JWT via `_get_agent_identity_jwt()`; persists result via `save_result` |
 | `TaskAgentLoop` | LangChain deep agent loop for task-based agents; observe-reason-act context producing a single structured or markdown result | 
 | `ConversationalAgentLoop` | LangChain deep agent loop for conversational agents; multi-turn observe-reason-act loop with `conversation_history` state |
 | `ModelBindingLayer` | Resolves `AgentType.model_id` string to a matching `ModelConfig` (scans `enabled_models`; falls back to provider-prefix matching); instantiates the correct LangChain/LiteLLM client; sends chat completion requests |
@@ -100,7 +100,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `POST` | `/api/v1/agents/roles/{role_id}/mcp-sessions` | Assign MCP session to role; one-session-per-server enforced |
 | `DELETE` | `/api/v1/agents/roles/{role_id}/mcp-sessions/{session_id}` | Remove MCP session from role |
 | `GET` | `/api/v1/agents/roles/{role_id}/mcp-sessions` | List MCP sessions assigned to role |
-| `GET` | `/api/v1/agents/roles/{role_id}/available-mcp-sessions` | List assignable MCP sessions filtered by servers whose tools the role uses |
+| `GET` | `/api/v1/agents/roles/{role_id}/available-mcp-sessions` | List assignable MCP sessions filtered by servers whose tools the role uses; each item includes `auth_type` |
 
 ### Agent Identities
 
@@ -212,14 +212,16 @@ The agents module is the central execution layer for AI agents on the platform. 
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `AgentRoleService` | class | Role CRUD; `assign_identities()`, `remove_identity()`, `list_identities()`, `is_identity_assigned()`; MCP session assignment with one-session-per-server enforcement; invalidates permission cache on writes | `backend/app/services/agents/role_service.py` |
+| `AgentRoleService` | class | Role CRUD; `assign_identities()`, `remove_identity()`, `list_identities()`, `is_identity_assigned()`; MCP session assignment with one-session-per-server enforcement; `get_available_mcp_sessions()` includes `auth_type` in returned session dicts; invalidates permission cache on writes | `backend/app/services/agents/role_service.py` |
 | `AgentIdentityService` | class | Identity CRUD; OAuth authorize URL generation; token exchange and encrypted storage; `refresh_token()`, `get_reauth_url()`; `assign_roles()`, `remove_role()`, `list_roles()` | `backend/app/services/agents/identity_service.py` |
 | `AgentPermissionManager` | class | Resolves `AgentRole → SOPs → Skills → MCP tools`; tool identifiers use `mcp_slug/tool_name`; LRU cache keyed on `role_id`; `invalidate(role_id)` called on role writes | `backend/app/services/agents/permission_manager.py` |
 | `RealmManager` | class | Agent realm initialization in OIDC provider; realm-level token policies; registers platform OAuth client | `backend/app/services/identity/realm_manager.py` |
 | `TokenRefreshService` | class | Background proactive token refresh for agent identities approaching expiry; updates `AgentIdentity` with re-encrypted token pair | `backend/app/services/agents/token_refresh_service.py` |
 | `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
 | `SessionDispatcher` | class | Background dispatch worker; `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor` | `backend/app/services/agents/session_dispatcher.py` |
-| `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction | `backend/app/services/agents/runtime_executor.py` |
+| `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token | `backend/app/services/agents/runtime_executor.py` |
+| `_get_agent_identity_jwt` | method | `AgentRuntimeExecutor._get_agent_identity_jwt()`; decrypts the executing agent's identity access token from the credential vault for passthrough sessions; returns error dict if token unavailable | `backend/app/services/agents/runtime_executor.py` |
+| `_load_role_mcp_session_map` | method | `AgentRuntimeExecutor._load_role_mcp_session_map()`; returns `{session_id, auth_type}` per server; used to detect passthrough sessions at execution time | `backend/app/services/agents/runtime_executor.py` |
 | `TaskAgentLoop` | class | LangChain deep agent loop for task-based agents; single result output | `backend/app/services/agents/agent_loop.py` |
 | `ConversationalAgentLoop` | class | LangChain deep agent loop for conversational agents; multi-turn with `conversation_history` state | `backend/app/services/agents/agent_loop.py` |
 | `ModelBindingLayer` | class | Resolves `AgentType.model_id` string to a `ModelConfig`; instantiates correct LangChain/LiteLLM client; sends chat completion requests | `backend/app/services/agents/model_binding.py` |
@@ -258,7 +260,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentRoleListPage` | component | Table view; Name, SOP count chip, Skill count chip, Edit/Delete actions | `frontend/src/pages/agents/AgentRoleListPage.tsx` |
 | `AgentRoleDialog` | component | Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); assigned identities and MCP sessions with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
 | `AssignIdentitiesToRoleDialog` | component | Multi-select dialog to bulk-assign identities to a role | `frontend/src/pages/agents/AssignIdentitiesToRoleDialog.tsx` |
-| `AssignMcpSessionsToRoleDialog` | component | Multi-select dialog to assign MCP sessions to a role; filtered by servers whose tools the role uses; one-session-per-server enforced | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` |
+| `AssignMcpSessionsToRoleDialog` | component | Multi-select dialog to assign MCP sessions to a role; filtered by servers whose tools the role uses; Passthrough chip shown for passthrough sessions; passthrough sessions may coexist with other sessions per server (no one-session-per-server enforcement for passthrough) | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` |
 | `AgentIdentityListPage` | component | Table view; realm_name, realm_username, token status chip, identity status chip; Refresh Token and Re-Authenticate per row | `frontend/src/pages/agents/AgentIdentityListPage.tsx` |
 | `AgentIdentityDialog` | component | Create/edit; realm_name, realm_username; "Sign In as Agent" OAuth button opens agent realm popup; reflects token status after callback | `frontend/src/pages/agents/AgentIdentityDialog.tsx` |
 | `AssignRolesToIdentityDialog` | component | Multi-select dialog to bulk-assign roles to an identity | `frontend/src/pages/agents/AssignRolesToIdentityDialog.tsx` |
@@ -298,6 +300,13 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `WorkingStep` | interface | Single LLM iteration or tool call: `message`, `timestamp`, `iconType: WorkingStepIconType`, and optional `detail: WorkingStepDetail` | `frontend/src/types/index.ts` |
 | `WorkingStepDetail` | interface | Collapsible detail block for a step: `label` and `content` string | `frontend/src/types/index.ts` |
 | `WorkingStepIconType` | type alias | `'llm' \| 'tool' \| 'success' \| 'error' \| 'info'` | `frontend/src/types/index.ts` |
+
+### Test Files
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_agent_runtime_executor` | test module | Unit tests for `AgentRuntimeExecutor`; 2 passthrough tests: proxy called with `agent_jwt`, error returned when no JWT available | `backend/tests/unit/test_agent_runtime_executor.py` |
+| `AssignMcpSessionsToRoleDialog.test` | test module | Component tests for `AssignMcpSessionsToRoleDialog`; 2 passthrough tests: Passthrough chip shown for passthrough session, chip absent for regular sessions | `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` |
 
 ### Frontend Components (`frontend/src/components/agents/`)
 

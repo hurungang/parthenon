@@ -19,6 +19,11 @@ vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
   default: () => <div data-testid="topology-diagram" />,
 }))
 
+// Mock ConversationDialog to avoid WebSocket complexity in these tests
+vi.mock('../components/agents/ConversationDialog', () => ({
+  ConversationDialog: () => <div data-testid="conversation-dialog" />,
+}))
+
 // Override default form values so input_type starts as 'typed', not 'none'.
 // This bypasses the primarySop validation in handleSave and lets plan preview tests work.
 vi.mock('../pages/agents/AgentTypeForm', async () => {
@@ -155,16 +160,16 @@ describe('AgentManagementPage', () => {
   it('renders Launch (PlayArrow) button per agent type row', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
-    // Tooltip wraps icon button with aria-label agents.types.launch
-    expect(screen.getByRole('button', { name: 'agents.types.launch' })).toBeDefined()
+    // Tooltip wraps icon button with aria-label agents.types.runAgent (since mock is typed)
+    expect(screen.getByRole('button', { name: 'agents.types.runAgent' })).toBeDefined()
   })
 
   it('opens AgentJobLaunchDialog when Launch is clicked', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
 
-    // Find and click the launch button by its accessible name
-    const launchBtn = screen.getByRole('button', { name: 'agents.types.launch' })
+    // Find and click the launch button by its accessible name (mock agent is typed, so runAgent)
+    const launchBtn = screen.getByRole('button', { name: 'agents.types.runAgent' })
     await act(async () => {
       fireEvent.click(launchBtn)
     })
@@ -175,6 +180,36 @@ describe('AgentManagementPage', () => {
     })
   })
 
+  it('opens ConversationDialog when Launch is clicked for conversation agent', async () => {
+    // Mock a conversation agent type
+    const conversationAgent = {
+      ...MOCK_AGENT_TYPES[0],
+      id: 'at-conv',
+      name: 'Chat Agent',
+      input_type: 'conversation',
+    }
+    vi.mocked(apiClient.get).mockResolvedValue({ data: [conversationAgent] })
+
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+
+    // Wait for agent types to load
+    await waitFor(() => {
+      expect(screen.getByText('Chat Agent')).toBeDefined()
+    })
+
+    // Find and click the launch button (should say 'Start Chat' for conversation agents)
+    const launchBtn = screen.getByRole('button', { name: 'agents.types.startChat' })
+    await act(async () => {
+      fireEvent.click(launchBtn)
+    })
+
+    // Conversation dialog should open (mocked as div with testid)
+    await waitFor(() => {
+      expect(screen.getByTestId('conversation-dialog')).toBeDefined()
+    })
+  })
+
   it('renders Edit button per agent type row', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
@@ -182,9 +217,9 @@ describe('AgentManagementPage', () => {
   })
 })
 
-// ── Plan preview state management tests ───────────────────────────────────────
+// ── Post-save navigation tests ─────────────────────────────────────────────────
 
-describe('AgentManagementPage — plan preview state', () => {
+describe('AgentManagementPage — post-save navigation', () => {
   beforeEach(() => {
     // Reset mock results before each test
     mockPostResult = { data: {} }
@@ -192,7 +227,7 @@ describe('AgentManagementPage — plan preview state', () => {
     vi.clearAllMocks()
   })
 
-  it('opens PlanPreviewModal after successful create when response includes plan', async () => {
+  it('opens AgentTypeDetailsDialog after successful create (agent has plan)', async () => {
     const savedAgentType = {
       id: 'at-new',
       name: 'New Agent',
@@ -216,55 +251,6 @@ describe('AgentManagementPage — plan preview state', () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
 
-    // Open create dialog
-    fireEvent.click(screen.getByRole('button', { name: /agents\.createType/i }))
-
-    // Fill in the required name field
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeDefined()
-    })
-
-    // Find and fill the name input
-    const nameInputs = screen.getAllByRole('textbox')
-    const nameInput = nameInputs[0]
-    fireEvent.change(nameInput, { target: { value: 'New Agent' } })
-
-    // Click Save
-    const saveBtn = screen.getByRole('button', { name: /app\.save/i })
-    await act(async () => {
-      fireEvent.click(saveBtn)
-    })
-
-    // PlanPreviewModal should open — look for plan step names
-    await waitFor(() => {
-      expect(screen.getByText('Gather Info')).toBeDefined()
-    })
-  })
-
-  it('opens PlanPreviewModal with failed plan message when generation failed', async () => {
-    const savedAgentTypeWithFailedPlan = {
-      id: 'at-fail',
-      name: 'Failed Plan Agent',
-      description: null,
-      identity_id: null,
-      role_id: null,
-      model_id: null,
-      system_instruction: null,
-      input_type: 'typed',
-      input_schema: null,
-      output_type: 'markdown',
-      output_schema: null,
-      primary_sop_id: null,
-      is_active: true,
-      created_at: '2026-05-09T12:00:00Z',
-      updated_at: '2026-05-09T12:00:00Z',
-      plan: MOCK_FAILED_PLAN,
-    }
-    mockPostResult = { data: savedAgentTypeWithFailedPlan }
-
-    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
-    render(<AgentManagementPage />, { wrapper })
-
     fireEvent.click(screen.getByRole('button', { name: /agents\.createType/i }))
 
     await waitFor(() => {
@@ -272,24 +258,24 @@ describe('AgentManagementPage — plan preview state', () => {
     })
 
     const nameInputs = screen.getAllByRole('textbox')
-    fireEvent.change(nameInputs[0], { target: { value: 'Failed Plan Agent' } })
+    fireEvent.change(nameInputs[0], { target: { value: 'New Agent' } })
 
     const saveBtn = screen.getByRole('button', { name: /app\.save/i })
     await act(async () => {
       fireEvent.click(saveBtn)
     })
 
-    // Plan modal should open with the error message
+    // Create dialog closes; PlanPreviewModal is never shown
     await waitFor(() => {
-      expect(screen.getByText('agents.plan.generationFailed')).toBeDefined()
+      expect(screen.queryByText('agents.plan.previewTitle')).toBeNull()
     })
-    // The generation_error text should be visible
+    // AgentTypeDetailsDialog opens (title shows the dialog heading i18n key while loading)
     await waitFor(() => {
-      expect(screen.getByText('LLM unavailable')).toBeDefined()
+      expect(screen.getByText('agents.types.dialogTitle')).toBeDefined()
     })
   })
 
-  it('does not open PlanPreviewModal when save response has no plan field', async () => {
+  it('opens AgentTypeDetailsDialog after save even without a plan', async () => {
     const savedAgentTypeNoPlan = {
       id: 'at-noplan',
       name: 'No Plan Agent',
@@ -306,7 +292,6 @@ describe('AgentManagementPage — plan preview state', () => {
       is_active: true,
       created_at: '2026-05-09T12:00:00Z',
       updated_at: '2026-05-09T12:00:00Z',
-      // no plan field
     }
     mockPostResult = { data: savedAgentTypeNoPlan }
 
@@ -327,10 +312,13 @@ describe('AgentManagementPage — plan preview state', () => {
       fireEvent.click(saveBtn)
     })
 
-    // Plan modal should NOT open — no previewTitle i18n key in the DOM
+    // PlanPreviewModal never opens
     await waitFor(() => {
-      // The edit/create dialog should have closed
       expect(screen.queryByText('agents.plan.previewTitle')).toBeNull()
+    })
+    // AgentTypeDetailsDialog opens
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.dialogTitle')).toBeDefined()
     })
   })
 })

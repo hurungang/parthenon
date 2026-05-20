@@ -50,9 +50,15 @@ vi.mock('../components/permissions/PermissionDeniedAlert', () => ({
   ),
 }))
 
+const { mockApiGet, mockApiPost } = vi.hoisted(() => ({
+  mockApiGet: vi.fn(),
+  mockApiPost: vi.fn(),
+}))
+
 vi.mock('../api/apiClient', () => ({
   default: {
-    get: vi.fn().mockResolvedValue({ data: [] }),
+    get: mockApiGet,
+    post: mockApiPost,
   },
 }))
 
@@ -151,6 +157,13 @@ describe('AgentTypeDetailsDialog', () => {
     mockAgentTypeLoading = false
     mockAgentTypeError = null
     vi.resetAllMocks()
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/roles') {
+        return { data: [] }
+      }
+      return { data: [] }
+    })
+    mockApiPost.mockResolvedValue({ data: {} })
   })
 
   it('shows loading spinner when data is loading', async () => {
@@ -220,11 +233,11 @@ describe('AgentTypeDetailsDialog', () => {
     const tabs = screen.getAllByRole('tab')
     expect(tabs.length).toBe(3)
     expect(tabs[0].textContent).toBe('agents.types.detailsTab')
-    expect(tabs[1].textContent).toBe('agents.types.planPreviewTab')
+    expect(tabs[1].textContent).toBe('agents.types.agentPreviewTab')
     expect(tabs[2].textContent).toBe('agents.types.executionLogsTab')
   })
 
-  it('shows no-plan placeholder on Plan Preview tab when plan is null', async () => {
+  it('shows no-plan placeholder on Agent Preview tab when plan is null', async () => {
     mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: null }
 
     const { AgentTypeDetailsDialog } = await import(
@@ -240,7 +253,7 @@ describe('AgentTypeDetailsDialog', () => {
     expect(screen.getByTestId('no-plan')).toBeDefined()
   })
 
-  it('shows plan content on Plan Preview tab when plan is populated', async () => {
+  it('shows plan content on Agent Preview tab when plan is populated', async () => {
     mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: MOCK_PLAN }
 
     const { AgentTypeDetailsDialog } = await import(
@@ -254,6 +267,122 @@ describe('AgentTypeDetailsDialog', () => {
     })
 
     expect(screen.getByTestId('plan-content')).toBeDefined()
+  })
+
+  it('shows regenerate plan button on Agent Preview tab', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: MOCK_PLAN }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    expect(screen.getByRole('button', { name: 'Regenerate plan' })).toBeDefined()
+  })
+
+  it('shows a stale plan warning when the role has newer updates', async () => {
+    mockAgentTypeData = {
+      ...MOCK_AGENT_TYPE,
+      input_type: 'conversation',
+      plan: MOCK_PLAN,
+    }
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === '/agents/roles') {
+        return {
+          data: [
+            {
+              id: 'role-1',
+              name: 'Research Role',
+              description: null,
+              sop_ids: ['sop-1'],
+              skill_ids: ['skill-1'],
+              allowed_identity_types: [],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-02-01T00:00:00Z',
+            },
+          ],
+        }
+      }
+      if (url === '/sops') {
+        return {
+          data: [
+            {
+              id: 'sop-1',
+              name: 'Research SOP',
+              description: null,
+              instructions: null,
+              is_active: true,
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-02-01T00:00:00Z',
+              required_skill_ids: [],
+            },
+          ],
+        }
+      }
+      if (url === '/skills') {
+        return {
+          data: [
+            {
+              id: 'skill-1',
+              name: 'Research Skill',
+              description: null,
+              instructions: null,
+              instructions_with_tools: null,
+              is_active: true,
+              tool_ids: [],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-02-01T00:00:00Z',
+            },
+          ],
+        }
+      }
+      return { data: [] }
+    })
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'This plan is older than the current role, SOPs, and skills definitions.',
+        ),
+      ).toBeDefined()
+    })
+  })
+
+  it('calls the regenerate-plan endpoint when the button is clicked', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, plan: MOCK_PLAN }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Regenerate plan' }))
+    })
+
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/agents/types/at-1/regenerate-plan')
+    })
   })
 
   it('shows session list on Execution Logs tab', async () => {
@@ -437,7 +566,7 @@ describe('AgentTypeDetailsDialog', () => {
       { wrapper },
     )
 
-    // Switch to Plan Preview tab
+    // Switch to Agent Preview tab
     const tabs = screen.getAllByRole('tab')
     await act(async () => {
       fireEvent.click(tabs[1])

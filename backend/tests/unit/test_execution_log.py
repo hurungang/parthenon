@@ -108,9 +108,10 @@ async def test_capture_prompt_log_stores_both_fields():
             db=db,
         )
 
-    # _capture_prompt_log writes two rows: AgentPromptLog + ExecutionLogEntry(prompt_captured)
-    assert db.add.call_count == 2
-    assert db.flush.call_count == 2
+    # After FIX-20260518-012042: only AgentPromptLog written via db.add;
+    # the prompt_captured ExecutionLogEntry now routes through CC data API.
+    assert db.add.call_count == 1
+    assert db.flush.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -129,8 +130,9 @@ async def test_capture_prompt_log_accepts_none_fields():
         db=db,
     )
 
-    # _capture_prompt_log writes two rows: AgentPromptLog + ExecutionLogEntry(prompt_captured)
-    assert db.add.call_count == 2
+    # After FIX-20260518-012042: only AgentPromptLog written via db.add;
+    # the prompt_captured ExecutionLogEntry now routes through CC data API.
+    assert db.add.call_count == 1
 
 
 @pytest.mark.asyncio

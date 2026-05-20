@@ -39,6 +39,8 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import SecurityIcon from '@mui/icons-material/Security'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import GroupIcon from '@mui/icons-material/Group'
+import ListAltIcon from '@mui/icons-material/ListAlt'
 import { useAuthStore } from '../stores/authStore'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
 
@@ -66,7 +68,6 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: 'nav.gateway', path: '/gateway', icon: <GatewayIcon /> },
   { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
   { labelKey: 'nav.results', path: '/results', icon: <FolderIcon /> },
-  { labelKey: 'nav.notifications', path: '/notifications', icon: <NotificationsIcon /> },
   { labelKey: 'nav.observability', path: '/observability', icon: <MonitorIcon /> },
   { labelKey: 'nav.permissions', path: '/user-permissions', icon: <SecurityIcon /> },
 ]
@@ -84,6 +85,17 @@ const AI_AGENT_GROUP: NavGroup = {
   ],
 }
 
+const NOTIFICATIONS_GROUP: NavGroup = {
+  groupKey: 'notifications',
+  labelKey: 'nav.notifications',
+  icon: <NotificationsIcon />,
+  children: [
+    { labelKey: 'nav.notificationChannels', path: '/admin/notifications/channels', icon: <HubIcon /> },
+    { labelKey: 'nav.recipientGroups', path: '/admin/notifications/groups', icon: <GroupIcon /> },
+    { labelKey: 'nav.notificationLogs', path: '/admin/notifications/logs', icon: <ListAltIcon /> },
+  ],
+}
+
 /**
  * Top-level layout: navigation drawer, header, and outlet for page content.
  */
@@ -94,11 +106,15 @@ export function AppShell() {
   const { claims, logout } = useAuthStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [aiAgentGroupExpanded, setAiAgentGroupExpanded] = useState(true)
+  const [notificationsGroupExpanded, setNotificationsGroupExpanded] = useState(true)
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen)
 
   const isAiAgentGroupActive =
     location.pathname.startsWith('/agents') || location.pathname === '/conversations'
+
+  const isNotificationsGroupActive =
+    location.pathname.startsWith('/admin/notifications')
 
   const drawerContent = (
     <Box>
@@ -150,8 +166,49 @@ export function AppShell() {
           </List>
         </Collapse>
 
-        {/* Items after AI Agent group (Gateway onwards) */}
-        {NAV_ITEMS.slice(5).map((item) => (
+        {/* Items between groups (Gateway, Schedules, Results) */}
+        {NAV_ITEMS.slice(5, 8).map((item) => (
+          <ListItem key={item.path} disablePadding>
+            <ListItemButton
+              selected={location.pathname === item.path}
+              onClick={() => { navigate(item.path); setMobileOpen(false) }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={t(item.labelKey)} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+
+        {/* Notifications collapsible group */}
+        <ListItem disablePadding>
+          <ListItemButton
+            selected={isNotificationsGroupActive && !notificationsGroupExpanded}
+            onClick={() => setNotificationsGroupExpanded((prev) => !prev)}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>{NOTIFICATIONS_GROUP.icon}</ListItemIcon>
+            <ListItemText primary={t(NOTIFICATIONS_GROUP.labelKey)} />
+            {notificationsGroupExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </ListItemButton>
+        </ListItem>
+        <Collapse in={notificationsGroupExpanded} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {NOTIFICATIONS_GROUP.children.map((child) => (
+              <ListItem key={child.path} disablePadding>
+                <ListItemButton
+                  selected={location.pathname === child.path}
+                  onClick={() => { navigate(child.path); setMobileOpen(false) }}
+                  sx={{ pl: 4 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 36 }}>{child.icon}</ListItemIcon>
+                  <ListItemText primary={t(child.labelKey)} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+
+        {/* Items after Notifications group (Observability, Permissions) */}
+        {NAV_ITEMS.slice(8).map((item) => (
           <ListItem key={item.path} disablePadding>
             <ListItemButton
               selected={location.pathname === item.path}

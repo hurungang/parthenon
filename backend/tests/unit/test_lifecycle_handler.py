@@ -18,7 +18,19 @@ def _make_job(session_id: uuid.UUID | None = None) -> MagicMock:
 
 
 def _mock_db() -> AsyncMock:
-    return AsyncMock()
+    db = AsyncMock()
+    # lifecycle_handler.launch() does db.execute(select(AgentType)...).scalar_one_or_none()
+    # AsyncMock attributes are also AsyncMock — calling them returns coroutines, not values.
+    # Provide a synchronous MagicMock as the execute return value so scalar_one_or_none()
+    # returns a plain MagicMock (not a coroutine).
+    from app.db.models.agents import AgentInputType
+    agent_type_mock = MagicMock()
+    agent_type_mock.input_type = AgentInputType.typed
+    agent_type_mock.name = "test-agent"
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = agent_type_mock
+    db.execute.return_value = execute_result
+    return db
 
 
 # ── launch() — routes through AgentSessionService.enqueue ─────────────────────

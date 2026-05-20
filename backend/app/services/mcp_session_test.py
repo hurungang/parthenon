@@ -48,6 +48,13 @@ async def test_mcp_session_connection(
         # Prepare headers based on auth type
         headers: dict[str, str] = {}
         
+        # Passthrough sessions: no credential test required — return immediate success
+        if session.auth_type == McpSessionAuthType.passthrough:
+            return ConnectionTestResult(
+                success=True,
+                message="Passthrough session — no credential test required",
+            )
+
         # Decrypt credentials if present
         credentials: dict[str, Any] | None = None
         if session.encrypted_credentials:

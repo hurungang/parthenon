@@ -9,12 +9,17 @@ import {
   CircularProgress,
   Chip,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
+import Autocomplete from '@mui/material/Autocomplete'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
@@ -26,12 +31,13 @@ import PermissionDeniedAlert from '../../components/permissions/PermissionDenied
 import type { AgentRole, McpTool, Skill } from '../../types'
 
 interface SkillEditorProps {
+  open: boolean
   skill: Skill | null
   onClose: () => void
   onSaved: () => void
 }
 
-export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
+export function SkillEditor({ open, skill, onClose, onSaved }: SkillEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
@@ -41,6 +47,7 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
   const [editorError, setEditorError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const [toolRefOpen, setToolRefOpen] = useState(false)
+  const [filterServerSlugs, setFilterServerSlugs] = useState<string[]>([])
 
   const { data: allTools } = useAllTools()
   const { data: servers } = useMcpServers()
@@ -79,6 +86,7 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
     }
     setEditorError(null)
     setToolRefOpen(false)
+    setFilterServerSlugs([])
   }, [skill])
 
   // Populate instructions from detail fetch (detail has the full instructions field)
@@ -111,6 +119,14 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
     }
     return groups
   }, [allTools, serverMap])
+
+  // Filter tool groups by selected server slugs
+  const filteredToolsByServer = useMemo(() => {
+    if (filterServerSlugs.length === 0) return toolsByServer
+    return Object.fromEntries(
+      Object.entries(toolsByServer).filter(([slug]) => filterServerSlugs.includes(slug)),
+    )
+  }, [toolsByServer, filterServerSlugs])
 
   const toggleTool = (toolId: string) => {
     setSelectedToolIds((prev) =>
@@ -164,17 +180,19 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
   }, [skillDetail])
 
   return (
-    <Box sx={{ borderLeft: 1, borderColor: 'divider', pl: 3, minWidth: 480 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">
-          {skill ? t('skills.editSkill') : t('skills.createSkill')}
-        </Typography>
-        <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
-      </Box>
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Typography variant="h6">
+            {skill ? t('skills.editSkill') : t('skills.createSkill')}
+          </Typography>
+          <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+        </Box>
+      </DialogTitle>
+      <DialogContent dividers>
+        {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
 
-      {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
-
-      <Stack spacing={2}>
+        <Stack spacing={2} sx={{ mt: 1 }}>
         {/* Basic Info */}
         <Card variant="outlined">
           <CardContent>
@@ -262,8 +280,29 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
             <Typography variant="subtitle2" mb={1}>{t('skills.editor.mcpTools')}</Typography>
             {!allTools ? (
               <CircularProgress size={20} />
+            ) : allTools.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                {t('skills.editor.noToolsAvailable')}
+              </Typography>
             ) : (
-              Object.entries(toolsByServer).map(([slug, tools]) => (
+              <>
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={Object.keys(toolsByServer)}
+                  value={filterServerSlugs}
+                  onChange={(_, newValue) => setFilterServerSlugs(newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label={t('skills.editor.filterByServer')} size="small" />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip {...getTagProps({ index })} key={option} label={option} size="small" />
+                    ))
+                  }
+                  sx={{ mb: 2 }}
+                />
+                {Object.entries(filteredToolsByServer).map(([slug, tools]) => (
                 <Box key={slug} mb={1}>
                   <Typography variant="caption" color="primary" fontWeight={600}>
                     <Chip label={slug} size="small" color="primary" variant="outlined" sx={{ mb: 0.5 }} />
@@ -290,11 +329,12 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
                           )}
                         </Box>
                       }
-                      sx={{ display: 'flex', ml: 1 }}
+                          sx={{ display: 'flex', ml: 1 }}
                     />
                   ))}
                 </Box>
-              ))
+              ))}
+              </>
             )}
           </CardContent>
         </Card>
@@ -323,14 +363,15 @@ export function SkillEditor({ skill, onClose, onSaved }: SkillEditorProps) {
           </CardContent>
         </Card>
 
-        <Box display="flex" justifyContent="flex-end" gap={1}>
-          <Button onClick={onClose} disabled={saving}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving || !form.name}>
-            {saving ? t('app.loading') : t('app.save')}
-          </Button>
-        </Box>
-      </Stack>
-    </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>{t('app.cancel')}</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving || !form.name}>
+          {saving ? t('app.loading') : t('app.save')}
+        </Button>
+      </DialogActions>
+    </Dialog>
   )
 }
 

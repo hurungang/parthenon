@@ -103,11 +103,12 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | `YamlSettingsSource` | class | `PydanticBaseSettingsSource` subclass that reads a domain-specific `config/<domain>.yaml` file and feeds its values into `Settings` as the second-priority source after env vars | `backend/app/core/config.py` |
 | `get_db` | function | FastAPI dependency providing a scoped async SQLAlchemy session per request | `backend/app/db/session.py` |
 | `OIDCClient` | class | Fetches and caches JWKS; validates JWT signatures, expiry, and audience claims | `backend/app/core/oidc_client.py` |
-| `JWTAuthMiddleware` | class | Starlette middleware validating bearer tokens on all protected routes; attaches identity claims to request state | `backend/app/middleware/auth.py` |
+| `JWTAuthMiddleware` | class | Starlette middleware validating bearer tokens on all protected routes; attaches identity claims to `request.state`; also stores the raw bearer token string on `request.state.raw_token` immediately after extraction (used by passthrough session endpoints for JWT forwarding) | `backend/app/middleware/auth.py` |
 | `CredentialVault` | class | AES-256 encrypt/decrypt wrapper for stored credentials; decrypt at call time only | `backend/app/core/credential_vault.py` |
 | `setup_telemetry` | function | Configures TracerProvider, MeterProvider, and LoggerProvider with OTLP exporters; applies auto-instrumentation | `backend/app/core/telemetry.py` |
 | `_instrument_libraries` | function | Applies OTEL auto-instrumentation patches for FastAPI, SQLAlchemy, Redis, and httpx; isolated for fault tolerance | `backend/app/core/telemetry.py` |
 | `limiter` | object | Global slowapi.Limiter instance with remote-address key function; attached to app.state | `backend/app/main.py` |
+| `validation_exception_handler` | function | FastAPI exception handler for `RequestValidationError`; converts Pydantic v2 `model_validator` exception objects in `ctx` to strings before JSON serialisation; required for passthrough session credential validator responses | `backend/app/main.py` |
 | `initTelemetry` | function | Initialises browser WebTracerProvider with OTLP HTTP exporter and FetchInstrumentation; triggers Web Vitals recording | `frontend/src/telemetry.ts` |
 | `_recordWebVitals` | function | Lazily imports web-vitals and records LCP, FID, FCP, CLS as OTEL histograms | `frontend/src/telemetry.ts` |
 
@@ -126,3 +127,9 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | `RT_CONVERSATION` | constant | Resource type identifier: `"conversation"` — conversations module | `backend/app/core/resource_types.py` |
 | `RT_RESULT` | constant | Resource type identifier: `"result"` — results module; newly registered in implement-global-access-control | `backend/app/core/resource_types.py` |
 | `RT_ACCESS_REQUEST` | constant | Resource type identifier: `"access_request"` — user access requests module | `backend/app/core/resource_types.py` |
+
+### Test Files
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_auth_middleware` | test module | Unit tests for `JWTAuthMiddleware`; 2 passthrough-related tests: `raw_token` stored on `request.state` after valid JWT extraction; `raw_token` absent on public paths that bypass auth | `backend/tests/unit/test_auth_middleware.py` |

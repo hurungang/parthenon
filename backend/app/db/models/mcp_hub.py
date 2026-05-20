@@ -80,6 +80,7 @@ class McpSessionAuthType(str, enum.Enum):
     basic_auth = "basic_auth"
     oauth2 = "oauth2"
     none = "none"
+    passthrough = "passthrough"
 
 
 class McpSession(Base):

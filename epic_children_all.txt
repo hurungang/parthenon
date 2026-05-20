@@ -1,0 +1,83 @@
+
+=== CHILDREN OF PSST-18811 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-18810 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-18627 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-18384 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-16659 ===
+Total: 2
+Key             Status               Summary
+--------------------------------------------------------------------------------
+PSST-16799      Open                 CICD - Create a new script to read the Mongo DB JSON file
+PSST-16801      Open                 CICD - Create a new script to compare source and destination Json file
+
+=== CHILDREN OF PSST-16242 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-16052 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-15902 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-12731 ===
+Total: 1
+Key             Status               Summary
+--------------------------------------------------------------------------------
+PSST-6201       Open                 DCSPolicer - Migrate database connection code
+
+=== CHILDREN OF PSST-13021 ===
+Total: 2
+Key             Status               Summary
+--------------------------------------------------------------------------------
+PSST-6202       Open                 DCSPolicer - Helm chart included
+PSST-6203       Open                 DCSPolicer - Docker build included
+
+=== CHILDREN OF PSST-12938 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-12935 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-12923 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-12792 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-12859 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-16175 ===
+Total: 0
+(no child issues)
+
+=== CHILDREN OF PSST-12997 ===
+Total: 2
+Key             Status               Summary
+--------------------------------------------------------------------------------
+PSST-6169       Completed            Airline Onboarding - WSB - Script to increase speed and reduce errors
+PSST-6265       Completed            WSB û Tech Debt - DCS Timeout Retry Policy û Changes to HTTP policies
+
+=== CHILDREN OF PSST-18369 ===
+Total: 0
+(no child issues)

@@ -2,7 +2,120 @@
 
 ## System Architecture
 
-The platform follows a gateway-routed, service-oriented architecture. Inbound traffic from the Web UI flows through a single API Gateway, which routes requests to two core entry points: the Platform API (admin and config) and the Communication Hub (real-time messaging and agent execution). The Communication Hub also serves as the **Agent Gateway**, accepting inbound agent execution requests and managing instance lifecycle. Agent execution is handled asynchronously by the Agent Runtime (powered by the **LangChain deep agent** framework), dispatched through the Agent Session Queue, with permissions evaluated by the Agent Permission Manager and LLM access mediated by the Model Config Service. When an agent type is saved, the Platform API triggers the **Plan Generation Service** synchronously — the service traverses the role → SOP → Skill → Tool graph, invokes the configured LLM to produce a structured implementation plan, and returns the plan alongside a topology payload in the save response. The **Agent Runtime Loader** loads the saved plan from the `agent_plans` table when initialising an agent session and injects it into the agent's system context.
+The platform is composed of three independently deployable services — **Control Center**, **Agent Runtime**, and **Communication Hub** — behind a single API Gateway. Only Control Center has direct database access; Agent Runtime and Communication Hub access all data through authenticated Control Center internal APIs over mutual TLS (mTLS).
+
+**Control Center** is the platform's data plane: it owns the PostgreSQL database, acts as the Certificate Authority (CA), manages identity tokens, serves the Platform API for the Web UI, and triggers execution and messaging on the other services.
+
+**Agent Runtime** is a stateless LangChain executor. It receives execution triggers from Control Center, fetches all agent context (plan, skills, model config) from Control Center data APIs using its service certificate, executes the observe-reason-act loop, and posts results back to Control Center. It never accesses the database directly.
+
+**Communication Hub** is the message broker and agent gateway. It accepts Web UI WebSocket connections, receives message dispatch commands from Control Center, validates agent certificates and resolves identity per tool call, and routes all agent tool calls to the correct handler using the unified tool naming convention. It never accesses the database directly.
+
+**Security:** All service-to-service communication uses certificate-based mutual TLS. Control Center issues X.509 certificates to both peer services via a bootstrap flow (using per-service bootstrap keys). Agent Runtime and Communication Hub renew their certificates automatically before expiry. Agent-instance certificates (short-lived, per execution) are issued separately and are blocked from accessing internal Control Center endpoints.
+
+```mermaid
+flowchart TB
+    subgraph Clients
+        WebUI[Web UI]
+    end
+
+    GW[API Gateway]
+
+    subgraph ControlCenter["Control Center — Data Plane"]
+        PlatformAPI[Platform API]
+        PGS[Plan Generation Service]
+        CertAuth[Certificate Authority]
+        TokenSvc[Token & Permission Service]
+        NotifSvc[Notification Service]
+    end
+
+    subgraph AgentRuntime["Agent Runtime"]
+        Executor[Agent Executor]
+        SkillEng[Skill Engine]
+        APM[Agent Permission Manager]
+    end
+
+    subgraph CommHub["Communication Hub"]
+        AgentGW[Agent Gateway]
+        Broker[Message Broker]
+        NameResolver[Name Resolver]
+        MCPHub[MCP Hub]
+    end
+
+    DB[(PostgreSQL)]
+    LLM[LLM Providers]
+    IdP[Identity Provider]
+    MCPServers[MCP Servers]
+    ExtChannels[Notification Channels]
+
+    WebUI --> GW
+    GW -->|REST| PlatformAPI
+    GW -->|WS / REST| AgentGW
+    PlatformAPI -->|plan generation on save| PGS
+    PGS -->|plan prompt| LLM
+    ControlCenter --> DB
+    AgentRuntime -.->|bootstrap| CertAuth
+    CommHub -.->|bootstrap| CertAuth
+    AgentRuntime -->|data API| PlatformAPI
+    CommHub -->|data API| PlatformAPI
+    CommHub -->|cert + token| TokenSvc
+    PlatformAPI -->|trigger execution| Executor
+    PlatformAPI -->|dispatch message| Broker
+    Executor --> SkillEng
+    SkillEng --> APM
+    SkillEng -->|"server____tool"| AgentGW
+    AgentGW --> NameResolver
+    NameResolver -->|"system____*"| NotifSvc
+    NameResolver -->|"<server>____*"| MCPHub
+    MCPHub --> MCPServers
+    NotifSvc --> ExtChannels
+    Executor --> LLM
+    PlatformAPI -.->|user auth| IdP
+    CertAuth -.->|token refresh| IdP
+```
+
+## Service Boundaries
+
+| Service | Database Access | Inbound from | Outbound to |
+|---|---|---|---|
+| **Control Center** | Direct (sole owner) | Web UI, Agent Runtime, Communication Hub | Agent Runtime (trigger), Communication Hub (dispatch), LLM, IdP |
+| **Agent Runtime** | None (all via CC data APIs) | Control Center (trigger) | Control Center (data APIs, result submit), Communication Hub (tool calls) |
+| **Communication Hub** | None (all via CC data APIs) | Web UI (WebSocket), Control Center (dispatch), Agent Runtime (tool calls) | Control Center (data APIs, token resolution), MCP Servers, Notification Channels |
+
+## Component Responsibilities
+
+| Component | Responsibility |
+|---|---|
+| **Web UI** | Admin management, user-to-agent conversation interface, and Agent Instance Dashboard for monitoring and drilling into individual agent executions |
+| **API Gateway** | Reverse proxy routing inbound traffic to Control Center and Communication Hub |
+| **Platform API** | Handles admin configuration, auth delegation, agent role and type management, model config CRUD, session history queries, notification channel/group management, and delivery log. On agent type save, triggers Plan Generation Service synchronously and returns the generated plan and topology in the response |
+| **Plan Generation Service** | Invoked on every agent type save; traverses the role → SOP → Skill → Tool graph; calls the configured LLM to produce a structured implementation plan; persists the plan. Non-blocking on failure — the agent type is still saved |
+| **Certificate Authority** | Issues and revokes X.509 certificates for agent instances (short-lived) and peer services (longer-lived). All certificates are managed within Control Center. |
+| **Token & Permission Service** | Resolves agent certificates to identity tokens and permissions for Communication Hub; manages token storage and refresh via the IdP `ai_agents` realm |
+| **Notification Service** | Orchestrates outbound notifications: resolves recipient groups by slug, retrieves encrypted channel credentials, dispatches to channel providers (SMTP, Email API, Webhook, Messenger), records delivery outcomes to `NotificationLog`, and emits delivery metrics. Registered as the `system____send_notification` tool handler. |
+| **Communication Hub** | Central message broker for Web UI ↔ Agent and Agent ↔ Agent messaging; also serves as the **Agent Gateway** — accepts inbound agent execution requests, validates agent-instance X.509 certificates, requests identity tokens and permissions from Control Center on every tool call. Contains the **Name Resolver** which routes all tool calls: `system____*` calls to internal system handlers, `<server>____*` calls to the MCP Hub. Identity tokens are used within the hub and never forwarded to Agent Runtime. |
+| **Name Resolver** | Central tool routing component within Communication Hub. Parses the unified `server____tool` name, determines handler (system handler or MCP server), and dispatches accordingly. No tool routing logic exists in Agent Runtime. |
+| **Conversation Session Manager** | Manages lifecycle transitions for conversation agent sessions (create, resume, end, archive); validates session ownership; enforces session state machine; triggers Session Auto-Namer after first user message. |
+| **Session Auto-Namer** | Background task triggered after the first user turn; generates a session title via LLM prompt; pushes `title_update` WebSocket event to the active client; falls back to truncated first message on LLM failure. |
+| **Agent Runtime** | Manages agent instance execution using the **LangChain deep agent** framework (observe → reason → act loop). Fetches all context (plan, skills, model config) from Control Center data APIs. Forwards all tool calls to Communication Hub using the unified `server____tool` naming convention — no system/MCP distinction in executor code. Authenticates using X.509 agent-instance certificates (mTLS). Never stores or receives identity tokens. |
+| **Agent Permission Manager** | Evaluates an agent role's SOP and Skill assignments; calculates the complete set of allowed tools via role → SOP → Skill → Tool traversal; provides real-time tool preview to the management UI. |
+| **Skill Engine** | Resolves skills with role-based access enforcement; binds multiple tools per skill; delegates SOP execution to the SOP Orchestrator |
+| **SOP Orchestrator** | Executes ordered SOP step sequences; routes skill-invocation steps to Skill Engine and agent-delegation steps to Agent Runtime; supports per-step instruction guidance |
+| **MCP Hub** | Registers tool servers, syncs tools, manages named sessions per server with AES-256 credential encrypt/decrypt lifecycle, and proxies tool calls. Supports **session-based** (stored credentials) and **passthrough** (forwards agent JWT) session types. |
+| **Scheduling Engine** | Triggers prompts and SOPs on configured cron schedules |
+| **Data Stores** | PostgreSQL (config, conversations, results, job state, execution logs, notification logs) and Redis (cache/pubsub) — accessed only by Control Center |
+| **Identity Provider** | Issues tokens for human users (`parthenon` realm) and agent identities (`ai_agents` realm); both realms provisioned on first run. Defaults to bundled Keycloak; substitutable with any OIDC provider. |
+| **LLM Providers** | External model services; accessed via Model Config Service credential resolution |
+| **MCP Servers** | Admin-registered external tool servers |
+| **Notification Channels** | External outbound destinations: SMTP relay, Email API, Webhook endpoints, Instant Messenger connectors (Teams, Slack) |
+| **MCP Demo App** | Example external MCP server; authenticates with the `ai_agents` realm; validates forwarded agent JWTs per tool call |
+
+## Tool Naming Convention (Cross-Cutting)
+
+All tools available to agents follow the `server____tool_name` convention (four underscores). The `system` server name is reserved for built-in platform tools (e.g., `system____save_result`, `system____send_notification`, `system____get_recipient_group`). MCP server names must not contain `____`. This convention is enforced platform-wide and is the basis for all routing decisions in the Communication Hub Name Resolver.
+
+## Identity (Cross-Cutting)
+
+Identity is a foundational concern that gates all authenticated traffic. The identity provider manages two realms: the `parthenon` realm for human users and the `ai_agents` realm for agent identities. Both are provisioned automatically on first run via a Setup Wizard or CLI command; operators may substitute any external OIDC-compliant provider. See [Identity](modules/identity.md) for the provisioning and runtime flows.
 
 ```mermaid
 flowchart TB
@@ -15,12 +128,14 @@ flowchart TB
     subgraph Core[Core Services]
         API[Platform API]
         PGS[Plan Generation Service]
+        CC[Control Center]
         CH[Communication Hub + Agent Gateway]
+        CSM[Conversation Session Manager]
+        SAN[Session Auto-Namer]
         AR[Agent Runtime]
         APM[Agent Permission Manager]
         AJQ[Agent Session Queue]
         MCS[Model Config Service]
-        TRS[Token Refresh Service]
     end
 
     subgraph Domain[Domain Services]
@@ -42,7 +157,11 @@ flowchart TB
     Nginx --> CH
     API -->|plan generation on save| PGS
     PGS -->|plan prompt| LLM
+    CH --> CSM
     CH --> AR
+    CSM --> AJQ
+    SAN -->|title prompt| LLM
+    SAN --> DS
     AJQ --> AR
     AR --> APM
     AR --> MCS
@@ -53,38 +172,6 @@ flowchart TB
     AJQ --> DS
     PGS --> DS
     API -.->|user auth| UserRealm
-    AR -.->|agent identity| AgentRealm
-    TRS -.->|token refresh| AgentRealm
-```
-
-## Component Responsibilities
-
-| Component | Responsibility |
-|---|---|
-| **Web UI** | Admin management, user-to-agent conversation interface, and Agent Instance Dashboard for monitoring and drilling into individual agent executions |
-| **API Gateway** | Reverse proxy routing inbound traffic to core services |
-| **Platform API** | Handles admin configuration, auth delegation, agent role and type management, model config CRUD, and session history queries. On agent type save, triggers Plan Generation Service synchronously and returns the generated plan and topology in the response |
-| **Plan Generation Service** | Invoked on every agent type save; traverses the role → SOP → Skill → Tool graph via Agent Role Service; constructs an LLM prompt with the agent's instructions, role, SOPs, skills, and tools; calls the configured LLM to produce a structured implementation plan; delegates topology serialisation to the internal **Topology Builder Service**; persists the plan to `agent_plans`. Non-blocking on failure — the agent type is still saved |
-| **Communication Hub** | Central message broker for Web UI ↔ Agent and Agent ↔ Agent messaging; also serves as the **Agent Gateway** — accepts inbound agent execution requests, validates OAuth identity tokens, enforces role authorization, and routes results back to callers. See [Communication Hub](modules/communication.md). |
-| **Agent Runtime** | Manages agent instance execution using the **LangChain deep agent** framework (observe → reason → act loop); validates agent identity-role assignment; resolves model config via Model Config Service; coordinates LLM inference and skill execution; captures system instruction and user prompt to the execution log before each session's first LLM call. The **Agent Runtime Loader** extension fetches the saved plan from `agent_plans` on session start and injects it into the agent's system context for execution guidance. See [Agent Runtime](modules/agent-runtime/architecture.md). |
-| **Agent Permission Manager** | Evaluates an agent role's SOP and Skill assignments; calculates the complete set of allowed MCP tools via role → SOP → Skill → Tool traversal; provides real-time tool preview to the management UI. See [Agent Runtime](modules/agent-runtime/architecture.md). |
-| **Agent Session Queue** | Accepts execution requests asynchronously; dispatches sessions to the Agent Runtime; tracks session state (pending → running → complete / failed / cancelled); persists results, conversation history, and execution logs. See [Agent Runtime](modules/agent-runtime/architecture.md). |
-| **Token Refresh Service** | Background service that monitors agent token expiry; proactively refreshes access tokens against the `ai_agents` realm using stored refresh tokens; updates the Token Store. See [Token Refresh](modules/token-refresh.md). |
-| **Model Config Service** | Manages LLM provider configurations (provider type, API endpoint, encrypted credentials, and `enabled_models` array); resolves the correct provider at runtime by finding the `ModelConfig` whose `enabled_models` contains the agent type's `model_id`. See [Model Configuration](modules/model-config.md). |
-| **Skill Engine** | Resolves skills with role-based access enforcement; binds multiple tools per skill using server-slug namespacing; delegates SOP execution to the SOP Orchestrator |
-| **SOP Orchestrator** | Executes ordered SOP step sequences; routes skill-invocation steps to Skill Engine and agent-delegation steps to Agent Runtime; supports per-step instruction guidance |
-| **MCP Hub** | Registers tool servers, syncs tools with tool-to-skill reverse mapping, manages named sessions per server with AES-256 credential encrypt/decrypt lifecycle, and proxies tool calls |
-| **Scheduling Engine** | Triggers prompts and SOPs on configured cron schedules |
-| **Notification Engine** | Sends outbound notifications via configured channels; exposed as invocable tools |
-| **Data Stores** | Relational store (config, conversations, results, job state, and execution logs) and cache/pubsub layer |
-| **Identity Provider** | Issues identity tokens for human users (`parthenon` realm) and agent identities (`ai_agents` realm); both realms are provisioned on first run. Defaults to a bundled Keycloak instance; can be replaced with any external OIDC-compliant provider. See [Identity](modules/identity.md). |
-| **LLM Providers** | External model services accessed via the Model Config Service; supports direct provider APIs and LiteLLM proxy |
-| **MCP Servers** | Admin-registered external tool servers |
-
-## Identity (Cross-Cutting)
-
-Identity is a foundational concern that gates all authenticated traffic. The identity provider manages two realms: the `parthenon` realm for human users and the `ai_agents` realm for agent identities. Both are provisioned automatically on first run via a Setup Wizard or CLI command; operators may substitute any external OIDC-compliant provider. See [Identity](modules/identity.md) for the provisioning and runtime flows.
-
 ## User Permission Management (Cross-Cutting)
 
 User Permission Management controls human user access to Parthenon features and resources through a tag-based policy model. On every authenticated request, Resource APIs delegate to a centralised Permission Engine that evaluates tag-based policy conditions and returns an allow or deny decision. User registration, group assignment, and role seeding happen automatically at login and startup so that access control is always consistent with the identity state. See [User Permission Management](modules/identity/architecture.md) for the component and flow detail.
@@ -103,6 +190,9 @@ Observability is a cross-cutting concern embedded in every component. All servic
 | **Platform API → Plan Generation Service** | Internal | Agent type save triggers synchronous plan generation; result returned in the save response |
 | **Plan Generation Service → LLM Providers** | LLM API (vendor-specific) | Prompt constructed from agent context; response parsed into structured plan steps |
 | **Communication Hub → Agent Runtime** | Internal | Routes agent execution requests; delivers results back to callers; maintains bidirectional chat for conversational agents |
+| **Communication Hub → Conversation Session Manager** | Internal (REST) | Handles session create, list, resume, end, and archive requests; associates WebSocket connections with session IDs for context propagation |
+| **Conversation Session Manager → Session Auto-Namer** | Internal (async trigger) | After first user turn is persisted, triggers background task to generate and set session title |
+| **Session Auto-Namer → Web UI** | WebSocket (`title_update` push) | Pushes generated session title to connected client after background generation completes |
 | **Agent Runtime → Model Config Service** | Internal | Passes `model_id`; service resolves matched provider endpoint and encrypted credentials via `enabled_models` lookup |
 | **Agent Runtime → Agent Permission Manager** | Internal | Per-session permission evaluation before any skill or tool call |
 | **Token Refresh Service → ai_agents Realm** | OAuth 2.0 refresh grant | Background refresh of agent access tokens using stored refresh tokens |

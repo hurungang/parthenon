@@ -50,8 +50,11 @@ erDiagram
         string realm_name
         string access_token_encrypted
         string refresh_token_encrypted
+        string encrypted_refresh_token
         datetime token_expiry
+        datetime last_token_refresh_at
         enum status
+        enum token_status
         datetime created_at
         datetime updated_at
     }
@@ -132,14 +135,42 @@ erDiagram
         datetime updated_at
     }
 
+    AgentInstanceCertificate {
+        uuid id
+        uuid agent_type_id
+        string instance_id
+        string certificate_pem
+        string serial_number
+        datetime issued_at
+        datetime expires_at
+        datetime revoked_at
+        string revocation_reason
+        enum status
+        datetime created_at
+        datetime updated_at
+    }
+    TokenRefreshLog {
+        uuid id
+        uuid agent_identity_id
+        datetime attempted_at
+        enum outcome
+        string error_message
+        int retry_attempt
+        datetime next_retry_at
+        json metadata
+        datetime created_at
+    }
+
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
     AgentSession }o--o| Identity : "triggered by"
     AgentType ||--o| AgentPlan : "has current plan"
+    AgentType ||--o{ AgentInstanceCertificate : "issues"
+    AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
-**Source**: `backend/app/db/models/agents.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
 
 | Entity | Description |
 |--------|-------------|
@@ -149,7 +180,9 @@ erDiagram
 | **AgentRoleSOP** | Join table linking an AgentRole to a Sop. Granting an SOP implicitly includes all Skills it depends on and all MCP tools those Skills require. |
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
 | **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role (unique constraint on `role_id + server_id`). |
-| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; tokens are refreshed automatically as needed. |
+| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. |
 | **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. |
 | **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
+| **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
+| **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, and any error message. Supports compliance review and debugging of refresh failures. Old entries (> 90 days) may be archived. |

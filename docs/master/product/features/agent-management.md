@@ -11,6 +11,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Developers/Integrators: Integrate agents into workflows via the gateway
 - Compliance & Audit Teams: Review agent definitions, assignments, and activity
 
+
 ## What It Does
 - Provides a unified "AI Agent" menu with the following modules in order: Agent Roles, Agent Identities, Agent Types, Agent Executions, Agent Logs
 - Supports creation and management of agent roles, with SOP/Skill permissions
@@ -25,25 +26,39 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Renames "Agent Instances" to "Agent Executions" throughout the platform for clarity
 - Agent Executions view supports filtering by agent type, enabling users to focus on relevant runs
 - Agent Types table includes columns for "Role" and "Identity", displaying the actual role and identity names for each agent type
+- Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - Clicking an agent type row opens a comprehensive dialog with:
 	- Agent type details (basic info)
 	- Plan preview tab (shows saved agent plan)
 	- Execution logs tab (filtered by agent type)
+	- Sessions tab (visible only for conversation-type agents) — lists all conversation sessions with title, status, and last active time
 	- Role and Identity names as clickable links, opening the corresponding view dialogs
 - All dialogs (agent type details, role/identity view) are fully responsive and maximize content area
 - Role and identity view dialogs include an "Edit" button for direct editing
 - After closing any dialog, the parent table refreshes automatically to show updated data
+- Conversation agent sessions:
+	- Users can start new conversation sessions from the Sessions tab
+	- Session titles are automatically generated from the first user prompt
+	- Users can resume previous sessions with full conversation history
+	- Users can end or archive sessions to manage their workspace
+	- All sessions are user-scoped (users only see their own sessions)
+
+
 
 ## Key Concepts
 - **AI Agent Menu**: A unified navigation entry grouping all agent-related modules for streamlined access
 - **Agent Role**: A permission grouping for SOPs, Skills, and tools, assigned to agent identities
 - **Identity-Role Assignment**: Explicit, many-to-many mapping between agent identities and roles, managed bidirectionally in the UI
 - **Agent Type**: A defined class of agent with specific identity, role, and model configuration
+- **Conversation Agent Session**: A persistent, user-named conversation with a conversation-type agent; includes automatic title generation, session management (start/resume/end/archive), and full turn history
+- **Session Type**: Either traditional (named session) or passthrough (direct agent identity propagation to MCP server)
 - **Model Configuration**: Central management of model providers and enabled models for agent use
 - **Execution Lifecycle**: The process of creating, running, and terminating agent executions (formerly instances)
 - **Filtering**: Ability to filter agent executions by agent type for targeted review
 - **Dialog-Based Details**: Agent type details, plan preview, and execution logs are accessible in a single, tabbed dialog
 - **Column Visibility**: Role and identity columns are visible in the agent types table, with clickable names for direct navigation
+- **Agent Identity as OIDC Principal**: All agent identities must be supported as first-class OIDC principals. The MCP Demo App provides a reference implementation for this requirement.
+
 
 ## Acceptance Criteria
 - The "AI Agent" top-level menu exists with the following five modules as child menus, in this order:
@@ -55,15 +70,31 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - "Agent Instances" is renamed to "Agent Executions" everywhere in the UI and documentation
 - Agent Executions view supports filtering by agent type (dropdown or similar)
 - Agent Types table includes columns for "Role" and "Identity" displaying the actual role name and identity name for each agent type
+- Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - Clicking an agent type row opens a dialog with:
 	- Agent type details (basic info)
 	- Tab: Plan preview (shows saved agent plan)
 	- Tab: Execution logs (list of executions for this agent type)
+	- Tab: Sessions (visible only for conversation-type agents) — lists all user's conversation sessions with:
+		- Session title (auto-generated from first user prompt)
+		- Session status (active, closed, archived)
+		- Last active timestamp
+		- Actions: Resume, End, Archive
+		- "Start New Conversation" entry point
 	- Role and Identity names displayed as clickable links; clicking opens the corresponding view dialog
 - All dialogs (AgentTypeDetailsDialog, role/identity view dialogs) are fully responsive and match the width of PlanPreviewModal, maximizing content area
 - Role and identity view dialogs include an "Edit" button to enable editing mode
 - "Active instances" feature works: clicking agent type row shows current executions for that type
 - After closing any dialog, parent table refreshes automatically to show updated data
+- Conversation agent sessions work correctly:
+	- Sessions tab appears only for agents with input_type = 'conversation'
+	- Users can start new conversation sessions from the Sessions tab
+	- Session titles are auto-generated from the first user prompt
+	- Users can resume previous sessions with full turn history restored
+	- Users can end sessions (status becomes 'closed', removed from active list)
+	- Users can archive sessions (status becomes 'archived', excluded from default listing)
+	- Sessions are user-scoped (users only see their own sessions)
+	- Sessions list updates automatically after create/end/archive operations
 - All changes are observable in the UI without requiring a page reload
 - Error messages are clear and actionable if features fail
 

@@ -38,6 +38,10 @@ Run `alembic downgrade` to the migration revision that was in place before the d
 
 > **Keycloak identity bootstrap migrations:** If the `keycloak-identity-bootstrap` change was the deployment being rolled back, `alembic downgrade` will remove the `IdentityProviderConfig` table, the `IdentityProviderSetupState` table, and the `idp_subject` column from the `User` table. Verify that all three schema objects are absent after the downgrade completes.
 
+> **Passthrough sessions migration (`5c2910c238a8`):** If this is the deployment being rolled back, note that `alembic downgrade -1` will **not** remove the `passthrough` value from the `mcp_session_auth_type_enum` type — PostgreSQL does not support removing enum values. The enum value will remain in the database, which is harmless: the rolled-back application code will simply not expose or accept `passthrough` as a valid auth type. No additional cleanup is required for this migration.
+
+> **Agent Runtime Security Segregation migration (`385c4ae051f6`):** If this is the deployment being rolled back, **do not roll back the migration** — the new columns on `agent_identities` (`encrypted_refresh_token`, `last_token_refresh_at`, `token_status`) are nullable, so the previous code version operates correctly without them. The four new tables (`agent_instance_certificates`, `certificate_revocation_entries`, `token_refresh_logs`, `certificate_validation_logs`) can remain; they cause no harm. If a full schema rollback is required anyway, `alembic downgrade -1` drops all four tables and the three columns; any agent instance certificates and CA state stored in those tables will be lost and must be re-provisioned after re-deploying.
+
 If data was corrupted and downgrade alone is insufficient, restore from the most recent database backup taken before the deployment. Confirm the restored schema revision matches the target revision.
 
 If no schema changes were made during the failed deployment, skip this step.
@@ -151,3 +155,18 @@ redis-cli --scan --pattern 'agentperm:*' | xargs redis-cli del
 ```
 
 **Completion condition:** No keys matching `agentperm:*` exist in Redis.
+
+---
+
+## Stateless Services
+
+Stateless MCP servers (such as `mcp-demo-app`) can be rolled back without a database downgrade. The full rollback procedure is:
+
+1. **Stop and remove the container** — Bring down the stateless service container. All in-memory state (token cache, JWKS cache) is discarded on shutdown.
+2. **Remove the Hub server record** — Delete the service's slug entry from the MCP Hub via the Hub admin API or directly in the database. This removes any registered tools from the Hub's tool registry.
+3. **Remove the docker-compose.yml service block** — Revert the compose file change that added the service.
+4. **Remove environment variables** — Delete all service-specific variables from the deployment environment.
+5. **Optionally remove the Keycloak client** — If the rollback is permanent, delete the service's client from the relevant Keycloak realm to eliminate unused credential exposure. If a future retry is planned, the client may be retained.
+6. **Verify no impact on remaining services** — Confirm all remaining services are healthy and that the Hub no longer lists the removed server or its tools.
+
+No database downgrade is required for stateless MCP servers. No other services are affected.

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from typing import Annotated
 
 from app.db.models.mcp_hub import McpServerStatus, McpSessionAuthType
@@ -48,6 +48,15 @@ class McpSessionCreate(BaseModel):
     identity_subject: str | None = None
     identity_binding: dict[str, Any] | None = None
     credential_config: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_passthrough_no_credentials(self) -> "McpSessionCreate":
+        """Passthrough sessions must not include credentials."""
+        if self.auth_type == McpSessionAuthType.passthrough and self.credentials is not None:
+            raise ValueError(
+                "Passthrough sessions forward the agent JWT directly — credentials must be omitted."
+            )
+        return self
 
 
 class McpSessionUpdate(BaseModel):
@@ -134,8 +143,11 @@ class SyncResult(BaseModel):
 class TestToolRequest(BaseModel):
     """Request to test an MCP tool invocation."""
     
-    session_id: uuid.UUID
-    """The MCP session ID to use for authentication."""
+    session_id: uuid.UUID | None = None
+    """The MCP session ID to use for authentication. Required for non-passthrough sessions."""
+    
+    agent_subject: str | None = None
+    """Agent identity UUID or username (realm_username) to use for passthrough testing. Required for passthrough sessions. The agent's access token will be retrieved/refreshed and forwarded to the MCP server."""
     
     tool_input: dict[str, Any]
     """The input arguments for the tool."""

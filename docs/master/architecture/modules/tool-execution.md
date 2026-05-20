@@ -16,6 +16,7 @@ sequenceDiagram
     participant SOPORCH as SOP Orchestrator
     participant MCP as MCP Hub
     participant CS as Credential Store
+    participant IdP as Keycloak Agent Realm
     participant EXT as MCP Server
 
     U->>CH: Send message
@@ -25,9 +26,15 @@ sequenceDiagram
     AE->>SE: Execute skill (role check)
     alt Single-tool skill
         SE->>MCP: Invoke tool
-        MCP->>CS: Decrypt named session credentials
-        CS-->>MCP: Session credentials
-        MCP->>EXT: Tool call
+        alt Standard session
+            MCP->>CS: Decrypt named session credentials
+            CS-->>MCP: Session credentials
+            MCP->>EXT: Tool call (stored credentials)
+        else Passthrough session
+            MCP->>IdP: Retrieve agent JWT
+            IdP-->>MCP: Agent JWT
+            MCP->>EXT: Tool call (Authorization: Bearer agent JWT)
+        end
         EXT-->>MCP: Tool result
         MCP-->>SE: Result
     else SOP skill
@@ -68,7 +75,12 @@ The SOP Orchestrator executes an ordered sequence of steps defined on a SOP skil
 
 ### MCP Hub
 
-The MCP Hub acts as a proxy and session manager for all registered MCP tool servers. Each server may have multiple named sessions, each with its own credential binding. Credentials are encrypted with AES-256 at registration time and decrypted only at tool-call time — they are never returned in plaintext. The hub also maintains a bidirectional tool-to-skill index, enabling both skill → tools lookup and reverse tool → skills membership queries.
+The MCP Hub acts as a proxy and session manager for all registered MCP tool servers. It supports two session types:
+
+- **Session-based** — each server has one or more named sessions with credential bindings. Credentials are encrypted with AES-256 at registration time and decrypted only at tool-call time; they are never returned in plaintext.
+- **Passthrough** — the executing agent's JWT is extracted from the request context and forwarded as the `Authorization: Bearer` header. The Credential Store is bypassed entirely; the receiving MCP server performs its own identity validation against the Keycloak `ai_agents` realm.
+
+The hub also maintains a bidirectional tool-to-skill index, enabling both skill → tools lookup and reverse tool → skills membership queries.
 
 ### External MCP Servers
 

@@ -239,20 +239,22 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         />
       )}
 
-      <FormControl fullWidth>
-        <InputLabel>{t('agents.types.outputType')}</InputLabel>
-        <Select
-          value={values.output_type}
-          label={t('agents.types.outputType')}
-          onChange={(e) => set('output_type', e.target.value as AgentOutputType)}
-        >
-          <MenuItem value="auto">{t('agents.types.outputAuto')}</MenuItem>
-          <MenuItem value="typed">{t('agents.types.outputTyped')}</MenuItem>
-          <MenuItem value="markdown">{t('agents.types.outputMarkdown')}</MenuItem>
-        </Select>
-      </FormControl>
+      {values.input_type !== 'conversation' && (
+        <FormControl fullWidth>
+          <InputLabel>{t('agents.types.outputType')}</InputLabel>
+          <Select
+            value={values.output_type}
+            label={t('agents.types.outputType')}
+            onChange={(e) => set('output_type', e.target.value as AgentOutputType)}
+          >
+            <MenuItem value="auto">{t('agents.types.outputAuto')}</MenuItem>
+            <MenuItem value="typed">{t('agents.types.outputTyped')}</MenuItem>
+            <MenuItem value="markdown">{t('agents.types.outputMarkdown')}</MenuItem>
+          </Select>
+        </FormControl>
+      )}
 
-      {values.output_type === 'typed' && (
+      {values.input_type !== 'conversation' && values.output_type === 'typed' && (
         <JsonSchemaBuilder
           value={values.output_schema}
           onChange={(schema) => set('output_schema', schema)}

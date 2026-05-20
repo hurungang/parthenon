@@ -18,6 +18,16 @@ RUN pip install --no-cache-dir -e ".[dev]"
 # Copy application code
 COPY . .
 
-EXPOSE 8000
+# Per-service entry point — override at build time or via docker compose `command:`
+# control-center  → APP_MODULE=app.main:app            APP_PORT=8000
+# agent-runtime   → APP_MODULE=app.agent_runtime.main:app   APP_PORT=8001
+# communication-hub → APP_MODULE=app.communication_hub.main:app APP_PORT=8002
+ARG APP_MODULE=app.main:app
+ARG APP_PORT=8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+ENV APP_MODULE=${APP_MODULE}
+ENV APP_PORT=${APP_PORT}
+
+EXPOSE ${APP_PORT}
+
+CMD ["sh", "-c", "uvicorn ${APP_MODULE} --host 0.0.0.0 --port ${APP_PORT} --reload"]

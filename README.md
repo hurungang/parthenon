@@ -58,7 +58,41 @@ Define standardized workflows combining one or multiple skills:
 
 ## Getting Started
 
-### Using the Management Script (Recommended)
+### First-Time Setup
+
+1. **Start infrastructure** (PostgreSQL, Redis, Keycloak):
+   ```powershell
+   .\parthenon.ps1 start -Services infra
+   ```
+
+2. **Initialize local development environment**:
+   ```powershell
+   .\parthenon.ps1 init
+   ```
+   This creates:
+   - Keycloak realms (human users + agents)
+   - OIDC clients in both realms
+   - Admin user and database roles
+   
+   Safe to run multiple times.
+
+3. **Run database migrations**:
+   ```powershell
+   cd backend
+   alembic upgrade head
+   ```
+
+4. **Start all services**:
+   ```powershell
+   .\parthenon.ps1 start
+   ```
+
+5. **Access the application**:
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000/docs
+   - Login: `admin@parthenon.local` / `admin`
+
+### Using the Management Script
 
 ```powershell
 # Check status of all services
@@ -102,3 +136,21 @@ Parthenon/
 ├── infra/          # Docker Compose, Helm, nginx config
 └── docs/           # Documentation
 ```
+
+## License
+
+Parthenon is licensed under the GNU Affero General Public License v3.0 or any
+later version. See [LICENSE](LICENSE).
+
+For organizations that need to use Parthenon under proprietary or other
+commercial terms, separate commercial licensing may be available. See
+[LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+
+## Contributing
+
+Community contributions are welcome. By contributing, you agree that your
+contribution is provided under AGPL-3.0-or-later and may also be relicensed by
+the maintainers under separate commercial terms. Pull requests are gated by an
+explicit CLA acceptance check; if the bot asks you to sign, reply on the pull
+request with the exact acceptance text from [CLA.md](CLA.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md).

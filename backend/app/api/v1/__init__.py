@@ -1,6 +1,14 @@
 """API v1 root router — aggregates all domain routers."""
 from fastapi import APIRouter
 
+from app.api.v1.certificates import CertificatesRouter
+from app.api.v1.internal.bootstrap import InternalBootstrapRouter
+from app.api.v1.internal.certificates import InternalCertificatesRouter
+from app.api.v1.internal.authorization import InternalAuthorizationRouter
+from app.api.v1.internal.agent_data import InternalAgentDataRouter
+from app.api.v1.internal.session_data import InternalSessionDataRouter
+from app.api.v1.internal.mcp_proxy import InternalMcpProxyRouter
+from app.api.v1.internal.system_tools import router as InternalSystemToolsRouter
 from app.api.v1.user_access_requests import AccessRequestsRouter
 from app.api.v1.agents import (
     AgentIdentityRouter,
@@ -31,6 +39,18 @@ router = APIRouter()
 
 # Public endpoints
 router.include_router(SetupRouter)
+
+# Certificate Authority (public CA cert endpoint + admin issue/revoke)
+router.include_router(CertificatesRouter)
+
+# Internal service-to-service endpoints (should be network-isolated in production)
+router.include_router(InternalBootstrapRouter)
+router.include_router(InternalCertificatesRouter)
+router.include_router(InternalAuthorizationRouter)
+router.include_router(InternalAgentDataRouter)
+router.include_router(InternalSessionDataRouter)
+router.include_router(InternalSystemToolsRouter)
+router.include_router(InternalMcpProxyRouter)
 
 # Identity & auth
 router.include_router(RoleRouter)

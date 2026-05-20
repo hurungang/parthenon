@@ -59,6 +59,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             token = authorization[len("Bearer "):]
             logger.debug("Auth middleware: Token extracted (length: %d)", len(token))
 
+        # Store the raw token string for passthrough forwarding by API endpoints
+        request.state.raw_token = token or ""
+
         if not token:
             logger.warning("Auth middleware: No token provided for %s", path)
             return self._unauthorized(request, "No token provided")
@@ -68,7 +71,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             logger.debug("Auth middleware: Validating token for %s", path)
             claims: dict[str, Any] = await client.validate_token(token)
             request.state.identity = claims
-            logger.info("Auth middleware: Token validated successfully for %s (sub: %s)", path, claims.get("sub", "unknown"))
+            logger.debug("Auth middleware: Token validated successfully for %s (sub: %s)", path, claims.get("sub", "unknown"))
         except OIDCError as exc:
             logger.warning("JWT validation failed for %s: %s", path, exc)
             logger.debug("JWT validation error details: %s", exc, exc_info=True)
@@ -126,8 +129,12 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         """Check if the path is in the public allowlist."""
         if path in PUBLIC_PATHS:
             return True
-        # Exact prefix checks for Swagger assets
-        return path.startswith("/docs/") or path.startswith("/redoc/")
+        # Exact prefix checks for Swagger assets and internal service-to-service paths
+        return (
+            path.startswith("/docs/")
+            or path.startswith("/redoc/")
+            or path.startswith("/api/v1/internal/")
+        )
 
     def _unauthorized(self, request: Request, detail: str) -> JSONResponse:
         """Return 401 response with CORS headers to prevent browser CORS errors."""

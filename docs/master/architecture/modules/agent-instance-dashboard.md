@@ -44,7 +44,20 @@ flowchart LR
 - Lists all agent instances (one row per `AgentSession`)
 - **Status filter:** `running` / `completed` / `failed` / `cancelled`
 - **Time-range picker:** scopes results to a selected window
-- Columns: agent type, status, start time, duration
+- Columns: agent type, status, start time, duration, session title (for conversation-type agents)
+- **Session column:** For conversation-type agent executions, displays the linked conversation session title; empty for non-conversational agents
+
+### Sessions Tab (Conversation Agents Only)
+
+For conversation-type agents, the Agent Type detail dialog includes a dedicated **Sessions** tab that lists all of the user's conversation sessions for that agent type:
+
+- **Session list columns:** Title (auto-generated), Status (active / closed / archived), Last Active timestamp
+- **Actions per session:** Resume (opens chat interface with full history), End (closes session), Archive (hides from active list)
+- **"Start New Conversation" entry point** — creates a new session and opens the chat interface
+- **User-scoped listing** — each user sees only their own sessions
+- **Automatic refresh** — session list updates after create, end, and archive operations without page reload
+
+The Sessions tab is visible **only** for agent types with `input_type = 'conversation'`. All other agent types (single-shot, workflow, etc.) do not display this tab.
 
 ### Instance Detail View
 

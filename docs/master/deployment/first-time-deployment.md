@@ -118,14 +118,21 @@ For deployments that use a declarative config file instead of individual env var
 
 Start backend services in the following strict order. Each service must reach a healthy state before the next is started.
 
-1. `platform-api` — Verify the `/health` endpoint responds through its port before proceeding
+1. `platform-api` — Verify the `/health` endpoint responds through its port before proceeding. After the health check passes, confirm that the Certificate Authority has initialised by calling `GET /api/v1/certificates/ca` — the response should include a `certificate_pem` field. The CA is generated automatically on first startup and logged with the serial number and expiry.
 2. `mcp-hub` — Depends on `platform-api` for internal API calls
 3. `skill-engine` — Depends on `platform-api` and `mcp-hub`
 4. `agent-engine` — Depends on `platform-api`, `mcp-hub`, and `skill-engine`
 5. `scheduling-engine` — Depends on `platform-api` and `agent-engine`
 6. `notification-engine` — Depends on `platform-api` and `mcp-hub` (for MCP tool registration)
-7. `communication-hub` — Depends on `redis` and `platform-api`
+7. `communication-hub` — Depends on `redis` and `platform-api`. Ensure `CONTROL_CENTER_URL` is set to the `platform-api` base URL before starting.
 8. `agent-gateway` — Depends on `agent-engine` and `communication-hub`
+
+**Agent instance certificate provisioning** — Before starting `agent-session-worker` or any isolated agent runtime container, provision a TLS certificate for each agent type:
+1. Obtain an admin JWT token.
+2. Call `POST /api/v1/certificates/issue` with the `agent_type_id` and a unique `instance_id` (hostname or job ID).
+3. Save the returned `certificate_pem` to the path set in `AGENT_CERT_PATH` and `private_key_pem` to `AGENT_KEY_PATH` (set permissions to `600`).
+4. Download the CA certificate: `GET /api/v1/certificates/ca` → save `certificate_pem` to `CA_CERT_PATH`.
+5. Set `CONTROL_CENTER_URL` to the `platform-api` base URL on the agent runtime container.
 
 If any service fails to start, check its logs for connection errors to PostgreSQL, Redis, or the OIDC JWKS endpoint before attempting to restart it.
 

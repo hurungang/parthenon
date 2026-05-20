@@ -231,6 +231,18 @@ Wait for all services to be healthy:
 docker compose ps
 ```
 
+**Verify mcp-demo-app health** (if included in docker compose):
+```powershell
+try {
+    $mcpDemo = Invoke-WebRequest -Uri "http://localhost:8001/health" -UseBasicParsing -TimeoutSec 5
+    if ($mcpDemo.StatusCode -eq 200) {
+        Write-Host "✅ MCP Demo App healthy on port 8001"
+    }
+} catch {
+    Write-Warning "MCP Demo App not responding on port 8001 — check logs: docker compose logs mcp-demo-app"
+}
+```
+
 ---
 
 ## Step 7: Report Access Endpoints
@@ -247,6 +259,7 @@ Once all verification checks pass (Step 6), display the access information:
 | Backend API   | http://localhost:8000/api/v1             |
 | API Docs      | http://localhost:8000/docs               |
 | Keycloak      | http://localhost:8082 (admin: /admin)    |
+| MCP Demo App  | http://localhost:8001 (docker mode only) |
 
 > Docker mode: App available at http://localhost (nginx proxy on port 80)
 > API at http://localhost/api/v1

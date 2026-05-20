@@ -66,6 +66,7 @@ from app.services.agents.role_service import (
 )
 from app.services.agents.session_service import AgentSessionService
 from app.services.agents.permission_manager import AgentPermissionManager
+from app.services.agents.tool_naming import build_tool_name, is_system_tool
 from app.services.gateway.lifecycle_handler import AgentAuthError, GatewayLifecycleHandler
 
 logger = logging.getLogger(__name__)
@@ -171,15 +172,36 @@ async def delete_agent_role(
 async def get_role_mcp_tools(
     role_id: uuid.UUID,
     db: DbSession,
+    skill_ids: str | None = None,  # Comma-separated UUIDs for preview
+    sop_ids: str | None = None,     # Comma-separated UUIDs for preview
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[str]:
-    """Return the set of allowed MCP tool identifiers for a given role."""
+    """Return the set of allowed MCP tool identifiers for a given role.
+    
+    Query Parameters:
+        skill_ids: Optional comma-separated list of skill UUIDs to preview (for unsaved changes)
+        sop_ids: Optional comma-separated list of SOP UUIDs to preview (for unsaved changes)
+    
+    If both skill_ids and sop_ids are provided, the endpoint returns a preview
+    without reading from the database. Otherwise, it reads the saved role configuration.
+    """
     try:
-        tools = await _permission_manager.calculate_allowed_tools(role_id, db)
+        override_skill_ids: set[uuid.UUID] | None = None
+        override_sop_ids: set[uuid.UUID] | None = None
+        
+        # Parse query parameters for preview mode
+        if skill_ids is not None and sop_ids is not None:
+            override_skill_ids = {uuid.UUID(s.strip()) for s in skill_ids.split(",") if s.strip()}
+            override_sop_ids = {uuid.UUID(s.strip()) for s in sop_ids.split(",") if s.strip()}
+        
+        tools = await _permission_manager.calculate_allowed_tools(role_id, db, override_skill_ids, override_sop_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid UUID format: {exc}")
     except Exception as exc:
         logger.warning("Permission manager failed for role %s: %s", role_id, exc)
         raise HTTPException(status_code=404, detail=str(exc))
-    return sorted(tools)
+    canonical_tools = [build_tool_name("system", tool) if is_system_tool(tool) and "____" not in tool else tool for tool in tools]
+    return sorted(canonical_tools)
 
 
 @AgentRoleRouter.post("/{role_id}/identities", status_code=status.HTTP_204_NO_CONTENT)
@@ -367,8 +389,14 @@ async def delete_agent_identity(
     try:
         await _identity_service.delete_identity(identity_id, db)
     except AgentIdentityNotFoundError as exc:
+        logger.warning("Agent identity not found for deletion: %s", identity_id)
         raise HTTPException(status_code=404, detail=str(exc))
     except AgentIdentityConflictError as exc:
+        logger.error(
+            "Cannot delete agent identity %s: %s",
+            identity_id,
+            str(exc),
+        )
         raise HTTPException(status_code=409, detail=str(exc))
 
 
@@ -421,10 +449,22 @@ async def refresh_identity_token(
 ) -> AgentIdentity:
     """Refresh the access token for an agent identity using its stored refresh token."""
     try:
-        return await _identity_service.refresh_token(identity_id=identity_id, db=db)
+        result = await _identity_service.refresh_token(identity_id=identity_id, db=db)
+        logger.info(
+            "Successfully refreshed token for identity %s (name: %s)",
+            identity_id,
+            result.name,
+        )
+        return result
     except AgentIdentityNotFoundError as exc:
+        logger.warning("Agent identity not found for token refresh: %s", identity_id)
         raise HTTPException(status_code=404, detail=str(exc))
     except AgentOAuthError as exc:
+        logger.error(
+            "Token refresh failed for identity %s: %s",
+            identity_id,
+            str(exc),
+        )
         raise HTTPException(status_code=400, detail=str(exc))
 
 
@@ -621,17 +661,24 @@ async def agent_session_chat(
     session_id: uuid.UUID,
     websocket: WebSocket,
     db: DbSession,
+    conv_session_id: uuid.UUID | None = None,
 ) -> None:
-    """WebSocket endpoint for conversational agent sessions."""
+    """WebSocket endpoint for conversational agent sessions.
+
+    Optional conv_session_id query param associates a ConversationSession with
+    this connection so that auto-naming fires after the first user message.
+    """
     await websocket.accept()
     try:
+        # For conversation sessions there may not be a backing AgentJob yet
         job = await _session_service.get_session(session_id, db)
-        if not job:
+        if not job and conv_session_id is None:
             await websocket.close(code=4004, reason="Session not found")
             return
 
-        # Route messages through the session service chat handler
-        await _session_service.handle_chat_websocket(session_id, websocket, db)
+        await _session_service.handle_chat_websocket(
+            session_id, websocket, db, conv_session_id=conv_session_id
+        )
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for session %s", session_id)
     except Exception as exc:
@@ -747,6 +794,27 @@ async def update_agent_type(
     await _plan_generation_service.generate_plan(agent_type, db)
 
     # Reload with plan relationship eagerly loaded so the response includes the plan
+    result = await db.execute(
+        select(AgentType)
+        .where(AgentType.id == agent_type.id)
+        .options(selectinload(AgentType.plan))
+    )
+    agent_type = result.scalar_one()
+    return AgentTypeRead.model_validate(agent_type)
+
+
+@AgentTypeRouter.post("/{type_id}/regenerate-plan", response_model=AgentTypeRead)
+async def regenerate_agent_type_plan(
+    type_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> AgentTypeRead:
+    agent_type = await db.get(AgentType, type_id)
+    if not agent_type:
+        raise HTTPException(status_code=404, detail="Agent type not found")
+
+    await _plan_generation_service.generate_plan(agent_type, db)
+
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)

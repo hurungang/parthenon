@@ -78,7 +78,7 @@ describe('AgentTypeForm', () => {
     })
   })
 
-  it('renders output_type dropdown', async () => {
+  it('renders output_type dropdown for non-conversation agents', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
       <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
@@ -139,6 +139,16 @@ describe('AgentTypeForm', () => {
       { wrapper },
     )
     expect(screen.queryByText('agents.types.inputSchema')).toBeNull()
+  })
+
+  it('does NOT show output_type field for input_type=conversation', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const values = { ...defaultAgentTypeFormValues, input_type: 'conversation' as const }
+    render(
+      <AgentTypeForm values={values} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    expect(screen.queryByText('agents.types.outputType', { selector: 'label' })).toBeNull()
   })
 
   it('renders model_id dropdown', async () => {

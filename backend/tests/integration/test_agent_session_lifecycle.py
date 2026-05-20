@@ -1269,3 +1269,52 @@ async def test_no_prompt_log_for_queued_session(db_session: AsyncSession):
     assert len(logs) == 0, (
         f"Expected no AgentPromptLog for queued session, got {len(logs)}"
     )
+
+
+@pytest.mark.asyncio
+async def test_conversation_agents_cannot_be_executed_via_launch(db_session: AsyncSession):
+    """SECURITY: Conversation agents must not be executable via /agents/sessions endpoint.
+    
+    Conversation agents (input_type=conversation) should only be accessible via
+    conversation sessions (/conversations endpoint). Attempting to launch them
+    via the agent execution endpoint should raise ValueError.
+    
+    This prevents conversation agents from being executed as typed agents, which
+    is both a UX issue and a security concern.
+    """
+    from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler
+    
+    lifecycle = GatewayLifecycleHandler()
+    
+    # Create a conversation agent type
+    conversation_agent = AgentType(
+        name=f"ChatAgent-{uuid.uuid4().hex[:8]}",
+        model_id="gpt-4o",
+        input_type=AgentInputType.conversation,  # CRITICAL: conversation type
+        output_type=AgentOutputType.auto,
+    )
+    db_session.add(conversation_agent)
+    await db_session.flush()
+    await db_session.commit()
+    
+    # Attempt to launch it via the execution endpoint should fail
+    with pytest.raises(ValueError) as exc_info:
+        await lifecycle.launch(
+            agent_type_id=conversation_agent.id,
+            input_data={"message": "Hello"},
+            user_id=None,
+            db=db_session,
+        )
+    
+    # Verify the error message is clear about why it failed
+    error_msg = str(exc_info.value)
+    assert "conversation agent" in error_msg.lower()
+    assert "cannot be executed as an agent session" in error_msg.lower()
+    assert "/conversations" in error_msg  # Should suggest correct endpoint
+    
+    # Verify no AgentJob was created
+    result = await db_session.execute(
+        text(f"SELECT COUNT(*) FROM agent_jobs WHERE agent_type_id = '{conversation_agent.id}'")
+    )
+    count = result.scalar()
+    assert count == 0, "No agent job should be created for conversation agents"
