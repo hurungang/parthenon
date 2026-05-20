@@ -17,10 +17,10 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
+from app.core.ssl_context import get_ssl_context
 from app.core.yaml_config import load_identity_yaml
 from app.db.models.agents import AgentIdentity, AgentIdentityStatus
 
@@ -98,7 +98,7 @@ class TokenRefreshService:
         client_id = _agent_realm_client_id()
         token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
 
-        async with httpx.AsyncClient(timeout=30.0) as http_client:
+        async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
             response = await http_client.post(
                 token_url,
                 data={
@@ -135,6 +135,7 @@ class TokenRefreshService:
         )
 
         await db.flush()
+        await db.commit()  # Persist refreshed tokens — without this, changes are lost on session close
         await db.refresh(identity)
         logger.info(
             "Refreshed tokens for identity %s; new token_expires_at=%s",

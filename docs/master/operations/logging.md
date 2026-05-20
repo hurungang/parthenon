@@ -19,6 +19,8 @@ Update this table whenever new components are added or new log events are instru
 | **Scheduling Engine** | Job trigger events (job ID, target agent type, cron expression); job completion (duration, status); missed or skipped executions (with reason); job store errors |
 | **Notification Engine** | Notification dispatch attempt (channel type, recipient summary); delivery success and failure per channel (failure includes error detail) |
 | **Telemetry System** (`parthenon.telemetry`) | Config file loaded, missing, or parse error; each exporter initialised; signals disabled (no-op provider); exporter runtime failures; telemetry fully initialised (`Telemetry initialised`); frontend config endpoint calls |
+| **MCP Demo App** | Keycloak token grant success/failure at startup; Hub registration success/conflict/failure; tool manifest sync success/failure; incoming `tools/call` JWT validation pass/fail; `helloWorld` invocation completed; JWKS cache refresh; access token refresh |
+| **Certificate Authority (CertificateManager)** | CA initialization success and failure; certificate issued (serial number, expiry); certificate renewed (old serial, new serial, expiry); certificate renewal failure (instance ID, error, attempt count); certificate revoked (serial number, reason, actor); certificate validation outcome (serial, CN, outcome: valid/expired/revoked/invalid) |
 | **All components** | Service startup and shutdown with configuration summary; health check results; unhandled exceptions with full stack trace |
 
 ---
@@ -118,6 +120,65 @@ Use the `trace_id` from any log line to jump directly to the correlated distribu
 | Event | Level | Key Fields | When Logged |
 |-------|-------|-----------|-------------|
 | `identity.token_acquired` | DEBUG | `identity_id`, `identity_type` | Agent client credentials successfully exchanged for access token |
+| `identity.token_refresh_failed` | ERROR | `identity_id`, `oidc_error` | Token refresh failed; OIDC provider error detail included |
+| `identity.token_expired` | WARN | `identity_id`, `job_id` | Token discovered expired mid-execution |
+
+---
+
+## Certificate Security Log Events
+
+### Log Sources
+
+| Component | Log Source | Access |
+|-----------|-----------|--------|
+| `CertificateManager` | `backend` container stdout | `docker compose logs backend` or Loki: `{service="backend"} \|= "cert."` |
+| `CertificateAuthority` | `backend` container stdout | Loki: `{service="backend"} \|= "ca.init"` |
+
+### Certificate Lifecycle Events
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `ca.initialized` | INFO | `ca_serial`, `expires_at` | CA certificate loaded or generated at backend startup |
+| `ca.initialization_failed` | ERROR | `error` | CA failed to initialize; certificate issuance and validation unavailable until backend restarts |
+| `cert.issued` | INFO | `instance_id`, `serial_number`, `expires_at`, `agent_type_id` | New certificate issued to an agent instance |
+| `cert.renewed` | INFO | `instance_id`, `old_serial`, `new_serial`, `expires_at` | Certificate automatically renewed before expiry |
+| `cert.renewal_failed` | ERROR | `instance_id`, `serial_number`, `error`, `attempt` | Certificate renewal attempt failed; agent runtime shuts down gracefully after expiry if unresolved |
+| `cert.revoked` | INFO | `serial_number`, `reason`, `revoked_by` | Certificate revoked via API; rejection is effective immediately on all subsequent validation calls |
+| `cert.validation.valid` | DEBUG | `serial_number`, `cn`, `requested_operation`, `validated_by_service` | Certificate validated successfully; logged per validation call |
+| `cert.validation.failed` | WARN | `serial_number`, `cn`, `outcome`, `failure_reason`, `validated_by_service` | Certificate validation rejected; `outcome` is one of `expired`, `revoked`, `invalid_signature`, or `unknown` |
+
+---
+
+## MCP Demo App Log Events
+
+All log entries are structured JSON and include `trace_id` and `span_id` for correlation with Jaeger traces.
+
+**Log access:**
+- Docker Compose: `docker compose logs mcp-demo-app`
+- Loki: `{service="mcp-demo-app"}`
+
+### Startup Sequence
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `keycloak.token_grant.success` | INFO | `realm`, `client_id`, `expires_in` | Successful client credentials grant at startup |
+| `keycloak.token_grant.failure` | ERROR | `realm`, `client_id`, `error`, `status_code` | Failed client credentials grant; container will not serve requests |
+| `hub.registration.success` | INFO | `slug`, `server_id` | Demo app registered with Hub; `server_id` is the assigned Hub record ID |
+| `hub.registration.conflict` | INFO | `slug`, `existing_server_id` | 409 returned by Hub; existing record looked up and reused (idempotent) |
+| `hub.registration.failure` | ERROR | `slug`, `error`, `status_code` | Hub unreachable or rejected registration; tool calls will not be routed |
+| `hub.sync.success` | INFO | `slug`, `tools_synced` | Tool manifest synced to Hub after registration |
+| `hub.sync.failure` | ERROR | `slug`, `error` | Tool sync failed; Hub tool list may be stale |
+
+### Request Handling
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `mcp.tools_call.received` | INFO | `tool_name`, `agent_sub`, `trace_id` | Incoming `tools/call` request with valid JWT |
+| `mcp.tools_call.completed` | INFO | `tool_name`, `agent_sub`, `duration_ms` | Tool handler returned successfully |
+| `mcp.jwt_validation.failure` | WARN | `error`, `token_hint` (first 8 chars of JWT), `trace_id` | Bearer token failed validation; 401 returned to caller |
+| `mcp.method_not_found` | WARN | `method`, `trace_id` | JSON-RPC method not implemented; -32601 returned to caller |
+| `keycloak.jwks.refreshed` | DEBUG | `keys_count`, `cache_age_s` | JWKS cache refreshed (every 10 min) |
+| `keycloak.token.refreshed` | DEBUG | `expires_in`, `refreshed_at` | Access token refreshed (~30 s before expiry) |
 | `identity.token_refresh` | DEBUG | `identity_id` | Existing token refreshed before expiry |
 | `identity.token_refresh_failed` | ERROR | `identity_id`, `oidc_error` | Token refresh failed; includes OIDC provider error detail |
 | `identity.token_expired` | WARN | `identity_id`, `job_id` | Token discovered to have expired mid-execution |

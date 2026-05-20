@@ -1,0 +1,25 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend[39m
+
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö new skill[2m > [22mrenders the skill editor panel[33m 381[2mms[22m[39m
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö new skill[2m > [22mrenders the instructions field
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö new skill[2m > [22mrenders tool selection section grouped by server
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö new skill[2m > [22mrenders close button
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö new skill[2m > [22mrenders save button
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö editing existing skill[2m > [22mpre-populates the name field
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö editing existing skill[2m > [22mpre-populates the instructions field
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö editing existing skill[2m > [22mrenders role assignment sidebar with loaded roles
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö editing existing skill[2m > [22mrenders without runtime errors
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22mrenders Generated Tool Reference section label when editing an existing skill
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22mdoes not render Generated Tool Reference section for new skill (null prop)
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22mrenders a collapsible toggle button next to the section label
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22msection content area uses a pre element (read-only, not a textarea or input)
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22mshows skills.noTools empty-state when skill has no tool section in instructions_with_tools
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22mshows tool section content when instructions_with_tools has ## Tools marker
+ [32mΓ£ô[39m src/__tests__/SkillEditor.test.tsx[2m > [22mSkillEditor ΓÇö Generated Tool Reference section[2m > [22msection is structurally distinct from the editable instructions textarea
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m16 passed[39m[22m[90m (16)[39m
+[2m   Start at [22m 20:50:33
+[2m   Duration [22m 8.42s[2m (transform 194ms, setup 675ms, collect 2.69s, tests 1.67s, environment 2.01s, prepare 688ms)[22m
+

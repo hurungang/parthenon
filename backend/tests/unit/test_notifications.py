@@ -15,7 +15,7 @@ async def test_notification_dispatcher_creates_event_on_dispatch():
 
     channel = MagicMock(spec=NotificationChannel)
     channel.id = uuid.uuid4()
-    channel.channel_type = ChannelType.webhook
+    channel.channel_type = ChannelType.TEAMS_WEBHOOK
     channel.encrypted_config = None  # no config
 
     event = MagicMock(spec=NotificationEvent)
@@ -66,11 +66,11 @@ async def test_notification_dispatcher_webhook_makes_http_call():
 
 
 def test_notification_dispatcher_mcp_tools_cover_all_channels():
-    """NotificationDispatcher.MCP_TOOLS has definitions for email, slack, teams, webhook."""
+    """NotificationDispatcher.MCP_TOOLS has send_notification and get_recipient_group tools."""
     from app.services.notifications.dispatcher import NotificationDispatcher
 
     tool_names = {t["name"] for t in NotificationDispatcher.MCP_TOOLS}
-    assert "notify_email" in tool_names
-    assert "notify_slack" in tool_names
-    assert "notify_teams" in tool_names
-    assert "notify_webhook" in tool_names
+    assert "send_notification" in tool_names
+    assert "get_recipient_group" in tool_names
+    # Legacy channel-specific tools (notify_email, notify_slack, etc.) no longer exist
+    # All notification dispatching now goes through send_notification with group-based routing

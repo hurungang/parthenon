@@ -66,6 +66,29 @@ Core pages and flows verified to render correctly:
 
 ---
 
+### 4. Passthrough Session UI
+
+**What is tested:**
+- McpSessionManager: passthrough option present in auth type selector; all credential input fields hidden when selected; informational alert displayed; submit payload omits credentials; passthrough chip shown in session table
+- McpSessionManager: switching between passthrough and credential auth types toggles credential field visibility without page reload
+- TestMcpToolDialog: for a server whose active session has `auth_type === 'passthrough'`, session picker is replaced by an agent identity picker; submit payload includes `session_id` and `agent_subject`
+- TestMcpToolDialog: for a server with a non-passthrough session, existing session picker renders unchanged
+- AssignMcpSessionsToRoleDialog: passthrough sessions display a "Passthrough" chip badge; sessions remain selectable; one-session-per-server toggle UI not shown for passthrough sessions
+
+**Acceptance criteria:**
+- Credential fields are completely hidden (not just disabled) when passthrough is selected
+- Identity picker in TestMcpToolDialog is populated from the agents API
+- Passthrough chip rendered in all relevant session lists without page reload
+- No regression in non-passthrough session flows
+
+**Test files:**
+- [frontend/src/__tests__/McpSessionManager.test.tsx](../../../../frontend/src/__tests__/McpSessionManager.test.tsx) — credential field hiding, informational alert, passthrough chip, submit payload, auth type toggle
+- [frontend/src/__tests__/TestMcpToolDialog.test.tsx](../../../../frontend/src/__tests__/TestMcpToolDialog.test.tsx) — identity picker rendered for passthrough server; session picker absent; correct payload on submit
+- [frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx](../../../../frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx) — passthrough badge, session selectable, toggle constraint not shown
+- [e2e/tests/passthrough-sessions.spec.ts](../../../../e2e/tests/passthrough-sessions.spec.ts) — mocked UI flow: admin creates passthrough session, chip displayed, identity picker shown in tool test dialog; `test.describe('Real Backend Integration')`: unauthenticated tool test returns correct status, passthrough+credentials rejected
+
+---
+
 ## Edge Cases & Risks
 
 - Font loading failure causes fallback to Roboto or system fonts — must be caught by theme-application tests
@@ -82,3 +105,4 @@ Core pages and flows verified to render correctly:
 |--------|-------------|-------|
 | apply-material-theme | Material UI theming: Inter font, indigo palette, component overrides, WCAG AA | 2026-04-30 |
 | unified-agent-navigation | Added agent-navigation.spec.ts to General UI Smoke table | 2026-05-10 |
+| passthrough-sessions | Added section 4: Passthrough Session UI (McpSessionManager, TestMcpToolDialog, AssignMcpSessionsToRoleDialog) | 2026-05-12 |

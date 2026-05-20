@@ -207,7 +207,7 @@ erDiagram
         uuid server_id
         string name
         string description
-        enum auth_type
+        enum auth_type "api_key|bearer_token|basic_auth|oauth2|none|passthrough"
         string encrypted_credentials
         string identity_subject
         json identity_binding
@@ -233,6 +233,9 @@ erDiagram
     McpServer ||--o{ McpTool : "provides"
     McpTool ||--o{ ToolPermission : "governed by"
 ```
+
+**Business rules:**
+- `passthrough` sessions forward the executing agent's identity to the MCP server at call time; no credentials are stored or required.
 
 **Source**: `backend/app/db/models/mcp_hub.py`
 
@@ -342,8 +345,11 @@ erDiagram
         string realm_name
         string access_token_encrypted
         string refresh_token_encrypted
+        string encrypted_refresh_token
         datetime token_expiry
+        datetime last_token_refresh_at
         enum status
+        enum token_status
         datetime created_at
         datetime updated_at
     }
@@ -395,13 +401,94 @@ erDiagram
         datetime updated_at
     }
 
+    AgentInstanceCertificate {
+        uuid id
+        uuid agent_type_id
+        string instance_id
+        string serial_number
+        enum status
+    }
+    TokenRefreshLog {
+        uuid id
+        uuid agent_identity_id
+        enum outcome
+        int retry_attempt
+    }
+
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
     AgentType ||--o| AgentPlan : "has current plan"
+    AgentType ||--o{ AgentInstanceCertificate : "issues"
+    AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
-**Source**: `backend/app/db/models/agents.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+
+---
+
+## Agent Runtime Security
+
+```mermaid
+erDiagram
+    AgentInstanceCertificate {
+        uuid id
+        uuid agent_type_id
+        string instance_id
+        string certificate_pem
+        string serial_number
+        datetime issued_at
+        datetime expires_at
+        datetime revoked_at
+        string revocation_reason
+        enum status
+        datetime created_at
+        datetime updated_at
+    }
+    CertificateRevocationEntry {
+        uuid id
+        string serial_number
+        datetime revoked_at
+        string revoked_by
+        string reason
+        datetime created_at
+    }
+    TokenRefreshLog {
+        uuid id
+        uuid agent_identity_id
+        datetime attempted_at
+        enum outcome
+        string error_message
+        int retry_attempt
+        datetime next_retry_at
+        json metadata
+        datetime created_at
+    }
+    CertificateValidationLog {
+        uuid id
+        string certificate_serial_number
+        string certificate_cn
+        datetime validated_at
+        enum outcome
+        string failure_reason
+        string validated_by_service
+        string requested_operation
+        datetime created_at
+    }
+    AgentType {
+        uuid id
+        string name
+    }
+    AgentIdentity {
+        uuid id
+        string name
+    }
+
+    AgentType ||--o{ AgentInstanceCertificate : "issues"
+    AgentIdentity ||--o{ TokenRefreshLog : "logs"
+```
+
+**Sources**: `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/certificate_revocation_entry.py`, `backend/app/db/models/token_refresh_log.py`, `backend/app/db/models/certificate_validation_log.py`
 
 ---
 
@@ -472,21 +559,66 @@ erDiagram
     NotificationChannel {
         uuid id
         string name
-        enum channel_type
+        string description
+        enum channel_type "SMTP, EMAIL_API, WEBHOOK, MESSENGER"
         boolean is_active
+        datetime created_at
+        datetime updated_at
     }
-    NotificationEvent {
+    ChannelProperty {
         uuid id
         uuid channel_id
+        string key
+        string encrypted_value
+        boolean is_secret
+        datetime created_at
+        datetime updated_at
+    }
+    RecipientGroup {
+        uuid id
+        string name
+        string slug
+        string description
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+    GroupChannelMapping {
+        uuid id
+        uuid group_id
+        uuid channel_id
+        datetime created_at
+    }
+    NotificationLog {
+        uuid id
+        uuid group_id
+        uuid channel_id
+        enum source_type "SOP, AGENT, MANUAL"
+        uuid source_id
         string subject
         string body
         string recipient
-        enum status
+        enum status "PENDING, DELIVERED, FAILED"
+        string error
+        json metadata
+        datetime created_at
+        datetime delivered_at
     }
 
     ScheduledJob ||--o{ JobExecution : "triggers"
-    NotificationChannel ||--o{ NotificationEvent : "sends"
+    NotificationChannel ||--o{ ChannelProperty : "configured via"
+    NotificationChannel ||--o{ GroupChannelMapping : "assigned to"
+    RecipientGroup ||--o{ GroupChannelMapping : "delivered via"
+    RecipientGroup ||--o{ NotificationLog : "notified in"
+    NotificationChannel ||--o{ NotificationLog : "sent through"
 ```
+
+**Entity notes:**
+- `NotificationChannel` — a configured outbound destination (SMTP relay, Email API, webhook endpoint, or Instant Messenger connector). One channel can serve multiple recipient groups.
+- `ChannelProperty` — individual key-value configuration for a channel. Secret properties (`is_secret=true`) are encrypted at rest and never returned in API responses.
+- `RecipientGroup` — a named, addressable audience. Agents and SOPs target a group by `slug`; the platform resolves all assigned channels and delivers to each.
+- `GroupChannelMapping` — many-to-many association between recipient groups and channels.
+- `NotificationLog` — immutable delivery record per channel attempt. Records source (`SOP`, `AGENT`, or `MANUAL`), delivery status, and any error detail.
 
 **Sources**: `backend/app/db/models/results.py`, `backend/app/db/models/scheduling.py`, `backend/app/db/models/notifications.py`
 

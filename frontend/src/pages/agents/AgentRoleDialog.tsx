@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -27,12 +27,16 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import CloudQueueIcon from '@mui/icons-material/CloudQueue'
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import { useAllTools } from '../../hooks/useMcpServers'
+import { canonicalizeToolName } from '../../utils/toolNaming'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { AssignIdentitiesToRoleDialog } from './AssignIdentitiesToRoleDialog'
 import { AssignMcpSessionsToRoleDialog } from './AssignMcpSessionsToRoleDialog'
-import type { AgentIdentity, AgentRole, Skill, Sop } from '../../types'
+import type { AgentIdentity, AgentRole, McpTool, Skill, Sop } from '../../types'
 
 interface McpSessionInfo {
   id: string
@@ -62,11 +66,17 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
   const [description, setDescription] = useState('')
   const [selectedSopIds, setSelectedSopIds] = useState<string[]>([])
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([])
+  // Skills that are auto-locked because a selected SOP requires them.
+  // Locked skills are auto-checked and their checkboxes are disabled.
+  const [lockedSkills, setLockedSkills] = useState<Set<string>>(new Set())
   const [previewTools, setPreviewTools] = useState<string[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignMcpDialogOpen, setAssignMcpDialogOpen] = useState(false)
+  const [toolRefOpen, setToolRefOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const { data: allTools } = useAllTools()
 
   const { data: sops } = useQuery<Sop[]>({
     queryKey: ['sops'],
@@ -111,10 +121,38 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
       setDescription(editRole?.description ?? '')
       setSelectedSopIds(editRole?.sop_ids ?? [])
       setSelectedSkillIds(editRole?.skill_ids ?? [])
+      setLockedSkills(new Set())
       setPreviewTools([])
       setDialogError(null)
     }
   }, [open, editRole])
+
+  // Recompute locked skills (and auto-select/deselect them) whenever the
+  // selected SOPs or the SOP data changes.
+  useEffect(() => {
+    const newLocked = new Set<string>()
+    for (const sopId of selectedSopIds) {
+      const sop = (sops ?? []).find((s) => s.id === sopId)
+      if (sop?.required_skill_ids) {
+        sop.required_skill_ids.forEach((skillId) => newLocked.add(skillId))
+      }
+    }
+    // Use the functional form of setLockedSkills to access the previous locked
+    // set so we can remove skills that are no longer required by any SOP.
+    setLockedSkills((prevLocked) => {
+      setSelectedSkillIds((prevSkills) => {
+        const next = new Set(prevSkills)
+        // Auto-select all newly locked skills
+        newLocked.forEach((id) => next.add(id))
+        // Remove skills that were locked before but are no longer needed
+        prevLocked.forEach((id) => {
+          if (!newLocked.has(id)) next.delete(id)
+        })
+        return Array.from(next)
+      })
+      return newLocked
+    })
+  }, [selectedSopIds, sops])
 
   // Fetch MCP tool preview when in edit mode and selection changes
   useEffect(() => {
@@ -123,8 +161,13 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
     debounceRef.current = setTimeout(async () => {
       try {
         setPreviewLoading(true)
+        // Pass current selections as query parameters for live preview
+        const params = new URLSearchParams({
+          skill_ids: selectedSkillIds.join(','),
+          sop_ids: selectedSopIds.join(','),
+        })
         const { data } = await apiClient.get<string[]>(
-          `/agents/roles/${editRole.id}/mcp-tools`,
+          `/agents/roles/${editRole.id}/mcp-tools?${params.toString()}`,
         )
         setPreviewTools(data)
       } catch {
@@ -138,10 +181,36 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
     }
   }, [editRole?.id, selectedSopIds, selectedSkillIds])
 
+  // Build a schema-based tool reference text from previewTools + allTools metadata
+  const toolReferenceText = useMemo(() => {
+    if (!previewTools.length) return null
+    const toolMap = new Map<string, McpTool>()
+    ;(allTools ?? []).forEach((tool) => {
+      toolMap.set(tool.name, tool)
+      toolMap.set(canonicalizeToolName(tool.name), tool)
+    })
+    const lines: string[] = ['## Tools']
+    for (const rawToolName of previewTools) {
+      const toolName = canonicalizeToolName(rawToolName)
+      const tool = toolMap.get(toolName)
+      lines.push(`\n### \`${toolName}\``)
+      if (tool?.description) lines.push(tool.description)
+      if (tool?.input_schema) {
+        lines.push('\n**Input Schema:**')
+        lines.push('```json')
+        lines.push(JSON.stringify(tool.input_schema, null, 2))
+        lines.push('```')
+      }
+    }
+    return lines.join('\n')
+  }, [previewTools, allTools])
+
   const toggleSop = (id: string) => {
     setSelectedSopIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     )
+    // Note: skill auto-selection is handled by the useEffect above that
+    // watches selectedSopIds — no extra logic needed here.
   }
 
   const toggleSkill = (id: string) => {
@@ -281,18 +350,28 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                     <Typography variant="body2" color="text.secondary">{t('app.noData')}</Typography>
                   ) : (
                     (skills ?? []).map((skill) => (
-                      <FormControlLabel
+                      <Tooltip
                         key={skill.id}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={selectedSkillIds.includes(skill.id)}
-                            onChange={() => toggleSkill(skill.id)}
-                          />
+                        title={
+                          lockedSkills.has(skill.id)
+                            ? t('agents.roles.skillLockedBySOPTooltip', { defaultValue: 'Required by a selected SOP' })
+                            : ''
                         }
-                        label={skill.name}
-                        sx={{ display: 'flex', mx: 0 }}
-                      />
+                        placement="right"
+                      >
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={selectedSkillIds.includes(skill.id)}
+                              onChange={() => toggleSkill(skill.id)}
+                              disabled={lockedSkills.has(skill.id)}
+                            />
+                          }
+                          label={skill.name}
+                          sx={{ display: 'flex', mx: 0 }}
+                        />
+                      </Tooltip>
                     ))
                   )}
                 </Box>
@@ -423,7 +502,19 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
 
             {/* MCP Tool Preview */}
             <Box>
-              <Typography variant="subtitle2" mb={1}>{t('agents.roles.mcpToolPreview')}</Typography>
+              <Box
+                display="flex"
+                alignItems="center"
+                sx={{ mb: 1, cursor: isEditing && previewTools.length > 0 ? 'pointer' : 'default', userSelect: 'none' }}
+                onClick={() => isEditing && previewTools.length > 0 && setToolRefOpen((o) => !o)}
+              >
+                <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>{t('agents.roles.mcpToolPreview')}</Typography>
+                {isEditing && previewTools.length > 0 && (
+                  <IconButton size="small" tabIndex={-1}>
+                    {toolRefOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                  </IconButton>
+                )}
+              </Box>
               {!isEditing ? (
                 <Alert severity="info">{t('agents.roles.mcpToolPreviewHint')}</Alert>
               ) : previewLoading ? (
@@ -433,22 +524,35 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                   {t('agents.roles.noMcpTools')}
                 </Typography>
               ) : (
-                <Box
-                  sx={{
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    maxHeight: 140,
-                    overflow: 'auto',
-                    p: 1,
-                  }}
-                >
-                  {previewTools.map((tool) => (
-                    <Typography key={tool} variant="body2" sx={{ fontFamily: 'monospace', py: 0.25 }}>
-                      {tool}
-                    </Typography>
-                  ))}
-                </Box>
+                <>
+                  {/* Summary chips */}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: toolRefOpen ? 1 : 0 }}>
+                    {previewTools.map((tool) => (
+                      <Chip key={tool} label={tool} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
+                    ))}
+                  </Box>
+                  {/* Schema reference (collapsible) */}
+                  {toolRefOpen && toolReferenceText && (
+                    <Box
+                      component="pre"
+                      sx={{
+                        mt: 1,
+                        p: 1.5,
+                        bgcolor: 'action.hover',
+                        borderRadius: 1,
+                        fontSize: '0.72rem',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        color: 'text.secondary',
+                        maxHeight: 400,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {toolReferenceText}
+                    </Box>
+                  )}
+                </>
               )}
             </Box>
           </Box>

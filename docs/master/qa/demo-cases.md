@@ -17,6 +17,10 @@
 - MCP Hub > MCP Hub has a register/add server button
 - MCP Session CRUD with new fields > MCP session API response includes identity_binding and credential_config
 - Notification Configuration > notification page shows channel names from API
+- Notification Channel Management > create channel updates list without page reload
+- Recipient Group Management > create group updates list without page reload
+- Notification Log Page > clicking a log row opens the detail view
+- Real Backend Integration - Notifications > notification channels endpoint returns 200
 - Observability Dashboard > observability dashboard shows request rate metric
 - Result Repository > result repository shows result payload text
 - Schedule Manager > schedule manager shows schedule names from API
@@ -97,6 +101,14 @@
 - Agent Type Details Dialog > identity view dialog has Edit button that navigates to identities page
 - Agent Type Details Dialog > clicking role name in Details tab opens role view dialog
 - Agent Type Details Dialog > role view dialog has Edit button that opens role edit form
+- Passthrough Sessions — Mocked > passthrough session chip displayed in session table
+- Passthrough Sessions — Mocked > creating passthrough session excludes credentials from payload
+- Passthrough Sessions — Mocked > passthrough session auth_type value is correct in API response
+- Real Backend Integration — Passthrough Sessions > passthrough session creation with credentials is rejected by real backend — AC-1 validation
+- Mocked — Certificate Authentication: Issue response excludes identity tokens > certificate issue response has cert/key but never identity tokens
+- Mocked — Metadata Security: zero identity tokens in Agent Runtime boundary > authorization response: identity_token present at Communication Hub boundary (not Agent Runtime)
+- Mocked — Tool Authorization Decision Outcomes > authorized=false: insufficient permissions — no token, includes reason
+- Mocked — Certificate Revocation Response and Downstream Effects > after revocation: tool authorization returns unauthorized with revoked reason
 
 ## Scenario Index
 | # | Feature | What it Shows | Change | Spec File |
@@ -193,3 +205,15 @@
 | 81 | Edit button in identity view dialog | Agent Identity view dialog has an Edit button that navigates to /agents/identities | unified-agent-navigation | agent-navigation.spec.ts |
 | 82 | Clickable role name in Details tab | Role field in Details dialog renders as a clickable button; clicking opens the Agent Role view dialog | unified-agent-navigation | agent-navigation.spec.ts |
 | 83 | Edit button in role view dialog | Agent Role view dialog has an Edit button that opens the role edit form dialog | unified-agent-navigation | agent-navigation.spec.ts |
+| 84 | MCP Demo App — Health Check | `GET /health` returns HTTP 200 with `{"status":"ok","slug":"demo"}` — no auth required | mcp-demo-app | (manual) |
+| 85 | MCP Demo App — Hub Registration | After `start.ps1`, the `demo` server appears in MCP Hub with status `active` and the `helloWorld` tool listed under the `demo/` namespace | mcp-demo-app | (manual) |
+| 86 | MCP Demo App — Agent JWT Tool Call | Agent obtains a Keycloak client-credentials JWT and POSTs a `tools/call` for `helloWorld`; response includes `"message":"Hello from MCP Demo App!"` and `agent_sub` matching the JWT `sub` claim | mcp-demo-app | (manual) |
+| 87 | MCP Demo App — Auth Guard (401) | POSTing to `/mcp` with an invalid or missing Bearer token returns HTTP 401 Unauthorized | mcp-demo-app | (manual) |
+| 88 | Passthrough chip in session table | User sees a "Passthrough" chip badge in the session list, confirming the auth type is displayed correctly | passthrough-sessions | passthrough-sessions.spec.ts |
+| 89 | Admin creates passthrough session | Admin selects passthrough auth type, credential fields are hidden, and the submitted payload contains no credentials | passthrough-sessions | passthrough-sessions.spec.ts |
+| 90 | Passthrough API contract | API response for a passthrough session carries the correct `auth_type`, `is_active`, and connection test values — no encrypted credentials in the payload | passthrough-sessions | passthrough-sessions.spec.ts |
+| 91 | Real backend rejects credentials on passthrough | Live backend enforces the constraint: submitting credentials with a passthrough session returns 422, never 500 | passthrough-sessions | passthrough-sessions.spec.ts |
+| 92 | Certificate Lifecycle | Admin issues a certificate and receives `certificate_pem`, `private_key_pem`, `serial_number`, and `expires_at` — confirming the cert carries no identity tokens (AC-1 one-time delivery to admin only) | agent-runtime-security-segregation | agent-security-segregation.spec.ts |
+| 93 | Security Boundary (Agent Runtime vs Communication Hub) | The `authorize/tool-call` response carries `identity_token` to the Communication Hub, but the certificate validate endpoint (Agent Runtime boundary) never does — demonstrating the token never crosses into Agent Runtime | agent-runtime-security-segregation | agent-security-segregation.spec.ts |
+| 94 | Authorization Flow — Permission Denial | An agent with a valid certificate but insufficient permissions receives `authorized=false`, a null identity token (no credential exposure on deny — AC-6 fail-safe), and a structured `reason` + `required_permission` for auditing | agent-runtime-security-segregation | agent-security-segregation.spec.ts |
+| 95 | Certificate Revocation — Downstream Effect | After a certificate is revoked, a tool-call authorization using that serial number returns `authorized=false` with `reason: certificate_revoked` and a null identity token — proving revocation propagates immediately to tool access | agent-runtime-security-segregation | agent-security-segregation.spec.ts |

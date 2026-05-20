@@ -20,16 +20,21 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from opentelemetry import trace
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from app.agent_runtime.data_client import ControlCenterDataClient
+    from app.agent_runtime.comm_hub_client import CommHubToolClient
 
 from app.db.models.agents import AgentJob, AgentJobStatus, AgentInputType
 from app.services.agents.agent_loop import TaskAgentLoop, ConversationalAgentLoop
 from app.services.agents.permission_manager import AgentPermissionManager, PermissionDeniedError
 from app.services.agents.runtime_loader import AgentRuntimeLoader
 from app.services.agents.session_service import AgentSessionService
+from app.services.agents.tool_naming import is_system_tool as _is_system_tool, parse_tool_name, build_tool_name
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -43,46 +48,70 @@ except ImportError:
 
 
 def _sanitize_tool_name_for_openai(tool_name: str) -> str:
-    """Sanitize MCP tool name for OpenAI API (replace / with _).
-    
-    OpenAI requires tool names to match ^[a-zA-Z0-9_-]+$.
-    MCP tool names use format mcp_slug/tool_name which contains invalid /.
+    """Sanitize a canonical tool name for the OpenAI API.
+
+    OpenAI requires tool names to match ``^[a-zA-Z0-9_-]+$``.
+    Canonical names use ``____`` (four underscores) as the server/tool separator
+    and ``/`` in legacy MCP names — both are converted to ``__`` (double underscore)
+    so the name stays within OpenAI limits while remaining reversible via tool_map.
     """
-    return tool_name.replace("/", "_")
+    return tool_name.replace("____", "__").replace("/", "_")
 
 
 def _restore_tool_name_from_openai(sanitized_name: str, tool_map: dict[str, str]) -> str:
-    """Restore original MCP tool name from OpenAI sanitized name.
-    
-    Uses tool_map to reverse the sanitization: {sanitized_name: original_name}.
-    Returns the sanitized name unchanged if not found in map (e.g., system tools).
+    """Restore the canonical tool name from an OpenAI-sanitised name.
+
+    Uses *tool_map* to reverse the sanitisation: ``{sanitized_name: original_name}``.
+    Returns *sanitized_name* unchanged when not found in the map (safe fallback).
     """
     return tool_map.get(sanitized_name, sanitized_name)
 
 
-# Save-result pseudo-tool definition injected into every agent's tool set
-_SAVE_RESULT_TOOL_DEF: dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "save_result",
-        "description": (
-            "Persist the final output to the Result Repository. "
-            "Call this when the task is complete and you have a result to save."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Short title for the result"},
-                "content": {"type": "string", "description": "Summary or text of the result"},
-                "data": {
-                    "type": "object",
-                    "description": "Structured payload to persist",
-                },
-            },
-            "required": ["content"],
-        },
-    },
-}
+def _resolve_result_content_type(output_type: str, requested: str | None = None) -> str:
+    """Resolve MIME content type for persisted save_result records."""
+    if requested:
+        normalized = requested.strip().lower()
+        aliases = {
+            "text": "text/plain",
+            "markdown": "text/markdown",
+            "json": "application/json",
+        }
+        return aliases.get(normalized, requested)
+
+    if output_type == "markdown":
+        return "text/markdown"
+    if output_type == "typed":
+        return "application/json"
+    return "text/plain"
+
+
+def _normalize_result_payload(tool_args: dict[str, Any], content_type: str) -> dict[str, Any]:
+    """Normalize tool args to ResultRecord JSON payload."""
+    if "data" in tool_args and tool_args["data"] is not None:
+        data = tool_args["data"]
+        if isinstance(data, dict):
+            return data
+        return {"value": data}
+
+    content = tool_args.get("content", "")
+    if content_type == "application/json" and isinstance(content, dict):
+        return content
+    return {"content": content}
+
+
+def _ensure_save_result_title(tool_name: str, args: dict[str, Any], fallback_title: str) -> dict[str, Any]:
+    """Inject a default title for save_result calls so logs/persistence always include one."""
+    if tool_name != "save_result":
+        return args
+    if isinstance(args.get("title"), str) and args.get("title", "").strip():
+        return args
+    return {**args, "title": fallback_title}
+
+
+# NOTE: Hardcoded system tool definitions removed (task 10.4).
+# System tool schemas now live in _SYSTEM_TOOL_SCHEMAS inside agent_data.py and
+# are served by the Control Center context API.  The executor picks them up via
+# context["tool_definitions"] — no local constants needed.
 
 
 class AgentRuntimeExecutor:
@@ -93,10 +122,17 @@ class AgentRuntimeExecutor:
     For conversational agents: the loop is driven externally via WebSocket messages.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, data_client: Any = None) -> None:
+        """Initialize executor with optional data client.
+        
+        Args:
+            data_client: ControlCenterDataClient instance with properly configured certificate.
+                        If None, will attempt to use app.state.data_client in runtime.
+        """
         self._permission_manager = AgentPermissionManager()
         self._session_service = AgentSessionService()
         self._runtime_loader = AgentRuntimeLoader()
+        self._data_client = data_client
 
     # ── Execution Log Helper ───────────────────────────────────────────────────
 
@@ -106,30 +142,34 @@ class AgentRuntimeExecutor:
         event_type: str,
         message: str,
         data: dict[str, Any],
-        db: AsyncSession,
         log_level: str = "INFO",
     ) -> None:
-        """Persist a structured execution event entry and emit to the Python logger."""
-        from app.db.models.session_logs import ExecutionLogEntry
-        from datetime import datetime, UTC
-
+        """Persist a structured execution event via Control Center data API and emit to logger."""
         logger.info("[%s] %s: %s", session_id, event_type, message, extra={"data": data})
 
-        entry = ExecutionLogEntry(
-            id=uuid.uuid4(),
-            session_id=session_id,
-            event_type=event_type,
-            log_level=log_level,
-            message=message,
-            data=data or {},
-            timestamp=datetime.now(UTC),
-        )
-        db.add(entry)
-        try:
-            await db.flush()
-        except Exception as exc:
+        if self._data_client is None:
             logger.warning(
-                "Failed to flush execution log entry for session %s: %s", session_id, exc
+                "[%s] No data_client configured - execution logs will not persist. "
+                "Ensure AgentRuntimeExecutor is instantiated with app.state.data_client.",
+                session_id
+            )
+            return
+
+        try:
+            await self._data_client.log_execution_event(
+                session_id=session_id,
+                event_type=event_type,
+                message=message,
+                data=data or {},
+                log_level=log_level,
+            )
+        except Exception as exc:
+            logger.error(
+                "[%s] Failed to persist execution log to Control Center: %s (event_type=%s)",
+                session_id,
+                exc,
+                event_type,
+                exc_info=True
             )
 
     async def _capture_prompt_log(
@@ -173,7 +213,6 @@ class AgentRuntimeExecutor:
                 "system_instruction_length": len(system_instruction or ""),
                 "user_prompt_length": len(user_prompt or ""),
             },
-            db=db,
         )
 
     # ── SOPs / Skills loader (GAP-1) ─────────────────────────────────────────
@@ -213,7 +252,6 @@ class AgentRuntimeExecutor:
                     "sops": sops,
                     "skills": skills,
                 },
-                db=db,
             )
         except Exception as exc:
             logger.warning(
@@ -351,47 +389,24 @@ class AgentRuntimeExecutor:
     ) -> tuple[list[dict[str, Any]], dict[str, str]]:
         """Load MCP tool schemas for all allowed tools and return as OpenAI tool definitions.
 
-        System tools (``save_result``, ``send_notification``) are always included.
-        All other active MCP tools whose name appears in allowed_tools are fetched
-        and wrapped in the OpenAI function-calling schema.
-        
+        All tool names come from the DB (including ``system____*`` rows seeded by
+        mcp_hub.  No system tools are hardcoded here — they are fetched the same
+        way as MCP tools so the agent_data context API is the single source of truth.
+
         Returns:
             Tuple of (tool_definitions, tool_name_map) where tool_name_map maps
-            sanitized names back to original names for MCP tool lookup.
+            sanitized names back to original names for CommHub routing.
         """
         from sqlalchemy import select
         from app.db.models.mcp_hub import McpTool
 
-        defs: list[dict[str, Any]] = [_SAVE_RESULT_TOOL_DEF]
+        defs: list[dict[str, Any]] = []
         tool_name_map: dict[str, str] = {}  # Maps sanitized_name -> original_name
-        
-        # Add send_notification system tool
-        defs.append({
-            "type": "function",
-            "function": {
-                "name": "send_notification",
-                "description": "Send a notification to user or system channels",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "channel": {"type": "string", "description": "Notification channel (email, slack, teams)"},
-                        "title": {"type": "string", "description": "Notification title"},
-                        "message": {"type": "string", "description": "Notification message"},
-                    },
-                    "required": ["channel", "title", "message"],
-                },
-            },
-        })
 
-        # Filter out system tools from MCP query; identifiers are mcp_slug/tool_name
-        tool_names = []
-        for t in allowed_tools:
-            if t in ("save_result", "send_notification"):
-                continue
-            tool_names.append(t)
-        
+        tool_names = list(allowed_tools)
+
         if not tool_names:
-            logger.debug("No MCP tools to load (only system tools)")
+            logger.debug("No tools to load")
             return defs, tool_name_map
 
         try:
@@ -401,13 +416,13 @@ class AgentRuntimeExecutor:
                 .where(McpTool.is_active.is_(True))
             )
             mcp_tools = list(result.scalars().all())
-            
+
             logger.info(
-                "Loaded %d MCP tool definition(s) from %d allowed tools",
+                "Loaded %d tool definition(s) from %d allowed tools",
                 len(mcp_tools),
                 len(tool_names),
             )
-            
+
             if len(mcp_tools) < len(tool_names):
                 found_names = {t.name for t in mcp_tools}
                 missing = set(tool_names) - found_names
@@ -415,11 +430,11 @@ class AgentRuntimeExecutor:
                     "Some tools not found in mcp_tools table: %s",
                     ", ".join(missing),
                 )
-            
+
             for tool in mcp_tools:
                 sanitized_name = _sanitize_tool_name_for_openai(tool.name)
                 tool_name_map[sanitized_name] = tool.name
-                
+
                 defs.append(
                     {
                         "type": "function",
@@ -439,66 +454,732 @@ class AgentRuntimeExecutor:
 
     # ── Public Entry Point ─────────────────────────────────────────────────────
 
-    async def run(self, session_id: uuid.UUID, db: AsyncSession) -> None:
-        """Entry point called by SessionDispatcher. Executes the session end-to-end."""
+    async def run(self, session_id: uuid.UUID, data_client: "ControlCenterDataClient") -> None:
+        """Entry point called by the /execute trigger endpoint. Executes the session end-to-end.
+
+        The session is already in ``running`` state when this is called — the
+        /execute endpoint transitions it before launching this coroutine.
+        All session state, agent context, and logging flow through the Control Center
+        data API via ``data_client``.  No direct database access.
+        """
         with tracer.start_as_current_span(
             "runtime_executor.run",
             attributes={"session_id": str(session_id)},
         ) as span:
-            job = await db.get(AgentJob, session_id)
-            if not job:
+            job_data = await data_client.get_session(session_id)
+            if not job_data:
                 logger.error("AgentJob %s not found during executor run", session_id)
                 return
 
-            if job.status != AgentJobStatus.running:
-                logger.warning(
-                    "Session %s is not in 'running' state (status=%s) — skipping",
-                    session_id,
-                    job.status,
-                )
-                return
-
             try:
-                output_data = await self._execute_job(job, db)
-                # Result persistence is handled by the LLM calling save_result as a tool.
-                # _persist_result() is no longer called automatically here.
-                await self._session_service.mark_completed(session_id, output_data, db)
+                context = await data_client.get_agent_context(job_data["agent_type_id"])
+                
+                # ── Log agent context loaded ─────────────────────────────────────────
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="agent_context_loaded",
+                    message="Agent context loaded from Control Center",
+                    data={
+                        "agent_type_id": job_data["agent_type_id"],
+                        "has_system_instruction": bool(context.get("system_instruction")),
+                        "system_instruction_length": len(context.get("system_instruction") or ""),
+                        "tool_definitions_count": len(context.get("tool_definitions") or []),
+                        "skills_count": len(context.get("skills") or []),
+                        "skills": [s.get("name") for s in (context.get("skills") or [])],
+                        "sops_count": len(context.get("sops") or []),
+                        "sops": [s.get("name") for s in (context.get("sops") or [])],
+                        "role_name": context.get("role_name"),
+                        "model_id": context.get("model_id"),
+                    },
+                )
+                
+                output_data = await self._run_task_loop_ar(job_data, context, data_client)
+                await data_client.mark_session_completed(session_id, output_data)
                 span.set_attribute("status", "completed")
 
-                await self._log_execution_event(
+                await data_client.log_execution_event(
                     session_id=session_id,
                     event_type="session_completed",
                     message="Session completed successfully",
                     data={"output_keys": list(output_data.keys()) if output_data else []},
-                    db=db,
                 )
             except PermissionDeniedError as exc:
                 error_msg = f"Permission denied: {exc}"
                 logger.warning("Session %s permission denied: %s", session_id, exc)
-                await self._log_execution_event(
+                await data_client.log_execution_event(
                     session_id=session_id,
                     event_type="error",
                     message=error_msg,
                     data={"exception_type": type(exc).__name__},
-                    db=db,
                     log_level="ERROR",
                 )
-                await self._session_service.mark_failed(session_id, error_msg, db)
+                await data_client.mark_session_failed(session_id, error_msg)
                 span.set_attribute("status", "permission_denied")
             except Exception as exc:
                 error_msg = str(exc)
                 logger.exception("Session %s execution error: %s", session_id, exc)
-                await self._log_execution_event(
+                await data_client.log_execution_event(
                     session_id=session_id,
                     event_type="error",
                     message=error_msg,
                     data={"exception_type": type(exc).__name__},
-                    db=db,
                     log_level="ERROR",
                 )
-                await self._session_service.mark_failed(session_id, error_msg, db)
+                await data_client.mark_session_failed(session_id, error_msg)
                 span.set_attribute("status", "failed")
                 span.set_attribute("error", error_msg)
+
+    async def _run_task_loop_ar(
+        self,
+        job_data: dict[str, Any],
+        context: dict[str, Any],
+        data_client: "ControlCenterDataClient",
+    ) -> dict[str, Any]:
+        """Execute a task agent using pre-fetched context from Control Center.
+
+        No database access — all data comes from ``context`` (the CC agent context API
+        response) and all logging flows through ``data_client``.
+        """
+        from app.services.agents.agent_loop import TaskAgentLoop, ConversationalAgentLoop
+        from app.services.agents.model_binding import ModelBindingLayer, ModelBindingError
+
+        session_id = uuid.UUID(job_data["id"])
+        agent_type_id = job_data["agent_type_id"]
+        input_data = job_data.get("input_data") or {}
+
+        # ── Log session_started ───────────────────────────────────────────────
+        await data_client.log_execution_event(
+            session_id=session_id,
+            event_type="session_started",
+            message="Session execution started",
+            data={
+                "agent_type_id": agent_type_id,
+                "model_id": context.get("model_id"),
+                "input_type": context.get("input_type"),
+                "system_instruction_length": len(context.get("system_instruction") or ""),
+                "identity_name": context.get("identity_name"),
+                "role_name": context.get("role_name"),
+            },
+        )
+
+        # ── Resolve allowed tools from context ────────────────────────────────
+        allowed_tools = self._permission_manager.get_allowed_tools_from_context(
+            context.get("allowed_tools") or []
+        )
+
+        await data_client.log_execution_event(
+            session_id=session_id,
+            event_type="tools_resolved",
+            message=f"Resolved {len(allowed_tools)} allowed tool(s)",
+            data={
+                "allowed_tools": sorted(allowed_tools),
+                "role_id": context.get("role_id"),
+            },
+        )
+
+        # ── Log SOPs / Skills ─────────────────────────────────────────────────
+        sops = context.get("sops") or []
+        skills = context.get("skills") or []
+        await data_client.log_execution_event(
+            session_id=session_id,
+            event_type="sops_skills_loaded",
+            message=f"Loaded {len(sops)} SOP(s) and {len(skills)} Skill(s) for role",
+            data={
+                "role_id": context.get("role_id"),
+                "sops": sops,
+                "skills": skills,
+            },
+        )
+
+        # ── Build system instruction with SOP + MCP context ───────────────────
+        system_instruction: str | None = context.get("system_instruction")
+        sop_content: str | None = context.get("sop_content")
+        if sop_content:
+            base = system_instruction or ""
+            system_instruction = f"{base}\n\n{sop_content}".strip()
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="sop_loaded",
+                message="SOP content loaded into system instruction",
+                data={
+                    "primary_sop_id": context.get("primary_sop_id"),
+                    "sop_content_preview": sop_content[:300],
+                    "total_instruction_length": len(system_instruction),
+                },
+            )
+
+        mcp_context: str | None = context.get("mcp_session_context")
+        if mcp_context:
+            base = system_instruction or ""
+            system_instruction = f"{base}\n\n{mcp_context}".strip()
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="mcp_context_loaded",
+                message="MCP session context loaded into system instruction",
+                data={
+                    "role_id": context.get("role_id"),
+                    "mcp_context_preview": mcp_context[:300],
+                    "total_instruction_length": len(system_instruction),
+                },
+            )
+
+        # ── Inject plan ───────────────────────────────────────────────────────
+        plan_data = await data_client.get_agent_plan(uuid.UUID(agent_type_id))
+        if plan_data:
+            plan_text = self._runtime_loader.format_plan_for_injection(plan_data)
+            if plan_text.strip():
+                base = system_instruction or ""
+                system_instruction = f"{base}{plan_text}".strip()
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="plan_injected",
+                    message="Pre-approved plan injected into system instruction",
+                    data={
+                        "agent_type_id": agent_type_id,
+                        "total_instruction_length": len(system_instruction),
+                    },
+                )
+
+        # ── Build tool definitions from context ───────────────────────────────
+        # Tool definitions are provided by CC context API (no local hardcoding).
+        tool_definitions: list[dict[str, Any]] = context.get("tool_definitions") or []
+        tool_name_map: dict[str, str] = context.get("tool_name_map") or {}
+        role_mcp_sessions: dict[str, dict[str, str]] = context.get("role_mcp_sessions") or {}
+
+        # Log tool definitions for debugging
+        tool_names = [t.get("function", {}).get("name") for t in tool_definitions]
+
+        system_tools = [name for name in tool_names if _is_system_tool(name or "")]
+        mcp_tools = [name for name in tool_names if not _is_system_tool(name or "")]
+        
+        await self._log_execution_event(
+            session_id=session_id,
+            event_type="tools_initialized",
+            message=f"Agent initialized with {len(tool_definitions)} tools ({len(system_tools)} system, {len(mcp_tools)} MCP)",
+            data={
+                "tool_count": len(tool_definitions),
+                "tool_names": tool_names,
+                "system_tools": system_tools,
+                "mcp_tools": mcp_tools,
+            },
+        )
+
+        # ── Initialize Communication Hub tool client ──────────────────────────
+        from app.agent_runtime.comm_hub_client import CommHubToolClient
+
+        comm_hub_client = CommHubToolClient()
+        
+        # Configure mTLS certificate for authentication with Communication Hub
+        # Get certificate paths from the CertificateManager via data_client
+        cert_manager = getattr(data_client, "_cert_manager", None)
+        logger.info(
+            "Session %s: Configuring CommHubToolClient - cert_manager=%s",
+            session_id,
+            "available" if cert_manager else "None",
+        )
+        
+        if cert_manager:
+            cert_path = cert_manager.cert_path
+            key_path = cert_manager.key_path
+            logger.info(
+                "Session %s: Certificate paths - cert_path=%s, key_path=%s",
+                session_id,
+                cert_path,
+                key_path,
+            )
+            
+            if cert_path and key_path:
+                cert_path_str = str(cert_path)
+                key_path_str = str(key_path)
+                comm_hub_client.set_certificate(cert_path_str, key_path_str)
+                logger.info(
+                    "Session %s: CommHubToolClient configured with mTLS certificate from CertificateManager",
+                    session_id,
+                )
+            else:
+                logger.warning(
+                    "Session %s: CertificateManager cert_path or key_path is None - "
+                    "Communication Hub tool calls will fail authentication",
+                    session_id,
+                )
+        else:
+            logger.warning(
+                "Session %s: CertificateManager not available - "
+                "Communication Hub tool calls will fail authentication",
+                session_id,
+            )
+
+        # ── Format user prompt ────────────────────────────────────────────────
+        user_prompt: str | None = None
+        if isinstance(input_data, dict):
+            user_prompt = input_data.get("message") or input_data.get("prompt")
+            if not user_prompt and input_data:
+                user_prompt = json.dumps(input_data)
+        elif input_data:
+            user_prompt = str(input_data)
+
+        # Log user prompt and system instruction
+        await self._log_execution_event(
+            session_id=session_id,
+            event_type="prompts_prepared",
+            message="User prompt and system instruction prepared",
+            data={
+                "user_prompt_length": len(user_prompt or ""),
+                "user_prompt_preview": (user_prompt or "")[:200] if user_prompt else None,
+                "system_instruction_length": len(system_instruction or ""),
+                "system_instruction_preview": (system_instruction or "")[:500] if system_instruction else None,
+            },
+        )
+
+        # ── Capture prompt log ────────────────────────────────────────────────
+        await data_client.log_prompt(
+            session_id=session_id,
+            system_instruction=system_instruction,
+            user_prompt=user_prompt,
+        )
+
+        # ── Fetch model config ────────────────────────────────────────────────
+        model_config_id = context.get("model_config_id")
+        model_config_dict: dict[str, Any] = {}
+        if model_config_id:
+            try:
+                model_config_dict = await data_client.get_model_config(uuid.UUID(model_config_id))
+            except Exception as exc:
+                logger.warning("Failed to fetch model config %s: %s", model_config_id, exc)
+
+        model_id: str = context.get("model_id") or ""
+
+        # ── Observe-Reason-Act loop ───────────────────────────────────────────
+        messages: list[dict[str, Any]] = []
+        if user_prompt:
+            messages.append({"role": "user", "content": user_prompt})
+
+        output_data: dict[str, Any] = {}
+        max_iterations = 10
+
+        for iteration in range(max_iterations):
+            # ── Observe ───────────────────────────────────────────────────────
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="observe",
+                message=f"Observe phase — iteration {iteration}",
+                data={
+                    "message_count": len(messages),
+                    "is_complete": False,
+                },
+            )
+
+            # ── Reason ────────────────────────────────────────────────────────
+            full_messages: list[dict[str, Any]] = []
+            if system_instruction:
+                full_messages.append({"role": "system", "content": system_instruction})
+            full_messages.extend(messages)
+
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="llm_request",
+                message=f"LLM request — iteration {iteration + 1}",
+                data={
+                    "model_id": model_id,
+                    "message_count": len(full_messages),
+                    "tool_count": len(tool_definitions),
+                },
+            )
+
+            raw_response: dict[str, Any] = {}
+            llm_success = False
+            if _LANGCHAIN_AVAILABLE and model_config_dict:
+                try:
+                    binding = ModelBindingLayer()
+                    raw_response = await binding.complete_from_context(
+                        model_id=model_id,
+                        model_config_dict=model_config_dict,
+                        messages=full_messages,
+                        tools=tool_definitions if tool_definitions else None,
+                    )
+                    llm_success = True
+                except Exception as exc:
+                    logger.error(
+                        "LLM call failed for session %s: %s — using stub", session_id, exc
+                    )
+
+            if not llm_success:
+                # Stub response: emit save_result and complete
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="llm_response",
+                    message=f"LLM response (stub) — iteration {iteration + 1}",
+                    log_level="WARN",
+                    data={"stub": True, "langchain_available": _LANGCHAIN_AVAILABLE},
+                )
+                output_data = {
+                    "result": "Task completed (stub executor)",
+                    "session_id": str(session_id),
+                    "iterations": iteration + 1,
+                }
+                break
+
+            # Extract text and tool calls from LLM response
+            provider = (model_config_dict.get("provider_type") or "openai")
+            from app.services.agents.model_binding import ModelBindingLayer as _MBL
+            response_text = _MBL.extract_text(raw_response, provider)
+            raw_tool_calls = _MBL.extract_tool_calls(raw_response, provider)
+
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="llm_response",
+                message=f"LLM response — iteration {iteration + 1}",
+                data={
+                    "response_text": (response_text or "")[:500],
+                    "has_tool_calls": bool(raw_tool_calls),
+                    "finish_reason": "tool_calls" if raw_tool_calls else "stop",
+                },
+            )
+
+            if not raw_tool_calls:
+                # Final answer — no more tool calls
+                output_data = {"result": response_text or "", "model_id": model_id}
+                break
+
+            # Append assistant message with tool calls
+            messages.append({
+                "role": "assistant",
+                "content": response_text or "",
+                "tool_calls": raw_tool_calls,
+            })
+
+            # ── Act ───────────────────────────────────────────────────────────
+            role_id_str = context.get("role_id") or ""
+            role_id = uuid.UUID(role_id_str) if role_id_str else uuid.uuid4()
+
+            for tc in raw_tool_calls:
+                sanitized_name = tc.get("function", {}).get("name", "")
+                original_name = _restore_tool_name_from_openai(sanitized_name, tool_name_map)
+                args_raw = tc.get("function", {}).get("arguments", "{}")
+                args: dict[str, Any] = (
+                    json.loads(args_raw)
+                    if isinstance(args_raw, str)
+                    else (args_raw if isinstance(args_raw, dict) else {})
+                )
+                args = _ensure_save_result_title(
+                    tool_name=original_name,
+                    args=args,
+                    fallback_title=f"Conversation {session_id} result",
+                )
+                call_id = tc.get("id", "")
+
+                try:
+                    self._permission_manager.check_tool_allowed(
+                        original_name, allowed_tools, role_id
+                    )
+                except PermissionDeniedError as exc:
+                    tool_result: Any = {"error": f"Permission denied: {exc}"}
+                    messages.append({
+                        "role": "tool",
+                        "content": str(tool_result),
+                        "tool_call_id": call_id,
+                    })
+                    continue
+
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="tool_call",
+                    message=f"Tool call: {original_name}",
+                    data={"tool": original_name, "args": args, "call_id": call_id},
+                )
+
+                # All tools (system and MCP) route uniformly through Communication Hub.
+                # CommHub identifies system tools by the system____ prefix and routes them
+                # to Control Center /internal/system-tools/* endpoints.
+                tool_result = await self._execute_mcp_tool_ar(
+                    tool_name=original_name,
+                    tool_args=args,
+                    role_mcp_sessions=role_mcp_sessions,
+                    agent_type_id=agent_type_id,
+                    session_id=str(session_id),
+                    comm_hub_client=comm_hub_client,
+                )
+
+                messages.append({
+                    "role": "tool",
+                    "content": str(tool_result),
+                    "tool_call_id": call_id,
+                })
+
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="iteration_complete",
+                message=f"Iteration {iteration + 1} complete",
+                data={"iteration": iteration + 1, "tool_calls": len(raw_tool_calls)},
+            )
+        else:
+            # Max iterations exceeded
+            logger.warning("Session %s exceeded max iterations", session_id)
+            output_data = {
+                "result": "Task did not complete within max iterations",
+                "session_id": str(session_id),
+            }
+
+        await data_client.log_execution_event(
+            session_id=session_id,
+            event_type="task_loop_completed",
+            message="Task loop completed",
+            data={"output_keys": list(output_data.keys())},
+        )
+        return output_data
+
+    async def _execute_mcp_tool_ar(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        role_mcp_sessions: dict[str, dict[str, str]],
+        agent_type_id: str | None,
+        session_id: str,
+        comm_hub_client: "CommHubToolClient",
+    ) -> dict[str, Any]:
+        """Dispatch tool call from Agent Runtime via Communication Hub (no DB access).
+
+        Routes ALL tools (external MCP + system tools) through Communication Hub:
+        - Permission validation (via Control Center)
+        - Credential retrieval (from Control Center)
+        - Routing to MCP servers or system tool endpoints
+
+        Args:
+            tool_name: Tool name (e.g., "hello-world____helloWorld", "system____save_result")
+            tool_args: Tool arguments
+            role_mcp_sessions: Session mapping (not used - for backward compatibility)
+            agent_type_id: Agent type ID
+            session_id: Agent session ID
+            comm_hub_client: Communication Hub tool client
+
+        Returns:
+            Tool execution result
+        """
+        from app.agent_runtime.comm_hub_client import CommHubToolClientError
+
+        try:
+            result = await comm_hub_client.call_tool(
+                tool_name=tool_name,
+                tool_args=tool_args,
+                session_id=session_id,
+                agent_type_id=agent_type_id or "",
+            )
+            return result
+        except CommHubToolClientError as exc:
+            logger.warning("Tool %s failed via Communication Hub: %s", tool_name, exc)
+            return {"error": str(exc)}
+        except Exception as exc:
+            logger.exception("Unexpected error calling tool %s", tool_name)
+            return {"error": str(exc)}
+
+    async def execute_conversation_turn(
+        self,
+        agent_type: Any,
+        messages: list[dict[str, Any]],
+        conv_session_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> str:
+        """Execute one WebSocket conversation turn using the full observe-reason-act loop.
+
+        Receives the complete message list (system instruction + conversation history)
+        and runs the same tool-calling loop used by task agents, giving conversation
+        agents access to SOPs, Skills, and MCP tools.
+
+        Unlike the task loop this method does NOT write to ``execution_log_entries``
+        (which has a FK to ``agent_jobs``) — it uses the Python logger instead.
+
+        Returns the final text response from the agent.
+        """
+        from app.services.agents.model_binding import ModelBindingLayer
+
+        binding = ModelBindingLayer()
+        model_config = await binding.resolve_model_config(agent_type.model_id, db)
+
+        # Resolve allowed tools for the agent's role
+        allowed_tools: set[str] = set()
+        if agent_type.role_id:
+            allowed_tools = await self._permission_manager.calculate_allowed_tools(
+                agent_type.role_id, db
+            )
+
+        # Load tool definitions (OpenAI format, sanitized names)
+        tool_definitions, tool_name_map = await self._load_tool_definitions(allowed_tools, db)
+
+        # Load MCP session map for tool dispatch
+        role_mcp_sessions: dict[str, dict[str, str]] = {}
+        if agent_type.role_id:
+            role_mcp_sessions = await self._load_role_mcp_session_map(agent_type.role_id, db)
+
+        # ── Initialize Communication Hub tool client (mirrors _run_task_loop_ar) ──
+        from app.agent_runtime.comm_hub_client import CommHubToolClient
+
+        comm_hub_client = CommHubToolClient()
+        logger.info(
+            "Conversation turn %s: CommHubToolClient initialized (no cert available in conversation context)",
+            conv_session_id,
+        )
+
+        logger.info(
+            "Conversation turn starting: session=%s agent=%s role=%s tools=%d",
+            conv_session_id,
+            agent_type.id,
+            agent_type.role_id,
+            len(tool_definitions),
+        )
+
+        # Work on a local copy so we don't mutate the caller's list
+        local_messages = list(messages)
+
+        max_iterations = 10
+        for iteration in range(max_iterations):
+            logger.debug(
+                "Conversation turn iteration %d for session %s", iteration + 1, conv_session_id
+            )
+
+            raw_response = await binding.complete(
+                agent_type=agent_type,
+                model_config=model_config,
+                messages=local_messages,
+                tools=tool_definitions if tool_definitions else None,
+            )
+
+            response_text = ModelBindingLayer.extract_text(raw_response, model_config.provider_type)
+            raw_tool_calls = ModelBindingLayer.extract_tool_calls(raw_response, model_config.provider_type)
+
+            if not raw_tool_calls:
+                # No tool calls — this is the final answer
+                return response_text or "I processed your message but received an empty response."
+
+            # Append assistant message with tool_calls before tool result messages (OpenAI requirement)
+            local_messages.append({
+                "role": "assistant",
+                "content": response_text or "",
+                "tool_calls": raw_tool_calls,
+            })
+
+            logger.info(
+                "Conversation turn: agent called %d tool(s) in iteration %d: %s",
+                len(raw_tool_calls),
+                iteration + 1,
+                [tc.get("function", {}).get("name", "") for tc in raw_tool_calls],
+            )
+
+            for tc in raw_tool_calls:
+                sanitized_name = tc.get("function", {}).get("name", "")
+                original_name = _restore_tool_name_from_openai(sanitized_name, tool_name_map)
+                args_raw = tc.get("function", {}).get("arguments", "{}")
+                args: dict[str, Any] = (
+                    json.loads(args_raw)
+                    if isinstance(args_raw, str)
+                    else (args_raw if isinstance(args_raw, dict) else {})
+                )
+                call_id = tc.get("id", "")
+
+                # Enforce permission boundary on every dispatch
+                try:
+                    self._permission_manager.check_tool_allowed(
+                        original_name, allowed_tools, agent_type.role_id
+                    )
+                except PermissionDeniedError as exc:
+                    tool_result: Any = {"error": f"Permission denied: {exc}"}
+                    logger.warning(
+                        "Tool %s denied in conversation session %s: %s",
+                        original_name,
+                        conv_session_id,
+                        exc,
+                    )
+                else:
+                    if original_name == "save_result":
+                        tool_result = await self._save_result_for_conversation(
+                            tool_args=args,
+                            agent_type_id=agent_type.id,
+                            conv_session_id=conv_session_id,
+                            output_type=agent_type.output_type.value,
+                            db=db,
+                        )
+                    elif original_name == "send_notification":
+                        from app.services.notifications.mcp_tool import handle_send_notification
+                        tool_result = await handle_send_notification(
+                            args=args,
+                            db_session=db,
+                            caller_identity={
+                                "agent_id": str(agent_type.id),
+                                "conversation_session_id": str(conv_session_id),
+                            },
+                        )
+                    elif original_name == "get_recipient_group":
+                        from app.services.notifications.mcp_tool import handle_get_recipient_group
+                        tool_result = await handle_get_recipient_group(
+                            args=args,
+                            db_session=db,
+                            caller_identity={
+                                "agent_id": str(agent_type.id),
+                                "conversation_session_id": str(conv_session_id),
+                            },
+                        )
+                    else:
+                        tool_result = await self._execute_mcp_tool_ar(
+                            original_name,
+                            args,
+                            role_mcp_sessions,
+                            str(agent_type.id),
+                            str(conv_session_id),
+                            comm_hub_client,
+                        )
+
+                local_messages.append({
+                    "role": "tool",
+                    "content": str(tool_result),
+                    "tool_call_id": call_id,
+                })
+
+        logger.warning(
+            "Conversation turn exceeded max iterations (%d) for session %s",
+            max_iterations,
+            conv_session_id,
+        )
+        return "I was unable to complete the task within the allowed number of steps."
+
+    async def _save_result_for_conversation(
+        self,
+        tool_args: dict[str, Any],
+        agent_type_id: uuid.UUID,
+        conv_session_id: uuid.UUID,
+        output_type: str,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Persist a save_result tool call for a conversation agent.
+
+        Associates the ResultRecord with both the agent type and conversation session.
+        """
+        try:
+            from app.db.models.results import ResultRecord
+
+            content_type = _resolve_result_content_type(
+                output_type=output_type,
+                requested=tool_args.get("content_type"),
+            )
+            payload = _normalize_result_payload(tool_args, content_type)
+
+            record = ResultRecord(
+                agent_type_id=agent_type_id,
+                conversation_session_id=conv_session_id,
+                payload=payload,
+                content_type=content_type,
+                title=tool_args.get("title", "Conversation result"),
+                tags=["conversation"],
+            )
+            db.add(record)
+            await db.flush()
+            logger.info(
+                "Saved result %s for conversation session %s", record.id, conv_session_id
+            )
+            return {"status": "saved", "result_id": str(record.id)}
+        except Exception as exc:
+            logger.warning(
+                "save_result failed for conversation session %s: %s", conv_session_id, exc
+            )
+            return {"status": "error", "error": str(exc)}
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -551,7 +1232,6 @@ class AgentRuntimeExecutor:
                 "identity_name": identity_name,
                 "role_name": role_name,
             },
-            db=db,
         )
 
         # Resolve permissions
@@ -586,7 +1266,6 @@ class AgentRuntimeExecutor:
                 "allowed_tools": sorted(allowed_tools),
                 "role_id": str(agent_type.role_id) if agent_type.role_id else None,
             },
-            db=db,
         )
 
         # Load and log SOPs/Skills assigned to the role (GAP-1 fix)
@@ -637,7 +1316,6 @@ class AgentRuntimeExecutor:
                             "sop_content_preview": sop_content[:300],
                             "total_instruction_length": len(ctx.system_instruction),
                         },
-                        db=db,
                     )
 
             # ── Load MCP session context and append to system instruction ────
@@ -655,7 +1333,6 @@ class AgentRuntimeExecutor:
                             "mcp_context_preview": mcp_context[:300],
                             "total_instruction_length": len(ctx.system_instruction),
                         },
-                        db=db,
                     )
 
             # ── Load and inject saved plan into system instruction ────────────
@@ -674,7 +1351,6 @@ class AgentRuntimeExecutor:
                         "agent_type_id": str(agent_type.id),
                         "total_instruction_length": len(ctx.system_instruction or ""),
                     },
-                    db=db,
                 )
 
             # ── Load tool definitions once for the whole session ──────────────
@@ -715,7 +1391,6 @@ class AgentRuntimeExecutor:
                     "tool_results_count": len(ctx.tool_results),
                     "output_keys": list(output_data.keys()),
                 },
-                db=db,
             )
 
             return output_data
@@ -792,7 +1467,6 @@ class AgentRuntimeExecutor:
                     "langchain_available": _LANGCHAIN_AVAILABLE,
                     "allowed_tools": sorted(allowed_tools),
                 },
-                db=db,
             )
 
             return {
@@ -825,7 +1499,6 @@ class AgentRuntimeExecutor:
                     "tool_result_count": len(ctx.tool_results),
                     "is_complete": ctx.is_complete,
                 },
-                db=db,
             )
         return ctx
 
@@ -872,7 +1545,6 @@ class AgentRuntimeExecutor:
                     "tool_count": len(tool_defs),
                     "available_tools": tool_names,
                 },
-                db=db,
             )
             
             # Full request details at DEBUG level
@@ -885,7 +1557,6 @@ class AgentRuntimeExecutor:
                     "messages": full_messages,
                     "tool_definitions": tool_defs,
                 },
-                db=db,
             )
 
             llm_success = False
@@ -921,6 +1592,11 @@ class AgentRuntimeExecutor:
                             if isinstance(args_raw, str)
                             else (args_raw if isinstance(args_raw, dict) else {})
                         )
+                        args = _ensure_save_result_title(
+                            tool_name=original_name,
+                            args=args,
+                            fallback_title=f"Session {ctx.session_id} result",
+                        )
                         tool_calls.append(
                             {"id": tc.get("id", ""), "name": original_name, "args": args}
                         )
@@ -953,7 +1629,6 @@ class AgentRuntimeExecutor:
                             "has_tool_calls": bool(tool_calls),
                             "finish_reason": "tool_calls" if tool_calls else "stop",
                         },
-                        db=db,
                     )
                     
                     # Full response at DEBUG level
@@ -966,7 +1641,6 @@ class AgentRuntimeExecutor:
                             "raw_response": raw_response,
                             "response_text_full": response_text,
                         },
-                        db=db,
                     )
 
                     if tool_calls:
@@ -1005,7 +1679,6 @@ class AgentRuntimeExecutor:
                     message=f"LLM response (stub) — iteration {ctx.iteration + 1}",
                     log_level="warn",
                     data=stub_data,
-                    db=db,
                 )
                 
                 # Whether LangChain failed or is unavailable, always use stub reasoning.
@@ -1084,7 +1757,6 @@ class AgentRuntimeExecutor:
                         "tool_calls": 0,
                         "is_complete": ctx.is_complete,
                     },
-                    db=db,
                 )
             return ctx
 
@@ -1115,14 +1787,34 @@ class AgentRuntimeExecutor:
                     event_type="tool_call",
                     message=f"Tool call: {tool_name}",
                     data={"tool": tool_name, "args": tool_args, "call_id": call_id},
-                    db=db,
                 )
 
                 if tool_name == "save_result":
                     result = await self._handle_save_result_tool_call(ctx, tool_args, db)
+                elif tool_name == "send_notification":
+                    from app.services.notifications.mcp_tool import handle_send_notification
+                    result = await handle_send_notification(
+                        args=tool_args,
+                        db_session=db,
+                        caller_identity={
+                            "agent_id": ctx.agent_type_id,
+                            "session_id": ctx.session_id,
+                        },
+                    )
+                elif tool_name == "get_recipient_group":
+                    from app.services.notifications.mcp_tool import handle_get_recipient_group
+                    result = await handle_get_recipient_group(
+                        args=tool_args,
+                        db_session=db,
+                        caller_identity={
+                            "agent_id": ctx.agent_type_id,
+                            "session_id": ctx.session_id,
+                        },
+                    )
                 else:
                     result = await self._execute_mcp_tool(
-                        tool_name, tool_args, db, role_mcp_sessions
+                        tool_name, tool_args, db, role_mcp_sessions,
+                        agent_type_id=ctx.agent_type_id,
                     )
 
                 ctx.append_tool_result(call_id, tool_name, result)
@@ -1140,7 +1832,6 @@ class AgentRuntimeExecutor:
                     "tool_calls": executed,
                     "is_complete": ctx.is_complete,
                 },
-                db=db,
             )
 
         return ctx
@@ -1160,10 +1851,16 @@ class AgentRuntimeExecutor:
         try:
             from app.db.models.results import ResultRecord
 
+            content_type = _resolve_result_content_type(
+                output_type=ctx.output_type,
+                requested=args.get("content_type"),
+            )
+            payload = _normalize_result_payload(args, content_type)
+
             record = ResultRecord(
                 agent_type_id=uuid.UUID(ctx.agent_type_id),
-                payload=args.get("data") or args,
-                content_type="application/json",
+                payload=payload,
+                content_type=content_type,
                 title=args.get("title", f"Session {ctx.session_id} result"),
                 tags=["agent_session"],
             )
@@ -1193,54 +1890,78 @@ class AgentRuntimeExecutor:
                 "title": args.get("title", ""),
                 "output_keys": list(args.keys()),
             },
-            db=db,
         )
 
         return {"status": "saved", "result_id": result_id}
 
     async def _load_role_mcp_session_map(
         self, role_id: uuid.UUID, db: AsyncSession
-    ) -> dict[str, str]:
-        """Load a map of server_id -> mcp_session_id for the role.
+    ) -> dict[str, dict[str, str]]:
+        """Load a map of server_id -> {session_id, auth_type} for the role.
+        
+        Includes passthrough sessions so tool dispatch does not fail for them.
         
         Returns:
-            Dict mapping server UUID (as string) to MCP session UUID (as string)
+            Dict mapping server UUID (as string) to a dict with 'session_id' and 'auth_type' keys.
         """
         from sqlalchemy import select
         from app.db.models.agents import AgentRoleMcpSession
         from app.db.models.mcp_hub import McpSession
         
         result = await db.execute(
-            select(McpSession.id, McpSession.server_id)
+            select(McpSession.id, McpSession.server_id, McpSession.auth_type)
             .join(AgentRoleMcpSession, AgentRoleMcpSession.mcp_session_id == McpSession.id)
             .where(AgentRoleMcpSession.role_id == role_id)
             .where(McpSession.is_active.is_(True))
         )
         
-        return {str(row.server_id): str(row.id) for row in result.all()}
+        return {
+            str(row.server_id): {
+                "session_id": str(row.id),
+                "auth_type": row.auth_type.value,
+            }
+            for row in result.all()
+        }
 
     async def _execute_mcp_tool(
         self,
         tool_name: str,
         tool_args: dict[str, Any],
         db: AsyncSession,
-        role_mcp_sessions: dict[str, str],
+        role_mcp_sessions: dict[str, dict[str, str]],
+        agent_type_id: str | None = None,
     ) -> dict[str, Any]:
         """Dispatch a single MCP tool call via McpProxyEngine.
 
+        .. deprecated::
+            Use :meth:`_execute_mcp_tool_ar` instead, which routes tool calls through
+            CommHubToolClient and Communication Hub, following the service decomposition
+            architecture. This method retains direct McpProxyEngine and database access
+            and is only kept for the legacy task loop path that has not yet been migrated.
+
         Looks up the McpTool record by namespaced name, loads its server
         relationship, and calls the proxy with the MCP session assigned to the
-        role for that server. Returns an error dict on any failure so the agent
-        loop can continue rather than abort.
+        role for that server. For passthrough sessions, retrieves the agent
+        identity JWT and forwards it. Returns an error dict on any failure so
+        the agent loop can continue rather than abort.
         """
         from sqlalchemy import select
         from app.db.models.mcp_hub import McpTool
         from app.services.mcp.proxy import McpProxyEngine, McpProxyError
 
         try:
+            tool_name_candidates = [tool_name]
+            try:
+                server_slug, bare_tool_name = parse_tool_name(tool_name)
+                canonical_name = build_tool_name(server_slug, bare_tool_name)
+                legacy_name = f"{server_slug}/{bare_tool_name}"
+                tool_name_candidates = [canonical_name, legacy_name]
+            except ValueError:
+                pass
+
             result = await db.execute(
                 select(McpTool)
-                .where(McpTool.name == tool_name)
+                .where(McpTool.name.in_(tool_name_candidates))
                 .where(McpTool.is_active.is_(True))
             )
             tool = result.scalar_one_or_none()
@@ -1250,11 +1971,11 @@ class AgentRuntimeExecutor:
 
             await db.refresh(tool, ["server"])
             
-            # Look up the MCP session ID for this tool's server from role assignments
+            # Look up the MCP session for this tool's server from role assignments
             server_id_str = str(tool.server_id)
-            mcp_session_id = role_mcp_sessions.get(server_id_str)
+            session_info = role_mcp_sessions.get(server_id_str)
             
-            if not mcp_session_id:
+            if not session_info:
                 logger.error(
                     "No MCP session assigned to role for server %s (tool: %s)",
                     server_id_str,
@@ -1265,12 +1986,32 @@ class AgentRuntimeExecutor:
                     f"Please assign an MCP session to the role for this server."
                 }
 
+            mcp_session_id = session_info["session_id"]
+            auth_type = session_info["auth_type"]
+
+            # Resolve agent JWT for passthrough sessions
+            agent_jwt: str | None = None
+            if auth_type == "passthrough":
+                agent_jwt = await self._get_agent_identity_jwt(agent_type_id, db)
+                if not agent_jwt:
+                    logger.error(
+                        "Passthrough session for tool '%s' but no agent identity JWT available. "
+                        "Check if agent identity refresh token is valid in Keycloak.",
+                        tool_name,
+                    )
+                    return {
+                        "error": f"Passthrough session requires an agent identity JWT "
+                        f"but none is available for tool '{tool_name}'. "
+                        f"The agent identity may need to be recreated if the refresh token is invalid."
+                    }
+
             proxy = McpProxyEngine()
             tool_result = await proxy.call_tool(
                 tool=tool,
                 tool_input=tool_args,
                 db=db,
                 session_id=mcp_session_id,
+                agent_jwt=agent_jwt,
             )
             return {"result": tool_result}
         except McpProxyError as exc:
@@ -1279,6 +2020,67 @@ class AgentRuntimeExecutor:
         except Exception as exc:
             logger.error("MCP tool '%s' unexpected error: %s", tool_name, exc)
             return {"error": str(exc)}
+
+    async def _get_agent_identity_jwt(
+        self, agent_type_id: str | None, db: AsyncSession
+    ) -> str | None:
+        """Retrieve the decrypted access token for the agent identity bound to an AgentType.
+
+        Automatically refreshes the token if it is expired or expiring within 5 minutes.
+        Returns None if the identity has no token, refresh fails, or decryption fails.
+        """
+        if not agent_type_id:
+            return None
+
+        try:
+            from app.db.models.agents import AgentType, AgentIdentity
+            from app.core.credential_vault import get_vault
+            from app.services.token_refresh import (
+                check_token_expiration,
+                refresh_oauth_token,
+                TokenRefreshError,
+            )
+
+            agent_type = await db.get(AgentType, uuid.UUID(agent_type_id))
+            if not agent_type or not agent_type.identity_id:
+                logger.debug("AgentType %s has no identity_id", agent_type_id)
+                return None
+
+            identity = await db.get(AgentIdentity, agent_type.identity_id)
+            if not identity:
+                logger.debug("AgentIdentity %s not found", agent_type.identity_id)
+                return None
+
+            # Check if token needs refresh BEFORE decrypting
+            if await check_token_expiration(identity.id, db):
+                logger.info(
+                    "Agent identity %s token expired or expiring soon, refreshing...",
+                    identity.id,
+                )
+                try:
+                    await refresh_oauth_token(identity.id, db)
+                    await db.commit()
+                    await db.refresh(identity)
+                except TokenRefreshError as exc:
+                    logger.error(
+                        "Token refresh failed for agent identity %s: %s. "
+                        "This usually indicates an invalid or expired refresh token in Keycloak. "
+                        "Consider deleting and recreating the agent identity.",
+                        identity.id,
+                        exc,
+                    )
+                    return None
+
+            if not identity.access_token:
+                logger.debug("AgentIdentity %s has no access_token", identity.id)
+                return None
+
+            vault = get_vault()
+            decrypted = vault.decrypt(identity.access_token)
+            return decrypted
+        except Exception as exc:
+            logger.warning("Failed to retrieve agent identity JWT: %s", exc)
+            return None
 
     async def _persist_result(
         self, job: AgentJob, output_data: dict[str, Any], db: AsyncSession
@@ -1291,10 +2093,16 @@ class AgentRuntimeExecutor:
             result_id: str | None = None
             try:
                 from app.db.models.results import ResultRecord
+                from app.db.models.agents import AgentType
+
+                agent_type = await db.get(AgentType, job.agent_type_id)
+                output_type = agent_type.output_type.value if agent_type else "auto"
+                content_type = _resolve_result_content_type(output_type=output_type)
+
                 record = ResultRecord(
                     agent_type_id=job.agent_type_id,
                     payload=output_data,
-                    content_type="application/json",
+                    content_type=content_type,
                     title=f"Session {job.id} result",
                     tags=["agent_session"],
                 )
@@ -1319,7 +2127,6 @@ class AgentRuntimeExecutor:
                     "output_keys": list(output_data.keys()) if output_data else [],
                     "title": f"Session {job.id} result",
                 },
-                db=db,
             )
 
     async def _format_user_prompt(

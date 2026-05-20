@@ -55,9 +55,30 @@
 - Changing identity clears role selection
 - Save blocked unless a model is selected
 
-### Runtime Identity-Role Validation
-- At session launch: validates identity is assigned to role via `agent_role_identity`
-- Session rejected with 403 (`PermissionDeniedError`) if identity not assigned to role
+### Unified Tool Naming and Routing
+- `parse_tool_name(name)` correctly splits `server____tool` into `(server, tool)` for valid names
+- `build_tool_name(server, tool)` produces canonical `server____tool` string
+- `is_system_tool(name)` returns `True` only for `system____*` names
+- Legacy bare tool names parsed without error (backward compatibility)
+- Names with more or fewer than 4 underscores rejected as malformed
+- Server segment containing `____` rejected (reserved separator)
+- `system` as MCP server name rejected at registration time
+- Agent executor code contains no branching on system vs MCP tool type — all tool calls forwarded uniformly to Communication Hub
+
+### Explicit Result Saving
+- Agent that calls `system____save_result` → `ResultRecord` created with correct payload, title, and source
+- Agent that completes without calling `system____save_result` → no `ResultRecord` created
+- Both scenarios verified via `result_records` table query and `GET /api/v1/results` endpoint
+
+### Service Trust Boundaries
+- Agent Runtime attempts direct PostgreSQL connection → connection refused (no `DATABASE_URL` configured)
+- Agent Runtime fetches all context (plan, skills, model config) via Control Center data APIs only
+- Agent Runtime bootstrap: certificate issued by Control Center; subsequent requests use mTLS with service cert
+- Certificate renewal: AR renews before expiry; old cert remains active until new cert is validated
+
+## Critical Scenarios
+
+
 - Session transitions immediately to `failed`; observe-reason-act loop not initiated
 - Error message contains identity-role assignment mismatch detail
 - No `ExecutionLog` written for sessions failing at identity-role validation
@@ -77,6 +98,9 @@
 - `MaxIterationsExceeded` transitions session to `failed` with error message
 - Model resolved at dispatch time by scanning all `ModelConfig.enabled_models` arrays
 - Missing `model_id` resolution → `ModelResolutionError`; session status → `failed`
+- Passthrough session dispatch: `_load_role_mcp_session_map()` includes passthrough sessions so dispatch does not fail with "no session assigned"
+- Passthrough session dispatch: `_execute_mcp_tool()` detects `auth_type == passthrough`, retrieves agent identity JWT from runtime context, passes it to `proxy.call_tool()` as `agent_jwt`; stored credentials never accessed
+- Passthrough session dispatch: when agent identity token is unavailable at runtime, tool call returns a structured error dict and the agent loop continues without crashing
 
 ### Execution Log Capture
 - `ExecutionLog` record created for every session containing full, untruncated system instruction and user prompt
@@ -114,6 +138,45 @@
 - Refresh button enabled only when refresh token is valid
 - Re-auth button always enabled
 - OAuth callback from re-auth flow updates tokens; status chip updates to `valid` without page reload
+
+### Certificate Lifecycle (Security Segregation)
+- CA initialization: root CA cert generated on first Control Center startup; idempotent on subsequent startups
+- Certificate issuance: `POST /certificates/issue` creates record in `agent_instance_certificate` with status `active`; CN format `agent-type:instance-id`; serial number globally unique
+- Certificate validation: valid certificate accepted; expired certificate returns 401 with outcome `expired` logged; revoked certificate returns 403 with outcome `revoked` logged; all outcomes recorded in `certificate_validation_log`
+- Certificate revocation: `POST /certificates/revoke` marks certificate `revoked`, inserts entry into `certificate_revocation_entry`; subsequent use of revoked cert immediately rejected
+- Certificate renewal: Agent Runtime auto-renews at 80% of lifetime (19 h); new cert atomically replaces old cert with no downtime; renewal logged with new serial and expiration
+- Graceful shutdown: if certificate expires and renewal fails (Control Center unreachable or permission denied), Agent Runtime logs critical error and shuts down; no tool calls accepted with expired cert
+
+### Agent Runtime Security Guarantees
+- Metadata response (`GET /agent/metadata`) does NOT contain `identity_token`, `access_token`, or `refresh_token` fields — zero-trust requirement
+- Agent Runtime authenticates using client certificate only; JWT tokens are never held by Agent Runtime
+- Certificate loaded from filesystem on startup; absence or corruption causes startup failure with clear error
+- Security assertion: Agent Runtime validates metadata response structure and rejects responses containing identity tokens
+
+## Test File References
+
+### Backend — Unit Tests
+- `backend/tests/unit/test_agent_identity_service.py` — identity CRUD, status transitions, token storage
+- `backend/tests/unit/test_agent_role_service.py` — role CRUD, SOP/skill assignment, permission cache invalidation
+- `backend/tests/unit/test_agent_runtime_executor.py` — LangChain executor, role permission boundary enforcement
+- `backend/tests/unit/test_agent_session_service.py` — session lifecycle, dispatch, result writing
+- `backend/tests/unit/test_agent_gateway.py` — gateway authorization checks
+- `backend/tests/unit/test_agent_instance_manager.py` — instance tracking and status
+- `backend/tests/unit/test_token_refresh_service.py` — token refresh logic, retry/backoff, rate-limit handling
+
+### Backend — Integration Tests
+- `backend/tests/integration/test_certificate_lifecycle.py` — certificate issuance, validation, revocation, renewal against real database
+- `backend/tests/integration/test_authorization_flow.py` — full authorization flow: certificate validation + permission resolution + token refresh
+- `backend/tests/integration/test_token_refresh_security.py` — token refresh with mocked OAuth provider; retry logic; `token_refresh_log` population
+- `backend/tests/integration/test_agent_session_lifecycle.py` — session dispatch, execution, completion, failure transitions
+- `backend/tests/integration/test_agent_role_constraints.py` — role constraint enforcement
+
+### E2E Tests
+- `e2e/tests/agent-runtime.spec.ts` — Agent Runtime UI flows and session submission
+- `e2e/tests/agent-management.spec.ts` — agent type and identity management CRUD
+- `e2e/tests/agent-bootstrap.spec.ts` — realm initialization and first-run setup
+- `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: certificate authentication, metadata security assertion (no identity tokens), tool authorization with certificate, certificate revocation
+- `e2e/tests/agent-identity-token-refresh.spec.ts` — token refresh endpoint wiring, identity management UI with mocked backend
 
 ### Communication Hub OAuth Enforcement
 - Agent connection without `Authorization` header → 401
@@ -169,6 +232,10 @@ This module has `has_db_changes: true`. Before running any tests:
 ### Credential Security
 - API key never returned in plaintext from GET responses — assert credential field absent or masked in all list and detail responses
 
+### Passthrough Runtime Dispatch (Critical Path)
+- Agent session executing with a passthrough-type MCP session assigned to its role → `proxy.call_tool()` invoked with agent identity JWT; no credential decryption occurs
+- Agent identity token unavailable at runtime (expired or absent) → tool call returns structured error dict; agent observe-reason-act loop continues without crashing
+
 ## Edge Cases
 - Circular SOP dependencies resolved without infinite recursion
 - Double-dispatch prevented via `SKIP LOCKED`; verify session dispatched only once under concurrent dispatchers
@@ -183,7 +250,7 @@ This module has `has_db_changes: true`. Before running any tests:
 ### Backend Unit Tests
 - `backend/tests/unit/test_agent_role_service.py`
 - `backend/tests/unit/test_agent_identity_service.py`
-- `backend/tests/unit/test_agent_runtime_executor.py`
+- `backend/tests/unit/test_agent_runtime_executor.py` — includes passthrough session dispatch: `_execute_mcp_tool()` passes `agent_jwt` to proxy; structured error returned when agent JWT unavailable
 - `backend/tests/unit/test_agent_session_service.py`
 - `backend/tests/unit/test_agent_instance_manager.py`
 - `backend/tests/unit/test_model_config_service.py`

@@ -8,6 +8,8 @@ OAuth flow:
      for an access + refresh token pair, AES-256 encrypts both, and persists them on the
      AgentIdentity record.  Sets status to `active`.
 """
+from __future__ import annotations
+
 import json
 import logging
 import urllib.parse
@@ -17,7 +19,6 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import Request
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
@@ -156,18 +157,29 @@ class AgentIdentityService:
         """Delete an AgentIdentity. Fails if any AgentType references it."""
         identity = await self.get_identity(identity_id, db)
 
-        # Referential integrity guard
+        # Referential integrity guard — fetch the referencing AgentType with its name
         ref_check = await db.execute(
-            select(AgentType.id).where(AgentType.identity_id == identity_id).limit(1)
+            select(AgentType).where(AgentType.identity_id == identity_id).limit(1)
         )
-        if ref_check.scalar_one_or_none() is not None:
+        referencing_type = ref_check.scalar_one_or_none()
+        if referencing_type is not None:
+            error_msg = (
+                f"AgentIdentity {identity_id} (name: {identity.name}) is referenced by "
+                f"AgentType '{referencing_type.name}' (ID: {referencing_type.id}). "
+                f"Please unassign this identity from the agent type before deleting."
+            )
+            logger.error(
+                "Delete blocked: %s",
+                error_msg,
+            )
+            # Return structured error with agent_type_id and agent_type_name for frontend linking
             raise AgentIdentityConflictError(
-                f"AgentIdentity {identity_id} is referenced by one or more AgentTypes and cannot be deleted"
+                f"agent_type_id:{referencing_type.id}|agent_type_name:{referencing_type.name}|{error_msg}"
             )
 
         await db.delete(identity)
         await db.flush()
-        logger.info("Deleted AgentIdentity %s", identity_id)
+        logger.info("Deleted AgentIdentity %s (name: %s)", identity_id, identity.name)
 
     # ── OAuth Flow ────────────────────────────────────────────────────────────
 
@@ -312,7 +324,7 @@ class AgentIdentityService:
 
         # Exchange code for tokens
         token_data: dict
-        async with httpx.AsyncClient(timeout=30.0) as http_client:
+        async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
             response = await http_client.post(
                 token_url,
                 data={
@@ -520,6 +532,12 @@ class AgentIdentityService:
                 response.status_code,
                 response.text[:200],
             )
+            # Clear the refresh token so the UI will switch to re-auth button
+            identity.refresh_token = None
+            identity.status = AgentIdentityStatus.suspended
+            await db.flush()
+            await db.commit()
+            await db.refresh(identity)
             raise AgentOAuthError(
                 f"Token refresh failed (HTTP {response.status_code}): {response.text[:200]}"
             )
@@ -529,15 +547,36 @@ class AgentIdentityService:
         new_refresh_token_plain: str | None = token_data.get("refresh_token")
         expires_in: int = int(token_data.get("expires_in", 300))
 
+        logger.info(
+            "Token refresh response for identity %s: has_new_refresh_token=%s",
+            identity_id,
+            new_refresh_token_plain is not None,
+        )
+
         identity.access_token = vault.encrypt(access_token_plain)
         if new_refresh_token_plain:
-            identity.refresh_token = vault.encrypt(new_refresh_token_plain)
+            encrypted_new_refresh = vault.encrypt(new_refresh_token_plain)
+            identity.refresh_token = encrypted_new_refresh
+            # Also update encrypted_refresh_token to keep both fields in sync
+            # (auto-refresh in runtime_executor checks this field first)
+            identity.encrypted_refresh_token = encrypted_new_refresh
+            logger.debug(
+                "Updated both refresh_token and encrypted_refresh_token for identity %s",
+                identity_id,
+            )
+        else:
+            logger.warning(
+                "Keycloak did not return a new refresh_token for identity %s - "
+                "old refresh_token will remain (may be invalid for next auto-refresh)",
+                identity_id,
+            )
         identity.token_expires_at = datetime.fromtimestamp(
             datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
         )
         identity.status = AgentIdentityStatus.active
 
         await db.flush()
+        await db.commit()
         await db.refresh(identity)
         logger.info(
             "Token refreshed for identity %s; new token_expires_at=%s",
@@ -562,9 +601,21 @@ class AgentIdentityService:
         """
         identity = await self.get_identity(identity_id, db)
 
-        # Build redirect URI from the incoming request
-        base_url = str(request.base_url).rstrip("/")
-        redirect_uri = f"{base_url}/api/v1/agents/oauth/callback"
+        # Build redirect_uri pointing at the frontend callback page
+        # Extract origin from request headers (for dev/prod flexibility)
+        origin = request.headers.get("origin")
+        if not origin:
+            # Fallback: extract from referer if origin not present
+            referer = request.headers.get("referer", "")
+            if referer:
+                from urllib.parse import urlparse
+                parsed = urlparse(referer)
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+        if not origin or not origin.startswith("http"):
+            origin = "http://localhost:5173"  # Default to Vite dev server
+
+        # Redirect URI must point to the frontend OAuth callback page, not the API endpoint
+        redirect_uri = f"{origin}/agents/identities/oauth/callback"
 
         state = str(identity_id)
         return self.get_oauth_authorize_url(state=state, redirect_uri=redirect_uri)

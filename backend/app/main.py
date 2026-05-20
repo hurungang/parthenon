@@ -60,10 +60,21 @@ def create_app() -> FastAPI:
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        # Pydantic v2 model_validator errors may include exception objects in 'ctx'
+        # that are not JSON-serializable.  Convert them to strings before serialising.
+        def _make_serializable(obj):  # type: ignore[no-untyped-def]
+            if isinstance(obj, dict):
+                return {k: _make_serializable(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_make_serializable(item) for item in obj]
+            if isinstance(obj, Exception):
+                return str(obj)
+            return obj
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "detail": exc.errors(),
+                "detail": _make_serializable(exc.errors()),
                 "body": exc.body,
             },
         )
@@ -97,8 +108,18 @@ def create_app() -> FastAPI:
 
     # Health check (public endpoint)
     @app.get("/health", tags=["health"])
-    async def health_check() -> dict[str, str]:
-        return {"status": "ok", "version": settings.app_version}
+    async def health_check() -> dict[str, str | None]:
+        from app.services.certificate_authority import get_ca_certificate
+        ca_cert = get_ca_certificate()
+        cert_expiry: str | None = None
+        if ca_cert is not None:
+            cert_expiry = ca_cert.not_valid_after_utc.isoformat()
+        return {
+            "status": "ok",
+            "service": "control-center",
+            "version": settings.app_version,
+            "cert_expires_at": cert_expiry,
+        }
 
     # Register routers
     _register_routers(app)
@@ -107,14 +128,15 @@ def create_app() -> FastAPI:
 
 
 def _register_routers(app: FastAPI) -> None:
-    """Register all API routers."""
+    """Register Control Center API routers.
+
+    REST API and internal endpoints only. WebSocket chat routes are served by
+    Communication Hub (app.communication_hub.main). Agent Runtime service
+    (app.agent_runtime.main) handles session dispatching.
+    """
     from app.api.v1 import router as api_v1_router
-    from app.api.gateway.lifecycle import GatewayRouter
-    from app.api.ws.chat import ws_router
 
     app.include_router(api_v1_router, prefix="/api/v1")
-    app.include_router(GatewayRouter)
-    app.include_router(ws_router)
 
 
 async def _run_bootstrap() -> None:
@@ -128,16 +150,33 @@ async def _run_bootstrap() -> None:
         logger.exception("Bootstrap service failed; application will continue.")
 
 
+async def _seed_system_tools() -> None:
+    """Seed system MCP server and tools into database on startup."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.api.v1.mcp_hub import seed_system_tools
+        async with AsyncSessionLocal() as db:
+            await seed_system_tools(db)
+            await db.commit()
+        logger.info("System tools seeding complete")
+    except Exception:
+        logger.exception("System tools seeding failed; application will continue.")
+
+
 app = create_app()
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Run startup tasks including bootstrap seeding and session dispatcher."""
+    """Run Control Center startup tasks.
+
+    Session dispatching is handled by the Agent Runtime service.
+    """
     await _run_bootstrap()
+    await _seed_system_tools()
     await _run_skill_seeder()
     await _initialize_agent_realm()
-    await _start_session_dispatcher()
+    await _initialize_certificate_authority()
 
 
 async def _run_skill_seeder() -> None:
@@ -167,13 +206,30 @@ async def _initialize_agent_realm() -> None:
         )
 
 
-async def _start_session_dispatcher() -> None:
-    """Start the background SessionDispatcher as an asyncio task."""
+async def _initialize_certificate_authority() -> None:
+    """Initialize the Certificate Authority on startup.
+
+    Generates (or loads) the root CA certificate used to sign and validate
+    agent instance certificates.  CA is stored in memory; private key
+    is encrypted at rest if CA_PRIVATE_KEY_ENCRYPTED env var is set.
+    """
     try:
-        import asyncio
-        from app.services.agents.session_dispatcher import SessionDispatcher
-        dispatcher = SessionDispatcher()
-        asyncio.create_task(dispatcher.run())
-        logger.info("SessionDispatcher started")
+        from app.db.session import AsyncSessionLocal
+        from app.services.certificate_authority import initialize_ca
+        async with AsyncSessionLocal() as db:
+            ca_cert = await initialize_ca(db)
+        logger.info(
+            "Certificate Authority initialized — serial=%s expires=%s",
+            ca_cert.serial_number,
+            ca_cert.not_valid_after_utc,
+        )
     except Exception:
-        logger.exception("Failed to start SessionDispatcher; agent sessions will not auto-execute")
+        logger.exception(
+            "Certificate Authority initialization failed; "
+            "agent certificate issuance/validation will not work. "
+            "Ensure CREDENTIAL_VAULT_KEY is set and the database is reachable."
+        )
+
+
+# SessionDispatcher is now started by the Agent Runtime service (app.agent_runtime.main).
+# It is no longer a Control Center startup responsibility.

@@ -9,12 +9,19 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
+from app.api.v1.mcp_hub import (
+    SYSTEM_TOOL_IDS,
+    SYSTEM_TOOL_SAVE_RESULT_ID,
+    SYSTEM_TOOL_SEND_NOTIFICATION_ID,
+    SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
+)
 from app.core.resource_types import RT_SKILL
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
 from app.db.models.agents import AgentRoleSkill
 from app.schemas.skills import SkillCreate, SkillDetailRead, SkillRead, SkillUpdate
+from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +33,83 @@ class _ToolRecord:
     name: str
     description: str | None
     input_schema: dict | None
+
+
+def _get_system_tool_record(tool_id: uuid.UUID) -> _ToolRecord | None:
+    """Return a _ToolRecord for a system tool ID, or None if not a system tool."""
+    if tool_id == SYSTEM_TOOL_SAVE_RESULT_ID:
+        return _ToolRecord(
+            name="system____save_result",
+            description=(
+                "Save the final result of agent execution. Always provide a clear title. "
+                "Use content format that matches the agent output_type "
+                "(markdown -> markdown text, typed -> structured JSON)."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Human-readable result title (required)"},
+                    "content": {
+                        "description": "Result body. Use markdown text when output_type=markdown; use structured JSON value when output_type=typed.",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "object"},
+                            {"type": "array"},
+                            {"type": "number"},
+                            {"type": "boolean"},
+                        ],
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "enum": ["text", "markdown", "json"],
+                        "description": "Optional explicit format override. If omitted, the system uses the agent output_type to infer format.",
+                    },
+                },
+                "required": ["title", "content"],
+            },
+        )
+    elif tool_id == SYSTEM_TOOL_SEND_NOTIFICATION_ID:
+        return _ToolRecord(
+            name="system____send_notification",
+            description="Send a notification to specified channels",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "recipient_group_id": {"type": "string", "description": "ID of the recipient group to send the notification to"},
+                    "subject": {"type": "string", "description": "Notification subject / title"},
+                    "body": {"type": "string", "description": "Notification body content"},
+                },
+                "required": ["recipient_group_id", "subject", "body"],
+            },
+        )
+    elif tool_id == SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID:
+        return _ToolRecord(
+            name="system____get_recipient_group",
+            description="Retrieve recipient group information including channels and properties",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name of the recipient group to retrieve"},
+                },
+                "required": ["name"],
+            },
+        )
+    return None
+
+
+def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_name: str | None) -> str:
+    """Return canonical ``server____tool`` for MCP tool identifiers."""
+    if server_slug and isinstance(original_name, str) and original_name:
+        return build_tool_name(server_slug, original_name)
+
+    try:
+        parsed_server, parsed_tool = parse_tool_name(name)
+        return build_tool_name(parsed_server, parsed_tool)
+    except ValueError:
+        if "/" in name:
+            parsed_server, parsed_tool = name.split("/", 1)
+            return build_tool_name(parsed_server, parsed_tool)
+        return name
 
 
 def assemble_tool_section(tools: list[_ToolRecord]) -> str:
@@ -51,15 +135,26 @@ def assemble_tool_section(tools: list[_ToolRecord]) -> str:
 
 def _build_skill_read(skill: Skill) -> SkillRead:
     """Construct a SkillRead response with computed instructions_with_tools."""
-    tool_records = [
-        _ToolRecord(
-            name=binding.tool.name,
-            description=binding.tool.description,
-            input_schema=binding.tool.input_schema,
-        )
-        for binding in sorted(skill.tool_bindings, key=lambda b: b.order)
-        if binding.tool is not None
-    ]
+    tool_records: list[_ToolRecord] = []
+    for binding in sorted(skill.tool_bindings, key=lambda b: b.order):
+        if binding.tool is not None:
+            # Regular MCP tool from database
+            tool_records.append(
+                _ToolRecord(
+                    name=_canonicalize_mcp_tool_name(
+                        binding.tool.name,
+                        None,
+                        binding.tool.original_name,
+                    ),
+                    description=binding.tool.description,
+                    input_schema=binding.tool.input_schema,
+                )
+            )
+        else:
+            # Check if it's a system tool (virtual)
+            system_tool = _get_system_tool_record(binding.tool_id)
+            if system_tool:
+                tool_records.append(system_tool)
     tool_section = assemble_tool_section(tool_records)
     if tool_section:
         instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
@@ -73,15 +168,26 @@ def _build_skill_read(skill: Skill) -> SkillRead:
 
 def _build_skill_detail_read(skill: Skill) -> SkillDetailRead:
     """Construct a SkillDetailRead response with computed instructions_with_tools."""
-    tool_records = [
-        _ToolRecord(
-            name=binding.tool.name,
-            description=binding.tool.description,
-            input_schema=binding.tool.input_schema,
-        )
-        for binding in sorted(skill.tool_bindings, key=lambda b: b.order)
-        if binding.tool is not None
-    ]
+    tool_records: list[_ToolRecord] = []
+    for binding in sorted(skill.tool_bindings, key=lambda b: b.order):
+        if binding.tool is not None:
+            # Regular MCP tool from database
+            tool_records.append(
+                _ToolRecord(
+                    name=_canonicalize_mcp_tool_name(
+                        binding.tool.name,
+                        None,
+                        binding.tool.original_name,
+                    ),
+                    description=binding.tool.description,
+                    input_schema=binding.tool.input_schema,
+                )
+            )
+        else:
+            # Check if it's a system tool (virtual)
+            system_tool = _get_system_tool_record(binding.tool_id)
+            if system_tool:
+                tool_records.append(system_tool)
     tool_section = assemble_tool_section(tool_records)
     if tool_section:
         instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
@@ -116,8 +222,11 @@ async def create_skill(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "create")),
 ) -> SkillDetailRead:
-    # Validate all tool IDs exist
+    # Validate all tool IDs exist (skip system tools)
     for tool_id in body.tool_ids:
+        # System tools are virtual and don't exist in database
+        if tool_id in SYSTEM_TOOL_IDS:
+            continue
         tool = await db.get(McpTool, tool_id)
         if not tool:
             raise HTTPException(
@@ -181,8 +290,11 @@ async def update_skill(
         setattr(skill, field, value)
 
     if body.tool_ids is not None:
-        # Validate new tool IDs
+        # Validate new tool IDs (skip system tools)
         for tool_id in body.tool_ids:
+            # System tools are virtual and don't exist in database
+            if tool_id in SYSTEM_TOOL_IDS:
+                continue
             tool = await db.get(McpTool, tool_id)
             if not tool:
                 raise HTTPException(

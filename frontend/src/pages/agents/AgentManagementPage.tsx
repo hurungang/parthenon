@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -35,9 +35,9 @@ import {
   type AgentTypeFormValues,
 } from './AgentTypeForm'
 import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
-import PlanPreviewModal from '../../components/agents/PlanPreviewModal'
 import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
-import type { AgentIdentity, AgentPlan, AgentRole, AgentType } from '../../types'
+import { ConversationDialog } from '../../components/agents/ConversationDialog'
+import type { AgentIdentity, AgentRole, AgentType } from '../../types'
 
 /**
  * Agent management page — agent type list, creation/editing, active instance table,
@@ -46,6 +46,7 @@ import type { AgentIdentity, AgentPlan, AgentRole, AgentType } from '../../types
 export function AgentManagementPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: agentTypes, isLoading, error } = useAgentTypes()
   const queryClient = useQueryClient()
 
@@ -67,16 +68,31 @@ export function AgentManagementPage() {
   const roleMap = new Map((allRoles ?? []).map((r) => [r.id, r.name]))
   const identityMap = new Map((allIdentities ?? []).map((i) => [i.id, i.name]))
   const [detailsDialogTypeId, setDetailsDialogTypeId] = useState<string | null>(null)
+  const [detailsDialogInitialTab, setDetailsDialogInitialTab] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [editType, setEditType] = useState<AgentType | null>(null)
   const [form, setForm] = useState<AgentTypeFormValues>(defaultAgentTypeFormValues)
   const [launchType, setLaunchType] = useState<AgentType | null>(null)
   const [launchOpen, setLaunchOpen] = useState(false)
-  const [planData, setPlanData] = useState<AgentPlan | null>(null)
-  const [planModalOpen, setPlanModalOpen] = useState(false)
-  const [planAgentTypeName, setPlanAgentTypeName] = useState('')
-  const [previewLoading, setPreviewLoading] = useState<string | null>(null)
+  const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
+  const [conversationAgentType, setConversationAgentType] = useState<AgentType | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  // Auto-open dialog if navigated from chat page with openDialogFor state
+  useEffect(() => {
+    const state = location.state as { openDialogFor?: string; editAgentType?: AgentType } | null
+    if (state?.openDialogFor) {
+      setDetailsDialogTypeId(state.openDialogFor)
+      // Clear the state so it doesn't reopen on next navigation
+      navigate(location.pathname, { replace: true, state: {} })
+    } else if (state?.editAgentType) {
+      // Open edit dialog for the agent type passed via state
+      handleOpenEdit(state.editAgentType)
+      // Clear the state so it doesn't reopen on next navigation
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location, navigate])
 
   const handleOpenCreate = () => {
     setEditType(null)
@@ -105,10 +121,12 @@ export function AgentManagementPage() {
   }
 
   const handleSave = async () => {
+    setSaving(true)
     try {
       setDialogError(null)
       if (form.input_type === 'none' && !form.primary_sop_id) {
         setDialogError(new Error(t('agents.types.form.primarySopRequired')))
+        setSaving(false)
         return
       }
       const body = {
@@ -134,31 +152,23 @@ export function AgentManagementPage() {
       }
       setDialogOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-      // Show plan preview if a plan was generated
-      if (savedAgentType.plan) {
-        setPlanData(savedAgentType.plan)
-        setPlanAgentTypeName(savedAgentType.name)
-        setPlanModalOpen(true)
-      }
+      // Open agent details dialog on Agent Preview tab
+      setDetailsDialogInitialTab(1)
+      setDetailsDialogTypeId(savedAgentType.id)
     } catch (err) {
       setDialogError(err)
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleLaunch = (at: AgentType) => {
-    setLaunchType(at)
-    setLaunchOpen(true)
-  }
-
-  const handlePreviewPlan = async (at: AgentType) => {
-    setPreviewLoading(at.id)
-    try {
-      const res = await apiClient.get<AgentType>(`/agents/types/${at.id}`)
-      setPlanData(res.data.plan ?? null)
-      setPlanAgentTypeName(res.data.name)
-      setPlanModalOpen(true)
-    } finally {
-      setPreviewLoading(null)
+    if (at.input_type === 'conversation') {
+      setConversationAgentType(at)
+      setConversationDialogOpen(true)
+    } else {
+      setLaunchType(at)
+      setLaunchOpen(true)
     }
   }
 
@@ -224,31 +234,26 @@ export function AgentManagementPage() {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Box display="flex" gap={0.5}>
-                      <Tooltip title={t('agents.types.launch')}>
+                      <Tooltip title={at.input_type === 'conversation' ? t('agents.types.startChat') : t('agents.types.runAgent')}>
                         <IconButton
                           size="small"
                           color="primary"
-                          aria-label={t('agents.types.launch')}
+                          aria-label={at.input_type === 'conversation' ? t('agents.types.startChat') : t('agents.types.runAgent')}
                           onClick={() => handleLaunch(at)}
                         >
                           <PlayArrowIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      {at.plan && (
-                        <Tooltip title={t('agents.plan.previewButton')}>
-                          <IconButton
-                            size="small"
-                            color="secondary"
-                            aria-label={t('agents.plan.previewButton')}
-                            onClick={() => void handlePreviewPlan(at)}
-                            disabled={previewLoading === at.id}
-                          >
-                            {previewLoading === at.id
-                              ? <CircularProgress size={16} color="inherit" />
-                              : <VisibilityIcon fontSize="small" />}
-                          </IconButton>
-                        </Tooltip>
-                      )}
+                      <Tooltip title={t('app.view')}>
+                        <IconButton
+                          size="small"
+                          color="secondary"
+                          aria-label={t('app.view')}
+                          onClick={() => setDetailsDialogTypeId(at.id)}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title={t('app.edit')}>
                         <IconButton size="small" aria-label={t('app.edit')} onClick={() => handleOpenEdit(at)}>
                           <EditIcon fontSize="small" />
@@ -269,14 +274,18 @@ export function AgentManagementPage() {
       )}
 
       {/* Agent Type Details Dialog */}
-      <AgentTypeDetailsDialog
-        open={detailsDialogTypeId !== null}
-        agentTypeId={detailsDialogTypeId}
-        onClose={() => {
-          setDetailsDialogTypeId(null)
-          void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-        }}
-      />
+      {detailsDialogTypeId !== null && (
+        <AgentTypeDetailsDialog
+          open={true}
+          agentTypeId={detailsDialogTypeId}
+          initialTab={detailsDialogInitialTab}
+          onClose={() => {
+            setDetailsDialogTypeId(null)
+            setDetailsDialogInitialTab(0)
+            void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+          }}
+        />
+      )}
 
       {/* Create / Edit Agent Type Dialog */}
       <Dialog
@@ -292,18 +301,25 @@ export function AgentManagementPage() {
           {dialogError ? (
             <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
           ) : null}
-          <Box pt={1}>
-            <AgentTypeForm values={form} onChange={setForm} />
-          </Box>
+          {saving ? (
+            <Box display="flex" flexDirection="column" alignItems="center" py={4}>
+              <CircularProgress />
+              <Typography mt={2}>{t('agents.generatingPlan', 'Generating implementation plan…')}</Typography>
+            </Box>
+          ) : (
+            <Box pt={1}>
+              <AgentTypeForm values={form} onChange={setForm} />
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setDialogOpen(false); setDialogError(null) }}>
+          <Button onClick={() => { setDialogOpen(false); setDialogError(null) }} disabled={saving}>
             {t('app.cancel')}
           </Button>
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={!form.name.trim()}
+            disabled={!form.name.trim() || saving}
           >
             {t('app.save')}
           </Button>
@@ -311,9 +327,9 @@ export function AgentManagementPage() {
       </Dialog>
 
       {/* Session Launch Dialog */}
-      {launchType && (
+      {launchType && launchOpen && (
         <AgentJobLaunchDialog
-          open={launchOpen}
+          open={true}
           agentType={launchType}
           onClose={() => { setLaunchOpen(false); setLaunchType(null) }}
           onLaunched={(sessionId) => {
@@ -324,12 +340,21 @@ export function AgentManagementPage() {
         />
       )}
 
-      <PlanPreviewModal
-        open={planModalOpen}
-        onClose={() => setPlanModalOpen(false)}
-        plan={planData}
-        agentTypeName={planAgentTypeName}
-      />
+      {/* Conversation Dialog for conversation agents */}
+      {conversationAgentType && conversationDialogOpen && (
+        <ConversationDialog
+          open={true}
+          sessionId={null}
+          agentTypeId={conversationAgentType.id}
+          agentTypeName={conversationAgentType.name}
+          onClose={() => {
+            setConversationDialogOpen(false)
+            setConversationAgentType(null)
+            void queryClient.invalidateQueries({ queryKey: ['conversations', 'sessions'] })
+          }}
+        />
+      )}
+
     </Box>
   )
 }

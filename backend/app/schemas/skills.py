@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, StringConstraints, model_validator
 from typing import Annotated
+from sqlalchemy import inspect as sa_inspect
 
 from app.db.models.skills import SopStepType
 
@@ -100,6 +101,28 @@ class SopRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    required_skill_ids: list[uuid.UUID] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_required_skill_ids(cls, data: Any) -> Any:
+        """Extract skill IDs from sop steps for frontend SOP-skill auto-selection."""
+        if isinstance(data, dict):
+            return data
+
+        try:
+            insp = sa_inspect(data)
+            if "steps" in insp.unloaded:
+                return data
+        except Exception:
+            # If inspection is unavailable, do not risk relationship lazy-load IO.
+            return data
+
+        steps = getattr(data, "steps", None) or []
+        # Collect unique skill_ids from all steps (excluding None)
+        skill_ids = [step.skill_id for step in steps if step.skill_id is not None]
+        data.required_skill_ids = list(dict.fromkeys(skill_ids))  # Deduplicate while preserving order
+        return data
 
 
 class SopDetailRead(SopRead):

@@ -275,3 +275,134 @@ class TestTopologyBuilderService:
         }
         result = self.service.build_topology(graph)
         assert len(result["nodes"]) == 1
+
+    # ── MCP Session Edge Label Tests ───────────────────────────────────────────
+
+    def test_edge_label_shows_session_name_when_session_configured(self):
+        """When tool has session_name, edge label shows 'via {session_name}'."""
+        skill_id = str(uuid.uuid4())
+        graph = {
+            "role": _make_role(),
+            "sops": [],
+            "skills": [_make_skill(skill_id, "TestSkill", sop_ids=[])],
+            "tools": [
+                {
+                    "name": "supabase/query",
+                    "description": "Query database",
+                    "skill_id": skill_id,
+                    "session_name": "harry",
+                    "auth_type": "api_key",
+                }
+            ],
+        }
+
+        result = self.service.build_topology(graph)
+
+        skill_tool_edges = [
+            e for e in result["edges"]
+            if e["source"] == f"skill:{skill_id}" and e["target"] == "tool:supabase/query"
+        ]
+        assert len(skill_tool_edges) == 1
+        assert skill_tool_edges[0]["label"] == "via harry"
+
+    def test_edge_label_shows_agent_identity_for_passthrough(self):
+        """When tool has passthrough auth (no session_name), edge label shows 'via agent identity'."""
+        skill_id = str(uuid.uuid4())
+        graph = {
+            "role": _make_role(),
+            "sops": [],
+            "skills": [_make_skill(skill_id, "TestSkill", sop_ids=[])],
+            "tools": [
+                {
+                    "name": "search/web",
+                    "description": "Web search",
+                    "skill_id": skill_id,
+                    "auth_type": "passthrough",
+                }
+            ],
+        }
+
+        result = self.service.build_topology(graph)
+
+        skill_tool_edges = [
+            e for e in result["edges"]
+            if e["source"] == f"skill:{skill_id}" and e["target"] == "tool:search/web"
+        ]
+        assert len(skill_tool_edges) == 1
+        assert skill_tool_edges[0]["label"] == "via agent identity"
+
+    def test_edge_label_shows_calls_for_platform_tools(self):
+        """When tool has no session_name and no auth_type, edge label shows 'calls'."""
+        skill_id = str(uuid.uuid4())
+        graph = {
+            "role": _make_role(),
+            "sops": [],
+            "skills": [_make_skill(skill_id, "TestSkill", sop_ids=[])],
+            "tools": [
+                {
+                    "name": "platform/calculator",
+                    "description": "Built-in calculator",
+                    "skill_id": skill_id,
+                }
+            ],
+        }
+
+        result = self.service.build_topology(graph)
+
+        skill_tool_edges = [
+            e for e in result["edges"]
+            if e["source"] == f"skill:{skill_id}" and e["target"] == "tool:platform/calculator"
+        ]
+        assert len(skill_tool_edges) == 1
+        assert skill_tool_edges[0]["label"] == "calls"
+
+    def test_multiple_tools_different_sessions(self):
+        """Multiple tools with different session configs each get the correct edge label."""
+        skill_id = str(uuid.uuid4())
+        graph = {
+            "role": _make_role(),
+            "sops": [],
+            "skills": [_make_skill(skill_id, "MultiSkill", sop_ids=[])],
+            "tools": [
+                {
+                    "name": "db/query",
+                    "description": "DB query",
+                    "skill_id": skill_id,
+                    "session_name": "dev-db",
+                    "auth_type": "api_key",
+                },
+                {
+                    "name": "api/call",
+                    "description": "API call",
+                    "skill_id": skill_id,
+                    "session_name": "prod-api",
+                    "auth_type": "oauth",
+                },
+                {
+                    "name": "search/semantic",
+                    "description": "Semantic search",
+                    "skill_id": skill_id,
+                    "auth_type": "passthrough",
+                },
+                {
+                    "name": "platform/clock",
+                    "description": "Platform clock",
+                    "skill_id": skill_id,
+                },
+            ],
+        }
+
+        result = self.service.build_topology(graph)
+
+        def _edge_label(tool_name: str) -> str:
+            matches = [
+                e for e in result["edges"]
+                if e["source"] == f"skill:{skill_id}" and e["target"] == f"tool:{tool_name}"
+            ]
+            assert len(matches) == 1, f"Expected one edge for {tool_name}, got {len(matches)}"
+            return matches[0]["label"]
+
+        assert _edge_label("db/query") == "via dev-db"
+        assert _edge_label("api/call") == "via prod-api"
+        assert _edge_label("search/semantic") == "via agent identity"
+        assert _edge_label("platform/clock") == "calls"

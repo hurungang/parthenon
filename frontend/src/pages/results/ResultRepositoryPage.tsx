@@ -19,6 +19,7 @@ import {
 } from '@mui/material'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useQuery } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { ResultRecord } from '../../types'
@@ -37,6 +38,10 @@ export function ResultRepositoryPage() {
       return data
     },
   })
+
+  const selectedContent = typeof selected?.payload?.content === 'string'
+    ? selected.payload.content
+    : null
 
   return (
     <Box>
@@ -90,9 +95,19 @@ export function ResultRepositoryPage() {
       <Dialog open={!!selected} onClose={() => setSelected(null)} maxWidth="md" fullWidth>
         <DialogTitle>{selected?.title ?? 'Result Detail'}</DialogTitle>
         <DialogContent>
-          <pre style={{ overflow: 'auto', fontSize: 12 }}>
-            {JSON.stringify(selected?.payload, null, 2)}
-          </pre>
+          {selected?.content_type === 'text/markdown' && selectedContent ? (
+            <Box sx={{ '& p': { my: 1 }, '& pre': { overflow: 'auto' }, '& code': { fontFamily: 'monospace' } }}>
+              <ReactMarkdown>{selectedContent}</ReactMarkdown>
+            </Box>
+          ) : selected?.content_type === 'text/plain' && selectedContent ? (
+            <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13 }}>
+              {selectedContent}
+            </Typography>
+          ) : (
+            <Box component="pre" sx={{ overflow: 'auto', fontSize: 12 }}>
+              {JSON.stringify(selected?.payload, null, 2)}
+            </Box>
+          )}
         </DialogContent>
       </Dialog>
     </Box>

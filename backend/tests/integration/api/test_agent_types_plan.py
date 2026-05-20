@@ -469,6 +469,38 @@ async def test_update_agent_type_response_includes_plan_field(authed_client: Asy
 
 
 @pytest.mark.asyncio
+async def test_regenerate_agent_type_plan_returns_plan_field(authed_client: AsyncClient):
+    """POST /api/v1/agents/types/{type_id}/regenerate-plan returns 200 with plan field."""
+    at_id = uuid.uuid4()
+
+    mock_plan = _mock_plan_response(at_id, AgentPlanStatus.success)
+
+    async def mock_generate_plan(self, agent_type, db) -> AgentPlan:
+        return mock_plan
+
+    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
+        create_resp = await authed_client.post(
+            "/api/v1/agents/types",
+            json={
+                "name": f"RegeneratePlanAgent-{uuid.uuid4().hex[:6]}",
+                "input_type": "typed",
+                "output_type": "markdown",
+                "is_active": True,
+            },
+        )
+
+    assert create_resp.status_code == 201
+    created_id = create_resp.json()["id"]
+
+    with patch.object(PlanGenerationService, "generate_plan", mock_generate_plan):
+        resp = await authed_client.post(f"/api/v1/agents/types/{created_id}/regenerate-plan")
+
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert "plan" in body
+
+
+@pytest.mark.asyncio
 async def test_list_agent_types_does_not_include_plan_field(authed_client: AsyncClient):
     """GET /api/v1/agents/types (list) does not include plan in each item."""
     # Create an agent type first so the list is non-empty

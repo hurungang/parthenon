@@ -256,7 +256,10 @@ async def test_delete_identity_raises_conflict_when_referenced():
     identity = _make_identity(identity_id=identity_id)
 
     ref_result = MagicMock()
-    ref_result.scalar_one_or_none.return_value = uuid.uuid4()  # referencing agent type
+    ref_agent_type = MagicMock()
+    ref_agent_type.id = uuid.uuid4()
+    ref_agent_type.name = "some-agent-type"
+    ref_result.scalar_one_or_none.return_value = ref_agent_type  # referencing agent type
 
     db = _mock_db()
     db.get = AsyncMock(return_value=identity)

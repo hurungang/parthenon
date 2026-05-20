@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -17,6 +17,7 @@ const MOCK_IDENTITIES = [
     realm_username: 'agent-user-1',
     status: 'active',
     token_expires_at: '2099-01-01T00:00:00Z',  // active token
+    has_refresh_token: true,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
@@ -27,19 +28,22 @@ const MOCK_IDENTITIES = [
     realm_username: 'agent-user-2',
     status: 'suspended',
     token_expires_at: null,  // no token
+    has_refresh_token: false,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
 ]
 
-vi.mock('../api/apiClient', () => ({
-  default: {
-    get: vi.fn().mockResolvedValue({ data: MOCK_IDENTITIES }),
-    post: vi.fn().mockResolvedValue({ data: MOCK_IDENTITIES[0] }),
-    put: vi.fn().mockResolvedValue({ data: MOCK_IDENTITIES[0] }),
-    delete: vi.fn().mockResolvedValue({ data: {} }),
-  },
-}))
+// Named mock reference — accessed directly in tests without a static import
+// (static import of apiClient would cause vi.mock factory to evaluate before MOCK_IDENTITIES is defined)
+const mockApiClient = {
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  delete: vi.fn(),
+}
+
+vi.mock('../api/apiClient', () => ({ default: mockApiClient }))
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -51,6 +55,14 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('AgentIdentityListPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApiClient.get.mockResolvedValue({ data: MOCK_IDENTITIES })
+    mockApiClient.post.mockResolvedValue({ data: MOCK_IDENTITIES[0] })
+    mockApiClient.put.mockResolvedValue({ data: MOCK_IDENTITIES[0] })
+    mockApiClient.delete.mockResolvedValue({ data: {} })
+  })
+
   it('renders the page heading', async () => {
     const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
     render(<AgentIdentityListPage />, { wrapper })
@@ -151,6 +163,109 @@ describe('AgentIdentityListPage', () => {
     await waitFor(() => {
       expect(screen.getByText('agents.identities.createTitle')).toBeDefined()
     })
+  })
+})
+
+describe('AgentIdentityListPage — conditional action buttons', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows green refresh button when refresh token is valid', async () => {
+    const identityWithRefresh = {
+      id: 'id-r1',
+      name: 'Refresh Bot',
+      realm_name: 'ai_agents',
+      realm_username: 'agent-user-r',
+      status: 'active',
+      token_expires_at: '2099-01-01T00:00:00Z',
+      has_refresh_token: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [identityWithRefresh] })
+    const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
+    const { container } = render(<AgentIdentityListPage />, { wrapper })
+    await waitFor(() => screen.getByText('Refresh Bot'))
+    // Green success-colored refresh button must exist
+    expect(container.querySelector('.MuiIconButton-colorSuccess')).not.toBeNull()
+  })
+
+  it('shows red reauth button when refresh token is invalid', async () => {
+    const identityNoRefresh = {
+      id: 'id-nr1',
+      name: 'NoRefresh Bot',
+      realm_name: 'ai_agents',
+      realm_username: 'agent-user-n',
+      status: 'suspended',
+      token_expires_at: null,
+      has_refresh_token: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [identityNoRefresh] })
+    const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
+    const { container } = render(<AgentIdentityListPage />, { wrapper })
+    await waitFor(() => screen.getByText('NoRefresh Bot'))
+    // No success-colored button — only the error-colored reauth and delete buttons
+    expect(container.querySelector('.MuiIconButton-colorSuccess')).toBeNull()
+  })
+
+  it('refresh button calls refresh-token endpoint', async () => {
+    const identityWithRefresh = {
+      id: 'id-r2',
+      name: 'Refresh Bot 2',
+      realm_name: 'ai_agents',
+      realm_username: 'agent-user-r2',
+      status: 'active',
+      token_expires_at: '2099-01-01T00:00:00Z',
+      has_refresh_token: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValueOnce({ data: [identityWithRefresh] })
+    mockApiClient.post.mockResolvedValueOnce({ data: {} })
+    const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
+    const { container } = render(<AgentIdentityListPage />, { wrapper })
+    await waitFor(() => screen.getByText('Refresh Bot 2'))
+    const refreshBtn = container.querySelector('.MuiIconButton-colorSuccess') as HTMLElement
+    await act(async () => { fireEvent.click(refreshBtn) })
+    await waitFor(() => {
+      expect(mockApiClient.post).toHaveBeenCalledWith('/agents/identities/id-r2/refresh-token')
+    })
+  })
+
+  it('reauth button calls reauth-url endpoint and opens popup', async () => {
+    const identityNoRefresh = {
+      id: 'id-nr2',
+      name: 'NoRefresh Bot 2',
+      realm_name: 'ai_agents',
+      realm_username: 'agent-user-n2',
+      status: 'suspended',
+      token_expires_at: null,
+      has_refresh_token: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get
+      .mockResolvedValueOnce({ data: [identityNoRefresh] })
+      .mockResolvedValueOnce({ data: { authorization_url: 'https://auth.example.com/authorize' } })
+    const windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+    const { AgentIdentityListPage } = await import('../pages/agents/AgentIdentityListPage')
+    render(<AgentIdentityListPage />, { wrapper })
+    await waitFor(() => screen.getByText('NoRefresh Bot 2'))
+    // Buttons per row (with 1 identity): [Add Identity, assign, reauth, delete]
+    const buttons = screen.getAllByRole('button')
+    await act(async () => { fireEvent.click(buttons[2]) })
+    await waitFor(() => {
+      expect(mockApiClient.get).toHaveBeenCalledWith('/agents/identities/id-nr2/reauth-url')
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        'https://auth.example.com/authorize',
+        expect.any(String),
+        expect.any(String),
+      )
+    })
+    windowOpenSpy.mockRestore()
   })
 })
 

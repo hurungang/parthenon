@@ -16,16 +16,31 @@ from typing import Any
 
 from opentelemetry import trace
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.models.agents import AgentPlan, AgentPlanStatus, AgentType
+from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 from app.services.agents.topology_builder_service import TopologyBuilderService
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
 
 _topology_builder = TopologyBuilderService()
+
+
+def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_name: str | None) -> str:
+    """Return canonical ``server____tool`` for MCP tool identifiers."""
+    if server_slug and isinstance(original_name, str) and original_name:
+        return build_tool_name(server_slug, original_name)
+
+    try:
+        parsed_server, parsed_tool = parse_tool_name(name)
+        return build_tool_name(parsed_server, parsed_tool)
+    except ValueError:
+        if "/" in name:
+            parsed_server, parsed_tool = name.split("/", 1)
+            return build_tool_name(parsed_server, parsed_tool)
+        return name
 
 
 class PlanGenerationService:
@@ -126,9 +141,9 @@ class PlanGenerationService:
         self, agent_type: AgentType, db: AsyncSession
     ) -> dict[str, Any]:
         """Traverse role→SOP→Skill→Tool graph and return a structured dict."""
-        from app.db.models.agents import AgentIdentity, AgentRole, AgentRoleSOP, AgentRoleSkill
+        from app.db.models.agents import AgentIdentity, AgentRole, AgentRoleSOP, AgentRoleSkill, AgentRoleMcpSession
         from app.db.models.skills import Skill, SkillToolBinding, Sop, SopStep, SopStepType
-        from app.db.models.mcp_hub import McpTool
+        from app.db.models.mcp_hub import McpTool, McpServer, McpSession
 
         # Build agent data
         agent_data: dict[str, Any] = {
@@ -163,6 +178,19 @@ class PlanGenerationService:
             "name": role.name,
             "description": role.description,
         }
+
+        # Load MCP sessions assigned to this role: build server_id → session info map
+        session_rows = await db.execute(
+            select(AgentRoleMcpSession, McpSession)
+            .join(McpSession, AgentRoleMcpSession.mcp_session_id == McpSession.id)
+            .where(AgentRoleMcpSession.role_id == role.id)
+        )
+        server_session_map: dict[str, dict[str, str]] = {}
+        for assoc, session in session_rows.all():
+            server_session_map[str(assoc.server_id)] = {
+                "session_name": session.name,
+                "auth_type": session.auth_type.value,
+            }
 
         # Load SOPs assigned to role
         sop_rows = await db.execute(
@@ -220,7 +248,9 @@ class PlanGenerationService:
             skills_result = await db.execute(
                 select(Skill)
                 .where(Skill.id.in_(all_skill_ids))
-                .options(selectinload(Skill.tool_bindings).selectinload(SkillToolBinding.tool))
+                .options(
+                    selectinload(Skill.tool_bindings).selectinload(SkillToolBinding.tool).selectinload(McpTool.server)
+                )
             )
             for skill in skills_result.scalars().all():
                 # Determine which SOPs reference this skill (for topology edges)
@@ -238,11 +268,23 @@ class PlanGenerationService:
                 # Collect tools
                 for binding in skill.tool_bindings:
                     if binding.tool:
-                        tool_data_list.append({
-                            "name": binding.tool.name,
+                        canonical_tool_name = _canonicalize_mcp_tool_name(
+                            binding.tool.name,
+                            binding.tool.server.slug if binding.tool.server is not None else None,
+                            binding.tool.original_name,
+                        )
+                        tool_data: dict[str, Any] = {
+                            "name": canonical_tool_name,
                             "description": binding.tool.description,
                             "skill_id": str(skill.id),
-                        })
+                            "server_id": str(binding.tool.server_id),
+                        }
+                        # Attach session info if this server has a role-assigned session
+                        srv_key = str(binding.tool.server_id)
+                        if srv_key in server_session_map:
+                            tool_data["session_name"] = server_session_map[srv_key]["session_name"]
+                            tool_data["auth_type"] = server_session_map[srv_key]["auth_type"]
+                        tool_data_list.append(tool_data)
 
         return {
             "agent": agent_data,

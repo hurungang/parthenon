@@ -1,6 +1,11 @@
 """Bootstrap Service — seeds the system_admin role on first startup.
 
 Idempotent: safe to run on every application restart.
+
+Note: For local development, use the `./parthenon.ps1 init` command to set up
+the environment properly. This bootstrap service provides a fallback mechanism
+for runtime initialization when BOOTSTRAP_ADMIN_EMAIL is set, but the init
+script is the recommended approach as it ensures consistent Keycloak user UUIDs.
 """
 import logging
 import os

@@ -13,7 +13,17 @@ from app.db.models.agents import (  # noqa: F401
     AgentRole,
     AgentRoleSkill,
     AgentRoleSOP,
+    AgentTokenStatus,
     AgentType,
+)
+from app.db.models.agent_security import (  # noqa: F401
+    AgentCertificateStatus,
+    AgentInstanceCertificate,
+    CertificateRevocationEntry,
+    CertificateValidationLog,
+    CertificateValidationOutcome,
+    TokenRefreshLog,
+    TokenRefreshOutcome,
 )
 from app.db.models.conversations import (  # noqa: F401
     ConversationSession,
@@ -22,8 +32,15 @@ from app.db.models.conversations import (  # noqa: F401
 )
 from app.db.models.results import ResultRecord  # noqa: F401
 from app.db.models.scheduling import JobExecution, ScheduledJob  # noqa: F401
-from app.db.models.notifications import NotificationChannel, NotificationEvent  # noqa: F401
-from app.services.gateway.registry import GatewayRoute  # noqa: F401
+from app.db.models.notifications import (  # noqa: F401
+    ChannelProperty,
+    GroupChannelMapping,
+    NotificationChannel,
+    NotificationEvent,
+    NotificationLog,
+    RecipientGroup,
+)
+from app.services.gateway.registry import GatewayEndpointRegistry  # noqa: F401
 
 # User Permission Management models
 from app.db.models.tag_definition import TagDefinition  # noqa: F401

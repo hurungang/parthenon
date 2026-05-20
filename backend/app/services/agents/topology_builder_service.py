@@ -158,14 +158,22 @@ class TopologyBuilderService:
                         "label": tool["name"],
                         "meta": {"description": tool.get("description")},
                     })
-                # Create skill→tool edge
+                # Create skill→tool edge with session label
                 skill_id = tool.get("skill_id", "")
                 parent_skill_node_id = skill_node_ids.get(skill_id)
                 if parent_skill_node_id:
+                    session_name = tool.get("session_name")
+                    auth_type = tool.get("auth_type")
+                    if session_name:
+                        edge_label = f"via {session_name}"
+                    elif auth_type == "passthrough":
+                        edge_label = "via agent identity"
+                    else:
+                        edge_label = "calls"
                     edges.append({
                         "source": parent_skill_node_id,
                         "target": tool_node_id,
-                        "label": "calls",
+                        "label": edge_label,
                     })
 
             span.set_attribute("node_count", len(nodes))

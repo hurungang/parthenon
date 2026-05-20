@@ -30,31 +30,20 @@ async def test_credential_vault_ciphertext_differs_from_input():
 
 @pytest.mark.asyncio
 async def test_gateway_endpoint_registry_register_and_resolve():
-    """GatewayEndpointRegistry: register creates a route; resolve returns the same route."""
-    from app.services.gateway.registry import GatewayEndpointRegistry, GatewayRoute
+    """GatewayEndpointRegistry: register creates an in-memory route; resolve returns the same path."""
+    from app.services.gateway.registry import GatewayEndpointRegistry
 
     agent_type_id = uuid.uuid4()
     registry = GatewayEndpointRegistry()
 
-    # Mock DB: first resolve returns None (not registered yet), then returns the route
-    route = MagicMock(spec=GatewayRoute)
-    route.agent_type_id = agent_type_id
-    route.http_base_path = f"/gateway/{agent_type_id}"
+    # register() is synchronous and returns the http_base_path
+    path = registry.register(agent_type_id)
+    assert path == f"/gateway/{agent_type_id}"
 
-    mock_db = AsyncMock()
-    # First execute (resolve inside register) → None; second execute (list/resolve) → route
-    mock_db.execute = AsyncMock(
-        side_effect=[
-            MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
-            MagicMock(scalar_one_or_none=MagicMock(return_value=route)),
-        ]
-    )
-    mock_db.flush = AsyncMock()
-    mock_db.refresh = AsyncMock()
-    mock_db.add = MagicMock()
+    # resolve() returns the same path
+    resolved = registry.resolve(agent_type_id)
+    assert resolved == path
 
-    created = await registry.register(agent_type_id, mock_db)
-    assert created is not None
-
-    resolved = await registry.resolve(agent_type_id, mock_db)
-    assert resolved is not None
+    # list_all() includes the registered route
+    all_routes = registry.list_all()
+    assert any(r["agent_type_id"] == str(agent_type_id) for r in all_routes)

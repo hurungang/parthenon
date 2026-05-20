@@ -1,8 +1,8 @@
 """SOP Agent Executor — handles sop-agent prompt execution via SopOrchestrator."""
+from __future__ import annotations
+
 import logging
 from typing import Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentInstance
 from app.services.skills.sop_orchestrator import SopOrchestrator

@@ -18,11 +18,19 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { DynamicSchemaForm } from '../../components/DynamicSchemaForm'
+import type { McpSessionAuthType } from '../../types'
 
 interface McpSession {
   id: string
   name: string
   server_id: string
+  auth_type: McpSessionAuthType
+}
+
+interface AgentIdentity {
+  id: string
+  name: string
+  realm_username: string | null
 }
 
 interface McpTool {
@@ -43,6 +51,7 @@ interface TestMcpToolDialogProps {
 export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProps) {
   const { t } = useTranslation()
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+  const [selectedAgentSubject, setSelectedAgentSubject] = useState<string>('')
   const [typedInputData, setTypedInputData] = useState<Record<string, any>>({})
   const [rawJsonInput, setRawJsonInput] = useState<string>('{}')
   const [useRawJson, setUseRawJson] = useState(false)
@@ -76,8 +85,23 @@ export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProp
     enabled: open && !!tool,
   })
 
+  // Determine if the server uses passthrough auth (all active sessions are passthrough)
+  const passthroughSession = sessions?.find((s) => s.auth_type === 'passthrough') ?? null
+  const isPassthrough = passthroughSession !== null
+
+  // Fetch agent identities when the server uses passthrough auth
+  const { data: agentIdentities, isLoading: loadingIdentities } = useQuery<AgentIdentity[]>({
+    queryKey: ['agents', 'identities'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
+      return data
+    },
+    enabled: open && isPassthrough,
+  })
+
   const handleTest = async () => {
-    if (!tool || !selectedSessionId) return
+    if (!tool) return
+    if (!isPassthrough && !selectedSessionId) return
 
     setTesting(true)
     setError(null)
@@ -98,10 +122,20 @@ export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProp
         inputData = typedInputData
       }
 
-      const { data } = await apiClient.post(`/mcp/tools/${tool.id}/test`, {
-        session_id: selectedSessionId,
+      const payload: Record<string, any> = {
         tool_input: inputData,
-      })
+      }
+
+      if (isPassthrough && passthroughSession) {
+        payload.session_id = passthroughSession.id
+        if (selectedAgentSubject) {
+          payload.agent_subject = selectedAgentSubject
+        }
+      } else {
+        payload.session_id = selectedSessionId
+      }
+
+      const { data } = await apiClient.post(`/mcp/tools/${tool.id}/test`, payload)
 
       setTestResult(data)
     } catch (err: any) {
@@ -113,6 +147,7 @@ export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProp
 
   const handleClose = () => {
     setSelectedSessionId('')
+    setSelectedAgentSubject('')
     setTypedInputData({})
     setRawJsonInput('{}')
     setTestResult(null)
@@ -120,6 +155,8 @@ export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProp
     setUseRawJson(false)
     onClose()
   }
+
+  const canTest = isPassthrough || !!selectedSessionId
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
@@ -146,22 +183,53 @@ export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProp
             </Typography>
           </Box>
 
-          {/* Session Selection */}
-          <FormControl fullWidth>
-            <InputLabel>MCP Session</InputLabel>
-            <Select
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-              label="MCP Session"
-              disabled={loadingSessions}
-            >
-              {(sessions ?? []).map((session) => (
-                <MenuItem key={session.id} value={session.id}>
-                  {session.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {/* Session / Identity Selection */}
+          {isPassthrough ? (
+            <Box>
+              <Alert severity="info" sx={{ mb: 1 }}>
+                {t('mcp.sessions.passthroughInfo')}
+              </Alert>
+              <FormControl fullWidth>
+                <InputLabel>Execute as agent identity</InputLabel>
+                <Select
+                  value={selectedAgentSubject}
+                  onChange={(e) => setSelectedAgentSubject(e.target.value)}
+                  label="Execute as agent identity"
+                  disabled={loadingIdentities}
+                >
+                  <MenuItem value="">
+                    <em>Current caller (my identity)</em>
+                  </MenuItem>
+                  {(agentIdentities ?? []).map((identity) => (
+                    <MenuItem key={identity.id} value={identity.realm_username ?? identity.id}>
+                      {identity.name}
+                      {identity.realm_username && (
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                          ({identity.realm_username})
+                        </Typography>
+                      )}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          ) : (
+            <FormControl fullWidth>
+              <InputLabel>MCP Session</InputLabel>
+              <Select
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
+                label="MCP Session"
+                disabled={loadingSessions}
+              >
+                {(sessions ?? []).map((session) => (
+                  <MenuItem key={session.id} value={session.id}>
+                    {session.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           {/* Input Form */}
           {tool?.input_schema ? (
@@ -236,7 +304,7 @@ export function TestMcpToolDialog({ open, tool, onClose }: TestMcpToolDialogProp
         <Button
           variant="contained"
           onClick={handleTest}
-          disabled={!selectedSessionId || testing}
+          disabled={!canTest || testing}
         >
           {testing ? 'Testing...' : 'Test Tool'}
         </Button>

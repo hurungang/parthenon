@@ -11,27 +11,32 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - Developers/Integrators: Integrate with the gateway to trigger agent sessions and receive results
 - Compliance & Audit Teams: Monitor agent activity, review session histories, and validate compliance
 
+
 ## What It Does
 - Exposes agent types via a standard lifecycle protocol (init, request, question, answer, close)
 - Supports both HTTP and MCP transports for agent communication
-- Manages secure, auditable agent interactions and session tracking
+- Manages secure, auditable agent interactions and session tracking, including passthrough session type for compatible MCP servers
 - Validates identity and role authorization for all agent actions
 - Provides real-time updates for conversational agents and asynchronous result delivery for task agents
 - Ensures all lifecycle events, system instructions, and user prompts are tracked and accessible
 - Filters available tools and actions based on agent role permissions
 
+
 ## Key Concepts
 - **Agent Gateway**: Central entry point for agent execution and result routing
 - **Lifecycle Protocol**: The standardized sequence of agent interaction events
-- **Session Tracking**: Monitoring agent activity, status, and results
+- **Session Tracking**: Monitoring agent activity, status, and results, including passthrough session type
+- **Session Type**: Either traditional (named session) or passthrough (direct agent identity propagation to MCP server)
 - **Identity-Role Validation**: Ensuring only authorized identities perform actions
 - **Execution Logging**: Capturing system instructions and user prompts for audit
+
 
 ## Acceptance Criteria
 - Agent types are accessible via both HTTP and MCP transports
 - All lifecycle events (init, request, question, answer, close) are tracked
 - Interactions are secure, permission-controlled, and validated against identity-role assignments
 - Lifecycle protocol is enforced for all agent communications
+- Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - All interactions, system instructions, and user prompts are auditable and accessible from the UI
 - Real-time updates are provided for conversational agents; asynchronous result delivery for task agents
 

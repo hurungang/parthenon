@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notification System — Prototype</title>
+<style>
+/* CSS copied from master prototype */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;position:relative;user-select:none}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody td{padding:12px 16px;vertical-align:middle}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);outline:none}
+.form-control:focus{border-color:var(--primary)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;font-size:18px;cursor:pointer}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:24px}
+.tab{padding:10px 20px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500}
+.tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+.dynamic-fields { padding: 16px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 16px; }
+.empty-state { text-align: center; padding: 40px; color: var(--text-secondary); }
+.success-toast { position: fixed; bottom: 20px; right: 20px; background: var(--success); color: white; padding: 12px 24px; border-radius: 4px; box-shadow: var(--shadow-md); transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 2000; }
+.success-toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+    <div style="padding: 16px 0;">
+      <div class="nav-item" onclick="switchView('overview')">Overview</div>
+      <div class="nav-item active" onclick="switchView('notifications')">Notifications</div>
+      <div class="nav-item" onclick="switchView('settings')">Settings</div>
+    </div>
+  </div>
+
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div class="topbar-title">Notifications Administration</div>
+    </div>
+
+    <div class="main-content">
+      
+      <!-- NOTIFICATIONS VIEW -->
+      <div id="view-notifications" class="view active">
+        <div class="view-header">
+          <div>
+            <h2>Notification System</h2>
+            <div class="view-desc">Manage channels, recipient groups, and messaging routing.</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('channels')" id="tab-channels">Channels</div>
+          <div class="tab" onclick="switchTab('groups')" id="tab-groups">Recipient Groups</div>
+          <div class="tab" onclick="switchTab('test')" id="tab-test">Test Notifications</div>
+        </div>
+
+        <!-- Channels Tab -->
+        <div id="panel-channels" style="display: block;">
+          <div class="card">
+            <div class="card-header">
+              <h3>Configured Channels</h3>
+              <button class="btn btn-primary" onclick="openModal('channelModal')">+ Add Channel</button>
+            </div>
+            <table id="channels-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Groups Tab -->
+        <div id="panel-groups" style="display: none;">
+          <div class="card">
+            <div class="card-header">
+              <h3>Recipient Groups</h3>
+              <button class="btn btn-primary" onclick="openModal('groupModal')">+ Add Group</button>
+            </div>
+            <table id="groups-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th>Mapped Channels</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Test Tab -->
+        <div id="panel-test" style="display: none;">
+          <div class="card" style="max-width: 600px;">
+            <div class="card-header">
+              <h3>Send Test Notification</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Target Group</label>
+                <select class="form-control" id="test-group-select"></select>
+              </div>
+              <div class="form-group">
+                <label>Message Content</label>
+                <textarea class="form-control" id="test-message" rows="4">This is a test notification from the Parthenon platform.</textarea>
+              </div>
+              <button class="btn btn-primary" onclick="sendTestNotification()">Send Notification</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Channel Modal -->
+<div class="modal-overlay" id="channelModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="channel-modal-title">Add Channel</h3>
+      <button class="modal-close" onclick="closeModal('channelModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="channel-id">
+      <div class="form-group">
+        <label>Channel Name</label>
+        <input type="text" id="channel-name" class="form-control" placeholder="e.g. Critical Alerts Webhook">
+      </div>
+      <div class="form-group">
+        <label>Channel Type</label>
+        <select id="channel-type" class="form-control" onchange="renderChannelFields()">
+          <option value="smtp">SMTP Email</option>
+          <option value="webhook">Slack/Teams Webhook</option>
+        </select>
+      </div>
+      <div id="channel-dynamic-fields" class="dynamic-fields">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('channelModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveChannel()">Save Channel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Group Modal -->
+<div class="modal-overlay" id="groupModal">
+  <div class="modal" style="max-width: 650px;">
+    <div class="modal-header">
+      <h3 id="group-modal-title">Edit Recipient Group</h3>
+      <button class="modal-close" onclick="closeModal('groupModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="group-id">
+      <div class="form-group">
+        <label>Group Name</label>
+        <input type="text" id="group-name" class="form-control" placeholder="e.g. Incident Response Team">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="group-desc" class="form-control">
+      </div>
+      <div class="form-group" style="margin-top:24px;">
+        <label style="border-bottom: 1px solid var(--border); padding-bottom: 8px;">Channel Mappings</label>
+        <div id="group-mappings"></div>
+        <button class="btn btn-secondary" style="margin-top:12px;" onclick="addMappingRow()">+ Add Channel Mapping</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('groupModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGroup()">Save Group</button>
+    </div>
+  </div>
+</div>
+
+<div class="success-toast" id="toast">Operation successful!</div>
+
+<script>
+// Mock Data
+let channels = [
+  { id: 1, name: 'Ops Alerts Webhook', type: 'webhook', config: { url: 'https://hooks.slack.com/services/...' }, active: true },
+  { id: 2, name: 'Support Mailer', type: 'smtp', config: { host: 'smtp.mailgun.org', port: '587' }, active: true }
+];
+
+let groups = [
+  { 
+    id: 1, 
+    name: 'SRE Team', 
+    desc: 'Platform reliability team', 
+    mappings: [
+      { channelId: 1, props: { targetUser: '@oncall' } },
+      { channelId: 2, props: { email: 'sre-oncall@example.com' } }
+    ] 
+  }
+];
+
+// UI State
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^="panel-"]').forEach(p => p.style.display = 'none');
+  document.getElementById(`tab-${tabId}`).classList.add('active');
+  document.getElementById(`panel-${tabId}`).style.display = 'block';
+  
+  if (tabId === 'channels') renderChannels();
+  if (tabId === 'groups') renderGroups();
+  if (tabId === 'test') renderTestForm();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Channels
+function renderChannels() {
+  const tbody = document.querySelector('#channels-table tbody');
+  tbody.innerHTML = channels.map(c => `
+    <tr>
+      <td><strong>${c.name}</strong></td>
+      <td><span class="chip chip-blue">${c.type.toUpperCase()}</span></td>
+      <td><span class="chip chip-green">Active</span></td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="editChannel(${c.id})">Edit</button>
+        <button class="btn btn-secondary btn-sm" style="color:red;" onclick="deleteChannel(${c.id})">Del</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function editChannel(id) {
+  const c = channels.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('channel-id').value = c.id;
+  document.getElementById('channel-name').value = c.name;
+  document.getElementById('channel-type').value = c.type;
+  document.getElementById('channel-modal-title').innerText = 'Edit Channel';
+  renderChannelFields(c);
+  openModal('channelModal');
+}
+
+function deleteChannel(id) {
+  channels = channels.filter(x => x.id !== id);
+  renderChannels();
+  showToast('Channel deleted');
+}
+
+function renderChannelFields(channel = null) {
+  const type = document.getElementById('channel-type').value;
+  const container = document.getElementById('channel-dynamic-fields');
+  let html = '';
+  
+  if (type === 'smtp') {
+    html = `
+      <div class="form-group"><label>SMTP Host</label><input type="text" class="form-control" id="cfg-host" value="${channel?.config?.host || ''}"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Port</label><input type="text" class="form-control" id="cfg-port" value="${channel?.config?.port || '587'}"></div>
+        <div class="form-group"><label>Username</label><input type="text" class="form-control" id="cfg-user" value="${channel?.config?.user || ''}"></div>
+      </div>
+    `;
+  } else if (type === 'webhook') {
+    html = `<div class="form-group"><label>Webhook URL</label><input type="text" class="form-control" id="cfg-url" value="${channel?.config?.url || ''}"></div>`;
+  }
+  container.innerHTML = html;
+}
+
+function saveChannel() {
+  const idStr = document.getElementById('channel-id').value;
+  const type = document.getElementById('channel-type').value;
+  
+  const config = {};
+  if (type === 'smtp') {
+    config.host = document.getElementById('cfg-host').value;
+    config.port = document.getElementById('cfg-port').value;
+    config.user = document.getElementById('cfg-user').value;
+  } else if (type === 'webhook') {
+    config.url = document.getElementById('cfg-url').value;
+  }
+
+  const channelData = {
+    name: document.getElementById('channel-name').value,
+    type,
+    config,
+    active: true
+  };
+
+  if (idStr) {
+    const idx = channels.findIndex(c => c.id == idStr);
+    channels[idx] = { ...channels[idx], ...channelData };
+  } else {
+    channels.push({ id: Date.now(), ...channelData });
+  }
+
+  closeModal('channelModal');
+  renderChannels();
+  showToast('Channel saved successfully');
+}
+
+// Groups
+function renderGroups() {
+  const tbody = document.querySelector('#groups-table tbody');
+  tbody.innerHTML = groups.map(g => `
+    <tr>
+      <td><strong>${g.name}</strong></td>
+      <td>${g.desc}</td>
+      <td>${g.mappings.map(m => {
+        const cName = channels.find(c => c.id == m.channelId)?.name || 'Unknown';
+        return `<span class="chip chip-gray">${cName}</span>`;
+      }).join(' ')}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="editGroup(${g.id})">Manage</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+let tempMappings = [];
+
+function editGroup(id) {
+  const g = groups.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById('group-id').value = g.id;
+  document.getElementById('group-name').value = g.name;
+  document.getElementById('group-desc').value = g.desc;
+  
+  tempMappings = JSON.parse(JSON.stringify(g.mappings));
+  renderGroupMappings();
+  openModal('groupModal');
+}
+
+function renderGroupMappings() {
+  const container = document.getElementById('group-mappings');
+  if (tempMappings.length === 0) {
+    container.innerHTML = `<div class="empty-state">No channels mapped yet.</div>`;
+    return;
+  }
+  
+  container.innerHTML = tempMappings.map((m, idx) => {
+    const channelOpts = channels.map(c => `<option value="${c.id}" ${c.id == m.channelId ? 'selected' : ''}>${c.name} (${c.type})</option>`).join('');
+    
+    // Dynamic prop field based on assigned channel type
+    const ch = channels.find(c => c.id == m.channelId);
+    let propHtml = '';
+    if (ch) {
+      if (ch.type === 'smtp') propHtml = `<input type="text" class="form-control" placeholder="Recipient Email" value="${m.props.email || ''}" onchange="updateProp(${idx}, 'email', this.value)">`;
+      if (ch.type === 'webhook') propHtml = `<input type="text" class="form-control" placeholder="Target User/Room" value="${m.props.targetUser || ''}" onchange="updateProp(${idx}, 'targetUser', this.value)">`;
+    }
+    
+    return `
+      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center; background: var(--bg); padding:10px; border-radius:4px; border:1px solid var(--border);">
+        <select class="form-control" style="width:200px" onchange="updateMappingChannel(${idx}, this.value)">
+          <option value="">Select Channel</option>
+          ${channelOpts}
+        </select>
+        <div style="flex:1">${propHtml}</div>
+        <button class="btn btn-secondary btn-sm" style="color:red;" onclick="removeMappingRow(${idx})">X</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function addMappingRow() {
+  tempMappings.push({ channelId: channels[0]?.id || "", props: {} });
+  renderGroupMappings();
+}
+
+function removeMappingRow(idx) {
+  tempMappings.splice(idx, 1);
+  renderGroupMappings();
+}
+
+function updateMappingChannel(idx, channelId) {
+  tempMappings[idx].channelId = channelId;
+  tempMappings[idx].props = {};
+  renderGroupMappings();
+}
+
+function updateProp(idx, key, val) {
+  tempMappings[idx].props[key] = val;
+}
+
+function saveGroup() {
+  const idStr = document.getElementById('group-id').value;
+  const gData = {
+    name: document.getElementById('group-name').value,
+    desc: document.getElementById('group-desc').value,
+    mappings: tempMappings.filter(m => m.channelId)
+  };
+  
+  if (idStr) {
+    const idx = groups.findIndex(g => g.id == idStr);
+    groups[idx] = { ...groups[idx], ...gData };
+  }
+  closeModal('groupModal');
+  renderGroups();
+  showToast('Group saved successfully');
+}
+
+// Test Notification
+function renderTestForm() {
+  const select = document.getElementById('test-group-select');
+  select.innerHTML = groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+}
+
+function sendTestNotification() {
+  const gId = document.getElementById('test-group-select').value;
+  const msg = document.getElementById('test-message').value;
+  if (!gId || !msg) return alert('Select group and enter message');
+  
+  const targetGroup = groups.find(g => g.id == gId);
+  const mappedCount = targetGroup.mappings.length;
+  
+  if (mappedCount === 0) {
+    showToast('Error: Selected group has no mapped channels.');
+    return;
+  }
+  
+  // Simulate sending
+  setTimeout(() => {
+    showToast(`Test notification routed to ${mappedCount} channel(s) for ${targetGroup.name}`);
+  }, 600);
+}
+
+// Modal Utils
+function openModal(id) { 
+  if (id === 'channelModal' && !document.getElementById('channel-id').value) {
+    document.getElementById('channel-name').value = '';
+    renderChannelFields(); 
+  }
+  document.getElementById(id).classList.add('open'); 
+}
+function closeModal(id) { 
+  document.getElementById(id).classList.remove('open');
+  if (id === 'channelModal') document.getElementById('channel-id').value = ''; 
+  if (id === 'groupModal') document.getElementById('group-id').value = ''; 
+}
+
+// Initialize
+renderChannels();
+</script>
+</body>
+</html>

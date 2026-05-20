@@ -187,6 +187,18 @@ class Settings(BaseSettings):
             raise ValueError("credential_vault_key must be at least 32 bytes")
         return v
 
+    # Bootstrap keys — Control Center reads these from env via the bootstrap endpoint.
+    # Defined here so they appear in settings validation and startup logging.
+    agent_runtime_bootstrap_key: str | None = Field(default=None)
+    comm_hub_bootstrap_key: str | None = Field(default=None)
+    # Key used by the backend integration test suite to obtain a service certificate
+    test_service_bootstrap_key: str | None = Field(default=None)
+
+    # Service URLs for inter-service communication
+    communication_hub_url: str = Field(default="http://localhost:8002")
+    control_center_url: str = Field(default="http://localhost:8000")
+    agent_runtime_url: str = Field(default="http://localhost:8001")
+
     # OTEL — replaced by nested TelemetrySettings
     telemetry: TelemetrySettings = Field(default_factory=TelemetrySettings)
 

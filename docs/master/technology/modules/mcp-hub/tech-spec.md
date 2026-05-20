@@ -16,7 +16,7 @@ The MCP Hub module is the canonical integration boundary between the Parthenon p
 | `McpSessionRouter` | FastAPI router for creating, updating, and deleting named sessions on an MCP server; handles encrypted credential storage via the Credential Vault; persists and returns `identity_binding` and `credential_config` per session |
 | `McpToolRouter` | FastAPI router for per-server tool listing and role-based permission grants; also exposes global all-tools listing (`GET /mcp/tools`) and tool-to-skill reverse mapping (`GET /mcp/tools/{id}/skills`) |
 | `ToolSyncService` | Service class that connects to a registered MCP server's HTTP endpoint, retrieves its tool manifest, and upserts tool records into the database namespaced under the server's unique slug |
-| `McpProxyEngine` | Service class that resolves a tool-call invocation to the correct server session, decrypts and injects the scoped credentials at call time, dispatches the call to the external MCP server, and returns the structured result |
+| `McpProxyEngine` | Service class that resolves a tool-call invocation to the correct server session, decrypts and injects the scoped credentials at call time (or forwards the caller's agent JWT for passthrough sessions), dispatches the call to the external MCP server, and returns the structured result |
 | `McpServer` | SQLAlchemy model for a registered external MCP tool server; holds the server URL, slug, and connection configuration |
 | `McpSession` | SQLAlchemy model for a named session on an MCP server; stores the encrypted credential blob, `identity_binding` (JSON), and `credential_config` (JSON); maps the session to an agent identity or role |
 | `McpTool` | SQLAlchemy model for a synced tool; namespaced under the owning server's slug; includes the tool schema and metadata from the last sync |
@@ -49,7 +49,7 @@ The MCP Hub module is the canonical integration boundary between the Parthenon p
 | `POST` | `/api/v1/mcp/servers/{server_id}/sync` | Trigger manual tool sync from the server |
 | `GET` | `/api/v1/mcp/servers/{server_id}/tools` | List synced tools for a server |
 | `GET` | `/api/v1/mcp/servers/{server_id}/sessions` | List sessions for a server; includes `identity_binding`, `credential_config` |
-| `POST` | `/api/v1/mcp/servers/{server_id}/sessions` | Create a named session; accepts `identity_binding`, `credential_config` |
+| `POST` | `/api/v1/mcp/servers/{server_id}/sessions` | Create a named session; accepts `identity_binding`, `credential_config`; passthrough auth type skips credential encryption and live test, activates immediately |
 | `PUT` | `/api/v1/mcp/servers/{server_id}/sessions/{session_id}` | Update a session; accepts `identity_binding`, `credential_config` |
 | `DELETE` | `/api/v1/mcp/servers/{server_id}/sessions/{session_id}` | Delete a session |
 | `GET` | `/api/v1/mcp/tools` | List all active tools across all servers, ordered by server name then tool name |
@@ -57,6 +57,7 @@ The MCP Hub module is the canonical integration boundary between the Parthenon p
 | `GET` | `/api/v1/mcp/tools/{tool_id}/permissions` | List permissions for a tool |
 | `POST` | `/api/v1/mcp/tools/{tool_id}/permissions` | Grant tool access to a role |
 | `DELETE` | `/api/v1/mcp/tools/{tool_id}/permissions/{permission_id}` | Revoke tool access |
+| `POST` | `/api/v1/mcp/tools/{tool_id}/test` | Test a tool call; `session_id` optional (passthrough sessions use `agent_subject` instead); returns `TestToolResponse` with success/error |
 
 ---
 
@@ -69,22 +70,45 @@ The MCP Hub module is the canonical integration boundary between the Parthenon p
 | `McpToolRouter` | router | Per-server tool listing and permission grant/revoke; global all-tools listing and tool-to-skill reverse mapping | `backend/app/api/v1/mcp_hub.py` |
 | `list_all_tools` | endpoint function | Returns all active `McpTool` records across all servers, ordered by server name then tool name | `backend/app/api/v1/mcp_hub.py` |
 | `list_tool_skills` | endpoint function | Returns all `Skill` records bound to a given tool via `skill_tool_bindings` | `backend/app/api/v1/mcp_hub.py` |
-| `create_mcp_session` | endpoint function | Creates a session; encrypts credentials; stores `identity_binding`, `credential_config` | `backend/app/api/v1/mcp_hub.py` |
+| `create_mcp_session` | endpoint function | Creates a session; encrypts credentials; stores `identity_binding`, `credential_config`; skips credential encrypt and live test for passthrough auth type, activates immediately | `backend/app/api/v1/mcp_hub.py` |
 | `update_mcp_session` | endpoint function | Updates a session; re-encrypts credentials if provided; stores updated `identity_binding`, `credential_config` | `backend/app/api/v1/mcp_hub.py` |
-| `McpSessionCreate` | Pydantic schema | Session creation payload; includes `identity_binding`, `credential_config` fields | `backend/app/schemas/mcp_hub.py` |
+| `test_mcp_tool` | endpoint function | Tests a tool call; detects passthrough sessions; extracts `request.state.raw_token` for passthrough JWT forwarding; accepts `agent_subject` to resolve agent identity token; passes `agent_jwt` to proxy | `backend/app/api/v1/mcp_hub.py` |
+| `McpSessionCreate` | Pydantic schema | Session creation payload; includes `identity_binding`, `credential_config` fields; `@model_validator` rejects credentials when `auth_type` is `passthrough` | `backend/app/schemas/mcp_hub.py` |
 | `McpSessionUpdate` | Pydantic schema | Session partial update payload; includes `identity_binding`, `credential_config` fields | `backend/app/schemas/mcp_hub.py` |
 | `McpSessionRead` | Pydantic schema | Session response schema; exposes `identity_binding`, `credential_config`; never exposes `encrypted_credentials` | `backend/app/schemas/mcp_hub.py` |
+| `TestToolRequest` | Pydantic schema | Tool test request; `session_id` optional (required for non-passthrough); `agent_subject` field for passthrough identity resolution (UUID or realm_username) | `backend/app/schemas/mcp_hub.py` |
 | `ToolSyncService` | class | Fetches tool manifest from a registered MCP server and upserts tools under the server slug namespace | `backend/app/services/mcp/tool_sync.py` |
-| `McpProxyEngine` | class | Routes tool-call invocations to the correct server session with credential injection | `backend/app/services/mcp/proxy.py` |
+| `McpProxyEngine` | class | Routes tool-call invocations to the correct server session with credential injection; passthrough branch forwards caller JWT instead of decrypting stored credentials | `backend/app/services/mcp/proxy.py` |
+| `call_tool` | method | `McpProxyEngine.call_tool()`; accepts optional `agent_jwt` parameter; raises `McpProxyError` if passthrough session selected but no JWT available | `backend/app/services/mcp/proxy.py` |
+| `_build_auth_headers` | method | `McpProxyEngine._build_auth_headers()`; passthrough branch injects `agent_jwt` as `Authorization: Bearer` header, bypassing credential decryption | `backend/app/services/mcp/proxy.py` |
+| `test_mcp_session_connection` | function | Returns immediate success for passthrough auth type without performing a live connection test | `backend/app/services/mcp_session_test.py` |
+| `McpSessionAuthType` | enum | `str` enum — `api_key`, `bearer_token`, `basic_auth`, `oauth2`, `none`, `passthrough`; `passthrough` added by passthrough-sessions change | `backend/app/db/models/mcp_hub.py` |
 | `McpServer` | model | SQLAlchemy model for a registered external MCP tool server | `backend/app/db/models/mcp_hub.py` |
 | `McpSession` | model | SQLAlchemy model for a named MCP session; stores encrypted credentials, `identity_binding` (JSON), and `credential_config` (JSON) | `backend/app/db/models/mcp_hub.py` |
 | `McpTool` | model | SQLAlchemy model for a synced tool namespaced under a server slug | `backend/app/db/models/mcp_hub.py` |
 | `ToolPermission` | model | SQLAlchemy model granting a role access to a specific tool | `backend/app/db/models/mcp_hub.py` |
+| `add_passthrough_to_mcp_session_auth_type` | migration | Adds `passthrough` to `mcp_session_auth_type_enum` outside a transaction (AUTOCOMMIT); downgrade is no-op (PostgreSQL does not support removing enum values) | `backend/alembic/versions/5c2910c238a8_add_passthrough_to_mcp_session_auth_type.py` |
 | `useMcpServers` | hook | React Query hook for fetching and caching the MCP server list | `frontend/src/hooks/useMcpServers.ts` |
 | `useServerSessions` | hook | React Query hook for fetching sessions for a specific MCP server; returns updated `McpSession` type with `identity_binding`, `credential_config` | `frontend/src/hooks/useMcpServers.ts` |
 | `useAllTools` | hook | React Query hook fetching all active tools across all servers; cache key `['mcp', 'tools']` | `frontend/src/hooks/useMcpServers.ts` |
 | `useToolSkills` | hook | React Query hook fetching skills bound to a specific tool; cache key `['mcp', 'tools', toolId, 'skills']` | `frontend/src/hooks/useMcpServers.ts` |
 | `McpHubPage` | component | Tabbed MCP Hub: Servers tab + Tool Repository tab; hosts per-server Sessions dialog | `frontend/src/pages/mcp/McpHubPage.tsx` |
 | `McpServerForm` | component | Create/edit form for MCP server registration | `frontend/src/pages/mcp/McpServerForm.tsx` |
-| `McpSessionManager` | component | Session CRUD UI with auth type, write-only credentials, `identity_binding`, `credential_config`; follows Dialog Error Handling Standard | `frontend/src/pages/mcp/McpSessionManager.tsx` |
+| `McpSessionManager` | component | Session CRUD UI with auth type, write-only credentials, `identity_binding`, `credential_config`; passthrough: credential fields hidden, info Alert shown, Passthrough chip in table; follows Dialog Error Handling Standard | `frontend/src/pages/mcp/McpSessionManager.tsx` |
+| `TestMcpToolDialog` | component | Tool test dialog; shows agent identity picker instead of session picker for passthrough sessions; sends `agent_subject` in payload for passthrough; agent identities fetched from `/agents/identities` | `frontend/src/pages/mcp/TestMcpToolDialog.tsx` |
 | `McpToolBrowser` | component | Tool Repository: all tools grouped by server with skill chips, search filter, server filter, active toggle | `frontend/src/pages/mcp/McpToolBrowser.tsx` |
+
+### Test Files
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_mcp_proxy` | test module | Unit tests for `McpProxyEngine`; includes 3 passthrough tests: success case, missing JWT, empty JWT | `backend/tests/unit/test_mcp_proxy.py` |
+| `McpSessionManager.test` | test module | Component tests for `McpSessionManager`; 3 passthrough tests: auth type in options, credential fields hidden, Passthrough chip in table | `frontend/src/__tests__/McpSessionManager.test.tsx` |
+| `TestMcpToolDialog.test` | test module | Component tests for `TestMcpToolDialog`; 2 passthrough tests: identity picker shown for passthrough, session picker shown for standard sessions | `frontend/src/__tests__/TestMcpToolDialog.test.tsx` |
+
+### i18n
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `mcp.sessions.passthrough` | i18n key | Display label for passthrough auth type chip in session table | `frontend/src/i18n/locales/en.json` |
+| `mcp.sessions.passthroughInfo` | i18n key | Informational Alert text shown when passthrough auth type is selected | `frontend/src/i18n/locales/en.json` |

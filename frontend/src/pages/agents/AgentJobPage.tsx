@@ -35,6 +35,10 @@ function statusColor(status: AgentJobStatus): 'default' | 'warning' | 'info' | '
 export interface AgentJobPageProps {
   /** Optional session ID for embedded usage. If not provided, reads from URL params. */
   sessionId?: string
+  /** Hide task result output when true (useful for dialog mode to focus on logs). */
+  hideResults?: boolean
+  /** Hide the LogViewer when true (useful when the parent already provides a log tab). */
+  hideLogs?: boolean
 }
 
 /**
@@ -45,7 +49,7 @@ export interface AgentJobPageProps {
  * - Conversational agents: opens a WebSocket chat interface for interactive Q&A.
  * - Can be used standalone (with URL params) or embedded in a dialog (with sessionId prop).
  */
-export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {}) {
+export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hideLogs = false }: AgentJobPageProps = {}) {
   const { id: urlId } = useParams<{ id: string }>()
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -60,9 +64,11 @@ export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {
   const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const logRefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasRefetchedLogsRef = useRef(false)
 
   // Execution logs (system instruction + user prompt) via dedicated hook
-  const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(id ?? null)
+  const { logs: execLogs, loading: execLogsLoading, refetch: refetchExecLogs } = useExecutionLogs(id ?? null)
 
   // Determine if this is a conversational session based on status flow
   // (we'll fetch the agent type info implicitly from output format)
@@ -103,10 +109,14 @@ export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {
   }, [id])
 
   useEffect(() => {
+    // Reset refetch flag when session ID changes
+    hasRefetchedLogsRef.current = false
+    
     void fetchSession()
     void fetchLogEntries()
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
+      if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
     }
   }, [fetchSession, fetchLogEntries])
 
@@ -120,6 +130,24 @@ export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {
       pollingRef.current = setInterval(() => void fetchSession(), POLL_INTERVAL_MS)
     }
   }, [session, isConversational, fetchSession])
+
+  // Refetch logs when session completes (with delay to allow backend to persist)
+  useEffect(() => {
+    if (!session || !TERMINAL_STATUSES.includes(session.status)) return
+    if (hasRefetchedLogsRef.current) return // Already refetched
+    
+    hasRefetchedLogsRef.current = true
+    
+    // Wait 1 second after completion, then refetch both execution logs and log entries
+    logRefetchTimeoutRef.current = setTimeout(() => {
+      refetchExecLogs()
+      void fetchLogEntries()
+    }, 1000)
+    
+    return () => {
+      if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
+    }
+  }, [session, refetchExecLogs, fetchLogEntries])
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -327,7 +355,7 @@ export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {
       )}
 
       {/* Task Agent Result */}
-      {!isConversational && session.status === 'completed' && session.output_data && (
+      {!hideResults && !isConversational && session.status === 'completed' && session.output_data && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" mb={2}>{t('agents.sessions.result')}</Typography>
           {typeof session.output_data === 'object' &&
@@ -413,10 +441,10 @@ export function AgentJobPage({ sessionId: sessionIdProp }: AgentJobPageProps = {
         </Paper>
       )}
 
-      {/* Log Viewer — replaces the old collapsible Execution Log section and the SessionExecutionLogsDialog */}
-      {!execLogsLoading && execLogs.length > 0 && session && (
+      {/* Log Viewer — shows whenever any log data exists (with or without prompt log) */}
+      {!hideLogs && !execLogsLoading && (logEntries.length > 0 || execLogs.length > 0) && session && (
         <LogViewer
-          executionLog={execLogs[0]}
+          executionLog={execLogs[0] ?? null}
           entries={logEntries}
           sessionStatus={session.status}
         />

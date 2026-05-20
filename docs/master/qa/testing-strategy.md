@@ -41,6 +41,26 @@ Some complex components using React Query + MSW in the Vitest environment requir
 - Edge cases and failure modes must be covered in test plans
 - For changes with DB schema changes: at least one real-backend E2E test must pass before deployment
 
+## Certificate-Based Authentication Testing
+
+Changes involving certificate issuance, validation, or revocation require:
+
+**Pre-test checklist:**
+1. Alembic migration applied: `alembic upgrade head`; confirm tables `agent_instance_certificate`, `certificate_revocation_entry`, `certificate_validation_log`, `token_refresh_log` exist
+2. CA initialized on Control Center startup (root CA cert present)
+3. Test fixtures seed certificates via `CertificateAuthorityService`; do not use self-signed certs outside the CA chain
+
+**Backend integration tests must:**
+- Issue certificates via the CA service (not handcrafted PEM strings) to test real signature verification
+- Cover all certificate states: valid, expired, revoked, unknown serial
+- Verify `certificate_validation_log` entries after each validation
+- Verify `token_refresh_log` entries after each refresh attempt
+- Assert metadata endpoint response schema excludes identity token fields
+
+**Security assertion (zero-trust):**
+- At least one test must assert that `GET /agent/metadata` response does NOT contain `identity_token`, `access_token`, or `refresh_token` keys — this is a critical security invariant
+- Failing this assertion is a blocking defect; deployment must be halted until resolved
+
 ## Test File Locations
 - Backend: `backend/tests/`
 - Frontend: `frontend/src/__tests__/`

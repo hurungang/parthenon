@@ -357,7 +357,7 @@ function buildSpans(entries: ExecutionLogEntry[]): WorkingStepSpan[] {
       title: 'Agent Actions',
       iconType: 'llm',
       children: iterationSpans,
-      collapsed: true,
+      collapsed: false,
     })
   }
 

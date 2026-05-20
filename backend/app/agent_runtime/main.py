@@ -1,0 +1,138 @@
+"""Agent Runtime — standalone FastAPI application entry point.
+
+This service is responsible for:
+- Receiving execution triggers from Control Center over mTLS
+- Managing the agent-instance X.509 certificate lifecycle
+- Immediately executing sessions trigger-based (no polling)
+- Posting results back to Control Center
+
+Database access: NONE — all data is fetched from Control Center data APIs.
+Entry point: uvicorn app.agent_runtime.main:app
+"""
+from __future__ import annotations
+
+import logging
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent.parent / ".env", override=False)
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import get_settings
+from app.core.telemetry import setup_telemetry
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+logger.info("Starting Agent Runtime in %s mode", settings.environment)
+
+
+def create_app() -> FastAPI:
+    """Create and configure the Agent Runtime FastAPI application."""
+    setup_telemetry(settings.telemetry)
+
+    app = FastAPI(
+        title="Parthenon Agent Runtime",
+        version=settings.app_version,
+        description="Stateless LangChain executor service for Parthenon agents",
+        docs_url="/docs" if settings.environment != "production" else None,
+        redoc_url="/redoc" if settings.environment != "production" else None,
+    )
+
+    # Inbound certificate validation: only Control Center may call Agent Runtime
+    # (task 4.2 — rejects any request without a valid service:control-center cert)
+    from app.agent_runtime.middleware import ControlCenterCertificateMiddleware
+    app.add_middleware(ControlCenterCertificateMiddleware)
+
+    @app.get("/health", tags=["health"])
+    async def health_check() -> dict[str, str | None]:
+        manager = getattr(app.state, "certificate_manager", None)
+        cert_expiry = (
+            manager.expires_at.isoformat() if manager and manager.expires_at else None
+        )
+        return {
+            "status": "ok",
+            "service": "agent-runtime",
+            "version": settings.app_version,
+            "cert_expires_at": cert_expiry,
+        }
+
+    # Phase 5.1 — execution trigger endpoint (Control Center → Agent Runtime)
+    from app.agent_runtime.api.execute import execute_router
+    app.include_router(execute_router)
+
+    return app
+
+
+app = create_app()
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Run Agent Runtime startup tasks."""
+    await _load_certificate()
+    await _start_certificate_renewal()
+    await _init_execution_engine()
+
+
+async def _load_certificate() -> None:
+    """Load or bootstrap the agent-instance certificate from Control Center.
+
+    Phase 2 (task 2.2) wires this to the /internal/bootstrap endpoint.
+    At Phase 1, the manager loads an existing cert from AGENT_CERT_PATH if present,
+    and logs a warning when running without a certificate (dev/test mode).
+    """
+    try:
+        from app.agent_runtime.certificate_manager import CertificateManager, CertificateLoadError
+        manager = CertificateManager()
+        await manager.load_certificate()
+        # Store globally so routes and the data client can access it
+        app.state.certificate_manager = manager
+        logger.info("Agent Runtime certificate loaded successfully")
+    except Exception as exc:
+        logger.exception(
+            "Agent Runtime certificate not loaded — running without mTLS "
+            "(acceptable in dev/test; Phase 2 wires full bootstrap)"
+        )
+        app.state.certificate_manager = None
+
+
+async def _start_certificate_renewal() -> None:
+    """Start the background certificate renewal task."""
+    import asyncio
+    manager = getattr(app.state, "certificate_manager", None)
+    if manager is not None:
+        asyncio.create_task(manager.run_renewal_task())
+        logger.info("Certificate renewal background task started")
+
+
+async def _init_execution_engine() -> None:
+    """Initialise the data client and concurrency semaphore for trigger-based execution.
+
+    POST /execute transitions the session to running and launches the executor
+    directly as a background task.  No polling or queue dispatcher is needed.
+    """
+    import asyncio
+    try:
+        from app.agent_runtime.data_client import ControlCenterDataClient
+
+        cert_manager = getattr(app.state, "certificate_manager", None)
+        data_client = ControlCenterDataClient(cert_manager=cert_manager)
+        app.state.data_client = data_client
+
+        # Bound concurrent sessions (same limit as the former SessionDispatcher)
+        app.state.execution_semaphore = asyncio.Semaphore(4)
+
+        logger.info("Agent Runtime execution engine initialised (trigger-based, no polling)")
+    except Exception:
+        logger.exception("Failed to initialise Agent Runtime execution engine")

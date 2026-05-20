@@ -1,0 +1,164 @@
+"""Tool call client for Agent Runtime.
+
+Calls Communication Hub tool routing endpoint with mTLS authentication.
+Replaces direct McpProxyEngine usage in runtime_executor.
+"""
+import json
+import logging
+from typing import Any
+
+import httpx
+
+from app.core.config import get_settings
+from app.core.ssl_context import get_ssl_context
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+class CommHubToolClientError(Exception):
+    """Raised when a tool call through Communication Hub fails."""
+
+
+class CommHubToolClient:
+    """Client for calling tools through Communication Hub.
+
+    All tool calls (external MCP + system tools) route through Communication Hub,
+    which handles:
+    - Permission validation (via Control Center)
+    - Credential retrieval (from Control Center)
+    - Routing to MCP servers or system tool endpoints
+    """
+
+    def __init__(self) -> None:
+        """Initialize tool call client."""
+        # Use getattr with fallback for backward compatibility
+        self._comm_hub_url = getattr(settings, "communication_hub_url", "http://localhost:8002")
+        self._cert_path: str | None = None
+        self._key_path: str | None = None
+
+    def set_certificate(self, cert_path: str, key_path: str) -> None:
+        """Set mTLS certificate for authentication.
+
+        Args:
+            cert_path: Path to agent certificate file
+            key_path: Path to agent private key file
+        """
+        self._cert_path = cert_path
+        self._key_path = key_path
+        logger.debug("mTLS certificate configured for tool calls")
+
+    async def call_tool(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        session_id: str,
+        agent_type_id: str,
+    ) -> dict[str, Any]:
+        """Call a tool through Communication Hub.
+
+        Args:
+            tool_name: Tool name (e.g., "hello-world____helloWorld", "system____save_result")
+            tool_args: Tool arguments
+            session_id: Agent session ID
+            agent_type_id: Agent type ID
+
+        Returns:
+            Tool execution result
+
+        Raises:
+            CommHubToolClientError: If tool call fails
+        """
+        endpoint = f"{self._comm_hub_url}/internal/tools/call"
+
+        payload = {
+            "tool_name": tool_name,
+            "tool_args": tool_args,
+            "session_id": session_id,
+            "agent_type_id": agent_type_id,
+        }
+
+        logger.info(
+            "Calling tool '%s' via Communication Hub (session=%s)",
+            tool_name,
+            session_id[:8] if session_id else "none",
+        )
+
+        # Log certificate status for debugging
+        logger.info(
+            "CommHubToolClient cert status: cert_path=%s, key_path=%s",
+            self._cert_path,
+            self._key_path,
+        )
+
+        try:
+            # Build mTLS client config
+            client_kwargs: dict[str, Any] = {
+                "timeout": 60.0,
+                "verify": get_ssl_context(),
+            }
+            
+            # Prepare headers
+            headers: dict[str, str] = {}
+
+            # For HTTP (localhost dev), send certificate as header
+            # For HTTPS (production), use actual TLS client cert
+            if self._cert_path and self._key_path:
+                if self._comm_hub_url.startswith("https://"):
+                    # Production: Use TLS client certificate
+                    client_kwargs["cert"] = (self._cert_path, self._key_path)
+                    logger.info("Using mTLS client certificate for HTTPS")
+                else:
+                    # Development (HTTP): Send cert as header with escaped newlines
+                    # Replace actual newlines with literal \n to make it valid for HTTP headers
+                    try:
+                        from pathlib import Path
+                        cert_content = Path(self._cert_path).read_text()
+                        cert_header_value = cert_content.replace("\n", "\\n")
+                        headers["X-Client-Certificate"] = cert_header_value
+                        logger.info("Using X-Client-Certificate header for HTTP")
+                    except Exception as exc:
+                        logger.error("Failed to read certificate file: %s", exc)
+            else:
+                logger.warning(
+                    "mTLS certificate NOT configured - tool call will fail authentication"
+                )
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                response = await client.post(endpoint, json=payload, headers=headers)
+
+                # Log response for debugging
+                logger.debug(
+                    "Communication Hub response: status=%d",
+                    response.status_code,
+                )
+
+                response.raise_for_status()
+                result_data = response.json()
+
+                # Check for tool execution error
+                if result_data.get("error"):
+                    error_msg = result_data["error"]
+                    logger.error("Tool execution failed: %s", error_msg)
+                    raise CommHubToolClientError(error_msg)
+
+                # Return tool result
+                tool_result = result_data.get("result", {})
+                logger.info("Tool '%s' completed successfully", tool_name)
+                return tool_result
+
+        except httpx.HTTPStatusError as exc:
+            error_detail = exc.response.text[:500] if exc.response else "Unknown error"
+            error_msg = f"Communication Hub tool call failed: HTTP {exc.response.status_code if exc.response else 'unknown'} - {error_detail}"
+            logger.error(error_msg)
+            raise CommHubToolClientError(error_msg) from exc
+
+        except httpx.RequestError as exc:
+            error_msg = f"Communication Hub connection error: {exc}"
+            logger.error(error_msg)
+            raise CommHubToolClientError(error_msg) from exc
+
+        except Exception as exc:
+            error_msg = f"Tool call error: {exc}"
+            logger.exception("Unexpected error calling tool '%s'", tool_name)
+            raise CommHubToolClientError(error_msg) from exc

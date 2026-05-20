@@ -14,6 +14,8 @@ This section contains per-module technology specifications for every backend, fr
 | [mcp-hub](modules/mcp-hub/tech-spec.md) | External MCP server registration, tool catalogue sync under slug namespaces, encrypted session management, and tool-call proxy engine |
 | [skills](modules/skills/tech-spec.md) | Skill and SOP definition management; Skill Executor for MCP tool invocation; SOP Orchestrator for ordered multi-step execution |
 | [agents](modules/agents/tech-spec.md) | Agent type definitions, role-governed permissions, first-class OIDC agent identities, asynchronous session queue (AgentJob), LangChain deep agent runtime executor, model configuration management, and background session dispatcher |
+| [control-center](modules/control-center/tech-spec.md) | Zero-trust PKI security layer: Certificate Authority for agent instance X.509 certificates, Permission Resolution Service (cert → roles → tools), and on-demand OAuth Token Refresh Service; issues identity tokens to the Communication Hub at tool call time |
+| [agent-runtime](modules/agent-runtime/tech-spec.md) | Agent execution-time certificate management: loads and validates mTLS certificates issued by the Control Center CA, configures HTTP clients for mutual TLS, monitors certificate expiry and triggers atomic renewal; enforces zero-token metadata contract with the Control Center |
 | [gateway](modules/gateway/tech-spec.md) | External-facing agent lifecycle protocol (init/request/question/answer/close) over HTTP and MCP transports; endpoint registry |
 | [comm-hub](modules/comm-hub/tech-spec.md) | Redis-backed message broker, WebSocket server bridging browser clients, inter-agent routing, and session context management |
 | [scheduling](modules/scheduling/tech-spec.md) | APScheduler cron engine with PostgreSQL job store; scheduled job CRUD, pause/resume, and execution history |
@@ -21,6 +23,7 @@ This section contains per-module technology specifications for every backend, fr
 | [results](modules/results/tech-spec.md) | Structured agent and SOP result persistence; `save_result` MCP tool registration and result query endpoints |
 | [notifications](modules/notifications/tech-spec.md) | Outbound notification dispatcher for email, Slack, Teams, and webhook channels; channel-as-MCP-tool registration and event history |
 | [observability](modules/observability/tech-spec.md) | OTEL telemetry initialisation for backend and frontend; OTEL Collector pipeline configuration; Helm chart for production Kubernetes deployment |
+| [mcp-demo-app](modules/mcp-demo-app/tech-spec.md) | Standalone Python FastAPI MCP server demonstrating end-to-end agent identity propagation; authenticates with Keycloak agent realm, registers with the MCP Hub under the `demo` slug, and validates forwarded agent JWTs on every tool call |
 
 ---
 

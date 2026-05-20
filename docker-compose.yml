@@ -53,11 +53,15 @@ services:
     networks:
       - parthenon
 
-  api:
+  control-center:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: parthenon-api
+      args:
+        APP_MODULE: app.main:app
+        APP_PORT: "8000"
+    container_name: parthenon-control-center
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-parthenon}:${POSTGRES_PASSWORD:-parthenon}@postgres:5432/${POSTGRES_DB:-parthenon}
       REDIS_URL: redis://redis:6379/0
@@ -66,8 +70,17 @@ services:
       CREDENTIAL_VAULT_KEY: ${CREDENTIAL_VAULT_KEY:-change-me-32-byte-key-for-aes256!}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      OTEL_SERVICE_NAME: parthenon-api
+      OTEL_SERVICE_NAME: parthenon-control-center
       OTEL_ENABLED: "true"
+      # Per-service file logging
+      TELEMETRY__EXPORTERS: '["file", "otlp"]'
+      TELEMETRY__FILE__PATH: logs/control-center.log
+      TELEMETRY__FILE__MAX_BYTES: 10485760
+      TELEMETRY__FILE__BACKUP_COUNT: 5
+      # Bootstrap keys — peer services must present matching keys to receive certs
+      AGENT_RUNTIME_BOOTSTRAP_KEY: ${AGENT_RUNTIME_BOOTSTRAP_KEY:-change-me-agent-runtime-bootstrap-key!!}
+      COMM_HUB_BOOTSTRAP_KEY: ${COMM_HUB_BOOTSTRAP_KEY:-change-me-comm-hub-bootstrap-key-here!!}
+      TEST_SERVICE_BOOTSTRAP_KEY: ${TEST_SERVICE_BOOTSTRAP_KEY:-change-me-test-service-bootstrap-key!!}
     ports:
       - "8000:8000"
     volumes:
@@ -83,6 +96,91 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - parthenon
+
+  agent-runtime:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        APP_MODULE: app.agent_runtime.main:app
+        APP_PORT: "8001"
+    container_name: parthenon-agent-runtime
+    command: ["uvicorn", "app.agent_runtime.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    environment:
+      CONTROL_CENTER_URL: ${CONTROL_CENTER_URL:-http://control-center:8000}
+      SERVICE_BOOTSTRAP_KEY: ${AGENT_RUNTIME_BOOTSTRAP_KEY:-change-me-agent-runtime-bootstrap-key!!}
+      OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL:-http://keycloak:8080/realms/parthenon}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: parthenon-agent-runtime
+      OTEL_ENABLED: "true"
+      # Per-service file logging
+      TELEMETRY__EXPORTERS: '["file", "otlp"]'
+      TELEMETRY__FILE__PATH: logs/agent-runtime.log
+      TELEMETRY__FILE__MAX_BYTES: 10485760
+      TELEMETRY__FILE__BACKUP_COUNT: 5
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      control-center:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - parthenon
+
+  communication-hub:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        APP_MODULE: app.communication_hub.main:app
+        APP_PORT: "8002"
+    container_name: parthenon-communication-hub
+    command: ["uvicorn", "app.communication_hub.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+    environment:
+      CONTROL_CENTER_URL: ${CONTROL_CENTER_URL:-http://control-center:8000}
+      SERVICE_BOOTSTRAP_KEY: ${COMM_HUB_BOOTSTRAP_KEY:-change-me-comm-hub-bootstrap-key-here!!}
+      REDIS_URL: redis://redis:6379/0
+      OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL:-http://keycloak:8080/realms/parthenon}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: parthenon-communication-hub
+      OTEL_ENABLED: "true"
+      # Per-service file logging
+      TELEMETRY__EXPORTERS: '["file", "otlp"]'
+      TELEMETRY__FILE__PATH: logs/communication-hub.log
+      TELEMETRY__FILE__MAX_BYTES: 10485760
+      TELEMETRY__FILE__BACKUP_COUNT: 5
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      control-center:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -108,7 +206,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - api
+      - control-center
     networks:
       - parthenon
 
@@ -120,7 +218,7 @@ services:
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - api
+      - control-center
       - frontend
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
@@ -196,6 +294,39 @@ services:
     networks:
       - parthenon
     restart: unless-stopped
+
+  # ── MCP Demo App ───────────────────────────────────────────────────────────
+
+  mcp-demo-app:
+    build:
+      context: ./mcp-demo-app
+      dockerfile: Dockerfile
+    container_name: parthenon-mcp-demo-app
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-ai_agents}
+      KEYCLOAK_CLIENT_ID: ${MCP_DEMO_CLIENT_ID:-mcp-demo-app}
+      KEYCLOAK_CLIENT_SECRET: ${MCP_DEMO_CLIENT_SECRET:-change-me}
+      HUB_BASE_URL: ${HUB_BASE_URL:-http://control-center:8000}
+      HUB_API_TOKEN: ${HUB_API_TOKEN:-change-me}
+      APP_BASE_URL: ${MCP_DEMO_APP_BASE_URL:-http://mcp-demo-app:7001}
+      APP_PORT: "7001"
+      APP_SLUG: ${MCP_DEMO_APP_SLUG:-demo}
+    ports:
+      - "${MCP_DEMO_PORT:-7001}:7001"
+    depends_on:
+      control-center:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - parthenon
 
 volumes:
   postgres_data:

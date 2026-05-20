@@ -7,21 +7,34 @@
     Controls infrastructure (Keycloak, PostgreSQL, Redis), backend API, and frontend dev server.
 
 .PARAMETER Action
-    Action to perform: start, stop, restart, status
+    Action to perform: start, stop, restart, status, logs
 
 .PARAMETER Services
-    Comma-separated list of services: infra, backend, frontend, all (default: all)
+    Comma-separated list of services: infra, control-center, agent-runtime, communication-hub, frontend, backend, all (default: all)
+    - backend: All services except infrastructure (control-center, agent-runtime, communication-hub, frontend)
+    - all: All services including infrastructure
+    For logs command: control-center, agent-runtime, communication-hub, all
 
 .PARAMETER Force
     Force restart without confirmation if service is already running
+
+.PARAMETER Lines
+    Number of log lines to display (default: 50, used with logs command)
+
+.PARAMETER Follow
+    Follow log output in real-time (used with logs command)
 
 .EXAMPLE
     .\parthenon.ps1 start
     Start all services
 
 .EXAMPLE
-    .\parthenon.ps1 start -Services backend,frontend
-    Start only backend and frontend (assumes infra is running)
+    .\parthenon.ps1 start -Services backend
+    Start all services except infrastructure (assumes infra is running)
+
+.EXAMPLE
+    .\parthenon.ps1 start -Services control-center,frontend
+    Start only Control Center and frontend
 
 .EXAMPLE
     .\parthenon.ps1 stop -Services backend
@@ -34,12 +47,28 @@
 .EXAMPLE
     .\parthenon.ps1 status
     Show status of all services
+
+.EXAMPLE
+    .\parthenon.ps1 logs -Services control-center
+    View Control Center logs (last 50 lines)
+
+.EXAMPLE
+    .\parthenon.ps1 logs -Services all -Lines 100
+    View logs from all backend services (last 100 lines)
+
+.EXAMPLE
+    .\parthenon.ps1 logs -Services agent-runtime -Follow
+    Follow Agent Runtime logs in real-time
+
+.EXAMPLE
+    .\parthenon.ps1 init
+    Initialize local development environment (Keycloak realm, admin user, database)
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position=0)]
-    [ValidateSet('start', 'stop', 'restart', 'status')]
+    [ValidateSet('start', 'stop', 'restart', 'status', 'logs', 'init')]
     [string]$Action = 'status',
     
     [Parameter()]
@@ -47,7 +76,13 @@ param(
     [string]$Services = 'all',
     
     [Parameter()]
-    [switch]$Force
+    [switch]$Force,
+    
+    [Parameter()]
+    [int]$Lines = 50,
+    
+    [Parameter()]
+    [switch]$Follow
 )
 
 # Script configuration
@@ -62,8 +97,8 @@ $Script:ServiceConfig = @{
         Port = 5432  # Postgres port as indicator
         CheckCommand = { (docker ps --filter "name=parthenon-postgres" --format "{{.Names}}") -ne $null }
         StartCommand = { 
-            Write-Host "Starting infrastructure containers (PostgreSQL, Redis, Keycloak)..." -ForegroundColor Cyan
-            docker compose up -d postgres redis keycloak
+            Write-Host "Starting infrastructure containers (PostgreSQL, Redis, Keycloak, OTEL)..." -ForegroundColor Cyan
+            docker compose -f docker-compose-infra.yml up -d
             Start-Sleep -Seconds 5
             
             # Wait for Keycloak to be healthy
@@ -84,19 +119,22 @@ $Script:ServiceConfig = @{
         }
         StopCommand = {
             Write-Host "Stopping infrastructure containers..." -ForegroundColor Cyan
-            docker compose stop keycloak redis postgres
+            docker compose -f docker-compose-infra.yml stop
         }
     }
     
-    backend = @{
-        Name = "Backend API"
+    'control-center' = @{
+        Name = "Control Center"
         Port = 8000
+        HealthUrl = "http://localhost:8000/health"
+        LogFile = "backend\logs\control-center.log"
         CheckCommand = { (netstat -ano | Select-String ":8000 .*LISTEN") -ne $null }
         StartCommand = {
-            Write-Host "Starting backend API server..." -ForegroundColor Cyan
-            $backendPath = Join-Path $Script:ProjectRoot "backend"
-
-            # Set SSL certificate bundle for corporate firewall CA (same pattern as myaider-app)
+            Write-Host "Starting Control Center (port 8000)..." -ForegroundColor Cyan
+            $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
+            $logPath = Join-Path $Script:ProjectRoot "backend\logs\control-center.log"
+            
+            # Set SSL certificate bundle for corporate firewall CA
             $caBundlePath = Join-Path $Script:ProjectRoot "ca-bundle.crt"
             $cacertPath   = Join-Path $Script:ProjectRoot "cacert.pem"
             if (Test-Path -Path $caBundlePath) {
@@ -118,14 +156,17 @@ $Script:ServiceConfig = @{
                 Write-Host "       Copy ca-bundle.crt to the project root or set REQUESTS_CA_BUNDLE" -ForegroundColor DarkYellow
             }
 
-            # Use venv Python to ensure all dependencies are available
-            $venvPython = Join-Path $Script:ProjectRoot ".venv\Scripts\python.exe"
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d $backendPath && `"$venvPython`" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+            # Start using helper script
+            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "control-center"
             
-            # Wait for backend to be ready
-            Start-Sleep -Seconds 8
+            # Wait for service to be ready with better health checking
+            Write-Host "  Waiting for Control Center to be ready (max 60s)..." -ForegroundColor Cyan
             $ready = $false
-            for ($i = 0; $i -lt 5; $i++) {
+            $logShown = $false
+            for ($i = 0; $i -lt 30; $i++) {
+                Start-Sleep -Seconds 2
+                
+                # Check health endpoint
                 try {
                     $response = Invoke-WebRequest "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
                     if ($response.StatusCode -eq 200) {
@@ -133,25 +174,214 @@ $Script:ServiceConfig = @{
                         break
                     }
                 } catch {
-                    Start-Sleep -Seconds 2
+                    # Show log tail on first failure to help diagnose issues
+                    if (-not $logShown -and (Test-Path $logPath)) {
+                        Write-Host "  Current log tail:" -ForegroundColor DarkGray
+                        Get-Content $logPath -Tail 3 -ErrorAction SilentlyContinue | ForEach-Object {
+                            Write-Host "    $_" -ForegroundColor DarkGray
+                        }
+                        $logShown = $true
+                    }
                 }
             }
             
             if ($ready) {
-                Write-Host "✅ Backend is ready at http://localhost:8000" -ForegroundColor Green
+                Write-Host "✅ Control Center ready at http://localhost:8000" -ForegroundColor Green
+                Write-Host "   Log: $logPath" -ForegroundColor DarkGray
             } else {
-                Write-Host "⚠️ Backend started but may not be ready yet" -ForegroundColor Yellow
+                Write-Host "⚠️ Control Center health check timeout" -ForegroundColor Yellow
+                Write-Host "   Check logs: $logPath" -ForegroundColor Yellow
+                if (Test-Path $logPath) {
+                    Write-Host "   Recent errors:" -ForegroundColor Yellow
+                    Get-Content $logPath -Tail 10 -ErrorAction SilentlyContinue | Select-String "ERROR|CRITICAL" | ForEach-Object {
+                        Write-Host "   $_" -ForegroundColor Red
+                    }
+                }
             }
         }
         StopCommand = {
-            Write-Host "Stopping backend API server..." -ForegroundColor Cyan
+            Write-Host "Stopping Control Center..." -ForegroundColor Cyan
             $pids = netstat -ano | Select-String ":8000 .*LISTEN" | ForEach-Object {
                 ($_.ToString().Trim() -split '\s+')[-1]
             } | Select-Object -Unique
             
             foreach ($processId in $pids) {
-                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                Write-Host "  Stopped process $processId"
+                Write-Host "  Killing process tree $processId..."
+                # Use taskkill /F /T to kill entire process tree (parent + children)
+                taskkill /F /T /PID $processId >$null 2>&1
+            }
+            
+            # Wait a moment and verify port is actually free
+            Start-Sleep -Milliseconds 500
+            $stillRunning = netstat -ano | Select-String ":8000 .*LISTEN"
+            if ($stillRunning) {
+                Write-Host "  Warning: Port 8000 still in use after stop" -ForegroundColor Yellow
+            } else {
+                Write-Host "  ✓ Port 8000 is now free" -ForegroundColor Green
+            }
+        }
+    }
+
+    'agent-runtime' = @{
+        Name = "Agent Runtime"
+        Port = 8001
+        HealthUrl = "http://localhost:8001/health"
+        LogFile = "backend\logs\agent-runtime.log"
+        DependsOn = @('control-center')
+        CheckCommand = { (netstat -ano | Select-String ":8001 .*LISTEN") -ne $null }
+        StartCommand = {
+            Write-Host "Starting Agent Runtime (port 8001)..." -ForegroundColor Cyan
+            
+            # Verify Control Center is accessible first
+            Write-Host "  Checking Control Center dependency..." -ForegroundColor Cyan
+            try {
+                $ccResponse = Invoke-WebRequest "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+                Write-Host "  ✓ Control Center is accessible" -ForegroundColor Green
+            } catch {
+                Write-Host "  ✗ Control Center not accessible - Agent Runtime may fail to start properly" -ForegroundColor Yellow
+            }
+            
+            $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
+            $logPath = Join-Path $Script:ProjectRoot "backend\logs\agent-runtime.log"
+            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "agent-runtime"
+            
+            Write-Host "  Waiting for Agent Runtime to be ready (max 60s)..." -ForegroundColor Cyan
+            $ready = $false
+            $logShown = $false
+            for ($i = 0; $i -lt 30; $i++) {
+                Start-Sleep -Seconds 2
+                try {
+                    $response = Invoke-WebRequest "http://localhost:8001/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+                    if ($response.StatusCode -eq 200) {
+                        $ready = $true
+                        break
+                    }
+                } catch {
+                    if (-not $logShown -and (Test-Path $logPath)) {
+                        Write-Host "  Current log tail:" -ForegroundColor DarkGray
+                        Get-Content $logPath -Tail 3 -ErrorAction SilentlyContinue | ForEach-Object {
+                            Write-Host "    $_" -ForegroundColor DarkGray
+                        }
+                        $logShown = $true
+                    }
+                }
+            }
+            
+            if ($ready) {
+                Write-Host "✅ Agent Runtime ready at http://localhost:8001" -ForegroundColor Green
+                Write-Host "   Log: $logPath" -ForegroundColor DarkGray
+            } else {
+                Write-Host "⚠️ Agent Runtime health check timeout" -ForegroundColor Yellow
+                Write-Host "   Check logs: $logPath" -ForegroundColor Yellow
+                if (Test-Path $logPath) {
+                    Write-Host "   Recent errors:" -ForegroundColor Yellow
+                    Get-Content $logPath -Tail 10 -ErrorAction SilentlyContinue | Select-String "ERROR|CRITICAL" | ForEach-Object {
+                        Write-Host "   $_" -ForegroundColor Red
+                    }
+                }
+            }
+        }
+        StopCommand = {
+            Write-Host "Stopping Agent Runtime..." -ForegroundColor Cyan
+            $pids = netstat -ano | Select-String ":8001 .*LISTEN" | ForEach-Object {
+                ($_.ToString().Trim() -split '\s+')[-1]
+            } | Select-Object -Unique
+            
+            foreach ($processId in $pids) {
+                Write-Host "  Killing process tree $processId..."
+                # Use taskkill /F /T to kill entire process tree (parent + children)
+                taskkill /F /T /PID $processId >$null 2>&1
+            }
+            
+            # Wait a moment and verify port is actually free
+            Start-Sleep -Milliseconds 500
+            $stillRunning = netstat -ano | Select-String ":8001 .*LISTEN"
+            if ($stillRunning) {
+                Write-Host "  Warning: Port 8001 still in use after stop" -ForegroundColor Yellow
+            } else {
+                Write-Host "  ✓ Port 8001 is now free" -ForegroundColor Green
+            }
+        }
+    }
+
+    'communication-hub' = @{
+        Name = "Communication Hub"
+        Port = 8002
+        HealthUrl = "http://localhost:8002/health"
+        LogFile = "backend\logs\communication-hub.log"
+        DependsOn = @('control-center')
+        CheckCommand = { (netstat -ano | Select-String ":8002 .*LISTEN") -ne $null }
+        StartCommand = {
+            Write-Host "Starting Communication Hub (port 8002)..." -ForegroundColor Cyan
+            
+            # Verify Control Center is accessible first
+            Write-Host "  Checking Control Center dependency..." -ForegroundColor Cyan
+            try {
+                $ccResponse = Invoke-WebRequest "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+                Write-Host "  ✓ Control Center is accessible" -ForegroundColor Green
+            } catch {
+                Write-Host "  ✗ Control Center not accessible - Communication Hub may fail to start properly" -ForegroundColor Yellow
+            }
+            
+            $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
+            $logPath = Join-Path $Script:ProjectRoot "backend\logs\communication-hub.log"
+            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "communication-hub"
+            
+            Write-Host "  Waiting for Communication Hub to be ready (max 60s)..." -ForegroundColor Cyan
+            $ready = $false
+            $logShown = $false
+            for ($i = 0; $i -lt 30; $i++) {
+                Start-Sleep -Seconds 2
+                try {
+                    $response = Invoke-WebRequest "http://localhost:8002/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+                    if ($response.StatusCode -eq 200) {
+                        $ready = $true
+                        break
+                    }
+                } catch {
+                    if (-not $logShown -and (Test-Path $logPath)) {
+                        Write-Host "  Current log tail:" -ForegroundColor DarkGray
+                        Get-Content $logPath -Tail 3 -ErrorAction SilentlyContinue | ForEach-Object {
+                            Write-Host "    $_" -ForegroundColor DarkGray
+                        }
+                        $logShown = $true
+                    }
+                }
+            }
+            
+            if ($ready) {
+                Write-Host "✅ Communication Hub ready at http://localhost:8002" -ForegroundColor Green
+                Write-Host "   Log: $logPath" -ForegroundColor DarkGray
+            } else {
+                Write-Host "⚠️ Communication Hub health check timeout" -ForegroundColor Yellow
+                Write-Host "   Check logs: $logPath" -ForegroundColor Yellow
+                if (Test-Path $logPath) {
+                    Write-Host "   Recent errors:" -ForegroundColor Yellow
+                    Get-Content $logPath -Tail 10 -ErrorAction SilentlyContinue | Select-String "ERROR|CRITICAL" | ForEach-Object {
+                        Write-Host "   $_" -ForegroundColor Red
+                    }
+                }
+            }
+        }
+        StopCommand = {
+            Write-Host "Stopping Communication Hub..." -ForegroundColor Cyan
+            $pids = netstat -ano | Select-String ":8002 .*LISTEN" | ForEach-Object {
+                ($_.ToString().Trim() -split '\s+')[-1]
+            } | Select-Object -Unique
+            
+            foreach ($processId in $pids) {
+                Write-Host "  Killing process tree $processId..."
+                # Use taskkill /F /T to kill entire process tree (parent + children)
+                taskkill /F /T /PID $processId >$null 2>&1
+            }
+            
+            # Wait a moment and verify port is actually free
+            Start-Sleep -Milliseconds 500
+            $stillRunning = netstat -ano | Select-String ":8002 .*LISTEN"
+            if ($stillRunning) {
+                Write-Host "  Warning: Port 8002 still in use after stop" -ForegroundColor Yellow
+            } else {
+                Write-Host "  ✓ Port 8002 is now free" -ForegroundColor Green
             }
         }
     }
@@ -159,6 +389,8 @@ $Script:ServiceConfig = @{
     frontend = @{
         Name = "Frontend Dev Server"
         Port = 5173
+        HealthUrl = "http://localhost:5173"
+        LogFile = $null  # Logs to console only
         CheckCommand = { (netstat -ano | Select-String ":5173 .*LISTEN") -ne $null }
         StartCommand = {
             Write-Host "Starting frontend dev server..." -ForegroundColor Cyan
@@ -166,9 +398,10 @@ $Script:ServiceConfig = @{
             Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d $frontendPath && npm run dev"
             
             # Wait for frontend to be ready
-            Start-Sleep -Seconds 10
+            Write-Host "  Waiting for frontend to be ready (max 30s)..." -ForegroundColor Cyan
             $ready = $false
-            for ($i = 0; $i -lt 5; $i++) {
+            for ($i = 0; $i -lt 15; $i++) {
+                Start-Sleep -Seconds 2
                 try {
                     $response = Invoke-WebRequest "http://localhost:5173" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
                     if ($response.StatusCode -lt 500) {
@@ -176,14 +409,19 @@ $Script:ServiceConfig = @{
                         break
                     }
                 } catch {
-                    Start-Sleep -Seconds 2
+                    # It's normal for Vite to respond with redirect or other non-200 codes
+                    if ($_.Exception.Response.StatusCode) {
+                        $ready = $true
+                        break
+                    }
                 }
             }
             
             if ($ready) {
                 Write-Host "✅ Frontend is ready at http://localhost:5173" -ForegroundColor Green
             } else {
-                Write-Host "⚠️ Frontend started but may not be ready yet" -ForegroundColor Yellow
+                Write-Host "⚠️ Frontend health check timeout" -ForegroundColor Yellow
+                Write-Host "   Check the terminal window for Vite output" -ForegroundColor Yellow
             }
         }
         StopCommand = {
@@ -192,12 +430,81 @@ $Script:ServiceConfig = @{
                 ($_.ToString().Trim() -split '\s+')[-1]
             } | Select-Object -Unique
             
-            foreach ($pid in $pids) {
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                Write-Host "  Stopped process $pid"
+            foreach ($processId in $pids) {
+                Write-Host "  Killing process tree $processId..."
+                # Use taskkill /F /T to kill entire process tree (parent + children)
+                taskkill /F /T /PID $processId >$null 2>&1
+            }
+            
+            # Wait a moment and verify port is actually free
+            Start-Sleep -Milliseconds 500
+            $stillRunning = netstat -ano | Select-String ":5173 .*LISTEN"
+            if ($stillRunning) {
+                Write-Host "  Warning: Port 5173 still in use after stop" -ForegroundColor Yellow
+            } else {
+                Write-Host "  ✓ Port 5173 is now free" -ForegroundColor Green
             }
         }
     }
+}
+
+function Show-Logs {
+    param(
+        [string]$ServiceName,
+        [int]$LineCount = 50,
+        [bool]$FollowMode = $false
+    )
+    
+    $config = $Script:ServiceConfig[$ServiceName]
+    
+    if (-not $config) {
+        Write-Host "⚠️  Unknown service: $ServiceName" -ForegroundColor Yellow
+        Write-Host "   Available services: $($Script:ServiceConfig.Keys -join ', ')" -ForegroundColor Gray
+        return
+    }
+    
+    if (-not $config.LogFile) {
+        Write-Host "⚠️  $($config.Name) does not have a log file (logs to console only)" -ForegroundColor Yellow
+        return
+    }
+    
+    $logPath = Join-Path $Script:ProjectRoot $config.LogFile
+    
+    if (-not (Test-Path $logPath)) {
+        Write-Host "⚠️  Log file not found: $logPath" -ForegroundColor Yellow
+        Write-Host "   Service may not have been started yet." -ForegroundColor Gray
+        return
+    }
+    
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  $($config.Name) Logs" -ForegroundColor Cyan
+    Write-Host "  File: $logPath" -ForegroundColor Gray
+    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+    
+    if ($FollowMode) {
+        Write-Host "Following logs (Ctrl+C to stop)..." -ForegroundColor Yellow
+        Write-Host ""
+        Get-Content $logPath -Tail $LineCount -Wait
+    } else {
+        Get-Content $logPath -Tail $LineCount | ForEach-Object {
+            # Colorize log levels
+            if ($_ -match 'ERROR|CRITICAL') {
+                Write-Host $_ -ForegroundColor Red
+            } elseif ($_ -match 'WARN') {
+                Write-Host $_ -ForegroundColor Yellow
+            } elseif ($_ -match 'INFO') {
+                Write-Host $_ -ForegroundColor Cyan
+            } elseif ($_ -match 'DEBUG') {
+                Write-Host $_ -ForegroundColor Gray
+            } else {
+                Write-Host $_
+            }
+        }
+    }
+    
+    Write-Host ""
 }
 
 function Get-ServiceStatus {
@@ -222,7 +529,7 @@ function Show-Status {
     
     $statuses = @()
     
-    foreach ($serviceName in @('infra', 'backend', 'frontend')) {
+    foreach ($serviceName in @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend')) {
         $status = Get-ServiceStatus -ServiceName $serviceName
         $statuses += [PSCustomObject]@{
             Service = $status.Name
@@ -257,7 +564,7 @@ function Start-Service {
                 }
                 'R' {
                     Write-Host "Restarting $($config.Name)..." -ForegroundColor Cyan
-                    & $config.StopCommand
+                    Stop-Service -ServiceName $ServiceName
                     Start-Sleep -Seconds 2
                     & $config.StartCommand
                 }
@@ -272,8 +579,21 @@ function Start-Service {
             }
         } else {
             Write-Host "Force restarting $($config.Name)..." -ForegroundColor Cyan
-            & $config.StopCommand
-            Start-Sleep -Seconds 2
+            Stop-Service -ServiceName $ServiceName
+            
+            # Verify service stopped before starting
+            $maxRetries = 5
+            $retry = 0
+            while ((& $config.CheckCommand) -and ($retry -lt $maxRetries)) {
+                Write-Host "  Waiting for service to stop completely..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 1
+                $retry++
+            }
+            
+            if (& $config.CheckCommand) {
+                Write-Host "⚠️  Service did not stop - may start duplicate instance" -ForegroundColor Yellow
+            }
+            
             & $config.StartCommand
         }
     } else {
@@ -289,6 +609,33 @@ function Stop-Service {
     
     if ($status.Running) {
         & $config.StopCommand
+        
+        # Verify the service actually stopped by checking if port is freed
+        if ($config.CheckCommand) {
+            $maxWait = 10  # seconds
+            $waited = 0
+            while ((& $config.CheckCommand) -and ($waited -lt $maxWait)) {
+                Start-Sleep -Milliseconds 500
+                $waited += 0.5
+            }
+            
+            if (& $config.CheckCommand) {
+                Write-Host "⚠️  $($config.Name) did not stop cleanly - forcing kill..." -ForegroundColor Yellow
+                # Force kill by port one more time
+                if ($config.Port) {
+                    $pids = netstat -ano | Select-String ":$($config.Port) .*LISTEN" | ForEach-Object {
+                        ($_.ToString().Trim() -split '\s+')[-1]
+                    } | Select-Object -Unique
+                    
+                    foreach ($processId in $pids) {
+                        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+                        Write-Host "  Force killed process $processId" -ForegroundColor Red
+                    }
+                    Start-Sleep -Seconds 1
+                }
+            }
+        }
+        
         Write-Host "✅ $($config.Name) stopped" -ForegroundColor Green
     } else {
         Write-Host "ℹ️  $($config.Name) is not running" -ForegroundColor Gray
@@ -297,16 +644,21 @@ function Stop-Service {
 
 # Parse services parameter
 $serviceList = if ($Services -eq 'all') {
-    @('infra', 'backend', 'frontend')
+    @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend')
+} elseif ($Services -eq 'backend') {
+    # All services except infrastructure
+    @('control-center', 'agent-runtime', 'communication-hub', 'frontend')
 } else {
     $Services -split ',' | ForEach-Object { $_.Trim() }
 }
 
-# Validate service names
-foreach ($svc in $serviceList) {
-    if ($svc -notin @('infra', 'backend', 'frontend')) {
-        Write-Host "Error: Invalid service name '$svc'. Valid options: infra, backend, frontend, all" -ForegroundColor Red
-        exit 1
+# Validate service names (skip for logs command which has its own validation)
+if ($Action -ne 'logs') {
+    foreach ($svc in $serviceList) {
+        if ($svc -notin @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend')) {
+            Write-Host "Error: Invalid service name '$svc'. Valid options: infra, control-center, agent-runtime, communication-hub, frontend, all" -ForegroundColor Red
+            exit 1
+        }
     }
 }
 
@@ -326,8 +678,8 @@ switch ($Action) {
         Write-Host "Starting services: $($serviceList -join ', ')" -ForegroundColor Cyan
         Write-Host ""
         
-        # Start in order: infra -> backend -> frontend
-        $orderedServices = @('infra', 'backend', 'frontend') | Where-Object { $_ -in $serviceList }
+        # Start in dependency order: infra -> control-center -> agent-runtime -> communication-hub -> frontend
+        $orderedServices = @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend') | Where-Object { $_ -in $serviceList }
         
         foreach ($svc in $orderedServices) {
             Start-Service -ServiceName $svc -ForceRestart $Force.IsPresent
@@ -342,8 +694,8 @@ switch ($Action) {
         Write-Host "Stopping services: $($serviceList -join ', ')" -ForegroundColor Cyan
         Write-Host ""
         
-        # Stop in reverse order: frontend -> backend -> infra
-        $orderedServices = @('frontend', 'backend', 'infra') | Where-Object { $_ -in $serviceList }
+        # Stop in reverse order: frontend -> communication-hub -> agent-runtime -> control-center -> infra
+        $orderedServices = @('frontend', 'communication-hub', 'agent-runtime', 'control-center', 'infra') | Where-Object { $_ -in $serviceList }
         
         foreach ($svc in $orderedServices) {
             Stop-Service -ServiceName $svc
@@ -359,22 +711,110 @@ switch ($Action) {
         Write-Host ""
         
         # Stop in reverse order
-        $orderedServices = @('frontend', 'backend', 'infra') | Where-Object { $_ -in $serviceList }
+        $orderedServices = @('frontend', 'communication-hub', 'agent-runtime', 'control-center', 'infra') | Where-Object { $_ -in $serviceList }
         foreach ($svc in $orderedServices) {
             Stop-Service -ServiceName $svc
         }
         
-        Start-Sleep -Seconds 2
+        # Wait a bit longer to ensure ports are fully freed
+        Write-Host "Waiting for ports to be freed..." -ForegroundColor Cyan
+        Start-Sleep -Seconds 3
         
-        # Start in normal order
-        $orderedServices = @('infra', 'backend', 'frontend') | Where-Object { $_ -in $serviceList }
+        # Start in normal order using Start-Service to handle any lingering processes
+        $orderedServices = @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend') | Where-Object { $_ -in $serviceList }
         foreach ($svc in $orderedServices) {
-            & $Script:ServiceConfig[$svc].StartCommand
+            # Use Start-Service with ForceRestart to handle any edge cases
+            Start-Service -ServiceName $svc -ForceRestart $true
             Write-Host ""
         }
         
         Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
         Show-Status
+    }
+    
+    'init' {
+        Write-Host "Initializing local development environment..." -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "This will set up:" -ForegroundColor Yellow
+        Write-Host "  - Keycloak realm and OIDC clients" -ForegroundColor Yellow
+        Write-Host "  - Default admin user (admin@parthenon.local)" -ForegroundColor Yellow
+        Write-Host "  - Database roles and permissions" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Prerequisites:" -ForegroundColor Yellow
+        Write-Host "  - Keycloak must be running (./parthenon.ps1 start -Services infra)" -ForegroundColor Yellow
+        Write-Host "  - Database must be accessible" -ForegroundColor Yellow
+        Write-Host ""
+        
+        # Check if Keycloak is running
+        $keycloakRunning = docker ps --filter "name=parthenon-keycloak" --format "{{.Names}}"
+        if (-not $keycloakRunning) {
+            Write-Host "✗ Keycloak is not running!" -ForegroundColor Red
+            Write-Host "  Start infrastructure with: ./parthenon.ps1 start -Services infra" -ForegroundColor Yellow
+            exit 1
+        }
+        
+        Write-Host "Running initialization script..." -ForegroundColor Cyan
+        Write-Host ""
+        
+        # Activate venv and run init script
+        Push-Location $Script:ProjectRoot
+        try {
+            if (Test-Path ".venv\Scripts\Activate.ps1") {
+                & .venv\Scripts\Activate.ps1
+            }
+            python scripts\init-local-dev.py
+            $exitCode = $LASTEXITCODE
+            
+            if ($exitCode -eq 0) {
+                Write-Host ""
+                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
+                Write-Host "  Initialization Complete!" -ForegroundColor Green
+                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
+            } else {
+                Write-Host ""
+                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
+                Write-Host "  Initialization Failed!" -ForegroundColor Red
+                Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
+            }
+        }
+        finally {
+            Pop-Location
+        }
+    }
+    
+    'logs' {
+        # For logs, we only support backend services that have log files
+        $logServices = if ($Services -eq 'all') {
+            @('control-center', 'agent-runtime', 'communication-hub')
+        } else {
+            @($Services -split ',' | ForEach-Object { $_.Trim() })
+        }
+        
+        # Validate service names for logs
+        foreach ($svc in $logServices) {
+            if ($svc -notin @('control-center', 'agent-runtime', 'communication-hub')) {
+                Write-Host "Error: Invalid service name '$svc' for logs. Valid options: control-center, agent-runtime, communication-hub, all" -ForegroundColor Red
+                exit 1
+            }
+        }
+        
+        if ($logServices.Count -eq 1) {
+            # Single service - show logs
+            # Use foreach instead of [0] to avoid string indexing issue
+            foreach ($svc in $logServices) {
+                Show-Logs -ServiceName $svc -LineCount $Lines -FollowMode $Follow.IsPresent
+            }
+        } else {
+            # Multiple services - show logs from each
+            foreach ($svc in $logServices) {
+                Show-Logs -ServiceName $svc -LineCount $Lines -FollowMode $false
+            }
+            
+            if ($Follow.IsPresent) {
+                Write-Host "⚠️  Follow mode only works with a single service" -ForegroundColor Yellow
+                Write-Host "   Example: .\parthenon.ps1 logs -Services control-center -Follow" -ForegroundColor Gray
+            }
+        }
     }
 }
 

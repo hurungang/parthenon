@@ -81,3 +81,55 @@ The loop continues until the LLM produces a final answer or a session limit is r
 ### 6. Result Persistence and Completion
 
 The structured result, full conversation history, and complete execution log are persisted to the Result Store. The Agent Session Queue marks the session as complete. The Agent Instance Dashboard surfaces session status, filtering by state (running / completed / failed / cancelled) and time range. See [Agent Instance Dashboard](../agent-instance-dashboard.md) and [Execution Logs](../execution-logs.md).
+
+## Conversational Session Lifecycle
+
+For **conversation-type agents** (agents with `input_type = 'conversation'`), the platform provides persistent, user-named sessions with extended lifecycle management beyond the core agent execution lifecycle.
+
+### Conversation Session State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> active : User creates session
+    active --> closed : User ends session
+    active --> archived : User archives session
+    active --> error : Unrecoverable error
+    closed --> [*]
+    archived --> [*]
+    error --> [*]
+```
+
+### Conversation Session Manager
+
+The **Conversation Session Manager** orchestrates session lifecycle transitions and enforces ownership validation:
+
+| Operation | Lifecycle Transition | Validation |
+|---|---|---|
+| **Create** | `null → active` | Authenticated user; validates agent type is conversation-type; sets `triggered_by_user_id` from JWT |
+| **Resume** | (no transition) | User must own the session; returns full turn history with tool call records |
+| **End** | `active → closed` | User must own the session; session no longer accepts new messages |
+| **Archive** | `active → archived` | User must own the session; session excluded from default active listing |
+
+All session management operations are user-scoped — users can only access their own sessions.
+
+### Session Auto-Naming
+
+When a new conversation session is created, the session starts with `title: null`. After the first user message is received and stored, the Communication Hub triggers the **Session Auto-Namer** as a background task:
+
+1. Auto-namer constructs a title-generation prompt from the first user message
+2. Calls the agent type's configured LLM via Model Config Service
+3. Writes the generated title to the `ConversationSession` record
+4. Pushes a `title_update` WebSocket event to the active client
+
+Title generation is asynchronous and does not block the user's message processing. If the LLM call fails, the auto-namer falls back to a truncated version of the first user message (first 50 characters).
+
+### Relationship to Agent Session Queue
+
+The `ConversationSession` record is promoted from an internal execution detail to the primary user-facing session entity. It carries:
+
+- `agent_job_id` — foreign key to the active `AgentSession` record (nullable; set when an execution is spawned)
+- `title` — auto-generated session title (nullable until first turn completes)
+- `triggered_by_user_id` — foreign key to the platform user who started the session
+- `updated_at` — timestamp of last turn or status change; used for sorting sessions by recency
+
+The Agent Session Queue continues to manage the core execution lifecycle (pending → running → complete / failed), while the Conversation Session Manager extends this with user-facing session persistence and lifecycle state (active → closed / archived).

@@ -17,6 +17,7 @@ except ImportError:
 
 from app.db.models.mcp_hub import McpServer, McpServerStatus, McpTool, McpSession, McpSessionAuthType
 from app.core.credential_vault import get_vault
+from app.services.agents.tool_naming import build_tool_name
 
 logger = logging.getLogger(__name__)
 
@@ -283,19 +284,23 @@ class ToolSyncService:
             original_name = tool_data.get("name", "")
             if not original_name:
                 continue
-            namespaced_name = f"{server.slug}/{original_name}"
+            namespaced_name = build_tool_name(server.slug, original_name)
+            legacy_namespaced_name = f"{server.slug}/{original_name}"
             remote_names.add(namespaced_name)
 
-            # Look for existing tool record
+            # Look for existing tool record by canonical or legacy slash format.
             result = await db.execute(
                 select(McpTool).where(
                     McpTool.server_id == server.id,
-                    McpTool.name == namespaced_name,
+                    (McpTool.name == namespaced_name) | (McpTool.name == legacy_namespaced_name),
                 )
             )
             existing = result.scalar_one_or_none()
 
             if existing:
+                # Canonicalize legacy rows in-place so subsequent reads are consistent.
+                if existing.name != namespaced_name:
+                    existing.name = namespaced_name
                 existing.description = tool_data.get("description")
                 existing.input_schema = tool_data.get("inputSchema") or tool_data.get("input_schema")
                 existing.is_active = True

@@ -92,6 +92,14 @@ class AgentPlanStatus(str, enum.Enum):
     failed = "failed"
 
 
+class AgentTokenStatus(str, enum.Enum):
+    """Status of the stored OAuth token for an agent identity."""
+
+    active = "active"
+    expired = "expired"
+    refresh_failed = "refresh_failed"
+
+
 # ── Role Models ───────────────────────────────────────────────────────────────
 
 
@@ -295,6 +303,14 @@ class AgentIdentity(Base):
     refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # Encrypted refresh token for automatic token renewal (agent-runtime-security-segregation)
+    encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_token_refresh_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    token_status: Mapped[AgentTokenStatus | None] = mapped_column(
+        Enum(AgentTokenStatus, name="agent_token_status_enum"), nullable=True
     )
     # Legacy fields (kept for backward compatibility with existing records)
     client_id: Mapped[str | None] = mapped_column(String(500), nullable=True)

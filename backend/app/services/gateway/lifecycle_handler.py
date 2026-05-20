@@ -12,10 +12,12 @@ descriptions or schemas, so agents rely fully on skill instructions.
 import asyncio
 import logging
 import uuid
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.models.agents import AgentInstanceStatus
 from app.services.agents.identity_service import AgentIdentityService, AgentOAuthError
 from app.services.agents.instance_manager import AgentInstanceManager, InstanceLimitError
@@ -201,7 +203,25 @@ class GatewayLifecycleHandler:
         Raises:
             AgentAuthError: if the agent identity token is missing, expired, or
                 the identity type is not permitted by the role.
+            ValueError: if attempting to launch a conversation agent via this endpoint.
         """
+        # SECURITY: Prevent conversation agents from being executed as agent sessions
+        from sqlalchemy import select
+        from app.db.models.agents import AgentType, AgentInputType
+        
+        result = await db.execute(
+            select(AgentType).where(AgentType.id == agent_type_id)
+        )
+        agent_type = result.scalar_one_or_none()
+        if not agent_type:
+            raise ValueError(f"AgentType {agent_type_id} not found")
+        
+        if agent_type.input_type == AgentInputType.conversation:
+            raise ValueError(
+                f"AgentType '{agent_type.name}' is a conversation agent and cannot be executed as an agent session. "
+                f"Conversation agents must be accessed via conversation sessions only (/conversations endpoint)."
+            )
+        
         await self.validate_agent_identity_token(agent_type_id, db)
 
         job = await self._session_service.enqueue(
@@ -213,7 +233,66 @@ class GatewayLifecycleHandler:
         logger.info(
             "Gateway launch: enqueued session %s for type %s", job.id, agent_type_id
         )
+        
+        # CRITICAL: Commit the transaction so the session exists in the database
+        # before triggering execution. Otherwise, Agent Runtime will get 404
+        # when trying to update session status via Control Center API.
+        await db.commit()
+        logger.debug(
+            "Gateway launch: committed session %s to database", job.id
+        )
+        
+        # Trigger immediate execution via Communication Hub
+        # This replaces the 30-second polling delay with instant execution
+        await self._trigger_execution_via_comm_hub(job.id, agent_type_id, input_data)
+        
         return {"session_id": str(job.id)}
+
+    async def _trigger_execution_via_comm_hub(
+        self,
+        session_id: uuid.UUID,
+        agent_type_id: uuid.UUID,
+        input_data: dict[str, Any] | None,
+    ) -> None:
+        """Trigger immediate agent execution via Communication Hub.
+        
+        Sends execution trigger to Communication Hub, which forwards to Agent Runtime.
+        This enables instant execution instead of waiting for 30-second polling.
+        
+        Flow:
+        1. Control Center (here) → Communication Hub: POST /internal/agent/execute
+        2. Communication Hub → Agent Runtime: POST /execute
+        3. Agent Runtime enqueues session for immediate pickup
+        
+        Args:
+            session_id: AgentJob ID to execute
+            agent_type_id: Agent type being executed
+            input_data: Input data for the agent
+        """
+        from app.services.control_center.comm_hub_client import (
+            CommunicationHubClient,
+            CommunicationHubClientError,
+        )
+        
+        try:
+            client = CommunicationHubClient()
+            await client.trigger_execution(
+                session_id=session_id,
+                agent_type_id=agent_type_id,
+                input_data=input_data,
+            )
+            logger.info(
+                "Execution trigger sent to Communication Hub: session=%s",
+                session_id,
+            )
+        except CommunicationHubClientError as exc:
+            # Log error but don't fail the launch - SessionDispatcher polling is fallback
+            logger.error(
+                "Failed to trigger execution via Communication Hub (session=%s): %s. "
+                "Falling back to SessionDispatcher polling (30s delay).",
+                session_id,
+                exc,
+            )
 
     # ── Legacy init/request/close path ────────────────────────────────────────
 
