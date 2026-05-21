@@ -9,11 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models.agents import AgentRoleSkill, AgentRoleSOP
+from app.db.models.agents import AgentRoleSkill, AgentRoleSOP, AgentType
 from app.db.models.skills import Skill, SkillToolBinding, Sop, SopStep, SopStepType
 from app.db.models.mcp_hub import McpTool
-from app.services.agents.tool_naming import build_tool_name, parse_tool_name
-from app.services.system_tools import is_system_tool, get_canonical_name
+from app.services.agents.tool_naming import build_tool_name, parse_tool_name, is_system_tool
 
 
 
@@ -44,6 +43,7 @@ class AgentPermissionManager:
 
     # Internal LRU cache mapping role_id (str) → frozenset[str]
     _cache: dict[str, frozenset[str]] = {}
+    _agent_type_cache: dict[str, frozenset[str]] = {}
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -89,6 +89,56 @@ class AgentPermissionManager:
             )
             return set(allowed)
 
+    async def calculate_allowed_agent_types(
+        self,
+        role_id: uuid.UUID,
+        db: "AsyncSession",
+        override_sop_ids: set[uuid.UUID] | None = None,
+    ) -> set[str]:
+        """Return delegated agent type names allowed by SOP agent_delegation steps.
+
+        The result is derived from SOP steps assigned to the role and cached per role.
+        When ``override_sop_ids`` is provided, the method bypasses cache for preview mode.
+        """
+        using_overrides = override_sop_ids is not None
+        cache_key = str(role_id)
+
+        if not using_overrides and cache_key in self._agent_type_cache:
+            logger.debug("Agent-type permission cache hit for role %s", role_id)
+            return set(self._agent_type_cache[cache_key])
+
+        with tracer.start_as_current_span(
+            "permission_manager.calculate_allowed_agent_types",
+            attributes={"role_id": str(role_id), "is_preview": using_overrides},
+        ) as span:
+            delegated_agent_ids = await self._resolve_allowed_agent_type_ids(
+                role_id, db, override_sop_ids
+            )
+
+            if not delegated_agent_ids:
+                if not using_overrides:
+                    self._agent_type_cache[cache_key] = frozenset()
+                span.set_attribute("agent_type_count", 0)
+                return set()
+
+            rows = await db.execute(
+                select(AgentType.name).where(AgentType.id.in_(list(delegated_agent_ids)))
+            )
+            allowed_agent_types = {row[0] for row in rows.fetchall() if row[0]}
+
+            if not using_overrides:
+                self._agent_type_cache[cache_key] = frozenset(allowed_agent_types)
+
+            span.set_attribute("agent_type_count", len(allowed_agent_types))
+            logger.info(
+                "Resolved %d allowed agent types for role %s%s: %s",
+                len(allowed_agent_types),
+                role_id,
+                " (preview)" if using_overrides else "",
+                sorted(allowed_agent_types),
+            )
+            return allowed_agent_types
+
     def get_allowed_tools_from_context(
         self, allowed_tools: list[str]
     ) -> set[str]:
@@ -97,7 +147,7 @@ class AgentPermissionManager:
         The CC data API pre-resolves permissions; this method simply converts
         the list to a set. No database access required.
         """
-        return set(allowed_tools)
+        return {self._canonicalize_tool_identifier(t) for t in allowed_tools}
 
     def check_tool_allowed(
         self, tool_identifier: str, allowed_tools: set[str], role_id: uuid.UUID
@@ -106,17 +156,20 @@ class AgentPermissionManager:
         Raise PermissionDeniedError if tool_identifier is not in allowed_tools.
         Called by AgentRuntimeExecutor on every tool dispatch.
         """
-        if tool_identifier not in allowed_tools:
+        requested = self._canonicalize_tool_identifier(tool_identifier)
+        normalized_allowed = {self._canonicalize_tool_identifier(t) for t in allowed_tools}
+
+        if requested not in normalized_allowed:
             with tracer.start_as_current_span(
                 "permission_manager.deny",
-                attributes={"tool": tool_identifier, "role_id": str(role_id)},
+                attributes={"tool": requested, "role_id": str(role_id)},
             ):
                 logger.warning(
                     "Permission denied: tool '%s' not in allowed set for role %s",
-                    tool_identifier,
+                    requested,
                     role_id,
                 )
-            raise PermissionDeniedError(tool_identifier, role_id)
+            raise PermissionDeniedError(requested, role_id)
 
     def invalidate(self, role_id: uuid.UUID) -> None:
         """Evict the cached permission set for a role."""
@@ -124,6 +177,9 @@ class AgentPermissionManager:
         if key in self._cache:
             del self._cache[key]
             logger.debug("Permission cache invalidated for role %s", role_id)
+        if key in self._agent_type_cache:
+            del self._agent_type_cache[key]
+            logger.debug("Agent-type permission cache invalidated for role %s", role_id)
 
     # ── Internal resolution ────────────────────────────────────────────────────
 
@@ -186,6 +242,36 @@ class AgentPermissionManager:
         # 3. Resolve tool identifiers from the collected skill IDs
         return await self._resolve_tools_from_skills(skill_ids, db)
 
+    async def _resolve_allowed_agent_type_ids(
+        self,
+        role_id: uuid.UUID,
+        db: AsyncSession,
+        override_sop_ids: set[uuid.UUID] | None = None,
+    ) -> set[uuid.UUID]:
+        """Resolve delegated target agent type IDs from role SOPs."""
+        sop_ids: list[uuid.UUID]
+
+        if override_sop_ids is not None:
+            sop_ids = list(override_sop_ids)
+        else:
+            sop_rows = await db.execute(
+                select(AgentRoleSOP.sop_id).where(AgentRoleSOP.role_id == role_id)
+            )
+            sop_ids = [row[0] for row in sop_rows.fetchall()]
+
+        if not sop_ids:
+            return set()
+
+        delegated_rows = await db.execute(
+            select(SopStep.target_agent_type_id)
+            .where(
+                SopStep.sop_id.in_(sop_ids),
+                SopStep.step_type == SopStepType.agent_delegation,
+                SopStep.target_agent_type_id.isnot(None),
+            )
+        )
+        return {row[0] for row in delegated_rows.fetchall() if row[0] is not None}
+
     async def _resolve_tools_from_skills(
         self, skill_ids: set[uuid.UUID], db: AsyncSession
     ) -> set[str]:
@@ -221,10 +307,9 @@ class AgentPermissionManager:
 
         allowed: set[str] = set()
         for tool in tools:
-            # For system tools, use ONLY the canonical bare name (no prefix)
-            # For all other tools, use the full namespaced name
+            # Use canonical server____tool identifiers for both system and MCP tools.
             if is_system_tool(tool.name):
-                allowed.add(get_canonical_name(tool.name))
+                allowed.add(self._canonicalize_tool_identifier(tool.name))
             else:
                 original_name = getattr(tool, "original_name", None)
                 if tool.server is not None and isinstance(original_name, str) and original_name:
@@ -241,3 +326,30 @@ class AgentPermissionManager:
                             allowed.add(tool.name)
 
         return allowed
+
+    def _canonicalize_tool_identifier(self, tool_identifier: str) -> str:
+        """Normalize legacy and display formats to canonical ``server____tool`` form."""
+        if tool_identifier.startswith("system____"):
+            return tool_identifier
+
+        if tool_identifier.startswith("system__"):
+            return build_tool_name("system", tool_identifier[len("system__"):])
+
+        if tool_identifier.startswith("system/"):
+            return build_tool_name("system", tool_identifier[len("system/"):])
+
+        if is_system_tool(tool_identifier):
+            try:
+                server, tool = parse_tool_name(tool_identifier)
+                return build_tool_name(server, tool)
+            except ValueError:
+                return build_tool_name("system", tool_identifier)
+
+        try:
+            server, tool = parse_tool_name(tool_identifier)
+            return build_tool_name(server, tool)
+        except ValueError:
+            if "/" in tool_identifier:
+                server, tool = tool_identifier.split("/", 1)
+                return build_tool_name(server, tool)
+            return tool_identifier

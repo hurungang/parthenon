@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import React from 'react'
 import type { AgentPlan } from '../types'
 
 vi.mock('react-i18next', () => ({
@@ -48,6 +47,24 @@ const FAILED_PLAN: AgentPlan = {
   generation_error: 'LLM connection timeout',
   agent_config_hash: null,
   generated_at: null,
+}
+
+const DELEGATION_PLAN: AgentPlan = {
+  id: 'plan-3',
+  agent_type_id: 'at-3',
+  plan_steps: [
+    { order: 1, type: 'skill_invocation', name: 'Collect Context', description: 'Gather the request context' },
+    { order: 2, type: 'agent_delegation', name: 'Delegate Research', description: 'Target agent type: research-agent' },
+  ],
+  topology_nodes: [
+    { id: 'role:r1', type: 'role', label: 'Coordinator Role' },
+    { id: 'agent_type:a1', type: 'agent_type', label: 'research-agent' },
+  ],
+  topology_edges: [{ source: 'role:r1', target: 'agent_type:a1', label: 'delegates to' }],
+  generation_status: 'success',
+  generation_error: null,
+  agent_config_hash: 'delegation123',
+  generated_at: '2026-05-20T12:00:00Z',
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -263,5 +280,50 @@ describe('PlanPreviewModal', () => {
     )
 
     expect(screen.getByText('agents.plan.noSteps')).toBeDefined()
+  })
+
+  it('renders agent delegation steps in the step list', async () => {
+    const { PlanPreviewModal } = await import('../components/agents/PlanPreviewModal')
+
+    render(
+      <PlanPreviewModal
+        open={true}
+        onClose={vi.fn()}
+        plan={DELEGATION_PLAN}
+        agentTypeName="Delegator Agent"
+      />,
+    )
+
+    expect(screen.getByText('Delegate Research')).toBeDefined()
+  })
+
+  it('shows the target agent type slug for agent delegation steps', async () => {
+    const { PlanPreviewModal } = await import('../components/agents/PlanPreviewModal')
+
+    render(
+      <PlanPreviewModal
+        open={true}
+        onClose={vi.fn()}
+        plan={DELEGATION_PLAN}
+        agentTypeName="Delegator Agent"
+      />,
+    )
+
+    expect(screen.getByText('Target agent type: research-agent')).toBeDefined()
+  })
+
+  it('renders the agent delegation step type chip', async () => {
+    const { PlanPreviewModal } = await import('../components/agents/PlanPreviewModal')
+
+    render(
+      <PlanPreviewModal
+        open={true}
+        onClose={vi.fn()}
+        plan={DELEGATION_PLAN}
+        agentTypeName="Delegator Agent"
+      />,
+    )
+
+    expect(screen.getByText('agents.plan.stepTypes.agent_delegation')).toBeDefined()
   })
 })

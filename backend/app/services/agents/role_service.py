@@ -54,9 +54,8 @@ class AgentRoleService:
 
         await self._set_assignments(role.id, sop_ids, skill_ids, db)
 
-        await db.refresh(role, ["sop_assignments", "skill_assignments"])
         logger.info("Created AgentRole %s (%s)", role.id, name)
-        return role
+        return await self.get_role(role.id, db)
 
     async def list_roles(self, db: AsyncSession) -> list[AgentRole]:
         """Return all AgentRoles with their SOP/Skill assignments loaded."""
@@ -119,7 +118,7 @@ class AgentRoleService:
             self._permission_manager.invalidate(role_id)
 
         logger.info("Updated AgentRole %s", role_id)
-        return role
+        return await self.get_role(role_id, db)
 
     async def delete_role(self, role_id: uuid.UUID, db: AsyncSession) -> None:
         """Delete an AgentRole. Fails if any AgentType references it."""

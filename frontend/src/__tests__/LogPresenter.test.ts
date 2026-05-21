@@ -568,12 +568,12 @@ describe('presentLog — hierarchical spans', () => {
     expect(prepSpan!.collapsed).toBe(false)
   })
 
-  it('Agent Actions span starts collapsed (collapsed=true)', () => {
+  it('Agent Actions span starts expanded (collapsed=false)', () => {
     const result = presentLog(makeLog(), [
       makeEntry({ id: 'e1', event_type: 'observe', message: 'Obs' }),
     ])
     const actionsSpan = result.spans.find((s) => s.id === 'span-agent-actions')
-    expect(actionsSpan!.collapsed).toBe(true)
+    expect(actionsSpan!.collapsed).toBe(false)
   })
 
   it('skips llm_request_detail from spans (debug noise)', () => {

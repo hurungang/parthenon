@@ -17,7 +17,6 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import CodeIcon from '@mui/icons-material/Code'
-import EditIcon from '@mui/icons-material/Edit'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 

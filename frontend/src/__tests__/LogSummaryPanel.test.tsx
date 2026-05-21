@@ -18,6 +18,7 @@ function makeSummary(overrides: Partial<LogSummary> = {}): LogSummary {
     resultStatus: 'unknown',
     startedAt: null,
     completedAt: null,
+    durationMs: null,
     ...overrides,
   }
 }

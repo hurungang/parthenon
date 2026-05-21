@@ -147,12 +147,8 @@ describe('WorkingStepsPanel', () => {
     const step = makeStep({ detail: null })
     render(<WorkingStepsPanel spans={[makePrepSpan([step])]} />)
 
-    // No aria-expanded buttons in the DOM beyond span toggles
-    const expandBtns = screen.queryAllByRole('button').filter(
-      (btn) => btn.getAttribute('aria-expanded') !== null
-    )
-    // One button for the span toggle, none for step detail
-    expect(expandBtns).toHaveLength(1)
+    // There should be no step-level detail toggle for steps without detail.
+    expect(screen.queryByRole('button', { name: /expand detail|collapse detail/i })).toBeNull()
   })
 
   it('step with detail shows an expand detail button', () => {

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon - SOP Delegation Derivation Preview</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary)}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;user-select:none}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+
+.main-content{flex:1;overflow-y:auto;padding:24px}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition)}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}
+.btn-secondary{background:#fff;color:var(--text-primary);border:1px solid var(--border)}
+
+.layout{display:grid;grid-template-columns:1fr 340px;gap:16px}
+.card{background:#fff;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:16px}
+.card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:16px}
+
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px}
+
+.step-card{border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#FCFDFF}
+.step-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.step-num{width:24px;height:24px;border-radius:999px;background:#E3F2FD;color:#0C4A8A;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.step-arrow{text-align:center;color:var(--text-secondary);margin:6px 0}
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:5px}
+select,textarea,input{width:100%;border:1px solid var(--border);border-radius:6px;padding:9px;margin-bottom:8px;background:#fff}
+textarea{min-height:70px;resize:vertical}
+
+.token{display:inline-flex;padding:3px 8px;border-radius:999px;background:#EEF2FF;color:#3730A3;font-size:11px;font-weight:600;margin:0 6px 6px 0}
+.mini{font-size:12px;color:var(--text-secondary)}
+
+.plan-list{list-style:none;padding:0;margin:0}
+.plan-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border)}
+.plan-index{min-width:20px;font-weight:700;color:var(--text-secondary)}
+.plan-title{font-size:13px;font-weight:600}
+.plan-meta{font-size:12px;color:var(--text-secondary)}
+
+.diagram{border:1px solid var(--border);border-radius:8px;background:#FBFDFF;padding:8px}
+
+@media (max-width: 1100px){
+  .sidebar{display:none}
+  .layout{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+    <div class="nav-item">Dashboard</div>
+    <div class="nav-item">MCP Hub</div>
+    <div class="nav-item">Skills</div>
+    <div class="nav-item active">SOPs</div>
+    <div class="nav-item">Agent Types</div>
+    <div class="nav-item">Agent Roles</div>
+  </aside>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <div class="topbar-title">SOP Management</div>
+      <span class="chip chip-blue">Hub-Only Communication</span>
+      <span class="chip chip-green">Step-Derived Permissions</span>
+    </header>
+
+    <main class="main-content">
+      <div class="view-header">
+        <div>
+          <h2>Edit SOP: incident_triage_sop</h2>
+          <div class="view-desc">Existing SOP editor flow retained. Delegation steps derive A2A associations and role previews.</div>
+        </div>
+        <div>
+          <button class="btn btn-secondary">Cancel</button>
+          <button class="btn btn-primary">Save SOP</button>
+        </div>
+      </div>
+
+      <div class="layout">
+        <div>
+          <section class="card">
+            <div class="card-header"><h3>Basic Info</h3></div>
+            <div class="card-body">
+              <label>SOP Name Slug</label>
+              <input value="incident_triage_sop">
+              <label>Description</label>
+              <textarea>Orchestrates incident triage with delegated analysis and summary generation.</textarea>
+              <label>Workflow Instruction</label>
+              <textarea>Use skill steps for data collection and agent delegation for specialist analysis. All communication routes through Communication Hub.</textarea>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header"><h3>Steps</h3><span class="mini">Existing step model with skill_invocation and agent_delegation</span></div>
+            <div class="card-body">
+              <div class="step-card">
+                <div class="step-header">
+                  <div class="step-num">1</div>
+                  <select style="width:210px;margin:0">
+                    <option selected>skill_invocation</option>
+                    <option>agent_delegation</option>
+                  </select>
+                </div>
+                <label>Skill</label>
+                <select>
+                  <option selected>collect_incident_context</option>
+                  <option>fetch_service_health</option>
+                </select>
+              </div>
+
+              <div class="step-arrow">down</div>
+
+              <div class="step-card">
+                <div class="step-header">
+                  <div class="step-num">2</div>
+                  <select style="width:210px;margin:0">
+                    <option>skill_invocation</option>
+                    <option selected>agent_delegation</option>
+                  </select>
+                </div>
+                <label>Target Agent Type Slug</label>
+                <select>
+                  <option selected>root_cause_analyst</option>
+                  <option>ops_responder</option>
+                </select>
+                <label>Instruction</label>
+                <textarea>Analyze telemetry and logs, then return probable root cause and confidence score.</textarea>
+              </div>
+
+              <div class="step-arrow">down</div>
+
+              <div class="step-card">
+                <div class="step-header">
+                  <div class="step-num">3</div>
+                  <select style="width:210px;margin:0">
+                    <option selected>agent_delegation</option>
+                    <option>skill_invocation</option>
+                  </select>
+                </div>
+                <label>Target Agent Type Slug</label>
+                <select>
+                  <option selected>incident_summarizer</option>
+                  <option>ops_responder</option>
+                </select>
+                <label>Instruction</label>
+                <textarea>Summarize findings for operations and attach remediation recommendations.</textarea>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div>
+          <section class="card">
+            <div class="card-header"><h3>Derived A2A Associations</h3></div>
+            <div class="card-body">
+              <div class="mini" style="margin-bottom:8px">Generated from `agent_delegation` steps on save:</div>
+              <span class="token">incident_triage_sop -> root_cause_analyst</span>
+              <span class="token">incident_triage_sop -> incident_summarizer</span>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header"><h3>Agent Role Preview</h3></div>
+            <div class="card-body">
+              <div class="mini" style="margin-bottom:8px">Same derivation style as skill and MCP tool previews:</div>
+              <div>role: incident_manager</div>
+              <div class="mini">allowed agent type slugs: root_cause_analyst, incident_summarizer</div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header"><h3>Plan Preview - Steps</h3></div>
+            <div class="card-body">
+              <ul class="plan-list">
+                <li class="plan-item">
+                  <div class="plan-index">1</div>
+                  <div>
+                    <div class="plan-title">collect_incident_context</div>
+                    <div class="plan-meta">type: skill_invocation</div>
+                  </div>
+                </li>
+                <li class="plan-item">
+                  <div class="plan-index">2</div>
+                  <div>
+                    <div class="plan-title">delegate to root_cause_analyst</div>
+                    <div class="plan-meta">type: agent_delegation | channel: communication_hub</div>
+                  </div>
+                </li>
+                <li class="plan-item">
+                  <div class="plan-index">3</div>
+                  <div>
+                    <div class="plan-title">delegate to incident_summarizer</div>
+                    <div class="plan-meta">type: agent_delegation | channel: communication_hub</div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header"><h3>Plan Preview - Topology</h3></div>
+            <div class="card-body">
+              <div class="diagram">
+                <svg viewBox="0 0 300 170" width="100%" height="170" aria-label="agent step topology preview">
+                  <rect x="10" y="20" width="95" height="32" rx="6" fill="#DBEAFE" stroke="#60A5FA"></rect>
+                  <text x="58" y="40" text-anchor="middle" font-size="11" fill="#1E3A8A">SOP start</text>
+
+                  <rect x="112" y="20" width="95" height="32" rx="6" fill="#DCFCE7" stroke="#4ADE80"></rect>
+                  <text x="160" y="40" text-anchor="middle" font-size="11" fill="#14532D">Skill step</text>
+
+                  <rect x="112" y="75" width="95" height="32" rx="6" fill="#EDE9FE" stroke="#A78BFA"></rect>
+                  <text x="160" y="95" text-anchor="middle" font-size="10" fill="#4C1D95">Delegate: RCA</text>
+
+                  <rect x="112" y="130" width="95" height="32" rx="6" fill="#EDE9FE" stroke="#A78BFA"></rect>
+                  <text x="160" y="150" text-anchor="middle" font-size="10" fill="#4C1D95">Delegate: Summary</text>
+
+                  <line x1="105" y1="36" x2="112" y2="36" stroke="#64748B" stroke-width="2"></line>
+                  <line x1="160" y1="52" x2="160" y2="75" stroke="#64748B" stroke-width="2"></line>
+                  <line x1="160" y1="107" x2="160" y2="130" stroke="#64748B" stroke-width="2"></line>
+                </svg>
+              </div>
+              <div class="mini" style="margin-top:8px">Delegation steps are rendered in topology the same way MCP tool-driven plan nodes are rendered today.</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

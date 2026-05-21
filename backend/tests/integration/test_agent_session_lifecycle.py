@@ -971,6 +971,72 @@ async def test_permission_manager_agent_delegation_steps_not_included_in_tools(
 
 
 @pytest.mark.asyncio
+async def test_internal_agent_context_includes_delegate_tool_and_allowed_targets(
+    db_session: AsyncSession,
+):
+    """Agent context should expose delegation capability from SOP agent_delegation steps."""
+    from app.api.v1.internal.agent_data import get_agent_context
+    from app.db.models.skills import Sop, SopStep, SopStepType
+
+    suffix = uuid.uuid4().hex[:8]
+
+    receiver_agent_type = AgentType(
+        name=f"receiver-agent-{suffix}",
+        model_id="gpt-4o",
+        input_type=AgentInputType.typed,
+        output_type=AgentOutputType.auto,
+        is_active=True,
+    )
+    db_session.add(receiver_agent_type)
+    await db_session.flush()
+
+    sop = Sop(name=f"delegation-context-sop-{suffix}", description="Delegation context SOP")
+    db_session.add(sop)
+    await db_session.flush()
+
+    db_session.add(
+        SopStep(
+            sop_id=sop.id,
+            order=1,
+            step_type=SopStepType.agent_delegation,
+            target_agent_type_id=receiver_agent_type.id,
+            name="Delegate to receiver",
+        )
+    )
+    await db_session.flush()
+
+    role_service = AgentRoleService()
+    role = await role_service.create_role(
+        name=f"DelegationContextRole-{suffix}",
+        description=None,
+        sop_ids=[sop.id],
+        skill_ids=[],
+        db=db_session,
+    )
+    await db_session.flush()
+
+    requester_agent_type = AgentType(
+        name=f"requester-agent-{suffix}",
+        role_id=role.id,
+        model_id="gpt-4o",
+        input_type=AgentInputType.typed,
+        output_type=AgentOutputType.auto,
+    )
+    db_session.add(requester_agent_type)
+    await db_session.commit()
+
+    ctx = await get_agent_context(requester_agent_type.id, db_session)
+
+    expected_tool = f"agent____{receiver_agent_type.name}"
+    assert expected_tool in ctx.allowed_tools
+    assert receiver_agent_type.name in ctx.allowed_agent_types
+    assert any(
+        td.get("function", {}).get("name") == expected_tool.replace("____", "__")
+        for td in ctx.tool_definitions
+    )
+
+
+@pytest.mark.asyncio
 async def test_full_agent_session_with_sop_and_permission_resolution(
     db_session: AsyncSession,
 ):

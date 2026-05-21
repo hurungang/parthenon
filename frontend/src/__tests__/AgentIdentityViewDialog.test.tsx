@@ -36,6 +36,7 @@ const MOCK_IDENTITY: AgentIdentity = {
   realm_username: 'research-bot',
   status: 'active',
   token_expires_at: null,
+  has_refresh_token: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }

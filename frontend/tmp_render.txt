@@ -1,6 +1,0 @@
-
-[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mC:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend[39m
-
-[90mstdout[2m | src/__tests__/SkillEditor.render.test.tsx[2m > [22m[2mSkillEditor ΓÇö render with no data[2m > [22m[2mrenders with null skill
-[22m[39m[TEST] Starting test
-

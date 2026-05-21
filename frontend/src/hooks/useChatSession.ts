@@ -20,7 +20,19 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
   const [sessionTitle, setSessionTitle] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const outboundQueueRef = useRef<string[]>([])
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushOutboundQueue = useCallback(() => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return
+    if (outboundQueueRef.current.length === 0) return
+
+    const queued = [...outboundQueueRef.current]
+    outboundQueueRef.current = []
+    for (const content of queued) {
+      wsRef.current.send(JSON.stringify({ message: content }))
+    }
+  }, [])
 
   const connect = useCallback(() => {
     if (!sessionId) return
@@ -33,7 +45,10 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
-    ws.onopen = () => setConnected(true)
+    ws.onopen = () => {
+      setConnected(true)
+      flushOutboundQueue()
+    }
 
     ws.onmessage = (event: MessageEvent<string>) => {
       try {
@@ -73,28 +88,35 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     }
 
     ws.onerror = () => ws.close()
-  }, [sessionId, convSessionId])
+  }, [sessionId, convSessionId, flushOutboundQueue])
 
   useEffect(() => {
     connect()
     return () => {
       wsRef.current?.close()
+      outboundQueueRef.current = []
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
     }
   }, [connect])
 
   const sendMessage = useCallback((content: string) => {
+    if (!content.trim()) return false
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ message: content }))
-      const msg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, msg])
-      setPendingQuestion(null)
+    } else {
+      outboundQueueRef.current.push(content)
     }
+
+    const msg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+    }
+    setMessages((prev) => [...prev, msg])
+    setPendingQuestion(null)
+    return true
   }, [])
 
   const clearMessages = useCallback(() => setMessages([]), [])

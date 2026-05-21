@@ -11,6 +11,13 @@ project:
     Designed for enterprise deployment with OIDC identity provider integration (Keycloak, Azure EntraID),
     role/permission management, and a management Web UI.
 
+# Top-priority architecture rules — must be followed before all other conventions
+top_priority_rules:
+  - 3 backend service should be fully segregated 
+  - Agent can only run in agent runtime services
+  - Only Control center can connect to database
+  - Agent can not get any senstivive data like identity tokens, database credentials, etc.
+
 # Source code locations — used by agents to resolve code references
 source:
   frontend: frontend/src
@@ -40,6 +47,7 @@ tech_stack:
 
 # Key project conventions — agents follow these when making decisions
 conventions:
+  - "Top priority: Before applying any change, validate it against docs/config.yaml top_priority_rules and reject designs that violate those rules"
   - "All UI text must go through the i18next t() function — no hardcoded strings in components"
   - "Use strong typing everywhere — TypeScript interfaces/enums on frontend; Pydantic models and Python Enums on backend"
   - "Database schema is managed via SQLAlchemy declarative models in backend/app/db/models/ — never write raw ALTER TABLE; generate Alembic migrations with alembic revision --autogenerate"

@@ -37,10 +37,12 @@ const mockAddSpanProcessor = vi.hoisted(() => vi.fn())
 // ------------------------------------------------------------------
 
 vi.mock('@opentelemetry/sdk-trace-web', () => ({
-  WebTracerProvider: vi.fn().mockImplementation(() => ({
-    addSpanProcessor: mockAddSpanProcessor,
-    register: mockRegister,
-  })),
+  WebTracerProvider: vi.fn().mockImplementation(function WebTracerProviderMock() {
+    return {
+      addSpanProcessor: mockAddSpanProcessor,
+      register: mockRegister,
+    }
+  }),
 }))
 vi.mock('@opentelemetry/sdk-trace-base', () => ({
   BatchSpanProcessor: vi.fn(),
@@ -58,7 +60,9 @@ vi.mock('@opentelemetry/instrumentation-fetch', () => ({
   FetchInstrumentation: vi.fn(),
 }))
 vi.mock('@opentelemetry/resources', () => ({
-  Resource: vi.fn().mockImplementation(() => ({})),
+  Resource: vi.fn().mockImplementation(function ResourceMock() {
+    return {}
+  }),
 }))
 vi.mock('@opentelemetry/semantic-conventions', () => ({
   SEMRESATTRS_SERVICE_NAME: 'service.name',

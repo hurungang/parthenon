@@ -15,12 +15,14 @@ import TopologyDiagramRenderer from './TopologyDiagramRenderer'
 
 function getStepTypeChipColor(
   type: string,
-): 'primary' | 'secondary' | 'success' | 'default' {
+): 'primary' | 'secondary' | 'success' | 'warning' | 'default' {
   switch (type) {
     case 'sop_invocation':
       return 'primary'
     case 'skill_invocation':
       return 'secondary'
+    case 'agent_delegation':
+      return 'warning'
     case 'tool_call':
       return 'success'
     default:

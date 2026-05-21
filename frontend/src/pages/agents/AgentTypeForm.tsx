@@ -6,13 +6,14 @@ import {
   MenuItem,
   Select,
   TextField,
-  Typography,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import type { AgentIdentity, AgentInputType, AgentOutputType, AgentRole, ModelConfig, Sop } from '../../types'
 import { JsonSchemaBuilder } from '../../components/JsonSchemaBuilder'
+
+const SLUG_PATTERN = /^[a-z0-9-]+$/
 
 export interface AgentTypeFormValues {
   name: string
@@ -55,6 +56,7 @@ interface AgentTypeFormProps {
  */
 export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
   const { t } = useTranslation()
+  const invalidAgentName = !!values.name && !SLUG_PATTERN.test(values.name)
 
   const set = <K extends keyof AgentTypeFormValues>(key: K, value: AgentTypeFormValues[K]) =>
     onChange({ ...values, [key]: value })
@@ -132,6 +134,8 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         onChange={(e) => set('name', e.target.value)}
         fullWidth
         required
+        error={invalidAgentName}
+        helperText={invalidAgentName ? t('agents.types.slugNameHelper') : t('agents.types.slugNameHint')}
       />
       <TextField
         label={t('app.description')}

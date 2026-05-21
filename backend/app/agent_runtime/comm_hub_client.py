@@ -162,3 +162,75 @@ class CommHubToolClient:
             error_msg = f"Tool call error: {exc}"
             logger.exception("Unexpected error calling tool '%s'", tool_name)
             raise CommHubToolClientError(error_msg) from exc
+
+    async def call_a2a_request(
+        self,
+        target_agent_type_slug: str,
+        session_id: str,
+        requester_role_id: str | None,
+        request_payload: dict[str, Any] | None = None,
+        session_link_id: str | None = None,
+        wait_for_response: bool = False,
+        wait_timeout_seconds: float = 20.0,
+    ) -> dict[str, Any]:
+        """Initiate an A2A delegation request through Communication Hub.
+
+        Args:
+            target_agent_type_slug: Target receiver agent type slug.
+            session_id: Current requester session ID.
+            requester_role_id: Requester role UUID string for permission check.
+            request_payload: Optional payload forwarded to receiver.
+            session_link_id: Optional existing A2A session link for multi-turn continuation.
+
+        Returns:
+            Parsed A2A response payload.
+
+        Raises:
+            CommHubToolClientError: If A2A request fails.
+        """
+        endpoint = f"{self._comm_hub_url}/internal/a2a/request"
+
+        conversation_metadata: dict[str, Any] = {
+            "requester_instance_id": session_id,
+        }
+        if requester_role_id:
+            conversation_metadata["requester_role_id"] = requester_role_id
+        if session_link_id:
+            conversation_metadata["session_link_id"] = session_link_id
+        if wait_for_response:
+            conversation_metadata["wait_for_response"] = True
+            conversation_metadata["wait_timeout_seconds"] = wait_timeout_seconds
+
+        payload = {
+            "target_agent_type_slug": target_agent_type_slug,
+            "conversation_metadata": conversation_metadata,
+            "request_payload": request_payload or {},
+        }
+
+        try:
+            client_kwargs: dict[str, Any] = {
+                "timeout": 60.0,
+                "verify": get_ssl_context(),
+            }
+            headers: dict[str, str] = {}
+
+            if self._cert_path and self._key_path:
+                if self._comm_hub_url.startswith("https://"):
+                    client_kwargs["cert"] = (self._cert_path, self._key_path)
+                else:
+                    from pathlib import Path
+
+                    cert_content = Path(self._cert_path).read_text()
+                    headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                response = await client.post(endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500] if exc.response else "Unknown error"
+            raise CommHubToolClientError(
+                f"A2A delegation failed: HTTP {exc.response.status_code if exc.response else 'unknown'} - {detail}"
+            ) from exc
+        except Exception as exc:
+            raise CommHubToolClientError(f"A2A delegation error: {exc}") from exc

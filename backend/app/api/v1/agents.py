@@ -204,6 +204,37 @@ async def get_role_mcp_tools(
     return sorted(canonical_tools)
 
 
+@AgentRoleRouter.get("/{role_id}/allowed-agent-types", response_model=list[str])
+async def get_role_allowed_agent_types(
+    role_id: uuid.UUID,
+    db: DbSession,
+    sop_ids: str | None = None,  # Comma-separated UUIDs for preview
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[str]:
+    """Return delegated agent type slugs allowed for a role.
+
+    The permission set is derived from SOP steps with ``step_type=agent_delegation``.
+    If ``sop_ids`` is provided, the response is a preview for unsaved SOP selections.
+    """
+    try:
+        override_sop_ids: set[uuid.UUID] | None = None
+        if sop_ids is not None:
+            override_sop_ids = {uuid.UUID(s.strip()) for s in sop_ids.split(",") if s.strip()}
+
+        allowed_agent_types = await _permission_manager.calculate_allowed_agent_types(
+            role_id,
+            db,
+            override_sop_ids=override_sop_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid UUID format: {exc}")
+    except Exception as exc:
+        logger.warning("Allowed agent type resolution failed for role %s: %s", role_id, exc)
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return sorted(allowed_agent_types)
+
+
 @AgentRoleRouter.post("/{role_id}/identities", status_code=status.HTTP_204_NO_CONTENT)
 async def assign_identities_to_role(
     role_id: uuid.UUID,

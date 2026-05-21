@@ -66,18 +66,6 @@ const MOCK_CHANNELS = [
   },
 ]
 
-function mockChannelHook(overrides?: Record<string, unknown>) {
-  vi.mock('../../hooks/useNotificationChannels', () => ({
-    useNotificationChannels: () => ({
-      channels: MOCK_CHANNELS,
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-      ...overrides,
-    }),
-  }))
-}
-
 function wrapper({ children }: { children: React.ReactNode }) {
   return <MemoryRouter>{children}</MemoryRouter>
 }

@@ -45,6 +45,9 @@ _INTERNAL_PATH_PREFIX = "/internal/"
 # Tool call paths accept agent-runtime certificates
 _TOOL_CALL_PATH_PREFIX = "/internal/tools/"
 
+# A2A internal paths are called by agent-runtime
+_A2A_PATH_PREFIX = "/internal/a2a/"
+
 # Agent execute path - called by Control Center (CA itself, no service cert)
 _AGENT_EXECUTE_PATH = "/internal/agent/execute"
 
@@ -132,9 +135,12 @@ class ControlPlaneMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Determine expected service based on path
-        # Tool call endpoints accept agent-runtime certificates
+        # Tool call and A2A endpoints accept agent-runtime certificates
         # All other /internal/* paths require control-center certificates
-        if request.url.path.startswith(_TOOL_CALL_PATH_PREFIX):
+        if (
+            request.url.path.startswith(_TOOL_CALL_PATH_PREFIX)
+            or request.url.path.startswith(_A2A_PATH_PREFIX)
+        ):
             expected_service = _AGENT_RUNTIME_SERVICE_NAME
         else:
             expected_service = _EXPECTED_SERVICE_NAME

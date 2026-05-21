@@ -91,7 +91,13 @@ class TelemetrySettings(BaseModel):
     custom: CustomExporterOptions = Field(default_factory=CustomExporterOptions)
 
     # Component → log level map; "root" maps to the root logger
-    log_levels: dict[str, str] = Field(default_factory=lambda: {"root": "INFO"})
+    log_levels: dict[str, str] = Field(
+        default_factory=lambda: {
+            "root": "INFO",
+            "httpx": "WARNING",
+            "httpcore": "WARNING",
+        }
+    )
 
     @field_validator("log_levels", mode="before")
     @classmethod

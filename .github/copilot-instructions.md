@@ -1,5 +1,9 @@
 # Parthenon — Copilot Instructions
 
+## Mandatory Pre-Change Check
+
+Before making any code or documentation change, contributors and agents must first review `docs/config.yaml` and ensure the change complies with every `top_priority_rules` entry; if any conflict exists, stop and escalate for clarification.
+
 ## Running Dev Servers (Windows)
 
 **Do NOT use `powershell` async sessions to run dev servers.** Async sessions (even with `detach: true`) are tied to the agent context and die when the session closes.

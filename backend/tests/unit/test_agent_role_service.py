@@ -63,19 +63,14 @@ async def test_create_role_with_no_assignments():
 
     # Mock _set_assignments to avoid DB queries
     service._set_assignments = AsyncMock()
-
-    # db.refresh should populate sop/skill assignments on the role
-    async def refresh_side_effect(obj, attrs):
-        obj.sop_assignments = []
-        obj.skill_assignments = []
-
-    db.refresh.side_effect = refresh_side_effect
+    service.get_role = AsyncMock(return_value=role)
 
     with patch("app.services.agents.role_service.AgentRole", return_value=role):
         result = await service.create_role("EmptyRole", None, [], [], db)
 
     assert result.id == role.id
     service._set_assignments.assert_called_once()
+    service.get_role.assert_awaited_once_with(role.id, db)
 
 
 @pytest.mark.asyncio
@@ -88,17 +83,31 @@ async def test_create_role_with_sop_and_skill_assignments():
     skill_id = uuid.uuid4()
     role = _make_role(sop_ids=[sop_id], skill_ids=[skill_id])
     db = _mock_db()
-
-    async def refresh_side_effect(obj, attrs):
-        obj.sop_assignments = [MagicMock(sop_id=sop_id)]
-        obj.skill_assignments = [MagicMock(skill_id=skill_id)]
-
-    db.refresh.side_effect = refresh_side_effect
+    service.get_role = AsyncMock(return_value=role)
 
     with patch("app.services.agents.role_service.AgentRole", return_value=role):
         await service.create_role("FullRole", "desc", [sop_id], [skill_id], db)
 
     service._set_assignments.assert_called_once_with(role.id, [sop_id], [skill_id], db)
+    service.get_role.assert_awaited_once_with(role.id, db)
+
+
+@pytest.mark.asyncio
+async def test_create_role_returns_fully_loaded_role_from_get_role():
+    """create_role returns the fully loaded role from get_role for safe API serialization."""
+    service = AgentRoleService()
+
+    role = _make_role()
+    reloaded = _make_role(role_id=role.id)
+    db = _mock_db()
+    service._set_assignments = AsyncMock()
+    service.get_role = AsyncMock(return_value=reloaded)
+
+    with patch("app.services.agents.role_service.AgentRole", return_value=role):
+        result = await service.create_role("LoadedRole", None, [], [], db)
+
+    service.get_role.assert_awaited_once_with(role.id, db)
+    assert result is reloaded
 
 
 # ── List ───────────────────────────────────────────────────────────────────────
@@ -240,6 +249,31 @@ async def test_update_role_invalidates_permission_cache():
     await service.update_role(role_id, "NewName", None, None, None, db)
 
     mock_pm.invalidate.assert_called_once_with(role_id)
+
+
+@pytest.mark.asyncio
+async def test_update_role_returns_fully_loaded_role_from_get_role():
+    """update_role returns a freshly loaded role to avoid expired async ORM attributes."""
+    service = AgentRoleService()
+    role_id = uuid.uuid4()
+    role = _make_role(role_id=role_id, name="OldName")
+    reloaded = _make_role(role_id=role_id, name="NewName")
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = role
+
+    db = _mock_db()
+    db.execute = AsyncMock(return_value=mock_result)
+    service._set_assignments = AsyncMock()
+
+    original_get_role = service.get_role
+    service.get_role = AsyncMock(side_effect=[role, reloaded])
+
+    result = await service.update_role(role_id, "NewName", None, None, None, db)
+
+    assert service.get_role.await_count == 2
+    service.get_role.assert_any_await(role_id, db)
+    assert result is reloaded
 
 
 # ── Delete ─────────────────────────────────────────────────────────────────────

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import React from 'react'
 import type { TopologyEdge, TopologyNode } from '../types'
 
 vi.mock('react-i18next', () => ({
@@ -10,15 +9,26 @@ vi.mock('react-i18next', () => ({
 // ── Test fixtures ──────────────────────────────────────────────────────────────
 
 const ROLE_NODE: TopologyNode = { id: 'role:r1', type: 'role', label: 'My Role', meta: { description: 'Role desc' } }
-const SOP_NODE: TopologyNode = { id: 'sop:s1', type: 'sop', label: 'My SOP', meta: null }
+const SOP_NODE: TopologyNode = { id: 'sop:s1', type: 'sop', label: 'My SOP' }
 const SKILL_NODE: TopologyNode = { id: 'skill:sk1', type: 'skill', label: 'My Skill', meta: undefined }
 const TOOL_NODE: TopologyNode = { id: 'tool:my_tool', type: 'tool', label: 'my_tool', meta: { description: 'Tool desc' } }
+const AGENT_TYPE_NODE: TopologyNode = {
+  id: 'agent_type:research-agent',
+  type: 'agent_type',
+  label: 'research-agent',
+  meta: { description: 'Delegation target' },
+}
 
 const ALL_NODES: TopologyNode[] = [ROLE_NODE, SOP_NODE, SKILL_NODE, TOOL_NODE]
 const ALL_EDGES: TopologyEdge[] = [
   { source: 'role:r1', target: 'sop:s1', label: 'uses SOP' },
   { source: 'sop:s1', target: 'skill:sk1', label: 'invokes' },
   { source: 'skill:sk1', target: 'tool:my_tool', label: 'calls' },
+]
+const DELEGATION_NODES: TopologyNode[] = [ROLE_NODE, SKILL_NODE, AGENT_TYPE_NODE]
+const DELEGATION_EDGES: TopologyEdge[] = [
+  { source: 'role:r1', target: 'agent_type:research-agent', label: 'delegates to' },
+  { source: 'skill:sk1', target: 'agent_type:research-agent', label: 'requests review' },
 ]
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -96,8 +106,8 @@ describe('TopologyDiagramRenderer', () => {
       '../components/agents/TopologyDiagramRenderer'
     )
     const nodesWithExtras = [
-      { id: 'role:r1', type: 'role', label: 'Role', meta: null, extra_unknown_field: 'ignored' },
-    ] as TopologyNode[]
+      { id: 'role:r1', type: 'role', label: 'Role', extra_unknown_field: 'ignored' },
+    ] as unknown as TopologyNode[]
 
     expect(() =>
       render(<TopologyDiagramRenderer nodes={nodesWithExtras} edges={[]} />),
@@ -110,7 +120,7 @@ describe('TopologyDiagramRenderer', () => {
     )
     const edgesWithExtras = [
       { source: 'role:r1', target: 'sop:s1', label: 'uses SOP', extra: 'ignored' },
-    ] as TopologyEdge[]
+    ] as unknown as TopologyEdge[]
 
     expect(() =>
       render(
@@ -143,5 +153,39 @@ describe('TopologyDiagramRenderer', () => {
     ).not.toThrow()
 
     expect(screen.getByText('My Role')).toBeDefined()
+  })
+
+  it('renders agent type nodes for delegation relationships', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+
+    render(<TopologyDiagramRenderer nodes={DELEGATION_NODES} edges={DELEGATION_EDGES} />)
+
+    expect(screen.getByText('research-agent')).toBeDefined()
+  })
+
+  it('renders delegation edges connecting the graph to the target agent type', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+
+    render(<TopologyDiagramRenderer nodes={DELEGATION_NODES} edges={DELEGATION_EDGES} />)
+
+    expect(screen.getByText('delegates to')).toBeDefined()
+    expect(screen.getByText('requests review')).toBeDefined()
+  })
+
+  it('renders delegation nodes with a distinct color from skills', async () => {
+    const { default: TopologyDiagramRenderer } = await import(
+      '../components/agents/TopologyDiagramRenderer'
+    )
+
+    render(<TopologyDiagramRenderer nodes={DELEGATION_NODES} edges={DELEGATION_EDGES} />)
+
+    const skillRect = screen.getByText('My Skill').parentElement?.querySelector('rect')
+    const agentTypeRect = screen.getByText('research-agent').parentElement?.querySelector('rect')
+
+    expect(skillRect?.getAttribute('stroke')).not.toBe(agentTypeRect?.getAttribute('stroke'))
   })
 })

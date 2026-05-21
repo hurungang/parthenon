@@ -51,6 +51,7 @@ const MOCK_ROLE: AgentRole = {
   description: 'Role for research tasks',
   sop_ids: ['sop-1'],
   skill_ids: ['skill-1', 'skill-2'],
+  allowed_identity_types: ['realm_user'],
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 }

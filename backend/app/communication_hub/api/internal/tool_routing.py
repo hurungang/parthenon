@@ -127,6 +127,21 @@ async def _route_to_system_tool(body: ToolCallRequest) -> ToolCallResponse:
         logger.error("Unknown system tool: %s (bare: %s)", body.tool_name, bare_name)
         return ToolCallResponse(result={}, error=f"Unknown system tool: {body.tool_name}")
 
+    # Validate required args locally so callers get actionable errors without
+    # cross-service retries and masked 502 statuses.
+    if bare_name == "send_notification":
+        if not body.tool_args.get("group_slug") or not body.tool_args.get("body"):
+            return ToolCallResponse(
+                result={},
+                error="Invalid send_notification args: group_slug and body are required",
+            )
+    if bare_name == "get_recipient_group":
+        if not body.tool_args.get("group_slug"):
+            return ToolCallResponse(
+                result={},
+                error="Invalid get_recipient_group args: group_slug is required",
+            )
+
     # Call Control Center with mTLS certificate
     payload = {
         "session_id": body.session_id,
@@ -144,8 +159,12 @@ async def _route_to_system_tool(body: ToolCallRequest) -> ToolCallResponse:
             return ToolCallResponse(result=result)
 
     except httpx.HTTPStatusError as exc:
-        error_msg = f"Control Center system tool call failed: HTTP {exc.response.status_code}"
-        logger.error("%s - %s", error_msg, exc.response.text[:200])
+        status_code = exc.response.status_code
+        detail = exc.response.text[:200]
+        error_msg = f"Control Center system tool call failed: HTTP {status_code} - {detail}"
+        logger.error("%s", error_msg)
+        if 400 <= status_code < 500:
+            return ToolCallResponse(result={}, error=error_msg)
         raise HTTPException(status_code=502, detail=error_msg)
     except Exception as exc:
         error_msg = f"System tool call error: {exc}"

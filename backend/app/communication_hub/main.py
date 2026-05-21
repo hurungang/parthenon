@@ -38,6 +38,16 @@ settings = get_settings()
 logger.info("Starting Communication Hub in %s mode", settings.environment)
 
 
+def _log_http_client_log_policy() -> None:
+    httpx_level = logging.getLevelName(logging.getLogger("httpx").getEffectiveLevel())
+    httpcore_level = logging.getLevelName(logging.getLogger("httpcore").getEffectiveLevel())
+    logger.info(
+        "HTTP client log policy applied via telemetry log_levels: httpx=%s, httpcore=%s",
+        httpx_level,
+        httpcore_level,
+    )
+
+
 def create_app() -> FastAPI:
     """Create and configure the Communication Hub FastAPI application."""
     setup_telemetry(settings.telemetry)
@@ -106,12 +116,14 @@ def _register_routers(app: FastAPI) -> None:
     from app.communication_hub.api.dispatch import dispatch_router  # Phase 5.2
     from app.communication_hub.api.internal.tool_routing import router as tool_routing_router
     from app.communication_hub.api.internal.agent_execute import router as agent_execute_router
+    from app.communication_hub.api.a2a import router as a2a_router  # Phase 1.1
 
     app.include_router(GatewayRouter)
     app.include_router(ws_router)
     app.include_router(dispatch_router)  # POST /internal/dispatch
     app.include_router(tool_routing_router)  # POST /internal/tools/call
     app.include_router(agent_execute_router)  # POST /internal/agent/execute
+    app.include_router(a2a_router)  # POST /internal/a2a/request, /internal/a2a/disconnect/{session_link_id}
 
 
 app = create_app()
@@ -120,7 +132,9 @@ app = create_app()
 @app.on_event("startup")
 async def startup_event() -> None:
     """Run Communication Hub startup tasks."""
+    _log_http_client_log_policy()
     await _load_certificate()
+    _init_data_client()
     await _start_certificate_renewal()
     await _verify_redis_connectivity()
 
@@ -159,6 +173,15 @@ async def _start_certificate_renewal() -> None:
     if manager is not None:
         asyncio.create_task(manager.run_renewal_task())
         logger.info("Communication Hub certificate renewal background task started")
+
+
+def _init_data_client() -> None:
+    """Initialize Control Center data client used by Communication Hub routes."""
+    from app.communication_hub.data_client import ControlCenterDataClient
+
+    manager = getattr(app.state, "certificate_manager", None)
+    app.state.data_client = ControlCenterDataClient(cert_manager=manager)
+    logger.info("Communication Hub Control Center data client initialized")
 
 
 async def _verify_redis_connectivity() -> None:

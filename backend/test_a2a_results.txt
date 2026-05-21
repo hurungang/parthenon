@@ -1,0 +1,64 @@
+2026-05-21 15:28:32,200 - app.main - INFO - Starting Parthenon backend in test mode
+2026-05-21 15:28:32,204 - app.core.telemetry - INFO - Traces disabled ù no-op TracerProvider registered
+2026-05-21 15:28:32,204 - app.core.telemetry - INFO - Metrics disabled ù no-op MeterProvider registered
+2026-05-21 15:28:32,395 - app.core.telemetry - DEBUG - FastAPI instrumented
+2026-05-21 15:28:32,409 - app.core.telemetry - DEBUG - SQLAlchemy instrumented
+2026-05-21 15:28:32,529 - app.core.telemetry - DEBUG - Redis instrumented
+2026-05-21 15:28:32,540 - app.core.telemetry - DEBUG - httpx instrumented
+2026-05-21 15:28:32,541 - app.core.telemetry - INFO - OpenTelemetry initialised ù service=parthenon-api exporters=['file']
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.3, pluggy-1.5.0 -- C:\Users\rhu\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend
+configfile: pyproject.toml
+plugins: anyio-4.9.0, devtools-0.12.2, Faker-40.15.0, langsmith-0.8.2, asyncio-1.3.0, cov-7.1.0, env-1.1.3, mock-3.14.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 8 items
+
+tests/unit/test_a2a_core_flow.py::test_a2a_request_handler_validates_target_agent_type 2026-05-21 15:28:34,933 - app.communication_hub.api.a2a - WARNING - A2A request: target agent type 'nonexistent-agent' not found
+PASSED
+tests/unit/test_a2a_core_flow.py::test_a2a_request_handler_creates_session_link 2026-05-21 15:28:34,950 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req_123 receiver=agent_11e15e98-90f2-4f7c-8ca1-dedd7fdc3f06_5bfc9f4b-096d-4799-b2f8-f221a618d3b0 session_id=7720acc1-17a1-42bd-988f-1c39deb4990e is_dynamic=True
+2026-05-21 15:28:34,951 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=test-receiver-agent receiver=agent_11e15e98-90f2-4f7c-8ca1-dedd7fdc3f06_5bfc9f4b-096d-4799-b2f8-f221a618d3b0 session=7720acc1-17a1-42bd-988f-1c39deb4990e
+2026-05-21 15:28:34,952 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=test-receiver-agent requester=req_123 receiver=agent_11e15e98-90f2-4f7c-8ca1-dedd7fdc3f06_5bfc9f4b-096d-4799-b2f8-f221a618d3b0 session=7720acc1-17a1-42bd-988f-1c39deb4990e
+2026-05-21 15:28:34,959 - app.services.agents.session_service - INFO - Enqueued AgentJob 20fb8e87-e71f-45ab-890f-ea652bead956 for type 11e15e98-90f2-4f7c-8ca1-dedd7fdc3f06 (user=None)
+2026-05-21 15:28:34,960 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_11e15e98-90f2-4f7c-8ca1-dedd7fdc3f06_5bfc9f4b-096d-4799-b2f8-f221a618d3b0, session_link_id=7720acc1-17a1-42bd-988f-1c39deb4990e, target_agent_type=test-receiver-agent, job_id=20fb8e87-e71f-45ab-890f-ea652bead956
+2026-05-21 15:28:34,962 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:28:46,345 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:28:46,346 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=agent_11e15e98-90f2-4f7c-8ca1-dedd7fdc3f06_5bfc9f4b-096d-4799-b2f8-f221a618d3b0, session_id=20fb8e87-e71f-45ab-890f-ea652bead956): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+PASSED
+tests/unit/test_a2a_core_flow.py::test_a2a_request_handler_rejects_inactive_agent_type 2026-05-21 15:28:46,355 - app.communication_hub.api.a2a - WARNING - A2A request: target agent type 'inactive-agent' is not active
+PASSED
+tests/unit/test_a2a_core_flow.py::test_a2a_disconnect_marks_session_completed 2026-05-21 15:28:46,368 - app.communication_hub.api.a2a - INFO - A2A session disconnected: session=session_789 receiver=recv_456 receiver_is_dynamic=True
+2026-05-21 15:28:46,368 - app.communication_hub.api.a2a - INFO - Dynamic A2A receiver cleanup completed: session=session_789 receiver=recv_456
+PASSED
+tests/unit/test_a2a_core_flow.py::test_sop_orchestrator_handles_agent_delegation_step 2026-05-21 15:28:46,390 - app.services.skills.sop_orchestrator - INFO - Delegating to agent type 'delegation-target' (step order=1)
+PASSED
+tests/unit/test_a2a_core_flow.py::test_sop_orchestrator_raises_error_for_missing_agent_delegation_target PASSED
+tests/unit/test_a2a_core_flow.py::test_agent_identity_create_validates_slug PASSED
+tests/unit/test_a2a_core_flow.py::test_agent_identity_update_validates_slug_when_provided PASSED
+
+============================== warnings summary ===============================
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547: DeprecationWarning: `LoggingHandler` in `opentelemetry-sdk` is deprecated. Use the handler from `opentelemetry-instrumentation-logging` instead.
+    warnings.warn(
+
+app\main.py:169
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\main.py:169: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 8 passed, 3 warnings in 12.34s ========================
