@@ -75,6 +75,8 @@ custom:
 #   uvicorn: ERROR         — silence uvicorn access logs
 log_levels:
   root: "INFO"
+  httpx: "WARNING"
+  httpcore: "WARNING"
   # app.services: "DEBUG"
   # uvicorn.access: "WARNING"
 

@@ -452,7 +452,7 @@ describe('ModelConfigDialog', () => {
     mockPut.mockResolvedValue({ data: MOCK_EXISTING_CONFIG })
 
     const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
-    const { container } = render(
+    render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )

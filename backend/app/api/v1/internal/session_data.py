@@ -17,17 +17,20 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_service_certificate
 from app.db.session import DbSession
+from app.services.agents.permission_manager import AgentPermissionManager
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 
 logger = logging.getLogger(__name__)
+_permission_manager = AgentPermissionManager()
 
 
 def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_name: str | None) -> str:
@@ -141,6 +144,81 @@ class AutoNameRequest(BaseModel):
 
 class AutoNameResponse(BaseModel):
     title: str | None
+
+
+class ConversationTurnPrepareRequest(BaseModel):
+    """Request body for preparing a conversation turn in Control Center."""
+
+    user_message: str
+
+
+class ConversationTurnPrepareResponse(BaseModel):
+    """Prepared execution context for a conversation turn."""
+
+    agent_type_id: uuid.UUID | None = None
+    messages: list[dict[str, str]] = Field(default_factory=list)
+    no_agent_message: str | None = None
+
+
+class ConversationTurnAppendRequest(BaseModel):
+    """Request body for appending agent turn and optional auto-naming."""
+
+    agent_reply: str
+    is_first_message: bool = False
+    first_user_message: str | None = None
+
+
+class ConversationTurnAppendResponse(BaseModel):
+    """Result of appending an agent turn."""
+
+    title: str | None = None
+
+
+class A2ADataRequest(BaseModel):
+    """Request body for POST /a2a/request."""
+
+    target_agent_type_slug: str
+    requester_instance_id: str
+    requester_role_id: uuid.UUID | None = None
+    request_payload: dict = Field(default_factory=dict)
+    session_link_id: str | None = None
+    active_receiver_instance_id: str | None = None
+
+
+class A2ADataResponse(BaseModel):
+    """Control Center prepared A2A execution context for Communication Hub."""
+
+    receiver_instance_id: str
+    session_link_id: str
+    status: str
+    receiver_session_id: uuid.UUID | None = None
+
+
+def _build_no_agent_message(has_session: bool, has_agent_type: bool) -> str:
+    if not has_session:
+        return "Conversation session not found."
+    if not has_agent_type:
+        return "No agent type is configured for this conversation session."
+    return "No model is configured for this agent."
+
+
+def _compose_conversation_system_instruction(context: Any) -> str | None:
+    instruction_parts: list[str] = []
+
+    base_instruction = getattr(context, "system_instruction", None)
+    if base_instruction:
+        instruction_parts.append(str(base_instruction).strip())
+
+    sop_content = getattr(context, "sop_content", None)
+    if sop_content:
+        instruction_parts.append(str(sop_content).strip())
+
+    mcp_context = getattr(context, "mcp_session_context", None)
+    if mcp_context:
+        instruction_parts.append(str(mcp_context).strip())
+
+    merged = "\n\n".join(part for part in instruction_parts if part)
+    return merged or None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -456,7 +534,288 @@ async def update_session_status(
     await db.flush()
     await db.commit()
 
+    if body.status == "completed":
+        await _dispatch_result_to_comm_hub(
+            session_id,
+            {
+                "status": "completed",
+                "output_data": body.output_data or {},
+            },
+        )
+    elif body.status == "failed":
+        await _dispatch_result_to_comm_hub(
+            session_id,
+            {
+                "status": "failed",
+                "error": body.error_message or "Receiver session failed",
+                "output_data": body.output_data or {},
+            },
+        )
+
     return SessionStatusUpdateResponse(session_id=session_id, status=body.status)
+
+
+@InternalSessionDataRouter.post(
+    "/a2a/request",
+    response_model=A2ADataResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Resolve and prepare A2A delegation request",
+)
+async def prepare_a2a_request(
+    body: A2ADataRequest,
+    db: DbSession,
+) -> A2ADataResponse:
+    """Resolve target agent type, enforce permission, create session link, enqueue receiver job.
+
+    Communication Hub calls this endpoint so all A2A DB access remains in Control Center.
+    """
+    from sqlalchemy import select
+
+    from app.db.models.agents import (
+        A2ASessionStatus,
+        AgentA2ASession,
+        AgentType,
+    )
+    from app.services.agents.session_service import AgentSessionService
+    from app.services.control_center.comm_hub_client import (
+        CommunicationHubClient,
+        CommunicationHubClientError,
+    )
+
+    result = await db.execute(select(AgentType).where(AgentType.name == body.target_agent_type_slug))
+    target_agent_type = result.scalar_one_or_none()
+    if not target_agent_type:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Target agent type '{body.target_agent_type_slug}' not found",
+        )
+    if not target_agent_type.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target agent type '{body.target_agent_type_slug}' is not active",
+        )
+
+    if body.requester_role_id is not None:
+        allowed_agent_types = await _permission_manager.calculate_allowed_agent_types(
+            body.requester_role_id,
+            db,
+        )
+        if body.target_agent_type_slug not in allowed_agent_types:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Role {body.requester_role_id} is not allowed to delegate "
+                    f"to '{body.target_agent_type_slug}'"
+                ),
+            )
+
+    if body.session_link_id:
+        existing = await db.execute(
+            select(AgentA2ASession).where(
+                AgentA2ASession.session_link_id == body.session_link_id,
+                AgentA2ASession.requester_instance_id == body.requester_instance_id,
+                AgentA2ASession.status == A2ASessionStatus.active,
+            )
+        )
+        existing_session = existing.scalar_one_or_none()
+        if existing_session is not None:
+            return A2ADataResponse(
+                receiver_instance_id=existing_session.receiver_instance_id,
+                session_link_id=existing_session.session_link_id,
+                status="accepted",
+                receiver_session_id=None,
+            )
+
+    receiver_instance_id = (
+        body.active_receiver_instance_id
+        if body.active_receiver_instance_id
+        else f"agent_{target_agent_type.id}_{uuid.uuid4()}"
+    )
+    receiver_is_dynamic = body.active_receiver_instance_id is None
+
+    session_link_id = str(uuid.uuid4())
+    a2a_session = AgentA2ASession(
+        requester_instance_id=body.requester_instance_id,
+        receiver_instance_id=receiver_instance_id,
+        receiver_is_dynamic=receiver_is_dynamic,
+        session_link_id=session_link_id,
+        status=A2ASessionStatus.active,
+    )
+    db.add(a2a_session)
+    await db.flush()
+
+    session_service = AgentSessionService()
+    receiver_job = await session_service.enqueue(
+        agent_type_id=target_agent_type.id,
+        input_data=body.request_payload,
+        user_id=None,
+        db=db,
+    )
+    await db.commit()
+
+    try:
+        client = CommunicationHubClient()
+        await client.trigger_execution(
+            session_id=receiver_job.id,
+            agent_type_id=target_agent_type.id,
+            input_data=body.request_payload,
+        )
+    except CommunicationHubClientError as exc:
+        logger.error(
+            "Failed to trigger receiver execution via Communication Hub "
+            "(receiver=%s session=%s): %s",
+            receiver_instance_id,
+            receiver_job.id,
+            exc,
+        )
+
+    return A2ADataResponse(
+        receiver_instance_id=receiver_instance_id,
+        session_link_id=session_link_id,
+        status="accepted",
+        receiver_session_id=receiver_job.id,
+    )
+
+
+@InternalSessionDataRouter.post(
+    "/a2a/sessions/{session_link_id}/disconnect",
+    dependencies=[Depends(require_service_certificate)],
+    summary="Mark A2A session disconnected",
+)
+async def disconnect_a2a_session(
+    session_link_id: str,
+    db: DbSession,
+) -> dict[str, str]:
+    """Mark an A2A session as completed in Control Center."""
+    from sqlalchemy import select
+
+    from app.db.models.agents import A2ASessionStatus, AgentA2ASession
+
+    result = await db.execute(
+        select(AgentA2ASession).where(AgentA2ASession.session_link_id == session_link_id)
+    )
+    session = result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"A2A session '{session_link_id}' not found",
+        )
+
+    session.status = A2ASessionStatus.completed
+    session.disconnect_at = datetime.now(timezone.utc)
+    await db.flush()
+    await db.commit()
+
+    return {"status": "disconnected", "session_link_id": session_link_id}
+
+
+@InternalSessionDataRouter.post(
+    "/conversations/{conv_session_id}/prepare-turn",
+    response_model=ConversationTurnPrepareResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Persist user turn and return prepared conversation context",
+)
+async def prepare_conversation_turn(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnPrepareRequest,
+    db: DbSession,
+) -> ConversationTurnPrepareResponse:
+    """Persist the user message and return conversation messages for runtime execution."""
+    from app.api.v1.internal.agent_data import get_agent_context
+    from app.db.models.agents import AgentType
+    from app.db.models.conversations import ConversationSession, ConversationTurn, TurnRole
+    from app.services.conversations.store import ConversationStore
+
+    store = ConversationStore()
+    await store.add_turn(conv_session_id, TurnRole.user, body.user_message, db)
+
+    conv_session = await db.get(ConversationSession, conv_session_id)
+    if conv_session is None:
+        await db.commit()
+        return ConversationTurnPrepareResponse(
+            no_agent_message=_build_no_agent_message(False, False)
+        )
+
+    if conv_session.agent_type_id is None:
+        await db.commit()
+        return ConversationTurnPrepareResponse(
+            no_agent_message=_build_no_agent_message(True, False)
+        )
+
+    agent_type = await db.get(AgentType, conv_session.agent_type_id)
+    if agent_type is None or not agent_type.model_id:
+        await db.commit()
+        return ConversationTurnPrepareResponse(
+            agent_type_id=conv_session.agent_type_id,
+            no_agent_message=_build_no_agent_message(True, True),
+        )
+
+    context = await get_agent_context(agent_type_id=agent_type.id, db=db)
+    system_instruction = _compose_conversation_system_instruction(context)
+
+    turns_result = await db.execute(
+        select(ConversationTurn)
+        .where(ConversationTurn.session_id == conv_session_id)
+        .where(ConversationTurn.role.in_([TurnRole.user, TurnRole.agent]))
+        .order_by(ConversationTurn.created_at)
+    )
+    turns = list(turns_result.scalars().all())
+
+    messages: list[dict[str, str]] = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    for turn in turns:
+        role = "user" if turn.role == TurnRole.user else "assistant"
+        messages.append({"role": role, "content": turn.content})
+
+    await db.commit()
+    return ConversationTurnPrepareResponse(
+        agent_type_id=agent_type.id,
+        messages=messages,
+        no_agent_message=None,
+    )
+
+
+@InternalSessionDataRouter.post(
+    "/conversations/{conv_session_id}/append-turn",
+    response_model=ConversationTurnAppendResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Persist agent turn and optionally auto-name conversation",
+)
+async def append_conversation_turn(
+    conv_session_id: uuid.UUID,
+    body: ConversationTurnAppendRequest,
+    db: DbSession,
+) -> ConversationTurnAppendResponse:
+    """Persist the agent response and optionally auto-name on first message."""
+    from app.db.models.conversations import ConversationSession, TurnRole
+    from app.services.conversations.auto_namer import SessionAutoNamer
+    from app.services.conversations.store import ConversationStore
+
+    store = ConversationStore()
+    await store.add_turn(conv_session_id, TurnRole.agent, body.agent_reply, db)
+
+    title: str | None = None
+    if body.is_first_message and body.first_user_message:
+        conv_session = await db.get(ConversationSession, conv_session_id)
+        agent_type_id = conv_session.agent_type_id if conv_session else None
+        try:
+            namer = SessionAutoNamer()
+            title = await namer.generate_and_save(
+                session_id=conv_session_id,
+                first_user_message=body.first_user_message,
+                agent_type_id=agent_type_id,
+                db=db,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Auto-naming failed while appending turn for conversation %s: %s",
+                conv_session_id,
+                exc,
+            )
+
+    await db.commit()
+    return ConversationTurnAppendResponse(title=title)
 
 
 @InternalSessionDataRouter.post(

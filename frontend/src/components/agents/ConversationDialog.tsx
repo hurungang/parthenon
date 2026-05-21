@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  Alert,
   Avatar,
   Box,
   Button,
@@ -130,7 +129,7 @@ export function ConversationDialog({
       setIsResuming(false)
     }
   }
-  const handleStartSession = async () => {
+  const handleStartSession = async (): Promise<string | null> => {
     setIsResuming(true)
     setError(null)
     try {
@@ -139,8 +138,10 @@ export function ConversationDialog({
       })
       setConvSessionId(data.id)
       setWsSessionId(data.id)
+      return data.id
     } catch (err) {
       setError(err)
+      return null
     } finally {
       setIsResuming(false)
     }
@@ -159,19 +160,22 @@ export function ConversationDialog({
 
   const handleSend = async () => {
     if (!inputText.trim()) return
-    
     const messageToSend = inputText.trim()
-    setInputText('') // Clear immediately for better UX
-    
+    if (isResuming) return
+
     // If no session exists yet, create it before sending first message
     if (!convSessionId) {
-      await handleStartSession()
-      // Wait briefly for state to propagate and WebSocket to connect
-      await new Promise(resolve => setTimeout(resolve, 200))
+      const startedSessionId = await handleStartSession()
+      if (!startedSessionId) {
+        return
+      }
     }
-    
-    // sendMessage will only send if WebSocket is connected
-    sendMessage(messageToSend)
+
+    // sendMessage queues when socket is not OPEN yet, then flushes on onopen.
+    const wasQueuedOrSent = sendMessage(messageToSend)
+    if (wasQueuedOrSent) {
+      setInputText('')
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -222,7 +226,7 @@ export function ConversationDialog({
         </DialogTitle>
 
         <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', p: 0 }}>
-          {error && (
+          {Boolean(error) && (
             <Box p={2}>
               <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />
             </Box>

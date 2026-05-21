@@ -34,6 +34,16 @@ settings = get_settings()
 
 logger.info("Starting Parthenon backend in %s mode", settings.environment)
 
+
+def _log_http_client_log_policy() -> None:
+    httpx_level = logging.getLevelName(logging.getLogger("httpx").getEffectiveLevel())
+    httpcore_level = logging.getLevelName(logging.getLogger("httpcore").getEffectiveLevel())
+    logger.info(
+        "HTTP client log policy applied via telemetry log_levels: httpx=%s, httpcore=%s",
+        httpx_level,
+        httpcore_level,
+    )
+
 # Global rate limiter instance — shared across all route modules
 limiter = Limiter(key_func=get_remote_address)
 
@@ -172,6 +182,7 @@ async def startup_event() -> None:
 
     Session dispatching is handled by the Agent Runtime service.
     """
+    _log_http_client_log_policy()
     await _run_bootstrap()
     await _seed_system_tools()
     await _run_skill_seeder()

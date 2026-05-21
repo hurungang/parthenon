@@ -1,7 +1,7 @@
 """Agent Runtime — standalone FastAPI application entry point.
 
 This service is responsible for:
-- Receiving execution triggers from Control Center over mTLS
+- Receiving execution/delegation triggers from Communication Hub over mTLS
 - Managing the agent-instance X.509 certificate lifecycle
 - Immediately executing sessions trigger-based (no polling)
 - Posting results back to Control Center
@@ -37,6 +37,16 @@ settings = get_settings()
 logger.info("Starting Agent Runtime in %s mode", settings.environment)
 
 
+def _log_http_client_log_policy() -> None:
+    httpx_level = logging.getLevelName(logging.getLogger("httpx").getEffectiveLevel())
+    httpcore_level = logging.getLevelName(logging.getLogger("httpcore").getEffectiveLevel())
+    logger.info(
+        "HTTP client log policy applied via telemetry log_levels: httpx=%s, httpcore=%s",
+        httpx_level,
+        httpcore_level,
+    )
+
+
 def create_app() -> FastAPI:
     """Create and configure the Agent Runtime FastAPI application."""
     setup_telemetry(settings.telemetry)
@@ -49,8 +59,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.environment != "production" else None,
     )
 
-    # Inbound certificate validation: only Control Center may call Agent Runtime
-    # (task 4.2 — rejects any request without a valid service:control-center cert)
+    # Inbound certificate validation: only Communication Hub may call Agent Runtime
+    # (task 4.2 — rejects any request without a valid service:communication-hub cert)
     from app.agent_runtime.middleware import ControlCenterCertificateMiddleware
     app.add_middleware(ControlCenterCertificateMiddleware)
 
@@ -71,6 +81,10 @@ def create_app() -> FastAPI:
     from app.agent_runtime.api.execute import execute_router
     app.include_router(execute_router)
 
+    # WebSocket chat execution delegation (Communication Hub → Agent Runtime)
+    from app.agent_runtime.api.conversation import conversation_router
+    app.include_router(conversation_router)
+
     return app
 
 
@@ -80,6 +94,7 @@ app = create_app()
 @app.on_event("startup")
 async def startup_event() -> None:
     """Run Agent Runtime startup tasks."""
+    _log_http_client_log_policy()
     await _load_certificate()
     await _start_certificate_renewal()
     await _init_execution_engine()

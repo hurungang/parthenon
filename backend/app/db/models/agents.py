@@ -619,5 +619,53 @@ class AgentPlan(Base):
         return f"<AgentPlan id={self.id} agent_type_id={self.agent_type_id} status={self.generation_status}>"
 
 
+# ── A2A Session Link Model ────────────────────────────────────────────────────
+
+
+class A2ASessionStatus(str, enum.Enum):
+    """Lifecycle status of an A2A session link."""
+
+    active = "active"
+    completed = "completed"
+    failed = "failed"
+
+
+class AgentA2ASession(Base):
+    """Tracks A2A (Agent-to-Agent) communication sessions linking requester and receiver agents.
+
+    Used to maintain shared session context across delegation steps and manage cleanup
+    of dynamically provisioned receiver agents.
+    """
+
+    __tablename__ = "agent_a2a_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    requester_instance_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    receiver_instance_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    receiver_is_dynamic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    session_link_id: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    status: Mapped[A2ASessionStatus] = mapped_column(
+        Enum(A2ASessionStatus, name="a2a_session_status_enum"),
+        nullable=False,
+        default=A2ASessionStatus.active,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    disconnect_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_agent_a2a_sessions_requester", "requester_instance_id"),
+        Index("ix_agent_a2a_sessions_receiver", "receiver_instance_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentA2ASession id={self.id} requester={self.requester_instance_id} receiver={self.receiver_instance_id} status={self.status}>"
+
+
 # Resolve forward references
 from app.db.models.skills import Skill, Sop  # noqa: E402, F401

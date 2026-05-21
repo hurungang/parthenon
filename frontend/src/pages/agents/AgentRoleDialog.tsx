@@ -70,6 +70,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
   // Locked skills are auto-checked and their checkboxes are disabled.
   const [lockedSkills, setLockedSkills] = useState<Set<string>>(new Set())
   const [previewTools, setPreviewTools] = useState<string[]>([])
+  const [previewAgentTypes, setPreviewAgentTypes] = useState<string[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignMcpDialogOpen, setAssignMcpDialogOpen] = useState(false)
@@ -123,6 +124,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
       setSelectedSkillIds(editRole?.skill_ids ?? [])
       setLockedSkills(new Set())
       setPreviewTools([])
+      setPreviewAgentTypes([])
       setDialogError(null)
     }
   }, [open, editRole])
@@ -166,12 +168,15 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
           skill_ids: selectedSkillIds.join(','),
           sop_ids: selectedSopIds.join(','),
         })
-        const { data } = await apiClient.get<string[]>(
-          `/agents/roles/${editRole.id}/mcp-tools?${params.toString()}`,
-        )
-        setPreviewTools(data)
+        const [toolsRes, agentTypesRes] = await Promise.all([
+          apiClient.get<string[]>(`/agents/roles/${editRole.id}/mcp-tools?${params.toString()}`),
+          apiClient.get<string[]>(`/agents/roles/${editRole.id}/allowed-agent-types?sop_ids=${selectedSopIds.join(',')}`),
+        ])
+        setPreviewTools(toolsRes.data)
+        setPreviewAgentTypes(agentTypesRes.data)
       } catch {
         setPreviewTools([])
+        setPreviewAgentTypes([])
       } finally {
         setPreviewLoading(false)
       }
@@ -553,6 +558,36 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                     </Box>
                   )}
                 </>
+              )}
+            </Box>
+
+            <Divider />
+
+            {/* Allowed Agent Type Preview */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                {t('agents.roles.allowedAgentTypePreview')}
+              </Typography>
+              {!isEditing ? (
+                <Alert severity="info">{t('agents.roles.allowedAgentTypePreviewHint')}</Alert>
+              ) : previewLoading ? (
+                <CircularProgress size={20} />
+              ) : previewAgentTypes.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('agents.roles.noAllowedAgentTypes')}
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {previewAgentTypes.map((agentType) => (
+                    <Chip
+                      key={agentType}
+                      label={agentType}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
+                    />
+                  ))}
+                </Box>
               )}
             </Box>
           </Box>

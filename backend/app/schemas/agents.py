@@ -170,6 +170,46 @@ class AgentIdentityUpdate(BaseModel):
     status: AgentIdentityStatus | None = None
 
 
+class AgentIdentityCreate(BaseModel):
+    name: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"),
+    ]
+    identity_type: AgentIdentityType = AgentIdentityType.realm_user
+    realm_name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    realm_username: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+    status: AgentIdentityStatus = AgentIdentityStatus.active
+
+
+class AgentIdentityUpdate(BaseModel):
+    name: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"),
+    ] | None = None
+    realm_name: str | None = None
+    realm_username: str | None = None
+    status: AgentIdentityStatus | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _compute_has_refresh_token(cls, v: Any) -> Any:
+        """Derive has_refresh_token from the ORM model without exposing the encrypted token."""
+        if not isinstance(v, dict) and hasattr(v, "refresh_token"):
+            return {
+                "id": v.id,
+                "name": v.name,
+                "identity_type": v.identity_type,
+                "realm_name": v.realm_name,
+                "realm_username": v.realm_username,
+                "status": v.status,
+                "token_expires_at": v.token_expires_at,
+                "has_refresh_token": v.refresh_token is not None,
+                "created_at": v.created_at,
+                "updated_at": v.updated_at,
+            }
+        return v
+
+
 class AgentIdentityRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -246,6 +286,45 @@ class AgentJobRead(BaseModel):
     created_at: datetime
 
 
+# ── A2A (Agent-to-Agent) Communication Schemas ────────────────────────────────
+
+
+class A2ARequest(BaseModel):
+    """Request to initiate A2A communication through Communication Hub.
+
+    Used by SopOrchestrator to delegate to another agent type.
+    """
+
+    target_agent_type_slug: str
+    conversation_metadata: dict[str, Any]
+    request_payload: dict[str, Any]
+
+
+class A2AResponse(BaseModel):
+    """Response from Communication Hub when A2A request is accepted."""
+
+    receiver_instance_id: str
+    session_link_id: str
+    status: str  # "accepted" or error message
+    receiver_session_id: str | None = None
+    response_payload: dict[str, Any] | None = None
+
+
+class A2ASessionRead(BaseModel):
+    """Read schema for agent A2A session records."""
+
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    requester_instance_id: str
+    receiver_instance_id: str
+    receiver_is_dynamic: bool
+    session_link_id: str
+    status: str
+    created_at: datetime
+    disconnect_at: datetime | None
+
+
 # ── ModelConfig Schemas ────────────────────────────────────────────────────
 
 
@@ -299,7 +378,10 @@ class ModelConfigRead(BaseModel):
 
 
 class AgentTypeCreate(BaseModel):
-    name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    name: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"),
+    ]
     description: str | None = None
     identity_id: uuid.UUID | None = None
     role_id: uuid.UUID | None = None
@@ -313,7 +395,10 @@ class AgentTypeCreate(BaseModel):
 
 
 class AgentTypeUpdate(BaseModel):
-    name: str | None = None
+    name: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"),
+    ] | None = None
     description: str | None = None
     identity_id: uuid.UUID | None = None
     role_id: uuid.UUID | None = None

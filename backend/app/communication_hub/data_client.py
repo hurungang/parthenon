@@ -182,3 +182,70 @@ class ControlCenterDataClient:
                 "Auto-naming for conversation %s failed: %s", conv_session_id, exc
             )
             return None
+
+    async def prepare_conversation_turn(
+        self,
+        conv_session_id: uuid.UUID,
+        user_message: str,
+    ) -> dict[str, Any]:
+        """Persist user turn and fetch prepared message history for execution."""
+        return await self._post(
+            f"/internal/data/conversations/{conv_session_id}/prepare-turn",
+            {"user_message": user_message},
+        )
+
+    async def append_conversation_turn(
+        self,
+        conv_session_id: uuid.UUID,
+        agent_reply: str,
+        is_first_message: bool = False,
+        first_user_message: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist agent turn and optionally auto-name the session title."""
+        body: dict[str, Any] = {
+            "agent_reply": agent_reply,
+            "is_first_message": is_first_message,
+        }
+        if first_user_message is not None:
+            body["first_user_message"] = first_user_message
+
+        return await self._post(
+            f"/internal/data/conversations/{conv_session_id}/append-turn",
+            body,
+        )
+
+    # ── A2A orchestration ────────────────────────────────────────────────────
+
+    async def prepare_a2a_request(
+        self,
+        *,
+        target_agent_type_slug: str,
+        requester_instance_id: str,
+        requester_role_id: str | None,
+        request_payload: dict[str, Any],
+        session_link_id: str | None,
+        active_receiver_instance_id: str | None,
+    ) -> dict[str, Any]:
+        """Prepare an A2A request in Control Center.
+
+        Calls ``POST /internal/data/a2a/request`` and returns:
+        receiver_instance_id, session_link_id, status, receiver_session_id.
+        """
+        body: dict[str, Any] = {
+            "target_agent_type_slug": target_agent_type_slug,
+            "requester_instance_id": requester_instance_id,
+            "request_payload": request_payload,
+            "session_link_id": session_link_id,
+            "active_receiver_instance_id": active_receiver_instance_id,
+        }
+        if requester_role_id:
+            body["requester_role_id"] = requester_role_id
+
+        return await self._post("/internal/data/a2a/request", body)
+
+    async def disconnect_a2a_session(self, session_link_id: str) -> dict[str, Any]:
+        """Mark an A2A session as disconnected in Control Center."""
+        return await self._post(
+            f"/internal/data/a2a/sessions/{session_link_id}/disconnect",
+            {},
+        )

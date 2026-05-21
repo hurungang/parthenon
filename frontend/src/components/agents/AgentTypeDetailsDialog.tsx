@@ -310,6 +310,7 @@ export function AgentTypeDetailsDialog({
     const edges: TopologyEdge[] = []
     const addedSkillIds = new Set<string>()
     const addedToolIds = new Set<string>()
+    const addedDelegatedAgentTypeIds = new Set<string>()
 
     nodes.push({ id: 'agent', type: 'agent', label: agentType.name })
 
@@ -354,6 +355,22 @@ export function AgentTypeDetailsDialog({
 
         const detail = (sopDetails ?? []).find((d) => d.id === sop.id)
         if (detail) {
+          detail.steps
+            .filter((step) => step.step_type === 'agent_delegation' && step.target_agent_type_id)
+            .forEach((step) => {
+              const targetAgentTypeId = step.target_agent_type_id!
+              const delegatedNodeId = `agent_type_${targetAgentTypeId}`
+              if (!addedDelegatedAgentTypeIds.has(targetAgentTypeId)) {
+                addedDelegatedAgentTypeIds.add(targetAgentTypeId)
+                nodes.push({
+                  id: delegatedNodeId,
+                  type: 'agent_type',
+                  label: targetAgentTypeId,
+                })
+              }
+              edges.push({ source: sopNodeId, target: delegatedNodeId, label: 'delegates' })
+            })
+
           detail.steps
             .filter((step) => step.step_type === 'skill_invocation' && step.skill_id)
             .forEach((step) => {
@@ -691,6 +708,35 @@ export function AgentTypeDetailsDialog({
                             </ListItem>
                           ))}
                         </List>
+                      )}
+
+                      {roleSops.length > 0 && (
+                        <>
+                          <Divider sx={{ my: 1.5 }} />
+                          <Typography variant="subtitle2" gutterBottom>
+                            {t('agents.plan.steps')}
+                          </Typography>
+                          <List dense disablePadding sx={{ mb: 2 }}>
+                            {(sopDetails ?? []).flatMap((detail) =>
+                              [...detail.steps]
+                                .sort((a, b) => a.order - b.order)
+                                .map((step) => {
+                                  const stepLabel =
+                                    step.step_type === 'agent_delegation'
+                                      ? `${step.name ?? 'Agent delegation'} (${step.target_agent_type_id ?? 'unknown'})`
+                                      : step.name ?? 'Skill invocation'
+                                  return (
+                                    <ListItem key={step.id} disableGutters>
+                                      <ListItemText
+                                        primary={stepLabel}
+                                        secondary={t(`agents.plan.stepTypes.${step.step_type}`)}
+                                      />
+                                    </ListItem>
+                                  )
+                                }),
+                            )}
+                          </List>
+                        </>
                       )}
 
                       <Divider sx={{ my: 1.5 }} />

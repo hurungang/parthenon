@@ -24,6 +24,8 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30.0
+_DEFAULT_CC_CERT_PATH = "certs/control-center/service-cert.pem"
+_DEFAULT_CC_KEY_PATH = "certs/control-center/service-key.pem"
 
 
 class CommunicationHubClientError(Exception):
@@ -66,26 +68,40 @@ class CommunicationHubClient:
             comm_hub_url
             or os.environ.get("COMM_HUB_URL", "http://localhost:8002")
         ).rstrip("/")
-        self._cert_path = cert_path or os.environ.get("CC_CERT_PATH")
-        self._key_path = key_path or os.environ.get("CC_KEY_PATH")
+        self._cert_path = cert_path or os.environ.get("CC_CERT_PATH", _DEFAULT_CC_CERT_PATH)
+        self._key_path = key_path or os.environ.get("CC_KEY_PATH", _DEFAULT_CC_KEY_PATH)
         self._ca_cert_path = ca_cert_path or os.environ.get("CA_CERT_PATH")
 
     def _make_client(self) -> httpx.AsyncClient:
-        """Return an mTLS-configured client, or plain HTTP fallback for dev."""
+        """Return a client configured for HTTPS mTLS or HTTP header cert auth."""
         if (
             self._cert_path
             and self._key_path
             and Path(self._cert_path).exists()
             and Path(self._key_path).exists()
         ):
-            ssl_ctx = ssl.create_default_context()
-            ssl_ctx.load_cert_chain(self._cert_path, self._key_path)
-            if self._ca_cert_path and Path(self._ca_cert_path).exists():
-                ssl_ctx.load_verify_locations(self._ca_cert_path)
-            else:
-                ssl_ctx.check_hostname = False
-                ssl_ctx.verify_mode = ssl.CERT_NONE
-            return httpx.AsyncClient(verify=ssl_ctx, timeout=_DEFAULT_TIMEOUT)
+            if self._comm_hub_url.startswith("https://"):
+                ssl_ctx = ssl.create_default_context()
+                ssl_ctx.load_cert_chain(self._cert_path, self._key_path)
+                if self._ca_cert_path and Path(self._ca_cert_path).exists():
+                    ssl_ctx.load_verify_locations(self._ca_cert_path)
+                else:
+                    ssl_ctx.check_hostname = False
+                    ssl_ctx.verify_mode = ssl.CERT_NONE
+                return httpx.AsyncClient(verify=ssl_ctx, timeout=_DEFAULT_TIMEOUT)
+
+            # Development (HTTP): forward the service cert via header.
+            # Communication Hub middleware restores escaped newlines.
+            cert_pem = Path(self._cert_path).read_text()
+            cert_header_value = cert_pem.replace("\n", "\\n")
+            logger.info(
+                "Using X-Client-Certificate header for HTTP Communication Hub connection"
+            )
+            return httpx.AsyncClient(
+                headers={"X-Client-Certificate": cert_header_value},
+                timeout=_DEFAULT_TIMEOUT,
+                verify=False,
+            )
 
         logger.warning(
             "CC service cert not configured — using plain HTTP for Communication Hub calls "

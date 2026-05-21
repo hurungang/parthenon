@@ -35,6 +35,8 @@ import apiClient from '../../api/apiClient'
 import { useQueryClient } from '@tanstack/react-query'
 import type { McpServer } from '../../types'
 
+const SLUG_PATTERN = /^[a-z0-9-]+$/
+
 /**
  * MCP Hub management page — Servers tab and Tool Repository tab.
  */
@@ -49,6 +51,8 @@ export function McpHubPage() {
   const [editServer, setEditServer] = useState<McpServer | null>(null)
   const [form, setForm] = useState({ name: '', slug: '', base_url: '', description: '' })
   const [sessionServerId, setSessionServerId] = useState<string | null>(null)
+  const invalidName = !!form.name && !SLUG_PATTERN.test(form.name)
+  const invalidSlug = !!form.slug && !SLUG_PATTERN.test(form.slug)
 
   const handleOpenCreate = () => {
     setEditServer(null)
@@ -67,6 +71,14 @@ export function McpHubPage() {
   const handleSave = async () => {
     try {
       setDialogError(null)
+      if (!SLUG_PATTERN.test(form.name)) {
+        setDialogError(new Error('Server name must use lowercase letters, numbers, and hyphens only'))
+        return
+      }
+      if (!SLUG_PATTERN.test(form.slug)) {
+        setDialogError(new Error('Server slug must use lowercase letters, numbers, and hyphens only'))
+        return
+      }
       if (editServer) {
         await apiClient.put(`/mcp/servers/${editServer.id}`, form)
       } else {
@@ -206,6 +218,8 @@ export function McpHubPage() {
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               fullWidth
+              error={invalidName}
+              helperText={invalidName ? 'Lowercase letters, numbers, hyphens only' : undefined}
             />
             <TextField
               label={t('mcp.slug')}
@@ -213,6 +227,7 @@ export function McpHubPage() {
               onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
               fullWidth
               disabled={!!editServer}
+              error={invalidSlug}
               helperText="Lowercase letters, numbers, hyphens only"
             />
             <TextField
@@ -233,7 +248,7 @@ export function McpHubPage() {
         </DialogContent>
         <Box display="flex" justifyContent="flex-end" gap={1} p={2} pt={0}>
           <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave}>{t('app.save')}</Button>
+          <Button variant="contained" onClick={handleSave} disabled={invalidName || invalidSlug}>{t('app.save')}</Button>
         </Box>
       </Dialog>
     </Box>

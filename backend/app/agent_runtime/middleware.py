@@ -1,9 +1,9 @@
 """Agent Runtime — Inbound Certificate Validation Middleware.
 
 Validates that all incoming requests (except health and docs paths) carry a
-valid Control Center service certificate.  Agent Runtime only accepts execution
-triggers from Control Center; any request without a ``CN=service:control-center``
-certificate issued by the Parthenon CA is rejected.
+valid Communication Hub service certificate. Agent Runtime only accepts
+execution/delegation requests from Communication Hub; any request without a
+``CN=service:communication-hub`` certificate issued by the Parthenon CA is rejected.
 
 Security guarantees enforced by this middleware (task 4.2):
 
@@ -87,12 +87,12 @@ def _extract_client_cert(request: Request) -> str | None:
 
 
 class ControlCenterCertificateMiddleware(BaseHTTPMiddleware):
-    """Middleware that enforces Control Center service-cert authentication on all AR routes.
+    """Middleware that enforces Communication Hub service-cert authentication on AR routes.
 
     Applied to every request except those in :data:`_EXEMPT_PATHS`.  The
     middleware validates the ``X-Client-Certificate`` header against the CA
     certificate loaded from ``CA_CERT_PATH``, confirms the CN is
-    ``service:control-center``, and checks revocation via Control Center's
+    ``service:communication-hub``, and checks revocation via Control Center's
     lightweight revocation API.
 
     On success the validated service name and certificate serial number are

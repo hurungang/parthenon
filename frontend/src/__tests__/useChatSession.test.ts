@@ -4,15 +4,15 @@ import { renderHook, act } from '@testing-library/react'
 describe('useChatSession', () => {
   beforeEach(() => {
     // Mock WebSocket
-    const MockWebSocket = vi.fn().mockImplementation(() => ({
-      readyState: 1, // OPEN
-      send: vi.fn(),
-      close: vi.fn(),
-      onopen: null,
-      onmessage: null,
-      onclose: null,
-      onerror: null,
-    }))
+    class MockWebSocket {
+      readyState = 1 // OPEN
+      send = vi.fn()
+      close = vi.fn()
+      onopen: ((this: WebSocket, ev: Event) => any) | null = null
+      onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null
+      onclose: ((this: WebSocket, ev: CloseEvent) => any) | null = null
+      onerror: ((this: WebSocket, ev: Event) => any) | null = null
+    }
     vi.stubGlobal('WebSocket', MockWebSocket)
   })
 

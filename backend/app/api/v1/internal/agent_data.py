@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from copy import deepcopy
 from datetime import datetime
 from typing import Any
 
@@ -23,123 +24,82 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import require_service_certificate
+from app.db.models.agents import AgentType
+from app.db.models.mcp_hub import McpSessionAuthType
 from app.db.session import DbSession
-from app.services.agents.tool_naming import (
-    is_system_tool as _is_system_tool,
-    build_tool_name,
-    parse_tool_name,
-)
+from app.services.agents.tool_naming import build_tool_name, parse_tool_name, is_system_tool
 
 logger = logging.getLogger(__name__)
 
 # ── System tool schemas (OpenAI function-calling format) ──────────────────────
-# Names use canonical ``system____*`` form so they are distinguishable from MCP
-# tools in the tool_name_map and CommHub routing logic.
+# These are always available to agents regardless of role permissions.
+
+_SYSTEM_TOOLS = {
+    "system____save_result",
+    "system____send_notification",
+    "system____get_recipient_group",
+}
 
 _SYSTEM_TOOL_SCHEMAS: dict[str, dict] = {
-    "system____save_result": {
+    "save_result": {
         "type": "function",
         "function": {
-            "name": "system____save_result",
-            "description": (
-                "Save the final result of agent execution. Always provide a clear title. "
-                "Use content format that matches this agent output_type "
-                "(markdown -> markdown text, typed -> structured JSON)."
-            ),
+            "name": "save_result",
+            "description": "Save the final result of agent execution to be retrieved later",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "Human-readable result title (required)",
-                    },
-                    "content": {
-                        "description": (
-                            "Result body. Use markdown text when output_type=markdown; "
-                            "use structured JSON value when output_type=typed."
-                        ),
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "object"},
-                            {"type": "array"},
-                            {"type": "number"},
-                            {"type": "boolean"},
-                        ],
-                    },
-                    "content_type": {
-                        "type": "string",
-                        "enum": ["text", "markdown", "json"],
-                        "description": (
-                            "Optional explicit format override. If omitted, the system uses "
-                            "the agent output_type to infer format."
-                        ),
-                    },
+                    "content": {"type": "string", "description": "The result content to save"},
+                    "title": {"type": "string", "description": "Optional title for the result"},
                 },
-                "required": ["title", "content"],
+                "required": ["content"],
             },
         },
     },
-    "system____send_notification": {
+    "send_notification": {
         "type": "function",
         "function": {
-            "name": "system____send_notification",
+            "name": "send_notification",
             "description": "Send a notification to a recipient group via configured channels",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "group_slug": {
+                    "recipient_group_id": {
                         "type": "string",
-                        "description": "Slug of the recipient group",
+                        "description": "UUID of the recipient group",
                     },
-                    "subject": {
+                    "message": {
                         "type": "string",
-                        "description": "Optional subject line for email-type channels",
+                        "description": "Notification message content",
                     },
-                    "body": {
+                    "priority": {
                         "type": "string",
-                        "description": "Notification body text",
+                        "enum": ["low", "normal", "high"],
+                        "description": "Notification priority level",
                     },
                 },
-                "required": ["group_slug", "body"],
+                "required": ["recipient_group_id", "message"],
             },
         },
     },
-    "system____get_recipient_group": {
+    "get_recipient_group": {
         "type": "function",
         "function": {
-            "name": "system____get_recipient_group",
+            "name": "get_recipient_group",
             "description": "Get information about a notification recipient group",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {
+                    "recipient_group_id": {
                         "type": "string",
-                        "description": "Name of the recipient group to query",
+                        "description": "UUID of the recipient group to query",
                     },
                 },
-                "required": ["name"],
+                "required": ["recipient_group_id"],
             },
         },
     },
 }
-
-#: Canonical ``system____*`` names for the built-in system tools.
-_SYSTEM_TOOLS: frozenset[str] = frozenset(_SYSTEM_TOOL_SCHEMAS.keys())
-
-
-def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_name: str | None) -> str:
-    """Return canonical ``server____tool`` for MCP tool identifiers."""
-    if server_slug and isinstance(original_name, str) and original_name:
-        return build_tool_name(server_slug, original_name)
-
-    try:
-        parsed_server, parsed_tool = parse_tool_name(name)
-        return build_tool_name(parsed_server, parsed_tool)
-    except ValueError:
-        if "/" in name:
-            parsed_server, parsed_tool = name.split("/", 1)
-            return build_tool_name(parsed_server, parsed_tool)
-        return name
 
 InternalAgentDataRouter = APIRouter(
     prefix="/internal/data",
@@ -199,6 +159,7 @@ class AgentContextResponse(BaseModel):
     tool_definitions: list[dict]  # OpenAI-format schemas for allowed tools
     tool_name_map: dict[str, str]  # sanitized_name → original MCP tool name
     role_mcp_sessions: dict[str, dict[str, str]]  # server_id → {session_id, auth_type}
+    allowed_agent_types: list[str]  # delegated agent slugs permitted by SOP steps
 
     # Summaries for execution logging
     sops: list[SopSummary]
@@ -230,6 +191,91 @@ class McpSessionResponse(BaseModel):
     server_base_url: str
     auth_headers: dict[str, str] = Field(default_factory=dict)
     auth_type: str
+
+
+def _build_agent_delegation_tool_definition(
+    target_agent_type_slug: str,
+    target_description: str | None,
+    target_input_type: str,
+    target_input_schema: dict[str, Any] | None,
+) -> tuple[str, dict[str, Any]]:
+    """Build dynamic delegation tool schema for a specific target agent type."""
+    canonical_name = build_tool_name("agent", target_agent_type_slug)
+    sanitized_name = canonical_name.replace("____", "__")
+
+    description_parts = [f"Delegate work to agent type '{target_agent_type_slug}'."]
+    if target_description:
+        description_parts.append(target_description.strip())
+    description_parts.append(f"Target input type: {target_input_type}.")
+
+    session_link_property = {
+        "session_link_id": {
+            "type": "string",
+            "description": "Optional existing A2A session link for continuation",
+        }
+    }
+
+    if target_input_type == "typed":
+        if (
+            isinstance(target_input_schema, dict)
+            and target_input_schema.get("type") == "object"
+        ):
+            parameters = deepcopy(target_input_schema)
+            properties = parameters.setdefault("properties", {})
+            if isinstance(properties, dict):
+                properties.update(session_link_property)
+            else:
+                parameters["properties"] = session_link_property
+        elif isinstance(target_input_schema, dict) and target_input_schema:
+            parameters = {
+                "type": "object",
+                "properties": {
+                    "request_payload": target_input_schema,
+                    **session_link_property,
+                },
+                "required": ["request_payload"],
+            }
+        else:
+            parameters = {
+                "type": "object",
+                "properties": {
+                    "request_payload": {
+                        "type": "object",
+                        "description": "Payload expected by the delegated typed agent",
+                    },
+                    **session_link_property,
+                },
+                "required": ["request_payload"],
+            }
+    elif target_input_type == "conversation":
+        parameters = {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Conversation message to send to the delegated agent",
+                },
+                **session_link_property,
+            },
+            "required": ["message"],
+        }
+    else:
+        parameters = {
+            "type": "object",
+            "properties": {**session_link_property},
+        }
+
+    return (
+        canonical_name,
+        {
+            "type": "function",
+            "function": {
+                "name": sanitized_name,
+                "description": " ".join(description_parts),
+                "parameters": parameters,
+            },
+        },
+    )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -299,6 +345,7 @@ async def get_agent_context(
 
     from app.db.models.agents import (
         AgentIdentity,
+        AgentInputType,
         AgentRole,
         AgentRoleIdentity,
         AgentRoleMcpSession,
@@ -339,13 +386,13 @@ async def get_agent_context(
         identity_role_valid = check.scalar_one_or_none() is not None
 
     # ── Resolve allowed tools ─────────────────────────────────────────────────
-    # System tools are no longer auto-injected — they must be explicitly bound
-    # to a skill that is assigned to the agent's role (task 10.3).
     allowed_tools: set[str] = set()
-    mcp_tools_by_name: dict[str, McpTool] = {}
+    resolved_tool_names_raw: set[str] = set()
     skill_ids: set[uuid.UUID] = set()
     sops_summary: list[SopSummary] = []
     skills_summary: list[SkillSummary] = []
+    allowed_agent_types: set[str] = set()
+    delegated_agent_type_metadata: dict[str, dict[str, Any]] = {}
 
     if agent_type.role_id:
         role_id = agent_type.role_id
@@ -386,64 +433,105 @@ async def get_agent_context(
                     skill_ids.add(skill_id)
                     skills_summary.append(SkillSummary(id=skill_id, name=skill_name))
 
+            delegation_rows = await db.execute(
+                select(
+                    AgentType.name,
+                    AgentType.description,
+                    AgentType.input_type,
+                    AgentType.input_schema,
+                )
+                .select_from(SopStep)
+                .join(AgentType, AgentType.id == SopStep.target_agent_type_id)
+                .where(
+                    SopStep.sop_id.in_(sop_ids),
+                    SopStep.step_type == SopStepType.agent_delegation,
+                    SopStep.target_agent_type_id.isnot(None),
+                    AgentType.is_active.is_(True),
+                )
+            )
+            for (
+                agent_type_name,
+                agent_type_description,
+                agent_input_type,
+                agent_input_schema,
+            ) in delegation_rows.fetchall():
+                if agent_type_name:
+                    allowed_agent_types.add(agent_type_name)
+                    delegated_agent_type_metadata[agent_type_name] = {
+                        "description": agent_type_description,
+                        "input_type": (
+                            agent_input_type.value
+                            if isinstance(agent_input_type, AgentInputType)
+                            else str(agent_input_type)
+                        ),
+                        "input_schema": agent_input_schema,
+                    }
+
         # Tool identifiers from skill → tool bindings
         if skill_ids:
             tool_rows = await db.execute(
-                select(McpTool)
-                .options(selectinload(McpTool.server))
+                select(McpTool.name)
                 .join(SkillToolBinding, SkillToolBinding.tool_id == McpTool.id)
                 .where(
                     SkillToolBinding.skill_id.in_(skill_ids),
                     McpTool.is_active.is_(True),
                 )
             )
-            for tool in tool_rows.scalars().all():
-                canonical_name = _canonicalize_mcp_tool_name(
-                    tool.name,
-                    tool.server.slug if tool.server is not None else None,
-                    tool.original_name,
-                )
-                allowed_tools.add(canonical_name)
-                mcp_tools_by_name[canonical_name] = tool
+            for (tool_name,) in tool_rows.fetchall():
+                resolved_tool_names_raw.add(tool_name)
+                allowed_tools.add(_canonicalize_tool_identifier(tool_name))
 
     # ── Tool definitions (OpenAI format) ─────────────────────────────────────
     tool_definitions: list[dict[str, Any]] = []
     tool_name_map: dict[str, str] = {}
 
-    # Build MCP tool schemas using canonical names for runtime->CommHub routing consistency.
-    for canonical_name, tool in mcp_tools_by_name.items():
-        if _is_system_tool(canonical_name):
-            continue
-        sanitized = canonical_name.replace("____", "__")
-        tool_name_map[sanitized] = canonical_name
-        tool_definitions.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": sanitized,
-                    "description": tool.description or f"Tool: {canonical_name}",
-                    "parameters": tool.input_schema or {"type": "object", "properties": {}},
-                },
-            }
+    mcp_tool_names = sorted(resolved_tool_names_raw)
+    if mcp_tool_names:
+        mcp_rows = await db.execute(
+            select(McpTool).where(
+                McpTool.name.in_(mcp_tool_names),
+                McpTool.is_active.is_(True),
+            )
         )
+        for tool in mcp_rows.scalars().all():
+            canonical_tool_name = _canonicalize_tool_identifier(tool.name)
+            sanitized = canonical_tool_name.replace("____", "__")
+            tool_name_map[sanitized] = canonical_tool_name
+            tool_definitions.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": sanitized,
+                        "description": tool.description or f"Tool: {tool.name}",
+                        "parameters": tool.input_schema or {"type": "object", "properties": {}},
+                    },
+                }
+            )
 
-    # Add system tool schemas for any system tools that appear in allowed_tools.
-    # (System tools come from skill/tool DB bindings, not auto-injection.)
-    for tool_name in allowed_tools:
-        if _is_system_tool(tool_name) and tool_name in _SYSTEM_TOOL_SCHEMAS:
-            # Convert ____ → __ for OpenAI; register in tool_name_map for restoration
-            sanitized = tool_name.replace("____", "__")
-            tool_name_map[sanitized] = tool_name
-            schema = _SYSTEM_TOOL_SCHEMAS[tool_name]
-            # Return schema with sanitized function name for OpenAI
-            openai_schema = {
-                "type": schema["type"],
-                "function": {
-                    **schema["function"],
-                    "name": sanitized,
-                },
-            }
-            tool_definitions.append(openai_schema)
+    # Add system tool schemas only when they are explicitly present in allowed_tools.
+    for tool_name in sorted(allowed_tools):
+        try:
+            server, bare_tool = parse_tool_name(tool_name)
+        except ValueError:
+            continue
+        if server != "system":
+            continue
+        if bare_tool in _SYSTEM_TOOL_SCHEMAS:
+            tool_definitions.append(_SYSTEM_TOOL_SCHEMAS[bare_tool])
+
+    if allowed_agent_types:
+        for target_slug in sorted(allowed_agent_types):
+            target_meta = delegated_agent_type_metadata.get(target_slug, {})
+            canonical_tool_name, definition = _build_agent_delegation_tool_definition(
+                target_agent_type_slug=target_slug,
+                target_description=target_meta.get("description"),
+                target_input_type=str(target_meta.get("input_type") or "typed"),
+                target_input_schema=target_meta.get("input_schema"),
+            )
+            allowed_tools.add(canonical_tool_name)
+            sanitized = canonical_tool_name.replace("____", "__")
+            tool_name_map[sanitized] = canonical_tool_name
+            tool_definitions.append(definition)
 
     # ── SOP content (pre-formatted for system instruction) ───────────────────
     sop_content: str | None = None
@@ -501,9 +589,38 @@ async def get_agent_context(
         tool_definitions=tool_definitions,
         tool_name_map=tool_name_map,
         role_mcp_sessions=role_mcp_sessions,
+        allowed_agent_types=sorted(allowed_agent_types),
         sops=sops_summary,
         skills=skills_summary,
     )
+
+
+def _canonicalize_tool_identifier(tool_identifier: str) -> str:
+    """Normalize legacy and display formats to canonical ``server____tool`` form."""
+    if tool_identifier.startswith("system____"):
+        return tool_identifier
+
+    if tool_identifier.startswith("system__"):
+        return build_tool_name("system", tool_identifier[len("system__"):])
+
+    if tool_identifier.startswith("system/"):
+        return build_tool_name("system", tool_identifier[len("system/"):])
+
+    if is_system_tool(tool_identifier):
+        try:
+            server, tool = parse_tool_name(tool_identifier)
+            return build_tool_name(server, tool)
+        except ValueError:
+            return build_tool_name("system", tool_identifier)
+
+    try:
+        server, tool = parse_tool_name(tool_identifier)
+        return build_tool_name(server, tool)
+    except ValueError:
+        if "/" in tool_identifier:
+            server, tool = tool_identifier.split("/", 1)
+            return build_tool_name(server, tool)
+        return tool_identifier
 
 
 @InternalAgentDataRouter.get(

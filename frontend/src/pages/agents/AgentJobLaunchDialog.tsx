@@ -95,6 +95,7 @@ export function AgentJobLaunchDialog({
   const schemaHint = agentType.input_schema
     ? JSON.stringify(agentType.input_schema, null, 2)
     : undefined
+  const schemaForForm = agentType.input_schema ? JSON.stringify(agentType.input_schema) : ''
 
   return (
     <Dialog
@@ -164,7 +165,7 @@ export function AgentJobLaunchDialog({
                 </Box>
               ) : (
                 <DynamicSchemaForm
-                  schema={agentType.input_schema || ''}
+                  schema={schemaForForm}
                   value={typedInputData}
                   onChange={setTypedInputData}
                 />

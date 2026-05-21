@@ -5,6 +5,24 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import type { AgentPlan } from '../types'
 
+type MockAgentType = {
+  id: string
+  name: string
+  description: string | null
+  identity_id: string | null
+  role_id: string | null
+  llm_provider: string
+  llm_model: string
+  system_instruction: string | null
+  input_type: string
+  input_schema: null
+  output_type: string
+  output_schema: null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
@@ -36,7 +54,7 @@ vi.mock('../pages/agents/AgentTypeForm', async () => {
   }
 })
 
-const MOCK_AGENT_TYPES = [
+let mockAgentTypes: MockAgentType[] = [
   {
     id: 'at-1',
     name: 'Research Agent',
@@ -71,25 +89,13 @@ const MOCK_PLAN: AgentPlan = {
   generated_at: '2026-05-09T12:00:00Z',
 }
 
-const MOCK_FAILED_PLAN: AgentPlan = {
-  id: 'plan-fail',
-  agent_type_id: 'at-fail',
-  plan_steps: [],
-  topology_nodes: [],
-  topology_edges: [],
-  generation_status: 'failed',
-  generation_error: 'LLM unavailable',
-  agent_config_hash: null,
-  generated_at: null,
-}
-
 // Mutable mock post/put — tests override these per scenario
 let mockPostResult: { data: Record<string, unknown> } = { data: {} }
 let mockPutResult: { data: Record<string, unknown> } = { data: {} }
 
 vi.mock('../hooks/useAgentTypes', () => ({
   useAgentTypes: () => ({
-    data: MOCK_AGENT_TYPES,
+    data: mockAgentTypes,
     isLoading: false,
     error: null,
   }),
@@ -118,6 +124,29 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('AgentManagementPage', () => {
+  beforeEach(() => {
+    mockAgentTypes = [
+      {
+        id: 'at-1',
+        name: 'Research Agent',
+        description: null,
+        identity_id: null,
+        role_id: null,
+        llm_provider: 'openai',
+        llm_model: 'gpt-4o',
+        system_instruction: null,
+        input_type: 'typed',
+        input_schema: null,
+        output_type: 'markdown',
+        output_schema: null,
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    vi.clearAllMocks()
+  })
+
   it('renders the page heading', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
@@ -183,19 +212,19 @@ describe('AgentManagementPage', () => {
   it('opens ConversationDialog when Launch is clicked for conversation agent', async () => {
     // Mock a conversation agent type
     const conversationAgent = {
-      ...MOCK_AGENT_TYPES[0],
+      ...mockAgentTypes[0],
       id: 'at-conv',
       name: 'Chat Agent',
       input_type: 'conversation',
     }
-    vi.mocked(apiClient.get).mockResolvedValue({ data: [conversationAgent] })
+    mockAgentTypes = [conversationAgent]
 
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
 
-    // Wait for agent types to load
+    // Wait for conversation launch action to appear
     await waitFor(() => {
-      expect(screen.getByText('Chat Agent')).toBeDefined()
+      expect(screen.getByRole('button', { name: 'agents.types.startChat' })).toBeDefined()
     })
 
     // Find and click the launch button (should say 'Start Chat' for conversation agents)
@@ -224,6 +253,25 @@ describe('AgentManagementPage — post-save navigation', () => {
     // Reset mock results before each test
     mockPostResult = { data: {} }
     mockPutResult = { data: {} }
+    mockAgentTypes = [
+      {
+        id: 'at-1',
+        name: 'Research Agent',
+        description: null,
+        identity_id: null,
+        role_id: null,
+        llm_provider: 'openai',
+        llm_model: 'gpt-4o',
+        system_instruction: null,
+        input_type: 'typed',
+        input_schema: null,
+        output_type: 'markdown',
+        output_schema: null,
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
     vi.clearAllMocks()
   })
 
@@ -326,6 +374,29 @@ describe('AgentManagementPage — post-save navigation', () => {
 // ── Role and identity column tests ────────────────────────────────────────────
 
 describe('AgentManagementPage — role and identity columns', () => {
+  beforeEach(() => {
+    mockAgentTypes = [
+      {
+        id: 'at-1',
+        name: 'Research Agent',
+        description: null,
+        identity_id: null,
+        role_id: null,
+        llm_provider: 'openai',
+        llm_model: 'gpt-4o',
+        system_instruction: null,
+        input_type: 'typed',
+        input_schema: null,
+        output_type: 'markdown',
+        output_schema: null,
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    vi.clearAllMocks()
+  })
+
   it('renders Role column header', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
@@ -339,7 +410,7 @@ describe('AgentManagementPage — role and identity columns', () => {
   })
 
   it('shows dash in Role column when role_id is null', async () => {
-    // MOCK_AGENT_TYPES has role_id: null, apiClient.get returns [] for roles
+    // mockAgentTypes has role_id: null, apiClient.get returns [] for roles
     // so roleMap is empty and the cell falls back to '—'
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
@@ -351,8 +422,8 @@ describe('AgentManagementPage — role and identity columns', () => {
   it('shows role name in Role column when resolved from API', async () => {
     // Temporarily add a role_id to the mock agent type and mock apiClient
     // to return role data so the role name resolves in the table
-    const originalRoleId = MOCK_AGENT_TYPES[0].role_id
-    MOCK_AGENT_TYPES[0].role_id = 'role-1'
+    const originalRoleId = mockAgentTypes[0].role_id
+    mockAgentTypes[0].role_id = 'role-1'
 
     const apiMock = await import('../api/apiClient')
     vi.mocked(apiMock.default.get).mockImplementation((url: string) => {
@@ -381,7 +452,7 @@ describe('AgentManagementPage — role and identity columns', () => {
     })
 
     // Restore original mock state
-    MOCK_AGENT_TYPES[0].role_id = originalRoleId
+    mockAgentTypes[0].role_id = originalRoleId
   })
 })
 

@@ -254,6 +254,9 @@
       "mcpToolPreview": "Allowed MCP Tools Preview",
       "mcpToolPreviewHint": "Save this role first to preview which MCP tools will be accessible.",
       "noMcpTools": "No MCP tools resolved. Assign SOPs or Skills to populate this list.",
+      "allowedAgentTypePreview": "Allowed Agent Types Preview",
+      "allowedAgentTypePreviewHint": "Save this role first to preview which delegated agent types will be accessible.",
+      "noAllowedAgentTypes": "No delegated agent types resolved. Add agent delegation steps to assigned SOPs.",
       "assignedIdentities": "Assigned Identities",
       "assignIdentities": "Assign Identities",
       "assignIdentitiesTitle": "Assign Identities to Role: {{name}}",
@@ -313,6 +316,9 @@
       "identity": "Agent Identity",
       "noIdentity": "No identity assigned",
       "modelId": "Model",
+      "slugNameHint": "Use lowercase letters, numbers, and hyphens only.",
+      "slugNameHelper": "Agent type name must use lowercase letters, numbers, and hyphens only.",
+      "slugNameValidationError": "Agent type name must use lowercase letters, numbers, and hyphens only.",
       "noModel": "No model selected",
       "modelIdHint": "Select a model from the enabled models of a provider configuration",
       "systemInstruction": "System Instruction",
@@ -404,7 +410,6 @@
       "disconnected": "Disconnected",
       "pollingHint": "Refreshing every 3 seconds…",
       "conversationHistory": "Conversation History",
-      "dashboardTitle": "Agent Executions",
       "dashboardSubtitle": "Monitor and inspect all agent execution sessions",
       "filterByType": "Filter by Agent Type",
       "allTypes": "All Agent Types",
@@ -506,6 +511,7 @@
       "stepTypes": {
         "sop_invocation": "SOP Invocation",
         "skill_invocation": "Skill Invocation",
+        "agent_delegation": "Agent Delegation",
         "tool_call": "Tool Call"
       },
       "nodeTypes": {
@@ -514,6 +520,7 @@
         "role": "Agent Role",
         "sop": "SOP",
         "skill": "Skill",
+        "agent_type": "Delegated Agent",
         "tool": "Tool"
       }
     }
@@ -601,7 +608,6 @@
   },
   "notifications": {
     "title": "Notification Configuration",
-    "channels": "Channels",
     "events": "Event History",
     "channelType": "Channel Type",
     "email": "Email",

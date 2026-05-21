@@ -154,7 +154,7 @@ def test_check_tool_allowed_raises_permission_denied():
     with pytest.raises(PermissionDeniedError) as exc_info:
         pm.check_tool_allowed("evil-server/drop_database", {"save_result"}, role_id)
 
-    assert "evil-server/drop_database" in str(exc_info.value)
+    assert "evil-server____drop_database" in str(exc_info.value)
 
 
 def test_tool_identifiers_use_canonical_separator():
@@ -322,3 +322,51 @@ async def test_resolve_no_infinite_recursion_without_circular_sop():
     allowed = await pm.calculate_allowed_tools(role_id, db)
     # Tool identifiers use canonical server____tool format.
     assert "analytics____analyze" in allowed
+
+
+@pytest.mark.asyncio
+async def test_calculate_allowed_agent_types_from_sop_delegation_steps():
+    """Delegated agent type names are resolved from role SOP agent_delegation steps."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    pm._agent_type_cache = {}
+    role_id = uuid.uuid4()
+    sop_id = uuid.uuid4()
+    delegated_agent_type_id = uuid.uuid4()
+
+    db = _mock_db()
+    db.execute = AsyncMock(side_effect=[
+        _make_execute_rows((sop_id,)),
+        _make_execute_rows((delegated_agent_type_id,)),
+        _make_execute_rows(("research-agent",)),
+    ])
+
+    allowed = await pm.calculate_allowed_agent_types(role_id, db)
+    assert allowed == {"research-agent"}
+
+
+@pytest.mark.asyncio
+async def test_calculate_allowed_agent_types_uses_cache():
+    """Second call should read delegated agent type names from cache."""
+    from app.services.agents.permission_manager import AgentPermissionManager
+
+    pm = AgentPermissionManager()
+    pm._agent_type_cache = {}
+    role_id = uuid.uuid4()
+    sop_id = uuid.uuid4()
+    delegated_agent_type_id = uuid.uuid4()
+
+    db = _mock_db()
+    db.execute = AsyncMock(side_effect=[
+        _make_execute_rows((sop_id,)),
+        _make_execute_rows((delegated_agent_type_id,)),
+        _make_execute_rows(("planner-agent",)),
+    ])
+
+    first = await pm.calculate_allowed_agent_types(role_id, db)
+    assert first == {"planner-agent"}
+
+    db.execute = AsyncMock(side_effect=Exception("should not call DB again"))
+    second = await pm.calculate_allowed_agent_types(role_id, db)
+    assert second == {"planner-agent"}

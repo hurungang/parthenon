@@ -39,6 +39,8 @@ import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetails
 import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type { AgentIdentity, AgentRole, AgentType } from '../../types'
 
+const SLUG_PATTERN = /^[a-z0-9-]+$/
+
 /**
  * Agent management page — agent type list, creation/editing, active instance table,
  * and session launch.
@@ -78,6 +80,7 @@ export function AgentManagementPage() {
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
   const [conversationAgentType, setConversationAgentType] = useState<AgentType | null>(null)
   const [saving, setSaving] = useState(false)
+  const invalidAgentName = !!form.name && !SLUG_PATTERN.test(form.name)
 
   // Auto-open dialog if navigated from chat page with openDialogFor state
   useEffect(() => {
@@ -124,6 +127,11 @@ export function AgentManagementPage() {
     setSaving(true)
     try {
       setDialogError(null)
+      if (!SLUG_PATTERN.test(form.name)) {
+        setDialogError(new Error(t('agents.types.slugNameValidationError')))
+        setSaving(false)
+        return
+      }
       if (form.input_type === 'none' && !form.primary_sop_id) {
         setDialogError(new Error(t('agents.types.form.primarySopRequired')))
         setSaving(false)
@@ -319,7 +327,7 @@ export function AgentManagementPage() {
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={!form.name.trim() || saving}
+            disabled={!form.name.trim() || invalidAgentName || saving}
           >
             {t('app.save')}
           </Button>

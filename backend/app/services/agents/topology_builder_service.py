@@ -30,6 +30,7 @@ class TopologyBuilderService:
                 - sops: [{"id": str, "name": str, "description": str|None, "skill_ids": list[str]}]
                 - skills: [{"id": str, "name": str, "description": str|None, "sop_ids": list[str]}]
                 - tools: [{"name": str, "description": str|None, "skill_id": str}]
+                - delegated_agents: [{"id": str, "name": str}]
 
         Returns:
             Dict with keys:
@@ -46,6 +47,7 @@ class TopologyBuilderService:
             sops: list[dict[str, Any]] = graph.get("sops", [])
             skills: list[dict[str, Any]] = graph.get("skills", [])
             tools: list[dict[str, Any]] = graph.get("tools", [])
+            delegated_agents: list[dict[str, Any]] = graph.get("delegated_agents", [])
 
             # Agent node (the top-level AI agent type)
             agent_node_id: str | None = None
@@ -175,6 +177,37 @@ class TopologyBuilderService:
                         "target": tool_node_id,
                         "label": edge_label,
                     })
+
+            delegated_node_ids: dict[str, str] = {
+                item["id"]: f"agent_type:{item['id']}" for item in delegated_agents if item.get("id")
+            }
+            for delegated in delegated_agents:
+                delegated_id = delegated.get("id")
+                if not delegated_id:
+                    continue
+                node_id = delegated_node_ids[delegated_id]
+                nodes.append({
+                    "id": node_id,
+                    "type": "agent_type",
+                    "label": delegated.get("name") or delegated_id,
+                    "meta": {},
+                })
+
+            for sop in sops:
+                sop_node_id = sop_node_ids.get(sop.get("id"))
+                if not sop_node_id:
+                    continue
+                for step in sop.get("steps", []):
+                    if step.get("step_type") != "agent_delegation":
+                        continue
+                    target_agent_type_id = step.get("target_agent_type_id")
+                    delegated_node_id = delegated_node_ids.get(target_agent_type_id)
+                    if delegated_node_id:
+                        edges.append({
+                            "source": sop_node_id,
+                            "target": delegated_node_id,
+                            "label": "delegates",
+                        })
 
             span.set_attribute("node_count", len(nodes))
             span.set_attribute("edge_count", len(edges))

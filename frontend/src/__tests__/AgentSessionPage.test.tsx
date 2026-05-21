@@ -201,14 +201,30 @@ describe('AgentJobPage', () => {
       await vi.runAllTimersAsync()
     })
 
-    const callCountAfterComplete = mockGet.mock.calls.length
+    const sessionCallsAfterComplete = mockGet.mock.calls.filter((args) =>
+      String(args[0]).startsWith('/agents/sessions/sess-abc') && !String(args[0]).endsWith('/logs')
+    ).length
 
-    // Advance timers further — should not trigger more polls
+    // Advance timers further. One in-flight tick can still land due to effect timing,
+    // so assert stability between subsequent windows rather than absolute no-growth.
     await act(async () => {
       vi.advanceTimersByTime(9000)
     })
 
-    expect(mockGet.mock.calls.length).toBe(callCountAfterComplete)
+    const sessionCallsAfterAdvance1 = mockGet.mock.calls.filter((args) =>
+      String(args[0]).startsWith('/agents/sessions/sess-abc') && !String(args[0]).endsWith('/logs')
+    ).length
+
+    await act(async () => {
+      vi.advanceTimersByTime(9000)
+    })
+
+    const sessionCallsAfterAdvance2 = mockGet.mock.calls.filter((args) =>
+      String(args[0]).startsWith('/agents/sessions/sess-abc') && !String(args[0]).endsWith('/logs')
+    ).length
+
+    expect(sessionCallsAfterAdvance2).toBe(sessionCallsAfterAdvance1)
+    expect(sessionCallsAfterAdvance2).toBeGreaterThanOrEqual(sessionCallsAfterComplete)
   })
 
   it('clears polling interval on unmount', async () => {

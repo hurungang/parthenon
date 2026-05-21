@@ -211,10 +211,7 @@ describe('AgentRoleDialog', () => {
     })
   })
 
-  // ── allowed_identity_types ─────────────────────────────────────────────────
-  // TODO: Implement allowed_identity_types feature in AgentRoleDialog component
-
-  it.skip('renders allowed_identity_types multi-select in the dialog', async () => {
+  it('shows allowed agent type preview hint in create mode', async () => {
     const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
@@ -224,71 +221,114 @@ describe('AgentRoleDialog', () => {
     )
 
     await waitFor(() => {
-      // The dialog should contain the identity types field (label or section header)
-      const bodyText = document.body.innerHTML
-      const hasIdentityTypesField =
-        bodyText.includes('agents.roles.allowedIdentityTypes') ||
-        bodyText.includes('allowed_identity_types') ||
-        bodyText.includes('identityTypes')
-      expect(hasIdentityTypesField).toBe(true)
+      expect(screen.getByText('agents.roles.allowedAgentTypePreviewHint')).toBeDefined()
     })
   })
 
-  it.skip('sends allowed_identity_types in POST payload when creating a role with constraint', async () => {
+  it('renders allowed agent type preview chips for selected SOPs in edit mode', async () => {
     const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
-    mockGet.mockResolvedValue({ data: [] })
-    mockPost.mockResolvedValue({
-      data: {
-        id: 'new-role',
-        name: 'Constrained Role',
-        allowed_identity_types: ['service_account'],
-      },
-    })
-
-    render(
-      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
-      { wrapper },
-    )
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/app\.name/)).toBeDefined()
-    })
-
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/app\.name/), {
-        target: { value: 'Constrained Role' },
-      })
-    })
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('app.save'))
-    })
-
-    await waitFor(() => {
-      // POST was called — verify allowed_identity_types is in the payload
-      if (mockPost.mock.calls.length > 0) {
-        const postBody = mockPost.mock.calls[0][1]
-        expect(postBody).toHaveProperty('allowed_identity_types')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({ data: [{ id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] }] })
       }
-    })
-  })
-
-  it.skip('sends updated allowed_identity_types in PUT payload when editing a role', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
-    mockGet.mockResolvedValue({ data: [] })
-    mockPut.mockResolvedValue({
-      data: {
-        id: 'role-1',
-        name: 'Updated Role',
-        allowed_identity_types: ['agent_user'],
-      },
+      if (url === '/skills') {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/identities') || url.includes('/mcp-sessions') || url.includes('/mcp-tools')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/allowed-agent-types')) {
+        return Promise.resolve({ data: ['planner-agent', 'review-agent'] })
+      }
+      return Promise.resolve({ data: [] })
     })
 
     const editRole = {
       id: 'role-1',
-      name: 'Existing Role',
+      name: 'Delegator Role',
       description: null,
-      sop_ids: [],
+      sop_ids: ['sop-1'],
+      skill_ids: [],
+      allowed_identity_types: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+
+    render(
+      <AgentRoleDialog open={true} editRole={editRole} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('planner-agent')).toBeDefined()
+      expect(screen.getByText('review-agent')).toBeDefined()
+    })
+  })
+
+  it('requests allowed agent types using the selected SOP ids', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({ data: [{ id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] }] })
+      }
+      if (url === '/skills') {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/identities') || url.includes('/mcp-sessions') || url.includes('/mcp-tools')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/allowed-agent-types')) {
+        return Promise.resolve({ data: ['planner-agent'] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const editRole = {
+      id: 'role-2',
+      name: 'Delegator Role',
+      description: null,
+      sop_ids: ['sop-1'],
+      skill_ids: [],
+      allowed_identity_types: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+
+    render(
+      <AgentRoleDialog open={true} editRole={editRole} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(
+        mockGet.mock.calls.some(([url]) => String(url).includes('/allowed-agent-types?sop_ids=sop-1'))
+      ).toBe(true)
+    })
+  })
+
+  it('shows the empty allowed agent type state when the preview response is empty', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({ data: [{ id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] }] })
+      }
+      if (url === '/skills') {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/identities') || url.includes('/mcp-sessions') || url.includes('/mcp-tools')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/allowed-agent-types')) {
+        return Promise.resolve({ data: [] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const editRole = {
+      id: 'role-3',
+      name: 'No Delegation Role',
+      description: null,
+      sop_ids: ['sop-1'],
       skill_ids: [],
       allowed_identity_types: [],
       created_at: '2026-01-01T00:00:00Z',
@@ -306,19 +346,63 @@ describe('AgentRoleDialog', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('agents.roles.editTitle')).toBeDefined()
+      expect(screen.getByText('agents.roles.noAllowedAgentTypes')).toBeDefined()
+    })
+  })
+
+  it('refreshes the allowed agent type preview when SOP selection changes', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({
+          data: [
+            { id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] },
+            { id: 'sop-2', name: 'Escalation SOP', required_skill_ids: [] },
+          ],
+        })
+      }
+      if (url === '/skills') {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/identities') || url.includes('/mcp-sessions') || url.includes('/mcp-tools')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.includes('/allowed-agent-types')) {
+        return Promise.resolve({ data: ['planner-agent'] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const editRole = {
+      id: 'role-4',
+      name: 'Dynamic Preview Role',
+      description: null,
+      sop_ids: ['sop-1'],
+      skill_ids: [],
+      allowed_identity_types: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+
+    render(
+      <AgentRoleDialog open={true} editRole={editRole} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(
+        mockGet.mock.calls.some(([url]) => String(url).includes('/allowed-agent-types?sop_ids=sop-1'))
+      ).toBe(true)
     })
 
     await act(async () => {
-      fireEvent.click(screen.getByText('app.save'))
+      fireEvent.click(screen.getByLabelText('Escalation SOP'))
     })
 
     await waitFor(() => {
-      // PUT was called — verify allowed_identity_types is in the payload
-      if (mockPut.mock.calls.length > 0) {
-        const putBody = mockPut.mock.calls[0][1]
-        expect(putBody).toHaveProperty('allowed_identity_types')
-      }
+      expect(
+        mockGet.mock.calls.some(([url]) => String(url).includes('/allowed-agent-types?sop_ids=sop-1,sop-2'))
+      ).toBe(true)
     })
   })
 })

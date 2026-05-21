@@ -10,7 +10,7 @@ from app.db.models.mcp_hub import McpServerStatus, McpSessionAuthType
 
 
 class McpServerCreate(BaseModel):
-    name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    name: Annotated[str, StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$")]
     slug: Annotated[str, StringConstraints(min_length=1, max_length=100, pattern=r"^[a-z0-9\-]+$")]
     description: str | None = None
     base_url: Annotated[str, StringConstraints(min_length=1, max_length=2000)]

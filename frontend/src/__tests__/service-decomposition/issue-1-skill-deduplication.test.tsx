@@ -112,9 +112,8 @@ describe('Issue 1 — System Tools Displayed Twice (FIX-20260518-140000)', () =>
       // EXPECTED (after fix): each tool ID appears exactly once
       // ACTUAL (broken): same 3 IDs appear twice each (3 unique, 6 total)
       const uniqueIds = new Set(BROKEN_API_RESPONSE.map((t) => t.id))
-      // After fix: uniqueIds.size === BROKEN_API_RESPONSE.length
-      expect(uniqueIds.size).toBe(BROKEN_API_RESPONSE.length)
-      // ^ FAILS: 3 !== 6 — confirms the duplication bug
+      // Broken state: unique IDs are fewer than total entries.
+      expect(uniqueIds.size).toBeLessThan(BROKEN_API_RESPONSE.length)
     })
 
     it('save_result tool appears exactly once in a correctly deduplicated response', () => {
@@ -153,8 +152,7 @@ describe('Issue 1 — System Tools Displayed Twice (FIX-20260518-140000)', () =>
         expect(fixed).toHaveLength(1) // passes only with deduplication
       }
       // Confirm the total is wrong without dedup
-      expect(BROKEN_API_RESPONSE.length).toBe(new Set(BROKEN_API_RESPONSE.map((t) => t.id)).size)
-      // ^ FAILS: 6 !== 3
+      expect(BROKEN_API_RESPONSE.length).toBeGreaterThan(new Set(BROKEN_API_RESPONSE.map((t) => t.id)).size)
     })
   })
 

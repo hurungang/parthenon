@@ -200,6 +200,7 @@ class PlanGenerationService:
 
         sop_data_list: list[dict[str, Any]] = []
         sop_skill_ids: dict[str, list[str]] = {}  # sop_id -> [skill_ids from steps]
+        delegated_agent_type_ids: set[str] = set()
 
         if sop_ids:
             sops_result = await db.execute(
@@ -208,6 +209,7 @@ class PlanGenerationService:
                 .options(selectinload(Sop.steps))
             )
             for sop in sops_result.scalars().all():
+                sop_steps = sorted(sop.steps, key=lambda s: s.order)
                 sop_data_list.append({
                     "id": str(sop.id),
                     "name": sop.name,
@@ -219,14 +221,33 @@ class PlanGenerationService:
                             "step_type": step.step_type.value if step.step_type else "skill_invocation",
                             "name": step.name,
                             "description": step.description,
+                            "target_agent_type_id": str(step.target_agent_type_id) if step.target_agent_type_id else None,
                         }
-                        for step in sorted(sop.steps, key=lambda s: s.order)
+                        for step in sop_steps
                     ],
                 })
                 # Collect skill IDs referenced in SOP steps
-                for step in sop.steps:
+                for step in sop_steps:
                     if step.step_type == SopStepType.skill_invocation and step.skill_id:
                         sop_skill_ids.setdefault(str(sop.id), []).append(str(step.skill_id))
+                    if step.step_type == SopStepType.agent_delegation and step.target_agent_type_id:
+                        delegated_agent_type_ids.add(str(step.target_agent_type_id))
+
+        delegated_agents: list[dict[str, Any]] = []
+        if delegated_agent_type_ids:
+            delegated_rows = await db.execute(
+                select(AgentType)
+                .where(AgentType.id.in_([uuid.UUID(agent_id) for agent_id in delegated_agent_type_ids]))
+            )
+            delegated_by_id = {str(agent.id): agent for agent in delegated_rows.scalars().all()}
+            for agent_id in sorted(delegated_agent_type_ids):
+                delegated = delegated_by_id.get(agent_id)
+                delegated_agents.append(
+                    {
+                        "id": agent_id,
+                        "name": delegated.name if delegated else agent_id,
+                    }
+                )
 
         # Collect all skill IDs: from SOP steps + directly assigned
         direct_skill_rows = await db.execute(
@@ -293,6 +314,7 @@ class PlanGenerationService:
             "sops": sop_data_list,
             "skills": skill_data_list,
             "tools": tool_data_list,
+            "delegated_agents": delegated_agents,
         }
 
     def _build_prompt(
@@ -362,12 +384,12 @@ class PlanGenerationService:
             "## Task",
             "Generate a clear, step-by-step implementation plan for this agent.",
             "Each step should specify:",
-            "  1. The action type: `sop_invocation`, `skill_invocation`, or `tool_call`",
+            "  1. The action type: `sop_invocation`, `skill_invocation`, `agent_delegation`, or `tool_call`",
             "  2. A concise name for the step",
             "  3. A human-readable description of what the agent does in this step",
             "",
             "Respond ONLY with a valid JSON array. Each element must be an object with these exact keys:",
-            '  {"order": <integer>, "type": "<sop_invocation|skill_invocation|tool_call>", "name": "<string>", "description": "<string or null>"}',
+            '  {"order": <integer>, "type": "<sop_invocation|skill_invocation|agent_delegation|tool_call>", "name": "<string>", "description": "<string or null>"}',
             "",
             "Do not include any text before or after the JSON array.",
         ])

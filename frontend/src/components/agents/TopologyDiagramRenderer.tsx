@@ -19,7 +19,8 @@ const COLUMN_ORDER: Record<string, number> = {
   role: 2,
   sop: 3,
   skill: 4,
-  tool: 5,
+  agent_type: 5,
+  tool: 6,
 }
 
 // Hex color map per node type (used for both SVG and legend)
@@ -29,6 +30,7 @@ const COLOR_MAP: Record<string, string> = {
   role: '#1976d2',       // blue
   sop: '#9c27b0',        // purple
   skill: '#ed6c02',      // orange
+  agent_type: '#455a64', // blue gray
   tool: '#2e7d32',       // green
 }
 
