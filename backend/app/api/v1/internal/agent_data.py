@@ -64,13 +64,21 @@ _SYSTEM_TOOL_SCHEMAS: dict[str, dict] = {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "recipient_group_id": {
+                    "group_slug": {
                         "type": "string",
-                        "description": "UUID of the recipient group",
+                        "description": "Slug of the recipient group",
                     },
-                    "message": {
+                    "channel": {
                         "type": "string",
-                        "description": "Notification message content",
+                        "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Notification subject / title",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Notification body content",
                     },
                     "priority": {
                         "type": "string",
@@ -78,7 +86,7 @@ _SYSTEM_TOOL_SCHEMAS: dict[str, dict] = {
                         "description": "Notification priority level",
                     },
                 },
-                "required": ["recipient_group_id", "message"],
+                "required": ["group_slug", "body"],
             },
         },
     },
@@ -90,12 +98,12 @@ _SYSTEM_TOOL_SCHEMAS: dict[str, dict] = {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "recipient_group_id": {
+                    "group_slug": {
                         "type": "string",
-                        "description": "UUID of the recipient group to query",
+                        "description": "Slug of the recipient group to query",
                     },
                 },
-                "required": ["recipient_group_id"],
+                "required": ["group_slug"],
             },
         },
     },

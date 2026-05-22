@@ -196,6 +196,7 @@ erDiagram
         uuid id
         string name
         string slug
+        string display_name
         string base_url
         enum status
         datetime last_synced_at
@@ -236,6 +237,7 @@ erDiagram
 
 **Business rules:**
 - `passthrough` sessions forward the executing agent's identity to the MCP server at call time; no credentials are stored or required.
+- `slug` is the canonical routing namespace for MCP tools and must be globally unique.
 
 **Source**: `backend/app/db/models/mcp_hub.py`
 
@@ -281,12 +283,24 @@ erDiagram
         json step_config
         datetime created_at
     }
+    SopA2APermission {
+        uuid id
+        uuid sop_id
+        uuid sop_step_id
+        uuid target_agent_type_id
+        enum derivation_source
+        boolean is_enabled
+        datetime created_at
+    }
 
     Skill ||--o{ SkillToolBinding : "invokes via"
     SkillToolBinding }o--|| McpTool : "calls"
     Sop ||--o{ SopStep : "composed of"
     SopStep }o--o| Skill : "executes"
     SopStep }o--o| AgentType : "delegates to"
+    SopStep ||--o{ SopA2APermission : "derives"
+    Sop ||--o{ SopA2APermission : "grants"
+    AgentType ||--o{ SopA2APermission : "target_is"
 ```
 
 **Source**: `backend/app/db/models/skills.py`
@@ -312,8 +326,15 @@ erDiagram
         uuid id
         string name
         string description
+        string slug
         datetime created_at
         datetime updated_at
+    }
+    AgentRoleAllowedType {
+        uuid id
+        uuid agent_role_id
+        uuid allowed_agent_type_id
+        datetime created_at
     }
     AgentRoleIdentity {
         uuid role_id
@@ -356,6 +377,8 @@ erDiagram
     AgentType {
         uuid id
         string name
+        string slug
+        string display_name
         string description
         uuid identity_id
         uuid role_id
@@ -382,11 +405,23 @@ erDiagram
         string error_message
         datetime created_at
     }
+    AgentA2ASessionLink {
+        uuid id
+        string requester_instance_id
+        string receiver_instance_id
+        string session_link_id
+        boolean receiver_is_dynamic
+        enum status
+        datetime created_at
+        datetime disconnected_at
+    }
 
     AgentRole ||--o{ AgentRoleSOP : "grants access to"
     AgentRole ||--o{ AgentRoleSkill : "grants access to"
     AgentRole ||--o{ AgentRoleIdentity : "can be assumed by"
     AgentRole ||--o{ AgentRoleMcpSession : "provides MCP context via"
+    AgentRole ||--o{ AgentRoleAllowedType : "allows"
+    AgentType ||--o{ AgentRoleAllowedType : "listed as"
     AgentIdentity ||--o{ AgentRoleIdentity : "can assume"
     AgentPlan {
         uuid id
@@ -418,12 +453,13 @@ erDiagram
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
+    AgentType ||--o{ AgentA2ASessionLink : "participates via runtime instances"
     AgentType ||--o| AgentPlan : "has current plan"
     AgentType ||--o{ AgentInstanceCertificate : "issues"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
-**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+**Source**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
 
 ---
 
@@ -519,12 +555,22 @@ erDiagram
         json tool_output
         int duration_ms
     }
+    AgentA2ASessionLink {
+        uuid id
+        string requester_instance_id
+        string receiver_instance_id
+        string session_link_id
+        enum status
+        datetime created_at
+        datetime disconnected_at
+    }
 
     ConversationSession ||--o{ ConversationTurn : "has"
     ConversationTurn ||--o{ ToolCallRecord : "references"
+    AgentA2ASessionLink ||--o| ConversationSession : "links delegated execution context"
 ```
 
-**Source**: `backend/app/db/models/conversations.py`
+**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/agents.py`
 
 ---
 
@@ -636,7 +682,11 @@ erDiagram
     Sop ||--o{ SopStep : "composed of"
     SopStep }o--o| Skill : "executes"
     SopStep }o--o| AgentType : "delegates to"
+    SopStep ||--o{ SopA2APermission : "derives"
+    Sop ||--o{ SopA2APermission : "grants"
     AgentType }o--|| AgentRole : "governed by"
+    AgentRole ||--o{ AgentRoleAllowedType : "allows"
+    AgentType ||--o{ AgentRoleAllowedType : "listed as"
     AgentRole ||--o{ AgentRoleSOP : "grants access to"
     AgentRoleSOP }o--|| Sop : "references"
     AgentRole ||--o{ AgentRoleSkill : "grants access to"
@@ -645,6 +695,7 @@ erDiagram
     AgentRoleMcpSession }o--|| McpSession : "references"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentType ||--o{ AgentSession : "executes via"
+    AgentA2ASessionLink }o--|| AgentType : "connects requester and receiver types"
     AgentType ||--o{ ResultRecord : "produces"
     ScheduledJob ||--o{ JobExecution : "triggers"
     Role ||--o{ PolicyStatement : "contains"

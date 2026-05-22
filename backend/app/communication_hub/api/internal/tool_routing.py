@@ -27,6 +27,50 @@ settings = get_settings()
 router = APIRouter(prefix="/internal/tools", tags=["Internal - Tool Routing"])
 
 
+def _allow_insecure_internal_fallback() -> bool:
+    """Return True only for explicit development-mode insecure fallback opt-in."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
+    return environment == "development" and opt_in in {"1", "true", "yes", "on"}
+
+
+def _build_control_center_auth(
+    request: Request,
+    cc_base: str,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Build transport kwargs and headers for authenticated CH -> CC calls."""
+    cert_manager = getattr(request.app.state, "certificate_manager", None)
+    client_kwargs: dict[str, Any] = {
+        "timeout": 60.0,
+        "verify": get_ssl_context(),
+    }
+    headers: dict[str, str] = {}
+
+    if cert_manager and cert_manager.cert_path and cert_manager.key_path:
+        if cc_base.startswith("https://"):
+            client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))
+        else:
+            from pathlib import Path
+
+            cert_content = Path(cert_manager.cert_path).read_text()
+            headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+        return client_kwargs, headers
+
+    if _allow_insecure_internal_fallback():
+        logger.warning(
+            "CH tool routing using insecure internal-call fallback because "
+            "ALLOW_INSECURE_INTERNAL_CALL_FALLBACK is enabled in development"
+        )
+        return client_kwargs, headers
+
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Communication Hub service certificate is required for Control Center internal calls"
+        ),
+    )
+
+
 class ToolCallRequest(BaseModel):
     """Request to call a tool via Communication Hub."""
 
@@ -67,10 +111,20 @@ async def route_tool_call(
     Raises:
         HTTPException: 401 if certificate invalid, 403 if permission denied, 502 if tool call fails
     """
+    route_type = "system" if _is_system_tool(body.tool_name) else "mcp"
     logger.info(
-        "Tool call request: tool=%s, session=%s",
+        "Tool call request: tool=%s, session=%s, route_type=%s",
         body.tool_name,
         body.session_id,
+        route_type,
+        extra={
+            "data": {
+                "tool_name": body.tool_name,
+                "session_id": body.session_id,
+                "agent_type_id": body.agent_type_id,
+                "route_type": route_type,
+            }
+        },
     )
 
     # Extract and validate certificate
@@ -83,14 +137,14 @@ async def route_tool_call(
 
     # System tools are identified by the canonical system____ prefix.
     # Also accept legacy bare names for backward compatibility (is_system_tool handles both).
-    if _is_system_tool(body.tool_name):
-        return await _route_to_system_tool(body)
+    if route_type == "system":
+        return await _route_to_system_tool(body, request)
 
     # MCP tools route to Control Center MCP proxy
     return await _route_to_mcp_tool(body, request)
 
 
-async def _route_to_system_tool(body: ToolCallRequest) -> ToolCallResponse:
+async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> ToolCallResponse:
     """Route system tool call to Control Center internal endpoints.
 
     Accepts canonical ``system____*`` names, legacy bare names, and old
@@ -112,7 +166,20 @@ async def _route_to_system_tool(body: ToolCallRequest) -> ToolCallResponse:
         # Fallback for legacy bare names that get_bare_tool_name can't parse
         bare_name = body.tool_name.split("/")[-1] if "/" in body.tool_name else body.tool_name
 
-    logger.info("Routing system tool '%s' (bare: %s) to Control Center", body.tool_name, bare_name)
+    logger.info(
+        "Routing system tool '%s' (bare: %s) to Control Center",
+        body.tool_name,
+        bare_name,
+        extra={
+            "data": {
+                "route_type": "system",
+                "tool_name": body.tool_name,
+                "normalized_tool_name": bare_name,
+                "session_id": body.session_id,
+                "agent_type_id": body.agent_type_id,
+            }
+        },
+    )
 
     # Map bare tool name to Control Center endpoint
     cc_base = settings.control_center_url or "http://localhost:8000"
@@ -126,6 +193,19 @@ async def _route_to_system_tool(body: ToolCallRequest) -> ToolCallResponse:
     if not endpoint:
         logger.error("Unknown system tool: %s (bare: %s)", body.tool_name, bare_name)
         return ToolCallResponse(result={}, error=f"Unknown system tool: {body.tool_name}")
+
+    logger.info(
+        "System tool endpoint resolved: tool=%s endpoint=%s",
+        bare_name,
+        endpoint,
+        extra={
+            "data": {
+                "route_type": "system",
+                "normalized_tool_name": bare_name,
+                "control_center_endpoint": endpoint,
+            }
+        },
+    )
 
     # Validate required args locally so callers get actionable errors without
     # cross-service retries and masked 502 statuses.
@@ -149,26 +229,61 @@ async def _route_to_system_tool(body: ToolCallRequest) -> ToolCallResponse:
     }
 
     try:
-        # TODO: Add mTLS certificate for authentication
-        async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as client:
-            response = await client.post(endpoint, json=payload)
+        cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)
+        async with httpx.AsyncClient(**cc_client_kwargs) as client:
+            response = await client.post(endpoint, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
 
-            logger.info("System tool '%s' completed successfully", body.tool_name)
+            logger.info(
+                "System tool '%s' completed successfully",
+                body.tool_name,
+                extra={
+                    "data": {
+                        "route_type": "system",
+                        "tool_name": body.tool_name,
+                        "normalized_tool_name": bare_name,
+                        "session_id": body.session_id,
+                        "status_code": response.status_code,
+                    }
+                },
+            )
             return ToolCallResponse(result=result)
 
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code
         detail = exc.response.text[:200]
         error_msg = f"Control Center system tool call failed: HTTP {status_code} - {detail}"
-        logger.error("%s", error_msg)
+        logger.error(
+            "%s",
+            error_msg,
+            extra={
+                "data": {
+                    "route_type": "system",
+                    "tool_name": body.tool_name,
+                    "normalized_tool_name": bare_name,
+                    "session_id": body.session_id,
+                    "status_code": status_code,
+                }
+            },
+        )
         if 400 <= status_code < 500:
             return ToolCallResponse(result={}, error=error_msg)
         raise HTTPException(status_code=502, detail=error_msg)
     except Exception as exc:
         error_msg = f"System tool call error: {exc}"
-        logger.exception("System tool call failed for %s", body.tool_name)
+        logger.exception(
+            "System tool call failed for %s",
+            body.tool_name,
+            extra={
+                "data": {
+                    "route_type": "system",
+                    "tool_name": body.tool_name,
+                    "normalized_tool_name": bare_name,
+                    "session_id": body.session_id,
+                }
+            },
+        )
         raise HTTPException(status_code=502, detail=error_msg)
 
 
@@ -189,7 +304,18 @@ async def _route_to_mcp_tool(body: ToolCallRequest, request: Request) -> ToolCal
     Raises:
         HTTPException: If proxy call fails
     """
-    logger.info("Routing MCP tool '%s' to Control Center proxy", body.tool_name)
+    logger.info(
+        "Routing MCP tool '%s' to Control Center proxy",
+        body.tool_name,
+        extra={
+            "data": {
+                "route_type": "mcp",
+                "tool_name": body.tool_name,
+                "session_id": body.session_id,
+                "agent_type_id": body.agent_type_id,
+            }
+        },
+    )
 
     cc_base = settings.control_center_url or "http://localhost:8000"
     proxy_endpoint = f"{cc_base}/api/v1/internal/mcp/proxy-tool"
@@ -202,39 +328,54 @@ async def _route_to_mcp_tool(body: ToolCallRequest, request: Request) -> ToolCal
     }
 
     try:
-        cert_manager = getattr(request.app.state, "certificate_manager", None)
-
-        cc_client_kwargs: dict = {
-            "timeout": 60.0,
-            "verify": get_ssl_context(),
-        }
-        headers: dict[str, str] = {}
-
-        if cert_manager and cert_manager.cert_path and cert_manager.key_path:
-            if cc_base.startswith("https://"):
-                cc_client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))
-                logger.info("Using mTLS certificate for Control Center MCP proxy call")
-            else:
-                from pathlib import Path
-                cert_content = Path(cert_manager.cert_path).read_text()
-                headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
-                logger.info("Using X-Client-Certificate header for Control Center MCP proxy call")
-        else:
-            logger.warning("No certificate manager — Control Center MCP proxy call may fail authentication")
+        cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)
 
         async with httpx.AsyncClient(**cc_client_kwargs) as client:
             response = await client.post(proxy_endpoint, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
 
-        logger.info("MCP tool '%s' completed via Control Center proxy", body.tool_name)
+        logger.info(
+            "MCP tool '%s' completed via Control Center proxy",
+            body.tool_name,
+            extra={
+                "data": {
+                    "route_type": "mcp",
+                    "tool_name": body.tool_name,
+                    "session_id": body.session_id,
+                    "status_code": response.status_code,
+                }
+            },
+        )
         return ToolCallResponse(result=result.get("result", {}))
 
     except httpx.HTTPStatusError as exc:
         error_msg = f"Control Center MCP proxy call failed: HTTP {exc.response.status_code}"
-        logger.error("%s - %s", error_msg, exc.response.text[:200])
+        logger.error(
+            "%s - %s",
+            error_msg,
+            exc.response.text[:200],
+            extra={
+                "data": {
+                    "route_type": "mcp",
+                    "tool_name": body.tool_name,
+                    "session_id": body.session_id,
+                    "status_code": exc.response.status_code,
+                }
+            },
+        )
         raise HTTPException(status_code=502, detail=error_msg)
     except Exception as exc:
         error_msg = f"MCP proxy call error: {exc}"
-        logger.exception("MCP proxy call failed for %s", body.tool_name)
+        logger.exception(
+            "MCP proxy call failed for %s",
+            body.tool_name,
+            extra={
+                "data": {
+                    "route_type": "mcp",
+                    "tool_name": body.tool_name,
+                    "session_id": body.session_id,
+                }
+            },
+        )
         raise HTTPException(status_code=502, detail=error_msg)

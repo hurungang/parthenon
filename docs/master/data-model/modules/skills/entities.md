@@ -38,12 +38,24 @@ erDiagram
         json step_config
         datetime created_at
     }
+    SopA2APermission {
+        uuid id
+        uuid sop_id
+        uuid sop_step_id
+        uuid target_agent_type_id
+        enum derivation_source
+        boolean is_enabled
+        datetime created_at
+    }
 
     Skill ||--o{ SkillToolBinding : "invokes via"
     SkillToolBinding }o--|| McpTool : "calls"
     Sop ||--o{ SopStep : "composed of"
     SopStep }o--o| Skill : "executes"
     SopStep }o--o| AgentType : "delegates to"
+    SopStep ||--o{ SopA2APermission : "derives"
+    Sop ||--o{ SopA2APermission : "grants"
+    AgentType ||--o{ SopA2APermission : "target_is"
 ```
 
 **Source**: `backend/app/db/models/skills.py`
@@ -54,3 +66,4 @@ erDiagram
 | **SkillToolBinding** | Ordered link between a Skill and an MCP tool it invokes; supports multi-tool skills. |
 | **Sop** | A Standard Operating Procedure that composes multiple Skills into an ordered, multi-step workflow; carries human-readable workflow guidance in its instructions field. |
 | **SopStep** | An ordered step within a SOP; represents either a skill invocation (`skill_invocation`) or a delegation request to another agent type (`agent_delegation`); carries step-specific runtime config and a typed reference to the target agent type. |
+| **SopA2APermission** | Derived allow-list entry generated from delegation steps. Captures which target agent type can be invoked from a SOP step and whether the delegation rule is currently enabled. |

@@ -132,9 +132,13 @@ def _system_tool_reads() -> list[McpToolRead]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "recipient_group_id": {
+                    "group_slug": {
                         "type": "string",
-                        "description": "ID of the recipient group to send the notification to",
+                        "description": "Slug of the recipient group to send the notification to",
+                    },
+                    "channel": {
+                        "type": "string",
+                        "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
                     },
                     "subject": {
                         "type": "string",
@@ -145,7 +149,7 @@ def _system_tool_reads() -> list[McpToolRead]:
                         "description": "Notification body content",
                     },
                 },
-                "required": ["recipient_group_id", "subject", "body"],
+                "required": ["group_slug", "body"],
             },
             is_active=True,
             created_at=now,

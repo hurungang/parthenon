@@ -339,6 +339,7 @@ class TestSendNotificationSystemTool:
                 source_type: Any = None,
                 subject: str | None = None,
                 source_id: uuid.UUID | None = None,
+                channel: str | None = None,
             ) -> Any:
                 return await send_mock(
                     group_slug=group_slug,
@@ -346,6 +347,7 @@ class TestSendNotificationSystemTool:
                     subject=subject,
                     source_type=source_type,
                     source_id=source_id,
+                    channel=channel,
                 )
 
         monkeypatch.setattr(notification_module, "NotificationService", FakeNotificationService)
@@ -354,6 +356,7 @@ class TestSendNotificationSystemTool:
             session_id=str(uuid.uuid4()),
             tool_args={
                 "group_slug": "ops-team",
+                "channel": "teams",
                 "subject": "Alert",
                 "body": "Service health degraded",
             },
@@ -363,4 +366,5 @@ class TestSendNotificationSystemTool:
 
         assert resp.result["status"] == "sent"
         assert resp.result["group_slug"] == "ops-team"
+        assert resp.result["channel"] == "teams"
         send_mock.assert_awaited_once()

@@ -21,6 +21,7 @@ Update this table whenever new components are added or new log events are instru
 | **Telemetry System** (`parthenon.telemetry`) | Config file loaded, missing, or parse error; each exporter initialised; signals disabled (no-op provider); exporter runtime failures; telemetry fully initialised (`Telemetry initialised`); frontend config endpoint calls |
 | **MCP Demo App** | Keycloak token grant success/failure at startup; Hub registration success/conflict/failure; tool manifest sync success/failure; incoming `tools/call` JWT validation pass/fail; `helloWorld` invocation completed; JWKS cache refresh; access token refresh |
 | **Certificate Authority (CertificateManager)** | CA initialization success and failure; certificate issued (serial number, expiry); certificate renewed (old serial, new serial, expiry); certificate renewal failure (instance ID, error, attempt count); certificate revoked (serial number, reason, actor); certificate validation outcome (serial, CN, outcome: valid/expired/revoked/invalid) |
+| **Control Center Internal Policy** | Caller normalization and internal allowlist decisions; deny-by-default events (`internal.allowlist.denied`) with reasons such as `unknown_internal_caller` and `endpoint_not_allowlisted` |
 | **All components** | Service startup and shutdown with configuration summary; health check results; unhandled exceptions with full stack trace |
 
 ---
@@ -146,6 +147,15 @@ Use the `trace_id` from any log line to jump directly to the correlated distribu
 | `cert.revoked` | INFO | `serial_number`, `reason`, `revoked_by` | Certificate revoked via API; rejection is effective immediately on all subsequent validation calls |
 | `cert.validation.valid` | DEBUG | `serial_number`, `cn`, `requested_operation`, `validated_by_service` | Certificate validated successfully; logged per validation call |
 | `cert.validation.failed` | WARN | `serial_number`, `cn`, `outcome`, `failure_reason`, `validated_by_service` | Certificate validation rejected; `outcome` is one of `expired`, `revoked`, `invalid_signature`, or `unknown` |
+
+---
+
+## Internal API Boundary Log Events
+
+| Event | Level | Key Fields | When Logged |
+|-------|-------|-----------|-------------|
+| `internal.allowlist.denied` | WARN | `caller_type`, `caller_identity`, `method`, `endpoint`, `deny_reason`, `trace_id` | Internal request denied by caller-specific policy before handler execution |
+| `internal.allowlist.allowed` | INFO | `caller_type`, `method`, `endpoint`, `trace_id` | Internal request allowed after caller-specific allowlist evaluation |
 
 ---
 

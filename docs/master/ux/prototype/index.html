@@ -373,7 +373,6 @@ strong{font-weight:600}
 .topology-container{width: 100%; min-height: 400px; display: flex; align-items: center; justify-content: center; background: #FAFAFA; border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden;}
 
 </style>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -1029,7 +1028,7 @@ strong{font-weight:600}
           <div class="card-header"><h3>Basic Info</h3></div>
           <div class="card-body">
             <div class="form-group">
-              <label>SOP Name</label>
+              <label>Name</label>
               <input class="form-control" id="sop-name-input" placeholder="e.g. pr-review-workflow">
             </div>
             <div class="form-group">
@@ -1037,7 +1036,7 @@ strong{font-weight:600}
               <textarea class="form-control" rows="2" placeholder="Describe what this SOP does..."></textarea>
             </div>
             <div class="form-group" style="margin-bottom:0">
-              <label>Workflow Instruction</label>
+              <label>Instructions</label>
               <textarea class="form-control" rows="4" placeholder="Explain how to execute the SOP using all associated skills... (e.g. 1. Run skill A and map output to B...)"></textarea>
             </div>
           </div>
@@ -1052,7 +1051,7 @@ strong{font-weight:600}
                 <div class="drag-handle" title="Drag to reorder">☰</div>
                 <div class="step-card-num">1</div>
                 <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
-                  <option selected>Skill</option><option>Sub-Agent Delegation</option>
+                  <option selected>Skill Invocation</option><option>Agent Delegation</option>
                 </select>
                 <div style="flex:1"></div>
                 <button class="btn-icon-sm">🗑️</button>
@@ -1064,6 +1063,10 @@ strong{font-weight:600}
                   <option>github-pr-workflow</option><option>slack-notify</option><option>db-report</option>
                 </select>
               </div>
+              <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                <label style="font-size:12px">Name</label>
+                <input class="form-control" value="Collect repository context" style="font-size:13px">
+              </div>
             </div>
             <div class="step-arrow">↓</div>
             <!-- Step 2 -->
@@ -1072,7 +1075,7 @@ strong{font-weight:600}
                 <div class="drag-handle" title="Drag to reorder">☰</div>
                 <div class="step-card-num">2</div>
                 <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
-                  <option selected>Skill</option><option>Sub-Agent Delegation</option>
+                  <option selected>Skill Invocation</option><option>Agent Delegation</option>
                 </select>
                 <div style="flex:1"></div>
                 <button class="btn-icon-sm">🗑️</button>
@@ -1084,6 +1087,10 @@ strong{font-weight:600}
                   <option selected>github-pr-workflow</option><option>slack-notify</option><option>db-report</option>
                 </select>
               </div>
+              <div class="form-group" style="margin-bottom:0;margin-top:8px">
+                <label style="font-size:12px">Name</label>
+                <input class="form-control" value="Analyze pull request" style="font-size:13px">
+              </div>
             </div>
             <div class="step-arrow">↓</div>
             <!-- Step 3 -->
@@ -1092,7 +1099,7 @@ strong{font-weight:600}
                 <div class="drag-handle" title="Drag to reorder">☰</div>
                 <div class="step-card-num">3</div>
                 <select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">
-                  <option>Skill</option><option selected>Sub-Agent Delegation</option>
+                  <option>Skill Invocation</option><option selected>Agent Delegation</option>
                 </select>
                 <div style="flex:1"></div>
                 <button class="btn-icon-sm">🗑️</button>
@@ -1104,6 +1111,10 @@ strong{font-weight:600}
                     <option selected>agent-sop</option><option>agent-skillful</option>
                   </select>
                 </div>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label style="font-size:12px">Name</label>
+                <input class="form-control" value="Delegate PR risk analysis" style="font-size:13px">
               </div>
               <div class="form-group" style="margin-bottom:0">
                 <label style="font-size:12px">Instruction</label>
@@ -1130,6 +1141,9 @@ strong{font-weight:600}
                 <option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
               </select>
             </div>
+            <div class="section-title" style="margin-top:0">Derived Delegations</div>
+            <div class="text-secondary text-sm" style="margin-bottom:8px">Generated from Agent Delegation steps on save.</div>
+            <span class="chip chip-gray">pr-review-workflow -> agent-sop</span>
           </div>
         </div>
       </div>
@@ -1872,13 +1886,22 @@ Returns: { request_id, status }</div>
 <div id="view-agent-roles" class="view">
   <div class="view-header">
     <div><h2>Agent Roles</h2><div class="view-desc">Define personas and operating context for agents</div></div>
-    <button class="btn btn-primary">+ Create Role</button>
+    <button class="btn btn-primary" onclick="openModal('modal-role')">+ Create Role</button>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>Description</th><th>Assigned Types</th><th style="width:120px">Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Description</th><th>Assigned Types</th><th>Allowed Agent Types Preview</th><th style="width:120px">Actions</th></tr></thead>
       <tbody>
-        <tr><td><strong>Developer</strong></td><td>Writes and reviews code</td><td><span class="chip chip-blue">3 types</span></td><td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openModal('modal-assign-sessions')">Assign Sessions</button></td></tr>
+        <tr>
+          <td><strong>Developer</strong></td>
+          <td>Writes and reviews code</td>
+          <td><span class="chip chip-blue">3 types</span></td>
+          <td>
+            <span class="chip chip-gray">agent-sop</span>
+            <span class="chip chip-gray">agent-skillful</span>
+          </td>
+          <td class="actions-cell"><button class="btn btn-xs btn-secondary" onclick="openModal('modal-assign-sessions')">Assign Sessions</button></td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -2166,6 +2189,7 @@ Returns: { request_id, status }</div>
         <div class="form-group">
           <label>Name</label>
           <input class="form-control" placeholder="e.g. my-reviewer">
+          <div class="form-hint">Use lowercase letters, numbers, and hyphens only.</div>
         </div>
         <div class="form-group">
           <label>Type</label>
@@ -2861,7 +2885,7 @@ function addSopStep() {
   step.innerHTML = '<div class="step-card-header">' +
     '<div class="step-card-num">' + sopStepCount + '</div>' +
     '<select class="form-control" style="width:180px;padding:5px 10px;font-size:13px">' +
-    '<option>Skill</option><option>Sub-Agent Delegation</option></select>' +
+    '<option>Skill Invocation</option><option>Agent Delegation</option></select>' +
     '<div style="flex:1"></div>' +
     '<button class="btn-icon-sm" onclick="this.closest(\'.step-card\').previousSibling.remove();this.closest(\'.step-card\').remove();renumberSteps()">🗑️</button>' +
     '</div>' +
@@ -3244,11 +3268,38 @@ function filterToolsByServer(server) {
                 <span class="chip chip-blue chip-border">sop_invocation</span>
                 <span class="plan-item-title">Execute PR Review</span>
               </div>
+              <span class="plan-item-desc">Load SOP context and required steps.</span>
+            </div>
+          </li>
+          <li class="plan-item">
+            <div class="plan-item-num">2.</div>
+            <div class="plan-item-content">
+              <div class="plan-item-header">
+                <span class="chip chip-yellow chip-border">agent_delegation</span>
+                <span class="plan-item-title">Delegate Risk Analysis</span>
+              </div>
+              <span class="plan-item-desc">Target agent type: agent-sop</span>
             </div>
           </li>
         </ul>
         <div class="topology-container">
-          Plan Diagram Placeholder
+          <svg viewBox="0 0 520 260" width="100%" height="260" aria-label="agent topology">
+            <rect x="20" y="26" width="120" height="40" rx="6" fill="#fce4ec" stroke="#d32f2f" stroke-width="1.5"></rect>
+            <text x="80" y="50" text-anchor="middle" font-size="12">pr-reviewer</text>
+
+            <rect x="180" y="26" width="130" height="40" rx="6" fill="#EDE9FE" stroke="#6D28D9" stroke-width="1.5"></rect>
+            <text x="245" y="50" text-anchor="middle" font-size="12">github-pr-workflow</text>
+
+            <rect x="180" y="98" width="130" height="40" rx="6" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.5"></rect>
+            <text x="245" y="122" text-anchor="middle" font-size="12">github-pr-analysis</text>
+
+            <rect x="350" y="98" width="130" height="40" rx="6" fill="#ECEFF1" stroke="#455a64" stroke-width="1.5"></rect>
+            <text x="415" y="122" text-anchor="middle" font-size="12">agent-sop</text>
+
+            <line x1="140" y1="46" x2="180" y2="46" stroke="#64748B" stroke-width="2"></line>
+            <line x1="245" y1="66" x2="245" y2="98" stroke="#64748B" stroke-width="2"></line>
+            <line x1="310" y1="118" x2="350" y2="118" stroke="#64748B" stroke-width="2"></line>
+          </svg>
         </div>
       </div>
       
@@ -3371,42 +3422,43 @@ function filterToolsByServer(server) {
             <span class="plan-item-desc">Use github.read_pr to extract details</span>
           </div>
         </li>
+        <li class="plan-item">
+          <div class="plan-item-num">4.</div>
+          <div class="plan-item-content">
+            <div class="plan-item-header">
+              <span class="chip chip-yellow chip-border">agent_delegation</span>
+              <span class="plan-item-title">Delegate Compliance Check</span>
+            </div>
+            <span class="plan-item-desc">Target agent type: agent-sop</span>
+          </div>
+        </li>
       </ul>
 
       <div class="divider"></div>
 
       <div class="h6">Topology Diagram</div>
       <div class="topology-container">
-        <div class="mermaid">
-flowchart TD
-  Agent[pr-reviewer]
-  
-  subgraph SOPs["Standard Operating Procedures"]
-    SOP1((PR Review Flow))
-  end
+        <svg viewBox="0 0 700 260" width="100%" height="260" aria-label="plan topology">
+          <rect x="20" y="24" width="130" height="40" rx="6" fill="#fce4ec" stroke="#d32f2f" stroke-width="1.5"></rect>
+          <text x="85" y="49" text-anchor="middle" font-size="12">pr-reviewer</text>
 
-  subgraph Skills["Capabilities"]
-    SK1{github-pr-workflow}
-  end
+          <rect x="190" y="24" width="150" height="40" rx="6" fill="#EDE9FE" stroke="#6D28D9" stroke-width="1.5"></rect>
+          <text x="265" y="49" text-anchor="middle" font-size="12">PR Review Flow</text>
 
-  subgraph Tools["MCP Tools"]
-    T1[github.read_pr]
-  end
+          <rect x="190" y="98" width="150" height="40" rx="6" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.5"></rect>
+          <text x="265" y="123" text-anchor="middle" font-size="12">github-pr-workflow</text>
 
-  Agent --> SOP1
-  SOP1 --> SK1
-  SK1 --> T1
-  
-  classDef roleClass fill:#1976D2,stroke:#115293,color:#fff,stroke-width:2px
-  classDef sopClass fill:#EDE9FE,stroke:#6D28D9,color:#4C1D95
-  classDef skillClass fill:#DBEAFE,stroke:#1D4ED8,color:#1E3A8A
-  classDef toolClass fill:#DCFCE7,stroke:#15803D,color:#14532D
-  
-  class Agent roleClass
-  class SOP1 sopClass
-  class SK1 skillClass
-  class T1 toolClass
-        </div>
+          <rect x="380" y="98" width="130" height="40" rx="6" fill="#DCFCE7" stroke="#15803D" stroke-width="1.5"></rect>
+          <text x="445" y="123" text-anchor="middle" font-size="12">github.read_pr</text>
+
+          <rect x="540" y="98" width="130" height="40" rx="6" fill="#ECEFF1" stroke="#455a64" stroke-width="1.5"></rect>
+          <text x="605" y="123" text-anchor="middle" font-size="12">agent-sop</text>
+
+          <line x1="150" y1="44" x2="190" y2="44" stroke="#64748B" stroke-width="2"></line>
+          <line x1="265" y1="64" x2="265" y2="98" stroke="#64748B" stroke-width="2"></line>
+          <line x1="340" y1="118" x2="380" y2="118" stroke="#64748B" stroke-width="2"></line>
+          <line x1="510" y1="118" x2="540" y2="118" stroke="#64748B" stroke-width="2" stroke-dasharray="4 3"></line>
+        </svg>
       </div>
     </div>
     
@@ -3418,23 +3470,9 @@ flowchart TD
 
 
 <script>
-  mermaid.initialize({ 
-    startOnLoad: false, 
-    theme: 'base',
-    securityLevel: 'loose',
-    flowchart: {
-      useMaxWidth: true,
-      htmlLabels: true,
-      curve: 'basis'
-    }
-  });
-
   function openPlanPreview() {
     const modal = document.getElementById('planModal');
     modal.classList.add('open');
-    setTimeout(() => {
-      mermaid.run({ querySelector: '.mermaid' });
-    }, 100);
   }
 
 function openModal(id) { 

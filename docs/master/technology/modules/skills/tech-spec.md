@@ -61,6 +61,7 @@ The skills module defines the execution primitives that agents use to interact w
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `SkillRouter` | router | Skill CRUD + role membership endpoints; eager-loads `tool_bindings`; guarded by `require_permission(RT_SKILL, action)` | `backend/app/api/v1/skills.py` |
+| `skills` | module | Skill and SOP API module surface where SOP-derived A2A permission fields are persisted and exposed | `backend/app/api/v1/skills.py` |
 | `SopRouter` | router | SOP CRUD + step management + role membership endpoints; guarded by `require_permission(RT_SKILL, action)` | `backend/app/api/v1/sops.py` |
 | `list_skills` | endpoint function | Returns all skills with eager-loaded `tool_ids` via `selectinload(Skill.tool_bindings)` | `backend/app/api/v1/skills.py` |
 | `get_skill` | endpoint function | Returns one skill with eager-loaded `tool_ids` | `backend/app/api/v1/skills.py` |
@@ -94,4 +95,4 @@ The skills module defines the execution primitives that agents use to interact w
 | `SkillListPage` | component | Skill list with tool count badges and role chips; hosts `SkillEditor` in-page panel | `frontend/src/pages/skills/SkillListPage.tsx` |
 | `SkillEditor` | component | In-page skill editor: name, description, instructions, MCP Tools multi-select grouped by server, role assignment sidebar | `frontend/src/pages/skills/SkillEditor.tsx` |
 | `SopListPage` | component | SOP list with step count; hosts `SopEditor` in-page panel | `frontend/src/pages/skills/SopListPage.tsx` |
-| `SopEditor` | component | In-page SOP editor: name, description, instructions field, step cards with drag reorder, step type selector | `frontend/src/pages/skills/SopEditor.tsx` |
+| `SopEditor` | component | In-page SOP editor: name, description, instructions field, step cards with drag reorder, and `agent_delegation` step authoring used for derived A2A permission mappings | `frontend/src/pages/skills/SopEditor.tsx` |

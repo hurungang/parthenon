@@ -78,6 +78,10 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Control Center** | `parthenon_cc_api_request_total` (labels: `endpoint`, `status`) | Total API requests to Control Center REST endpoints |
 | **Control Center** | `parthenon_cc_cert_issue_total` (labels: `service`) | Certificates issued to Agent Runtime and Communication Hub; tracks bootstrap and renewal events |
 | **Control Center** | `parthenon_cc_cert_renewal_failures_total` (labels: `service`) | Failed certificate renewal requests; any sustained non-zero rate is critical |
+| **Control Center Internal Policy** | `internal_allowlist_decisions_total` (labels: `caller_type`, `endpoint`, `method`, `decision`) | Shows allowed vs denied internal calls by caller profile |
+| **Control Center Internal Policy** | `internal_allowlist_denied_total` (labels: `caller_type`, `endpoint`, `method`, `reason`) | Primary signal for deny-by-default enforcement and contract drift |
+| **Control Center Internal Policy** | `internal_unknown_caller_denied_total` | Detects missing or malformed caller identity mapping |
+| **Control Center Internal Policy** | `internal_endpoint_not_allowlisted_total` (labels: `caller_type`, `endpoint`) | Detects privilege-overreach attempts and stale client behavior |
 | **Agent Runtime** | `parthenon_ar_session_total` (labels: `status`) | Agent sessions completed per status (`completed`, `failed`, `timeout`) |
 | **Agent Runtime** | `parthenon_ar_tool_call_total` (labels: `server`, `tool`, `status`) | Tool calls forwarded to CommHub by the Agent Runtime executor |
 | **Communication Hub** | `parthenon_ch_tool_routed_total` (labels: `routing` = `system` or `mcp`) | Tool calls routed by NameResolver; tracks system vs MCP routing split |
@@ -179,6 +183,9 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `CertRenewalFailure` | `rate(parthenon_cc_cert_renewal_failures_total) > 0` for 2 min | Critical | AR or CommHub cannot renew cert; service will shut down after expiry |
 | `CommHubNameResolverErrors` | `rate(parthenon_ch_name_resolver_errors_total) > 0` for 5 min | Warning | Agents sending malformed tool names or unknown server IDs; check agent code |
 | `CommHubCertValidationFailures` | `rate(parthenon_ch_cert_validation_failures_total) > 0` for 5 min | Critical | Potential unauthorized tool calls; check for compromised agent certs |
+| `InternalDenySpike` | `rate(internal_allowlist_denied_total) > baseline` for 5 min | Warning | Check recent deployments and allowlist contract drift |
+| `UnknownInternalCallerDetected` | `rate(internal_unknown_caller_denied_total) > 0` for 2 min | Critical | Validate certificate identity propagation and caller normalization |
+| `InternalAllowlistContractDrift` | `rate(internal_endpoint_not_allowlisted_total) > 0` for 2 min | Critical | Verify caller endpoint contract and roll back mismatched deployments if needed |
 
 ### MCP Demo App Alerts
 

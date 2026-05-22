@@ -17,12 +17,17 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.api.deps import require_service_certificate
 from app.db.session import get_db
 from app.db.models.agents import AgentOutputType
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/internal/system-tools", tags=["Internal - System Tools"])
+router = APIRouter(
+    prefix="/internal/system-tools",
+    tags=["Internal - System Tools"],
+    dependencies=[Depends(require_service_certificate)],
+)
 
 
 class SystemToolRequest(BaseModel):
@@ -184,6 +189,7 @@ async def send_notification_tool(
 
     try:
         group_slug = body.tool_args.get("group_slug")
+        channel = body.tool_args.get("channel")
         subject = body.tool_args.get("subject", "")
         message_body = body.tool_args.get("body", "")
 
@@ -201,11 +207,12 @@ async def send_notification_tool(
             group_slug=group_slug,
             subject=subject,
             body=message_body,
+            channel=channel,
         )
 
         logger.info("Notification sent to group %s", group_slug)
         return SystemToolResponse(
-            result={"status": "sent", "group_slug": group_slug}
+            result={"status": "sent", "group_slug": group_slug, "channel": channel}
         )
 
     except HTTPException:

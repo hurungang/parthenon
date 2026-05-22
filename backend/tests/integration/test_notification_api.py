@@ -524,6 +524,43 @@ async def test_api_create_channel_secrets_not_in_response(authed_client: AsyncCl
 
 
 @pytest.mark.asyncio
+async def test_api_create_channel_rejects_non_slug_name(authed_client: AsyncClient):
+    """POST /api/v1/notifications/channels rejects names that are not slug-format."""
+    resp = await authed_client.post(
+        "/api/v1/notifications/channels",
+        json={
+            "name": "Ops Alerts",  # spaces and uppercase are invalid
+            "channel_type": "SMTP",
+            "description": "Invalid slug format",
+            "properties": [],
+        },
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_api_update_channel_rejects_non_slug_name(authed_client: AsyncClient):
+    """PUT /api/v1/notifications/channels/{id} rejects names that are not slug-format."""
+    create_resp = await authed_client.post(
+        "/api/v1/notifications/channels",
+        json={
+            "name": f"valid-channel-{uuid.uuid4().hex[:6]}",
+            "channel_type": "SMTP",
+            "description": None,
+            "properties": [],
+        },
+    )
+    assert create_resp.status_code == 201
+    channel_id = create_resp.json()["id"]
+
+    update_resp = await authed_client.put(
+        f"/api/v1/notifications/channels/{channel_id}",
+        json={"name": "Invalid Name"},
+    )
+    assert update_resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_api_list_channels(authed_client: AsyncClient):
     """GET /api/v1/notifications/channels returns 200 with a list."""
     resp = await authed_client.get("/api/v1/notifications/channels")

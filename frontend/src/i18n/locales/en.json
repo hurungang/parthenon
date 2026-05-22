@@ -641,6 +641,8 @@
       "add": "Add Channel",
       "edit": "Edit Channel",
       "name": "Channel Name",
+      "slugNameHint": "Use lowercase letters, numbers, and hyphens only.",
+      "slugNameValidationError": "Channel name must use lowercase letters, numbers, and hyphens only.",
       "type": "Channel Type",
       "status": "Status",
       "properties": "Properties",

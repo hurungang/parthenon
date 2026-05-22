@@ -81,6 +81,21 @@ flowchart TB
 | **Agent Runtime** | None (all via CC data APIs) | Control Center (trigger) | Control Center (data APIs, result submit), Communication Hub (tool calls) |
 | **Communication Hub** | None (all via CC data APIs) | Web UI (WebSocket), Control Center (dispatch), Agent Runtime (tool calls) | Control Center (data APIs, token resolution), MCP Servers, Notification Channels |
 
+## Control Center Internal API Policy (Service Segregation)
+
+Control Center enforces caller-scoped internal API allowlists with deny-by-default behavior:
+
+- Agent Runtime caller type: `agent_runtime`
+- Communication Hub caller type: `communication_hub`
+- Unknown caller identity or non-allowlisted endpoint: denied before handler execution and logged as a structured deny event
+
+| Caller | Internal API Scope |
+|---|---|
+| Agent Runtime | Runtime data/session endpoints only (agent context, model config, session state, result/log writes, MCP session lookup) |
+| Communication Hub | Authorization/certificate validation, conversation and A2A data endpoints, system-tools endpoints, MCP proxy |
+
+This policy preserves top-priority segregation rules: only Control Center holds direct database access, and execution remains in Agent Runtime.
+
 ## Component Responsibilities
 
 | Component | Responsibility |
@@ -172,6 +187,36 @@ flowchart TB
     AJQ --> DS
     PGS --> DS
     API -.->|user auth| UserRealm
+    CH -.->|agent auth| AgentRealm
+```
+
+## A2A Routing and Dynamic Receiver Lifecycle (Cross-Cutting)
+
+```mermaid
+flowchart LR
+    Req[Requester Agent]
+    Hub[Communication Hub]
+    Perm[Permission Resolver]
+    SOP[SOP A2A Policy]
+    Registry[Agent Registry]
+    Runtime[Agent Runtime]
+    Lifecycle[Receiver Lifecycle Controller]
+    Rec[Receiver Agent]
+    Link[A2A Session Link]
+
+    Req -->|target slug + message| Hub
+    Hub --> Perm
+    Perm --> SOP
+    Hub --> Registry
+    Registry --> Runtime
+    Runtime --> Lifecycle
+    Lifecycle -->|activate or reuse| Rec
+    Hub -->|shared channel| Link
+    Req --> Link
+    Rec --> Link
+    Link -->|disconnect| Lifecycle
+```
+
 ## User Permission Management (Cross-Cutting)
 
 User Permission Management controls human user access to Parthenon features and resources through a tag-based policy model. On every authenticated request, Resource APIs delegate to a centralised Permission Engine that evaluates tag-based policy conditions and returns an allow or deny decision. User registration, group assignment, and role seeding happen automatically at login and startup so that access control is always consistent with the identity state. See [User Permission Management](modules/identity/architecture.md) for the component and flow detail.

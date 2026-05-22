@@ -1059,3 +1059,86 @@ async def test_run_task_loop_ar_save_result_logs_via_execution_helper():
         for call in executor._log_execution_event.await_args_list
     )
 
+
+@pytest.mark.asyncio
+async def test_execute_conversation_turn_from_context_routes_send_notification_via_comm_hub():
+    """Conversation from-context path should dispatch send_notification via shared CH routing."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    executor._permission_manager.get_allowed_tools_from_context = MagicMock(
+        return_value={"send_notification"}
+    )
+    executor._permission_manager.check_tool_allowed = MagicMock()
+    executor._execute_mcp_tool_ar = AsyncMock(return_value={"status": "ok"})
+
+    tool_call = {
+        "id": "call-send-1",
+        "type": "function",
+        "function": {
+            "name": "send_notification",
+            "arguments": json.dumps({"group_slug": "ops", "body": "done"}),
+        },
+    }
+
+    class _DummyCommHubClient:
+        def set_certificate(self, cert_path, key_path):
+            return None
+
+    agent_context = {
+        "model_id": "gpt-4o-mini",
+        "role_id": str(uuid.uuid4()),
+        "allowed_tools": ["system____send_notification"],
+        "tool_definitions": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_notification",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+        "tool_name_map": {},
+        "role_mcp_sessions": {},
+        "sops": [{"id": "sop-1", "name": "notify"}],
+        "skills": [{"id": "skill-1", "name": "send"}],
+    }
+
+    model_config = {"provider_type": "openai"}
+    conv_session_id = uuid.uuid4()
+    agent_type_id = uuid.uuid4()
+    messages = [
+        {"role": "system", "content": "always notify via send_notification"},
+        {"role": "user", "content": "please notify ops"},
+    ]
+
+    with patch(
+        "app.agent_runtime.comm_hub_client.CommHubToolClient",
+        return_value=_DummyCommHubClient(),
+    ), patch(
+        "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
+        new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
+    ), patch(
+        "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
+        side_effect=[[tool_call], []],
+    ), patch(
+        "app.services.agents.model_binding.ModelBindingLayer.extract_text",
+        side_effect=["calling tool", "done"],
+    ):
+        result = await executor.execute_conversation_turn_from_context(
+            agent_type_id=agent_type_id,
+            agent_context=agent_context,
+            model_config=model_config,
+            messages=messages,
+            conv_session_id=conv_session_id,
+        )
+
+    assert result == "done"
+    assert executor._execute_mcp_tool_ar.await_count == 1
+    dispatched_args = executor._execute_mcp_tool_ar.await_args.args
+    assert dispatched_args[0] == "send_notification"
+    assert dispatched_args[1] == {"group_slug": "ops", "body": "done"}
+    assert dispatched_args[2] == {}
+    assert dispatched_args[3] == str(agent_type_id)
+    assert dispatched_args[4] == str(conv_session_id)
+

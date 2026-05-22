@@ -26,6 +26,7 @@ import type { ChannelPropertyWrite, NotificationChannel } from '../../types'
 
 const CHANNEL_TYPES = ['SMTP', 'SENDGRID', 'RESEND', 'TEAMS_WEBHOOK', 'SLACK_WEBHOOK'] as const
 const SECRET_PLACEHOLDER = '••••••••••••••••'
+const CHANNEL_NAME_SLUG_PATTERN = /^[a-z0-9-]+$/
 
 interface PropertyField {
   key: string
@@ -122,6 +123,8 @@ export function ChannelFormDialog({ open, channel, onClose, onSaved }: Props) {
   }, [open, channel])
 
   const fields = PROPERTY_FIELDS[channelType] ?? []
+  const trimmedName = name.trim()
+  const isNameValid = trimmedName.length > 0 && CHANNEL_NAME_SLUG_PATTERN.test(trimmedName)
 
   const handleSave = async () => {
     clearDialogError()
@@ -140,13 +143,13 @@ export function ChannelFormDialog({ open, channel, onClose, onSaved }: Props) {
 
       if (channel) {
         await updateChannel(channel.id, {
-          name,
+          name: trimmedName,
           description: description || null,
           is_active: isActive,
           properties: properties.length > 0 ? properties : undefined,
         })
       } else {
-        await createChannel({ name, channel_type: channelType, description: description || null, properties })
+        await createChannel({ name: trimmedName, channel_type: channelType, description: description || null, properties })
       }
       onSaved()
       onClose()
@@ -190,6 +193,12 @@ export function ChannelFormDialog({ open, channel, onClose, onSaved }: Props) {
             onChange={(e) => setName(e.target.value)}
             required
             fullWidth
+            error={trimmedName.length > 0 && !isNameValid}
+            helperText={
+              trimmedName.length > 0 && !isNameValid
+                ? t('notifications.channels.slugNameValidationError')
+                : t('notifications.channels.slugNameHint')
+            }
           />
           <TextField
             select
@@ -287,7 +296,7 @@ export function ChannelFormDialog({ open, channel, onClose, onSaved }: Props) {
         <Button onClick={() => { onClose(); clearDialogError() }}>
           {t('app.cancel')}
         </Button>
-        <Button variant="contained" onClick={handleSave}>
+        <Button variant="contained" onClick={handleSave} disabled={!isNameValid}>
           {t('app.save')}
         </Button>
       </DialogActions>

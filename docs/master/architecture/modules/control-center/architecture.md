@@ -69,3 +69,20 @@ Records all certificate validations, token refreshes, and permission checks with
 | `GET /agent/metadata` | Agent-instance cert | Return non-sensitive metadata (SOPs, skills, instructions, model configs) — no identity tokens |
 | `POST /internal/certificates/validate` | **Service cert** | Validate an agent-instance certificate; return type and identity |
 | `POST /internal/authorize/tool-call` | **Service cert** | Resolve permissions and return identity token for a tool call |
+
+## Internal API Allowlists and Deny Policy
+
+Control Center enforces caller-specific internal API allowlists via `require_service_certificate` policy checks.
+
+Caller profiles:
+- `agent_runtime`: limited to runtime-essential data/session endpoints only
+- `communication_hub`: limited to hub-essential certificate/authorization, conversation/A2A data, system-tools, and MCP proxy endpoints
+
+Deny-by-default rules:
+- Any internal endpoint not explicitly allowlisted for the caller is denied.
+- Unknown caller identities are denied.
+- Deny decisions are logged as structured events (`internal.allowlist.denied`) with caller type, endpoint, method, and deny reason.
+
+Revocation checks and bootstrap:
+- Revocation endpoint `GET /api/v1/internal/certificates/revoked/{serial_number}` is network-isolated and used by service trust checks.
+- Bootstrap endpoint uses service-specific bootstrap key policy and is outside caller allowlist matching.

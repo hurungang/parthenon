@@ -51,6 +51,7 @@ class NotificationService:
         source_type: SourceType = SourceType.MANUAL,
         subject: str | None = None,
         source_id: uuid.UUID | None = None,
+        channel: str | None = None,
     ) -> GroupSendResult:
         """
         Dispatch a notification to all channels assigned to the given recipient group.
@@ -68,10 +69,31 @@ class NotificationService:
             if not group.is_active:
                 raise ValueError(f"Recipient group '{group_slug}' is inactive")
 
+            selected_mappings = list(group.channel_mappings)
+            if channel:
+                selector = channel.strip().lower()
+                selected_mappings = [
+                    mapping
+                    for mapping in selected_mappings
+                    if self._channel_matches_selector(mapping.channel, selector)
+                ]
+                if not selected_mappings:
+                    available = sorted(
+                        {
+                            mapping.channel.name
+                            for mapping in group.channel_mappings
+                            if getattr(mapping.channel, "name", None)
+                        }
+                    )
+                    raise ValueError(
+                        f"Channel '{channel}' not found in recipient group '{group_slug}'. "
+                        f"Available channels: {available}"
+                    )
+
             log_ids: list[uuid.UUID] = []
             results: list[ChannelDeliveryResult] = []
 
-            for mapping in group.channel_mappings:
+            for mapping in selected_mappings:
                 channel = mapping.channel
                 if not channel.is_active:
                     continue
@@ -124,6 +146,23 @@ class NotificationService:
                 log_ids=log_ids,
                 channel_results=results,
             )
+
+    @staticmethod
+    def _channel_matches_selector(channel: object, selector: str) -> bool:
+        """Match channel selector against id, name, or channel_type."""
+        channel_id = getattr(channel, "id", None)
+        channel_name = getattr(channel, "name", None)
+        channel_type = getattr(channel, "channel_type", None)
+
+        if channel_id is not None and str(channel_id).lower() == selector:
+            return True
+        if isinstance(channel_name, str) and channel_name.lower() == selector:
+            return True
+        if channel_type is not None:
+            channel_type_value = getattr(channel_type, "value", str(channel_type))
+            if str(channel_type_value).lower() == selector:
+                return True
+        return False
 
     async def test_channel(
         self,

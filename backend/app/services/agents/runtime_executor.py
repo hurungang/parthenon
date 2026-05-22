@@ -82,6 +82,79 @@ def _extract_agent_delegation_target(tool_name: str) -> str | None:
     return None
 
 
+def _tool_route_type(tool_name: str) -> str:
+    """Classify a tool into system/agent/mcp for diagnostics."""
+    if is_system_tool(tool_name):
+        return "system"
+    if _extract_agent_delegation_target(tool_name) is not None:
+        return "agent"
+    return "mcp"
+
+
+def _tool_names_from_definitions(tool_definitions: list[dict[str, Any]]) -> list[str]:
+    """Extract tool function names from OpenAI function definitions."""
+    names: list[str] = []
+    for tool_def in tool_definitions:
+        fn = tool_def.get("function") if isinstance(tool_def, dict) else None
+        name = fn.get("name") if isinstance(fn, dict) else None
+        if isinstance(name, str) and name:
+            names.append(name)
+    return names
+
+
+def _canonicalize_tool_name_for_log(
+    tool_name: str,
+    tool_name_map: dict[str, str] | None = None,
+) -> str:
+    """Normalize tool names into canonical ``server____tool`` format for logs."""
+    if not tool_name:
+        return tool_name
+
+    if tool_name_map and tool_name in tool_name_map:
+        return tool_name_map[tool_name]
+
+    if "____" in tool_name:
+        return tool_name
+
+    if tool_name in {"save_result", "send_notification", "get_recipient_group"}:
+        return build_tool_name("system", tool_name)
+
+    if tool_name.startswith("system/"):
+        bare = tool_name[len("system/"):]
+        return build_tool_name("system", bare)
+
+    if tool_name.startswith("system__"):
+        bare = tool_name[len("system__"):]
+        if bare:
+            return build_tool_name("system", bare)
+
+    if tool_name.startswith("system_"):
+        bare = tool_name[len("system_"):]
+        if bare:
+            return build_tool_name("system", bare)
+
+    # OpenAI-sanitized canonical names are represented as ``server__tool``.
+    if "__" in tool_name and "____" not in tool_name:
+        server, bare = tool_name.split("__", 1)
+        if server and bare:
+            return build_tool_name(server, bare)
+
+    return tool_name
+
+
+def _canonicalize_tool_list_for_log(
+    tool_names: list[str] | set[str] | tuple[str, ...],
+    tool_name_map: dict[str, str] | None = None,
+) -> list[str]:
+    """Return sorted distinct canonical tool names for clean diagnostics."""
+    canonical = {
+        _canonicalize_tool_name_for_log(name, tool_name_map)
+        for name in tool_names
+        if isinstance(name, str) and name
+    }
+    return sorted(canonical)
+
+
 def _build_delegation_request_payload(tool_args: dict[str, Any]) -> dict[str, Any]:
     """Build A2A request payload from dynamic agent tool args."""
     request_payload = tool_args.get("request_payload")
@@ -217,6 +290,10 @@ _SEND_NOTIFICATION_TOOL_DEF: dict[str, Any] = {
                 "group_slug": {
                     "type": "string",
                     "description": "Slug of the recipient group to send the notification to.",
+                },
+                "channel": {
+                    "type": "string",
+                    "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
                 },
                 "subject": {
                     "type": "string",
@@ -769,13 +846,14 @@ class AgentRuntimeExecutor:
         allowed_tools = self._permission_manager.get_allowed_tools_from_context(
             context.get("allowed_tools") or []
         )
+        allowed_tool_names = _canonicalize_tool_list_for_log(allowed_tools)
 
         await data_client.log_execution_event(
             session_id=session_id,
             event_type="tools_resolved",
             message=f"Resolved {len(allowed_tools)} allowed tool(s)",
             data={
-                "allowed_tools": sorted(allowed_tools),
+                "allowed_tools": allowed_tool_names,
                 "role_id": context.get("role_id"),
             },
         )
@@ -907,6 +985,37 @@ class AgentRuntimeExecutor:
         elif input_data:
             user_prompt = str(input_data)
 
+        # Snapshot tool and instruction state before first LLM call so we can
+        # diagnose why a system tool was not selected.
+        tool_def_names = _canonicalize_tool_list_for_log(
+            _tool_names_from_definitions(tool_definitions),
+            tool_name_map,
+        )
+        allowed_tool_names = _canonicalize_tool_list_for_log(allowed_tools)
+        route_summary = {
+            "system": sorted([t for t in tool_def_names if _tool_route_type(t) == "system"]),
+            "agent": sorted([t for t in tool_def_names if _tool_route_type(t) == "agent"]),
+            "mcp": sorted([t for t in tool_def_names if _tool_route_type(t) == "mcp"]),
+        }
+        await self._log_execution_event(
+            session_id=session_id,
+            event_type="runtime_context_loaded",
+            message="Runtime context prepared for task execution",
+            data={
+                "tools": tool_def_names,
+                "tool_count": len(tool_def_names),
+                "allowed_tools": allowed_tool_names,
+                "tool_definitions": sorted(tool_def_names),
+                "tool_routes": route_summary,
+                "has_send_notification_tool": build_tool_name("system", "send_notification") in tool_def_names,
+                "system_instruction": system_instruction,
+                "system_instruction_length": len(system_instruction or ""),
+                "user_prompt": user_prompt,
+                "user_prompt_length": len(user_prompt or ""),
+            },
+            data_client=data_client,
+        )
+
         # ── Capture prompt log ────────────────────────────────────────────────
         await data_client.log_prompt(
             session_id=session_id,
@@ -1011,6 +1120,16 @@ class AgentRuntimeExecutor:
                 data={
                     "response_text": (response_text or "")[:500],
                     "has_tool_calls": bool(raw_tool_calls),
+                    "selected_tools": [
+                        _canonicalize_tool_name_for_log(
+                            _restore_tool_name_from_openai(
+                                tc.get("function", {}).get("name", ""),
+                                tool_name_map,
+                            ),
+                            tool_name_map,
+                        )
+                        for tc in (raw_tool_calls or [])
+                    ],
                     "finish_reason": "tool_calls" if raw_tool_calls else "stop",
                 },
                 data_client=data_client,
@@ -1032,9 +1151,13 @@ class AgentRuntimeExecutor:
             role_id_str = context.get("role_id") or ""
             role_id = uuid.UUID(role_id_str) if role_id_str else uuid.uuid4()
 
+            save_requested = False
+            save_output_data: dict[str, Any] | None = None
+
             for tc in raw_tool_calls:
                 sanitized_name = tc.get("function", {}).get("name", "")
                 original_name = _restore_tool_name_from_openai(sanitized_name, tool_name_map)
+                canonical_name = _canonicalize_tool_name_for_log(original_name, tool_name_map)
                 args_raw = tc.get("function", {}).get("arguments", "{}")
                 args: dict[str, Any] = (
                     json.loads(args_raw)
@@ -1059,8 +1182,8 @@ class AgentRuntimeExecutor:
                 await self._log_execution_event(
                     session_id=session_id,
                     event_type="tool_call",
-                    message=f"Tool call: {original_name}",
-                    data={"tool": original_name, "args": args, "call_id": call_id},
+                    message=f"Tool call: {canonical_name}",
+                    data={"tool": canonical_name, "args": args, "call_id": call_id},
                     data_client=data_client,
                 )
 
@@ -1072,6 +1195,8 @@ class AgentRuntimeExecutor:
                     }
                     await data_client.submit_result(session_id, output_data)
                     tool_result = {"status": "saved"}
+                    save_requested = True
+                    save_output_data = output_data
 
                     await self._log_execution_event(
                         session_id=session_id,
@@ -1085,15 +1210,6 @@ class AgentRuntimeExecutor:
                         "content": str(tool_result),
                         "tool_call_id": call_id,
                     })
-                    # save_result signals task completion
-                    await self._log_execution_event(
-                        session_id=session_id,
-                        event_type="task_loop_completed",
-                        message="Task loop completed",
-                        data={"iterations": iteration + 1},
-                        data_client=data_client,
-                    )
-                    return output_data
                 elif original_name in ("send_notification", "get_recipient_group"):
                     # System tools now route through Communication Hub
                     tool_result = await self._execute_mcp_tool_ar(
@@ -1141,6 +1257,18 @@ class AgentRuntimeExecutor:
                     "content": str(tool_result),
                     "tool_call_id": call_id,
                 })
+
+            # save_result signals task completion, but only after all tool calls
+            # from the same model turn have been executed.
+            if save_requested:
+                await self._log_execution_event(
+                    session_id=session_id,
+                    event_type="task_loop_completed",
+                    message="Task loop completed",
+                    data={"iterations": iteration + 1},
+                    data_client=data_client,
+                )
+                return save_output_data or output_data
 
             await self._log_execution_event(
                 session_id=session_id,
@@ -1299,12 +1427,26 @@ class AgentRuntimeExecutor:
             elif role == "assistant":
                 assistant_message_count += 1
 
+        allowed_tool_names = _canonicalize_tool_list_for_log(allowed_tools)
         logger.info(
             "Conversation runtime initialized: session=%s agent=%s role=%s allowed_tools=%s",
             conv_session_id,
             agent_type.id,
             agent_type.role_id,
-            sorted(allowed_tools),
+            allowed_tool_names,
+        )
+        conv_tool_names = _canonicalize_tool_list_for_log(
+            _tool_names_from_definitions(tool_definitions),
+            tool_name_map,
+        )
+        logger.info(
+            "Conversation runtime tools: session=%s total=%d system=%s agent=%s mcp=%s has_send_notification=%s",
+            conv_session_id,
+            len(conv_tool_names),
+            sorted([t for t in conv_tool_names if _tool_route_type(t) == "system"]),
+            sorted([t for t in conv_tool_names if _tool_route_type(t) == "agent"]),
+            sorted([t for t in conv_tool_names if _tool_route_type(t) == "mcp"]),
+            build_tool_name("system", "send_notification") in conv_tool_names,
         )
         logger.info(
             "Conversation prompt captured: session=%s system_instruction_length=%d user_prompt_length=%d",
@@ -1402,34 +1544,13 @@ class AgentRuntimeExecutor:
                             wait_for_response=True,
                             wait_timeout_seconds=45.0,
                         )
-                    elif original_name == "save_result":
-                        tool_result = await self._save_result_for_conversation(
-                            tool_args=args,
-                            agent_type_id=agent_type.id,
-                            conv_session_id=conv_session_id,
-                            db=db,
-                        )
-                    elif original_name == "send_notification":
-                        from app.services.notifications.mcp_tool import handle_send_notification
-                        tool_result = await handle_send_notification(
-                            args=args,
-                            db_session=db,
-                            caller_identity={
-                                "agent_id": str(agent_type.id),
-                                "conversation_session_id": str(conv_session_id),
-                            },
-                        )
-                    elif original_name == "get_recipient_group":
-                        from app.services.notifications.mcp_tool import handle_get_recipient_group
-                        tool_result = await handle_get_recipient_group(
-                            args=args,
-                            db_session=db,
-                            caller_identity={
-                                "agent_id": str(agent_type.id),
-                                "conversation_session_id": str(conv_session_id),
-                            },
-                        )
                     else:
+                        logger.info(
+                            "Conversation tool dispatch: session=%s tool=%s route_type=%s",
+                            conv_session_id,
+                            original_name,
+                            _tool_route_type(original_name),
+                        )
                         tool_result = await self._execute_mcp_tool_ar(
                             original_name,
                             args,
@@ -1490,11 +1611,61 @@ class AgentRuntimeExecutor:
         role_id_raw = agent_context.get("role_id")
         role_id = uuid.UUID(str(role_id_raw)) if role_id_raw else uuid.UUID(int=0)
 
+        system_instruction: str | None = None
+        last_user_prompt: str | None = None
+        user_message_count = 0
+        assistant_message_count = 0
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content")
+            if role == "system" and isinstance(content, str):
+                system_instruction = content
+            elif role == "user" and isinstance(content, str):
+                user_message_count += 1
+                last_user_prompt = content
+            elif role == "assistant":
+                assistant_message_count += 1
+
         from app.agent_runtime.comm_hub_client import CommHubToolClient
 
         comm_hub_client = CommHubToolClient()
         if cert_path and key_path:
             comm_hub_client.set_certificate(cert_path, key_path)
+
+        conv_tool_names = _canonicalize_tool_list_for_log(
+            _tool_names_from_definitions(tool_definitions),
+            tool_name_map,
+        )
+        allowed_tool_names = _canonicalize_tool_list_for_log(allowed_tools)
+        logger.info(
+            "Conversation runtime initialized (from context): session=%s agent=%s role=%s",
+            conv_session_id,
+            agent_type_id,
+            role_id_raw,
+            extra={
+                "data": {
+                    "tools": conv_tool_names,
+                    "tool_count": len(conv_tool_names),
+                    "allowed_tools": allowed_tool_names,
+                    "tool_definitions": sorted(conv_tool_names),
+                    "tool_routes": {
+                        "system": sorted([t for t in conv_tool_names if _tool_route_type(t) == "system"]),
+                        "agent": sorted([t for t in conv_tool_names if _tool_route_type(t) == "agent"]),
+                        "mcp": sorted([t for t in conv_tool_names if _tool_route_type(t) == "mcp"]),
+                    },
+                    "sops": agent_context.get("sops", []),
+                    "skills": agent_context.get("skills", []),
+                    "system_instruction": system_instruction,
+                    "system_instruction_length": len(system_instruction or ""),
+                    "user_prompt": last_user_prompt,
+                    "user_prompt_length": len(last_user_prompt or ""),
+                    "message_count": len(messages),
+                    "user_message_count": user_message_count,
+                    "assistant_message_count": assistant_message_count,
+                    "has_send_notification_tool": build_tool_name("system", "send_notification") in conv_tool_names,
+                }
+            },
+        )
 
         local_messages = list(messages)
         max_iterations = 10
@@ -1509,6 +1680,23 @@ class AgentRuntimeExecutor:
 
             response_text = ModelBindingLayer.extract_text(raw_response, provider_type)
             raw_tool_calls = ModelBindingLayer.extract_tool_calls(raw_response, provider_type)
+
+            logger.info(
+                "Conversation LLM response (from context): session=%s iteration=%d has_tool_calls=%s selected_tools=%s",
+                conv_session_id,
+                iteration + 1,
+                bool(raw_tool_calls),
+                [
+                    _canonicalize_tool_name_for_log(
+                        _restore_tool_name_from_openai(
+                            tc.get("function", {}).get("name", ""),
+                            tool_name_map,
+                        ),
+                        tool_name_map,
+                    )
+                    for tc in (raw_tool_calls or [])
+                ],
+            )
 
             if not raw_tool_calls:
                 return response_text or "I processed your message but received an empty response."
@@ -1540,6 +1728,12 @@ class AgentRuntimeExecutor:
                     )
                 except PermissionDeniedError as exc:
                     tool_result: Any = {"error": f"Permission denied: {exc}"}
+                    logger.warning(
+                        "Conversation tool denied (from context): session=%s tool=%s error=%s",
+                        conv_session_id,
+                        original_name,
+                        exc,
+                    )
                 else:
                     delegated_target_slug = _extract_agent_delegation_target(original_name)
                     if delegated_target_slug is not None:
@@ -1553,6 +1747,12 @@ class AgentRuntimeExecutor:
                             wait_timeout_seconds=45.0,
                         )
                     else:
+                        logger.info(
+                            "Conversation tool dispatch (from context): session=%s tool=%s route_type=%s",
+                            conv_session_id,
+                            original_name,
+                            _tool_route_type(original_name),
+                        )
                         tool_result = await self._execute_mcp_tool_ar(
                             original_name,
                             args,
@@ -1695,7 +1895,7 @@ class AgentRuntimeExecutor:
             event_type="tools_resolved",
             message=f"Resolved {len(allowed_tools)} allowed tool(s)",
             data={
-                "allowed_tools": sorted(allowed_tools),
+                "allowed_tools": _canonicalize_tool_list_for_log(allowed_tools),
                 "role_id": str(agent_type.role_id) if agent_type.role_id else None,
             },
         )

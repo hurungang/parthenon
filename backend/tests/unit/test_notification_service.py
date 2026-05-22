@@ -23,6 +23,7 @@ def _make_channel(channel_type=ChannelType.TEAMS_WEBHOOK, is_active=True):
     ch.id = uuid.uuid4()
     ch.channel_type = channel_type
     ch.is_active = is_active
+    ch.name = f"{channel_type.value}-channel"
     return ch
 
 
@@ -236,6 +237,30 @@ class TestSendToGroup:
 
         assert result.log_ids == []
         assert mock_dispatch.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_channel_selector_dispatches_only_matching_channel(self):
+        """send_to_group(channel=...) dispatches only to matching channel in the group."""
+        teams_ch = _make_channel(channel_type=ChannelType.TEAMS_WEBHOOK, is_active=True)
+        teams_ch.name = "ops-teams"
+        slack_ch = _make_channel(channel_type=ChannelType.SLACK_WEBHOOK, is_active=True)
+        slack_ch.name = "ops-slack"
+        group = _make_group(mappings=[_make_mapping(teams_ch), _make_mapping(slack_ch)])
+
+        svc, mock_repo, _, _ = _make_service_with_mocks(group=group)
+        mock_repo.create_notification_log = AsyncMock(return_value=_make_log())
+
+        from app.services.notifications.providers.base import ChannelDeliveryResult
+
+        with patch.object(
+            svc,
+            "_dispatch",
+            new=AsyncMock(return_value=ChannelDeliveryResult(success=True)),
+        ) as mock_dispatch:
+            result = await svc.send_to_group(group.slug, "body", channel="ops-teams")
+
+        assert mock_dispatch.call_count == 1
+        assert len(result.log_ids) == 1
 
 
 # ── test_channel ──────────────────────────────────────────────────────────────

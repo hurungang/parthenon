@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TIMEOUT = 30.0  # seconds
 
 
+def _allow_insecure_internal_fallback() -> bool:
+    """Return True only for explicit development-mode insecure fallback opt-in."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
+    return environment == "development" and opt_in in {"1", "true", "yes", "on"}
+
+
 class ControlCenterDataError(Exception):
     """Raised when a Control Center data API call fails."""
 
@@ -55,11 +62,29 @@ class ControlCenterDataClient:
 
     def _make_client(self) -> httpx.AsyncClient:
         """Return an mTLS-configured HTTP client using the current service cert."""
+        if self._cert_manager is None:
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "CH data client using insecure HTTP fallback because "
+                    "ALLOW_INSECURE_INTERNAL_CALL_FALLBACK is enabled in development"
+                )
+                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+            raise RuntimeError(
+                "Communication Hub certificate manager is unavailable; "
+                "internal Control Center calls fail closed"
+            )
         try:
             return self._cert_manager.configure_mtls_client()
-        except Exception:
-            logger.warning("CH certificate not loaded; using plain HTTP client (dev only)")
-            return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+        except Exception as exc:
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "CH certificate not loaded; using insecure HTTP fallback in development: %s",
+                    exc,
+                )
+                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+            raise RuntimeError(
+                "Communication Hub service certificate is required for internal calls"
+            ) from exc
 
     def _url(self, path: str) -> str:
         return f"{self._control_center_url}/api/v1{path}"
@@ -138,21 +163,27 @@ class ControlCenterDataClient:
     async def check_revocation_status(self, serial: str) -> bool:
         """Return True if the certificate serial is revoked.
 
-        Calls ``GET /internal/certificates/revocation-status?serial={serial}``.
-        Returns False on any error (fail-open for now; Phase 4 hardens this).
+        Calls ``GET /internal/certificates/revoked/{serial}``.
+        Returns True on error (fail-closed) unless explicit dev-only opt-in enables
+        insecure fallback behavior.
         """
         try:
-            data = await self._get(
-                f"/internal/certificates/revocation-status?serial={serial}"
-            )
+            data = await self._get(f"/internal/certificates/revoked/{serial}")
             return bool(data.get("revoked", False))
         except Exception as exc:
-            logger.warning(
-                "Revocation check for serial %s failed: %s — treating as not revoked",
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "Revocation check for serial %s failed: %s — insecure dev fallback treats as not revoked",
+                    serial,
+                    exc,
+                )
+                return False
+            logger.error(
+                "Revocation check for serial %s failed: %s — fail-closed treats certificate as revoked",
                 serial,
                 exc,
             )
-            return False
+            return True
 
     # ── Auto-naming ───────────────────────────────────────────────────────────
 

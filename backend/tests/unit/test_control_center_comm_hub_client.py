@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from unittest.mock import patch
 
-from app.services.control_center.comm_hub_client import CommunicationHubClient
+from app.services.control_center.comm_hub_client import (
+    CommunicationHubClient,
+    CommunicationHubClientError,
+)
 
 
 def test_make_client_http_uses_client_certificate_header(tmp_path) -> None:
@@ -41,3 +46,19 @@ def test_init_uses_default_cc_cert_paths_when_env_missing() -> None:
 
     assert client._cert_path == "certs/control-center/service-cert.pem"
     assert client._key_path == "certs/control-center/service-key.pem"
+
+
+def test_make_client_without_cert_fails_closed_outside_dev_opt_in() -> None:
+    client = CommunicationHubClient(
+        comm_hub_url="http://localhost:8002",
+        cert_path="does/not/exist/service-cert.pem",
+        key_path="does/not/exist/service-key.pem",
+    )
+
+    with patch.dict(
+        "app.services.control_center.comm_hub_client.os.environ",
+        {"ENVIRONMENT": "test"},
+        clear=True,
+    ):
+        with pytest.raises(CommunicationHubClientError):
+            client._make_client()

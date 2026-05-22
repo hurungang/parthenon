@@ -28,6 +28,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import create_app
 from app.db.session import get_db
 from app.middleware.auth import JWTAuthMiddleware
+from app.api.v1.mcp_hub import SYSTEM_TOOL_SEND_NOTIFICATION_ID
 
 
 def _bypass_auth():
@@ -473,6 +474,38 @@ async def test_get_skill_tool_section_includes_tool_description_and_schema():
     assert "Full-text web search" in iwt
     assert "Input Schema" in iwt
     assert "query" in iwt
+
+
+@pytest.mark.asyncio
+async def test_get_skill_system_tool_reference_uses_canonical_schema_when_db_schema_missing():
+    """GET /skills/{id} uses canonical system schema even if bound DB tool has no input_schema."""
+    skill_id = uuid.uuid4()
+    binding = _make_binding_with_tool(
+        tool_id=SYSTEM_TOOL_SEND_NOTIFICATION_ID,
+        name="system____send_notification",
+        description="DB description that may be incomplete",
+        input_schema=None,
+    )
+    skill = _make_skill(skill_id=skill_id, instructions="Notify operations.")
+    skill.tool_bindings = [binding]
+
+    mock_db, db_dep = _db_with_skill(skill)
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(f"/api/v1/skills/{skill_id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    iwt = body["instructions_with_tools"]
+    assert "system____send_notification" in iwt
+    assert "Input Schema" in iwt
+    assert "group_slug" in iwt
+    assert "channel" in iwt
+    assert "subject" in iwt
+    assert "body" in iwt
 
 
 @pytest.mark.asyncio

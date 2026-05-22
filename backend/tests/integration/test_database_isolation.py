@@ -142,6 +142,30 @@ class TestAgentRuntimeDatabaseIsolation:
         assert "from app.db.session import" not in source
         assert "get_db" not in source
 
+    def test_agent_runtime_has_no_ast_db_or_sqlalchemy_imports(self):
+        """AR modules must not import app.db or SQLAlchemy session APIs."""
+        violations: list[str] = []
+        for path in self._get_ar_files():
+            if path.name.startswith("test_"):
+                continue
+            tree = ast.parse(_read_source(path), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if module.startswith("app.db"):
+                        violations.append(f"{path}: from {module} import ...")
+                    if module.startswith("sqlalchemy"):
+                        for alias in node.names:
+                            if alias.name in {"AsyncSession", "sessionmaker", "async_sessionmaker"}:
+                                violations.append(
+                                    f"{path}: from {module} import {alias.name}"
+                                )
+
+        assert not violations, (
+            "Agent Runtime has forbidden DB/session imports:\n"
+            + "\n".join(f"  {v}" for v in violations)
+        )
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Communication Hub database isolation
@@ -223,6 +247,30 @@ class TestCommunicationHubDatabaseIsolation:
         source = _read_source(main_py)
         assert "from app.db.session import" not in source
         assert "get_db" not in source
+
+    def test_communication_hub_has_no_ast_db_or_sqlalchemy_imports(self):
+        """CH modules must not import app.db or SQLAlchemy session APIs."""
+        violations: list[str] = []
+        for path in self._get_ch_files():
+            if path.name.startswith("test_"):
+                continue
+            tree = ast.parse(_read_source(path), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if module.startswith("app.db"):
+                        violations.append(f"{path}: from {module} import ...")
+                    if module.startswith("sqlalchemy"):
+                        for alias in node.names:
+                            if alias.name in {"AsyncSession", "sessionmaker", "async_sessionmaker"}:
+                                violations.append(
+                                    f"{path}: from {module} import {alias.name}"
+                                )
+
+        assert not violations, (
+            "Communication Hub has forbidden DB/session imports:\n"
+            + "\n".join(f"  {v}" for v in violations)
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

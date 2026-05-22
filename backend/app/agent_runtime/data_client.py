@@ -21,6 +21,13 @@ _DEFAULT_TIMEOUT = 30.0  # seconds
 _RETRY_BASE_DELAY = 1.0
 
 
+def _allow_insecure_internal_fallback() -> bool:
+    """Return True only for explicit development-mode insecure fallback opt-in."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
+    return environment == "development" and opt_in in {"1", "true", "yes", "on"}
+
+
 class ControlCenterDataError(Exception):
     """Raised when a Control Center data API call fails."""
 
@@ -56,15 +63,30 @@ class ControlCenterDataClient:
 
     def _make_client(self) -> httpx.AsyncClient:
         """Return an mTLS-configured HTTP client using the current agent cert."""
+        if self._cert_manager is None:
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "Agent Runtime data client using insecure HTTP fallback because "
+                    "ALLOW_INSECURE_INTERNAL_CALL_FALLBACK is enabled in development"
+                )
+                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+            raise RuntimeError(
+                "Agent Runtime certificate manager is unavailable; "
+                "internal Control Center calls fail closed"
+            )
         try:
             return self._cert_manager.configure_mtls_client()
         except Exception as exc:
-            logger.warning(
-                "Certificate not loaded; using plain HTTP client (dev only). Error: %s",
-                exc,
-                exc_info=True
-            )
-            return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "Certificate not loaded; using insecure HTTP fallback in development: %s",
+                    exc,
+                    exc_info=True,
+                )
+                return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
+            raise RuntimeError(
+                "Agent Runtime service certificate is required for internal calls"
+            ) from exc
 
     def _url(self, path: str) -> str:
         return f"{self._control_center_url}/api/v1/internal/data{path}"
