@@ -149,3 +149,65 @@ The Agent Runtime Loader is an extension to the Agent Runtime Core that loads a 
 
 **Purpose:** The pre-approved plan guides the agent's observe → reason → act loop at runtime, aligning execution with the configuration-time intent expressed when the agent type was saved.
 
+## Control Center Internal API Contract
+
+Agent Runtime calls Control Center using service-certificate identity and is constrained by the `agent_runtime` internal allowlist.
+
+Allowed endpoint groups:
+- Agent context and plan lookup
+- Model config lookup
+- Session read/claim/status/result/log updates
+- MCP session lookup for tool routing
+
+Denied by policy:
+- Communication Hub-only internal endpoints (for example tool-call authorization API)
+- Unknown or non-allowlisted internal endpoints
+
+Agent Runtime has no direct database access; all data operations flow through Control Center internal APIs.
+
+## Dynamic Receiver Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unbound
+    Unbound --> Resolving: A2A target slug received
+    Resolving --> Active: Receiver attached or activated
+    Active --> Active: Message exchange
+    Active --> Disconnecting: Disconnect intent received
+    Disconnecting --> Cleanup: Release session link
+    Cleanup --> Removed: Receiver removed
+    Removed --> [*]
+```
+
+## A2A Cleanup Semantics
+
+```mermaid
+flowchart LR
+    Req[Requester Agent]
+    Hub[Communication Hub]
+    Runtime[Agent Runtime]
+    Link[A2A Session Link]
+    Rec[Receiver Agent]
+    Cleanup[Lifecycle Cleanup]
+
+    Req -->|disconnect| Hub
+    Hub --> Link
+    Link --> Runtime
+    Runtime --> Cleanup
+    Cleanup -->|detach and remove| Rec
+```
+
+## Naming Validation Responsibility
+
+```mermaid
+flowchart LR
+    Hub[Communication Hub]
+    NameVal[Shared Naming Validation]
+    Runtime[Agent Runtime]
+    Lifecycle[Receiver Lifecycle Controller]
+
+    Hub -->|target slug| NameVal
+    NameVal -->|validated slug| Runtime
+    Runtime --> Lifecycle
+```
+

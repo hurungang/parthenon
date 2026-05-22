@@ -55,6 +55,13 @@
 - Changing identity clears role selection
 - Save blocked unless a model is selected
 
+### A2A Communication and Slug Enforcement
+- A2A routing uses target agent type slug and preserves requester/receiver session continuity.
+- Runtime fallback creates dynamic receiver on target miss, then links conversation state for continued turns.
+- Disconnect flow removes dynamic receiver and clears A2A session-link state.
+- A2A allow/deny decision accepts only target slugs derived from SOP `agent_delegation` steps.
+- Slug-only validation rejects non-slug agent type and agent names before/at API validation boundaries.
+
 ### Unified Tool Naming and Routing
 - `parse_tool_name(name)` correctly splits `server____tool` into `(server, tool)` for valid names
 - `build_tool_name(server, tool)` produces canonical `server____tool` string
@@ -101,6 +108,12 @@
 - Passthrough session dispatch: `_load_role_mcp_session_map()` includes passthrough sessions so dispatch does not fail with "no session assigned"
 - Passthrough session dispatch: `_execute_mcp_tool()` detects `auth_type == passthrough`, retrieves agent identity JWT from runtime context, passes it to `proxy.call_tool()` as `agent_jwt`; stored credentials never accessed
 - Passthrough session dispatch: when agent identity token is unavailable at runtime, tool call returns a structured error dict and the agent loop continues without crashing
+
+### A2A Runtime Lifecycle
+- Request with available target slug routes directly and returns in same session.
+- Request with unavailable target slug triggers dynamic receiver creation and link activation.
+- Request with disallowed target slug is denied before runtime provisioning.
+- Disconnect tears down dynamic receiver and removes session-link record.
 
 ### Execution Log Capture
 - `ExecutionLog` record created for every session containing full, untruncated system instruction and user prompt
@@ -256,6 +269,8 @@ This module has `has_db_changes: true`. Before running any tests:
 - `backend/tests/unit/test_model_config_service.py`
 - `backend/tests/unit/test_model_binding.py`
 - `backend/tests/unit/test_permission_manager.py`
+- `backend/tests/unit/test_a2a_core_flow.py`
+- `backend/tests/unit/test_a2a_communication.py`
 - `backend/tests/unit/test_token_refresh_service.py`
 - `backend/tests/unit/test_realm_manager.py`
 - `backend/tests/unit/test_lifecycle_handler.py`
@@ -269,6 +284,7 @@ This module has `has_db_changes: true`. Before running any tests:
 - `backend/tests/integration/test_realm_bootstrap.py`
 - `backend/tests/integration/test_identity_setup_flow.py`
 - `backend/tests/integration/test_communication_hub.py`
+- `backend/tests/integration/test_websocket_communication_hub.py`
 
 ### Backend API Tests
 - `backend/tests/api/test_agents_api.py`
@@ -290,6 +306,8 @@ This module has `has_db_changes: true`. Before running any tests:
 ### E2E Tests
 - `e2e/tests/agent-runtime.spec.ts` — Agent Role Management, Agent Identity Management, Agent Type Configuration, Agent Session Launch, Agent Session Status, Model Config CRUD, Agent Instance Dashboard, Conversation History Display, Agent Role Identity Constraints, Identity-First Role Selection, Real Backend Integration suites
 - `e2e/tests/agent-bootstrap.spec.ts` — Agent Realm Bootstrap (Mocked and Real Keycloak Integration suites)
-- `e2e/tests/communication-hub-auth.spec.ts` — Communication Hub OAuth enforcement
+- `e2e/tests/agent-a2a-communication.spec.ts` — slug validation and delegation preview coverage for A2A-related UI flows
+- `e2e/tests/comm-hub-websocket.spec.ts` — Communication Hub websocket flow coverage
+- `e2e/tests/websocket-communication-hub.spec.ts` — websocket routing and delivery checks
 - `backend/tests/unit/services/test_plan_generation_service.py` — AgentRuntimeLoader plan injection unit tests (loaded via agent-plan-mode change)
 - `backend/tests/integration/api/test_agent_types_plan.py` — plan injection integration coverage

@@ -46,6 +46,10 @@ erDiagram
 
 **Source**: `backend/app/db/models/mcp_hub.py`
 
+**Business rules:**
+- `McpServer.slug` is the canonical namespace for tool routing and must be globally unique.
+- Server display labels can change, but slug remains stable for references and namespaced tool IDs.
+
 | Entity | Description |
 |--------|-------------|
 | **McpServer** | A registered external tool server with a unique slug; its status (active/inactive) is tracked by the platform. |

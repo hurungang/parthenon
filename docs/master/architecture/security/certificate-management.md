@@ -52,3 +52,10 @@ This prevents agent instances from directly accessing identity tokens — even a
 **Renewal:** Agent Runtime automatically renews its certificate at 80% of the 24-hour validity window. If renewal fails, the agent instance shuts down gracefully. Service certificates require manual renewal before the 30-day expiry.
 
 **Revocation:** Administrators revoke certificates via `POST /certificates/revoke` with the certificate serial number. The serial is added to the CRL immediately; subsequent validation attempts return 401.
+
+## Revocation and Boundary Enforcement Notes
+
+- Service-to-service revocation checks use `GET /api/v1/internal/certificates/revoked/{serial_number}`.
+- Internal callers default to fail-closed behavior when revocation status cannot be validated.
+- Development-only insecure fallback is allowed only with explicit opt-in flags and should not be enabled in production.
+- Control Center emits structured deny events for blocked internal calls, including caller identity and deny reason, for security auditability.

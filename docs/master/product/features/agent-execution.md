@@ -1,12 +1,14 @@
 # Agent Execution Flow (Business Overview)
 
 ## Overview
-Agent execution in Parthenon is governed by a secure, auditable, and policy-driven process. Each agent instance is authenticated using a unique certificate, and all identity management is centralized in the Control Center. Agents never receive or store identity tokens. Every tool call is explicitly authorized by the Control Center, ensuring that only valid, non-revoked agent instances can execute protected operations. This approach eliminates credential leakage risk and provides a centralized audit trail for all identity operations.
+Agent execution in Parthenon is governed by a secure, auditable, and policy-driven process with explicit service segregation. Agent Runtime is restricted to approved execution responsibilities, while sensitive identity handling and data-access governance remain centralized in the Control Center. Agents never receive or store identity tokens. Runtime access to internal business operations is controlled through a dedicated allowlist for runtime-essential paths, with deny-by-default behavior for all other internal control paths. This reduces privilege overlap and strengthens boundary assurance.
 
 ## Key Principles
 - Agent runtime instances are authenticated using unique certificates
 - Identity tokens are never distributed to agent runtimes
 - All identity and authorization operations are managed centrally
+- Runtime access is limited to caller-specific, business-essential internal control paths
+- Non-allowlisted internal control paths are denied by default
 - Every tool call is authorized before execution
 - All actions are logged for compliance and audit
 
@@ -27,7 +29,7 @@ The agent runtime does **not** automatically save results at the end of executio
 ## User Impact
 - Security administrators can verify and revoke agent instances
 - Platform operators do not manage or distribute identity tokens
-- Compliance officers have a single audit trail for all agent actions
+- Compliance officers can verify evidence of both permitted and blocked access outcomes
 - SOP authors control when and what results are saved by including explicit save instructions
 - Tool naming is predictable and consistent across all agent interactions
 
@@ -38,4 +40,5 @@ The agent runtime does **not** automatically save results at the end of executio
 ## Dependencies & Constraints
 - Requires Control Center for certificate management and audit logging
 - Relies on OIDC-compliant identity provider
+- Requires approved service-boundary policies and runtime allowlist governance
 - All changes must comply with Parthenon’s security and audit conventions

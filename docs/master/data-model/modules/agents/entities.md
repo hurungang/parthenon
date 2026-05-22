@@ -16,9 +16,16 @@ erDiagram
     AgentRole {
         uuid id
         string name
+        string slug
         string description
         datetime created_at
         datetime updated_at
+    }
+    AgentRoleAllowedType {
+        uuid id
+        uuid agent_role_id
+        uuid allowed_agent_type_id
+        datetime created_at
     }
     AgentRoleIdentity {
         uuid role_id
@@ -45,6 +52,8 @@ erDiagram
     AgentIdentity {
         uuid id
         string name
+        string slug
+        string display_name
         enum identity_type
         string auth_provider
         string realm_name
@@ -61,6 +70,8 @@ erDiagram
     AgentType {
         uuid id
         string name
+        string slug
+        string display_name
         string description
         uuid identity_id
         uuid role_id
@@ -86,6 +97,16 @@ erDiagram
         json conversation_history
         string error_message
         datetime created_at
+    }
+    AgentA2ASessionLink {
+        uuid id
+        string requester_instance_id
+        string receiver_instance_id
+        string session_link_id
+        boolean receiver_is_dynamic
+        enum status
+        datetime created_at
+        datetime disconnected_at
     }
     McpServer {
         uuid id
@@ -115,6 +136,7 @@ erDiagram
     AgentRole ||--o{ AgentRoleSkill : "grants access to"
     AgentRole ||--o{ AgentRoleIdentity : "can be assumed by"
     AgentRole ||--o{ AgentRoleMcpSession : "provides MCP context via"
+    AgentRole ||--o{ AgentRoleAllowedType : "allows"
     AgentIdentity ||--o{ AgentRoleIdentity : "can assume"
     AgentRoleIdentity }o--|| Identity : "assigned by"
     AgentRoleSOP }o--|| Sop : "references"
@@ -164,25 +186,34 @@ erDiagram
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
+    AgentType ||--o{ AgentRoleAllowedType : "listed as"
+    AgentType ||--o{ AgentA2ASessionLink : "participates via runtime instances"
     AgentSession }o--o| Identity : "triggered by"
     AgentType ||--o| AgentPlan : "has current plan"
     AgentType ||--o{ AgentInstanceCertificate : "issues"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
-**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+**Source**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
 
 | Entity | Description |
 |--------|-------------|
 | **ModelConfig** | A named, reusable LLM provider backend configuration. Stores provider type, API endpoint, encrypted credentials, and the explicit list of enabled model IDs. The runtime resolves which config to use by matching a model ID against `enabled_models` on active configs. |
 | **AgentRole** | A named permission set granting an agent access to specific SOPs and/or Skills. Controls which MCP tools are available at runtime and which identities may assume the role. |
+| **AgentRoleAllowedType** | Explicit allow-list mapping between an agent role and target agent types permitted for delegation. Used for A2A policy preview and enforcement checks. |
 | **AgentRoleIdentity** | Many-to-many join table explicitly assigning an AgentIdentity to an AgentRole. An identity can only be used for a role if a record exists here. Tracks when and by whom the assignment was made. |
 | **AgentRoleSOP** | Join table linking an AgentRole to a Sop. Granting an SOP implicitly includes all Skills it depends on and all MCP tools those Skills require. |
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
 | **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role (unique constraint on `role_id + server_id`). |
-| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. |
-| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. |
+| **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
+| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. |
 | **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. |
+| **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
 | **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
 | **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, and any error message. Supports compliance review and debugging of refresh failures. Old entries (> 90 days) may be archived. |
+
+**Business rules:**
+- `AgentType.slug` is the canonical agent routing identifier and must be unique and normalized.
+- Agent identity runtime identifier (name/slug) must be slug-safe for protocol metadata and routing.
+- Role-to-agent-type allow-list mappings are used to preview and enforce delegation boundaries.

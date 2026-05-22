@@ -61,14 +61,20 @@ class ChannelPropertyWrite(BaseModel):
 # ── Notification channel schemas ───────────────────────────────────────────────
 
 class NotificationChannelCreate(BaseModel):
-    name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    name: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"),
+    ]
     channel_type: ChannelType
     description: str | None = None
     properties: list[ChannelPropertyWrite] = []
 
 
 class NotificationChannelUpdate(BaseModel):
-    name: str | None = None
+    name: Annotated[
+        str,
+        StringConstraints(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"),
+    ] | None = None
     description: str | None = None
     is_active: bool | None = None
     properties: list[ChannelPropertyWrite] | None = None

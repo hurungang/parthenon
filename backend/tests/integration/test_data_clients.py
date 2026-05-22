@@ -16,7 +16,7 @@ CH data client tests:
   - get_session: fetches from /internal/data/sessions/{id}
   - get_conversation_history: fetches from /internal/data/sessions/{id}/history
   - get_user_permissions: fetches from /internal/data/users/{id}/permissions
-  - check_revocation_status: fetches from /internal/certificates/revocation-status
+    - check_revocation_status: fetches from /internal/certificates/revoked/{serial}
 """
 from __future__ import annotations
 
@@ -39,9 +39,7 @@ from app.communication_hub.data_client import (
 def _make_ar_client() -> ControlCenterDataClient:
     """Create an AR data client with a mock cert manager."""
     cert_manager = MagicMock()
-    # configure_mtls_client raises CertificateLoadError in real code if not loaded;
-    # our mock returns a plain client so the test doesn't need TLS
-    cert_manager.configure_mtls_client.side_effect = Exception("not loaded")
+    cert_manager.configure_mtls_client.side_effect = lambda: httpx.AsyncClient(timeout=30.0)
     return ControlCenterDataClient(
         cert_manager=cert_manager,
         control_center_url="http://cc.test",
@@ -51,7 +49,7 @@ def _make_ar_client() -> ControlCenterDataClient:
 def _make_ch_client() -> CHDataClient:
     """Create a CH data client with a mock cert manager."""
     cert_manager = MagicMock()
-    cert_manager.configure_mtls_client.side_effect = Exception("not loaded")
+    cert_manager.configure_mtls_client.side_effect = lambda: httpx.AsyncClient(timeout=30.0)
     return CHDataClient(
         cert_manager=cert_manager,
         control_center_url="http://cc.test",
@@ -395,7 +393,7 @@ class TestCHDataClientRevocationStatus:
 
     @pytest.mark.asyncio
     async def test_check_revocation_status_calls_correct_url(self):
-        """check_revocation_status calls /api/v1/internal/certificates/revocation-status."""
+        """check_revocation_status calls /api/v1/internal/certificates/revoked/{serial}."""
         client = _make_ch_client()
         serial = "ABC123"
         revocation_data = {"serial": serial, "revoked": False}
@@ -413,5 +411,22 @@ class TestCHDataClientRevocationStatus:
 
         call_args = mock_instance.get.call_args
         url = call_args[0][0]
-        assert "revocation-status" in url
+        assert "/internal/certificates/revoked/" in url
         assert serial in url
+
+    @pytest.mark.asyncio
+    async def test_check_revocation_status_fail_closed_on_error(self):
+        """Revocation check defaults to fail-closed when Control Center call fails."""
+        client = _make_ch_client()
+        serial = "FAILCLOSED1"
+
+        with patch("httpx.AsyncClient") as mock_class:
+            mock_instance = AsyncMock()
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock(return_value=False)
+            mock_instance.get = AsyncMock(side_effect=RuntimeError("cc unavailable"))
+            mock_class.return_value = mock_instance
+
+            result = await client.check_revocation_status(serial)
+
+        assert result is True

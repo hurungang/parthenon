@@ -84,3 +84,9 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 | `MetadataClient` | class | Fetches agent configuration from Control Center using mTLS-configured HTTP client; enforces zero-token response contract | `backend/app/agent_runtime/metadata_client.py` |
 | `request_metadata` | method | Call `GET /agent/metadata` with client certificate; return parsed agent configuration dict | `backend/app/agent_runtime/metadata_client.py` |
 | `verify_no_identity_tokens` | function | Assert that response body contains no `identity_token` or `access_token` keys; raise `SecurityViolationError` if found | `backend/app/agent_runtime/metadata_client.py` |
+
+### Communication Hub Client (`backend/app/agent_runtime/comm_hub_client.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `CommunicationHubClient` | class | Runtime-side client for Communication Hub coordination paths, including A2A target-slug dispatch payloads and session-link metadata handoff | `backend/app/agent_runtime/comm_hub_client.py` |

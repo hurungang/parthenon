@@ -36,6 +36,7 @@ Available scenarios (from `e2e/tests/`):
 - `agent-logs` — user-friendly agent execution logs (summary, collapsible steps, raw mode toggle)
 - `agent-bootstrap` — agent realm initialization and OAuth-based identity creation
 - `agent-security-segregation` — certificate-based auth, token refresh automation, zero-trust tool authorization
+- `service-segregation-security-audit` — caller-scoped internal API allowlists, deny-by-default enforcement, revocation fail-closed checks
 - `gateway` — gateway / agent types configuration
 - `mcp-hub` — MCP hub management
 - `passthrough-sessions` — passthrough session type with agent identity forwarding

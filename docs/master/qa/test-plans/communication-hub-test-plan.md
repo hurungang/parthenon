@@ -17,6 +17,8 @@
 - Inter-agent message delivery routed via Communication Hub (not direct)
 - SOP delegation: parent agent delivers sub-task to child agent; result relayed back
 - Relay preserves message integrity (no content modification)
+- Target resolution by agent type slug; unavailable target can trigger runtime fallback provisioning path
+- A2A deny path blocks requests when target slug is outside the derived allow-list
 
 ### Session Context Consistency
 - Conversation history appended correctly for each message turn
@@ -86,11 +88,16 @@
 
 ### Backend — Unit Tests
 - `backend/tests/unit/test_communication_hub.py` — message routing, WebSocket delivery, relay logic
+- `backend/tests/unit/test_a2a_communication.py` — A2A message relay and slug-target request path coverage
+- `backend/tests/unit/test_a2a_core_flow.py` — A2A requester/receiver lifecycle baseline behaviors
 
 ### Backend — Integration Tests
 - `backend/tests/integration/test_communication_hub.py` — integration-level routing, session context consistency, concurrent session isolation
 - `backend/tests/integration/test_authorization_flow.py` — full authorization chain exercised through Communication Hub: certificate validation + permission resolution + token provision; `certificate_validation_log` population; denied and authorized outcomes
+- `backend/tests/integration/test_websocket_communication_hub.py` — websocket delivery integration path
 
 ### E2E Tests
 - `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: tool call authorization with certificate, permission denial (403), revocation enforcement; verifies hub correctly routes authorization decisions
 - `e2e/tests/conversations.spec.ts` — message routing and conversation history
+- `e2e/tests/comm-hub-websocket.spec.ts` — communication hub websocket coverage
+- `e2e/tests/websocket-communication-hub.spec.ts` — websocket routing and delivery checks

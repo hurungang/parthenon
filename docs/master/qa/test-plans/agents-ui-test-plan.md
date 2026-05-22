@@ -153,6 +153,28 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
+### 8. A2A Delegation Preview and Slug Validation
+
+**What is tested:**
+- Agent type create/edit form enforces slug-safe names with inline validation feedback
+- Plan preview list includes `agent_delegation` steps from generated plan payload
+- Topology preview renders delegated agent type nodes/edges
+- Agent role edit dialog shows allowed delegated target agent type slugs
+
+**Acceptance criteria:**
+- Non-slug agent type name is rejected before save
+- Plan preview and topology both show delegated agent type when present in plan payload
+- Allowed delegated agent type slug list is visible in role edit dialog
+
+**Test files:**
+- [frontend/src/__tests__/AgentTypeForm.test.tsx](../../../../frontend/src/__tests__/AgentTypeForm.test.tsx) — slug-safe name validation behavior in agent type form
+- [frontend/src/__tests__/TopologyDiagramRenderer.test.tsx](../../../../frontend/src/__tests__/TopologyDiagramRenderer.test.tsx) — delegated node/edge rendering in topology diagram
+- [frontend/src/__tests__/PlanPreviewModal.test.tsx](../../../../frontend/src/__tests__/PlanPreviewModal.test.tsx) — plan step rendering including delegation step types
+- [frontend/src/__tests__/AgentRoleDialog.test.tsx](../../../../frontend/src/__tests__/AgentRoleDialog.test.tsx) — role dialog delegated-target preview rendering
+- [e2e/tests/agent-a2a-communication.spec.ts](../../../../e2e/tests/agent-a2a-communication.spec.ts) — end-to-end UI coverage for slug enforcement and delegation previews
+
+---
+
 ## Manual Testing Requirements
 
 | Scenario | Why Manual |
@@ -185,3 +207,4 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | Change | Description | Added |
 |--------|-------------|-------|
 | unified-agent-navigation | AI Agent nav group; AgentTypeDetailsDialog; Role/Identity columns; Agent Executions filter; view dialogs with Edit mode; legacy redirect | 2026-05-10 |
+| agent-a2a-communication-and-slug-enforcement | Added A2A delegation preview and slug validation coverage (agent type naming, role allowed-target preview, plan/topology delegation rendering) | 2026-05-22 |

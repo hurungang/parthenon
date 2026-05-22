@@ -28,6 +28,13 @@ _DEFAULT_CC_CERT_PATH = "certs/control-center/service-cert.pem"
 _DEFAULT_CC_KEY_PATH = "certs/control-center/service-key.pem"
 
 
+def _allow_insecure_internal_fallback() -> bool:
+    """Return True only for explicit development-mode insecure fallback opt-in."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
+    return environment == "development" and opt_in in {"1", "true", "yes", "on"}
+
+
 class CommunicationHubClientError(Exception):
     """Raised when a Communication Hub HTTP call fails."""
 
@@ -103,11 +110,16 @@ class CommunicationHubClient:
                 verify=False,
             )
 
-        logger.warning(
-            "CC service cert not configured — using plain HTTP for Communication Hub calls "
-            "(set CC_CERT_PATH and CC_KEY_PATH for production mTLS)"
+        if _allow_insecure_internal_fallback():
+            logger.warning(
+                "CC service cert not configured — using insecure development fallback for "
+                "Communication Hub calls"
+            )
+            return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT, verify=False)
+
+        raise CommunicationHubClientError(
+            "Control Center service certificate is required for Communication Hub internal calls"
         )
-        return httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT, verify=False)
 
     async def dispatch_message(
         self,

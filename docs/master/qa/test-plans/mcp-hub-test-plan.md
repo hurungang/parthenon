@@ -5,6 +5,7 @@
 ### MCP Server Management
 - MCP server registration
 - Slug uniqueness enforcement
+- Slug format enforcement (lowercase letters, numbers, hyphens) on MCP server naming fields
 - Tool sync and removal
 - Proxy call routing
 - Permission enforcement on all MCP server endpoints (`mcp_server:read`, `mcp_server:create`, `mcp_server:update`, `mcp_server:delete`)
@@ -59,6 +60,7 @@
 - User without `mcp_server:create` receives 403 on `POST /api/v1/mcp/servers`; snackbar pre-filled with resource type and action
 - 403 on MCP server delete includes resource ID in snackbar context
 - User with correct permissions completes full MCP server CRUD flow
+- MCP server registration with non-slug values is rejected with inline validation and blocked save action
 - Passthrough session created with no credentials → `is_active: true`, no credential data stored, connection test reports success
 - Passthrough session created with credentials → HTTP 422 returned; no session persisted
 - Authenticated user POSTs to tool test endpoint with passthrough session → proxy receives caller's JWT; tool result returned
@@ -100,6 +102,6 @@
 
 ### E2E
 - `e2e/tests/mcp-hub.spec.ts` — full McpSessionManager CRUD flow (mocked), Tool Repository tab with tool grouping and search (mocked), parent table refresh after session operations; `test.describe('Real Backend Integration - MCP Sessions')` — real session creation, verifies `identity_binding`/`credential_config` returned, confirms `encrypted_credentials` absent
-- `e2e/tests/access-control.spec.ts` — `403 on MCP server delete triggers snackbar with resource ID context`
+- `e2e/tests/agent-a2a-communication.spec.ts` — MCP server slug validation coverage (`mcp server registration blocks invalid slug values`)
 - `e2e/tests/permission-errors.spec.ts` — structured 403 error rendering per page
 - `e2e/tests/passthrough-sessions.spec.ts` — mocked suite: admin creates passthrough session via UI, chip displayed, tool test dialog shows identity picker, API contract validated; `test.describe('Real Backend Integration')` suite: backend health check, unauthenticated tool test returns correct status, passthrough+credentials rejected by real backend

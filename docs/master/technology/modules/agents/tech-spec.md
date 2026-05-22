@@ -214,12 +214,14 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `AgentRoleService` | class | Role CRUD; `assign_identities()`, `remove_identity()`, `list_identities()`, `is_identity_assigned()`; MCP session assignment with one-session-per-server enforcement; `get_available_mcp_sessions()` includes `auth_type` in returned session dicts; invalidates permission cache on writes | `backend/app/services/agents/role_service.py` |
 | `AgentIdentityService` | class | Identity CRUD; OAuth authorize URL generation; token exchange and encrypted storage; `refresh_token()`, `get_reauth_url()`; `assign_roles()`, `remove_role()`, `list_roles()` | `backend/app/services/agents/identity_service.py` |
-| `AgentPermissionManager` | class | Resolves `AgentRole → SOPs → Skills → MCP tools`; tool identifiers use `mcp_slug/tool_name`; LRU cache keyed on `role_id`; `invalidate(role_id)` called on role writes | `backend/app/services/agents/permission_manager.py` |
+| `AgentPermissionManager` | class | Resolves `AgentRole → SOPs → Skills → MCP tools`; tool identifiers use `mcp_slug/tool_name`; includes A2A permission evaluation for target agent type slugs derived from SOP `agent_delegation` steps; LRU cache keyed on `role_id`; `invalidate(role_id)` called on role writes | `backend/app/services/agents/permission_manager.py` |
+| `PermissionManager` | class alias | Alias used in change docs for `AgentPermissionManager` A2A permission extension points | `backend/app/services/agents/permission_manager.py` |
 | `RealmManager` | class | Agent realm initialization in OIDC provider; realm-level token policies; registers platform OAuth client | `backend/app/services/identity/realm_manager.py` |
 | `TokenRefreshService` | class | Background proactive token refresh for agent identities approaching expiry; updates `AgentIdentity` with re-encrypted token pair | `backend/app/services/agents/token_refresh_service.py` |
 | `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
 | `SessionDispatcher` | class | Background dispatch worker; `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor` | `backend/app/services/agents/session_dispatcher.py` |
-| `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token | `backend/app/services/agents/runtime_executor.py` |
+| `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; enforces A2A target-agent permission checks and session-link lifecycle handoff metadata during delegation; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token | `backend/app/services/agents/runtime_executor.py` |
+| `RuntimeExecutor` | class alias | Alias used in change docs for `AgentRuntimeExecutor` workflow and session lifecycle orchestration | `backend/app/services/agents/runtime_executor.py` |
 | `_get_agent_identity_jwt` | method | `AgentRuntimeExecutor._get_agent_identity_jwt()`; decrypts the executing agent's identity access token from the credential vault for passthrough sessions; returns error dict if token unavailable | `backend/app/services/agents/runtime_executor.py` |
 | `_load_role_mcp_session_map` | method | `AgentRuntimeExecutor._load_role_mcp_session_map()`; returns `{session_id, auth_type}` per server; used to detect passthrough sessions at execution time | `backend/app/services/agents/runtime_executor.py` |
 | `TaskAgentLoop` | class | LangChain deep agent loop for task-based agents; single result output | `backend/app/services/agents/agent_loop.py` |
@@ -228,6 +230,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `ModelConfigService` | class | CRUD for `ModelConfig`; encrypts/decrypts credentials; `fetch_available_models(config_id)` | `backend/app/services/agents/model_config_service.py` |
 | `AgentInstanceManager` | class | Session handle management; execution logic removed | `backend/app/services/agents/instance_manager.py` |
 | `PlanGenerationService` | class | LLM-based plan generation on agent type save; constructs prompt with agent context; invokes LLM; parses response into structured plan steps; traverses role→SOP→Skill→Tool graph; upserts `AgentPlan`; non-blocking error handling | `backend/app/services/agents/plan_generation_service.py` |
+| `plan_generation_service` | module | Module containing plan generation orchestration and A2A-aware plan semantics surfaced by `PlanGenerationService` | `backend/app/services/agents/plan_generation_service.py` |
 | `TopologyBuilderService` | class | Converts role→SOP→Skill→Tool graph to `nodes`/`edges` topology dict; deterministic node IDs for stable rendering | `backend/app/services/agents/topology_builder_service.py` |
 | `AgentRuntimeLoader` | class | Loads saved plan from `agent_plans` on session init; injects plan into system context for execution guidance; graceful degradation when no plan exists | `backend/app/services/agents/runtime_loader.py` |
 | `SopAgentExecutor` | class | **Superseded** — retained in codebase but not invoked by job-queue flow; execution handled by `AgentRuntimeExecutor` | `backend/app/services/agents/sop_executor.py` |
@@ -247,6 +250,13 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentInstanceRouter` | router | Instance listing and force-termination; unchanged | `backend/app/api/v1/agents.py` |
 | `ModelConfigRouter` | router | Mounts all `/agents/model-configs` endpoints | `backend/app/api/v1/agents.py` |
 
+### Backend Internal APIs (`backend/app/api/v1/internal/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `agent_data` | module | Internal API surface for agent-specific data operations and A2A routing metadata | `backend/app/api/v1/internal/agent_data.py` |
+| `session_data` | module | Internal API surface for session-bound state and lifecycle transitions used by A2A flows | `backend/app/api/v1/internal/session_data.py` |
+
 ### Alembic Migrations
 
 | Symbol | Type | Description | File |
@@ -258,7 +268,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `AgentRoleListPage` | component | Table view; Name, SOP count chip, Skill count chip, Edit/Delete actions | `frontend/src/pages/agents/AgentRoleListPage.tsx` |
-| `AgentRoleDialog` | component | Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); assigned identities and MCP sessions with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
+| `AgentRoleDialog` | component | Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); includes allowed target agent type slug preview derived from SOP `agent_delegation` policy mappings; assigned identities and MCP sessions with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
 | `AssignIdentitiesToRoleDialog` | component | Multi-select dialog to bulk-assign identities to a role | `frontend/src/pages/agents/AssignIdentitiesToRoleDialog.tsx` |
 | `AssignMcpSessionsToRoleDialog` | component | Multi-select dialog to assign MCP sessions to a role; filtered by servers whose tools the role uses; Passthrough chip shown for passthrough sessions; passthrough sessions may coexist with other sessions per server (no one-session-per-server enforcement for passthrough) | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` |
 | `AgentIdentityListPage` | component | Table view; realm_name, realm_username, token status chip, identity status chip; Refresh Token and Re-Authenticate per row | `frontend/src/pages/agents/AgentIdentityListPage.tsx` |
@@ -306,6 +316,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `test_agent_runtime_executor` | test module | Unit tests for `AgentRuntimeExecutor`; 2 passthrough tests: proxy called with `agent_jwt`, error returned when no JWT available | `backend/tests/unit/test_agent_runtime_executor.py` |
+| `test_permission_manager` | test module | Unit tests for permission resolution and allow/deny behavior, including A2A delegation permission checks | `backend/tests/unit/test_permission_manager.py` |
 | `AssignMcpSessionsToRoleDialog.test` | test module | Component tests for `AssignMcpSessionsToRoleDialog`; 2 passthrough tests: Passthrough chip shown for passthrough session, chip absent for regular sessions | `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` |
 
 ### Frontend Components (`frontend/src/components/agents/`)
@@ -315,11 +326,11 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentTypeDetailsDialog` | component | Three-tab dialog (Details, Plan Preview, Execution Logs) for an agent type; fetches via `useAgentType(id)`; Details tab has clickable role/identity names opening `AgentRoleViewDialog`/`AgentIdentityViewDialog`; Execution Logs tab shows last 10 sessions with "View" opening `AgentExecutionDetailsDialog`; "Run Agent" opens `AgentJobLaunchDialog`; follows Dialog Error Handling Standard | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
 | `AgentExecutionsDialog` | component | Dialog wrapper for `AgentInstanceDashboardPage`; allows viewing the full execution list in dialog context without navigating away; pre-filtered by `agentTypeId` | `frontend/src/components/agents/AgentExecutionsDialog.tsx` |
 | `AgentExecutionDetailsDialog` | component | Dialog wrapper for `AgentJobPage`; shows full session details and logs in dialog context; opened from the Execution Logs tab View button or post-launch | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
-| `AgentPlanContent` | component | Presentational component for plan steps and topology diagram; extracted from `PlanPreviewModal`; receives `plan: AgentPlan \| null \| undefined`; reused by both `PlanPreviewModal` and the Plan Preview tab of `AgentTypeDetailsDialog` | `frontend/src/components/agents/AgentPlanContent.tsx` |
+| `AgentPlanContent` | component | Presentational component for plan steps and topology diagram; includes `agent_delegation` step rendering in ordered plan previews; extracted from `PlanPreviewModal`; receives `plan: AgentPlan \| null \| undefined`; reused by both `PlanPreviewModal` and the Plan Preview tab of `AgentTypeDetailsDialog` | `frontend/src/components/agents/AgentPlanContent.tsx` |
 | `AgentRoleViewDialog` | component | Read-only view dialog for a single agent role; two-column detail grid; Edit and Close actions; opened from clickable role name in `AgentTypeDetailsDialog` Details tab | `frontend/src/components/agents/AgentRoleViewDialog.tsx` |
 | `AgentIdentityViewDialog` | component | Read-only view dialog for a single agent identity; two-column detail grid; Edit and Close actions; opened from clickable identity name in `AgentTypeDetailsDialog` Details tab | `frontend/src/components/agents/AgentIdentityViewDialog.tsx` |
 | `PlanPreviewModal` | component | MUI Dialog displaying plan steps as an ordered list with step-type chips and topology diagram after agent type save; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard; plan content rendered via `AgentPlanContent` | `frontend/src/components/agents/PlanPreviewModal.tsx` |
-| `TopologyDiagramRenderer` | component | Renders node-edge topology payload as a visual diagram; distinguishes node types (role, sop, skill, tool) by colour/icon; handles empty state | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
+| `TopologyDiagramRenderer` | component | Renders node-edge topology payload as a visual diagram; includes delegation nodes/edges for A2A plan preview; distinguishes node types (role, sop, skill, tool) by colour/icon; handles empty state | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
 
 ### Frontend Components (`frontend/src/components/logs/`)
 

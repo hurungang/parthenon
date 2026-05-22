@@ -58,9 +58,29 @@ Stop-Process -Id $pid -Force
 
 **Skip if: `--frontend` only, or docker containers already running.**
 
-Check if docker is available:
+Check if docker engine is available:
 ```powershell
-docker info 2>&1 | Select-String "Server Version"
+$dockerInfo = docker info 2>$null
+$dockerReady = $LASTEXITCODE -eq 0
+
+if (-not $dockerReady) {
+    Write-Host "Docker engine is not ready. Attempting to start Docker Desktop..."
+    Start-Process -FilePath "C:\Program Files\Docker\Docker\Docker Desktop.exe" -ErrorAction SilentlyContinue
+
+    $maxWait = 120
+    $waited = 0
+    while (-not $dockerReady -and $waited -lt $maxWait) {
+        Start-Sleep -Seconds 5
+        $waited += 5
+        $dockerInfo = docker info 2>$null
+        $dockerReady = $LASTEXITCODE -eq 0
+    }
+}
+
+if (-not $dockerReady) {
+    Write-Host "❌ Docker engine is not available. Cannot start infrastructure containers."
+    return
+}
 ```
 
 Start infra containers (including Keycloak):

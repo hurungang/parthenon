@@ -75,11 +75,15 @@ def _get_system_tool_record(tool_id: uuid.UUID) -> _ToolRecord | None:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "recipient_group_id": {"type": "string", "description": "ID of the recipient group to send the notification to"},
+                    "group_slug": {"type": "string", "description": "Slug of the recipient group to send the notification to"},
+                    "channel": {
+                        "type": "string",
+                        "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
+                    },
                     "subject": {"type": "string", "description": "Notification subject / title"},
                     "body": {"type": "string", "description": "Notification body content"},
                 },
-                "required": ["recipient_group_id", "subject", "body"],
+                "required": ["group_slug", "body"],
             },
         )
     elif tool_id == SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID:
@@ -137,7 +141,12 @@ def _build_skill_read(skill: Skill) -> SkillRead:
     """Construct a SkillRead response with computed instructions_with_tools."""
     tool_records: list[_ToolRecord] = []
     for binding in sorted(skill.tool_bindings, key=lambda b: b.order):
-        if binding.tool is not None:
+        # Prefer canonical system tool definitions so generated references always
+        # include full schemas, even if DB-seeded rows have partial metadata.
+        system_tool = _get_system_tool_record(binding.tool_id)
+        if system_tool:
+            tool_records.append(system_tool)
+        elif binding.tool is not None:
             # Regular MCP tool from database
             tool_records.append(
                 _ToolRecord(
@@ -150,11 +159,6 @@ def _build_skill_read(skill: Skill) -> SkillRead:
                     input_schema=binding.tool.input_schema,
                 )
             )
-        else:
-            # Check if it's a system tool (virtual)
-            system_tool = _get_system_tool_record(binding.tool_id)
-            if system_tool:
-                tool_records.append(system_tool)
     tool_section = assemble_tool_section(tool_records)
     if tool_section:
         instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section
@@ -170,7 +174,12 @@ def _build_skill_detail_read(skill: Skill) -> SkillDetailRead:
     """Construct a SkillDetailRead response with computed instructions_with_tools."""
     tool_records: list[_ToolRecord] = []
     for binding in sorted(skill.tool_bindings, key=lambda b: b.order):
-        if binding.tool is not None:
+        # Prefer canonical system tool definitions so generated references always
+        # include full schemas, even if DB-seeded rows have partial metadata.
+        system_tool = _get_system_tool_record(binding.tool_id)
+        if system_tool:
+            tool_records.append(system_tool)
+        elif binding.tool is not None:
             # Regular MCP tool from database
             tool_records.append(
                 _ToolRecord(
@@ -183,11 +192,6 @@ def _build_skill_detail_read(skill: Skill) -> SkillDetailRead:
                     input_schema=binding.tool.input_schema,
                 )
             )
-        else:
-            # Check if it's a system tool (virtual)
-            system_tool = _get_system_tool_record(binding.tool_id)
-            if system_tool:
-                tool_records.append(system_tool)
     tool_section = assemble_tool_section(tool_records)
     if tool_section:
         instructions_with_tools = (skill.instructions or "") + "\n\n" + tool_section

@@ -40,7 +40,6 @@
 - Access Request Flow > access requests tab renders
 - Theme Application > Inter font is applied globally
 - Component Theming > Cards have 12px border radius
-- Page Consistency > Dashboard uses theme consistently
 - Accessibility > Color contrast meets WCAG AA standards
 - Group-Optional Access Request Flow > user with no groups sees informational alert in request dialog and can submit with justification only
 - Group-Optional Access Request Flow > admin can assign a group and approve a group-less request
@@ -93,7 +92,6 @@
 - Agent Executions page > selecting agent type filter refetches sessions
 - Agent Type Details Dialog > dialog Details tab shows agent metadata
 - Agent Type Details Dialog > Plan Preview tab shows plan steps when plan is populated
-- Agent Type Details Dialog > "View All Executions" button opens executions dialog
 - Nav menu order > Agent Roles and Agent Identities appear above Agent Types in the nav
 - Agent Types table columns > Role column shows resolved role name for agent type
 - Agent Types table columns > Identity column shows resolved identity name for agent type

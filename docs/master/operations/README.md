@@ -60,3 +60,4 @@ The following endpoints must be included in production readiness checklists and 
 | [telemetry.md](runbooks/telemetry.md) | Telemetry init failure at startup; no spans in Jaeger; frontend OTEL not initialising; file exporter disk pressure; Logfire or custom exporter credential errors; log level not applying |
 | [agent-runtime.md](runbooks/agent-runtime.md) | Resolving stuck sessions, permission failures, OAuth expiry, timeouts, and queue backlogs in the Agent Runtime with LangGraph |
 | [certificate-security.md](runbooks/certificate-security.md) | CA initialization failures, certificate expiry and renewal failures, certificate compromise response, agent identity token refresh failures, and token leakage investigation |
+| [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) | Internal API deny spikes, unknown caller denials, certificate mismatch denials, allowlist contract drift, and revocation check failures |

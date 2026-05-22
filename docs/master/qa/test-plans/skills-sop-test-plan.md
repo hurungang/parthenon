@@ -32,6 +32,7 @@
 - Default `step_type` is `skill_invocation` when not provided
 - `GET /sops/{sop_id}/roles` and `PUT /sops/{sop_id}/roles` behave symmetrically to skill role endpoints
 - Agent delegation and context passing
+- Allowed A2A target agent type slugs are derived from `agent_delegation` steps on SOP save/update
 - Permission enforcement on SOP endpoints
 
 ### SOPs — Frontend (SopEditor)
@@ -50,6 +51,8 @@
 ## Critical Scenarios
 - Skill composes two tool calls
 - SOP step delegates to a second agent type
+- SOP with delegation steps produces derived allowed target slug set used by A2A permission checks
+- SOP without delegation for a target slug denies A2A request to that slug
 - `instructions` provided in skill form — `GET /skills/{id}` returns exact text
 - `instructions` omitted — accepted (column is nullable), returns `null`
 - `PUT /skills/{id}/roles` with new list — all previous memberships replaced, none remaining
@@ -80,16 +83,18 @@
 ### Backend
 - `backend/tests/unit/test_skill_executor.py` — skill execution logic, multi-tool composition
 - `backend/tests/unit/test_skill_sop.py` — SOP step sequencing, agent delegation
+- `backend/tests/unit/test_permission_manager.py` — delegation-step-derived allowed agent type slug resolution
 - `backend/tests/api/v1/test_skills_api.py` — `POST/PUT /skills` with `instructions` field, `GET /skills/{id}` returns `instructions`, `GET /skills` includes `tool_ids`, `GET/PUT /skills/{id}/roles`
 - `backend/tests/api/v1/test_sops_api.py` — `POST/PUT /sops` with `instructions`, `PUT /sops/{id}/steps` with `target_agent_type_id`/`step_config`/default step type, `GET/PUT /sops/{id}/roles`
 - `backend/tests/integration/test_enhance_mcp_hub_skills_sops_db.py` — `skill_invocation` enum validity, legacy `skill` enum rejection, nullable field acceptance (`instructions`, `target_agent_type_id`), atomic role replacement correctness, `Skill.instructions` field persistence
 
 ### Frontend
 - `frontend/src/__tests__/SkillEditor.test.tsx` — instructions field, tool selection with namespace prefix, role sidebar, form submission *(skipped — mocking infrastructure issue)*
-- `frontend/src/__tests__/SkillEditor.simple.test.tsx` — core rendering assertions (workaround)
+- `frontend/src/__tests__/SkillEditor.minimal.test.tsx` — core rendering assertions (workaround)
 - `frontend/src/__tests__/SopEditor.test.tsx` — instructions field, step add/reorder/remove, step type selector, `target_agent_type_id` in submission, role assignment *(skipped — mocking infrastructure issue)*
 - `frontend/src/__tests__/SopEditor.simple.test.tsx` — core rendering assertions (workaround)
 
 ### E2E
 - `e2e/tests/skills-sops.spec.ts` — SkillEditor with tool binding and role assignment (mocked), SopEditor with instructions and steps (mocked), parent table refresh for both, `target_agent_type_id` round-trip; `test.describe('Real Backend Integration - Skills and SOPs')` — real skill creation with tool bindings (verifies `tool_ids`), real SOP creation with `instructions` and steps using `target_agent_type_id`
+- `e2e/tests/agent-a2a-communication.spec.ts` — delegation-focused UI coverage tied to SOP-derived A2A permissions
 - `e2e/tests/permission-errors.spec.ts` — structured 403 error rendering per page

@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parthenon - Enterprise AI Harness Framework</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-base: #0b0f1e;
+        --bg-section: #0f1526;
+        --bg-card: #161d35;
+        --bg-card-hover: #1c2540;
+        --bg-nav: rgba(11, 15, 30, 0.92);
+        --accent: #7c5cfc;
+        --accent-light: #a285fd;
+        --accent-glow: rgba(124, 92, 252, 0.25);
+        --indigo: #4f46e5;
+        --indigo-light: #818cf8;
+        --text-primary: #f0f2ff;
+        --text-secondary: #9ea8c9;
+        --text-muted: #5c6b8a;
+        --border: rgba(124, 92, 252, 0.18);
+        --border-subtle: rgba(255, 255, 255, 0.06);
+        --radius-sm: 6px;
+        --radius-md: 12px;
+        --radius-lg: 20px;
+        --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+        --shadow-glow: 0 0 32px var(--accent-glow);
+        --max-w: 1100px;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background: var(--bg-base);
+        color: var(--text-primary);
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      a {
+        color: var(--accent-light);
+        text-decoration: none;
+      }
+
+      a:hover {
+        color: var(--text-primary);
+      }
+
+      code,
+      .mono {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.85em;
+      }
+
+      .container {
+        max-width: var(--max-w);
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+
+      .section {
+        padding: 96px 0;
+      }
+
+      .section--alt {
+        background: var(--bg-section);
+      }
+
+      .section-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent-light);
+        margin-bottom: 0.75rem;
+      }
+
+      .section-title {
+        font-size: clamp(1.75rem, 4vw, 2.5rem);
+        font-weight: 800;
+        line-height: 1.2;
+        color: var(--text-primary);
+        margin-bottom: 1rem;
+      }
+
+      .section-subtitle {
+        font-size: 1.05rem;
+        color: var(--text-secondary);
+        max-width: 640px;
+        margin-bottom: 3rem;
+      }
+
+      .fade-up {
+        opacity: 0;
+        transform: translateY(28px);
+        transition: opacity 0.55s ease, transform 0.55s ease;
+      }
+
+      .fade-up.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 999;
+        background: var(--bg-nav);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .nav-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 60px;
+        max-width: var(--max-w);
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+
+      .nav-logo {
+        font-weight: 800;
+        font-size: 1.15rem;
+        letter-spacing: -0.02em;
+        background: linear-gradient(90deg, var(--accent-light), var(--indigo-light));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        white-space: nowrap;
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 0.25rem;
+        list-style: none;
+      }
+
+      .nav-links a {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        padding: 0.35rem 0.75rem;
+        border-radius: var(--radius-sm);
+        transition: color 0.2s, background 0.2s;
+      }
+
+      .nav-links a:hover {
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      @media (max-width: 760px) {
+        .nav-links {
+          display: none;
+        }
+      }
+
+      #hero {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        padding-top: 60px;
+        background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124, 92, 252, 0.15) 0%, transparent 70%),
+          var(--bg-base);
+      }
+
+      .hero-inner {
+        text-align: center;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(124, 92, 252, 0.12);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        padding: 0.3rem 1rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--accent-light);
+        margin-bottom: 2rem;
+      }
+
+      .hero-badge::before {
+        content: '';
+        display: block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent-light);
+        box-shadow: 0 0 8px var(--accent-light);
+      }
+
+      .hero-title {
+        font-size: clamp(2.8rem, 8vw, 5.5rem);
+        font-weight: 800;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+      }
+
+      .hero-title span {
+        background: linear-gradient(135deg, var(--accent-light) 0%, var(--indigo-light) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .hero-tagline {
+        font-size: clamp(0.95rem, 2.5vw, 1.25rem);
+        font-weight: 500;
+        color: var(--accent-light);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 1.75rem;
+      }
+
+      .hero-desc {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        max-width: 600px;
+        margin: 0 auto 2.5rem;
+        line-height: 1.7;
+      }
+
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.95rem;
+        padding: 0.8rem 2rem;
+        border-radius: var(--radius-sm);
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+        box-shadow: 0 4px 20px rgba(124, 92, 252, 0.4);
+      }
+
+      .btn-primary:hover {
+        background: var(--accent-light);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 28px rgba(124, 92, 252, 0.55);
+        color: #fff;
+      }
+
+      .hero-services {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 4rem;
+        flex-wrap: wrap;
+      }
+
+      .service-pill {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 0.65rem 1.25rem;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .service-pill .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .dot-cc {
+        background: #34d399;
+        box-shadow: 0 0 6px #34d399;
+      }
+
+      .dot-ch {
+        background: #60a5fa;
+        box-shadow: 0 0 6px #60a5fa;
+      }
+
+      .dot-ar {
+        background: #f59e0b;
+        box-shadow: 0 0 6px #f59e0b;
+      }
+
+      .cards-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
+
+      @media (max-width: 680px) {
+        .cards-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .arch-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 2rem;
+        transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+      }
+
+      .arch-card:hover {
+        border-color: var(--border);
+        box-shadow: var(--shadow-card), var(--shadow-glow);
+        transform: translateY(-3px);
+      }
+
+      .card-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        display: block;
+      }
+
+      .card-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+      }
+
+      .card-bullets {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+
+      .card-bullets li {
+        font-size: 0.88rem;
+        color: var(--text-secondary);
+        padding-left: 1.1rem;
+        position: relative;
+      }
+
+      .card-bullets li::before {
+        content: '>';
+        position: absolute;
+        left: 0;
+        color: var(--accent-light);
+        font-weight: 700;
+      }
+
+      .diagram-wrap {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 3rem 2rem;
+        overflow-x: auto;
+      }
+
+      .diagram-wrap .mermaid {
+        display: flex;
+        justify-content: center;
+      }
+
+      .mermaid svg {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .security-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+      }
+
+      @media (max-width: 760px) {
+        .security-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .sec-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 2rem;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.25s, box-shadow 0.25s;
+      }
+
+      .sec-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--accent), var(--indigo-light));
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+      }
+
+      .sec-card:hover {
+        border-color: var(--border);
+        box-shadow: var(--shadow-card);
+      }
+
+      .sec-icon {
+        font-size: 2.25rem;
+        margin-bottom: 1rem;
+        display: block;
+      }
+
+      .sec-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+      }
+
+      .sec-desc {
+        font-size: 0.88rem;
+        color: var(--text-secondary);
+        line-height: 1.65;
+      }
+
+      .sec-tag {
+        display: inline-block;
+        margin-top: 1rem;
+        background: rgba(124, 92, 252, 0.12);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        padding: 0.2rem 0.75rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--accent-light);
+        font-family: 'Fira Code', monospace;
+      }
+
+      .tab-pills {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 2rem;
+      }
+
+      .tab-pill {
+        padding: 0.5rem 1.1rem;
+        border-radius: 100px;
+        border: 1px solid var(--border-subtle);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: 'Inter', sans-serif;
+      }
+
+      .tab-pill:hover {
+        border-color: var(--border);
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .tab-pill.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+        box-shadow: 0 2px 12px rgba(124, 92, 252, 0.4);
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      .demo-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2.5rem;
+        align-items: start;
+      }
+
+      @media (max-width: 760px) {
+        .demo-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .demo-steps {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      .demo-step {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+
+      .step-num {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--indigo));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(124, 92, 252, 0.4);
+      }
+
+      .step-content h4 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.2rem;
+      }
+
+      .step-content p {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        line-height: 1.55;
+      }
+
+      .demo-screenshot {
+        width: 100%;
+        border-radius: var(--radius-md);
+        display: block;
+      }
+
+      .sub-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+      }
+
+      @media (max-width: 600px) {
+        .sub-cols {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .sub-col {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.5rem;
+      }
+
+      .sub-col-title {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--accent-light);
+        margin-bottom: 1.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-family: 'Fira Code', monospace;
+      }
+
+      footer {
+        background: #07090f;
+        border-top: 1px solid var(--border-subtle);
+        padding: 3rem 0;
+      }
+
+      .footer-inner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+      }
+
+      .footer-logo {
+        font-size: 1.1rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, var(--accent-light), var(--indigo-light));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .footer-tagline {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 1.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .footer-links a {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: color 0.2s;
+      }
+
+      .footer-links a:hover {
+        color: var(--accent-light);
+      }
+
+      .footer-license {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-subtle);
+        text-align: center;
+      }
+
+      .section-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--border), transparent);
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="nav-inner">
+        <span class="nav-logo">Parthenon</span>
+        <ul class="nav-links">
+          <li><a href="#architecture">Architecture</a></li>
+          <li><a href="#diagram">Diagram</a></li>
+          <li><a href="#security">Security</a></li>
+          <li><a href="#demo">Walkthroughs</a></li>
+          <li><a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <section id="hero">
+      <div class="container">
+        <div class="hero-inner fade-up">
+          <div class="hero-badge">Enterprise AI Harness Framework</div>
+          <p class="hero-tagline">Parthenon</p>
+          <h1 class="hero-title">Govern your<br /><span>AI agents</span><br />at enterprise scale</h1>
+          <p class="hero-desc">
+            A self-hosted, identity-aware platform for managing AI agents, MCP tool hubs, skills, SOPs,
+            and multi-agent communication - with audit, observability, and dual-realm OIDC security built in.
+          </p>
+          <a class="btn-primary" href="#architecture">Explore Architecture</a>
+
+          <div class="hero-services">
+            <div class="service-pill"><span class="dot dot-cc"></span> Control Center</div>
+            <div class="service-pill"><span class="dot dot-ch"></span> Communication Hub</div>
+            <div class="service-pill"><span class="dot dot-ar"></span> Agent Runtime</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <section id="architecture" class="section section--alt">
+      <div class="container">
+        <p class="section-label fade-up">Platform Design</p>
+        <h2 class="section-title fade-up">High-Level Architecture</h2>
+        <p class="section-subtitle fade-up">
+          Parthenon is composed of three strictly isolated backend services and a dual-identity model,
+          connected through a permissions framework built around Skills, SOPs, and Agent Roles.
+        </p>
+
+        <div class="cards-grid">
+          <div class="arch-card fade-up">
+            <span class="card-icon">Plug</span>
+            <div class="card-title">SOP / Skill-Driven MCP Integration</div>
+            <ul class="card-bullets">
+              <li><strong>Skills</strong> wrap one or more MCP tool calls into a named, permissionable unit</li>
+              <li>
+                <strong>SOPs</strong> compose multiple Skills with sequencing logic and support
+                agent-to-agent delegation
+              </li>
+              <li>Each MCP server is registered with a unique slug; all tools sync under that namespace</li>
+              <li>Permissions are granted at the tool level through skills and roles</li>
+            </ul>
+          </div>
+
+          <div class="arch-card fade-up">
+            <span class="card-icon">Shield</span>
+            <div class="card-title">Security &amp; Permission Control</div>
+            <ul class="card-bullets">
+              <li>Agent Roles are permission sets granting access to specific SOPs and Skills</li>
+              <li>Roles resolve to a complete deterministic set of allowed MCP tools at runtime</li>
+              <li>Agent identities are first-class OIDC principals in a dedicated agent realm</li>
+              <li>Agents never hold identity tokens directly; tokens are injected per tool call</li>
+            </ul>
+          </div>
+
+          <div class="arch-card fade-up">
+            <span class="card-icon">Gear</span>
+            <div class="card-title">Three-Service Isolation</div>
+            <ul class="card-bullets">
+              <li><strong>Control Center</strong> is the sole database owner and policy authority</li>
+              <li><strong>Communication Hub</strong> brokers UI-agent and agent-agent messaging</li>
+              <li><strong>Agent Runtime</strong> executes agents only and has no direct database access</li>
+              <li>Cross-service calls use certificate-based mTLS with isolated credentials</li>
+            </ul>
+          </div>
+
+          <div class="arch-card fade-up">
+            <span class="card-icon">ID</span>
+            <div class="card-title">Dual Identity Support</div>
+            <ul class="card-bullets">
+              <li><strong>User Realm</strong> for human OIDC accounts and standard OAuth2 login</li>
+              <li><strong>Agent Realm</strong> for AI agent identities with encrypted credential storage</li>
+              <li>Agent Types pair identity, role, model, instruction, and I/O mode</li>
+              <li>Each run validates identity-role assignment before execution starts</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <section id="diagram" class="section">
+      <div class="container">
+        <p class="section-label fade-up">System Overview</p>
+        <h2 class="section-title fade-up">Architecture Diagram</h2>
+        <p class="section-subtitle fade-up">
+          Key data flows between the three core services, identity realms, MCP Hub, and persistence layer.
+        </p>
+
+        <div class="diagram-wrap fade-up">
+          <div class="mermaid">
+%%{init: {
+  "theme": "dark",
+  "themeVariables": {
+    "primaryColor": "#1c2540",
+    "primaryTextColor": "#f0f2ff",
+    "primaryBorderColor": "#7c5cfc",
+    "lineColor": "#7c5cfc",
+    "secondaryColor": "#161d35",
+    "tertiaryColor": "#0f1526",
+    "clusterBkg": "#161d35",
+    "clusterBorder": "#7c5cfc",
+    "nodeBorder": "#7c5cfc",
+    "mainBkg": "#1c2540",
+    "edgeLabelBackground": "#0b0f1e",
+    "fontFamily": "Inter, sans-serif"
+  }
+}}%%
+flowchart TD
+    UserBrowser["User Browser\n(React UI)"]
+
+    subgraph IdentityProvider["Identity Provider (Keycloak / EntraID)"]
+        UserRealm["User Realm\nHuman OIDC Accounts"]
+        AgentRealm["Agent Realm\nAgent OIDC Identities"]
+    end
+
+    subgraph Services["Three Isolated Backend Services"]
+        ControlCenter["Control Center\n----------------\nDatabase owner\nCertificate Authority\nPermission resolver\nToken refresh\nAudit logs"]
+
+        CommHub["Communication Hub\n----------------\nUI-agent broker\nAgent Gateway\nSession management\nToken injection per tool call"]
+
+        AgentRuntime["Agent Runtime\n----------------\nLangChain agent loop\nmTLS authenticated\nNo DB access\nNo raw tokens"]
+    end
+
+    MCPHub["MCP Hub\nRegistered MCP Servers\nand Synced Tool Namespaces"]
+
+    PostgreSQL[("PostgreSQL\nDatabase")]
+
+    UserBrowser -- "OIDC login" --> UserRealm
+    UserBrowser -- "REST + WebSocket" --> CommHub
+    CommHub -- "Permission check\nToken resolution" --> ControlCenter
+    CommHub -- "Dispatch jobs\nmTLS" --> AgentRuntime
+    ControlCenter -- "Read / Write" --> PostgreSQL
+    ControlCenter -- "Issue agent-instance certs\n24h validity" --> AgentRuntime
+    AgentRuntime -- "Tool calls\n(token injected by CommHub)" --> MCPHub
+    AgentRealm -- "Agent credentials\n(encrypted, auto-refreshed)" --> ControlCenter
+    MCPHub -- "Tool results" --> AgentRuntime
+    AgentRuntime -- "Results / status" --> CommHub
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <section id="security" class="section section--alt">
+      <div class="container">
+        <p class="section-label fade-up">Trust &amp; Compliance</p>
+        <h2 class="section-title fade-up">Security Deep Dive</h2>
+        <p class="section-subtitle fade-up">
+          Parthenon enforces security at every boundary from tool-level permissions to certificate-based
+          service identity and strict token isolation.
+        </p>
+
+        <div class="security-grid">
+          <div class="sec-card fade-up">
+            <span class="sec-icon">Lock</span>
+            <div class="sec-title">Tool-Level Permission Control</div>
+            <p class="sec-desc">
+              Permissions are granted at individual MCP tool level. Agent Roles define which Skills an
+              agent can invoke, and each execution resolves a deterministic allow-list of tools.
+            </p>
+            <span class="sec-tag">SOP to Skill to Tool</span>
+          </div>
+
+          <div class="sec-card fade-up">
+            <span class="sec-icon">Cert</span>
+            <div class="sec-title">mTLS Certificate Authentication</div>
+            <p class="sec-desc">
+              Agent Runtime receives short-lived agent-instance certificates while internal services use
+              longer-lived service certificates. All inter-service calls are mutually authenticated via mTLS.
+            </p>
+            <span class="sec-tag">24h agent-instance / 30d service</span>
+          </div>
+
+          <div class="sec-card fade-up">
+            <span class="sec-icon">Token</span>
+            <div class="sec-title">Token Isolation</div>
+            <p class="sec-desc">
+              Agent Runtime never stores raw identity tokens. Communication Hub injects scoped tokens
+              just in time per tool call, and agent certificates are blocked from internal management APIs.
+            </p>
+            <span class="sec-tag">Just-in-time token injection</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <section id="demo" class="section">
+      <div class="container">
+        <p class="section-label fade-up">Step-by-Step Walkthroughs</p>
+        <h2 class="section-title fade-up">Demo Walkthroughs</h2>
+        <p class="section-subtitle fade-up">
+          Follow these guided flows to understand how operators configure and run AI agents on Parthenon.
+        </p>
+
+        <div class="tab-pills">
+          <button class="tab-pill active" data-tab="tab-mcp">1 - Integrate MCP Server</button>
+          <button class="tab-pill" data-tab="tab-skill">2 - Create Skill &amp; SOP</button>
+          <button class="tab-pill" data-tab="tab-role">3 - Create Agent Roles</button>
+          <button class="tab-pill" data-tab="tab-agent">4 - Agent Types &amp; Trigger</button>
+          <button class="tab-pill" data-tab="tab-logs">5 - Execution Logs</button>
+        </div>
+
+        <div id="tab-mcp" class="tab-panel active fade-up">
+          <div class="demo-layout">
+            <div>
+              <ol class="demo-steps">
+                <li class="demo-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">
+                    <h4>Register the MCP Server</h4>
+                    <p>
+                      In Control Center MCP Hub, click Add MCP Server, provide a unique slug,
+                      endpoint URL, and credentials encrypted at rest.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">
+                    <h4>Sync Tools</h4>
+                    <p>
+                      Sync the remote tool manifest and confirm imported tools appear under
+                      the server namespace.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">
+                    <h4>Configure Sessions</h4>
+                    <p>
+                      Create named MCP sessions and bind identity context per session for controlled tool use.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">4</span>
+                  <div class="step-content">
+                    <h4>Test Connectivity</h4>
+                    <p>
+                      Run connection checks and manifest validation to confirm the server is ready for Skills.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <div>
+              <img
+                src="/images/placeholder-mcp.svg"
+                alt="MCP Server Registration UI - screenshot placeholder"
+                class="demo-screenshot"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-skill" class="tab-panel fade-up">
+          <div class="demo-layout">
+            <div>
+              <ol class="demo-steps">
+                <li class="demo-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">
+                    <h4>Define Skill</h4>
+                    <p>
+                      Create a Skill and map exactly which MCP tools it can invoke as a reusable governed unit.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">
+                    <h4>Compose SOP</h4>
+                    <p>
+                      Build a SOP by sequencing Skills with optional branching and delegation rules.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">
+                    <h4>Review Tool Allow-List</h4>
+                    <p>
+                      Confirm the transitive tool set resolved from the SOP matches security intent.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">4</span>
+                  <div class="step-content">
+                    <h4>Test SOP</h4>
+                    <p>
+                      Execute a controlled dry run and inspect order, intermediate outputs, and tool usage.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <div>
+              <img
+                src="/images/placeholder-skill-sop.svg"
+                alt="Skill and SOP UI - screenshot placeholder"
+                class="demo-screenshot"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-role" class="tab-panel fade-up">
+          <div class="demo-layout">
+            <div>
+              <ol class="demo-steps">
+                <li class="demo-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">
+                    <h4>Create Role</h4>
+                    <p>
+                      Create an Agent Role that will become the governance boundary for tool access.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">
+                    <h4>Assign SOPs and Skills</h4>
+                    <p>
+                      Attach approved SOPs and direct Skills to the role to define intended capabilities.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">
+                    <h4>Bind Agent Identity</h4>
+                    <p>
+                      Associate agent-realm identities to the role through the identity-role assignment panel.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">4</span>
+                  <div class="step-content">
+                    <h4>Validate Allow-List</h4>
+                    <p>
+                      Inspect the computed transitive MCP tool allow-list before production activation.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <div>
+              <img
+                src="/images/placeholder-agent-roles.svg"
+                alt="Agent Roles UI - screenshot placeholder"
+                class="demo-screenshot"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-agent" class="tab-panel fade-up">
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.75rem">
+            Agent Types define identity, role, model configuration, system instruction, and I/O mode.
+            After saving, operators can trigger non-conversational jobs or conversational sessions.
+          </p>
+          <div class="sub-cols" style="margin-bottom: 2rem">
+            <div class="sub-col">
+              <div class="sub-col-title">Non-Conversational Trigger</div>
+              <ol class="demo-steps">
+                <li class="demo-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">
+                    <h4>Define Agent Type</h4>
+                    <p>Set structured input/output mode, instruction, identity, and role binding.</p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">
+                    <h4>Trigger by Schedule or API</h4>
+                    <p>Launch through cron scheduling or Agent Gateway API with structured payload.</p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">
+                    <h4>Collect Structured Result</h4>
+                    <p>Retrieve persisted output from the Result Repository and completion channels.</p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <div class="sub-col">
+              <div class="sub-col-title">Conversational Session</div>
+              <ol class="demo-steps">
+                <li class="demo-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">
+                    <h4>Define Agent Type</h4>
+                    <p>Enable conversational mode with history persistence and replay support.</p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">
+                    <h4>Open Session</h4>
+                    <p>Start a UI WebSocket session via Communication Hub and send the initial prompt.</p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">
+                    <h4>Continue Conversation</h4>
+                    <p>Stream subsequent turns while observing tool traces and decision spans live.</p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+          <img
+            src="/images/placeholder-agent-trigger.svg"
+            alt="Agent Types and Trigger UI - screenshot placeholder"
+            class="demo-screenshot"
+          />
+        </div>
+
+        <div id="tab-logs" class="tab-panel fade-up">
+          <div class="demo-layout">
+            <div>
+              <ol class="demo-steps">
+                <li class="demo-step">
+                  <span class="step-num">1</span>
+                  <div class="step-content">
+                    <h4>Navigate to Session</h4>
+                    <p>
+                      Open an Agent Session from runtime history and access the Execution Log Viewer.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">2</span>
+                  <div class="step-content">
+                    <h4>Inspect Span Tree</h4>
+                    <p>
+                      Review hierarchical spans for iterations, LLM calls, tool calls, timings, and payloads.
+                    </p>
+                  </div>
+                </li>
+                <li class="demo-step">
+                  <span class="step-num">3</span>
+                  <div class="step-content">
+                    <h4>Toggle Raw Logs</h4>
+                    <p>
+                      Switch between structured presentation and raw technical log output for debugging.
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+            <div>
+              <img
+                src="/images/placeholder-exec-logs.svg"
+                alt="Execution Logs Viewer UI - screenshot placeholder"
+                class="demo-screenshot"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <footer>
+      <div class="container">
+        <div class="footer-inner">
+          <div>
+            <div class="footer-logo">Parthenon</div>
+            <div class="footer-tagline">Open Source Enterprise AI Harness Framework</div>
+          </div>
+          <div class="footer-links">
+            <a href="https://github.com" target="_blank" rel="noreferrer">GitHub Repository</a>
+            <a href="https://github.com" target="_blank" rel="noreferrer">Documentation</a>
+            <a href="https://github.com" target="_blank" rel="noreferrer">Contributing</a>
+          </div>
+        </div>
+        <div class="footer-license">
+          Parthenon is available under a <strong>dual license</strong>:
+          <a href="https://github.com" target="_blank" rel="noreferrer">MIT License</a> for open-source use and
+          <a href="https://github.com" target="_blank" rel="noreferrer">Commercial License</a> for enterprise
+          deployments. Copyright 2025-2026 Parthenon Contributors.
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

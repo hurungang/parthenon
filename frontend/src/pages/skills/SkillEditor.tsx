@@ -37,6 +37,49 @@ interface SkillEditorProps {
   onSaved: () => void
 }
 
+export function extractGeneratedToolSection(instructionsWithTools?: string | null): string | null {
+  if (!instructionsWithTools) return null
+
+  // Generated tool reference is appended to the end by backend.
+  // Use the last Tools header to avoid matching a user-authored "## Tools" section.
+  const marker = '\n\n## Tools'
+  const idx = instructionsWithTools.lastIndexOf(marker)
+  if (idx !== -1) return instructionsWithTools.slice(idx + 2)
+
+  // Backward compatibility for payloads that start directly with the marker.
+  if (instructionsWithTools.startsWith('## Tools')) return instructionsWithTools
+  return null
+}
+
+type ToolReferenceTool = Pick<McpTool, 'id' | 'name' | 'description' | 'input_schema'>
+
+export function buildGeneratedToolSectionFromSelection(
+  selectedToolIds: string[],
+  allTools?: ToolReferenceTool[] | null,
+): string | null {
+  if (!allTools || selectedToolIds.length === 0) return null
+
+  const toolById = new Map(allTools.map((tool) => [tool.id, tool]))
+  const selectedTools = selectedToolIds
+    .map((toolId) => toolById.get(toolId))
+    .filter((tool): tool is ToolReferenceTool => tool != null)
+
+  if (selectedTools.length === 0) return null
+
+  const lines: string[] = ['## Tools']
+  for (const tool of selectedTools) {
+    lines.push(`\n### \`${tool.name}\``)
+    if (tool.description) lines.push(tool.description)
+    if (tool.input_schema) {
+      lines.push('\n**Input Schema:**')
+      lines.push('```json')
+      lines.push(JSON.stringify(tool.input_schema, null, 2))
+      lines.push('```')
+    }
+  }
+  return lines.join('\n')
+}
+
 export function SkillEditor({ open, skill, onClose, onSaved }: SkillEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -170,14 +213,18 @@ export function SkillEditor({ open, skill, onClose, onSaved }: SkillEditorProps)
   }
 
   // Extract just the ## Tools section from instructions_with_tools (if present)
-  const toolSection = useMemo(() => {
-    const iwt = skillDetail?.instructions_with_tools
-    if (!iwt) return null
-    const marker = '\n\n## Tools'
-    const idx = iwt.indexOf(marker)
-    if (idx === -1) return null
-    return iwt.slice(idx + 2) // strip leading \n\n
+  const persistedToolSection = useMemo(() => {
+    return extractGeneratedToolSection(skillDetail?.instructions_with_tools)
   }, [skillDetail])
+
+  // Live preview from current selections so the reference refreshes immediately
+  // when tools are checked/unchecked, before saving.
+  const liveToolSection = useMemo(
+    () => buildGeneratedToolSectionFromSelection(selectedToolIds, allTools),
+    [selectedToolIds, allTools],
+  )
+
+  const toolSection = liveToolSection ?? persistedToolSection
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>

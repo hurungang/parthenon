@@ -58,7 +58,7 @@ Capture pass/fail counts from output. Record any failures with file + line.
 
 **Skip if `--backend` or `--e2e` only.**
 
-Run in IDE terminal (synchronous mode to see results immediately):
+Run in IDE terminal using JSON reporter output file (required on Windows/Copilot terminal to avoid reporter hangs):
 
 ```powershell
 cd frontend
@@ -66,11 +66,19 @@ cd frontend
 
 If `--filter <pattern>`:
 ```powershell
-npm run test -- --reporter=verbose -t "<pattern>"
+$outputFile = "vitest_results_test_app.json"
+npx vitest run --reporter=json --outputFile=$outputFile -t "<pattern>"
+Write-Host "EXIT: $LASTEXITCODE"
+$j = Get-Content $outputFile | ConvertFrom-Json
+Write-Host ("Passed: {0} / {1}  Failed: {2}" -f $j.numPassedTests, $j.numTotalTests, $j.numFailedTests)
 ```
 Otherwise:
 ```powershell
-npm run test
+$outputFile = "vitest_results_test_app.json"
+npx vitest run --reporter=json --outputFile=$outputFile
+Write-Host "EXIT: $LASTEXITCODE"
+$j = Get-Content $outputFile | ConvertFrom-Json
+Write-Host ("Passed: {0} / {1}  Failed: {2}" -f $j.numPassedTests, $j.numTotalTests, $j.numFailedTests)
 ```
 
 Capture pass/fail counts. Record any failures with component + test name.

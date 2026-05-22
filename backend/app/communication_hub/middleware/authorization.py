@@ -22,12 +22,15 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Callable
 
 import httpx
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+from app.core.ssl_context import get_ssl_context
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,43 @@ _TOOL_CALL_PATH_PREFIX = "/tools/"
 
 def _get_control_center_url() -> str:
     return os.environ.get("CONTROL_CENTER_URL", "").rstrip("/")
+
+
+def _allow_insecure_internal_fallback() -> bool:
+    """Return True only for explicit development-mode insecure fallback opt-in."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
+    return environment == "development" and opt_in in {"1", "true", "yes", "on"}
+
+
+def _build_control_center_auth(
+    request: Request,
+    control_center_url: str,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Build authenticated transport config for CH -> CC internal calls."""
+    cert_manager = getattr(request.app.state, "certificate_manager", None)
+    client_kwargs: dict[str, Any] = {
+        "timeout": 10.0,
+        "verify": get_ssl_context(),
+    }
+    headers: dict[str, str] = {}
+
+    if cert_manager and cert_manager.cert_path and cert_manager.key_path:
+        if control_center_url.startswith("https://"):
+            client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))
+        else:
+            cert_content = Path(cert_manager.cert_path).read_text()
+            headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+        return client_kwargs, headers
+
+    if _allow_insecure_internal_fallback():
+        logger.warning(
+            "CH authorization middleware using insecure internal fallback because "
+            "ALLOW_INSECURE_INTERNAL_CALL_FALLBACK is enabled in development"
+        )
+        return client_kwargs, headers
+
+    raise RuntimeError("Communication Hub service certificate is required for internal authorization calls")
 
 
 # ── Core functions ────────────────────────────────────────────────────────────
@@ -70,6 +110,7 @@ def extract_client_certificate(request: Request) -> str | None:
 
 
 async def validate_certificate_with_control_center(
+    request: Request,
     cert_pem: str,
     tool_name: str | None = None,
 ) -> dict[str, Any]:
@@ -87,13 +128,15 @@ async def validate_certificate_with_control_center(
         return {"valid": False, "reason": "control_center_url_not_configured"}
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        client_kwargs, headers = _build_control_center_auth(request, control_center_url)
+        async with httpx.AsyncClient(**client_kwargs) as client:
             response = await client.post(
                 f"{control_center_url}/api/v1/internal/certificates/validate",
                 json={
                     "certificate_pem": cert_pem,
                     "requested_operation": tool_name,
                 },
+                headers=headers,
             )
         return response.json()
     except Exception as exc:
@@ -102,6 +145,7 @@ async def validate_certificate_with_control_center(
 
 
 async def authorize_tool_call(
+    request: Request,
     cert_serial_number: str,
     tool_name: str,
     tool_params: dict | None = None,
@@ -121,7 +165,8 @@ async def authorize_tool_call(
         return {"authorized": False, "reason": "control_center_url_not_configured"}
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        client_kwargs, headers = _build_control_center_auth(request, control_center_url)
+        async with httpx.AsyncClient(**client_kwargs) as client:
             response = await client.post(
                 f"{control_center_url}/api/v1/internal/authorize/tool-call",
                 json={
@@ -129,6 +174,7 @@ async def authorize_tool_call(
                     "tool_name": tool_name,
                     "tool_params": tool_params,
                 },
+                headers=headers,
             )
         return response.json()
     except Exception as exc:
@@ -216,7 +262,7 @@ class CertificateAuthorizationMiddleware(BaseHTTPMiddleware):
             )
 
         # 2. Validate certificate with Control Center
-        validation = await validate_certificate_with_control_center(cert_pem, tool_name)
+        validation = await validate_certificate_with_control_center(request, cert_pem, tool_name)
         cert_serial = validation.get("serial_number")
         cert_cn = None  # Extracted from validation response if available
 
@@ -230,6 +276,7 @@ class CertificateAuthorizationMiddleware(BaseHTTPMiddleware):
 
         # 3. Authorize tool call (permission check + token)
         authorization = await authorize_tool_call(
+            request=request,
             cert_serial_number=cert_serial,
             tool_name=tool_name,
         )

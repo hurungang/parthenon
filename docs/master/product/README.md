@@ -11,6 +11,7 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 - **Skill Management** — Skill definition, MCP tool wrapping, and permission assignment
 - **SOP Management** — SOP composition, step sequencing, and agent-to-agent delegation
 - **Agent Management** — Agent types, identity, instance lifecycle, and max-instance enforcement
+- **Agent A2A Communication and Slug Enforcement** — Dynamic agent-to-agent continuity, delegation governance, and slug-safe naming for routing-critical entities
 - **Agent Gateway** — Lifecycle protocol, HTTP and MCP transports
 - **Communication Hub** — Message broker, WebSocket, session context, and agent-to-agent routing
 - **Schedule Management** — Cron scheduling, job management, and execution history

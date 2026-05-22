@@ -17,6 +17,7 @@ Control Center service certificates before accepting requests.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import NamedTuple
 
@@ -24,6 +25,13 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 logger = logging.getLogger(__name__)
+
+
+def _allow_insecure_internal_fallback() -> bool:
+    """Return True only for explicit development-mode insecure fallback opt-in."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    opt_in = os.environ.get("ALLOW_INSECURE_INTERNAL_CALL_FALLBACK", "").strip().lower()
+    return environment == "development" and opt_in in {"1", "true", "yes", "on"}
 
 
 def _now_utc() -> datetime:
@@ -222,10 +230,11 @@ class RevocationService:
         ``GET /api/v1/internal/certificates/revoked/{serial}`` endpoint on
         Control Center (network-isolated in production).
 
-        **Fail-open**: if Control Center is unreachable the method returns
-        ``False`` so that a temporary CC outage does not block all traffic.
-        High-security deployments should implement a local CRL cache as a
-        future enhancement.
+        **Fail-closed by default**: if Control Center is unreachable the method
+        returns ``True`` so the caller treats the certificate as revoked.
+        A development-only insecure fallback can be enabled with
+        ``ALLOW_INSECURE_INTERNAL_CALL_FALLBACK=true`` while
+        ``ENVIRONMENT=development``.
 
         Args:
             serial_number: Certificate serial number to check.
@@ -233,8 +242,8 @@ class RevocationService:
                 (e.g. ``http://control-center:8000``).
 
         Returns:
-            ``True`` if the certificate is revoked; ``False`` if not revoked
-            or if Control Center is unreachable.
+            ``True`` if the certificate is revoked, or if revocation status
+            cannot be validated under fail-closed policy.
         """
         import httpx
 
@@ -253,12 +262,24 @@ class RevocationService:
                 response.status_code,
                 serial_number,
             )
-            return False
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "Revocation check unexpected status for serial=%s but insecure development fallback is enabled",
+                    serial_number,
+                )
+                return False
+            return True
         except Exception as exc:
-            logger.warning(
-                "Revocation check failed for serial=%s (failing open): %s",
+            if _allow_insecure_internal_fallback():
+                logger.warning(
+                    "Revocation check failed for serial=%s; insecure development fallback treats as not revoked: %s",
+                    serial_number,
+                    exc,
+                )
+                return False
+            logger.error(
+                "Revocation check failed for serial=%s; fail-closed treats certificate as revoked: %s",
                 serial_number,
                 exc,
             )
-            # Fail open: a temporary CC outage must not block all traffic
-            return False
+            return True
