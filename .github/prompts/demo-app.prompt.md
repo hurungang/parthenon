@@ -37,6 +37,7 @@ Available scenarios (from `e2e/tests/`):
 - `agent-bootstrap` — agent realm initialization and OAuth-based identity creation
 - `agent-security-segregation` — certificate-based auth, token refresh automation, zero-trust tool authorization
 - `service-segregation-security-audit` — caller-scoped internal API allowlists, deny-by-default enforcement, revocation fail-closed checks
+- `github-pages-showcase` — static project showcase page with architecture walkthrough tabs and placeholders
 - `gateway` — gateway / agent types configuration
 - `mcp-hub` — MCP hub management
 - `passthrough-sessions` — passthrough session type with agent identity forwarding
@@ -206,6 +207,10 @@ Build the `--grep` argument from the resolved cases (Step 1):
 - If patterns were loaded from a demo-cases.md: `$grepArg = '"(pattern1|pattern2|...)"'` (join with `|`)
 - If `--filter` was also given: append to the pattern or use it alone
 - If no patterns: omit `--grep` entirely (runs all tests)
+
+Config selection rule:
+- If resolved patterns or filter target `github-pages-showcase`, run with `playwright.showcase.config.ts`.
+- Otherwise, run with `playwright.demo.config.ts`.
 
 ### Pause mode (`--pause` flag)
 

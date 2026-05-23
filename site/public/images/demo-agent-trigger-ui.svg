@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="Agent trigger dashboard mockup">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1526"/><stop offset="1" stop-color="#131d37"/></linearGradient>
+    <style>.h{font:700 28px Inter,Arial,sans-serif;fill:#eef2ff}.s{font:500 16px Inter,Arial,sans-serif;fill:#9ea8c9}.t{font:500 14px Inter,Arial,sans-serif;fill:#d5dcf4}.k{font:600 14px 'Fira Code',Consolas,monospace;fill:#a98fff}</style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <rect x="40" y="34" width="1200" height="64" rx="14" fill="#1b2748" stroke="#394b7d"/>
+  <text x="72" y="74" class="h" font-size="24">Agent Types and Trigger Console</text>
+
+  <rect x="40" y="122" width="580" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="68" y="160" class="h" font-size="20">Non-Conversational Trigger</text>
+  <text x="68" y="188" class="s">Scheduled or API execution with structured input</text>
+
+  <rect x="68" y="220" width="524" height="58" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="256" class="t">Agent Type: incident-triage-v3</text>
+  <rect x="68" y="292" width="524" height="58" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="328" class="t">Input mode: JSON payload</text>
+  <rect x="68" y="364" width="524" height="58" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="400" class="t">Trigger: cron(0 */2 * * *) or POST /agents/trigger</text>
+
+  <rect x="68" y="454" width="260" height="58" rx="12" fill="#7c5cfc"/><text x="140" y="490" class="t" fill="#fff">Run Job</text>
+  <rect x="356" y="454" width="236" height="58" rx="12" fill="#24345f" stroke="#566ca5"/><text x="417" y="490" class="t">Queue Preview</text>
+
+  <rect x="660" y="122" width="580" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="688" y="160" class="h" font-size="20">Conversational Session</text>
+  <text x="688" y="188" class="s">Realtime WebSocket interactions with traceable turns</text>
+
+  <rect x="688" y="220" width="524" height="58" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="710" y="256" class="t">Agent Type: support-chat-v2</text>
+  <rect x="688" y="292" width="524" height="58" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="710" y="328" class="t">Session mode: conversational / history persisted</text>
+  <rect x="688" y="364" width="524" height="142" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="710" y="398" class="k">User: summarize incident 8472</text>
+  <text x="710" y="430" class="k">Agent: collecting context and next steps...</text>
+  <text x="710" y="462" class="k">Tool: jira-prod.search_issues (allowed)</text>
+
+  <rect x="688" y="528" width="524" height="154" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="710" y="562" class="t">Session ID: sess_9f2e...</text>
+  <text x="710" y="592" class="t">Status: active</text>
+  <text x="710" y="622" class="t">Streaming: enabled</text>
+  <text x="710" y="652" class="t">Execution logs: attached</text>
+</svg>

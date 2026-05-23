@@ -64,6 +64,25 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 
 ## Code Reference Map
 
+### Runtime Application Surface
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `create_app` | function | Agent Runtime app factory that wires middleware, routing, and runtime service clients | `backend/app/agent_runtime/main.py` |
+| `startup_event` | function | Startup lifecycle hook that initializes runtime dependencies before session execution begins | `backend/app/agent_runtime/main.py` |
+
+### Runtime Boundary Enforcement
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ControlCenterCertificateMiddleware` | class | Validates service certificates on runtime control-plane requests and enforces internal trust boundary | `backend/app/agent_runtime/middleware.py` |
+| `ControlCenterDataClient` | class | Fetches plans, context, model config, and session state from Control Center internal data APIs | `backend/app/agent_runtime/data_client.py` |
+| `_allow_insecure_internal_fallback` | function | Development-only opt-in guard; production/default behavior remains fail-closed for missing internal trust material | `backend/app/agent_runtime/data_client.py` |
+| `CommHubToolClient` | class | Sends tool and A2A requests from Agent Runtime to Communication Hub internal routes with service identity headers or mTLS | `backend/app/agent_runtime/comm_hub_client.py` |
+| `trigger_execution` | endpoint | Runtime execution trigger endpoint used by Communication Hub for asynchronous session execution | `backend/app/agent_runtime/api/execute.py` |
+| `_execute_session` | function | Executes one queued session with control-plane state updates and tool routing through Communication Hub | `backend/app/agent_runtime/api/execute.py` |
+| `execute_conversation_turn` | endpoint | Executes conversation turn requests delegated from Communication Hub chat flows | `backend/app/agent_runtime/api/conversation.py` |
+
 ### Certificate Manager (`backend/app/agent_runtime/certificate_manager.py`)
 
 | Symbol | Type | Description | File |
@@ -89,4 +108,11 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `CommunicationHubClient` | class | Runtime-side client for Communication Hub coordination paths, including A2A target-slug dispatch payloads and session-link metadata handoff | `backend/app/agent_runtime/comm_hub_client.py` |
+| `CommHubToolClient` | class | Runtime-side client for Communication Hub coordination paths, including tool routing and A2A target-slug dispatch payloads | `backend/app/agent_runtime/comm_hub_client.py` |
+
+### Segregation Audit Coverage
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_agent_runtime_has_no_ast_db_or_sqlalchemy_imports` | integration test | Guardrail test that fails if Agent Runtime introduces direct database/session imports | `backend/tests/integration/test_database_isolation.py` |
+| `test_make_client_without_cert_fails_closed_outside_dev_opt_in` | unit test | Ensures internal runtime/hub calls fail closed when certificate identity is unavailable in non-development profiles | `backend/tests/unit/test_control_center_comm_hub_client.py` |

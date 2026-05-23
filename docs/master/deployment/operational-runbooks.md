@@ -115,3 +115,91 @@ After deploying a Permission Engine change:
 - If the median response time increases by more than 20%, scale the `platform-api` replicas before switching to enforce mode
 - If database connection pool utilisation exceeds 80%, review whether the user cache TTL should be extended or whether the group claim mapping query can be cached
 - Monitor for at least 15 minutes of representative traffic before considering the deployment stable
+
+---
+
+## 5. Service Segregation Allowlist Rollout (Audit → Enforce)
+
+Use this runbook when deploying caller-specific Control Center internal API allowlists for `agent_runtime` and `communication_hub`.
+
+### Preconditions
+
+- mTLS is enabled for Agent Runtime and Communication Hub internal calls.
+- Service certificates and revocation checks are operational.
+- Control Center policy variables are configured, including `INTERNAL_API_POLICY_MODE`, `INTERNAL_API_DENY_AUDIT_ENABLED`, and `INTERNAL_API_REQUIRE_SERVICE_IDENTITY`.
+
+### Phase A — Audit Mode
+
+1. Deploy Control Center with `INTERNAL_API_POLICY_MODE=audit` and deny audit events enabled.
+2. Deploy Agent Runtime and Communication Hub with caller identity and mTLS variables aligned.
+3. Run representative workloads and verify all expected internal calls succeed.
+4. Confirm denied events are emitted only for non-contract paths.
+
+### Phase B — Contract Validation Window
+
+- Maintain audit mode for a minimum of one representative traffic cycle.
+- Resolve all allowlist drift before enforcement. Drift includes legitimate production traffic denied in audit mode.
+- Record allowlist version and validation evidence in deployment records.
+
+### Phase C — Enforce Cutover
+
+1. Set `INTERNAL_API_POLICY_MODE=enforce`.
+2. Verify normal agent execution, message routing, and tool-call workflows.
+3. Confirm deny events continue for blocked calls with stable error rates.
+4. Continue elevated monitoring through stabilization period.
+
+### Exit criteria
+
+- No unresolved allowlist drift.
+- No sustained failures on legitimate internal service paths.
+- Certificate renewal and revocation telemetry are healthy.
+
+---
+
+## 6. Deny-Event Triage and Escalation
+
+Use this runbook when deny events increase after allowlist rollout.
+
+### Triage steps
+
+1. Group deny events by caller type, route, method, and policy reason.
+2. Determine whether traffic is expected behavior or potential abuse.
+3. For expected behavior, validate caller identity mapping and allowlist version.
+4. For unexpected traffic, keep deny-by-default and open security incident review.
+
+### Escalation thresholds
+
+- Escalate immediately if denied calls exceed 5% of total internal calls for 5 consecutive minutes.
+- Escalate immediately if any deny reason indicates missing caller identity for a known service.
+- Escalate immediately if revocation-check failures are present during enforce mode.
+
+### Containment guidance
+
+- Do not disable mTLS or caller identity enforcement.
+- If legitimate traffic is impacted, downgrade policy mode to audit while investigation continues.
+- Preserve deny-event telemetry for forensic and compliance evidence.
+
+---
+
+## 7. Certificate and Revocation Failure Response
+
+Use this runbook for certificate bootstrap, renewal, handshake, or revocation-check failures affecting internal service calls.
+
+### Detection signals
+
+- Repeated mTLS handshake failures between Agent Runtime or Communication Hub and Control Center.
+- Certificate renewal failures approaching expiry threshold.
+- Revocation subsystem outages when `INTERNAL_API_FAIL_CLOSED_REVOCATION=true`.
+
+### Response sequence
+
+1. Confirm affected service identity and certificate chain status.
+2. Validate bootstrap key alignment between Control Center and caller service.
+3. Rotate affected service certificate and re-bootstrap identity if compromise or mismatch is suspected.
+4. Re-verify revocation-check health before restoring normal traffic expectations.
+
+### Operational guardrails
+
+- Do not switch revocation behavior to fail-open in production.
+- Do not bypass service certificate validation to recover traffic.
+- If service continuity is at risk, switch policy mode to audit and follow rollback runbook guidance.

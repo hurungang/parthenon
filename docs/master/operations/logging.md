@@ -21,7 +21,7 @@ Update this table whenever new components are added or new log events are instru
 | **Telemetry System** (`parthenon.telemetry`) | Config file loaded, missing, or parse error; each exporter initialised; signals disabled (no-op provider); exporter runtime failures; telemetry fully initialised (`Telemetry initialised`); frontend config endpoint calls |
 | **MCP Demo App** | Keycloak token grant success/failure at startup; Hub registration success/conflict/failure; tool manifest sync success/failure; incoming `tools/call` JWT validation pass/fail; `helloWorld` invocation completed; JWKS cache refresh; access token refresh |
 | **Certificate Authority (CertificateManager)** | CA initialization success and failure; certificate issued (serial number, expiry); certificate renewed (old serial, new serial, expiry); certificate renewal failure (instance ID, error, attempt count); certificate revoked (serial number, reason, actor); certificate validation outcome (serial, CN, outcome: valid/expired/revoked/invalid) |
-| **Control Center Internal Policy** | Caller normalization and internal allowlist decisions; deny-by-default events (`internal.allowlist.denied`) with reasons such as `unknown_internal_caller` and `endpoint_not_allowlisted` |
+| **Control Center Internal Policy** | Full boundary event model: allowlist allowed and denied outcomes, unknown caller denials, caller-certificate mismatch denials, endpoint-not-allowlisted denials, revocation check failures, and system-tools unauthenticated rejections |
 | **All components** | Service startup and shutdown with configuration summary; health check results; unhandled exceptions with full stack trace |
 
 ---
@@ -154,8 +154,46 @@ Use the `trace_id` from any log line to jump directly to the correlated distribu
 
 | Event | Level | Key Fields | When Logged |
 |-------|-------|-----------|-------------|
-| `internal.allowlist.denied` | WARN | `caller_type`, `caller_identity`, `method`, `endpoint`, `deny_reason`, `trace_id` | Internal request denied by caller-specific policy before handler execution |
-| `internal.allowlist.allowed` | INFO | `caller_type`, `method`, `endpoint`, `trace_id` | Internal request allowed after caller-specific allowlist evaluation |
+| `internal.allowlist.allowed` | INFO | `caller_type`, `caller_identity`, `certificate_type`, `method`, `endpoint`, `policy_version`, `trace_id` | Internal request is allowlisted for the caller profile |
+| `internal.allowlist.denied` | WARN | `caller_type`, `caller_identity`, `certificate_type`, `method`, `endpoint`, `deny_reason`, `policy_version`, `trace_id` | Internal request denied by default policy before handler execution |
+| `internal.allowlist.unknown_caller` | WARN | `caller_identity`, `method`, `endpoint`, `deny_reason`, `trace_id` | Caller identity missing, malformed, or unrecognized during policy evaluation |
+| `internal.allowlist.certificate_mismatch` | WARN | `caller_type`, `certificate_type`, `method`, `endpoint`, `deny_reason`, `trace_id` | Presented certificate type does not match caller profile |
+| `internal.allowlist.endpoint_not_allowlisted` | WARN | `caller_type`, `method`, `endpoint`, `deny_reason`, `policy_version`, `trace_id` | Caller attempted an endpoint outside the caller-scoped allowlist |
+| `internal.revocation.check_failed` | ERROR | `caller_type`, `caller_identity`, `certificate_type`, `failure_mode`, `method`, `endpoint`, `trace_id` | Revocation status could not be validated for an internal request |
+| `internal.system_tools.unauthenticated_rejected` | WARN | `endpoint`, `method`, `deny_reason`, `trace_id` | Internal system-tools route rejected due to missing or invalid service certificate |
+
+### Required Fields for Boundary Events
+
+All internal boundary events must include the following fields.
+
+| Field | Requirement |
+|-------|-------------|
+| `timestamp` | ISO 8601 UTC with millisecond precision |
+| `service_name` | Emitting service identifier |
+| `trace_id` | Correlates to distributed trace |
+| `span_id` | Correlates to specific trace span |
+| `caller_type` | Normalized caller class (`agent_runtime`, `communication_hub`, or `unknown`) |
+| `caller_identity` | Operational caller identity value used by policy |
+| `certificate_type` | Presented certificate class used in evaluation |
+| `endpoint` | Canonical internal route path |
+| `method` | HTTP method |
+| `decision` | `allowed` or `denied` |
+| `deny_reason` | Required when denied; set to `none` when allowed |
+| `policy_version` | Active allowlist policy version |
+| `environment` | Deployment environment label |
+
+### Sensitive Data Exclusions for Boundary Events
+
+- Never log access tokens, refresh tokens, JWT bodies, decrypted secrets, private keys, or certificate private material.
+- Never log raw system-tools request payloads.
+- Use operational identifiers only for `caller_identity` (service name, mapped principal, or equivalent non-secret identifier).
+
+### Boundary Incident Query Guide
+
+- Filter by `caller_type` and `decision` first to isolate affected internal caller flows.
+- Group denied events by `deny_reason` and `endpoint` to separate contract drift from identity failures.
+- Use `trace_id` to pivot from deny events to distributed traces for cross-service timeline analysis.
+- Correlate `internal.revocation.check_failed` with deny spikes to identify fail-closed impact.
 
 ---
 

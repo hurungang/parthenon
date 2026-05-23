@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon - Service Segregation Security Audit Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--sidebar-w:256px;--topbar-h:64px;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);border-right:1px solid var(--border);padding:16px 0;overflow-y:auto}
+.sidebar-logo{padding:4px 20px 16px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.sidebar-logo h1{font-size:18px;font-weight:700}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px}
+.topbar-title{font-size:18px;font-weight:600}
+.main-content{flex:1;overflow:auto;padding:24px}
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary)}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:16px}
+.metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.metric-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:16px}
+.metric-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase}
+.metric-value{font-size:24px;font-weight:700;margin-top:4px}
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:16px}
+.tab{padding:10px 18px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;color:var(--text-secondary)}
+.tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.form-control{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:var(--radius-sm);border:none;cursor:pointer}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.chip-green{background:#DCFCE7;color:#15803D}.chip-red{background:#FEE2E2;color:#B91C1C}.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}thead th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase}
+tbody td{padding:10px 14px;border-top:1px solid var(--border);vertical-align:top}
+.log-stream{background:#0F172A;border-radius:var(--radius);padding:14px;font-family:'Courier New',monospace;font-size:12px;line-height:1.7;color:#94A3B8;max-height:260px;overflow:auto}
+.log-line{white-space:pre}.log-info .lvl{color:#60A5FA}.log-warn .lvl{color:#FBBF24}.log-error .lvl{color:#F87171}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.font-mono{font-family:'Courier New',monospace}
+@media (max-width:980px){
+  .app-shell{flex-direction:column}
+  .sidebar{width:100%;display:flex;overflow:auto;white-space:nowrap;padding:8px 0}
+  .sidebar-logo{display:none}
+  .nav-item{border-radius:8px;margin:0 6px;padding:8px 12px}
+  .metrics-grid,.grid-2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Enterprise AI Harness</small>
+    </div>
+    <div class="nav-item" onclick="nav(this,'gateway')">Gateway</div>
+    <div class="nav-item" onclick="nav(this,'chat')">Communication Hub</div>
+    <div class="nav-item" onclick="nav(this,'observability')">Observability</div>
+    <div class="nav-item active" onclick="nav(this,'security-audit')">Security Audit</div>
+  </nav>
+
+  <div class="main-wrapper">
+    <div class="topbar"><div class="topbar-title" id="topbar-title">Service Segregation Security Audit</div></div>
+    <div class="main-content">
+
+      <div id="view-security-audit" class="view active">
+        <div class="view-header">
+          <div>
+            <h2>Service Segregation Security Audit</h2>
+            <div class="view-desc">Reconciled with shipped implementation: API_CONFIG, apiClient, useChatSession, and internal deny-path evidence.</div>
+          </div>
+          <span class="chip chip-green">Audit Controls Active</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card"><div class="metric-label">UI Transport Boundary</div><div class="metric-value">API + WS</div></div>
+          <div class="metric-card"><div class="metric-label">Internal Allowlist</div><div class="metric-value">Caller Scoped</div></div>
+          <div class="metric-card"><div class="metric-label">Default Policy</div><div class="metric-value" style="color:var(--error)">Deny</div></div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab(this,'audit-ui')">UI Boundary</div>
+          <div class="tab" onclick="switchTab(this,'audit-policy')">Internal Policy</div>
+          <div class="tab" onclick="switchTab(this,'audit-evidence')">Evidence</div>
+        </div>
+
+        <div id="audit-ui" class="tab-panel active">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header"><h3>Configured Frontend Endpoints</h3></div>
+              <div class="card-body">
+                <div style="margin-bottom:12px"><strong>API_CONFIG.BASE_URL</strong><div class="font-mono">/api/v1</div></div>
+                <div style="margin-bottom:12px"><strong>API_CONFIG.WS_BASE_URL</strong><div class="font-mono">/ws</div></div>
+                <div><strong>apiClient Base URL</strong><div class="font-mono">axios baseURL = API_CONFIG.BASE_URL</div></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>useChatSession URL Builder</h3></div>
+              <div class="card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                  <input id="sa-session" class="form-control" value="session-123" placeholder="session id" oninput="buildWsPreview()">
+                  <input id="sa-conv" class="form-control" value="conv-999" placeholder="conversation id" oninput="buildWsPreview()">
+                </div>
+                <input id="sa-token" class="form-control" value="segregation-token" placeholder="access token" oninput="buildWsPreview()">
+                <div style="margin-top:12px"><strong>Computed WS URL</strong><div id="sa-ws-url" class="font-mono" style="margin-top:4px;word-break:break-all"></div></div>
+                <div style="margin-top:10px" class="chip chip-blue">No postgres/supabase/direct DB transport hints</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="audit-policy" class="tab-panel">
+          <div class="table-wrap" style="margin-bottom:14px">
+            <table>
+              <thead><tr><th>Caller</th><th>Allowed Endpoint</th><th>Expected Result</th></tr></thead>
+              <tbody>
+                <tr><td>Agent Runtime</td><td class="font-mono">GET /api/v1/internal/data/sessions/{session_id}</td><td><span class="chip chip-green">Allowed</span></td></tr>
+                <tr><td>Communication Hub</td><td class="font-mono">POST /api/v1/internal/system-tools/save-result</td><td><span class="chip chip-green">Allowed</span></td></tr>
+                <tr><td>Unknown/Mismatched Caller</td><td class="font-mono">POST /api/v1/internal/authorize/tool-call</td><td><span class="chip chip-red">Denied</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Deny-By-Default Probe</h3><button class="btn btn-primary" onclick="runPolicyProbe()">Run Probe</button></div>
+            <div class="card-body">
+              <div id="sa-policy-status" class="chip chip-blue">Waiting for probe...</div>
+              <div id="sa-policy-note" style="margin-top:10px;color:var(--text-secondary)">Checks missing service certificate behavior for internal routes.</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="audit-evidence" class="tab-panel">
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-header"><h3>Regression Evidence Checklist</h3></div>
+            <div class="card-body">
+              <div style="margin-bottom:8px">1. Frontend tests validate API/WS boundary only.</div>
+              <div style="margin-bottom:8px">2. Internal authorize endpoint rejects missing service certificate (401/403).</div>
+              <div style="margin-bottom:8px">3. Internal system-tools endpoint rejects missing service certificate (401/403).</div>
+              <div>4. Revocation contract endpoint path is <span class="font-mono">/internal/certificates/revoked/{serial_number}</span>.</div>
+            </div>
+          </div>
+          <div class="log-stream" id="sa-log">
+<div class="log-line log-info">[INFO ] [frontend.boundary] API_CONFIG.BASE_URL=/api/v1 | WS_BASE_URL=/ws</div>
+<div class="log-line log-info">[INFO ] [chat.session] Built ws URL from configured base + token + conv_session_id</div>
+<div class="log-line log-warn">[WARN ] [internal.policy] Non-allowlisted endpoint denied by default</div>
+<div class="log-line log-error">[ERROR] [security.audit] Missing service certificate -> 401/403 expected</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-gateway" class="view">
+        <div class="view-header"><div><h2>Gateway</h2><div class="view-desc">Internal route controls and certificate boundaries.</div></div></div>
+        <div class="card"><div class="card-body">This flow remains unchanged. Security audit validates policy gates around internal endpoints.</div></div>
+      </div>
+
+      <div id="view-chat" class="view">
+        <div class="view-header"><div><h2>Communication Hub</h2><div class="view-desc">Chat transport is WebSocket-only via configured base URL.</div></div></div>
+        <div class="card"><div class="card-body">WebSocket sessions are built from <span class="font-mono">API_CONFIG.WS_BASE_URL</span> and auth token.</div></div>
+      </div>
+
+      <div id="view-observability" class="view">
+        <div class="view-header"><div><h2>Observability</h2><div class="view-desc">Deny events are auditable and visible as structured logs.</div></div></div>
+        <div class="card"><div class="card-body">Structured deny events include caller, endpoint signature, method, and reason code.</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const viewTitles = {
+  'gateway': 'Gateway',
+  'chat': 'Communication Hub',
+  'observability': 'Observability',
+  'security-audit': 'Service Segregation Security Audit'
+}
+
+function nav(el, viewId) {
+  document.querySelectorAll('.nav-item').forEach(function(item){ item.classList.remove('active') })
+  if (el) el.classList.add('active')
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active') })
+  const target = document.getElementById('view-' + viewId)
+  if (target) target.classList.add('active')
+  document.getElementById('topbar-title').textContent = viewTitles[viewId] || viewId
+}
+
+function switchTab(tabEl, panelId) {
+  tabEl.parentElement.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active') })
+  tabEl.classList.add('active')
+  const view = tabEl.closest('.view')
+  if (!view) return
+  view.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active') })
+  const panel = document.getElementById(panelId)
+  if (panel) panel.classList.add('active')
+}
+
+function buildWsPreview() {
+  const session = document.getElementById('sa-session').value.trim() || 'session-123'
+  const conv = document.getElementById('sa-conv').value.trim()
+  const token = document.getElementById('sa-token').value.trim()
+  let wsUrl = '/ws/sessions/' + session + '?token=' + encodeURIComponent(token)
+  if (conv) wsUrl += '&conv_session_id=' + encodeURIComponent(conv)
+  document.getElementById('sa-ws-url').textContent = wsUrl
+}
+
+function runPolicyProbe() {
+  document.getElementById('sa-policy-status').className = 'chip chip-red'
+  document.getElementById('sa-policy-status').textContent = 'Probe Result: Denied (401/403)'
+  document.getElementById('sa-policy-note').textContent = 'Internal endpoint without service certificate is rejected under deny-by-default policy.'
+}
+
+buildWsPreview()
+</script>
+</body>
+</html>

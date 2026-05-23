@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="Skill and SOP builder mockup">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1526"/><stop offset="1" stop-color="#131d37"/></linearGradient>
+    <style>.h{font:700 28px Inter,Arial,sans-serif;fill:#eef2ff}.s{font:500 16px Inter,Arial,sans-serif;fill:#9ea8c9}.t{font:500 14px Inter,Arial,sans-serif;fill:#d5dcf4}.k{font:600 14px 'Fira Code',Consolas,monospace;fill:#a98fff}</style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <rect x="40" y="34" width="1200" height="64" rx="14" fill="#1b2748" stroke="#394b7d"/>
+  <text x="72" y="74" class="h" font-size="24">Skills and SOP Designer</text>
+
+  <rect x="40" y="122" width="370" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="68" y="160" class="h" font-size="20">Skills Catalog</text>
+  <rect x="68" y="184" width="314" height="44" rx="10" fill="#7c5cfc"/><text x="88" y="212" class="t" fill="#fff">new_skill: triage_incident</text>
+  <rect x="68" y="238" width="314" height="44" rx="10" fill="#0f1731" stroke="#576ea8"/><text x="88" y="266" class="t">fetch_alert_context</text>
+  <rect x="68" y="292" width="314" height="44" rx="10" fill="#0f1731" stroke="#576ea8"/><text x="88" y="320" class="t">notify_oncall</text>
+  <rect x="68" y="346" width="314" height="44" rx="10" fill="#0f1731" stroke="#576ea8"/><text x="88" y="374" class="t">create_ticket</text>
+
+  <rect x="440" y="122" width="800" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="468" y="160" class="h" font-size="20">SOP Flow</text>
+  <text x="468" y="186" class="s">incident-response-v2</text>
+
+  <rect x="500" y="230" width="220" height="64" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="522" y="268" class="t">1) fetch_alert_context</text>
+  <rect x="810" y="230" width="220" height="64" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="838" y="268" class="t">2) triage_incident</text>
+  <rect x="500" y="348" width="220" height="64" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="540" y="386" class="t">3) create_ticket</text>
+  <rect x="810" y="348" width="220" height="64" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="852" y="386" class="t">4) notify_oncall</text>
+
+  <line x1="720" y1="262" x2="810" y2="262" stroke="#8f77ff" stroke-width="3"/>
+  <line x1="920" y1="294" x2="920" y2="348" stroke="#8f77ff" stroke-width="3"/>
+  <line x1="810" y1="380" x2="720" y2="380" stroke="#8f77ff" stroke-width="3"/>
+  <line x1="610" y1="348" x2="610" y2="294" stroke="#8f77ff" stroke-width="3"/>
+
+  <rect x="468" y="470" width="744" height="210" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="494" y="506" class="h" font-size="18">Resolved Tool Allow-List (role preview)</text>
+  <text x="494" y="538" class="k">jira-prod.search_issues, jira-prod.create_comment, pagerduty.trigger, slack.post_message</text>
+  <text x="494" y="570" class="t">Policy result: compliant with IncidentResponder role</text>
+  <text x="494" y="602" class="t">Estimated run: 4 steps, 2 branch checks</text>
+</svg>

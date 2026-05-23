@@ -407,6 +407,7 @@ strong{font-weight:600}
   <div class="nav-item" data-view="results" onclick="nav(this,'results')"><span class="nav-icon">💾</span>Results</div>
   <div class="nav-item" data-view="notifications" onclick="nav(this,'notifications')"><span class="nav-icon">🔔</span>Notifications</div>
   <div class="nav-item" data-view="observability" onclick="nav(this,'observability')"><span class="nav-icon">📊</span>Observability</div>
+  <div class="nav-item" data-view="security-audit" onclick="nav(this,'security-audit')"><span class="nav-icon">🛡️</span>Security Audit</div>
   <div class="nav-item" data-view="permissions" onclick="nav(this,'permissions')"><span class="nav-icon">🔐</span>Permissions</div>
 </nav>
 
@@ -1709,6 +1710,137 @@ Returns: { request_id, status }</div>
   </div>
 </div>
 
+<!-- ═══════════════════════════════ VIEW: SERVICE SEGREGATION SECURITY AUDIT ═══════════════════════════════ -->
+<div id="view-security-audit" class="view">
+  <div class="view-header">
+    <div><h2>Service Segregation Security Audit</h2><div class="view-desc">Boundary evidence for API and WebSocket transport, caller-scoped allowlists, and deny-by-default enforcement.</div></div>
+    <span class="chip chip-green">Controls Active</span>
+  </div>
+
+  <div class="metrics-grid" style="margin-bottom:16px">
+    <div class="metric-card">
+      <div class="metric-label">UI Boundary</div>
+      <div class="metric-value">API + WS</div>
+      <div class="metric-delta delta-neutral">From API_CONFIG and useChatSession</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Internal Access</div>
+      <div class="metric-value">Caller Scoped</div>
+      <div class="metric-delta delta-neutral">Agent Runtime and Communication Hub partitioned</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Policy Mode</div>
+      <div class="metric-value" style="color:var(--error)">Deny Default</div>
+      <div class="metric-delta delta-neutral">Non-allowlisted routes are blocked</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Revocation Contract</div>
+      <div class="metric-value" style="font-size:20px">revoked/{serial}</div>
+      <div class="metric-delta delta-neutral">Fail-closed on client errors</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'sec-audit-ui')">UI Boundary</div>
+    <div class="tab" onclick="switchTab(this,'sec-audit-policy')">Internal Policy</div>
+    <div class="tab" onclick="switchTab(this,'sec-audit-evidence')">Evidence</div>
+  </div>
+
+  <div id="sec-audit-ui" class="tab-panel active">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><h3>Frontend Transport Configuration</h3></div>
+        <div class="card-body">
+          <div style="margin-bottom:10px"><strong>API_CONFIG.BASE_URL</strong><div class="font-mono mt-2">/api/v1</div></div>
+          <div style="margin-bottom:10px"><strong>API_CONFIG.WS_BASE_URL</strong><div class="font-mono mt-2">/ws</div></div>
+          <div><strong>apiClient</strong><div class="text-secondary mt-2">All REST requests are sent through the shared axios client with bearer token injection.</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>useChatSession WebSocket Builder</h3></div>
+        <div class="card-body">
+          <div class="form-row" style="margin-bottom:10px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Session ID</label>
+              <input id="sec-audit-session-id" class="form-control" value="session-123" oninput="updateSecurityAuditWsUrl()">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Conversation ID</label>
+              <input id="sec-audit-conv-id" class="form-control" value="conv-999" oninput="updateSecurityAuditWsUrl()">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Access Token</label>
+            <input id="sec-audit-token" class="form-control" value="segregation-token" oninput="updateSecurityAuditWsUrl()">
+          </div>
+          <div class="mt-4">
+            <div class="text-sm text-secondary">Computed URL</div>
+            <div id="sec-audit-ws-url" class="font-mono" style="word-break:break-all;margin-top:6px;background:#F8FAFC;border:1px solid var(--border);padding:10px;border-radius:var(--radius-sm)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec-audit-policy" class="tab-panel">
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead><tr><th>Caller</th><th>Endpoint</th><th>Expected</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Agent Runtime</td>
+            <td><span class="font-mono text-sm">GET /api/v1/internal/data/sessions/{session_id}</span></td>
+            <td><span class="chip chip-green">Allowed</span></td>
+            <td class="text-secondary">Runtime-essential data fetch</td>
+          </tr>
+          <tr>
+            <td>Communication Hub</td>
+            <td><span class="font-mono text-sm">POST /api/v1/internal/system-tools/save-result</span></td>
+            <td><span class="chip chip-green">Allowed</span></td>
+            <td class="text-secondary">Service-certificate-authenticated internal call</td>
+          </tr>
+          <tr>
+            <td>Unknown Caller</td>
+            <td><span class="font-mono text-sm">POST /api/v1/internal/authorize/tool-call</span></td>
+            <td><span class="chip chip-red">Denied</span></td>
+            <td class="text-secondary">Not allowlisted and missing trusted caller identity</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Deny-By-Default Probe</h3>
+        <button class="btn btn-primary" onclick="runSecurityAuditProbe()">Run Probe</button>
+      </div>
+      <div class="card-body">
+        <span id="sec-audit-probe-status" class="chip chip-blue">Waiting for probe...</span>
+        <div id="sec-audit-probe-note" class="text-secondary mt-3">Simulates internal endpoint access without a valid service certificate.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec-audit-evidence" class="tab-panel">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Evidence from Shipped Verification</h3></div>
+      <div class="card-body">
+        <div class="session-item"><div class="session-info"><div class="session-name">Frontend boundary test</div><div class="session-binding">Confirms API and WS config paths only; rejects direct DB transport hints.</div></div><span class="chip chip-green">Pass</span></div>
+        <div class="session-item"><div class="session-info"><div class="session-name">Internal authorize deny path</div><div class="session-binding">Rejects missing service certificate with 401/403 behavior.</div></div><span class="chip chip-green">Pass</span></div>
+        <div class="session-item"><div class="session-info"><div class="session-name">System-tools service-certificate enforcement</div><div class="session-binding">Internal system-tools endpoint rejects unauthenticated internal caller.</div></div><span class="chip chip-green">Pass</span></div>
+        <div class="session-item"><div class="session-info"><div class="session-name">Revocation endpoint contract</div><div class="session-binding">Calls /api/v1/internal/certificates/revoked/{serial_number} path.</div></div><span class="chip chip-green">Pass</span></div>
+      </div>
+    </div>
+
+    <div class="log-stream">
+<div class="log-line log-info"><span>[2026-05-22 09:11:18.204]</span> <span class="lvl">[INFO ]</span>  [frontend.boundary ] API_CONFIG.BASE_URL=/api/v1 ; WS_BASE_URL=/ws</div>
+<div class="log-line log-info"><span>[2026-05-22 09:11:18.418]</span> <span class="lvl">[INFO ]</span>  [chat.session      ] Built ws URL with token and conv_session_id query params</div>
+<div class="log-line log-warn"><span>[2026-05-22 09:11:18.829]</span> <span class="lvl">[WARN ]</span>  [internal.policy   ] Caller endpoint not in allowlist; deny_by_default=true</div>
+<div class="log-line log-error"><span>[2026-05-22 09:11:18.833]</span> <span class="lvl">[ERROR]</span>  [system-tools      ] Missing service certificate; request rejected with 403</div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════ VIEW: CHAT ═══════════════════════════════ -->
 <div id="view-chat" class="view">
   <div class="chat-shell">
@@ -2553,6 +2685,7 @@ const viewTitles = {
   'schedules': 'Schedules',
   'notifications': 'Notification Channels',
   'observability': 'Observability',
+  'security-audit': 'Service Segregation Security Audit',
   'chat': 'Communication Hub',
   'conversations': 'Conversations',
   'results': 'Results',
@@ -2994,9 +3127,32 @@ function filterToolsByServer(server) {
   });
 }
 
+function updateSecurityAuditWsUrl() {
+  var sessionId = (document.getElementById('sec-audit-session-id')?.value || '').trim() || 'session-123';
+  var convId = (document.getElementById('sec-audit-conv-id')?.value || '').trim();
+  var token = (document.getElementById('sec-audit-token')?.value || '').trim();
+  var wsUrl = '/ws/sessions/' + sessionId + '?token=' + encodeURIComponent(token);
+  if (convId) wsUrl += '&conv_session_id=' + encodeURIComponent(convId);
+  var output = document.getElementById('sec-audit-ws-url');
+  if (output) output.textContent = wsUrl;
+}
+
+function runSecurityAuditProbe() {
+  var status = document.getElementById('sec-audit-probe-status');
+  var note = document.getElementById('sec-audit-probe-note');
+  if (status) {
+    status.className = 'chip chip-red';
+    status.textContent = 'Probe Result: Denied (401/403)';
+  }
+  if (note) {
+    note.textContent = 'Internal endpoint access without service certificate is denied under caller-scoped allowlist policy.';
+  }
+}
+
 // ═══════════════════════════════ INIT ═══════════════════════════════
 (function init() {
   showView('dashboard');
+  updateSecurityAuditWsUrl();
   // Set default nav item as active
   var dashNav = document.querySelector('.nav-item[data-view="dashboard"]');
   if (dashNav) dashNav.classList.add('active');

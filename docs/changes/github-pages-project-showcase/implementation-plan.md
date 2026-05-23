@@ -1,48 +1,48 @@
 ## Overview
 
-Build a polished static GitHub Pages showcase site for Parthenon using Vite + vanilla TypeScript. Source lives in `site/` at the repo root; the build outputs to `docs/` for GitHub Pages serving. A GitHub Actions workflow automatically builds and publishes on every push to `main`.
+Build a polished static GitHub Pages showcase site for Parthenon using Vite + vanilla TypeScript. Source lives in `site/` at the repo root; the build outputs to `docs/site/` for GitHub Pages serving. A GitHub Actions workflow automatically builds and publishes on every push to `main`.
 
 ## Task Checklist
 
 ### Phase 1 — Site Scaffolding
-- [ ] 1.1 — Create `site/` directory structure
-- [ ] 1.2 — Create `site/package.json` with Vite + TypeScript + Mermaid dependencies
-- [ ] 1.3 — Create `site/tsconfig.json`
-- [ ] 1.4 — Create `site/vite.config.ts` with output dir set to `../docs` and correct base path
-- [ ] 1.5 — Create `site/index.html` shell (links to `src/main.ts`, preserves prototype nav/section structure)
+- [x] 1.1 — Create `site/` directory structure
+- [x] 1.2 — Create `site/package.json` with Vite + TypeScript + Mermaid dependencies
+- [x] 1.3 — Create `site/tsconfig.json`
+- [x] 1.4 — Create `site/vite.config.ts` with output dir set to `../docs` and correct base path
+- [x] 1.5 — Create `site/index.html` shell (links to `src/main.ts`, preserves prototype nav/section structure)
 
 ### Phase 2 — Content & Sections
-- [ ] 2.1 — Port hero section from prototype into `site/index.html` (badge, title, tagline, service pills)
-- [ ] 2.2 — Port architecture section (four arch-cards: SOP/Skill MCP, Security & Permissions, Three-Service Isolation, Dual Identity)
-- [ ] 2.3 — Port diagram section with Mermaid flowchart source inline
-- [ ] 2.4 — Port security deep-dive section (three sec-cards: Tool-Level Permissions, mTLS, Token Isolation)
-- [ ] 2.5 — Port demo/walkthroughs section with all five tab panels (MCP, Skill/SOP, Agent Roles, Agent Types & Trigger, Execution Logs)
-- [ ] 2.6 — Port footer section
-- [ ] 2.7 — Create `site/src/main.ts` — entry point that imports and initialises all modules
-- [ ] 2.8 — Create `site/src/tabs.ts` — tab switching logic (pill click → show/hide panels, active state)
-- [ ] 2.9 — Create `site/src/animations.ts` — IntersectionObserver fade-up animation for `.fade-up` elements
-- [ ] 2.10 — Create `site/src/mermaid-init.ts` — import and initialise Mermaid with dark theme config
+- [x] 2.1 — Port hero section from prototype into `site/index.html` (badge, title, tagline, service pills)
+- [x] 2.2 — Port architecture section (four arch-cards: SOP/Skill MCP, Security & Permissions, Three-Service Isolation, Dual Identity)
+- [x] 2.3 — Port diagram section with Mermaid flowchart source inline
+- [x] 2.4 — Port security deep-dive section (three sec-cards: Tool-Level Permissions, mTLS, Token Isolation)
+- [x] 2.5 — Port demo/walkthroughs section with all five tab panels (MCP, Skill/SOP, Agent Roles, Agent Types & Trigger, Execution Logs)
+- [x] 2.6 — Port footer section
+- [x] 2.7 — Create `site/src/main.ts` — entry point that imports and initialises all modules
+- [x] 2.8 — Create `site/src/tabs.ts` — tab switching logic (pill click → show/hide panels, active state)
+- [x] 2.9 — Create `site/src/animations.ts` — IntersectionObserver fade-up animation for `.fade-up` elements
+- [x] 2.10 — Create `site/src/mermaid-init.ts` — import and initialise Mermaid with dark theme config
 
 ### Phase 3 — Placeholder Assets
-- [ ] 3.1 — Create `site/public/images/placeholder-mcp.svg` (MCP Server Registration UI placeholder)
-- [ ] 3.2 — Create `site/public/images/placeholder-skill-sop.svg` (Skill & SOP UI placeholder)
-- [ ] 3.3 — Create `site/public/images/placeholder-agent-roles.svg` (Agent Roles UI placeholder)
-- [ ] 3.4 — Create `site/public/images/placeholder-agent-trigger.svg` (Agent Types & Trigger UI placeholder)
-- [ ] 3.5 — Create `site/public/images/placeholder-exec-logs.svg` (Execution Logs UI placeholder)
-- [ ] 3.6 — Replace inline `screenshot-placeholder` divs in `index.html` with `<img>` tags pointing to SVG files
+- [x] 3.1 — Create `site/public/images/placeholder-mcp.svg` (MCP Server Registration UI placeholder)
+- [x] 3.2 — Create `site/public/images/placeholder-skill-sop.svg` (Skill & SOP UI placeholder)
+- [x] 3.3 — Create `site/public/images/placeholder-agent-roles.svg` (Agent Roles UI placeholder)
+- [x] 3.4 — Create `site/public/images/placeholder-agent-trigger.svg` (Agent Types & Trigger UI placeholder)
+- [x] 3.5 — Create `site/public/images/placeholder-exec-logs.svg` (Execution Logs UI placeholder)
+- [x] 3.6 — Replace inline `screenshot-placeholder` divs in `index.html` with `<img>` tags pointing to SVG files
 
 ### Phase 4 — Build Pipeline
-- [ ] 4.1 — Create `.github/workflows/deploy-github-pages.yml` with build + deploy steps
-- [ ] 4.2 — Enable GitHub Pages in repository settings (document manual step for operator)
+- [x] 4.1 — Create `.github/workflows/deploy-github-pages.yml` with build + deploy steps
+- [x] 4.2 — Enable GitHub Pages in repository settings (document manual step for operator)
 
 ### Phase 5 — Verification
-- [ ] 5.1 — Run `npm run build` locally in `site/` and verify `docs/` output is produced without errors
-- [ ] 5.2 — Open `docs/index.html` in browser and verify all sections render correctly
-- [ ] 5.3 — Verify Mermaid diagram renders (no CDN dependency in built output)
-- [ ] 5.4 — Verify all five demo tabs switch correctly
-- [ ] 5.5 — Verify fade-up animations fire on scroll
-- [ ] 5.6 — Verify placeholder SVGs are visible and clearly labelled in each tab panel
-- [ ] 5.7 — Verify responsive layout on mobile viewport (nav collapses, grids stack)
+- [x] 5.1 — Run `npm run build` locally in `site/` and verify `docs/` output is produced without errors
+- [x] 5.2 — Open `docs/index.html` in browser and verify all sections render correctly
+- [x] 5.3 — Verify Mermaid diagram renders (no CDN dependency in built output)
+- [x] 5.4 — Verify all five demo tabs switch correctly
+- [x] 5.5 — Verify fade-up animations fire on scroll
+- [x] 5.6 — Verify placeholder SVGs are visible and clearly labelled in each tab panel
+- [x] 5.7 — Verify responsive layout on mobile viewport (nav collapses, grids stack)
 
 ## Phase 1 — Site Scaffolding
 
@@ -93,11 +93,11 @@ Standard browser TypeScript config targeting ES2020, `moduleResolution: bundler`
 ### 1.4 — Create `site/vite.config.ts`
 
 Configure:
-- `build.outDir: '../docs'` — output goes to repo-root `docs/` for GitHub Pages
+- `build.outDir: '../docs/site'` — output goes to repo-root `docs/site/` for GitHub Pages
 - `build.emptyOutDir: true` — clean output on each build
 - `base: './'` — relative base path so GitHub Pages serves correctly whether at root or subdirectory
 
-**Done when:** `npm run build` writes to `docs/` without errors.
+**Done when:** `npm run build` writes to `docs/site/` without errors.
 
 ---
 
@@ -246,7 +246,7 @@ Steps:
 2. `actions/setup-node@v4` with Node 20
 3. `npm ci` in `site/` directory
 4. `npm run build` in `site/` directory
-5. `actions/upload-pages-artifact@v3` pointing to `docs/` directory
+5. `actions/upload-pages-artifact@v3` pointing to `docs/site/` directory
 6. `actions/deploy-pages@v4` in a separate `deploy` job with `pages` and `id-token: write` permissions
 
 **Done when:** Workflow file exists and passes YAML lint.
@@ -265,15 +265,15 @@ In a comment in the workflow file, note the one-time manual step: in repository 
 
 ### 5.1 — Local build verification
 
-Run `npm run build` inside `site/`. Confirm `docs/index.html` is produced and contains the expected sections.
+Run `npm run build` inside `site/`. Confirm `docs/site/index.html` is produced and contains the expected sections.
 
-**Done when:** Build exits 0 and `docs/` contains `index.html`, bundled JS/CSS assets, and `images/` folder.
+**Done when:** Build exits 0 and `docs/site/` contains `index.html`, bundled JS/CSS assets, and `images/` folder.
 
 ---
 
 ### 5.2–5.7 — Browser verification
 
-Open `docs/index.html` locally (or via `vite preview`) and verify:
+Open `docs/site/index.html` locally (or via `vite preview`) and verify:
 - All sections render with correct styling
 - Mermaid diagram appears (not blank)
 - All five tab pills switch content correctly
@@ -286,13 +286,13 @@ Open `docs/index.html` locally (or via `vite preview`) and verify:
 ---
 
 ## Completion Checklist
-- [ ] `site/` source directory is committed with all TypeScript modules
-- [ ] `docs/` output is committed (initial build artifact checked in for GitHub Pages bootstrap)
-- [ ] All five SVG placeholder images are committed to `site/public/images/`
-- [ ] `.github/workflows/deploy-github-pages.yml` is committed and passes YAML lint
-- [ ] Local build produces no TypeScript or Vite errors
-- [ ] All five demo tabs display correct content and placeholder images
-- [ ] Mermaid diagram renders from bundled package (no CDN)
-- [ ] Fade-up scroll animations work
-- [ ] Responsive layout verified at mobile viewport
-- [ ] README or workflow comment documents the one-time GitHub Pages source setting
+- [x] `site/` source directory is committed with all TypeScript modules
+- [x] `docs/` output is committed (initial build artifact checked in for GitHub Pages bootstrap)
+- [x] All five SVG placeholder images are committed to `site/public/images/`
+- [x] `.github/workflows/deploy-github-pages.yml` is committed and passes YAML lint
+- [x] Local build produces no TypeScript or Vite errors
+- [x] All five demo tabs display correct content and placeholder images
+- [x] Mermaid diagram renders from bundled package (no CDN)
+- [x] Fade-up scroll animations work
+- [x] Responsive layout verified at mobile viewport
+- [x] README or workflow comment documents the one-time GitHub Pages source setting

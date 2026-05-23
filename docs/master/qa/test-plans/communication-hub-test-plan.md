@@ -27,6 +27,9 @@
 
 ### Tool Authorization Flow (Security Segregation)
 - Communication Hub requests authorization from Control Center for every tool call (no bypass or caching of auth decisions)
+- Communication Hub caller scope is enforced by Control Center allowlist (hub can call only hub-allowlisted internal endpoints)
+- Communication Hub calling Agent Runtime-only internal endpoints is denied with explicit authorization failure and structured deny event
+- Non-allowlisted internal endpoints are denied by default before handler execution
 - Tool call with valid agent certificate and sufficient permissions: Control Center returns `authorized=true` with identity token; Hub executes tool using Control Center-provided token
 - Tool call with valid certificate but insufficient permissions: Control Center returns 403; Hub returns 403 to Agent Runtime with reason `insufficient_permissions`; tool NOT executed
 - Tool call with invalid or expired certificate: Control Center returns 401/403; Hub returns error to Agent Runtime; tool NOT executed
@@ -90,14 +93,18 @@
 - `backend/tests/unit/test_communication_hub.py` — message routing, WebSocket delivery, relay logic
 - `backend/tests/unit/test_a2a_communication.py` — A2A message relay and slug-target request path coverage
 - `backend/tests/unit/test_a2a_core_flow.py` — A2A requester/receiver lifecycle baseline behaviors
+- `backend/tests/unit/test_control_center_comm_hub_client.py` — revocation contract path and internal client wiring between Communication Hub and Control Center
 
 ### Backend — Integration Tests
 - `backend/tests/integration/test_communication_hub.py` — integration-level routing, session context consistency, concurrent session isolation
 - `backend/tests/integration/test_authorization_flow.py` — full authorization chain exercised through Communication Hub: certificate validation + permission resolution + token provision; `certificate_validation_log` population; denied and authorized outcomes
+- `backend/tests/integration/test_internal_allowlist_partitioning.py` — caller-scoped allowlist enforcement for Communication Hub and deny on Agent Runtime-only endpoints
+- `backend/tests/integration/test_internal_deny_audit_events.py` — deny-by-default evidence with structured deny event fields
 - `backend/tests/integration/test_websocket_communication_hub.py` — websocket delivery integration path
 
 ### E2E Tests
 - `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: tool call authorization with certificate, permission denial (403), revocation enforcement; verifies hub correctly routes authorization decisions
+- `e2e/tests/service-segregation-security-audit.spec.ts` — **Real Backend Integration**: internal authorize and system-tools denial paths, revocation contract endpoint path, browser API/WS-only boundary assertions
 - `e2e/tests/conversations.spec.ts` — message routing and conversation history
 - `e2e/tests/comm-hub-websocket.spec.ts` — communication hub websocket coverage
 - `e2e/tests/websocket-communication-hub.spec.ts` — websocket routing and delivery checks

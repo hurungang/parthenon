@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860" role="img" aria-label="Parthenon high-level architecture diagram">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0f1e"/>
+      <stop offset="100%" stop-color="#101a33"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a2446"/>
+      <stop offset="100%" stop-color="#141d38"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto">
+      <polygon points="0,0 12,4 0,8" fill="#8f77ff"/>
+    </marker>
+    <style>
+      .title { font: 700 40px Inter, Arial, sans-serif; fill: #eef2ff; }
+      .subtitle { font: 400 18px Inter, Arial, sans-serif; fill: #9ea8c9; }
+      .h { font: 700 22px Inter, Arial, sans-serif; fill: #eef2ff; }
+      .t { font: 400 15px Inter, Arial, sans-serif; fill: #c7d0ea; }
+      .k { font: 600 14px 'Fira Code', Consolas, monospace; fill: #a98fff; }
+      .edge { stroke: #8f77ff; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .edge2 { stroke: #63b7ff; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .edge3 { stroke: #45d6a7; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1400" height="860" fill="url(#bg)"/>
+  <text x="70" y="78" class="title">Parthenon Platform Architecture</text>
+  <text x="70" y="112" class="subtitle">Three-service isolation, dual identity realms, and governed MCP tool access via Skills and SOPs</text>
+
+  <rect x="70" y="160" width="260" height="110" rx="16" fill="url(#panel)" stroke="#394b7d"/>
+  <text x="100" y="205" class="h">User Browser</text>
+  <text x="100" y="230" class="t">React Control Center UI</text>
+  <text x="100" y="252" class="k">OIDC + REST + WebSocket</text>
+
+  <rect x="400" y="150" width="920" height="180" rx="18" fill="#111933" stroke="#394b7d"/>
+  <text x="430" y="188" class="h">Identity Provider</text>
+  <text x="430" y="214" class="t">Keycloak / Azure Entra ID</text>
+  <rect x="430" y="230" width="390" height="76" rx="12" fill="url(#panel)" stroke="#566ca5"/>
+  <text x="455" y="274" class="h">User Realm</text>
+  <text x="580" y="274" class="t">Human OIDC accounts</text>
+  <rect x="860" y="230" width="430" height="76" rx="12" fill="url(#panel)" stroke="#566ca5"/>
+  <text x="885" y="274" class="h">Agent Realm</text>
+  <text x="1020" y="274" class="t">AI agent identities</text>
+
+  <rect x="70" y="370" width="1260" height="330" rx="20" fill="#111933" stroke="#394b7d"/>
+  <text x="100" y="410" class="h">Three Isolated Backend Services</text>
+
+  <rect x="110" y="440" width="360" height="230" rx="16" fill="url(#panel)" stroke="#5d75b4"/>
+  <text x="140" y="476" class="h">Control Center</text>
+  <text x="140" y="503" class="t">Sole database owner</text>
+  <text x="140" y="527" class="t">Certificate Authority</text>
+  <text x="140" y="551" class="t">Permission resolver</text>
+  <text x="140" y="575" class="t">Token refresh + audit logs</text>
+
+  <rect x="520" y="440" width="360" height="230" rx="16" fill="url(#panel)" stroke="#5d75b4"/>
+  <text x="550" y="476" class="h">Communication Hub</text>
+  <text x="550" y="503" class="t">UI/Agent message broker</text>
+  <text x="550" y="527" class="t">Agent Gateway + sessions</text>
+  <text x="550" y="551" class="t">Just-in-time token injection</text>
+  <text x="550" y="575" class="t">No direct DB ownership</text>
+
+  <rect x="930" y="440" width="360" height="230" rx="16" fill="url(#panel)" stroke="#5d75b4"/>
+  <text x="960" y="476" class="h">Agent Runtime</text>
+  <text x="960" y="503" class="t">LangChain observe-reason-act</text>
+  <text x="960" y="527" class="t">mTLS authenticated service</text>
+  <text x="960" y="551" class="t">No database access</text>
+  <text x="960" y="575" class="t">No raw identity tokens</text>
+
+  <rect x="350" y="735" width="300" height="88" rx="14" fill="url(#panel)" stroke="#566ca5"/>
+  <text x="378" y="773" class="h">PostgreSQL</text>
+  <text x="378" y="796" class="t">Control Center read/write only</text>
+
+  <rect x="770" y="735" width="560" height="88" rx="14" fill="url(#panel)" stroke="#566ca5"/>
+  <text x="798" y="773" class="h">MCP Hub + Tool Namespaces</text>
+  <text x="798" y="796" class="t">Skills and SOPs resolve to role-governed tool allow-lists</text>
+
+  <path class="edge2" d="M330 215 C365 215, 375 252, 430 252"/>
+  <path class="edge2" d="M330 235 C370 235, 385 270, 430 270"/>
+  <path class="edge2" d="M330 252 C410 252, 480 500, 520 500"/>
+
+  <path class="edge" d="M820 268 C845 268, 850 268, 860 268"/>
+  <path class="edge" d="M1080 306 C960 360, 280 360, 280 440"/>
+
+  <path class="edge" d="M470 535 C495 535, 500 535, 520 535"/>
+  <path class="edge" d="M880 535 C905 535, 910 535, 930 535"/>
+  <path class="edge3" d="M280 670 C280 715, 400 740, 430 740"/>
+  <path class="edge3" d="M1110 670 C1110 715, 980 740, 930 740"/>
+  <path class="edge" d="M700 670 C700 730, 880 745, 880 745"/>
+
+  <text x="560" y="520" class="k">permission check + token resolution</text>
+  <text x="965" y="735" class="k">tool calls + results</text>
+</svg>

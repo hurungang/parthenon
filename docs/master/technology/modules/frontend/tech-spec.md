@@ -92,6 +92,7 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
+| `API_CONFIG` | config object | Defines frontend REST and WebSocket base endpoints used by `apiClient` and chat/session hooks | `frontend/src/api/API_CONFIG.ts` |
 | `apiClient` | axios instance | HTTP client with auth header injection; 401 interceptor redirects to OIDC login; 403 interceptor calls `parsePermissionError` and fires `dispatchPermissionDeniedEvent` | `frontend/src/api/apiClient.ts` |
 | `parsePermissionError` | function | Extracts `PermissionDeniedDetail` from an Axios 403 error response body; returns `null` for non-403 or malformed payloads | `frontend/src/utils/permissionError.ts` |
 | `dispatchPermissionDeniedEvent` | function | Fires `parthenon:permissionDenied` custom DOM event carrying the `PermissionDeniedDetail` payload | `frontend/src/utils/permissionError.ts` |
@@ -101,3 +102,10 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | `AccessDeniedPage` | component | Full-page route-level 403 view at `/access-denied`; reads `RequiredPermission` from `useLocation().state`; mirrors the approved prototype error-state card design | `frontend/src/pages/AccessDeniedPage.tsx` |
 | `extractErrorMessage` | function | Shared utility: reads `error.response.data.detail` (Axios), `error.message` (Error), or falls back to provided `fallback` string; used across `UsersPage`, `RolesPage`, `AccessRequestsPage`, and `GroupsPage` | `frontend/src/utils/errorUtils.ts` |
 | `toolNaming` | utility module | Shared frontend naming/slug formatting helpers used for consistent slug validation and normalization across MCP and agent surfaces | `frontend/src/utils/toolNaming.ts` |
+
+### Segregation Audit Coverage
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `useChatSession` | hook | Manages WebSocket session lifecycle and chat turn transport to Communication Hub with API-only frontend boundaries | `frontend/src/hooks/useChatSession.ts` |
+| `service-segregation-security-audit` | frontend test | Verifies frontend boundary stays API/WS-only and does not introduce direct database transport references | `frontend/src/__tests__/service-segregation-security-audit.test.ts` |

@@ -2,7 +2,7 @@
 
 Created by: Tester Agent  
 Date: 2026-05-22  
-Status: Planned
+Status: Implemented
 
 ## 1. Test Strategy
 
@@ -178,12 +178,10 @@ The checklist below mirrors PRD acceptance criteria and maps each item to explic
 
 Based on `docs/config.yaml` `source.tests` paths, this change should use:
 
-- Primary automated test location: `e2e/tests/`
-
-No test additions are required in the following for this static-site change:
-- `backend/tests/`
-- `frontend/src/__tests__/`
-- `mcp-demo-app/tests/`
+- Backend: `backend/tests/unit/test_github_pages_showcase_site.py`
+- Frontend: `frontend/src/__tests__/service-decomposition/github-pages-showcase.test.ts`
+- E2E: `e2e/tests/github-pages-showcase.spec.ts`
+- E2E config for showcase runner: `e2e/playwright.showcase.config.ts`
 
 ## 7. Execution Notes
 

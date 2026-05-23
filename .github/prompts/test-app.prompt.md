@@ -144,6 +144,12 @@ Otherwise:
 npx playwright test
 ```
 
+Special case for the GitHub Pages showcase flow:
+- If the filter or selected scenario targets `github-pages-showcase`, run the dedicated config that serves `site/` on port 4174:
+```powershell
+npx playwright test tests/github-pages-showcase.spec.ts --config=playwright.showcase.config.ts --reporter=list
+```
+
 Capture pass/fail counts per spec file.
 
 ---

@@ -44,7 +44,6 @@
 - Group-Optional Access Request Flow > user with no groups sees informational alert in request dialog and can submit with justification only
 - Group-Optional Access Request Flow > admin can assign a group and approve a group-less request
 - Permissions Page > renders tabs for tag/role/group/user/access management
-- Bug Reproduction: Role Policy Management > should allow editing role policy as JSON
 - Bug Reproduction: Group View Members > View Members button for groups should open members drawer
 - Schedule Manager > schedule execution history is available
 - Notification Configuration > notification page shows event log with event types
@@ -107,6 +106,10 @@
 - Mocked — Metadata Security: zero identity tokens in Agent Runtime boundary > authorization response: identity_token present at Communication Hub boundary (not Agent Runtime)
 - Mocked — Tool Authorization Decision Outcomes > authorized=false: insufficient permissions — no token, includes reason
 - Mocked — Certificate Revocation Response and Downstream Effects > after revocation: tool authorization returns unauthorized with revoked reason
+- Real Backend Integration - Service Segregation Deny Paths > internal authorize endpoint is wired and rejects missing service certificate
+- Real Backend Integration - Service Segregation Deny Paths > internal system-tools endpoint is wired and rejects missing service certificate
+- Real Backend Integration - Service Segregation Deny Paths > revocation contract endpoint uses revoked/{serial_number} path
+- Browser Boundary - Frontend Uses API/WS Boundaries Only > dashboard traffic does not attempt direct database connections
 
 ## Scenario Index
 | # | Feature | What it Shows | Change | Spec File |
@@ -215,3 +218,7 @@
 | 93 | Security Boundary (Agent Runtime vs Communication Hub) | The `authorize/tool-call` response carries `identity_token` to the Communication Hub, but the certificate validate endpoint (Agent Runtime boundary) never does — demonstrating the token never crosses into Agent Runtime | agent-runtime-security-segregation | agent-security-segregation.spec.ts |
 | 94 | Authorization Flow — Permission Denial | An agent with a valid certificate but insufficient permissions receives `authorized=false`, a null identity token (no credential exposure on deny — AC-6 fail-safe), and a structured `reason` + `required_permission` for auditing | agent-runtime-security-segregation | agent-security-segregation.spec.ts |
 | 95 | Certificate Revocation — Downstream Effect | After a certificate is revoked, a tool-call authorization using that serial number returns `authorized=false` with `reason: certificate_revoked` and a null identity token — proving revocation propagates immediately to tool access | agent-runtime-security-segregation | agent-security-segregation.spec.ts |
+| 96 | Internal Authorize Endpoint Hardening | Real backend call confirms internal authorize endpoint is wired and rejects missing service certificate with auth-deny status (not 404/500) | service-segregation-security-audit | service-segregation-security-audit.spec.ts |
+| 97 | Internal System-Tools Endpoint Hardening | Real backend call confirms internal system-tools endpoint is wired and denies unauthenticated direct invocation without service certificate | service-segregation-security-audit | service-segregation-security-audit.spec.ts |
+| 98 | Revocation Contract Endpoint | Real backend call confirms revocation check path uses `revoked/{serial_number}` contract and is operationally wired | service-segregation-security-audit | service-segregation-security-audit.spec.ts |
+| 99 | Frontend API/WS Boundary | Browser traffic inspection confirms dashboard flow uses API boundary and does not attempt direct database channels (`postgres`, `supabase`, `:5432`) | service-segregation-security-audit | service-segregation-security-audit.spec.ts |

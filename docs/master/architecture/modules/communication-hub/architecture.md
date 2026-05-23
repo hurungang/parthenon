@@ -1,69 +1,27 @@
-# Communication Hub
-
-## Service Segregation Contract
-
-Communication Hub uses service certificate-authenticated internal calls to Control Center and is restricted to its caller-specific allowlist.
-
-Allowed Control Center internal groups:
-- Certificate validation and tool-call authorization
-- Session/conversation/A2A data endpoints
-- System-tools endpoints (`save-result`, `send-notification`, `get-recipient-group`)
-- MCP proxy endpoint
-
-Denied by policy:
-- Agent Runtime-only Control Center endpoints (for example `POST /api/v1/internal/data/sessions/claim-queued`)
-- Any unknown or non-allowlisted internal endpoint
-
-Communication Hub does not access the database directly; all persistence flows route through Control Center.
+# Communication Hub Architecture
 
 ```mermaid
 flowchart LR
-    Req[Requester Agent]
-    Hub[Communication Hub]
-    NameVal[Shared Naming Validation]
-    Perm[Permission Resolver]
-    SOP[SOP A2A Policy]
-    Registry[Agent Registry]
-    Runtime[Agent Runtime]
-    Lifecycle[Receiver Lifecycle Controller]
-    Rec[Receiver Agent]
-    Link[A2A Session Link]
+    UI[Web UI]
+    CH[Communication Hub]
+    CC[Control Center]
+    AR[Agent Runtime]
+    MCP[MCP and Channel Integrations]
 
-    Req -->|target agent type slug| Hub
-    Hub --> NameVal
-    Hub --> Perm
-    Perm --> SOP
-    Hub --> Registry
-    Registry --> Runtime
-    Runtime --> Lifecycle
-    Lifecycle -->|activate or attach| Rec
-    Hub --> Link
-    Req --> Link
-    Rec --> Link
-    Link -->|disconnect intent| Lifecycle
+    UI <-->|Realtime conversation| CH
+    CH -->|Caller: communication_hub| CC
+    AR -->|Tool forwarding path| CH
+    CH --> MCP
 ```
 
 ```mermaid
-sequenceDiagram
-    participant Req as Requester Agent
-    participant Hub as Communication Hub
-    participant NV as Shared Naming Validation
-    participant Perm as Permission Resolver
-    participant SOP as SOP A2A Policy
-    participant Run as Agent Runtime
-    participant Rec as Receiver Agent
+flowchart TB
+    CH2[Communication Hub]
+    CHA[CH allowlist scope in Control Center]
+    ARS[Agent Runtime-only scope]
+    DENY[Denied access and audit evidence]
 
-    Req->>Hub: A2A request(target slug, payload)
-    Hub->>NV: Validate slug format and reservation rules
-    Hub->>Perm: Authorize delegation path
-    Perm->>SOP: Evaluate SOP-step A2A allow rule
-    SOP-->>Perm: Allow or deny
-    Perm-->>Hub: Authorization decision
-    Hub->>Run: Resolve receiver availability
-    Run-->>Hub: Active receiver or activation result
-    Hub->>Rec: Deliver message on shared session link
-    Rec-->>Hub: Response or event
-    Hub-->>Req: Response or event
-    Req->>Hub: Disconnect
-    Hub->>Run: Trigger receiver cleanup
+    CH2 --> CHA
+    CH2 -.->|Request to AR-only scope| ARS
+    ARS --> DENY
 ```

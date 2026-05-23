@@ -139,7 +139,7 @@ All variables are optional. Defaults are suitable for development. Production de
 
 ## Service-to-Service Authentication (Control Center / Agent Runtime / Communication Hub)
 
-These variables control certificate bootstrapping and mTLS for the three-service deployment. They are required only when running the services in decomposed mode.
+These variables control certificate bootstrapping, caller identity normalization, and mTLS policy enforcement for the three-service deployment. They are required when running the services in decomposed mode and mandatory for deny-by-default internal API enforcement.
 
 ### Control Center (additional vars for decomposed mode)
 
@@ -151,6 +151,11 @@ These variables control certificate bootstrapping and mTLS for the three-service
 | `AGENT_INSTANCE_CERT_VALIDITY_HOURS` | Agent-instance certificate validity period (default: `24`) | |
 | `AGENT_RUNTIME_BOOTSTRAP_KEY` | Unique bootstrap secret for Agent Runtime (min 32 chars, random) | ✓ |
 | `COMM_HUB_BOOTSTRAP_KEY` | Unique bootstrap secret for Communication Hub (min 32 chars, random) | ✓ |
+| `INTERNAL_API_POLICY_MODE` | Internal Control Center policy mode for caller-specific allowlists. Accepted values: `audit`, `enforce`. Start in `audit`; switch to `enforce` only after validation window completion. | |
+| `INTERNAL_API_DENY_AUDIT_ENABLED` | Enables structured deny-event telemetry for blocked internal calls. Keep enabled in both `audit` and `enforce`. | |
+| `INTERNAL_API_ALLOWLIST_VERSION` | Optional policy bundle version marker for deployment evidence, drift triage, and rollback coordination. | |
+| `INTERNAL_API_REQUIRE_SERVICE_IDENTITY` | Requires caller identity extraction from validated service certificate before any internal route evaluation. | |
+| `INTERNAL_API_FAIL_CLOSED_REVOCATION` | Enforces fail-closed behavior when certificate revocation status cannot be verified. Required in production. | |
 
 ### Agent Runtime (decomposed mode)
 
@@ -159,6 +164,8 @@ These variables control certificate bootstrapping and mTLS for the three-service
 | `SERVICE_IDENTITY` | Service identity name for certificate bootstrap (default: `agent-runtime`) | |
 | `SERVICE_BOOTSTRAP_KEY` | Bootstrap secret matching `AGENT_RUNTIME_BOOTSTRAP_KEY` in Control Center | ✓ |
 | `CERT_RENEWAL_THRESHOLD_HOURS` | Hours before expiry to trigger certificate renewal (default: `1`) | |
+| `INTERNAL_CALLS_REQUIRE_MTLS` | Requires mTLS for all Agent Runtime calls to Control Center internal APIs in non-local environments. | |
+| `INTERNAL_ALLOWLIST_CALLER_TYPE` | Caller type asserted for allowlist policy matching. Must be `agent_runtime`. | |
 
 > **Removed in decomposed mode**: `DATABASE_URL` and `REDIS_URL` are no longer set on Agent Runtime — it has no direct database access.
 
@@ -170,8 +177,17 @@ These variables control certificate bootstrapping and mTLS for the three-service
 | `SERVICE_BOOTSTRAP_KEY` | Bootstrap secret matching `COMM_HUB_BOOTSTRAP_KEY` in Control Center | ✓ |
 | `CERT_RENEWAL_THRESHOLD_HOURS` | Hours before expiry to trigger certificate renewal (default: `1`) | |
 | `TOKEN_RESOLUTION_CACHE_TTL_SECONDS` | TTL for per-tool-call permission cache (default: `60`) | |
+| `INTERNAL_CALLS_REQUIRE_MTLS` | Requires mTLS for all Communication Hub calls to Control Center internal APIs in non-local environments. | |
+| `INTERNAL_ALLOWLIST_CALLER_TYPE` | Caller type asserted for allowlist policy matching. Must be `communication_hub`. | |
 
 > **Removed in decomposed mode**: `DATABASE_URL` is no longer set on Communication Hub — it has no direct database access.
+
+### Rollout Requirement Notes (Service Segregation Security Audit)
+
+- `AGENT_RUNTIME_BOOTSTRAP_KEY` and `COMM_HUB_BOOTSTRAP_KEY` are mandatory for this rollout and must be rotated if provenance is unknown.
+- `CONTROL_CENTER_URL` must point to the internal TLS endpoint used for mTLS trust validation.
+- `CERT_RENEWAL_THRESHOLD_HOURS` must be explicitly set on Agent Runtime and Communication Hub to prevent certificate expiry during cutover.
+- `INTERNAL_API_POLICY_MODE=enforce` is allowed only after a completed audit observation window with no unresolved allowlist drift.
 
 ---
 
