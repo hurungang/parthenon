@@ -82,6 +82,8 @@
 - Agent Runtime fetches all context (plan, skills, model config) via Control Center data APIs only
 - Agent Runtime bootstrap: certificate issued by Control Center; subsequent requests use mTLS with service cert
 - Certificate renewal: AR renews before expiry; old cert remains active until new cert is validated
+- Agent Runtime calling Communication-Hub-only internal endpoints is denied by Control Center caller-scope policy
+- Agent Runtime calls to non-allowlisted internal endpoints are denied by default with auditable deny reason fields
 
 ## Critical Scenarios
 
@@ -285,6 +287,9 @@ This module has `has_db_changes: true`. Before running any tests:
 - `backend/tests/integration/test_identity_setup_flow.py`
 - `backend/tests/integration/test_communication_hub.py`
 - `backend/tests/integration/test_websocket_communication_hub.py`
+- `backend/tests/integration/test_internal_allowlist_partitioning.py`
+- `backend/tests/integration/test_internal_deny_audit_events.py`
+- `backend/tests/integration/test_internal_revocation_fail_closed.py`
 
 ### Backend API Tests
 - `backend/tests/api/test_agents_api.py`
@@ -309,5 +314,6 @@ This module has `has_db_changes: true`. Before running any tests:
 - `e2e/tests/agent-a2a-communication.spec.ts` — slug validation and delegation preview coverage for A2A-related UI flows
 - `e2e/tests/comm-hub-websocket.spec.ts` — Communication Hub websocket flow coverage
 - `e2e/tests/websocket-communication-hub.spec.ts` — websocket routing and delivery checks
+- `e2e/tests/service-segregation-security-audit.spec.ts` — Real backend deny-path checks for internal authorize/system-tools endpoints and revocation contract endpoint wiring
 - `backend/tests/unit/services/test_plan_generation_service.py` — AgentRuntimeLoader plan injection unit tests (loaded via agent-plan-mode change)
 - `backend/tests/integration/api/test_agent_types_plan.py` — plan injection integration coverage

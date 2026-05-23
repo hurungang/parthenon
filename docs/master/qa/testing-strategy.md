@@ -4,7 +4,7 @@
 - **Unit Tests**: Backend service logic, permission enforcement, skill composition (pytest). Frontend component rendering and state management (vitest).
 - **Integration Tests**: REST API endpoints, MCP proxy round-trips, OIDC token flow. Database schema migration verification against real PostgreSQL.
 - **End-to-End (E2E) Tests**: Full user journeys via Playwright browser automation covering all major UI flows.
-- **Security Tests**: Auth boundary enforcement, permission isolation, credential leak prevention, max-instance enforcement.
+- **Security Tests**: Auth boundary enforcement, permission isolation, credential leak prevention, max-instance enforcement, caller-scoped internal allowlists, and deny-by-default verification with audit evidence.
 - **Performance Tests**: Agent instance throughput, MCP tool call round-trip latency, Communication Hub message throughput under concurrent sessions.
 
 ## Test Layers
@@ -67,3 +67,12 @@ Changes involving certificate issuance, validation, or revocation require:
 - E2E: `e2e/tests/`
 
 Refer to individual test plans for module-specific coverage and test file references.
+
+## Service Segregation Security Requirements
+
+Changes that touch internal service boundaries must include:
+- Backend integration assertions for allowlist partitioning by caller type (`agent_runtime` vs `communication_hub`)
+- Deny-by-default validation for non-allowlisted internal endpoints before handler execution
+- Fail-closed behavior checks when certificate revocation status cannot be validated
+- Structured deny-event validation including caller type, endpoint, method, reason, and timestamp
+- At least one real-backend E2E suite validating internal endpoint wiring and browser API/WS-only boundaries

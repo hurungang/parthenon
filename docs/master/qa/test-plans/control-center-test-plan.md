@@ -45,6 +45,8 @@
 
 ### Authorization Decision
 - Full authorization flow: validate certificate → resolve permissions → check tool in allowed set → check/refresh token → return authorization response
+- Caller-scoped allowlists enforced independently for `agent_runtime` and `communication_hub` callers
+- Requests to internal endpoints outside caller allowlist are denied by default before handler logic executes
 - Authorized tool call: `authorized=true` + identity token included in response; decision logged with outcome `authorized`
 - Unauthorized tool call (insufficient permissions): `authorized=false` with reason `insufficient_permissions`; returns 403; decision logged with outcome `denied`; identity token NOT included in response
 - Invalid/expired/revoked certificate: authorization rejected before permission check; 401/403 returned; no identity token exposed
@@ -67,6 +69,7 @@
 - Serial number collision: database unique constraint prevents duplicate serial numbers; tested with bulk issuance
 - Token refresh during tool execution: Control Center refreshes proactively (within 5-minute window) before returning token; prevents mid-execution expiry
 - OAuth provider prolonged outage: after max retries, clear 503 returned; operator can resolve by fixing OAuth provider
+- Revocation status check service outage: internal requests fail closed and produce auditable deny events
 
 ## Acceptance Criteria
 - AC-1 (Agent Runtime Isolation): Metadata endpoint verified to exclude identity tokens
@@ -84,6 +87,9 @@
 - `backend/tests/integration/test_certificate_lifecycle.py` — CA initialization, certificate issuance, validation (valid/expired/revoked), CN parsing, revocation against real database with schema verification
 - `backend/tests/integration/test_authorization_flow.py` — full authorization chain: certificate validation + permission resolution + token retrieval; `certificate_validation_log` population
 - `backend/tests/integration/test_token_refresh_security.py` — token refresh with mocked OAuth provider; retry/backoff; rate-limit; `token_refresh_log` population; `token_status` transitions
+- `backend/tests/integration/test_internal_allowlist_partitioning.py` — endpoint partitioning by caller type with explicit allow/deny outcomes
+- `backend/tests/integration/test_internal_deny_audit_events.py` — deny-by-default and structured deny evidence assertions
+- `backend/tests/integration/test_internal_revocation_fail_closed.py` — fail-closed behavior when revocation validation is unavailable
 
 ### E2E Tests
 - `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: certificate authentication endpoint wiring, metadata security assertion (no identity tokens in response), tool authorization with certificate validation, revocation flow

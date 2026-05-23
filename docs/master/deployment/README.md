@@ -17,13 +17,24 @@ This section contains all deployment documentation for the Parthenon platform. G
 
 | Document | Description |
 |----------|-------------|
-| [environment-variables.md](environment-variables.md) | Master reference table of all environment variables for every service; update whenever new services are added or variables change |
-| [configuration-files.md](configuration-files.md) | Reference for platform-managed configuration files (e.g., `config/telemetry.yaml`); covers resolution order, Docker Compose bind-mounts, and Kubernetes ConfigMap mounting |
-| [services.md](services.md) | Master inventory of all containers and pods with their roles; update whenever services are added, removed, or renamed |
-| [database-migrations.md](database-migrations.md) | Chronological log of all Alembic migration revisions applied to production; update whenever a migration is promoted |
 | [first-time-deployment.md](first-time-deployment.md) | Ordered step-by-step runbook for the initial deployment of a fresh Parthenon instance |
-| [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state |
-| [operational-runbooks.md](operational-runbooks.md) | Targeted runbooks for specific operational tasks: Permission Engine mode toggling, audit → enforce rollout pattern, role seeding, and latency monitoring |
+| [environment-variables.md](environment-variables.md) | Master reference table of all environment variables for every service; update whenever new services are added or variables change |
+| [services.md](services.md) | Master inventory of all containers and pods with their roles; update whenever services are added, removed, or renamed |
+| [operational-runbooks.md](operational-runbooks.md) | Targeted runbooks for specific operational tasks including permission rollout, service-segregation allowlist cutover, deny-event triage, and certificate failure response |
+| [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state, including service-segregation policy rollback sequence |
+| [configuration-files.md](configuration-files.md) | Reference for platform-managed configuration files (e.g., `config/telemetry.yaml`); covers resolution order, Docker Compose bind-mounts, and Kubernetes ConfigMap mounting |
+| [database-migrations.md](database-migrations.md) | Chronological log of all Alembic migration revisions applied to production; update whenever a migration is promoted |
+
+---
+
+## Service-Segregation Security Rollout Order
+
+Use this sequence for caller-specific internal API allowlist deployment:
+
+1. Confirm required variables and secrets in [environment-variables.md](environment-variables.md)
+2. Validate caller/service boundary expectations in [services.md](services.md)
+3. Execute audit-to-enforce operational procedure in [operational-runbooks.md](operational-runbooks.md)
+4. If cutover issues occur, execute the rollback sequence in [rollback.md](rollback.md)
 
 ---
 

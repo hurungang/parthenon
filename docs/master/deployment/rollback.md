@@ -170,3 +170,58 @@ Stateless MCP servers (such as `mcp-demo-app`) can be rolled back without a data
 6. **Verify no impact on remaining services** — Confirm all remaining services are healthy and that the Hub no longer lists the removed server or its tools.
 
 No database downgrade is required for stateless MCP servers. No other services are affected.
+
+---
+
+## Change-Specific Rollback: Service Segregation Security Audit
+
+Use this section when rolling back the caller-specific Control Center internal API allowlist deployment. Execute steps S1–S5 after completing Steps 1–2 of the general procedure above.
+
+### Trigger Conditions
+
+Initiate this rollback if any of the following occur during or after enforce activation:
+
+- sustained failures on legitimate agent execution or communication workflows
+- persistent mTLS handshake failures across internal service calls
+- high deny-event volume on expected allowlisted routes
+- revocation-check instability causing broad fail-closed call rejection
+
+### Step S1 — Downgrade Policy Mode to Audit
+
+Set `INTERNAL_API_POLICY_MODE` from `enforce` to `audit` on Control Center while keeping deny-event logging enabled.
+
+**Completion condition:** Internal workflows recover and deny telemetry continues.
+
+### Step S2 — Revert Caller Service Images (if needed)
+
+Roll Agent Runtime and Communication Hub back to last known-good image tags that match the previous allowlist contract.
+
+**Completion condition:** Service health is stable and known-good call patterns resume.
+
+### Step S3 — Roll Back Allowlist Version
+
+Revert Control Center to the previous approved allowlist policy bundle version.
+
+**Completion condition:** Deny rates normalize for legitimate internal traffic while non-contract traffic remains denied.
+
+### Step S4 — Repair Certificate and Identity State (conditional)
+
+If certificate mismatch, renewal failure, or identity mapping regression is confirmed:
+
+1. rotate affected service certificates
+2. re-bootstrap caller service identity
+3. validate revocation checks and trust chain health
+
+**Completion condition:** mTLS and identity validation pass consistently for both caller services.
+
+### Step S5 — Stabilize and Re-qualify
+
+Run in audit mode until a clean validation window is completed, then re-attempt enforce cutover using the operational runbook.
+
+**Completion condition:** Zero unresolved allowlist drift and acceptable deny-event baseline.
+
+### Rollback Guardrails
+
+- do not disable service certificate validation
+- do not disable deny-event telemetry during rollback
+- do not grant direct database access to Agent Runtime or Communication Hub

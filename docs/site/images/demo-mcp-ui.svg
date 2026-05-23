@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="MCP integration demo screen mockup">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1526"/><stop offset="1" stop-color="#131d37"/></linearGradient>
+    <style>
+      .h{font:700 30px Inter,Arial,sans-serif;fill:#eef2ff}.s{font:500 16px Inter,Arial,sans-serif;fill:#9ea8c9}
+      .k{font:600 14px 'Fira Code',Consolas,monospace;fill:#a98fff}.t{font:500 14px Inter,Arial,sans-serif;fill:#d5dcf4}
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <rect x="40" y="34" width="1200" height="64" rx="14" fill="#1b2748" stroke="#394b7d"/>
+  <text x="72" y="74" class="h" font-size="24">MCP Hub - Register Server</text>
+  <text x="1050" y="74" class="k">status: connected</text>
+
+  <rect x="40" y="122" width="560" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="72" y="162" class="h" font-size="22">Connection Settings</text>
+  <text x="72" y="190" class="s">Define endpoint, slug, and credentials</text>
+
+  <rect x="72" y="220" width="496" height="56" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="255" class="t">Server Name: Jira Production MCP</text>
+  <rect x="72" y="290" width="496" height="56" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="325" class="t">Slug: jira-prod</text>
+  <rect x="72" y="360" width="496" height="56" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="395" class="t">Endpoint: https://mcp.company.com/jira</text>
+  <rect x="72" y="430" width="496" height="56" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="90" y="465" class="t">Auth: OAuth2 session binding enabled</text>
+
+  <rect x="72" y="526" width="232" height="54" rx="12" fill="#7c5cfc"/>
+  <text x="127" y="560" class="t" fill="#ffffff">Save Server</text>
+  <rect x="334" y="526" width="232" height="54" rx="12" fill="#24345f" stroke="#566ca5"/>
+  <text x="405" y="560" class="t">Test Connection</text>
+
+  <rect x="640" y="122" width="600" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="672" y="162" class="h" font-size="22">Synced Tools</text>
+  <text x="672" y="190" class="s">Namespaced under jira-prod/*</text>
+
+  <rect x="672" y="220" width="536" height="70" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="696" y="248" class="k">jira-prod.search_issues</text><text x="696" y="272" class="t">Scope: role-filtered / read</text>
+  <rect x="672" y="306" width="536" height="70" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="696" y="334" class="k">jira-prod.create_comment</text><text x="696" y="358" class="t">Scope: SOP-approved / write</text>
+  <rect x="672" y="392" width="536" height="70" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="696" y="420" class="k">jira-prod.transition_issue</text><text x="696" y="444" class="t">Scope: role-filtered / write</text>
+
+  <rect x="672" y="504" width="536" height="188" rx="12" fill="#0f1731" stroke="#576ea8"/>
+  <text x="696" y="538" class="h" font-size="18">Session Binding</text>
+  <text x="696" y="568" class="t">Session: service-desk-prod</text>
+  <text x="696" y="596" class="t">Identity: agent-realm:ops-bot</text>
+  <text x="696" y="624" class="t">Mode: token injected by Communication Hub</text>
+  <text x="696" y="652" class="k">mTLS verified</text>
+</svg>

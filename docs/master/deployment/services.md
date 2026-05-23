@@ -35,6 +35,28 @@ This inventory applies to both deployment targets:
 
 ---
 
+## Control Center Internal API Boundary Model
+
+The Control Center internal API is caller-scoped and deny-by-default. Access is granted only when all of the following are true:
+- caller certificate is valid and maps to a known service identity
+- caller type matches policy (`agent_runtime` or `communication_hub`)
+- route and method are explicitly allowlisted for that caller type
+
+### Caller-specific deployment notes
+
+| Caller Type | Allowed Internal API Surface | Explicitly Disallowed |
+|-------------|------------------------------|-----------------------|
+| Agent Runtime | Runtime-essential certificate lifecycle and execution support endpoints required to run agent sessions | Communication Hub-only internal routes, administrative policy routes, and any endpoint not explicitly in the Agent Runtime allowlist |
+| Communication Hub | Hub-essential certificate validation, token-resolution support, and routing support endpoints required for message and tool-call brokering | Agent Runtime-only internal routes, administrative policy routes, and any endpoint not explicitly in the Communication Hub allowlist |
+
+### Service boundary guarantees
+
+- Agent Runtime and Communication Hub never receive database credentials or direct database routes.
+- Caller-specific policy ownership remains in Control Center and is versioned for audit and rollback.
+- Unknown caller types, missing caller identity, and certificate mismatches are denied by default.
+
+---
+
 ## Service Dependencies
 
 ```

@@ -151,6 +151,33 @@ The Control Center is the authoritative security and identity hub for agent exec
 |--------|------|-------------|------|
 | `_initialize_certificate_authority` | function | FastAPI startup hook; calls `initialize_ca()` to load or create the root CA cert and encrypted key on boot | `backend/app/main.py` |
 
+### Internal Segregation Enforcement
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `create_app` | function | Control Center application composition entry point that mounts public and internal routers | `backend/app/main.py` |
+| `_register_routers` | function | Registers internal route groups under `/api/v1/internal` and other API routers | `backend/app/main.py` |
+| `router` (internal includes) | router module | Internal router registration for agent data, session data, authorization, certificates, system-tools, and MCP proxy paths | `backend/app/api/v1/__init__.py` |
+| `JWTAuthMiddleware._is_public` | method | Bypasses JWT auth for `/api/v1/internal/*`; requires strict service-certificate enforcement on internal endpoints | `backend/app/middleware/auth.py` |
+| `require_service_certificate` | dependency | Enforces service certificate validity and caller-specific endpoint allowlists with deny-by-default behavior | `backend/app/api/deps.py` |
+| `_normalize_internal_caller` | function | Normalizes caller identity (`agent-runtime`, `communication-hub`) to policy caller types | `backend/app/api/deps.py` |
+| `_resolve_route_template` | function | Resolves canonical route template used for allowlist matching and deny audit metadata | `backend/app/api/deps.py` |
+| `_raise_internal_policy_deny` | function | Emits structured deny event and returns deterministic 403 error payload for blocked internal calls | `backend/app/api/deps.py` |
+| `InternalAgentDataRouter` | router | Internal runtime context and model/session reference endpoints used by allowlisted internal callers | `backend/app/api/v1/internal/agent_data.py` |
+| `InternalSessionDataRouter` | router | Internal session, conversation, permission, and A2A coordination endpoints | `backend/app/api/v1/internal/session_data.py` |
+| `authorize_tool_call_internal` | endpoint | Internal authorizer endpoint for Communication Hub tool call checks | `backend/app/api/v1/internal/authorization.py` |
+| `validate_certificate_internal` | endpoint | Internal certificate validation endpoint for service callers | `backend/app/api/v1/internal/certificates.py` |
+| `check_certificate_revoked` | endpoint | Internal revocation status endpoint on `revoked/{serial_number}` contract | `backend/app/api/v1/internal/certificates.py` |
+| `bootstrap_service_certificate` | endpoint | Internal bootstrap endpoint for service identity onboarding under bootstrap key policy | `backend/app/api/v1/internal/bootstrap.py` |
+| `save_result_tool` | endpoint | Internal system tool endpoint guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
+| `send_notification_tool` | endpoint | Internal notification system tool endpoint guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
+| `get_recipient_group_tool` | endpoint | Internal recipient-group lookup endpoint guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
+| `proxy_mcp_tool` | endpoint | Internal MCP proxy endpoint for Communication Hub forwarded tool calls | `backend/app/api/v1/internal/mcp_proxy.py` |
+| `CommunicationHubClient` | class | Control Center outbound client to Communication Hub with fail-closed certificate requirements outside explicit development opt-in | `backend/app/services/control_center/comm_hub_client.py` |
+| `engine` | SQLAlchemy engine | Control Center-owned database engine and session boundary | `backend/app/db/session.py` |
+| `AsyncSessionLocal` | session factory | Async session factory for all persisted state access in Control Center | `backend/app/db/session.py` |
+| `get_db` | dependency | DB session dependency used by Control Center route handlers and services | `backend/app/db/session.py` |
+
 ### Tests
 
 | Symbol | Type | Description | File |
@@ -159,3 +186,13 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `test_token_refresh_security` | integration test | Token refresh with mocked OAuth provider; verifies backoff, 429 handling, and audit log writes | `backend/tests/integration/test_token_refresh_security.py` |
 | `test_authorization_flow` | integration test | Full cert → permission → tool authorisation flow; covers permit, deny (tool not allowed), deny (cert revoked) | `backend/tests/integration/test_authorization_flow.py` |
 | `test_token_refresh_service` | unit test | Unit tests for `TokenRefreshServiceV2`; mocked OAuth provider and DB | `backend/tests/unit/test_token_refresh_service.py` |
+| `test_agent_runtime_denied_for_communication_hub_only_endpoint` | integration test | Verifies caller-specific allowlist partitioning blocks Agent Runtime from Communication Hub-only internal endpoints | `backend/tests/integration/test_internal_allowlist_partitioning.py` |
+| `test_communication_hub_denied_for_agent_runtime_only_endpoint` | integration test | Verifies caller-specific allowlist partitioning blocks Communication Hub from Agent Runtime-only internal endpoints | `backend/tests/integration/test_internal_allowlist_partitioning.py` |
+| `test_policy_denial_emits_structured_audit_event` | integration test | Verifies deny-by-default decisions emit structured audit events with endpoint and caller metadata | `backend/tests/integration/test_internal_allowlist_partitioning.py` |
+| `test_unknown_internal_service_is_denied_by_default` | integration test | Verifies unknown caller identities are denied on internal routes | `backend/tests/integration/test_internal_deny_audit_events.py` |
+| `test_unknown_internal_service_denial_emits_structured_event` | integration test | Verifies deny event payload shape for unknown internal callers | `backend/tests/integration/test_internal_deny_audit_events.py` |
+| `test_internal_system_tools_rejects_missing_service_certificate` | integration test | Verifies internal system-tools routes reject missing service certificates | `backend/tests/integration/test_internal_deny_audit_events.py` |
+| `test_remote_revocation_check_fails_closed_on_transport_error` | integration test | Verifies internal revocation checks fail closed on remote transport errors | `backend/tests/integration/test_internal_revocation_fail_closed.py` |
+| `test_remote_revocation_check_allows_dev_opt_in_fallback` | integration test | Verifies revocation fallback is available only behind explicit development opt-in | `backend/tests/integration/test_internal_revocation_fail_closed.py` |
+| `test_check_revocation_status_calls_correct_url` | integration test | Verifies client uses Control Center `revoked/{serial}` endpoint contract | `backend/tests/integration/test_data_clients.py` |
+| `test_check_revocation_status_fail_closed_on_error` | integration test | Verifies data client treats revocation lookup errors as revoked by default | `backend/tests/integration/test_data_clients.py` |

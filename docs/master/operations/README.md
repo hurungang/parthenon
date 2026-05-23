@@ -16,8 +16,11 @@ This section contains all operational reference material for running and maintai
 | **Scheduling Engine** | Triggered vs. completed job counts over time, scheduler queue depth trend |
 | **Infrastructure** | PostgreSQL connection count and query latency, Redis memory and eviction rate, OTEL Collector throughput |
 | **Agent Runtime** | Session queue depth, session throughput and failure rate, dispatch latency, active runtime sessions, execution duration, LangGraph node transitions, permission cache hit rate, permission denials |
+| **Service Segregation Boundary Enforcement** | Allowed vs denied internal calls by caller type, top deny reasons, unknown caller and certificate mismatch trends, revocation health, internal auth latency, and system-tools unauthenticated rejects |
 
 For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
+
+Boundary policy metrics and alerts for internal caller segregation are defined in [monitoring.md](monitoring.md) under Service Segregation Boundary Enforcement.
 
 ---
 
@@ -31,6 +34,8 @@ For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
 | Jaeger (distributed traces) | Use `trace_id` from a log line to jump to the correlated trace in Jaeger UI |
 
 For structured log fields and per-component event reference, see [logging.md](logging.md).
+
+Boundary event catalog and required fields for allowlist enforcement are defined in [logging.md](logging.md) under Internal API Boundary Log Events.
 
 ---
 
@@ -61,3 +66,5 @@ The following endpoints must be included in production readiness checklists and 
 | [agent-runtime.md](runbooks/agent-runtime.md) | Resolving stuck sessions, permission failures, OAuth expiry, timeouts, and queue backlogs in the Agent Runtime with LangGraph |
 | [certificate-security.md](runbooks/certificate-security.md) | CA initialization failures, certificate expiry and renewal failures, certificate compromise response, agent identity token refresh failures, and token leakage investigation |
 | [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) | Internal API deny spikes, unknown caller denials, certificate mismatch denials, allowlist contract drift, and revocation check failures |
+
+For boundary incidents that involve certificate class or identity problems, use [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) for initial triage and [certificate-security.md](runbooks/certificate-security.md) for certificate lifecycle remediation.

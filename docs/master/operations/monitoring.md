@@ -80,8 +80,14 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Control Center** | `parthenon_cc_cert_renewal_failures_total` (labels: `service`) | Failed certificate renewal requests; any sustained non-zero rate is critical |
 | **Control Center Internal Policy** | `internal_allowlist_decisions_total` (labels: `caller_type`, `endpoint`, `method`, `decision`) | Shows allowed vs denied internal calls by caller profile |
 | **Control Center Internal Policy** | `internal_allowlist_denied_total` (labels: `caller_type`, `endpoint`, `method`, `reason`) | Primary signal for deny-by-default enforcement and contract drift |
-| **Control Center Internal Policy** | `internal_unknown_caller_denied_total` | Detects missing or malformed caller identity mapping |
-| **Control Center Internal Policy** | `internal_endpoint_not_allowlisted_total` (labels: `caller_type`, `endpoint`) | Detects privilege-overreach attempts and stale client behavior |
+| **Control Center Internal Policy** | `internal_unknown_caller_denied_total` (labels: `endpoint`, `method`) | Detects missing or malformed caller identity mapping and spoofed internal identities |
+| **Control Center Internal Policy** | `internal_caller_certificate_mismatch_denied_total` (labels: `caller_type`, `presented_cert_type`) | Detects wrong certificate class usage by internal callers |
+| **Control Center Internal Policy** | `internal_endpoint_not_allowlisted_total` (labels: `caller_type`, `endpoint`, `method`) | Detects privilege-overreach attempts and stale client behavior |
+| **Internal Callers (AR and CH)** | `internal_revocation_check_failures_total` (labels: `caller_service`, `failure_mode`) | Detects trust-chain instability that can force fail-closed internal traffic |
+| **Internal Callers (AR and CH)** | `internal_revocation_check_latency_seconds` p99 (labels: `caller_service`) | Detects revocation dependency slowness before widespread request failures |
+| **Control Center Internal API** | `internal_authorization_duration_seconds` p99 (labels: `caller_type`, `endpoint_group`) | Detects authorization gate regressions and dependency slowdown |
+| **Control Center Internal API** | `internal_http_403_total` (labels: `caller_type`, `endpoint_group`) | Distinguishes expected deny-by-default events from allowlisted-path regressions |
+| **Control Center System Tools** | `internal_system_tools_unauthenticated_rejected_total` (labels: `endpoint`) | Confirms service-certificate enforcement on sensitive system-tools paths |
 | **Agent Runtime** | `parthenon_ar_session_total` (labels: `status`) | Agent sessions completed per status (`completed`, `failed`, `timeout`) |
 | **Agent Runtime** | `parthenon_ar_tool_call_total` (labels: `server`, `tool`, `status`) | Tool calls forwarded to CommHub by the Agent Runtime executor |
 | **Communication Hub** | `parthenon_ch_tool_routed_total` (labels: `routing` = `system` or `mcp`) | Tool calls routed by NameResolver; tracks system vs MCP routing split |
@@ -133,6 +139,17 @@ Agent runtime execution health. Add alongside the existing Agent Engine and MCP 
 - **Permission Cache Hit Rate** — Derived from `agent.permission.cache_hits_total` and `agent.permission.cache_misses_total`; alert annotation when below 80%.
 - **Permission Denials** — `agent.runtime.permission_denials_total` rate; alert annotations when non-zero.
 
+### Service Segregation Boundary Enforcement
+Dedicated dashboard panel group for internal caller boundary controls. Panels:
+
+- **Allowed vs Denied Internal Calls** — `internal_allowlist_decisions_total` split by `caller_type` and `decision`.
+- **Top Denied Endpoints** — `internal_allowlist_denied_total` grouped by `caller_type`, `endpoint`, and `reason`.
+- **Unknown Caller and Certificate Mismatch Trends** — `internal_unknown_caller_denied_total` and `internal_caller_certificate_mismatch_denied_total` as separate time series.
+- **Revocation Health** — `internal_revocation_check_failures_total` rate and `internal_revocation_check_latency_seconds` p99 for AR and CH.
+- **Internal Authorization Latency** — `internal_authorization_duration_seconds` p99 by `caller_type` and `endpoint_group`.
+- **Allowlisted Path 403 Regression** — `internal_http_403_total` for known allowlisted endpoint groups.
+- **System Tools Unauthenticated Rejects** — `internal_system_tools_unauthenticated_rejected_total` by endpoint.
+
 ---
 
 ## Alerts to Configure
@@ -183,9 +200,14 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `CertRenewalFailure` | `rate(parthenon_cc_cert_renewal_failures_total) > 0` for 2 min | Critical | AR or CommHub cannot renew cert; service will shut down after expiry |
 | `CommHubNameResolverErrors` | `rate(parthenon_ch_name_resolver_errors_total) > 0` for 5 min | Warning | Agents sending malformed tool names or unknown server IDs; check agent code |
 | `CommHubCertValidationFailures` | `rate(parthenon_ch_cert_validation_failures_total) > 0` for 5 min | Critical | Potential unauthorized tool calls; check for compromised agent certs |
-| `InternalDenySpike` | `rate(internal_allowlist_denied_total) > baseline` for 5 min | Warning | Check recent deployments and allowlist contract drift |
-| `UnknownInternalCallerDetected` | `rate(internal_unknown_caller_denied_total) > 0` for 2 min | Critical | Validate certificate identity propagation and caller normalization |
-| `InternalAllowlistContractDrift` | `rate(internal_endpoint_not_allowlisted_total) > 0` for 2 min | Critical | Verify caller endpoint contract and roll back mismatched deployments if needed |
+| `InternalDenySpike` | `rate(internal_allowlist_denied_total) > baseline` for 5 min | Warning | Start deny spike triage in [runbooks/service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) |
+| `NonAllowlistedEndpointAttemptDetected` | `rate(internal_endpoint_not_allowlisted_total) > 0` for 2 min | Critical | Treat as contract drift or privilege-overreach; follow boundary runbook |
+| `UnknownCallerDenied` | `rate(internal_unknown_caller_denied_total) > 0` for 2 min | Critical | Validate identity extraction and caller normalization immediately; follow boundary runbook |
+| `CallerCertificateMismatch` | `rate(internal_caller_certificate_mismatch_denied_total) > 0` for 2 min | Critical | Validate certificate class assignment and rotation state; follow boundary runbook and [runbooks/certificate-security.md](runbooks/certificate-security.md) |
+| `RevocationCheckFailureSustained` | `rate(internal_revocation_check_failures_total) > 0` for 2 min | Critical | Keep fail-closed mode; restore revocation dependency and follow boundary runbook |
+| `InternalAuthorizationLatencyHigh` | `internal_authorization_duration_seconds` p99 above threshold for 10 min | Warning | Investigate policy dependency and Control Center saturation |
+| `Internal403RegressionAllowedPath` | `rate(internal_http_403_total{endpoint_group=~"allowlisted.*"})` above baseline for 5 min | Warning | Investigate allowlist regression on valid paths; follow boundary runbook |
+| `SystemToolsUnauthenticatedAccessAttempt` | `rate(internal_system_tools_unauthenticated_rejected_total) > 0` for 2 min | Critical | Treat as security event; validate source and network path; follow boundary runbook |
 
 ### MCP Demo App Alerts
 

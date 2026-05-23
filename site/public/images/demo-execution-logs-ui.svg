@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-label="Execution logs viewer mockup">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1526"/><stop offset="1" stop-color="#131d37"/></linearGradient>
+    <style>.h{font:700 28px Inter,Arial,sans-serif;fill:#eef2ff}.s{font:500 16px Inter,Arial,sans-serif;fill:#9ea8c9}.t{font:500 14px Inter,Arial,sans-serif;fill:#d5dcf4}.k{font:600 13px 'Fira Code',Consolas,monospace;fill:#a98fff}</style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <rect x="40" y="34" width="1200" height="64" rx="14" fill="#1b2748" stroke="#394b7d"/>
+  <text x="72" y="74" class="h" font-size="24">Execution Log Viewer</text>
+
+  <rect x="40" y="122" width="300" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="68" y="160" class="h" font-size="20">Sessions</text>
+  <rect x="68" y="186" width="244" height="56" rx="10" fill="#7c5cfc"/><text x="88" y="220" class="t" fill="#fff">sess_9f2e  running</text>
+  <rect x="68" y="252" width="244" height="56" rx="10" fill="#0f1731" stroke="#576ea8"/><text x="88" y="286" class="t">sess_9f1a  success</text>
+  <rect x="68" y="318" width="244" height="56" rx="10" fill="#0f1731" stroke="#576ea8"/><text x="88" y="352" class="t">sess_9ef9  success</text>
+
+  <rect x="370" y="122" width="870" height="590" rx="16" fill="#182345" stroke="#4f67a8"/>
+  <text x="400" y="160" class="h" font-size="20">Span Timeline</text>
+  <text x="400" y="188" class="s">Structured view with collapsible tool and model calls</text>
+
+  <rect x="400" y="220" width="810" height="74" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="424" y="250" class="k">[12:03:11.442] iteration.start</text>
+  <text x="424" y="275" class="t">instruction + user prompt snapshot captured</text>
+
+  <rect x="430" y="306" width="780" height="74" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="454" y="336" class="k">[12:03:13.109] llm.call  model=gpt-5.3-codex</text>
+  <text x="454" y="361" class="t">duration=1.24s  tokens_in=842  tokens_out=219</text>
+
+  <rect x="460" y="392" width="750" height="74" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="484" y="422" class="k">[12:03:14.812] tool.call  jira-prod.search_issues</text>
+  <text x="484" y="447" class="t">status=ok  duration=338ms  policy=allow(role: IncidentResponder)</text>
+
+  <rect x="490" y="478" width="720" height="74" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="514" y="508" class="k">[12:03:15.906] tool.call  slack.post_message</text>
+  <text x="514" y="533" class="t">status=ok  channel=oncall-alerts</text>
+
+  <rect x="400" y="576" width="810" height="108" rx="10" fill="#0f1731" stroke="#576ea8"/>
+  <text x="424" y="606" class="h" font-size="18">Raw Log Toggle</text>
+  <text x="424" y="634" class="t">Switch between operator-friendly span view and full technical payloads.</text>
+  <text x="424" y="660" class="k">otel.trace_id=1fca...  session=sess_9f2e</text>
+</svg>

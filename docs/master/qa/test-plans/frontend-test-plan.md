@@ -53,7 +53,7 @@ Core pages and flows verified to render correctly:
 
 | Area | Spec File |
 |------|-----------|
-| Authentication flows | e2e/tests/auth.spec.ts |
+| Authentication flows | e2e/tests/test-login-flow.spec.ts |
 | Dashboard / app shell | e2e/tests/dashboard.spec.ts |
 | Agent navigation structure, AI Agent nav group | e2e/tests/agent-navigation.spec.ts |
 | Agent Management | e2e/tests/agent-management.spec.ts |
@@ -89,6 +89,23 @@ Core pages and flows verified to render correctly:
 
 ---
 
+### 5. Service Segregation Security Audit (UI Boundary)
+
+**What is tested:**
+- Browser traffic for dashboard/user flows remains on API and WebSocket boundaries only
+- Frontend does not attempt direct database channels (`postgres`, `supabase`, or `:5432` network targets)
+- Boundary-safe client behavior remains consistent while backend deny-path hardening is in effect
+
+**Acceptance criteria:**
+- At least one dashboard journey shows API boundary calls and zero direct database traffic attempts
+- Frontend boundary assertions remain green alongside real-backend internal deny-path probes
+
+**Test files:**
+- [frontend/src/__tests__/service-segregation-security-audit.test.ts](../../../../frontend/src/__tests__/service-segregation-security-audit.test.ts) — boundary-safe client behavior checks for service segregation assumptions
+- [e2e/tests/service-segregation-security-audit.spec.ts](../../../../e2e/tests/service-segregation-security-audit.spec.ts) — browser API/WS-only boundary verification and real-backend deny-path wiring checks
+
+---
+
 ## Edge Cases & Risks
 
 - Font loading failure causes fallback to Roboto or system fonts — must be caught by theme-application tests
@@ -106,3 +123,4 @@ Core pages and flows verified to render correctly:
 | apply-material-theme | Material UI theming: Inter font, indigo palette, component overrides, WCAG AA | 2026-04-30 |
 | unified-agent-navigation | Added agent-navigation.spec.ts to General UI Smoke table | 2026-05-10 |
 | passthrough-sessions | Added section 4: Passthrough Session UI (McpSessionManager, TestMcpToolDialog, AssignMcpSessionsToRoleDialog) | 2026-05-12 |
+| service-segregation-security-audit | Added section 5: Service Segregation Security Audit (UI boundary enforcement and deny-path integration checks) | 2026-05-22 |
