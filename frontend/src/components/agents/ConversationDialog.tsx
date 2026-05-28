@@ -10,8 +10,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Fab,
   IconButton,
   Paper,
+  Popover,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material'
@@ -22,9 +25,15 @@ import CloseIcon from '@mui/icons-material/Close'
 import StopCircleIcon from '@mui/icons-material/StopCircle'
 import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
-import { useChatSession, type ChatMessage } from '../../hooks/useChatSession'
+import {
+  useChatSession,
+  type ChatMessage,
+  type ConversationalGuardrailUsage,
+} from '../../hooks/useChatSession'
 import { useEndConversationSession } from '../../hooks/useConversationSessions'
 import type { ConversationSessionDetail } from '../../types'
 
@@ -34,6 +43,30 @@ interface ConversationDialogProps {
   agentTypeId: string
   agentTypeName: string
   onClose: () => void
+}
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUsage | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const payload = value as Record<string, unknown>
+  return {
+    policySnapshotId:
+      typeof payload['policy_snapshot_id'] === 'string' ? payload['policy_snapshot_id'] : null,
+    tokenUsageCurrentSession: toNullableNumber(payload['token_usage_current_session']),
+    tokenBudget: toNullableNumber(payload['token_budget']),
+    cumulativeIterations: toNullableNumber(payload['cumulative_iterations']),
+    maxIterations: toNullableNumber(payload['max_iterations']),
+    delegatedSteps: toNullableNumber(payload['delegated_steps']),
+    maxDelegatedSteps: toNullableNumber(payload['max_delegated_steps']),
+    delegationDepth: toNullableNumber(payload['delegation_depth']),
+    maxDelegationDepth: toNullableNumber(payload['max_delegation_depth']),
+  }
 }
 
 /**
@@ -58,11 +91,58 @@ export function ConversationDialog({
   const [endError, setEndError] = useState<unknown>(null)
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [pendingInitialMessage, setPendingInitialMessage] = useState<string | null>(null)
+  const [guardrailHintAnchorEl, setGuardrailHintAnchorEl] = useState<HTMLElement | null>(null)
+  const [resumedGuardrailUsage, setResumedGuardrailUsage] =
+    useState<ConversationalGuardrailUsage | null>(null)
 
   const endSession = useEndConversationSession(agentTypeId)
 
-  const { messages: wsMessages, connected, pendingQuestion, sessionTitle, sendMessage } =
+  const { messages: wsMessages, connected, pendingQuestion, sessionTitle, guardrailUsage, sendMessage } =
     useChatSession(wsSessionId, convSessionId)
+  const effectiveGuardrailUsage = guardrailUsage ?? resumedGuardrailUsage
+
+  const formatTokenCountK = (value: number | null): string => {
+    if (value == null) return t('agents.sessions.logViewer.summary.notAvailable')
+    const tokenCountK = value / 1000
+    const rounded = Math.round(tokenCountK * 10) / 10
+    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}k tokens`
+  }
+
+  const formatPair = (current: number | null, limit: number | null, formatter?: (value: number) => string): string => {
+    if (current == null) return t('agents.sessions.logViewer.summary.notAvailable')
+    const format = formatter ?? ((value: number) => `${value}`)
+    const currentLabel = format(current)
+    const limitLabel = limit == null ? null : format(limit)
+    return limitLabel ? `${currentLabel} / ${limitLabel}` : currentLabel
+  }
+
+  const guardrailRows = effectiveGuardrailUsage
+    ? [
+        {
+          label: t('agents.sessions.logViewer.summary.policySnapshot'),
+          value: effectiveGuardrailUsage.policySnapshotId ?? t('agents.sessions.logViewer.summary.notAvailable'),
+        },
+        {
+          label: t('agents.sessions.logViewer.summary.currentSessionTokens'),
+          value: formatPair(effectiveGuardrailUsage.tokenUsageCurrentSession, effectiveGuardrailUsage.tokenBudget, formatTokenCountK),
+        },
+        {
+          label: t('agents.sessions.logViewer.summary.iterations'),
+          value: formatPair(effectiveGuardrailUsage.cumulativeIterations, effectiveGuardrailUsage.maxIterations),
+        },
+        {
+          label: t('agents.sessions.logViewer.summary.delegatedSteps'),
+          value: formatPair(effectiveGuardrailUsage.delegatedSteps, effectiveGuardrailUsage.maxDelegatedSteps),
+        },
+        {
+          label: t('agents.sessions.logViewer.summary.delegationDepth'),
+          value: formatPair(effectiveGuardrailUsage.delegationDepth, effectiveGuardrailUsage.maxDelegationDepth),
+        },
+      ]
+    : []
+
+  const guardrailHintOpen = Boolean(guardrailHintAnchorEl)
 
   // Combine resumed history with live WebSocket messages
   const messages = [...resumedMessages, ...wsMessages]
@@ -102,8 +182,23 @@ export function ConversationDialog({
       setEndError(null)
       setEndConfirmOpen(false)
       setFullscreen(false)
+      setPendingInitialMessage(null)
+      setGuardrailHintAnchorEl(null)
+      setResumedGuardrailUsage(null)
     }
   }, [open, convSessionId, messages, sessionId])
+
+  useEffect(() => {
+    if (!pendingInitialMessage || !convSessionId || !connected || isResuming) {
+      return
+    }
+
+    const wasQueuedOrSent = sendMessage(pendingInitialMessage)
+    if (wasQueuedOrSent) {
+      setInputText('')
+      setPendingInitialMessage(null)
+    }
+  }, [connected, convSessionId, isResuming, pendingInitialMessage, sendMessage])
 
   const handleResumeSession = async (sessionId: string) => {
     setIsResuming(true)
@@ -113,6 +208,7 @@ export function ConversationDialog({
         `/conversations/${sessionId}/resume`,
       )
       setConvSessionId(data.id)
+      setResumedGuardrailUsage(parsePersistedGuardrailUsage(data.guardrail_usage))
       // Convert history turns to ChatMessages for display
       const history: ChatMessage[] = (data.turns ?? []).map((turn) => ({
         id: turn.id,
@@ -138,6 +234,7 @@ export function ConversationDialog({
       })
       setConvSessionId(data.id)
       setWsSessionId(data.id)
+      setResumedGuardrailUsage(null)
       return data.id
     } catch (err) {
       setError(err)
@@ -169,6 +266,9 @@ export function ConversationDialog({
       if (!startedSessionId) {
         return
       }
+
+      setPendingInitialMessage(messageToSend)
+      return
     }
 
     // sendMessage queues when socket is not OPEN yet, then flushes on onopen.
@@ -186,6 +286,22 @@ export function ConversationDialog({
   }
 
   const displayTitle = sessionTitle ?? agentTypeName
+  const connectionLabel =
+    convSessionId && !connected
+      ? pendingInitialMessage || isResuming
+        ? t('conversations.sessions.connecting')
+        : t('conversations.sessions.disconnected')
+      : connected
+        ? t('conversations.sessions.connected')
+        : null
+
+  const handleToggleGuardrailHint = (event: React.MouseEvent<HTMLElement>) => {
+    setGuardrailHintAnchorEl((current) => (current ? null : event.currentTarget))
+  }
+
+  const handleCloseGuardrailHint = () => {
+    setGuardrailHintAnchorEl(null)
+  }
 
   return (
     <>
@@ -207,10 +323,10 @@ export function ConversationDialog({
             <Typography variant="h6" component="span" fontWeight={600}>
               {displayTitle}
             </Typography>
-            {convSessionId && (
+            {connectionLabel && (
               <Chip
-                label={connected ? t('conversations.sessions.connected') : t('conversations.sessions.disconnected')}
-                color={connected ? 'success' : 'error'}
+                label={connectionLabel}
+                color={connected ? 'success' : pendingInitialMessage || isResuming ? 'info' : 'error'}
                 size="small"
               />
             )}
@@ -239,51 +355,83 @@ export function ConversationDialog({
           ) : (
             <>
               {/* Messages list */}
-              <Paper
-                variant="outlined"
-                sx={{ flex: 1, overflow: 'auto', p: 2, m: 2, bgcolor: 'grey.50' }}
-              >
-                {messages.length === 0 ? (
-                  <Typography color="text.secondary" align="center">
-                    {t('conversations.sessions.chatEmpty')}
-                  </Typography>
-                ) : (
-                  messages.map((msg: ChatMessage) => (
-                    <Box
-                      key={msg.id}
-                      display="flex"
-                      flexDirection={msg.role === 'user' ? 'row-reverse' : 'row'}
-                      alignItems="flex-start"
-                      gap={1}
-                      mb={2}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          bgcolor: msg.role === 'user' ? 'primary.main' : 'secondary.main',
-                        }}
+              <Box sx={{ m: 2, mb: 1.5, position: 'relative', flex: 1, minHeight: 0 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{ height: '100%', overflow: 'auto', p: 2, bgcolor: 'grey.50' }}
+                >
+                  {messages.length === 0 ? (
+                    <Typography color="text.secondary" align="center">
+                      {t('conversations.sessions.chatEmpty')}
+                    </Typography>
+                  ) : (
+                    messages.map((msg: ChatMessage) => (
+                      <Box
+                        key={msg.id}
+                        display="flex"
+                        flexDirection={msg.role === 'user' ? 'row-reverse' : 'row'}
+                        alignItems="flex-start"
+                        gap={1}
+                        mb={2}
                       >
-                        {msg.role === 'user' ? <PersonIcon /> : <SmartToyIcon />}
-                      </Avatar>
-                      <Paper
-                        sx={{
-                          p: 1.5,
-                          maxWidth: '70%',
-                          bgcolor: msg.role === 'user' ? 'primary.light' : 'background.paper',
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                          {msg.content}
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  ))
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            bgcolor: msg.role === 'user' ? 'primary.main' : 'secondary.main',
+                          }}
+                        >
+                          {msg.role === 'user' ? <PersonIcon /> : <SmartToyIcon />}
+                        </Avatar>
+                        <Paper
+                          sx={{
+                            p: 1.5,
+                            maxWidth: '70%',
+                            bgcolor: msg.role === 'user' ? 'primary.light' : 'background.paper',
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                            {msg.content}
+                          </Typography>
+                        </Paper>
+                      </Box>
+                    ))
+                  )}
+                </Paper>
+
+                {guardrailRows.length > 0 && (
+                  <Fab
+                    size="small"
+                    color="default"
+                    aria-label={t('conversations.sessions.guardrailFloatingAriaLabel')}
+                    aria-expanded={guardrailHintOpen}
+                    onClick={handleToggleGuardrailHint}
+                    sx={{
+                      position: 'absolute',
+                      right: { xs: 10, md: 12 },
+                      bottom: { xs: 10, md: 12 },
+                      zIndex: 2,
+                      boxShadow: 3,
+                      minHeight: 34,
+                      height: 34,
+                      width: 'auto',
+                      px: 1.2,
+                      borderRadius: 999,
+                      gap: 0.8,
+                    }}
+                  >
+                    {guardrailHintOpen ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    <Typography variant="caption" fontWeight={700} sx={{ whiteSpace: 'nowrap' }}>
+                      {guardrailHintOpen
+                        ? t('conversations.sessions.guardrailHintClose')
+                        : t('conversations.sessions.guardrailHintOpen')}
+                    </Typography>
+                  </Fab>
                 )}
-              </Paper>
+              </Box>
 
               {/* Input box */}
-              <Box p={2} pt={0}>
+              <Box p={2} pt={0.5}>
                 <Box display="flex" gap={1}>
                   <TextField
                     fullWidth
@@ -293,19 +441,75 @@ export function ConversationDialog({
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t('conversations.sessions.chatPlaceholder')}
-                    disabled={convSessionId ? !connected || !!pendingQuestion : false}
+                    disabled={convSessionId ? !connected || !!pendingQuestion || !!pendingInitialMessage : false}
                     size="small"
                   />
                   <Button
                     variant="contained"
                     onClick={() => void handleSend()}
-                    disabled={!inputText.trim() || (convSessionId ? !connected || !!pendingQuestion : false)}
+                    disabled={!inputText.trim() || (convSessionId ? !connected || !!pendingQuestion || !!pendingInitialMessage : false)}
                     startIcon={<SendIcon />}
                   >
                     {t('conversations.sessions.send')}
                   </Button>
                 </Box>
               </Box>
+
+              {guardrailRows.length > 0 && (
+                <Popover
+                  open={guardrailHintOpen}
+                  anchorEl={guardrailHintAnchorEl}
+                  onClose={handleCloseGuardrailHint}
+                  anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  slotProps={{
+                    paper: {
+                      sx: {
+                        mt: -1,
+                        width: { xs: 'calc(100vw - 32px)', sm: 360 },
+                        maxHeight: { xs: '50vh', sm: 320 },
+                        p: 1.25,
+                        borderRadius: 2,
+                        overflowY: 'auto',
+                      },
+                    },
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.75}>
+                    <Typography variant="subtitle2" fontWeight={700}>
+                      {t('conversations.sessions.guardrailPanelTitle')}
+                    </Typography>
+                    <Button size="small" onClick={handleCloseGuardrailHint}>
+                      {t('conversations.sessions.guardrailCollapse')}
+                    </Button>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                    {t('conversations.sessions.guardrailPanelSubtitle')}
+                  </Typography>
+
+                  <Stack spacing={0.75}>
+                    {guardrailRows.map((row) => (
+                      <Box
+                        key={row.label}
+                        sx={{
+                          border: (theme) => `1px solid ${theme.palette.divider}`,
+                          borderRadius: 1.5,
+                          px: 1,
+                          py: 0.85,
+                          bgcolor: 'background.paper',
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary" display="block" mb={0.25}>
+                          {row.label}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                          {row.value}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Popover>
+              )}
             </>
           )}
         </DialogContent>

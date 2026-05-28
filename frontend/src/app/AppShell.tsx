@@ -37,6 +37,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications'
 import MonitorIcon from '@mui/icons-material/Monitor'
 import LogoutIcon from '@mui/icons-material/Logout'
 import SecurityIcon from '@mui/icons-material/Security'
+import SettingsIcon from '@mui/icons-material/Settings'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import GroupIcon from '@mui/icons-material/Group'
@@ -69,6 +70,7 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
   { labelKey: 'nav.results', path: '/results', icon: <FolderIcon /> },
   { labelKey: 'nav.observability', path: '/observability', icon: <MonitorIcon /> },
+  { labelKey: 'nav.systemConfig', path: '/system-config', icon: <SettingsIcon /> },
   { labelKey: 'nav.permissions', path: '/user-permissions', icon: <SecurityIcon /> },
 ]
 

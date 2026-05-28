@@ -8,6 +8,7 @@ Covers:
 - generate_plan LLM timeout: caught and recorded, exception not propagated
 - generate_plan upsert: first save creates row, second save updates (no duplicate)
 - generate_plan no role: empty graph handled without crash
+- _resolve_graph SOP filtering: by system instruction, default fallback, keep-all
 """
 from __future__ import annotations
 
@@ -429,3 +430,143 @@ async def test_upsert_plan_updates_existing_row():
     # The existing plan should have been mutated
     assert existing_plan.generation_status == AgentPlanStatus.success
     assert existing_plan.plan_steps is not None
+
+
+# ── _resolve_graph SOP filtering ──────────────────────────────────────────────
+
+
+def _make_role(role_id: uuid.UUID, name: str = "Test Role") -> MagicMock:
+    role = MagicMock()
+    role.id = role_id
+    role.name = name
+    role.description = None
+    return role
+
+
+def _make_sop(sop_id: uuid.UUID, name: str) -> MagicMock:
+    sop = MagicMock()
+    sop.id = sop_id
+    sop.name = name
+    sop.description = None
+    sop.instructions = None
+    sop.steps = []
+    return sop
+
+
+def _make_db_for_resolve_graph(
+    role: MagicMock,
+    sop_ids: list[uuid.UUID],
+    sops: list[MagicMock],
+) -> AsyncMock:
+    """Build a DB AsyncMock for _resolve_graph with no identity, no skills, no MCP sessions."""
+    db = AsyncMock()
+
+    # Call 1: select(AgentRole) → scalar_one_or_none
+    role_result = MagicMock()
+    role_result.scalar_one_or_none.return_value = role
+
+    # Call 2: select(AgentRoleMcpSession, McpSession) → .all()
+    sessions_result = MagicMock()
+    sessions_result.all.return_value = []
+
+    # Call 3: select(AgentRoleSOP.sop_id) → .fetchall()
+    sop_ids_result = MagicMock()
+    sop_ids_result.fetchall.return_value = [(sid,) for sid in sop_ids]
+
+    # Call 4: select(Sop) → .scalars().all()
+    sops_scalars = MagicMock()
+    sops_scalars.all.return_value = sops
+    sops_result = MagicMock()
+    sops_result.scalars.return_value = sops_scalars
+
+    # Call 5: select(AgentRoleSkill.skill_id) → .fetchall()
+    skills_result = MagicMock()
+    skills_result.fetchall.return_value = []
+
+    db.execute.side_effect = [
+        role_result,
+        sessions_result,
+        sop_ids_result,
+        sops_result,
+        skills_result,
+    ]
+    return db
+
+
+@pytest.mark.asyncio
+async def test_resolve_graph_filters_sops_by_system_instruction():
+    """System instruction names 'query-supabase' → sop_data_list contains only that SOP."""
+    service = PlanGenerationService()
+    role_id = uuid.uuid4()
+    sop1_id = uuid.uuid4()
+    sop2_id = uuid.uuid4()
+
+    at = _make_agent_type(
+        role_id=role_id,
+        system_instruction="Use the query-supabase procedure to retrieve data.",
+    )
+    at.identity_id = None
+
+    role = _make_role(role_id)
+    sop1 = _make_sop(sop1_id, "query-supabase")
+    sop2 = _make_sop(sop2_id, "send-email")
+    db = _make_db_for_resolve_graph(role, [sop1_id, sop2_id], [sop1, sop2])
+
+    graph = await service._resolve_graph(at, db)
+
+    assert len(graph["sops"]) == 1
+    assert graph["sops"][0]["name"] == "query-supabase"
+
+
+@pytest.mark.asyncio
+async def test_resolve_graph_uses_default_sop_as_fallback():
+    """System instruction names no SOP, agent has primary_sop_id → only that SOP returned."""
+    service = PlanGenerationService()
+    role_id = uuid.uuid4()
+    sop1_id = uuid.uuid4()
+    sop2_id = uuid.uuid4()
+
+    at = _make_agent_type(
+        role_id=role_id,
+        primary_sop_id=sop1_id,
+        system_instruction="Process all incoming requests efficiently.",
+    )
+    at.identity_id = None
+
+    role = _make_role(role_id)
+    sop1 = _make_sop(sop1_id, "query-supabase")
+    sop2 = _make_sop(sop2_id, "send-email")
+    db = _make_db_for_resolve_graph(role, [sop1_id, sop2_id], [sop1, sop2])
+
+    graph = await service._resolve_graph(at, db)
+
+    assert len(graph["sops"]) == 1
+    assert graph["sops"][0]["id"] == str(sop1_id)
+
+
+@pytest.mark.asyncio
+async def test_resolve_graph_keeps_all_sops_when_no_instruction_and_no_default():
+    """No system instruction and no primary_sop_id → all role SOPs are kept."""
+    service = PlanGenerationService()
+    role_id = uuid.uuid4()
+    sop1_id = uuid.uuid4()
+    sop2_id = uuid.uuid4()
+
+    at = _make_agent_type(
+        role_id=role_id,
+        primary_sop_id=None,
+        system_instruction=None,
+    )
+    at.identity_id = None
+
+    role = _make_role(role_id)
+    sop1 = _make_sop(sop1_id, "query-supabase")
+    sop2 = _make_sop(sop2_id, "send-email")
+    db = _make_db_for_resolve_graph(role, [sop1_id, sop2_id], [sop1, sop2])
+
+    graph = await service._resolve_graph(at, db)
+
+    assert len(graph["sops"]) == 2
+    sop_names = {s["name"] for s in graph["sops"]}
+    assert sop_names == {"query-supabase", "send-email"}
+

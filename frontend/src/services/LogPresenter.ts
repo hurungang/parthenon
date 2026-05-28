@@ -8,8 +8,10 @@
  */
 import type {
   AgentJobStatus,
+  AgentInputType,
   ExecutionLogEntry,
   ExecutionLogRead,
+  GuardrailUsage,
   LogSummary,
   StructuredLog,
   WorkingStep,
@@ -122,6 +124,120 @@ function countPlanSteps(text: string): number {
   return Math.max(traditional, injected)
 }
 
+function toNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  return value as Record<string, unknown>
+}
+
+function extractGuardrailPayload(entry: ExecutionLogEntry | undefined): Record<string, unknown> | null {
+  if (!entry) {
+    return null
+  }
+
+  const directGuardrail = toRecord(entry.data?.['guardrail'])
+  if (directGuardrail) {
+    return directGuardrail
+  }
+
+  if (
+    entry.event_type === 'guardrail.runtime.snapshot' ||
+    entry.event_type.startsWith('guardrail.runtime.snapshot.') ||
+    entry.event_type === 'guardrail.runtime.conversational_token_usage_snapshot' ||
+    'token_usage_current_session' in entry.data
+  ) {
+    return entry.data
+  }
+
+  return null
+}
+
+function extractGuardrailCurrentPayload(entry: ExecutionLogEntry | undefined): Record<string, unknown> | null {
+  if (!entry) {
+    return null
+  }
+
+  const directPayload = extractGuardrailPayload(entry)
+  if (entry.event_type === 'task_loop_completed' && directPayload) {
+    return directPayload
+  }
+
+  const currentValue = toRecord(entry.data?.['current_value'])
+  if (currentValue) {
+    return currentValue
+  }
+
+  return directPayload
+}
+
+function extractGuardrailThresholdPayload(entry: ExecutionLogEntry | undefined): Record<string, unknown> | null {
+  if (!entry) {
+    return null
+  }
+
+  return toRecord(entry.data?.['threshold_value'])
+}
+
+function extractGuardrailUsage(entries: ExecutionLogEntry[]): GuardrailUsage | null {
+  const latestCompletionEntry = [...entries]
+    .reverse()
+    .find((entry) => entry.event_type === 'task_loop_completed' && extractGuardrailPayload(entry) != null)
+  const latestSnapshotEntry = [...entries]
+    .reverse()
+    .find(
+      (entry) =>
+        entry.event_type === 'guardrail.runtime.snapshot' ||
+        entry.event_type.startsWith('guardrail.runtime.snapshot.') ||
+        entry.event_type === 'guardrail.runtime.conversational_token_usage_snapshot',
+    )
+
+  const currentPayload =
+    extractGuardrailCurrentPayload(latestCompletionEntry) ?? extractGuardrailCurrentPayload(latestSnapshotEntry)
+  const thresholdPayload = extractGuardrailThresholdPayload(latestSnapshotEntry)
+  const payload =
+    extractGuardrailPayload(latestCompletionEntry) ??
+    extractGuardrailPayload(latestSnapshotEntry) ??
+    currentPayload ??
+    thresholdPayload
+
+  if (!payload) {
+    return null
+  }
+
+  const currentIterations = toNullableNumber(currentPayload?.['cumulative_iterations'])
+  const maxIterations = toNullableNumber(thresholdPayload?.['max_iterations'])
+  const currentDelegatedSteps = toNullableNumber(currentPayload?.['delegated_steps'])
+  const maxDelegatedSteps = toNullableNumber(thresholdPayload?.['max_delegated_steps'])
+  const currentDelegationDepth = toNullableNumber(currentPayload?.['delegation_depth'])
+  const maxDelegationDepth = toNullableNumber(thresholdPayload?.['max_delegation_depth'])
+  const tokenUsageCurrentSession = toNullableNumber(currentPayload?.['token_usage_current_session'])
+  const tokenBudget = toNullableNumber(thresholdPayload?.['token_budget'])
+
+  return {
+    policySnapshotId: toNullableString(payload['policy_snapshot_id']),
+    cumulativeIterations: currentIterations ?? toNullableNumber(payload['cumulative_iterations']),
+    maxIterations,
+    delegatedSteps: currentDelegatedSteps ?? toNullableNumber(payload['delegated_steps']),
+    maxDelegatedSteps,
+    delegationDepth: currentDelegationDepth ?? toNullableNumber(payload['delegation_depth']),
+    maxDelegationDepth,
+    elapsedSeconds: toNullableNumber(payload['elapsed_seconds']),
+    tokenUsageCurrentSession: tokenUsageCurrentSession ?? toNullableNumber(payload['token_usage_current_session']),
+    tokenBudget: tokenBudget ?? toNullableNumber(payload['token_budget']),
+    executionTimeoutSeconds: toNullableNumber(thresholdPayload?.['execution_timeout_seconds']),
+  }
+}
+
 function buildSummary(
   executionLog: ExecutionLogRead,
   entries: ExecutionLogEntry[],
@@ -144,8 +260,13 @@ function buildSummary(
   // Identity & role: added to session_started event by the runtime executor
   const identityData = sessionStartedEntry?.data?.['identity_name']
   const roleData = sessionStartedEntry?.data?.['role_name']
+  const inputTypeData = sessionStartedEntry?.data?.['input_type']
   const identity = typeof identityData === 'string' ? identityData : null
   const role = typeof roleData === 'string' ? roleData : null
+  const inputType =
+    inputTypeData === 'none' || inputTypeData === 'typed' || inputTypeData === 'conversation'
+      ? (inputTypeData as AgentInputType)
+      : null
 
   // SOPs and Skills: from the sops_skills_loaded event (has names, not just IDs)
   let sopsSkills: string[] = []
@@ -218,6 +339,7 @@ function buildSummary(
     identity,
     role,
     model,
+    inputType,
     sopsSkills,
     planCompleted,
     planTotal,
@@ -225,6 +347,7 @@ function buildSummary(
     startedAt,
     completedAt,
     durationMs,
+    guardrailUsage: extractGuardrailUsage(entries),
   }
 }
 

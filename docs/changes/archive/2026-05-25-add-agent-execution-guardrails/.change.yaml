@@ -1,0 +1,17 @@
+name: add-agent-execution-guardrails
+created_at: 2026-05-22
+status: master-updated
+master_updated_at: 2026-05-25
+scope:
+  has_ui_changes: true
+  has_architecture_changes: true
+  has_db_changes: false
+  has_deployment_changes: true
+  has_operations_changes: true
+agents_complete:
+  product_owner: true
+  ux_specialist: true
+  architect: true
+  database_designer: skipped
+  developer: true
+  tester: true

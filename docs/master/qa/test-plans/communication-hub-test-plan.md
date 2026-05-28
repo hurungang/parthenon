@@ -62,6 +62,11 @@
 - CommHub bootstrap: certificate issued by Control Center; subsequent requests use mTLS
 - Certificate renewal: CommHub renews before expiry without connection interruption
 
+### Guardrail Outcome Forwarding (add-agent-execution-guardrails)
+- Forwarded runtime outcomes preserve guardrail stop metadata and do not remap stop reason values
+- A2A forwarding paths preserve downstream guardrail terminal outcomes for parent-session triage
+- Hub remains transport-only: no guardrail policy ownership and no guardrail persistence side effects
+
 ## Critical Scenarios
 
 ### Scenario: Authorized Tool Execution
@@ -81,6 +86,11 @@
 - Admin revokes cert while call is in-flight (before Communication Hub validates)
 - Communication Hub validates cert, detects revocation, returns 403
 - Tool NOT executed
+
+### Scenario: Guardrail Stop Propagation
+- Downstream runtime ends execution with a guardrail stop reason
+- Communication Hub forwards response without changing stop reason/category fields
+- Parent-facing session views receive the same terminal guardrail semantics
 
 ## Edge Cases
 - Hub restart during active tool call: in-flight tool call fails with clear error; agent session transitions to failed
@@ -106,5 +116,6 @@
 - `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: tool call authorization with certificate, permission denial (403), revocation enforcement; verifies hub correctly routes authorization decisions
 - `e2e/tests/service-segregation-security-audit.spec.ts` — **Real Backend Integration**: internal authorize and system-tools denial paths, revocation contract endpoint path, browser API/WS-only boundary assertions
 - `e2e/tests/conversations.spec.ts` — message routing and conversation history
+- `e2e/tests/agent-runtime.spec.ts` — execution trigger path coverage through hub forwarding boundaries
 - `e2e/tests/comm-hub-websocket.spec.ts` — communication hub websocket coverage
 - `e2e/tests/websocket-communication-hub.spec.ts` — websocket routing and delivery checks

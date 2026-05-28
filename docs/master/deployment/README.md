@@ -38,6 +38,29 @@ Use this sequence for caller-specific internal API allowlist deployment:
 
 ---
 
+## Agent Execution Guardrails Rollout Order
+
+Use this sequence for `add-agent-execution-guardrails` and subsequent guardrail updates:
+
+1. Confirm guardrail variables and required flags by service in [environment-variables.md](environment-variables.md)
+2. Confirm service responsibility boundaries and rollout order in [services.md](services.md)
+3. Execute post-deploy guardrail verification checklist in [operational-runbooks.md](operational-runbooks.md)
+4. If rollout instability is detected, execute guardrail rollback sequence in [rollback.md](rollback.md)
+
+### Rollout prerequisites
+
+- Guardrail contract-compatible versions are prepared for Control Center, Communication Hub, and Agent Runtime.
+- Required guardrail environment variables are configured before cutover.
+- Guardrail threshold defaults and token fallback policy are approved for the environment.
+
+### Verification expectations
+
+- Guardrail outcomes are classified clearly (cycle detection, cumulative iteration, timeout, delegation depth/steps, token budget/fallback).
+- Conversational token usage is continuously visible and continuation behavior is preserved.
+- Guardrail metadata is preserved and persisted across direct and delegated execution paths.
+
+---
+
 ## Quick Reference
 
 - **Infrastructure dependencies**: PostgreSQL 16 and Redis must be healthy before any backend service starts. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, the bundled Keycloak container is also an infrastructure dependency and must be healthy before the Platform API starts. Ensure host port `8080` is free before starting the stack in bundled mode.

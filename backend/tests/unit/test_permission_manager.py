@@ -154,7 +154,7 @@ def test_check_tool_allowed_raises_permission_denied():
     with pytest.raises(PermissionDeniedError) as exc_info:
         pm.check_tool_allowed("evil-server/drop_database", {"save_result"}, role_id)
 
-    assert "evil-server____drop_database" in str(exc_info.value)
+    assert "evil-server/drop_database" in str(exc_info.value)
 
 
 def test_tool_identifiers_use_canonical_separator():

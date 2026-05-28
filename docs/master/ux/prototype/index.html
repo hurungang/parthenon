@@ -2324,15 +2324,25 @@ Returns: { request_id, status }</div>
           <div class="form-hint">Use lowercase letters, numbers, and hyphens only.</div>
         </div>
         <div class="form-group">
-          <label>Type</label>
-          <select class="form-control" id="agent-type-select" onchange="toggleAgentTypeFields()">
-            <option>sop-agent</option><option>skillful-agent</option>
+          <label>Input Type</label>
+          <select class="form-control" id="agent-input-type-select" onchange="toggleAgentTypeFields()">
+            <option value="none">none</option>
+            <option value="typed">typed</option>
+            <option value="conversation">conversation</option>
           </select>
         </div>
       </div>
       <div class="form-group">
-        <label>Identity (OIDC Client ID)</label>
+        <label>Identity</label>
         <input class="form-control" placeholder="agent-myname@parthenon">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select class="form-control">
+          <option>Developer</option>
+          <option>Data Analyst</option>
+          <option>Operations</option>
+        </select>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -2343,29 +2353,104 @@ Returns: { request_id, status }</div>
           </select>
         </div>
         <div class="form-group">
-          <label>Max Instances</label>
-          <input class="form-control" type="number" value="3" min="1" max="20">
+          <label>Output Type</label>
+          <select class="form-control" id="agent-output-type-select" onchange="toggleAgentOutputTypeFields()">
+            <option value="auto">auto</option>
+            <option value="typed">typed</option>
+            <option value="markdown">markdown</option>
+          </select>
         </div>
       </div>
       <div id="agent-sop-field">
         <div class="form-group">
-          <label>SOP</label>
+          <label>Primary SOP</label>
           <select class="form-control">
             <option>pr-review-workflow</option><option>daily-report-gen</option>
             <option>incident-response</option><option>data-pipeline-audit</option>
           </select>
         </div>
       </div>
-      <div id="agent-skills-field" style="display:none">
+      <div id="agent-input-schema-field" style="display:none">
         <div class="form-group">
-          <label>Skills (multi-select)</label>
-          <select class="form-control" multiple size="4">
-            <option>read-analyze-file</option><option>github-pr-workflow</option>
-            <option>slack-notify</option><option>db-report</option><option>file-organizer</option>
-          </select>
-          <div class="form-hint">Hold Ctrl/Cmd to select multiple</div>
+          <label>Input Schema (JSON)</label>
+          <textarea class="form-control" rows="3" placeholder='{"type":"object","properties":{"query":{"type":"string"}}}'></textarea>
         </div>
       </div>
+      <div id="agent-output-schema-field" style="display:none">
+        <div class="form-group">
+          <label>Output Schema (JSON)</label>
+          <textarea class="form-control" rows="3" placeholder='{"type":"object","properties":{"result":{"type":"string"}}}'></textarea>
+        </div>
+      </div>
+
+      <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;">
+        <summary style="font-weight:600;cursor:pointer;">Guardrails</summary>
+        <div class="form-hint" style="margin-top:6px">Collapsed by default. Values mirror the Agent Type guardrail profile.</div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label>Max Iterations</label>
+            <input class="form-control" type="number" value="10" min="1" max="1000">
+          </div>
+          <div class="form-group">
+            <label>Execution Timeout (seconds)</label>
+            <input class="form-control" type="number" value="300" min="1" max="86400">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Max Delegation Depth</label>
+            <input class="form-control" type="number" value="3" min="0" max="32">
+          </div>
+          <div class="form-group">
+            <label>Max Delegated Steps</label>
+            <input class="form-control" type="number" value="20" min="0" max="5000">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Token Budget</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="form-control" type="number" value="1000" min="1" style="max-width:180px;">
+            <span class="text-secondary text-sm">k tokens</span>
+          </div>
+        </div>
+
+        <div id="agent-guardrail-non-conversation">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Token Enforcement Mode</label>
+              <select class="form-control">
+                <option>observe</option>
+                <option>enforce</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Token Fallback Mode</label>
+              <select class="form-control">
+                <option>observe_and_log</option>
+                <option>stop_on_next_hard_guardrail</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div id="agent-guardrail-conversation" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Conversational Visibility Mode</label>
+              <select class="form-control">
+                <option>enabled</option>
+                <option>disabled</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Conversational Continuation Policy</label>
+              <select class="form-control">
+                <option>allow</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-agent-type')">Cancel</button>
@@ -3040,9 +3125,21 @@ function renumberSteps() {
 
 // ═══════════════════════════════ AGENT TYPE MODAL ═══════════════════════════════
 function toggleAgentTypeFields() {
-  var type = document.getElementById('agent-type-select').value;
-  document.getElementById('agent-sop-field').style.display = (type === 'sop-agent') ? 'block' : 'none';
-  document.getElementById('agent-skills-field').style.display = (type === 'skillful-agent') ? 'block' : 'none';
+  var inputType = document.getElementById('agent-input-type-select').value;
+  document.getElementById('agent-sop-field').style.display = (inputType === 'none') ? 'block' : 'none';
+  document.getElementById('agent-input-schema-field').style.display = (inputType === 'typed') ? 'block' : 'none';
+  document.getElementById('agent-guardrail-conversation').style.display = (inputType === 'conversation') ? 'block' : 'none';
+  document.getElementById('agent-guardrail-non-conversation').style.display = (inputType === 'conversation') ? 'none' : 'block';
+  document.getElementById('agent-output-type-select').disabled = (inputType === 'conversation');
+  if (inputType === 'conversation') {
+    document.getElementById('agent-output-schema-field').style.display = 'none';
+  }
+}
+
+function toggleAgentOutputTypeFields() {
+  var inputType = document.getElementById('agent-input-type-select').value;
+  var outputType = document.getElementById('agent-output-type-select').value;
+  document.getElementById('agent-output-schema-field').style.display = (inputType !== 'conversation' && outputType === 'typed') ? 'block' : 'none';
 }
 
 // ═══════════════════════════════ SCHEDULE MODAL ═══════════════════════════════
@@ -3149,10 +3246,20 @@ function runSecurityAuditProbe() {
   }
 }
 
+function setExecutionLogMode(mode) {
+  var friendly = document.getElementById('execution-log-friendly');
+  var raw = document.getElementById('execution-log-raw');
+  if (!friendly || !raw) return;
+  friendly.style.display = mode === 'raw' ? 'none' : 'block';
+  raw.style.display = mode === 'raw' ? 'block' : 'none';
+}
+
 // ═══════════════════════════════ INIT ═══════════════════════════════
 (function init() {
   showView('dashboard');
   updateSecurityAuditWsUrl();
+  toggleAgentTypeFields();
+  toggleAgentOutputTypeFields();
   // Set default nav item as active
   var dashNav = document.querySelector('.nav-item[data-view="dashboard"]');
   if (dashNav) dashNav.classList.add('active');
@@ -3525,11 +3632,60 @@ function runSecurityAuditProbe() {
       <button class="modal-close" onclick="closeModal('executionDetailsModal')">×</button>
     </div>
     <div class="modal-body">
-      <div class="log-stream">
-        <div class="log-line log-info">[INFO] Starting session sess-1234</div>
-        <div class="log-line log-info">[INFO] Loading SOP github-pr-workflow</div>
-        <div class="log-line log-info">[INFO] Reviewing PR #42</div>
-        <div class="log-line log-info">[INFO] Session completed successfully</div>
+      <div class="card" style="box-shadow:none; margin-bottom:14px;">
+        <div class="card-header" style="padding:12px 14px;">
+          <h3 style="font-size:14px;">Execution Summary</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span class="chip chip-blue">Policy Snapshot: gps-pr-reviewer-2026-05-25</span>
+            <span class="chip chip-green">Within Limits</span>
+          </div>
+        </div>
+        <div class="card-body" style="padding:12px 14px;">
+          <div class="form-row" style="margin-bottom:10px;">
+            <div><div class="summary-key">Current Session Tokens</div><div class="summary-value">412.4k / 1000.0k</div></div>
+            <div><div class="summary-key">Iterations</div><div class="summary-value">6 / 10</div></div>
+          </div>
+          <div class="form-row" style="margin-bottom:10px;">
+            <div><div class="summary-key">Delegated Steps</div><div class="summary-value">11 / 20</div></div>
+            <div><div class="summary-key">Delegation Depth</div><div class="summary-value">2 / 3</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="setExecutionLogMode('friendly')">Friendly View</button>
+        <button class="btn btn-secondary btn-sm" onclick="setExecutionLogMode('raw')">Raw Log</button>
+      </div>
+
+      <div id="execution-log-friendly">
+        <div class="timeline">
+          <div class="timeline-item">
+            <h4><span>Preparation</span><small>09:21:11</small></h4>
+            <p>session_started, tools_resolved, plan_injected</p>
+          </div>
+          <div class="timeline-item">
+            <h4><span>Iteration 1</span><small>09:21:19</small></h4>
+            <p>observe, llm_request, llm_response, tool_call github.read_pr</p>
+          </div>
+          <div class="timeline-item warning">
+            <h4><span>Guardrail Snapshot</span><small>09:21:29</small></h4>
+            <p>token_usage_current_session=412400, cumulative_iterations=6, delegated_steps=11</p>
+          </div>
+          <div class="timeline-item success">
+            <h4><span>Completion</span><small>09:21:35</small></h4>
+            <p>task_loop_completed, session_completed</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="execution-log-raw" style="display:none">
+        <div class="log-stream">
+          <div class="log-line log-info">[2026-05-25T09:21:11.104Z] [INFO] [session_started] Session started for pr-reviewer</div>
+          <div class="log-line log-info">[2026-05-25T09:21:12.018Z] [INFO] [sops_skills_loaded] Loaded SOP github-pr-workflow and related skills</div>
+          <div class="log-line log-info">[2026-05-25T09:21:29.441Z] [INFO] [guardrail.runtime.snapshot] {"cumulative_iterations":6,"delegated_steps":11,"delegation_depth":2,"token_usage_current_session":412400}</div>
+          <div class="log-line log-info">[2026-05-25T09:21:35.227Z] [INFO] [task_loop_completed] Task loop completed within configured guardrails</div>
+          <div class="log-line log-info">[2026-05-25T09:21:35.311Z] [INFO] [session_completed] Session completed successfully</div>
+        </div>
       </div>
     </div>
   </div>

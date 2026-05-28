@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { LogSummaryPanel } from '../components/logs/LogSummaryPanel'
+import { LogSummaryPanel } from '../components/executions/LogSummaryPanel'
 import type { LogSummary } from '../types'
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  useTranslation: () => ({
+    t: (k: string, options?: { value?: string }) => (options?.value ? `${k} ${options.value}` : k),
+  }),
 }))
 
 function makeSummary(overrides: Partial<LogSummary> = {}): LogSummary {
@@ -12,6 +14,7 @@ function makeSummary(overrides: Partial<LogSummary> = {}): LogSummary {
     identity: 'agent@example.com',
     role: 'DataAnalyst',
     model: 'gpt-4o',
+    inputType: null,
     sopsSkills: [],
     planCompleted: 0,
     planTotal: 0,
@@ -19,6 +22,7 @@ function makeSummary(overrides: Partial<LogSummary> = {}): LogSummary {
     startedAt: null,
     completedAt: null,
     durationMs: null,
+    guardrailUsage: null,
     ...overrides,
   }
 }
@@ -62,6 +66,41 @@ describe('LogSummaryPanel', () => {
     render(<LogSummaryPanel summary={makeSummary({ sopsSkills: ['DataPipeline', 'ReportGen'] })} />)
     expect(screen.getByText('DataPipeline')).toBeDefined()
     expect(screen.getByText('ReportGen')).toBeDefined()
+  })
+
+  it('renders guardrail usage table rows when guardrail usage is present', () => {
+    render(
+      <LogSummaryPanel
+        summary={makeSummary({
+          inputType: 'conversation',
+          guardrailUsage: {
+            policySnapshotId: 'policy-1',
+            cumulativeIterations: 7,
+            maxIterations: 10,
+            delegatedSteps: 3,
+            maxDelegatedSteps: 20,
+            delegationDepth: 1,
+            maxDelegationDepth: 3,
+            elapsedSeconds: 12.5,
+            tokenUsageCurrentSession: 125000,
+            tokenBudget: 1000000,
+            executionTimeoutSeconds: 300,
+          },
+        })}
+      />,
+    )
+
+    expect(screen.getByText('agents.sessions.logViewer.summary.guardrailUsageTitle')).toBeDefined()
+    expect(screen.getByText(/policy-1/)).toBeDefined()
+    expect(screen.getByText('agents.sessions.logViewer.summary.runStateWithinLimits')).toBeDefined()
+    expect(screen.getByText('agents.sessions.logViewer.summary.currentSessionTokens')).toBeDefined()
+    expect(screen.getByText('125k tokens / 1000k tokens')).toBeDefined()
+    expect(screen.getByText('agents.sessions.logViewer.summary.iterations')).toBeDefined()
+    expect(screen.getByText('7 / 10')).toBeDefined()
+    expect(screen.getByText('agents.sessions.logViewer.summary.delegatedSteps')).toBeDefined()
+    expect(screen.getByText('3 / 20')).toBeDefined()
+    expect(screen.getByText('agents.sessions.logViewer.summary.delegationDepth')).toBeDefined()
+    expect(screen.getByText('1 / 3')).toBeDefined()
   })
 
   it('does not render SOPs/skills section when sopsSkills is empty', () => {

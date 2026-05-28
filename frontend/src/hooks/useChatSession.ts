@@ -10,6 +10,42 @@ export interface ChatMessage {
   timestamp: string
 }
 
+export interface ConversationalGuardrailUsage {
+  policySnapshotId: string | null
+  tokenUsageCurrentSession: number | null
+  tokenBudget: number | null
+  cumulativeIterations: number | null
+  maxIterations: number | null
+  delegatedSteps: number | null
+  maxDelegatedSteps: number | null
+  delegationDepth: number | null
+  maxDelegationDepth: number | null
+}
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function parseGuardrailUsage(value: unknown): ConversationalGuardrailUsage | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const payload = value as Record<string, unknown>
+  return {
+    policySnapshotId:
+      typeof payload['policy_snapshot_id'] === 'string' ? payload['policy_snapshot_id'] : null,
+    tokenUsageCurrentSession: toNullableNumber(payload['token_usage_current_session']),
+    tokenBudget: toNullableNumber(payload['token_budget']),
+    cumulativeIterations: toNullableNumber(payload['cumulative_iterations']),
+    maxIterations: toNullableNumber(payload['max_iterations']),
+    delegatedSteps: toNullableNumber(payload['delegated_steps']),
+    maxDelegatedSteps: toNullableNumber(payload['max_delegated_steps']),
+    delegationDepth: toNullableNumber(payload['delegation_depth']),
+    maxDelegationDepth: toNullableNumber(payload['max_delegation_depth']),
+  }
+}
+
 /**
  * Manages WebSocket connection lifecycle, inbound message queue,
  * pending question state, and reconnection for a chat session.
@@ -19,6 +55,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const [connected, setConnected] = useState(false)
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
   const [sessionTitle, setSessionTitle] = useState<string | null>(null)
+  const [guardrailUsage, setGuardrailUsage] = useState<ConversationalGuardrailUsage | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const outboundQueueRef = useRef<string[]>([])
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -58,11 +95,20 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           sender_role?: ChatRole
           content?: string
           timestamp?: string
+          guardrail_usage?: unknown
         }
 
         // Handle title_update server event without adding it to messages
         if (data.type === 'title_update' && data.title) {
           setSessionTitle(data.title)
+          return
+        }
+
+        if (data.type === 'guardrail_update') {
+          const parsed = parseGuardrailUsage(data.guardrail_usage)
+          if (parsed) {
+            setGuardrailUsage(parsed)
+          }
           return
         }
 
@@ -121,5 +167,5 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
   const clearMessages = useCallback(() => setMessages([]), [])
 
-  return { messages, connected, pendingQuestion, sessionTitle, sendMessage, clearMessages }
+  return { messages, connected, pendingQuestion, sessionTitle, guardrailUsage, sendMessage, clearMessages }
 }

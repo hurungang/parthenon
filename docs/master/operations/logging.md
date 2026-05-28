@@ -24,6 +24,64 @@ Update this table whenever new components are added or new log events are instru
 | **Control Center Internal Policy** | Full boundary event model: allowlist allowed and denied outcomes, unknown caller denials, caller-certificate mismatch denials, endpoint-not-allowlisted denials, revocation check failures, and system-tools unauthenticated rejections |
 | **All components** | Service startup and shutdown with configuration summary; health check results; unhandled exceptions with full stack trace |
 
+### Agent Execution Guardrail Events
+
+| Event | Level | Description |
+|-------|-------|-------------|
+| `guardrail.precheck.allowed` | INFO | Pre-execution guardrail checks passed |
+| `guardrail.precheck.blocked_cycle` | WARN | Recursive delegation cycle detected and blocked before execution |
+| `guardrail.runtime.iteration_limit_exceeded` | WARN | Cumulative iteration ceiling reached |
+| `guardrail.runtime.timeout_exceeded` | WARN | Per-agent wall-clock timeout reached |
+| `guardrail.runtime.delegation_depth_exceeded` | WARN | Delegation depth limit reached |
+| `guardrail.runtime.delegated_steps_exceeded` | WARN | Delegated-step budget reached |
+| `guardrail.runtime.token_budget_exceeded_non_conversational` | WARN | Non-conversational or automated execution exceeded hard token budget |
+| `guardrail.runtime.conversational_token_threshold_observed` | INFO | Conversational token threshold reached, continuation still allowed |
+| `guardrail.runtime.conversational_token_usage_snapshot` | INFO | Conversational current-session token usage snapshot emitted |
+| `guardrail.runtime.token_fallback_applied` | INFO | Fallback mode activated where strict token enforcement is unavailable |
+| `guardrail.session.terminal` | INFO | Session ended by guardrail with canonical stop reason |
+
+### Guardrail Reason Taxonomy (Canonical)
+
+Use a stable `guardrail_reason` value set for metrics and logs:
+
+- `cycle_blocked`
+- `iteration_limit_exceeded`
+- `timeout_exceeded`
+- `delegation_depth_exceeded`
+- `delegated_steps_exceeded`
+- `token_budget_exceeded_non_conversational`
+- `conversational_token_threshold_observed`
+- `token_fallback_applied`
+
+### Required Fields for Guardrail Events
+
+All guardrail events must include the following fields.
+
+| Field | Requirement |
+|-------|-------------|
+| `timestamp` | ISO 8601 UTC with millisecond precision |
+| `service_name` | Emitting service identifier |
+| `trace_id` | Correlates to distributed trace |
+| `span_id` | Correlates to specific trace span |
+| `session_id` | Agent session identifier |
+| `agent_type_id` | Agent type associated with the guardrail decision |
+| `guardrail_reason` | Canonical reason from the taxonomy above |
+| `execution_mode` | Mode used for policy resolution |
+| `current_value` | Observed value at decision time |
+| `threshold_value` | Policy threshold value used in the decision |
+| `policy_snapshot_id` | Policy/version snapshot used to evaluate the guardrail |
+
+Conditional fields:
+- `token_usage_current_session` and `continuation_allowed` for conversational token events.
+- `fallback_mode` for fallback events.
+- `delegation_chain_depth` for delegation-depth and delegated-step events.
+
+### Sensitive Data Exclusions for Guardrail Events
+
+- Never log identity tokens, refresh tokens, JWT payload bodies, API keys, decrypted secrets, or credential material.
+- Never log full prompt or tool payload contents in guardrail events.
+- Log operational identifiers and counters only; keep guardrail analytics fields stable and non-secret.
+
 ---
 
 ## Log Levels

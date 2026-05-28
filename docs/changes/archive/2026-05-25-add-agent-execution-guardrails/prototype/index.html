@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parthenon Guardrails Prototype</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --primary: #1976d2;
+      --primary-dark: #115293;
+      --primary-light: #e3f2fd;
+      --surface: #ffffff;
+      --bg: #f5f7fb;
+      --border: #dbe3ec;
+      --text-primary: #1f2937;
+      --text-secondary: #64748b;
+      --success: #16a34a;
+      --warning: #f59e0b;
+      --error: #dc2626;
+      --chip-blue-bg: #dbeafe;
+      --chip-blue-text: #1d4ed8;
+      --chip-green-bg: #dcfce7;
+      --chip-green-text: #15803d;
+      --chip-yellow-bg: #fef3c7;
+      --chip-yellow-text: #92400e;
+      --chip-red-bg: #fee2e2;
+      --chip-red-text: #b91c1c;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.12), 0 8px 18px rgba(15, 23, 42, 0.06);
+      --radius: 10px;
+      --radius-sm: 6px;
+      --topbar-h: 64px;
+      --sidebar-w: 260px;
+      --transition: 0.2s ease;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Segoe UI", "Helvetica Neue", "Noto Sans", sans-serif;
+      background: radial-gradient(circle at 5% 0%, #e9f2ff 0, transparent 35%), var(--bg);
+      color: var(--text-primary);
+    }
+
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: var(--sidebar-w);
+      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+      border-right: 1px solid var(--border);
+      padding: 18px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar h1 {
+      margin: 0;
+      padding: 0 20px;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+    }
+
+    .sidebar small {
+      display: block;
+      color: var(--text-secondary);
+      padding: 2px 20px 14px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .nav-item {
+      padding: 11px 20px;
+      margin-right: 12px;
+      border-radius: 0 999px 999px 0;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      transition: background var(--transition), color var(--transition);
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      background: #eef4ff;
+      color: var(--primary);
+    }
+
+    .nav-item.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .main-wrapper {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      height: var(--topbar-h);
+      background: rgba(255, 255, 255, 0.92);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .topbar-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.45px;
+    }
+
+    .chip-blue { background: var(--chip-blue-bg); color: var(--chip-blue-text); }
+    .chip-green { background: var(--chip-green-bg); color: var(--chip-green-text); }
+    .chip-yellow { background: var(--chip-yellow-bg); color: var(--chip-yellow-text); }
+    .chip-red { background: var(--chip-red-bg); color: var(--chip-red-text); }
+
+    .main-content {
+      padding: 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .hero h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.4px;
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      color: var(--text-secondary);
+      max-width: 920px;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .layout-grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: 320px 1fr;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .card-header h3 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -0.2px;
+    }
+
+    .card-body {
+      padding: 16px;
+    }
+
+    .agent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .agent-item {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+    }
+
+    .agent-item:hover {
+      border-color: #9ec5ef;
+      background: #f8fbff;
+    }
+
+    .agent-item.active {
+      border-color: var(--primary);
+      background: #edf5ff;
+    }
+
+    .agent-item strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .agent-item span {
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(170px, 1fr));
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      letter-spacing: 0.45px;
+    }
+
+    .form-control {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 10px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px #e6f0fd;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      margin-top: 10px;
+      background: #fcfdff;
+    }
+
+    .panel h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      letter-spacing: -0.1px;
+    }
+
+    .radios {
+      display: grid;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .radio {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      align-items: start;
+      gap: 8px;
+    }
+
+    .radio input { margin-top: 2px; }
+
+    .radio strong {
+      font-size: 13px;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .radio span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .buttons {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 9px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--primary-dark); }
+
+    .btn-secondary {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text-primary);
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 10px;
+      margin: 12px 0 16px;
+    }
+
+    .kpi {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fafcff;
+      padding: 10px;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      font-weight: 700;
+      letter-spacing: 0.45px;
+    }
+
+    .kpi-value {
+      margin-top: 4px;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .progress-wrap {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      background: #fcfdff;
+    }
+
+    .progress-line {
+      width: 100%;
+      height: 14px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #edf2f8;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #60a5fa, #2563eb);
+      transition: width 0.35s ease;
+    }
+
+    .threshold-mark {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      background: #f59e0b;
+      left: 80%;
+    }
+
+    .progress-meta {
+      margin-top: 8px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-secondary);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .timeline {
+      margin-top: 14px;
+      border-left: 2px solid #d6dee8;
+      padding-left: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .timeline-item {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      position: relative;
+    }
+
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      left: -20px;
+      top: 14px;
+      background: var(--primary);
+      border: 2px solid #fff;
+    }
+
+    .timeline-item h4 {
+      margin: 0;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .timeline-item p {
+      margin: 6px 0 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .timeline-item.warning::before { background: var(--warning); }
+    .timeline-item.error::before { background: var(--error); }
+    .timeline-item.success::before { background: var(--success); }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 10px 0 4px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .summary-tile {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+      padding: 11px;
+      min-width: 0;
+    }
+
+    .summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .summary-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.45px;
+    }
+
+    .state-pill {
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.35px;
+      white-space: nowrap;
+    }
+
+    .state-good { background: #e8f7ee; color: #166534; }
+    .state-near { background: #fff4df; color: #92400e; }
+    .state-over { background: #fee2e2; color: #b91c1c; }
+
+    .summary-value {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .summary-track {
+      position: relative;
+      height: 8px;
+      width: 100%;
+      border-radius: 999px;
+      background: #e6edf6;
+      overflow: hidden;
+    }
+
+    .summary-fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 0;
+      background: linear-gradient(90deg, #60a5fa, #2563eb);
+      transition: width 0.25s ease;
+    }
+
+    .summary-fill.near { background: linear-gradient(90deg, #f8b84f, #f59e0b); }
+    .summary-fill.over { background: linear-gradient(90deg, #f87171, #dc2626); }
+
+    .summary-meta {
+      margin-top: 5px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .summary-note {
+      margin-top: 12px;
+      border: 1px dashed #c5d4e6;
+      border-radius: var(--radius-sm);
+      background: #f7faff;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #334155;
+    }
+
+    .inline-code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #eef2f7;
+      border: 1px solid #dde5ef;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      background: #0f172a;
+      color: #fff;
+      padding: 11px 13px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: all 0.2s ease;
+      z-index: 999;
+    }
+
+    .toast.open {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .conv-guardrail-panel {
+      position: fixed;
+      right: 20px;
+      bottom: 72px;
+      width: min(560px, calc(100vw - 28px));
+      max-height: 62vh;
+      overflow: auto;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+      padding: 14px;
+      z-index: 120;
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+      pointer-events: none;
+      transition: opacity var(--transition), transform var(--transition);
+    }
+
+    .conv-guardrail-panel.open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .conv-guardrail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .conv-guardrail-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+      letter-spacing: 0.2px;
+    }
+
+    .conv-guardrail-fab {
+      position: fixed;
+      right: 20px;
+      bottom: 18px;
+      border: 1px solid #c7d6ea;
+      background: #f8fbff;
+      color: #1e40af;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
+      cursor: pointer;
+      z-index: 121;
+      display: none;
+    }
+
+    .conv-guardrail-fab[aria-expanded="true"] {
+      background: #e8f0ff;
+      color: #1d4ed8;
+    }
+
+    .conv-guardrail-meta {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    body.view-conversational .conv-guardrail-fab,
+    body.view-conversational .conv-guardrail-panel {
+      display: block;
+    }
+
+    @media (max-width: 1120px) {
+      .layout-grid { grid-template-columns: 1fr; }
+      .split { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+    }
+
+    @media (max-width: 800px) {
+      .sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .app-shell { flex-direction: column; }
+      .nav-item { border-radius: 8px; margin: 0 12px; }
+      .main-content { padding: 14px; }
+      .topbar { padding: 0 14px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+
+      .conv-guardrail-fab {
+        right: 12px;
+        bottom: 12px;
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+
+      .conv-guardrail-panel {
+        right: 12px;
+        left: 12px;
+        width: auto;
+        bottom: 58px;
+        max-height: 56vh;
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <h1>Parthenon</h1>
+      <small>Execution Guardrails Prototype</small>
+      <div class="nav-item active" data-view="settings">1. Agent Type Guardrail Settings</div>
+      <div class="nav-item" data-view="automated">2. Execution Log Summary</div>
+    </aside>
+
+    <main class="main-wrapper">
+      <div class="topbar">
+        <div class="topbar-title" id="viewTitle">Agent Type Guardrail Settings</div>
+        <div class="chip chip-blue">Prototype Only</div>
+      </div>
+
+      <div class="main-content">
+        <section class="view active" id="view-settings">
+          <div class="hero">
+            <h2>Configure deterministic execution guardrails per Agent Type</h2>
+            <p>This flow mirrors the implemented Agent Type form: a compact guardrail profile with limits for iterations, delegation depth, delegated steps, timeout, and a token budget shown in k tokens. Token controls adapt based on input type (conversation vs non-conversation).</p>
+          </div>
+
+          <div class="layout-grid">
+            <div class="card">
+              <div class="card-header">
+                <h3>Agent Types</h3>
+                <span class="chip chip-green" id="policyCountChip">3 Profiles</span>
+              </div>
+              <div class="card-body">
+                <div class="agent-list" id="agentList"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Guardrail Profile Editor</h3>
+                <span class="chip chip-blue" id="selectedAgentChip">Research Analyst</span>
+              </div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="maxIterations">Max Iterations</label>
+                    <input id="maxIterations" class="form-control" type="number" min="1" />
+                  </div>
+                  <div class="form-group">
+                    <label for="maxDepth">Max Delegation Depth</label>
+                    <input id="maxDepth" class="form-control" type="number" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="maxDelegatedSteps">Max Delegated Steps</label>
+                    <input id="maxDelegatedSteps" class="form-control" type="number" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label for="timeout">Execution Timeout (seconds)</label>
+                    <input id="timeout" class="form-control" type="number" min="30" />
+                  </div>
+                  <div class="form-group">
+                    <label for="inputType">Input Type</label>
+                    <select id="inputType" class="form-control">
+                      <option value="none">none</option>
+                      <option value="typed">typed</option>
+                      <option value="conversation">conversation</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="tokenBudgetK">Token Budget</label>
+                    <input id="tokenBudgetK" class="form-control" type="number" min="1" step="1" />
+                  </div>
+                </div>
+
+                <div class="panel" id="nonConversationPolicyPanel">
+                  <h4>Non-conversational token policy</h4>
+                  <div class="form-group">
+                    <label for="nonConvMode">Token Enforcement Mode</label>
+                    <select id="nonConvMode" class="form-control">
+                      <option value="observe">observe</option>
+                      <option value="enforce">enforce</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="nonConvFallback">Token Fallback Mode</label>
+                    <select id="nonConvFallback" class="form-control">
+                      <option value="observe_and_log">observe_and_log</option>
+                      <option value="stop_on_next_hard_guardrail">stop_on_next_hard_guardrail</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="panel" id="conversationPolicyPanel" style="display:none">
+                  <h4>Conversational token policy</h4>
+                  <div class="form-group">
+                    <label for="convVisibilityMode">Visibility Mode</label>
+                    <select id="convVisibilityMode" class="form-control">
+                      <option value="enabled">enabled</option>
+                      <option value="disabled">disabled</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="convContinuationPolicy">Continuation Policy</label>
+                    <select id="convContinuationPolicy" class="form-control">
+                      <option value="allow">allow</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="buttons">
+                  <button class="btn btn-primary" id="savePolicyBtn">Save Guardrail Profile</button>
+                  <button class="btn btn-secondary" id="resetPolicyBtn">Reset</button>
+                  <span class="chip chip-green" id="saveStatusChip">Saved 2m ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-conversational">
+          <div class="hero">
+            <h2>Conversational Session Monitor</h2>
+            <p>Current-session token consumption is visible live. When threshold visibility is reached, the user can explicitly continue the session while other guardrails (cycle, iteration, depth, timeout) stay active.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Session live monitor</h3>
+              <div class="status-row">
+                <span class="chip chip-blue" id="convSessionChip">Session CONV-921</span>
+                <span class="chip chip-blue" id="convGuardrailHintChip">Guardrail details hidden</span>
+                <span class="chip chip-green">Other guardrails active</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="buttons">
+                <button class="btn btn-primary" id="convStartBtn">Start Live Simulation</button>
+                <button class="btn btn-secondary" id="convContinueBtn" disabled>Continue After Threshold Visibility</button>
+                <button class="btn btn-secondary" id="convPauseBtn">Pause</button>
+              </div>
+
+              <div class="timeline" id="convTimeline">
+                <div class="timeline-item success">
+                  <h4>
+                    <span>Session started</span>
+                    <small>09:41:12</small>
+                  </h4>
+                  <p>Agent Runtime accepted policy snapshot. Conversational visibility mode is enabled with allow continuation policy.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="conv-guardrail-fab" id="convGuardrailFab" type="button" aria-expanded="false" aria-controls="convGuardrailPanel">Guardrail reference</button>
+          <div class="conv-guardrail-panel" id="convGuardrailPanel">
+            <div class="conv-guardrail-header">
+              <div>
+                <div class="conv-guardrail-title">Guardrail reference</div>
+                <p class="conv-guardrail-meta">Quick view for conversational limits and token visibility.</p>
+              </div>
+              <button class="btn btn-secondary" id="convGuardrailCloseBtn" type="button">Collapse</button>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="kpi">
+                <div class="kpi-label">Current Session Tokens</div>
+                <div class="kpi-value" id="convTokenCount">0</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Configured Threshold</div>
+                <div class="kpi-value" id="convThresholdValue">20,000</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Max Iterations</div>
+                <div class="kpi-value" id="convMaxIter">12</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-label">Execution Timeout</div>
+                <div class="kpi-value" id="convTimeout">900s</div>
+              </div>
+            </div>
+
+            <div class="progress-wrap">
+              <div class="progress-line">
+                <div class="progress-fill" id="convProgressFill"></div>
+                <div class="threshold-mark"></div>
+              </div>
+              <div class="progress-meta">
+                <span>Live usage: <strong id="convProgressText">0 / 25,000</strong></span>
+                <span>Threshold marker at 20,000</span>
+                <span>Status: <span class="inline-code" id="convStatusLabel">RUNNING</span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-automated">
+          <div class="hero">
+            <h2>Execution Log Summary and Guardrail Visibility</h2>
+            <p>This flow mirrors the execution log summary panel: policy snapshot id, run-state chip, and metric cards for current-session tokens, iterations, delegated steps, and delegation depth with good/near/over states.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3>Execution Summary - Guardrail Usage</h3>
+              <div class="status-row">
+                <span class="chip chip-blue" id="summaryPolicyChip">Policy Snapshot: --</span>
+                <span class="chip chip-green" id="summaryRunStateChip">Within Limits</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="summary-grid">
+                <div class="summary-tile">
+                  <div class="summary-header">
+                    <span class="summary-label">Current Session Tokens</span>
+                    <span class="state-pill state-good" id="summaryStateTokens">Good</span>
+                  </div>
+                  <div class="summary-value" id="summaryTokensValue">0 / 1000.0k</div>
+                  <div class="summary-track"><div class="summary-fill" id="summaryTokensFill"></div></div>
+                  <div class="summary-meta">
+                    <span id="summaryTokensPct">0% used</span>
+                    <span id="summaryTokensLimit">Limit 1000.0k</span>
+                  </div>
+                </div>
+
+                <div class="summary-tile">
+                  <div class="summary-header">
+                    <span class="summary-label">Iterations</span>
+                    <span class="state-pill state-good" id="summaryStateIterations">Good</span>
+                  </div>
+                  <div class="summary-value" id="summaryIterationsValue">0 / 12</div>
+                  <div class="summary-track"><div class="summary-fill" id="summaryIterationsFill"></div></div>
+                  <div class="summary-meta">
+                    <span id="summaryIterationsPct">0% used</span>
+                    <span id="summaryIterationsLimit">Limit 12</span>
+                  </div>
+                </div>
+
+                <div class="summary-tile">
+                  <div class="summary-header">
+                    <span class="summary-label">Delegated Steps</span>
+                    <span class="state-pill state-good" id="summaryStateSteps">Good</span>
+                  </div>
+                  <div class="summary-value" id="summaryStepsValue">0 / 18</div>
+                  <div class="summary-track"><div class="summary-fill" id="summaryStepsFill"></div></div>
+                  <div class="summary-meta">
+                    <span id="summaryStepsPct">0% used</span>
+                    <span id="summaryStepsLimit">Limit 18</span>
+                  </div>
+                </div>
+
+                <div class="summary-tile">
+                  <div class="summary-header">
+                    <span class="summary-label">Delegation Depth</span>
+                    <span class="state-pill state-good" id="summaryStateDepth">Good</span>
+                  </div>
+                  <div class="summary-value" id="summaryDepthValue">0 / 3</div>
+                  <div class="summary-track"><div class="summary-fill" id="summaryDepthFill"></div></div>
+                  <div class="summary-meta">
+                    <span id="summaryDepthPct">0% used</span>
+                    <span id="summaryDepthLimit">Limit 3</span>
+                  </div>
+                </div>
+              </div>
+              <div class="summary-note" id="summaryNote">The summary is derived from execution-log snapshots and updates as runtime counters change.</div>
+            </div>
+          </div>
+
+          <div class="split">
+            <div class="card">
+              <div class="card-header">
+                <h3>Execution Log View</h3>
+                <span class="chip chip-blue">LOG-443</span>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label for="rawMode">Display mode</label>
+                  <select id="rawMode" class="form-control">
+                    <option value="friendly" selected>Friendly summary + steps</option>
+                    <option value="raw">Raw log</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="providerSupport">Provider capability for hard token enforcement</label>
+                  <select id="providerSupport" class="form-control">
+                    <option value="supported" selected>Supported</option>
+                    <option value="unsupported">Unsupported</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="autoTokenBudget">Configured token budget</label>
+                  <input id="autoTokenBudget" class="form-control" value="12000" />
+                </div>
+                <div class="form-group">
+                  <label for="autoFallbackDisplay">Fallback mode (from policy)</label>
+                  <input id="autoFallbackDisplay" class="form-control" value="observe_and_log" disabled />
+                </div>
+
+                <div class="buttons">
+                  <button class="btn btn-primary" id="runAutomatedBtn">Replay Snapshot Stream</button>
+                  <button class="btn btn-secondary" id="resetAutomatedBtn">Reset Summary</button>
+                </div>
+
+                <div class="status-row">
+                  <span class="chip chip-green" id="autoStateChip">Ready</span>
+                  <span class="chip chip-blue" id="autoReasonChip">Stop reason: none</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Working Steps Panel</h3>
+                <span class="chip chip-yellow">Span-based timeline</span>
+              </div>
+              <div class="card-body">
+                <div class="timeline" id="autoTimeline">
+                  <div class="timeline-item">
+                    <h4>
+                      <span>Preparation</span>
+                      <small>--:--:--</small>
+                    </h4>
+                    <p>Execution started, context loaded, and policy snapshot resolved.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const profiles = [
+      {
+        id: "research-analyst",
+        name: "Research Analyst",
+        role: "role_research_ops",
+        maxIterations: 12,
+        maxDepth: 3,
+        maxDelegatedSteps: 18,
+        timeout: 900,
+        inputType: "conversation",
+        tokenBudgetK: 1000,
+        convVisibilityMode: "enabled",
+        convContinuationPolicy: "allow",
+        nonConvMode: "observe",
+        nonConvFallback: "observe_and_log"
+      },
+      {
+        id: "policy-auditor",
+        name: "Policy Auditor",
+        role: "role_compliance",
+        maxIterations: 8,
+        maxDepth: 2,
+        maxDelegatedSteps: 10,
+        timeout: 600,
+        inputType: "typed",
+        tokenBudgetK: 1000,
+        convVisibilityMode: "enabled",
+        convContinuationPolicy: "allow",
+        nonConvMode: "enforce",
+        nonConvFallback: "stop_on_next_hard_guardrail"
+      },
+      {
+        id: "workflow-coordinator",
+        name: "Workflow Coordinator",
+        role: "role_ops_automation",
+        maxIterations: 15,
+        maxDepth: 4,
+        maxDelegatedSteps: 24,
+        timeout: 1200,
+        inputType: "none",
+        tokenBudgetK: 1000,
+        convVisibilityMode: "enabled",
+        convContinuationPolicy: "allow",
+        nonConvMode: "observe",
+        nonConvFallback: "observe_and_log"
+      }
+    ];
+
+    let activeProfile = profiles[0];
+    let convTimer = null;
+    let convTokens = 0;
+    const convMaxDisplay = 25000;
+    const convThreshold = 20000;
+    let convThresholdVisible = false;
+    let convGuardrailPanelOpen = false;
+
+    const autoUsage = {
+      policySnapshotId: "gps-RA-2026-05-25",
+      tokenUsed: 0,
+      tokenBudget: 1000000,
+      iterations: 0,
+      maxIterations: profiles[0].maxIterations,
+      delegatedSteps: 0,
+      maxDelegatedSteps: profiles[0].maxDelegatedSteps,
+      delegationDepth: 0,
+      maxDelegationDepth: profiles[0].maxDepth
+    };
+
+    function nowStamp() {
+      const d = new Date();
+      return d.toLocaleTimeString([], { hour12: false });
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("open");
+      setTimeout(() => toast.classList.remove("open"), 1600);
+    }
+
+    function renderAgentList() {
+      const list = document.getElementById("agentList");
+      list.innerHTML = "";
+      profiles.forEach((p) => {
+        const item = document.createElement("div");
+        item.className = "agent-item" + (p.id === activeProfile.id ? " active" : "");
+        item.innerHTML = `<strong>${p.name}</strong><span>${p.role}</span>`;
+        item.addEventListener("click", () => {
+          activeProfile = p;
+          renderAgentList();
+          loadProfileToForm();
+        });
+        list.appendChild(item);
+      });
+      document.getElementById("policyCountChip").textContent = `${profiles.length} Profiles`;
+    }
+
+    function loadProfileToForm() {
+      document.getElementById("selectedAgentChip").textContent = activeProfile.name;
+      document.getElementById("maxIterations").value = activeProfile.maxIterations;
+      document.getElementById("maxDepth").value = activeProfile.maxDepth;
+      document.getElementById("maxDelegatedSteps").value = activeProfile.maxDelegatedSteps;
+      document.getElementById("timeout").value = activeProfile.timeout;
+      document.getElementById("inputType").value = activeProfile.inputType;
+      document.getElementById("tokenBudgetK").value = activeProfile.tokenBudgetK;
+      document.getElementById("nonConvMode").value = activeProfile.nonConvMode;
+      document.getElementById("nonConvFallback").value = activeProfile.nonConvFallback;
+      document.getElementById("convVisibilityMode").value = activeProfile.convVisibilityMode;
+      document.getElementById("convContinuationPolicy").value = activeProfile.convContinuationPolicy;
+      syncTokenPolicyPanels();
+
+      document.getElementById("convMaxIter").textContent = activeProfile.maxIterations;
+      document.getElementById("convTimeout").textContent = `${activeProfile.timeout}s`;
+      document.getElementById("autoFallbackDisplay").value = activeProfile.nonConvFallback;
+
+      autoUsage.policySnapshotId = `gps-${activeProfile.id}-${new Date().toISOString().slice(0, 10)}`;
+      autoUsage.tokenBudget = Number(activeProfile.tokenBudgetK) * 1000;
+      autoUsage.maxIterations = activeProfile.maxIterations;
+      autoUsage.maxDelegatedSteps = activeProfile.maxDelegatedSteps;
+      autoUsage.maxDelegationDepth = activeProfile.maxDepth;
+      renderAutoSummary();
+    }
+
+    function saveProfileFromForm() {
+      activeProfile.maxIterations = Number(document.getElementById("maxIterations").value);
+      activeProfile.maxDepth = Number(document.getElementById("maxDepth").value);
+      activeProfile.maxDelegatedSteps = Number(document.getElementById("maxDelegatedSteps").value);
+      activeProfile.timeout = Number(document.getElementById("timeout").value);
+      activeProfile.inputType = document.getElementById("inputType").value;
+      activeProfile.tokenBudgetK = Number(document.getElementById("tokenBudgetK").value);
+      activeProfile.nonConvMode = document.getElementById("nonConvMode").value;
+      activeProfile.nonConvFallback = document.getElementById("nonConvFallback").value;
+      activeProfile.convVisibilityMode = document.getElementById("convVisibilityMode").value;
+      activeProfile.convContinuationPolicy = document.getElementById("convContinuationPolicy").value;
+      document.getElementById("saveStatusChip").textContent = `Saved ${nowStamp()}`;
+      loadProfileToForm();
+      renderAgentList();
+      showToast("Guardrail profile saved in prototype state");
+    }
+
+    function syncTokenPolicyPanels() {
+      const inputType = document.getElementById("inputType").value;
+      const showConversation = inputType === "conversation";
+      document.getElementById("conversationPolicyPanel").style.display = showConversation ? "block" : "none";
+      document.getElementById("nonConversationPolicyPanel").style.display = showConversation ? "none" : "block";
+    }
+
+    function addTimelineItem(containerId, kind, title, text) {
+      const container = document.getElementById(containerId);
+      const div = document.createElement("div");
+      div.className = `timeline-item ${kind || ""}`.trim();
+      div.innerHTML = `<h4><span>${title}</span><small>${nowStamp()}</small></h4><p>${text}</p>`;
+      container.prepend(div);
+    }
+
+    function toK(value) {
+      const thousands = value / 1000;
+      const rounded = Math.round(thousands * 10) / 10;
+      return `${rounded.toFixed(rounded % 1 === 0 ? 0 : 1)}k`;
+    }
+
+    function applyUsageMetric(key, used, limit) {
+      const pctRaw = limit > 0 ? (used / limit) * 100 : 0;
+      const pct = Math.max(0, Math.min(100, pctRaw));
+      const stateEl = document.getElementById(`summaryState${key}`);
+      const fillEl = document.getElementById(`summary${key}Fill`);
+      const pctEl = document.getElementById(`summary${key}Pct`);
+
+      fillEl.style.width = `${pct}%`;
+      fillEl.classList.remove("near", "over");
+      stateEl.className = "state-pill";
+
+      if (pctRaw >= 100) {
+        stateEl.textContent = "Over";
+        stateEl.classList.add("state-over");
+        fillEl.classList.add("over");
+      } else if (pctRaw >= 80) {
+        stateEl.textContent = "Near";
+        stateEl.classList.add("state-near");
+        fillEl.classList.add("near");
+      } else {
+        stateEl.textContent = "Good";
+        stateEl.classList.add("state-good");
+      }
+
+      pctEl.textContent = `${Math.round(pctRaw)}% used`;
+    }
+
+    function renderAutoSummary() {
+      document.getElementById("summaryPolicyChip").textContent = `Policy Snapshot: ${autoUsage.policySnapshotId}`;
+      document.getElementById("summaryTokensValue").textContent = `${toK(autoUsage.tokenUsed)} / ${toK(autoUsage.tokenBudget)}`;
+      document.getElementById("summaryTokensLimit").textContent = `Limit ${toK(autoUsage.tokenBudget)}`;
+      document.getElementById("summaryIterationsValue").textContent = `${autoUsage.iterations} / ${autoUsage.maxIterations}`;
+      document.getElementById("summaryIterationsLimit").textContent = `Limit ${autoUsage.maxIterations}`;
+      document.getElementById("summaryStepsValue").textContent = `${autoUsage.delegatedSteps} / ${autoUsage.maxDelegatedSteps}`;
+      document.getElementById("summaryStepsLimit").textContent = `Limit ${autoUsage.maxDelegatedSteps}`;
+      document.getElementById("summaryDepthValue").textContent = `${autoUsage.delegationDepth} / ${autoUsage.maxDelegationDepth}`;
+      document.getElementById("summaryDepthLimit").textContent = `Limit ${autoUsage.maxDelegationDepth}`;
+
+      applyUsageMetric("Tokens", autoUsage.tokenUsed, autoUsage.tokenBudget);
+      applyUsageMetric("Iterations", autoUsage.iterations, autoUsage.maxIterations);
+      applyUsageMetric("Steps", autoUsage.delegatedSteps, autoUsage.maxDelegatedSteps);
+      applyUsageMetric("Depth", autoUsage.delegationDepth, autoUsage.maxDelegationDepth);
+
+      const overAny =
+        autoUsage.tokenUsed > autoUsage.tokenBudget ||
+        autoUsage.iterations > autoUsage.maxIterations ||
+        autoUsage.delegatedSteps > autoUsage.maxDelegatedSteps ||
+        autoUsage.delegationDepth > autoUsage.maxDelegationDepth;
+
+      const nearAny =
+        autoUsage.tokenUsed >= autoUsage.tokenBudget * 0.8 ||
+        autoUsage.iterations >= autoUsage.maxIterations * 0.8 ||
+        autoUsage.delegatedSteps >= autoUsage.maxDelegatedSteps * 0.8 ||
+        autoUsage.delegationDepth >= autoUsage.maxDelegationDepth * 0.8;
+
+      const runStateChip = document.getElementById("summaryRunStateChip");
+      if (overAny) {
+        runStateChip.className = "chip chip-red";
+        runStateChip.textContent = "Limit Exceeded";
+      } else if (nearAny) {
+        runStateChip.className = "chip chip-yellow";
+        runStateChip.textContent = "Approaching Limits";
+      } else {
+        runStateChip.className = "chip chip-green";
+        runStateChip.textContent = "Within Limits";
+      }
+    }
+
+    function renderConvProgress() {
+      const pct = Math.min((convTokens / convMaxDisplay) * 100, 100);
+      document.getElementById("convTokenCount").textContent = convTokens.toLocaleString();
+      document.getElementById("convProgressText").textContent = `${convTokens.toLocaleString()} / ${convMaxDisplay.toLocaleString()}`;
+      document.getElementById("convProgressFill").style.width = `${pct}%`;
+    }
+
+    function setConvGuardrailPanel(open) {
+      convGuardrailPanelOpen = open;
+      const panel = document.getElementById("convGuardrailPanel");
+      const fab = document.getElementById("convGuardrailFab");
+      panel.classList.toggle("open", open);
+      fab.setAttribute("aria-expanded", String(open));
+      fab.textContent = open ? "Hide guardrail reference" : "Guardrail reference";
+      document.getElementById("convGuardrailHintChip").textContent = open ? "Guardrail details visible" : "Guardrail details hidden";
+      document.getElementById("convGuardrailHintChip").className = open ? "chip chip-yellow" : "chip chip-blue";
+    }
+
+    function startConvSimulation() {
+      if (convTimer) {
+        return;
+      }
+      document.getElementById("convStatusLabel").textContent = "RUNNING";
+      addTimelineItem(
+        "convTimeline",
+        "",
+        "Live sampling enabled",
+        "Current-session token snapshots are emitted every cycle for visibility and audit logs."
+      );
+
+      convTimer = setInterval(() => {
+        convTokens += Math.floor(Math.random() * 900) + 420;
+        renderConvProgress();
+
+        if (!convThresholdVisible && convTokens >= convThreshold) {
+          convThresholdVisible = true;
+          setConvGuardrailPanel(true);
+          document.getElementById("convContinueBtn").disabled = false;
+          addTimelineItem(
+            "convTimeline",
+            "warning",
+            "Token threshold visible",
+            "Session reached configured threshold. Session is not hard-stopped; user can continue explicitly."
+          );
+        }
+
+        if (convTokens >= convMaxDisplay) {
+          clearInterval(convTimer);
+          convTimer = null;
+          document.getElementById("convStatusLabel").textContent = "WAITING_USER_DECISION";
+          addTimelineItem(
+            "convTimeline",
+            "warning",
+            "Awaiting continuation",
+            "Token visibility remains active while runtime waits for user continuation decision."
+          );
+        }
+      }, 1200);
+    }
+
+    function continueConvSession() {
+      if (!convThresholdVisible) {
+        showToast("Threshold not visible yet");
+        return;
+      }
+      document.getElementById("convContinueBtn").disabled = true;
+      document.getElementById("convStatusLabel").textContent = "RUNNING";
+      addTimelineItem(
+        "convTimeline",
+        "success",
+        "User continued session",
+        "Continuation accepted after threshold visibility. Iteration, depth, timeout, and cycle guardrails remain active."
+      );
+      showToast("Session continuation accepted");
+      if (!convTimer) {
+        convTimer = setInterval(() => {
+          convTokens += Math.floor(Math.random() * 380) + 180;
+          renderConvProgress();
+          if (convTokens >= convMaxDisplay + 4000) {
+            clearInterval(convTimer);
+            convTimer = null;
+            document.getElementById("convStatusLabel").textContent = "COMPLETED";
+            addTimelineItem(
+              "convTimeline",
+              "success",
+              "Conversation completed",
+              "Run ended normally with visible token tracking and no token-budget-only hard stop."
+            );
+          }
+        }, 1200);
+      }
+    }
+
+    function pauseConvSession() {
+      if (convTimer) {
+        clearInterval(convTimer);
+        convTimer = null;
+      }
+      document.getElementById("convStatusLabel").textContent = "PAUSED";
+      addTimelineItem("convTimeline", "", "Session paused", "Simulation paused for operator review.");
+    }
+
+    function runAutomatedSession() {
+      const support = document.getElementById("providerSupport").value;
+      const budget = Number(document.getElementById("autoTokenBudget").value);
+      const fallback = activeProfile.nonConvFallback;
+      const timeline = document.getElementById("autoTimeline");
+      timeline.innerHTML = "";
+
+      autoUsage.tokenUsed = 0;
+      autoUsage.tokenBudget = budget;
+      autoUsage.iterations = 0;
+      autoUsage.delegatedSteps = 0;
+      autoUsage.delegationDepth = 0;
+      renderAutoSummary();
+
+      let used = 0;
+      addTimelineItem("autoTimeline", "", "Automated run started", "Execution mode: automated. Guardrail policy snapshot loaded from Control Center.");
+
+      for (let step = 1; step <= 4; step += 1) {
+        used += 3600;
+        autoUsage.tokenUsed = used;
+        autoUsage.iterations = step;
+        autoUsage.delegatedSteps = step * 2;
+        autoUsage.delegationDepth = Math.min(step, autoUsage.maxDelegationDepth + 1);
+        renderAutoSummary();
+        addTimelineItem(
+          "autoTimeline",
+          "",
+          `Step ${step} completed`,
+          `Token usage snapshot: ${used.toLocaleString()} / ${budget.toLocaleString()}.`
+        );
+
+        if (used > budget) {
+          if (support === "supported" && activeProfile.nonConvMode === "enforce") {
+            addTimelineItem(
+              "autoTimeline",
+              "error",
+              "Token-budget stop enforced",
+              "Provider supports hard token accounting. Session terminated with stop reason TOKEN_BUDGET_EXCEEDED_NON_CONVERSATIONAL."
+            );
+            document.getElementById("autoStateChip").className = "chip chip-red";
+            document.getElementById("autoStateChip").textContent = "Stopped";
+            document.getElementById("autoReasonChip").textContent = "Stop reason: TOKEN_BUDGET_EXCEEDED_NON_CONVERSATIONAL";
+            return;
+          }
+
+          if (support === "unsupported") {
+            if (fallback === "stop_on_next_hard_guardrail") {
+              addTimelineItem(
+                "autoTimeline",
+                "error",
+                "Fallback stop applied",
+                "Provider hard token enforcement unavailable. Session stopped with reason TOKEN_GUARDRAIL_FALLBACK_APPLIED."
+              );
+              document.getElementById("autoStateChip").className = "chip chip-red";
+              document.getElementById("autoStateChip").textContent = "Stopped";
+              document.getElementById("autoReasonChip").textContent = "Stop reason: TOKEN_GUARDRAIL_FALLBACK_APPLIED";
+              return;
+            }
+
+            addTimelineItem(
+              "autoTimeline",
+              "warning",
+              "Fallback continue with audit",
+              "Provider hard token enforcement unavailable. Run continued under fallback mode observe_and_log."
+            );
+            document.getElementById("autoStateChip").className = "chip chip-yellow";
+            document.getElementById("autoStateChip").textContent = "Completed with fallback";
+            document.getElementById("autoReasonChip").textContent = "Stop reason: none (fallback continue)";
+            return;
+          }
+        }
+      }
+
+      addTimelineItem(
+        "autoTimeline",
+        "success",
+        "Automated run completed",
+        "Run completed within token budget or observe-only mode."
+      );
+      document.getElementById("autoStateChip").className = "chip chip-green";
+      document.getElementById("autoStateChip").textContent = "Completed";
+      document.getElementById("autoReasonChip").textContent = "Stop reason: none";
+    }
+
+    function resetAutomatedTimeline() {
+      const timeline = document.getElementById("autoTimeline");
+      timeline.innerHTML = `<div class="timeline-item"><h4><span>Awaiting run</span><small>--:--:--</small></h4><p>Run simulation to show token-budget enforcement behavior and fallback outcomes.</p></div>`;
+      document.getElementById("autoStateChip").className = "chip chip-green";
+      document.getElementById("autoStateChip").textContent = "Ready";
+      document.getElementById("autoReasonChip").textContent = "Stop reason: none";
+      autoUsage.tokenUsed = 0;
+      autoUsage.iterations = 0;
+      autoUsage.delegatedSteps = 0;
+      autoUsage.delegationDepth = 0;
+      renderAutoSummary();
+    }
+
+    function setView(viewName) {
+      document.querySelectorAll(".nav-item").forEach((el) => {
+        el.classList.toggle("active", el.dataset.view === viewName);
+      });
+      document.querySelectorAll(".view").forEach((el) => {
+        el.classList.remove("active");
+      });
+      document.getElementById(`view-${viewName}`).classList.add("active");
+
+      const titleMap = {
+        settings: "Agent Type Guardrail Settings",
+        conversational: "Conversational Session Monitor",
+        automated: "Execution Log Summary"
+      };
+      document.getElementById("viewTitle").textContent = titleMap[viewName] || "Guardrails Prototype";
+      document.body.classList.toggle("view-conversational", viewName === "conversational");
+
+      if (viewName !== "conversational") {
+        setConvGuardrailPanel(false);
+      }
+    }
+
+    document.querySelectorAll(".nav-item").forEach((el) => {
+      el.addEventListener("click", () => setView(el.dataset.view));
+    });
+
+    document.getElementById("savePolicyBtn").addEventListener("click", saveProfileFromForm);
+    document.getElementById("resetPolicyBtn").addEventListener("click", loadProfileToForm);
+    document.getElementById("inputType").addEventListener("change", syncTokenPolicyPanels);
+    document.getElementById("convStartBtn").addEventListener("click", startConvSimulation);
+    document.getElementById("convContinueBtn").addEventListener("click", continueConvSession);
+    document.getElementById("convPauseBtn").addEventListener("click", pauseConvSession);
+    document.getElementById("convGuardrailFab").addEventListener("click", () => setConvGuardrailPanel(!convGuardrailPanelOpen));
+    document.getElementById("convGuardrailCloseBtn").addEventListener("click", () => setConvGuardrailPanel(false));
+    document.getElementById("runAutomatedBtn").addEventListener("click", runAutomatedSession);
+    document.getElementById("resetAutomatedBtn").addEventListener("click", resetAutomatedTimeline);
+
+    renderAgentList();
+    loadProfileToForm();
+    renderConvProgress();
+    renderAutoSummary();
+    syncTokenPolicyPanels();
+    setConvGuardrailPanel(false);
+  </script>
+</body>
+</html>
