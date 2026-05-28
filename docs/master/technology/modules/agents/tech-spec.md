@@ -171,6 +171,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentJob` | model | Async session tracking; `conversation_history` JSONB for conversational agents (table: `agent_jobs`) | `backend/app/db/models/agents.py` |
 | `AgentJobStatus` | str enum | `queued`, `running`, `completed`, `failed` | `backend/app/db/models/agents.py` |
 | `AgentPromptLog` | model | Prompt capture before first LLM call; `session_id` FK → agent_jobs CASCADE; `system_instruction`, `user_prompt`, `logged_at` (table: `execution_logs`) | `backend/app/db/models/agents.py` |
+| `ExecutionLogEntry` | model | Structured execution log entry model used for guardrail decision and counter audit events | `backend/app/db/models/session_logs.py` |
 | `ModelConfig` | model | LLM provider config; `provider_type`, `display_name`, `api_base_url`, encrypted `api_key`, `enabled_models` JSONB | `backend/app/db/models/agents.py` |
 | `AgentType` | model | Modified — `identity_id`, `role_id`, `model_id` (string), `system_instruction`, `input_type`, `input_schema`, `output_type`, `output_schema`; `plan` relationship (`uselist=False`) → `AgentPlan`; removed `mode`, `sop_id`, `identity_subject`, `system_prompt`, `max_instances`, `llm_*`, `model_config_id`, `model_name` | `backend/app/db/models/agents.py` |
 | `AgentInputType` | str enum | `none`, `typed`, `conversation` | `backend/app/db/models/agents.py` |
@@ -221,6 +222,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
 | `SessionDispatcher` | class | Background dispatch worker; `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor` | `backend/app/services/agents/session_dispatcher.py` |
 | `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; enforces A2A target-agent permission checks and session-link lifecycle handoff metadata during delegation; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token | `backend/app/services/agents/runtime_executor.py` |
+| `_run_task_loop_ar` | method | Runtime task loop enforcement path for iteration ceilings, delegated step budgets, and timeout guardrails | `backend/app/services/agents/runtime_executor.py` |
+| `execute_conversation_turn` | method | Conversational runtime path with mode-aware token guardrail handling and current-session usage reporting | `backend/app/services/agents/runtime_executor.py` |
 | `RuntimeExecutor` | class alias | Alias used in change docs for `AgentRuntimeExecutor` workflow and session lifecycle orchestration | `backend/app/services/agents/runtime_executor.py` |
 | `_get_agent_identity_jwt` | method | `AgentRuntimeExecutor._get_agent_identity_jwt()`; decrypts the executing agent's identity access token from the credential vault for passthrough sessions; returns error dict if token unavailable | `backend/app/services/agents/runtime_executor.py` |
 | `_load_role_mcp_session_map` | method | `AgentRuntimeExecutor._load_role_mcp_session_map()`; returns `{session_id, auth_type}` per server; used to detect passthrough sessions at execution time | `backend/app/services/agents/runtime_executor.py` |
@@ -247,6 +250,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentOAuthRouter` | router | Mounts `/agents/identities/oauth/authorize` and `/agents/oauth/callback` | `backend/app/api/v1/agents.py` |
 | `AgentJobRouter` | router | Mounts all `/agents/sessions` endpoints | `backend/app/api/v1/agents.py` |
 | `AgentTypeRouter` | router | CRUD for AgentType; create and update handlers call `PlanGenerationService` after commit; response includes `plan: AgentPlanRead \| null` | `backend/app/api/v1/agents.py` |
+| `create_agent_type` | endpoint | Agent type create endpoint where guardrail policy defaults and validation are applied before persistence | `backend/app/api/v1/agents.py` |
+| `update_agent_type` | endpoint | Agent type update endpoint where guardrail policy compatibility checks and validation are applied | `backend/app/api/v1/agents.py` |
 | `AgentInstanceRouter` | router | Instance listing and force-termination; unchanged | `backend/app/api/v1/agents.py` |
 | `ModelConfigRouter` | router | Mounts all `/agents/model-configs` endpoints | `backend/app/api/v1/agents.py` |
 

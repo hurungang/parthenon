@@ -45,6 +45,9 @@ from app.schemas.agents import (
     ModelConfigCreate,
     ModelConfigRead,
     ModelConfigUpdate,
+    WorkflowGenerationModelConfigRead,
+    WorkflowGenerationModelConfigUpdate,
+    WorkflowGenerationModelOption,
 )
 from app.services.agents.identity_service import (
     AgentIdentityConflictError,
@@ -57,6 +60,10 @@ from app.services.agents.model_config_service import (
     ModelConfigConflictError,
     ModelConfigNotFoundError,
     ModelConfigService,
+)
+from app.services.agents.workflow_generation_settings import (
+    get_workflow_generation_model_id,
+    set_workflow_generation_model_id,
 )
 from app.services.agents.plan_generation_service import PlanGenerationService
 from app.services.agents.role_service import (
@@ -1040,6 +1047,50 @@ async def create_model_config(
         db=db,
     )
     return ModelConfigRead.model_validate(config)
+
+
+@ModelConfigRouter.get("/workflow-generation", response_model=WorkflowGenerationModelConfigRead)
+async def get_workflow_generation_model(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> WorkflowGenerationModelConfigRead:
+    configs = await _model_config_service.list_model_configs(db)
+    options: list[WorkflowGenerationModelOption] = []
+    for config in configs:
+        for model_id in config.enabled_models or []:
+            options.append(
+                WorkflowGenerationModelOption(
+                    model_id=model_id,
+                    config_id=config.id,
+                    config_display_name=config.display_name,
+                    provider_type=config.provider_type,
+                )
+            )
+
+    return WorkflowGenerationModelConfigRead(
+        selected_model_id=get_workflow_generation_model_id(),
+        options=options,
+    )
+
+
+@ModelConfigRouter.put("/workflow-generation", response_model=WorkflowGenerationModelConfigRead)
+async def set_workflow_generation_model(
+    body: WorkflowGenerationModelConfigUpdate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> WorkflowGenerationModelConfigRead:
+    configs = await _model_config_service.list_model_configs(db)
+    allowed_model_ids: set[str] = {
+        model_id for config in configs for model_id in (config.enabled_models or [])
+    }
+    if body.model_id is not None and body.model_id not in allowed_model_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Selected workflow generation model is not enabled in any model configuration",
+        )
+
+    set_workflow_generation_model_id(body.model_id)
+    return await get_workflow_generation_model(db=db, _={})
 
 
 @ModelConfigRouter.get("/{config_id}", response_model=ModelConfigRead)

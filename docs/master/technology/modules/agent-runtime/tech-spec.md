@@ -77,6 +77,9 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 |--------|------|-------------|------|
 | `ControlCenterCertificateMiddleware` | class | Validates service certificates on runtime control-plane requests and enforces internal trust boundary | `backend/app/agent_runtime/middleware.py` |
 | `ControlCenterDataClient` | class | Fetches plans, context, model config, and session state from Control Center internal data APIs | `backend/app/agent_runtime/data_client.py` |
+| `get_agent_context` | method | Loads effective context payload including guardrail policy snapshot before execution starts | `backend/app/agent_runtime/data_client.py` |
+| `mark_session_failed` | method | Persists terminal guardrail stop outcomes through Control Center session-status APIs | `backend/app/agent_runtime/data_client.py` |
+| `log_execution_event` | method | Emits structured guardrail decision events and runtime counter snapshots to execution logs | `backend/app/agent_runtime/data_client.py` |
 | `_allow_insecure_internal_fallback` | function | Development-only opt-in guard; production/default behavior remains fail-closed for missing internal trust material | `backend/app/agent_runtime/data_client.py` |
 | `CommHubToolClient` | class | Sends tool and A2A requests from Agent Runtime to Communication Hub internal routes with service identity headers or mTLS | `backend/app/agent_runtime/comm_hub_client.py` |
 | `trigger_execution` | endpoint | Runtime execution trigger endpoint used by Communication Hub for asynchronous session execution | `backend/app/agent_runtime/api/execute.py` |
@@ -109,6 +112,14 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `CommHubToolClient` | class | Runtime-side client for Communication Hub coordination paths, including tool routing and A2A target-slug dispatch payloads | `backend/app/agent_runtime/comm_hub_client.py` |
+| `call_a2a_request` | method | Sends delegated A2A requests whose results propagate guardrail stop reason metadata back to parent execution flow | `backend/app/agent_runtime/comm_hub_client.py` |
+
+### Runtime Enforcement Loop (`backend/app/services/agents/runtime_executor.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `_run_task_loop_ar` | method | Task execution loop enforcing runtime guardrails such as iteration ceilings, delegated step budgets, and timeout checks | `backend/app/services/agents/runtime_executor.py` |
+| `execute_conversation_turn` | method | Conversation loop applying mode-aware token guardrail behavior, continuation semantics, and guardrail usage logging | `backend/app/services/agents/runtime_executor.py` |
 
 ### Segregation Audit Coverage
 

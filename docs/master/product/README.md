@@ -10,9 +10,12 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 - **MCP Demo App** — Minimal MCP application for validating agent identity authentication and tool registration (reference implementation)
 - **Skill Management** — Skill definition, MCP tool wrapping, and permission assignment
 - **SOP Management** — SOP composition, step sequencing, and agent-to-agent delegation
+- **SOPs** — Guardrailed delegated workflow behavior for predictable enterprise execution
 - **Agent Management** — Agent types, identity, instance lifecycle, and max-instance enforcement
+- **Agent Types** — Per-Agent-Type execution guardrail profiles and bounded policy controls
 - **Agent A2A Communication and Slug Enforcement** — Dynamic agent-to-agent continuity, delegation governance, and slug-safe naming for routing-critical entities
 - **Agent Gateway** — Lifecycle protocol, HTTP and MCP transports
+- **Control Center** — Governance management for agent policies, guardrail profiles, and operational oversight
 - **Communication Hub** — Message broker, WebSocket, session context, and agent-to-agent routing
 - **Schedule Management** — Cron scheduling, job management, and execution history
 - **Conversation Management** — Conversation persistence, all turn types, audit, and replay

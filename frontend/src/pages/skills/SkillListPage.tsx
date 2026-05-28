@@ -19,6 +19,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
@@ -38,6 +39,7 @@ export function SkillListPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [editorSkill, setEditorSkill] = useState<Skill | null | undefined>(undefined)
+  const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'view'>('create')
 
   const { data: skills, isLoading, error } = useQuery<Skill[]>({
     queryKey: ['skills'],
@@ -69,7 +71,14 @@ export function SkillListPage() {
           <Typography variant="h4" fontWeight={700}>
             {t('skills.title')}
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorSkill(null)}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditorMode('create')
+              setEditorSkill(null)
+            }}
+          >
             {t('skills.createSkill')}
           </Button>
         </Box>
@@ -131,8 +140,23 @@ export function SkillListPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <IconButton size="small" onClick={() => setEditorSkill(skill)}>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setEditorMode('edit')
+                          setEditorSkill(skill)
+                        }}
+                      >
                         <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setEditorMode('view')
+                          setEditorSkill(skill)
+                        }}
+                      >
+                        <VisibilityIcon fontSize="small" />
                       </IconButton>
                       <IconButton size="small" onClick={() => handleDelete(skill.id)}>
                         <DeleteIcon fontSize="small" />
@@ -156,6 +180,7 @@ export function SkillListPage() {
       <SkillEditor
         open={editorSkill !== undefined}
         skill={editorSkill ?? null}
+        mode={editorMode}
         onClose={() => setEditorSkill(undefined)}
         onSaved={() => setEditorSkill(undefined)}
       />

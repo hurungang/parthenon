@@ -202,3 +202,75 @@ async def test_list_models_requires_agent_read_permission():
             resp = await client.get(f"/api/v1/agents/model-configs/{config_id}/models")
 
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_generation_model_options_are_sourced_from_enabled_models():
+    """GET /agents/model-configs/workflow-generation returns options from model-config enabled_models."""
+    now = datetime.now(timezone.utc)
+    cfg_1 = MagicMock(
+        id=uuid.uuid4(),
+        display_name="OpenAI Prod",
+        provider_type="openai",
+        enabled_models=["gpt-4o-mini", "gpt-4o"],
+        created_at=now,
+        updated_at=now,
+    )
+    cfg_2 = MagicMock(
+        id=uuid.uuid4(),
+        display_name="Anthropic Prod",
+        provider_type="anthropic",
+        enabled_models=["claude-3-5-sonnet"],
+        created_at=now,
+        updated_at=now,
+    )
+
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with (
+        _bypass_auth(),
+        _mock_permission_allow(),
+        patch("app.api.v1.agents._model_config_service.list_model_configs", AsyncMock(return_value=[cfg_1, cfg_2])),
+        patch("app.api.v1.agents.get_workflow_generation_model_id", return_value="gpt-4o-mini"),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/v1/agents/model-configs/workflow-generation")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["selected_model_id"] == "gpt-4o-mini"
+    assert [o["model_id"] for o in body["options"]] == ["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet"]
+    assert body["options"][0]["config_display_name"] == "OpenAI Prod"
+    assert body["options"][2]["provider_type"] == "anthropic"
+
+
+@pytest.mark.asyncio
+async def test_set_workflow_generation_model_rejects_non_enabled_model():
+    """PUT /agents/model-configs/workflow-generation returns 422 for model IDs not in enabled_models."""
+    now = datetime.now(timezone.utc)
+    cfg = MagicMock(
+        id=uuid.uuid4(),
+        display_name="OpenAI Prod",
+        provider_type="openai",
+        enabled_models=["gpt-4o-mini"],
+        created_at=now,
+        updated_at=now,
+    )
+
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow(), patch(
+        "app.api.v1.agents._model_config_service.list_model_configs", AsyncMock(return_value=[cfg])
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.put(
+                "/api/v1/agents/model-configs/workflow-generation",
+                json={"model_id": "not-enabled-model"},
+            )
+
+    assert resp.status_code == 422
+    assert "not enabled" in resp.json()["detail"].lower()

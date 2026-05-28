@@ -22,6 +22,7 @@ This test plan validates the persistent conversation session lifecycle for conve
 | Sessions tab visibility | The Sessions tab must appear only for agents whose `input_type === 'conversation'`; it must be absent for all other agent types |
 | Session resume | `POST /conversations/{id}/resume` must return full turn history with tool call records; `ChatPage` must restore context from the `sessionId` route param without requiring a page reload |
 | Parent table refresh | After create/end/archive operations the sessions list must update automatically without a manual page reload |
+| Conversational guardrail hint visibility | Conversation dialog must expose current-session token usage hint data without forcing a token-budget-only terminal stop |
 | `AgentTypeForm` output field | The output type field must be hidden when creating/editing a conversation agent type |
 | `AgentInstanceDashboardPage` Session column | The session title column must render for conversation-type agent jobs and must remain absent for non-conversational jobs |
 
@@ -70,6 +71,11 @@ This test plan validates the persistent conversation session lifecycle for conve
 - **WHEN** an agent type has any other `input_type` **THEN** no Sessions tab is rendered
 - **WHEN** the Sessions tab is active and a new session is created **THEN** the session list updates without page reload
 
+### Conversational Guardrail Hint
+
+- **WHEN** conversation session payloads include guardrail usage fields **THEN** the hint is collapsed by default and can be expanded on demand
+- **WHEN** a session is resumed with persisted guardrail usage **THEN** token usage values are restored and shown consistently in the hint panel
+
 ## Edge Cases & Risks
 
 | Risk | Mitigation |
@@ -90,19 +96,20 @@ This test plan validates the persistent conversation session lifecycle for conve
 ### Backend Tests — 16/16 passed ✅
 
 **Unit tests** (`backend/tests/unit/conversations/`):
-- `test_auto_namer.py` — SessionAutoNamer happy path, LLM failure fallback, truncation, empty LLM response (4 tests)
-- `test_session_manager.py` — ConversationSessionManager lifecycle: reject non-conversation agent type, missing agent type → not found, create success, end → closed, archive → archived, resume returns turns, ownership validation (7 tests)
+- `backend/tests/unit/conversations/test_auto_namer.py` — SessionAutoNamer happy path, LLM failure fallback, truncation, empty LLM response (4 tests)
+- `backend/tests/unit/conversations/test_session_manager.py` — ConversationSessionManager lifecycle: reject non-conversation agent type, missing agent type → not found, create success, end → closed, archive → archived, resume returns turns, ownership validation (7 tests)
 
 **Integration tests** (`backend/tests/integration/`):
-- `test_conversations.py` — Endpoint registration verification: POST /conversations, GET /conversations, POST /end, POST /archive, POST /resume all registered and responding (5 tests)
+- `backend/tests/integration/test_conversations.py` — Endpoint registration verification: POST /conversations, GET /conversations, POST /end, POST /archive, POST /resume all registered and responding (5 tests)
 
 ### Frontend Component Tests — 9/9 passed ✅
 
 **Hook tests** (`frontend/src/__tests__/`):
-- `useChatSession.test.ts` — Disconnected initial state, empty messages, sendMessage adds user message, clearMessages resets (4 tests)
+- `frontend/src/__tests__/useChatSession.test.ts` — Disconnected initial state, empty messages, sendMessage adds user message, clearMessages resets (4 tests)
 
 **Component tests** (`frontend/src/__tests__/`):
-- `ConversationSessionsTab.test.tsx` — Renders session titles and status chips, untitled placeholder, Start New Conversation button calls mutation, Archive confirmation dialog, empty state (5 tests)
+- `frontend/src/__tests__/ConversationSessionsTab.test.tsx` — Renders session titles and status chips, untitled placeholder, Start New Conversation button calls mutation, Archive confirmation dialog, empty state (5 tests)
+- `frontend/src/__tests__/ConversationDialog.test.tsx` — conversational guardrail hint collapsed-by-default behavior and resumed-session usage restoration
 
 ### E2E Tests — 4/4 passed (1 skipped) ✅
 

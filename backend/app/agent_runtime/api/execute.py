@@ -128,7 +128,11 @@ async def _execute_session(
             except Exception as exc:
                 logger.exception("Session %s failed: %s", session_id, exc)
                 try:
-                    await data_client.mark_session_failed(session_id, str(exc))
+                    await data_client.mark_session_failed(
+                        session_id,
+                        str(exc),
+                        stop_category="functional_failure",
+                    )
                 except Exception:
                     logger.exception("Failed to mark session %s as failed", session_id)
 

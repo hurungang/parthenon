@@ -57,6 +57,32 @@ The Control Center internal API is caller-scoped and deny-by-default. Access is 
 
 ---
 
+## Agent Execution Guardrails — Responsibility Boundaries and Rollout Order
+
+Use this model for the `add-agent-execution-guardrails` deployment and future guardrail revisions.
+
+### Responsibility boundaries
+
+| Service | Guardrail responsibility |
+|---------|--------------------------|
+| Control Center | Policy source of truth, policy snapshot resolution, and persistence of structured guardrail stop reasons and conversational token telemetry |
+| Communication Hub | Forwarding boundary that preserves policy snapshot, stop-reason metadata, and conversational token telemetry without remapping |
+| Agent Runtime | Execution-time guardrail enforcement (cycle detection, cumulative iteration limits, timeout, delegation depth/step budgets, mode-aware token behavior) |
+
+### Rollout order
+
+1. Deploy Control Center first to ensure policy and persistence readiness.
+2. Deploy Communication Hub second to preserve guardrail metadata across direct and delegated routes.
+3. Deploy Agent Runtime third to activate enforcement against an already compatible policy and forwarding contract.
+
+### Boundary guardrails
+
+- Agent Runtime and Communication Hub must not become policy owners.
+- Agent Runtime and Communication Hub must not gain direct database access.
+- Guardrail metadata contracts must remain stable across service boundaries during rollout and rollback.
+
+---
+
 ## Service Dependencies
 
 ```

@@ -1,0 +1,30 @@
+# SOPs
+
+## Overview
+SOPs represent business workflows composed of orchestrated steps and delegated tasks. Guardrail policies ensure delegation remains bounded and free of recursive loops so SOP execution is predictable, controllable, and suitable for enterprise operations.
+
+## Who Uses It
+- Enterprise Administrators: Define and govern SOP workflows
+- AI Operations Leads: Monitor SOP outcomes and policy-enforced stops
+- Business Process Owners: Depend on reliable automated process execution
+
+## What It Does
+- Supports multi-step workflow orchestration for repeatable business processes
+- Supports delegated execution across agents while enforcing bounded delegation behavior
+- Detects and blocks direct and indirect cyclic delegation chains
+- Produces clear policy-stop outcomes for governance and incident triage
+
+## Acceptance Criteria
+- SOP delegation supports business workflows without unbounded recursion
+- Direct and indirect cyclic delegation paths are blocked with clear user-visible outcomes
+- Delegation depth and delegated-step boundaries are enforced as part of execution policy
+- SOP outcomes remain auditable and distinguish policy enforcement stops from functional failures
+
+## Out of Scope
+- Technical workflow engine design details
+- Low-level execution runtime implementation mechanics
+
+## Dependencies & Constraints
+- Depends on Agent Type guardrail policy definitions and governance controls
+- Must align with enterprise auditability and operational reliability requirements
+- Must preserve established service-boundary expectations

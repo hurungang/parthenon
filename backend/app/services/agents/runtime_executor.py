@@ -33,6 +33,14 @@ if TYPE_CHECKING:
 from app.db.models.agents import AgentJob, AgentJobStatus, AgentInputType
 from app.services.agents.agent_loop import TaskAgentLoop, ConversationalAgentLoop
 from app.services.agents.permission_manager import AgentPermissionManager, PermissionDeniedError
+from app.services.agents.guardrails import (
+    GuardrailInfoReason,
+    GuardrailStop,
+    GuardrailStopReason,
+    RuntimeGuardrailState,
+    detect_cycle_path,
+    extract_total_tokens_from_usage,
+)
 from app.services.agents.runtime_loader import AgentRuntimeLoader
 from app.services.agents.session_service import AgentSessionService
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name, is_system_tool
@@ -166,6 +174,14 @@ def _build_delegation_request_payload(tool_args: dict[str, Any]) -> dict[str, An
         for key, value in tool_args.items()
         if key != "session_link_id"
     }
+
+
+def _int_or_default(value: Any, default: int) -> int:
+    """Convert value to int with a safe default for malformed inputs."""
+    try:
+        return int(value)
+    except Exception:
+        return default
 
 
 def _build_dynamic_agent_tool_definition(
@@ -351,6 +367,180 @@ class AgentRuntimeExecutor:
         self._session_service = AgentSessionService()
         self._runtime_loader = AgentRuntimeLoader()
         self._data_client = data_client
+
+    def _build_guardrail_state(
+        self,
+        context: dict[str, Any],
+        job_data: dict[str, Any],
+    ) -> RuntimeGuardrailState:
+        """Construct runtime guardrail state from resolved context policy snapshot."""
+        policy = context.get("guardrail_policy") or {}
+        input_data = job_data.get("input_data") if isinstance(job_data, dict) else {}
+        current_depth = 0
+        if isinstance(input_data, dict):
+            current_depth = _int_or_default(input_data.get("__delegation_depth"), 0)
+
+        return RuntimeGuardrailState(
+            max_iterations=_int_or_default(policy.get("max_iterations"), 10),
+            max_delegation_depth=_int_or_default(policy.get("max_delegation_depth"), 3),
+            max_delegated_steps=_int_or_default(policy.get("max_delegated_steps"), 20),
+            execution_timeout_seconds=_int_or_default(
+                policy.get("execution_timeout_seconds"),
+                300,
+            ),
+            token_budget=(
+                _int_or_default(policy.get("token_budget"), 0)
+                if policy.get("token_budget") is not None
+                else None
+            ),
+            token_enforcement_mode=str(policy.get("token_enforcement_mode") or "observe"),
+            token_fallback_mode=str(policy.get("token_fallback_mode") or "observe_and_log"),
+            conversational_token_visibility_mode=str(
+                policy.get("conversational_token_visibility_mode") or "enabled"
+            ),
+            conversational_continuation_policy=str(
+                policy.get("conversational_continuation_policy") or "allow"
+            ),
+            policy_snapshot_id=str(policy.get("policy_snapshot_id") or "unknown"),
+            delegation_depth=max(0, current_depth),
+        )
+
+    async def _precheck_delegation_graph(
+        self,
+        *,
+        session_id: uuid.UUID,
+        agent_type_slug: str,
+        context: dict[str, Any],
+        data_client: "ControlCenterDataClient",
+        guardrail_state: RuntimeGuardrailState,
+    ) -> None:
+        """Run pre-execution graph cycle guardrail checks before first model/tool action."""
+        adjacency: dict[str, list[str]] = {}
+        provided_graph = context.get("delegation_graph")
+        provided_cycle_path = context.get("delegation_cycle_path")
+
+        if isinstance(provided_graph, dict):
+            adjacency = {
+                str(node): [str(target) for target in (targets or [])]
+                for node, targets in provided_graph.items()
+            }
+        elif isinstance(context.get("allowed_agent_types"), list):
+            adjacency = {
+                str(agent_type_slug): [
+                    str(target) for target in (context.get("allowed_agent_types") or [])
+                ]
+            }
+
+        cycle_path: list[str] | None = None
+        if isinstance(provided_cycle_path, list) and provided_cycle_path:
+            cycle_path = [str(node) for node in provided_cycle_path]
+        elif adjacency:
+            cycle_path = detect_cycle_path(adjacency, str(agent_type_slug))
+
+        if cycle_path:
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="guardrail.precheck.blocked_cycle",
+                log_level="WARN",
+                message="Delegation cycle detected before execution start",
+                data={
+                    "guardrail_reason": GuardrailStopReason.CYCLE_DETECTED,
+                    "cycle_path": cycle_path,
+                    "root_agent": str(agent_type_slug),
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                },
+            )
+            raise GuardrailStop(
+                reason=GuardrailStopReason.CYCLE_DETECTED,
+                message="Delegation cycle detected in pre-execution graph validation",
+                details={
+                    "cycle_path": cycle_path,
+                    "root_agent": str(agent_type_slug),
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                },
+            )
+
+        graph_errors = context.get("delegation_graph_errors") or []
+        if isinstance(graph_errors, list) and graph_errors:
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="guardrail.precheck.blocked_cycle",
+                log_level="WARN",
+                message="Delegation graph validation failed before execution start",
+                data={
+                    "guardrail_reason": GuardrailStopReason.CYCLE_DETECTED,
+                    "validation_errors": [str(err) for err in graph_errors],
+                    "root_agent": str(agent_type_slug),
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                },
+            )
+            raise GuardrailStop(
+                reason=GuardrailStopReason.CYCLE_DETECTED,
+                message="Delegation graph validation failed before execution start",
+                details={
+                    "validation_errors": [str(err) for err in graph_errors],
+                    "root_agent": str(agent_type_slug),
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                },
+            )
+
+        await data_client.log_execution_event(
+            session_id=session_id,
+            event_type="guardrail.precheck.allowed",
+            message="Pre-execution delegation graph validation passed",
+            data={
+                "guardrail_reason": "precheck_allowed",
+                "root_agent": str(agent_type_slug),
+                "node_count": len(adjacency),
+                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+            },
+        )
+
+    def _check_runtime_limits_or_raise(
+        self,
+        state: RuntimeGuardrailState,
+    ) -> None:
+        """Apply hard iteration/depth/delegation/timeout constraints."""
+        if state.cumulative_iterations > state.max_iterations:
+            raise GuardrailStop(
+                reason=GuardrailStopReason.ITERATION_LIMIT_EXCEEDED,
+                message="Cumulative iteration limit exceeded",
+                details={
+                    "current_value": state.cumulative_iterations,
+                    "threshold_value": state.max_iterations,
+                },
+            )
+
+        if state.delegation_depth > state.max_delegation_depth:
+            raise GuardrailStop(
+                reason=GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED,
+                message="Delegation depth limit exceeded",
+                details={
+                    "current_value": state.delegation_depth,
+                    "threshold_value": state.max_delegation_depth,
+                },
+            )
+
+        if state.delegated_steps > state.max_delegated_steps:
+            raise GuardrailStop(
+                reason=GuardrailStopReason.DELEGATED_STEPS_EXCEEDED,
+                message="Delegated-step budget exceeded",
+                details={
+                    "current_value": state.delegated_steps,
+                    "threshold_value": state.max_delegated_steps,
+                },
+            )
+
+        elapsed_seconds = state.elapsed_seconds()
+        if elapsed_seconds > state.execution_timeout_seconds:
+            raise GuardrailStop(
+                reason=GuardrailStopReason.EXECUTION_TIMEOUT_EXCEEDED,
+                message="Execution timeout exceeded",
+                details={
+                    "current_value": elapsed_seconds,
+                    "threshold_value": state.execution_timeout_seconds,
+                },
+            )
 
     # ── Execution Log Helper ───────────────────────────────────────────────────
 
@@ -773,6 +963,14 @@ class AgentRuntimeExecutor:
 
             try:
                 context = await data_client.get_agent_context(job_data["agent_type_id"])
+                guardrail_state = self._build_guardrail_state(context, job_data)
+                await self._precheck_delegation_graph(
+                    session_id=session_id,
+                    agent_type_slug=str(context.get("agent_type_slug") or context.get("agent_type_id") or job_data["agent_type_id"]),
+                    context=context,
+                    data_client=data_client,
+                    guardrail_state=guardrail_state,
+                )
                 output_data = await self._run_task_loop_ar(job_data, context, data_client)
                 await data_client.mark_session_completed(session_id, output_data)
                 span.set_attribute("status", "completed")
@@ -783,6 +981,27 @@ class AgentRuntimeExecutor:
                     message="Session completed successfully",
                     data={"output_keys": list(output_data.keys()) if output_data else []},
                 )
+            except GuardrailStop as exc:
+                logger.warning("Session %s guardrail stop: %s", session_id, exc.reason)
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="guardrail.session.terminal",
+                    log_level="INFO",
+                    message=exc.message,
+                    data={
+                        "guardrail_reason": exc.reason,
+                        "stop_category": "guardrail_stop",
+                        **(exc.details or {}),
+                    },
+                )
+                await data_client.mark_session_failed(
+                    session_id,
+                    exc.message,
+                    stop_category="guardrail_stop",
+                    stop_reason=exc.reason,
+                    stop_details=exc.details,
+                )
+                span.set_attribute("status", "guardrail_stop")
             except PermissionDeniedError as exc:
                 error_msg = f"Permission denied: {exc}"
                 logger.warning("Session %s permission denied: %s", session_id, exc)
@@ -793,7 +1012,11 @@ class AgentRuntimeExecutor:
                     data={"exception_type": type(exc).__name__},
                     log_level="ERROR",
                 )
-                await data_client.mark_session_failed(session_id, error_msg)
+                await data_client.mark_session_failed(
+                    session_id,
+                    error_msg,
+                    stop_category="functional_failure",
+                )
                 span.set_attribute("status", "permission_denied")
             except Exception as exc:
                 error_msg = str(exc)
@@ -805,7 +1028,11 @@ class AgentRuntimeExecutor:
                     data={"exception_type": type(exc).__name__},
                     log_level="ERROR",
                 )
-                await data_client.mark_session_failed(session_id, error_msg)
+                await data_client.mark_session_failed(
+                    session_id,
+                    error_msg,
+                    stop_category="functional_failure",
+                )
                 span.set_attribute("status", "failed")
                 span.set_attribute("error", error_msg)
 
@@ -1033,6 +1260,8 @@ class AgentRuntimeExecutor:
                 logger.warning("Failed to fetch model config %s: %s", model_config_id, exc)
 
         model_id: str = context.get("model_id") or ""
+        guardrail_state = self._build_guardrail_state(context, job_data)
+        execution_mode = "non_conversational"
 
         # ── Observe-Reason-Act loop ───────────────────────────────────────────
         messages: list[dict[str, Any]] = []
@@ -1040,9 +1269,37 @@ class AgentRuntimeExecutor:
             messages.append({"role": "user", "content": user_prompt})
 
         output_data: dict[str, Any] = {}
-        max_iterations = 10
+        max_iterations = max(1, guardrail_state.max_iterations)
 
         for iteration in range(max_iterations):
+            guardrail_state.cumulative_iterations += 1
+            self._check_runtime_limits_or_raise(guardrail_state)
+
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="guardrail.runtime.snapshot",
+                message=f"Guardrail snapshot before iteration {iteration + 1}",
+                data={
+                    "guardrail_reason": "runtime_snapshot",
+                    "execution_mode": execution_mode,
+                    "current_value": {
+                        "cumulative_iterations": guardrail_state.cumulative_iterations,
+                        "delegation_depth": guardrail_state.delegation_depth,
+                        "delegated_steps": guardrail_state.delegated_steps,
+                        "elapsed_seconds": guardrail_state.elapsed_seconds(),
+                        "token_usage_current_session": guardrail_state.token_usage_current_session,
+                    },
+                    "threshold_value": {
+                        "max_iterations": guardrail_state.max_iterations,
+                        "max_delegation_depth": guardrail_state.max_delegation_depth,
+                        "max_delegated_steps": guardrail_state.max_delegated_steps,
+                        "execution_timeout_seconds": guardrail_state.execution_timeout_seconds,
+                        "token_budget": guardrail_state.token_budget,
+                    },
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                },
+            )
+
             # ── Observe ───────────────────────────────────────────────────────
             await self._log_execution_event(
                 session_id=session_id,
@@ -1112,6 +1369,53 @@ class AgentRuntimeExecutor:
             from app.services.agents.model_binding import ModelBindingLayer as _MBL
             response_text = _MBL.extract_text(raw_response, provider)
             raw_tool_calls = _MBL.extract_tool_calls(raw_response, provider)
+            usage = _MBL.extract_usage(raw_response, provider)
+            iteration_tokens = extract_total_tokens_from_usage(usage)
+            if iteration_tokens > 0:
+                guardrail_state.token_usage_current_session += iteration_tokens
+
+            token_budget = guardrail_state.token_budget
+            token_threshold_hit = (
+                token_budget is not None
+                and token_budget > 0
+                and guardrail_state.token_usage_current_session >= token_budget
+            )
+
+            if token_threshold_hit:
+                guardrail_state.token_threshold_reached = True
+                provider_supported = usage is not None
+
+                if (
+                    guardrail_state.token_enforcement_mode == "enforce"
+                    and provider_supported
+                ):
+                    raise GuardrailStop(
+                        reason=GuardrailStopReason.TOKEN_BUDGET_EXCEEDED_NON_CONVERSATIONAL,
+                        message="Token budget exceeded for non-conversational execution",
+                        details={
+                            "current_value": guardrail_state.token_usage_current_session,
+                            "threshold_value": token_budget,
+                            "execution_mode": execution_mode,
+                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                            "provider": provider,
+                        },
+                    )
+
+                if guardrail_state.token_enforcement_mode == "enforce" and not provider_supported:
+                    await data_client.log_execution_event(
+                        session_id=session_id,
+                        event_type="guardrail.runtime.token_fallback_applied",
+                        message="Token fallback mode applied due to unsupported provider usage accounting",
+                        data={
+                            "guardrail_reason": GuardrailStopReason.TOKEN_GUARDRAIL_FALLBACK_APPLIED,
+                            "execution_mode": execution_mode,
+                            "provider": provider,
+                            "fallback_mode": guardrail_state.token_fallback_mode,
+                            "current_value": guardrail_state.token_usage_current_session,
+                            "threshold_value": token_budget,
+                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                        },
+                    )
 
             await self._log_execution_event(
                 session_id=session_id,
@@ -1120,6 +1424,8 @@ class AgentRuntimeExecutor:
                 data={
                     "response_text": (response_text or "")[:500],
                     "has_tool_calls": bool(raw_tool_calls),
+                    "token_usage": usage,
+                    "token_usage_current_session": guardrail_state.token_usage_current_session,
                     "selected_tools": [
                         _canonicalize_tool_name_for_log(
                             _restore_tool_name_from_openai(
@@ -1223,6 +1529,29 @@ class AgentRuntimeExecutor:
                 else:
                     delegated_target_slug = _extract_agent_delegation_target(original_name)
                     if delegated_target_slug is not None:
+                        guardrail_state.delegated_steps += 1
+                        next_depth = guardrail_state.delegation_depth + 1
+                        if next_depth > guardrail_state.max_delegation_depth:
+                            raise GuardrailStop(
+                                reason=GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED,
+                                message="Delegation depth limit exceeded before dispatch",
+                                details={
+                                    "current_value": next_depth,
+                                    "threshold_value": guardrail_state.max_delegation_depth,
+                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                },
+                            )
+                        if guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
+                            raise GuardrailStop(
+                                reason=GuardrailStopReason.DELEGATED_STEPS_EXCEEDED,
+                                message="Delegated-step limit exceeded before dispatch",
+                                details={
+                                    "current_value": guardrail_state.delegated_steps,
+                                    "threshold_value": guardrail_state.max_delegated_steps,
+                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                },
+                            )
+
                         if (
                             allowed_agent_types
                             and delegated_target_slug not in allowed_agent_types
@@ -1234,11 +1563,13 @@ class AgentRuntimeExecutor:
                                 )
                             }
                         else:
+                            delegation_payload = _build_delegation_request_payload(args)
+                            delegation_payload["__delegation_depth"] = next_depth
                             tool_result = await comm_hub_client.call_a2a_request(
                                 target_agent_type_slug=delegated_target_slug,
                                 session_id=str(session_id),
                                 requester_role_id=context.get("role_id"),
-                                request_payload=_build_delegation_request_payload(args),
+                                request_payload=delegation_payload,
                                 session_link_id=args.get("session_link_id"),
                             )
                     else:
@@ -1280,18 +1611,41 @@ class AgentRuntimeExecutor:
         else:
             # Max iterations exceeded
             logger.warning("Session %s exceeded max iterations", session_id)
-            output_data = {
-                "result": "Task did not complete within max iterations",
-                "session_id": str(session_id),
-            }
+            raise GuardrailStop(
+                reason=GuardrailStopReason.ITERATION_LIMIT_EXCEEDED,
+                message="Task did not complete within max iterations",
+                details={
+                    "current_value": guardrail_state.cumulative_iterations,
+                    "threshold_value": guardrail_state.max_iterations,
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                },
+            )
 
         await self._log_execution_event(
             session_id=session_id,
             event_type="task_loop_completed",
             message="Task loop completed",
-            data={"output_keys": list(output_data.keys())},
+            data={
+                "output_keys": list(output_data.keys()),
+                "guardrail": {
+                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                    "cumulative_iterations": guardrail_state.cumulative_iterations,
+                    "delegated_steps": guardrail_state.delegated_steps,
+                    "delegation_depth": guardrail_state.delegation_depth,
+                    "elapsed_seconds": guardrail_state.elapsed_seconds(),
+                    "token_usage_current_session": guardrail_state.token_usage_current_session,
+                },
+            },
             data_client=data_client,
         )
+        output_data.setdefault("guardrail_usage", {
+            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+            "cumulative_iterations": guardrail_state.cumulative_iterations,
+            "delegated_steps": guardrail_state.delegated_steps,
+            "delegation_depth": guardrail_state.delegation_depth,
+            "elapsed_seconds": guardrail_state.elapsed_seconds(),
+            "token_usage_current_session": guardrail_state.token_usage_current_session,
+        })
         return output_data
 
     async def _execute_mcp_tool_ar(
@@ -1582,7 +1936,7 @@ class AgentRuntimeExecutor:
         conv_session_id: uuid.UUID,
         cert_path: str | None = None,
         key_path: str | None = None,
-    ) -> str:
+    ) -> tuple[str, dict[str, Any]]:
         """Execute one conversation turn using Control Center context only.
 
         This is the Agent Runtime DB-free path: all execution context and model
@@ -1668,9 +2022,38 @@ class AgentRuntimeExecutor:
         )
 
         local_messages = list(messages)
-        max_iterations = 10
+        guardrail_state = self._build_guardrail_state(
+            agent_context,
+            {"input_data": {"__delegation_depth": 0}},
+        )
+
+        def build_conversation_guardrail_usage() -> dict[str, Any]:
+            return {
+                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                "token_usage_current_session": guardrail_state.token_usage_current_session,
+                "token_budget": guardrail_state.token_budget,
+                "cumulative_iterations": guardrail_state.cumulative_iterations,
+                "max_iterations": guardrail_state.max_iterations,
+                "delegated_steps": guardrail_state.delegated_steps,
+                "max_delegated_steps": guardrail_state.max_delegated_steps,
+                "delegation_depth": guardrail_state.delegation_depth,
+                "max_delegation_depth": guardrail_state.max_delegation_depth,
+            }
+
+        max_iterations = max(1, guardrail_state.max_iterations)
 
         for iteration in range(max_iterations):
+            guardrail_state.cumulative_iterations += 1
+            try:
+                self._check_runtime_limits_or_raise(guardrail_state)
+            except GuardrailStop as exc:
+                logger.warning(
+                    "Conversation guardrail stop (from context): session=%s reason=%s",
+                    conv_session_id,
+                    exc.reason,
+                )
+                return exc.message, build_conversation_guardrail_usage()
+
             raw_response = await binding.complete_from_context(
                 model_id=str(model_id),
                 model_config_dict=model_config,
@@ -1680,6 +2063,33 @@ class AgentRuntimeExecutor:
 
             response_text = ModelBindingLayer.extract_text(raw_response, provider_type)
             raw_tool_calls = ModelBindingLayer.extract_tool_calls(raw_response, provider_type)
+            usage = ModelBindingLayer.extract_usage(raw_response, provider_type)
+            guardrail_state.token_usage_current_session += extract_total_tokens_from_usage(usage)
+
+            token_budget = guardrail_state.token_budget
+            token_threshold_hit = (
+                token_budget is not None
+                and token_budget > 0
+                and guardrail_state.token_usage_current_session >= token_budget
+            )
+            if (
+                token_threshold_hit
+                and guardrail_state.conversational_token_visibility_mode == "enabled"
+            ):
+                logger.info(
+                    "guardrail.runtime.conversational_token_usage_snapshot",
+                    extra={
+                        "data": {
+                            "guardrail_reason": GuardrailInfoReason.CONVERSATIONAL_TOKEN_THRESHOLD_OBSERVED,
+                            "execution_mode": "conversational",
+                            "token_usage_current_session": guardrail_state.token_usage_current_session,
+                            "threshold_value": token_budget,
+                            "continuation_allowed": True,
+                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                            "provider": provider_type,
+                        }
+                    },
+                )
 
             logger.info(
                 "Conversation LLM response (from context): session=%s iteration=%d has_tool_calls=%s selected_tools=%s",
@@ -1699,7 +2109,10 @@ class AgentRuntimeExecutor:
             )
 
             if not raw_tool_calls:
-                return response_text or "I processed your message but received an empty response."
+                return (
+                    response_text or "I processed your message but received an empty response.",
+                    build_conversation_guardrail_usage(),
+                )
 
             local_messages.append(
                 {
@@ -1737,11 +2150,20 @@ class AgentRuntimeExecutor:
                 else:
                     delegated_target_slug = _extract_agent_delegation_target(original_name)
                     if delegated_target_slug is not None:
+                        guardrail_state.delegated_steps += 1
+                        next_depth = guardrail_state.delegation_depth + 1
+                        if next_depth > guardrail_state.max_delegation_depth:
+                            return "Delegation depth limit exceeded.", build_conversation_guardrail_usage()
+                        if guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
+                            return "Delegated-step budget exceeded.", build_conversation_guardrail_usage()
+
+                        delegation_payload = _build_delegation_request_payload(args)
+                        delegation_payload["__delegation_depth"] = next_depth
                         tool_result = await comm_hub_client.call_a2a_request(
                             target_agent_type_slug=delegated_target_slug,
                             session_id=str(conv_session_id),
                             requester_role_id=(str(role_id_raw) if role_id_raw else None),
-                            request_payload=_build_delegation_request_payload(args),
+                            request_payload=delegation_payload,
                             session_link_id=args.get("session_link_id"),
                             wait_for_response=True,
                             wait_timeout_seconds=45.0,
@@ -1770,7 +2192,10 @@ class AgentRuntimeExecutor:
                     }
                 )
 
-        return "I was unable to complete the task within the allowed number of steps."
+        return (
+            "I was unable to complete the task within the allowed number of steps.",
+            build_conversation_guardrail_usage(),
+        )
 
     async def _save_result_for_conversation(
         self,

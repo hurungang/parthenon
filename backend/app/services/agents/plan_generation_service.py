@@ -233,6 +233,24 @@ class PlanGenerationService:
                     if step.step_type == SopStepType.agent_delegation and step.target_agent_type_id:
                         delegated_agent_type_ids.add(str(step.target_agent_type_id))
 
+        # Filter sop_data_list based on system instruction SOP references
+        if sop_data_list:
+            system_instruction_lower = (agent_type.system_instruction or "").lower()
+            mentioned = [
+                sop for sop in sop_data_list
+                if sop["name"].lower() in system_instruction_lower
+            ]
+            if mentioned:
+                # System instruction names specific SOPs — use only those
+                sop_data_list = mentioned
+            elif agent_type.primary_sop_id:
+                # No SOPs named — fall back to the configured default SOP
+                primary_id = str(agent_type.primary_sop_id)
+                default_sop = [sop for sop in sop_data_list if sop["id"] == primary_id]
+                if default_sop:
+                    sop_data_list = default_sop
+            # else: no system instruction SOP mentions, no default SOP → keep all role SOPs
+
         delegated_agents: list[dict[str, Any]] = []
         if delegated_agent_type_ids:
             delegated_rows = await db.execute(

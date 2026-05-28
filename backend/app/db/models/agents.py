@@ -9,6 +9,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -90,6 +91,52 @@ class AgentPlanStatus(str, enum.Enum):
     pending = "pending"
     success = "success"
     failed = "failed"
+
+
+class GuardrailTokenEnforcementMode(str, enum.Enum):
+    """Token budget behavior for non-conversational and automated execution modes."""
+
+    observe = "observe"
+    enforce = "enforce"
+
+
+class GuardrailTokenFallbackMode(str, enum.Enum):
+    """Fallback behavior when provider hard token enforcement is unavailable."""
+
+    observe_and_log = "observe_and_log"
+    stop_on_next_hard_guardrail = "stop_on_next_hard_guardrail"
+
+
+class GuardrailConversationalTokenVisibilityMode(str, enum.Enum):
+    """Whether conversational token usage snapshots are emitted."""
+
+    enabled = "enabled"
+    disabled = "disabled"
+
+
+class GuardrailConversationalContinuationPolicy(str, enum.Enum):
+    """Conversational continuation behavior after token threshold is reached."""
+
+    allow = "allow"
+
+
+class SessionStopCategory(str, enum.Enum):
+    """Session terminal category used for operational triage."""
+
+    functional_failure = "functional_failure"
+    guardrail_stop = "guardrail_stop"
+
+
+class SessionStopReason(str, enum.Enum):
+    """Canonical stop-reason taxonomy for runtime/session propagation."""
+
+    cycle_detected = "cycle_detected"
+    iteration_limit_exceeded = "iteration_limit_exceeded"
+    delegation_depth_exceeded = "delegation_depth_exceeded"
+    delegated_steps_exceeded = "delegated_steps_exceeded"
+    execution_timeout_exceeded = "execution_timeout_exceeded"
+    token_budget_exceeded_non_conversational = "token_budget_exceeded_non_conversational"
+    token_guardrail_fallback_applied = "token_guardrail_fallback_applied"
 
 
 class AgentTokenStatus(str, enum.Enum):
@@ -428,6 +475,62 @@ class AgentType(Base):
         nullable=True,
     )
 
+    # Guardrail policy profile (owned by Control Center and resolved by runtime context)
+    guardrail_max_iterations: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+    )
+    guardrail_max_delegation_depth: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+    )
+    guardrail_max_delegated_steps: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=20,
+    )
+    guardrail_execution_timeout_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=300,
+    )
+    guardrail_token_budget: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    guardrail_token_enforcement_mode: Mapped[GuardrailTokenEnforcementMode] = mapped_column(
+        Enum(GuardrailTokenEnforcementMode, name="guardrail_token_enforcement_mode_enum"),
+        nullable=False,
+        default=GuardrailTokenEnforcementMode.observe,
+    )
+    guardrail_token_fallback_mode: Mapped[GuardrailTokenFallbackMode] = mapped_column(
+        Enum(GuardrailTokenFallbackMode, name="guardrail_token_fallback_mode_enum"),
+        nullable=False,
+        default=GuardrailTokenFallbackMode.observe_and_log,
+    )
+    guardrail_conversational_token_visibility_mode: Mapped[
+        GuardrailConversationalTokenVisibilityMode
+    ] = mapped_column(
+        Enum(
+            GuardrailConversationalTokenVisibilityMode,
+            name="guardrail_conversational_token_visibility_mode_enum",
+        ),
+        nullable=False,
+        default=GuardrailConversationalTokenVisibilityMode.enabled,
+    )
+    guardrail_conversational_continuation_policy: Mapped[
+        GuardrailConversationalContinuationPolicy
+    ] = mapped_column(
+        Enum(
+            GuardrailConversationalContinuationPolicy,
+            name="guardrail_conversational_continuation_policy_enum",
+        ),
+        nullable=False,
+        default=GuardrailConversationalContinuationPolicy.allow,
+    )
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -525,6 +628,15 @@ class AgentJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     output_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stop_category: Mapped[SessionStopCategory | None] = mapped_column(
+        Enum(SessionStopCategory, name="agent_job_stop_category_enum"),
+        nullable=True,
+    )
+    stop_reason: Mapped[SessionStopReason | None] = mapped_column(
+        Enum(SessionStopReason, name="agent_job_stop_reason_enum"),
+        nullable=True,
+    )
+    stop_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Ordered message thread for conversational sessions: [{"role": "user"|"assistant"|"tool", "content": "..."}]
     conversation_history: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

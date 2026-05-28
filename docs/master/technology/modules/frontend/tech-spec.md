@@ -103,6 +103,15 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | `extractErrorMessage` | function | Shared utility: reads `error.response.data.detail` (Axios), `error.message` (Error), or falls back to provided `fallback` string; used across `UsersPage`, `RolesPage`, `AccessRequestsPage`, and `GroupsPage` | `frontend/src/utils/errorUtils.ts` |
 | `toolNaming` | utility module | Shared frontend naming/slug formatting helpers used for consistent slug validation and normalization across MCP and agent surfaces | `frontend/src/utils/toolNaming.ts` |
 
+### Agent Guardrails & Execution Summary UI
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `LogPresenter` | service module | Derives guardrail usage summaries and conversational token-usage visibility from execution log entries | `frontend/src/services/LogPresenter.ts` |
+| `LogSummaryPanel` | component | Renders execution summary chips including guardrail usage and token-visibility information | `frontend/src/components/logs/LogSummaryPanel.tsx` |
+| `AgentTypeForm` | component | Agent Type editor surface where guardrail policy values are configured and displayed in k-token units | `frontend/src/pages/agents/AgentTypeForm.tsx` |
+| `AgentTypeDetailsDialog` | component | Read-only/details surface that presents the configured guardrail profile for an Agent Type | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
+
 ### Segregation Audit Coverage
 
 | Symbol | Type | Description | File |

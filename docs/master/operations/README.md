@@ -16,9 +16,12 @@ This section contains all operational reference material for running and maintai
 | **Scheduling Engine** | Triggered vs. completed job counts over time, scheduler queue depth trend |
 | **Infrastructure** | PostgreSQL connection count and query latency, Redis memory and eviction rate, OTEL Collector throughput |
 | **Agent Runtime** | Session queue depth, session throughput and failure rate, dispatch latency, active runtime sessions, execution duration, LangGraph node transitions, permission cache hit rate, permission denials |
+| **Agent Execution Guardrails** | Guardrail stop trends by reason, cycle blocks, iteration/timeout/delegation budget pressure, conversational token visibility, token fallback activation, terminal stop-category integrity |
 | **Service Segregation Boundary Enforcement** | Allowed vs denied internal calls by caller type, top deny reasons, unknown caller and certificate mismatch trends, revocation health, internal auth latency, and system-tools unauthenticated rejects |
 
 For metric definitions and alert thresholds, see [monitoring.md](monitoring.md).
+
+Agent execution guardrail metrics and alerts are defined in [monitoring.md](monitoring.md) under Agent Execution Guardrails.
 
 Boundary policy metrics and alerts for internal caller segregation are defined in [monitoring.md](monitoring.md) under Service Segregation Boundary Enforcement.
 
@@ -34,6 +37,8 @@ Boundary policy metrics and alerts for internal caller segregation are defined i
 | Jaeger (distributed traces) | Use `trace_id` from a log line to jump to the correlated trace in Jaeger UI |
 
 For structured log fields and per-component event reference, see [logging.md](logging.md).
+
+Agent execution guardrail event taxonomy, required fields, and sensitive-data exclusions are defined in [logging.md](logging.md) under Agent Execution Guardrail Events.
 
 Boundary event catalog and required fields for allowlist enforcement are defined in [logging.md](logging.md) under Internal API Boundary Log Events.
 
@@ -64,6 +69,7 @@ The following endpoints must be included in production readiness checklists and 
 | [communication-hub-disconnect.md](runbooks/communication-hub-disconnect.md) | Web UI shows disconnected state; agent responses stop; repeated `WebSocket disconnect` in logs |
 | [telemetry.md](runbooks/telemetry.md) | Telemetry init failure at startup; no spans in Jaeger; frontend OTEL not initialising; file exporter disk pressure; Logfire or custom exporter credential errors; log level not applying |
 | [agent-runtime.md](runbooks/agent-runtime.md) | Resolving stuck sessions, permission failures, OAuth expiry, timeouts, and queue backlogs in the Agent Runtime with LangGraph |
+| [agent-execution-guardrails.md](runbooks/agent-execution-guardrails.md) | Triage for cycle blocks, iteration/timeout/delegation budget stops, conversational token continuation behavior, token fallback activation, and stop metadata integrity |
 | [certificate-security.md](runbooks/certificate-security.md) | CA initialization failures, certificate expiry and renewal failures, certificate compromise response, agent identity token refresh failures, and token leakage investigation |
 | [service-segregation-boundary-enforcement.md](runbooks/service-segregation-boundary-enforcement.md) | Internal API deny spikes, unknown caller denials, certificate mismatch denials, allowlist contract drift, and revocation check failures |
 

@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="29" time="1.335" timestamp="2026-05-24T20:44:14.474603+10:00" hostname="SYDL208162"><testcase classname="tests.unit.test_agent_runtime_executor" name="test_executor_can_be_instantiated" time="0.240" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_executor_has_required_methods" time="0.001" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_executor_has_permission_manager" time="0.001" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_executor_has_session_service" time="0.001" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_executor_does_not_import_langgraph" time="0.001"><failure message="FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\rhu\\source\\personal\\coding-workspace\\Parthenon\\app/services/agents/runtime_executor.py'">def test_executor_does_not_import_langgraph():
+        """runtime_executor must not import langgraph — LangChain deep agent is used instead."""
+        import importlib.util
+        import sys
+    
+        # Remove cached module so we can inspect a fresh import
+        for key in list(sys.modules.keys()):
+            if "runtime_executor" in key:
+                del sys.modules[key]
+    
+        spec = importlib.util.spec_from_file_location(
+            "runtime_executor",
+            "app/services/agents/runtime_executor.py",
+        )
+        # The module source should not reference langgraph
+        if spec and spec.origin:
+&gt;           with open(spec.origin, encoding="utf-8") as f:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\rhu\\source\\personal\\coding-workspace\\Parthenon\\app/services/agents/runtime_executor.py'
+
+backend\tests\unit\test_agent_runtime_executor.py:71: FileNotFoundError</failure></testcase><testcase classname="tests.unit.test_agent_runtime_executor" name="test_agent_loop_module_available" time="0.000" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_agent_loop_should_stop_after_max_iterations" time="0.000" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_agent_loop_should_stop_when_complete" time="0.000" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_agent_loop_message_helpers" time="0.000" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_skips_when_job_not_found" time="0.018" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_skips_when_status_not_running" time="0.008" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_marks_failed_on_permission_denied" time="0.003" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_marks_failed_on_generic_exception" time="0.007" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_marks_completed_on_success" time="0.003" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_observe_phase_increments_no_state" time="0.002" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_reason_phase_stub_marks_complete" time="0.002" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_act_phase_increments_iteration" time="0.003" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_capture_prompt_log_writes_agent_prompt_log" time="0.007" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_capture_prompt_log_does_not_raise_on_db_failure" time="0.006" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_execute_job_raises_permission_denied_when_identity_not_assigned_to_role" time="0.003" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_execute_job_succeeds_when_identity_assigned_to_role" time="0.009" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_execute_mcp_tool_passthrough_calls_proxy_with_agent_jwt" time="0.003" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_execute_mcp_tool_passthrough_returns_error_when_no_jwt" time="0.003" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_task_loop_ar_agent_tool_without_payload_calls_target_with_empty_payload" time="0.011"><failure message="AssertionError: assert {'guardrail_u...final answer'} == {'model_id': ...final answer'}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'guardrail_usage': {'cumulative_iterations': 2,&#10;                       'delegated_steps': 1,&#10;                       'delegation_depth': 0,&#10;                       'elapsed_seconds': 0.0014050999889150262,...&#10;  &#10;  ...Full output truncated (3 lines hidden), use '-vv' to show">@pytest.mark.asyncio
+    async def test_run_task_loop_ar_agent_tool_without_payload_calls_target_with_empty_payload():
+        """agent____&lt;slug&gt; tool delegates to the encoded target even with empty args."""
+        from app.services.agents.runtime_executor import AgentRuntimeExecutor
+    
+        executor = AgentRuntimeExecutor()
+        job_data, context, data_client = _build_ar_job_context_and_client()
+        executor._permission_manager.get_allowed_tools_from_context = MagicMock(
+            return_value={"agent____receiver-agent"}
+        )
+        executor._permission_manager.check_tool_allowed = MagicMock()
+    
+        tool_call = {
+            "id": "call-1",
+            "type": "function",
+            "function": {
+                "name": "agent__receiver-agent",
+                "arguments": json.dumps({}),
+            },
+        }
+    
+        comm_hub_instance = MagicMock()
+        comm_hub_instance.call_a2a_request = AsyncMock(return_value={"status": "accepted"})
+    
+        with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", True), patch(
+            "app.agent_runtime.comm_hub_client.CommHubToolClient",
+            return_value=comm_hub_instance,
+        ), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
+            new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
+        ) as mock_complete, patch(
+            "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
+            side_effect=[[tool_call], []],
+        ), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.extract_text",
+            side_effect=["delegating", "final answer"],
+        ):
+            result = await executor._run_task_loop_ar(job_data, context, data_client)
+    
+&gt;       assert result == {"result": "final answer", "model_id": context["model_id"]}
+E       AssertionError: assert {'guardrail_u...final answer'} == {'model_id': ...final answer'}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Left contains 1 more item:
+E         {'guardrail_usage': {'cumulative_iterations': 2,
+E                              'delegated_steps': 1,
+E                              'delegation_depth': 0,
+E                              'elapsed_seconds': 0.0014050999889150262,...
+E         
+E         ...Full output truncated (3 lines hidden), use '-vv' to show
+
+backend\tests\unit\test_agent_runtime_executor.py:848: AssertionError</failure></testcase><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_task_loop_ar_delegate_disallowed_target_adds_allowed_targets_error" time="0.011"><failure message="AssertionError: assert {'guardrail_u...final answer'} == {'model_id': ...final answer'}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'guardrail_usage': {'cumulative_iterations': 2,&#10;                       'delegated_steps': 1,&#10;                       'delegation_depth': 0,&#10;                       'elapsed_seconds': 0.002438399998936802,...&#10;  &#10;  ...Full output truncated (3 lines hidden), use '-vv' to show">@pytest.mark.asyncio
+    async def test_run_task_loop_ar_delegate_disallowed_target_adds_allowed_targets_error():
+        """agent____&lt;slug&gt; for disallowed target returns error mentioning allowed targets."""
+        from app.services.agents.runtime_executor import AgentRuntimeExecutor
+    
+        executor = AgentRuntimeExecutor()
+        job_data, context, data_client = _build_ar_job_context_and_client()
+        context["allowed_agent_types"] = ["z-agent", "a-agent"]
+        context["tool_name_map"] = {"agent__forbidden-agent": "agent____forbidden-agent"}
+        context["tool_definitions"] = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "agent__forbidden-agent",
+                    "parameters": {"type": "object"},
+                },
+            }
+        ]
+        executor._permission_manager.get_allowed_tools_from_context = MagicMock(
+            return_value={"agent____forbidden-agent"}
+        )
+        executor._permission_manager.check_tool_allowed = MagicMock()
+    
+        tool_call = {
+            "id": "call-2",
+            "type": "function",
+            "function": {
+                "name": "agent__forbidden-agent",
+                "arguments": json.dumps({}),
+            },
+        }
+    
+        with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", True), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
+            new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
+        ) as mock_complete, patch(
+            "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
+            side_effect=[[tool_call], []],
+        ), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.extract_text",
+            side_effect=["delegating", "final answer"],
+        ):
+            result = await executor._run_task_loop_ar(job_data, context, data_client)
+    
+&gt;       assert result == {"result": "final answer", "model_id": context["model_id"]}
+E       AssertionError: assert {'guardrail_u...final answer'} == {'model_id': ...final answer'}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Left contains 1 more item:
+E         {'guardrail_usage': {'cumulative_iterations': 2,
+E                              'delegated_steps': 1,
+E                              'delegation_depth': 0,
+E                              'elapsed_seconds': 0.002438399998936802,...
+E         
+E         ...Full output truncated (3 lines hidden), use '-vv' to show
+
+backend\tests\unit\test_agent_runtime_executor.py:903: AssertionError</failure></testcase><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request" time="0.010"><failure message="AssertionError: expected await not found.&#10;Expected: call_a2a_request(target_agent_type_slug='receiver-agent', session_id='b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', requester_role_id='11942874-1837-4791-b7f0-7fcb1b97acb8', request_payload={'task': 'summarize'}, session_link_id='link-123')&#10;  Actual: call_a2a_request(target_agent_type_slug='receiver-agent', session_id='b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', requester_role_id='11942874-1837-4791-b7f0-7fcb1b97acb8', request_payload={'task': 'summarize', '__delegation_depth': 1}, session_link_id='link-123')">@pytest.mark.asyncio
+    async def test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request():
+        """agent____&lt;slug&gt; for allowed target calls CommHubToolClient.call_a2a_request."""
+        from app.services.agents.runtime_executor import AgentRuntimeExecutor
+    
+        executor = AgentRuntimeExecutor()
+        job_data, context, data_client = _build_ar_job_context_and_client()
+        context["allowed_agent_types"] = ["receiver-agent"]
+        executor._permission_manager.get_allowed_tools_from_context = MagicMock(
+            return_value={"agent____receiver-agent"}
+        )
+        executor._permission_manager.check_tool_allowed = MagicMock()
+    
+        tool_call = {
+            "id": "call-3",
+            "type": "function",
+            "function": {
+                "name": "agent__receiver-agent",
+                "arguments": json.dumps(
+                    {
+                        "task": "summarize",
+                        "session_link_id": "link-123",
+                    }
+                ),
+            },
+        }
+    
+        comm_hub_instance = MagicMock()
+        comm_hub_instance.call_a2a_request = AsyncMock(return_value={"status": "accepted"})
+    
+        with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", True), patch(
+            "app.agent_runtime.comm_hub_client.CommHubToolClient",
+            return_value=comm_hub_instance,
+        ), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
+            new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
+        ), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
+            side_effect=[[tool_call], []],
+        ), patch(
+            "app.services.agents.model_binding.ModelBindingLayer.extract_text",
+            side_effect=["delegating", "final answer"],
+        ):
+            await executor._run_task_loop_ar(job_data, context, data_client)
+    
+&gt;       comm_hub_instance.call_a2a_request.assert_awaited_once_with(
+            target_agent_type_slug="receiver-agent",
+            session_id=job_data["id"],
+            requester_role_id=context["role_id"],
+            request_payload={"task": "summarize"},
+            session_link_id="link-123",
+        )
+
+backend\tests\unit\test_agent_runtime_executor.py:959: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:2393: in assert_awaited_once_with
+    return self.assert_awaited_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AsyncMock name='mock.call_a2a_request' id='2005921780736'&gt;, args = ()
+kwargs = {'request_payload': {'task': 'summarize'}, 'requester_role_id': '11942874-1837-4791-b7f0-7fcb1b97acb8', 'session_id': 'b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', 'session_link_id': 'link-123', ...}
+expected = call(target_agent_type_slug='receiver-agent', session_id='b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', requester_role_id='11942874-1837-4791-b7f0-7fcb1b97acb8', request_payload={'task': 'summarize'}, session_link_id='link-123')
+_error_message = &lt;function AsyncMockMixin.assert_awaited_with.&lt;locals&gt;._error_message at 0x000001D30A17A200&gt;
+actual = call(target_agent_type_slug='receiver-agent', session_id='b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', requester_role_id='11...37-4791-b7f0-7fcb1b97acb8', request_payload={'task': 'summarize', '__delegation_depth': 1}, session_link_id='link-123')
+cause = None
+
+    def assert_awaited_with(self, /, *args, **kwargs):
+        """
+        Assert that the last await was with the specified arguments.
+        """
+        if self.await_args is None:
+            expected = self._format_mock_call_signature(args, kwargs)
+            raise AssertionError(f'Expected await: {expected}\nNot awaited')
+    
+        def _error_message():
+            msg = self._format_mock_failure_message(args, kwargs, action='await')
+            return msg
+    
+        expected = self._call_matcher(_Call((args, kwargs), two=True))
+        actual = self._call_matcher(self.await_args)
+        if actual != expected:
+            cause = expected if isinstance(expected, Exception) else None
+&gt;           raise AssertionError(_error_message()) from cause
+E           AssertionError: expected await not found.
+E           Expected: call_a2a_request(target_agent_type_slug='receiver-agent', session_id='b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', requester_role_id='11942874-1837-4791-b7f0-7fcb1b97acb8', request_payload={'task': 'summarize'}, session_link_id='link-123')
+E             Actual: call_a2a_request(target_agent_type_slug='receiver-agent', session_id='b5fa3800-1c2b-42f5-bd48-07edfb4af8b0', requester_role_id='11942874-1837-4791-b7f0-7fcb1b97acb8', request_payload={'task': 'summarize', '__delegation_depth': 1}, session_link_id='link-123')
+
+..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:2382: AssertionError</failure></testcase><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_task_loop_ar_delegate_logs_via_execution_helper" time="0.008" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_run_task_loop_ar_save_result_logs_via_execution_helper" time="0.008" /><testcase classname="tests.unit.test_agent_runtime_executor" name="test_execute_conversation_turn_from_context_routes_send_notification_via_comm_hub" time="0.004" /></testsuite></testsuites>

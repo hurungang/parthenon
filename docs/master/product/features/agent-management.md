@@ -27,6 +27,10 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Agent Executions view supports filtering by agent type, enabling users to focus on relevant runs
 - Agent Types table includes columns for "Role" and "Identity", displaying the actual role and identity names for each agent type
 - Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
+- Provides a distinct guardrail profile view for every Agent Type, including iteration, delegation depth, delegated-step, timeout, and token-budget policies
+- Allows authorized administrators to edit and save each Agent Type guardrail profile from the same governance workspace
+- Presents token-budget values in k-token units with a default presentation value of 1000k for consistency across Agent Types
+- Keeps guardrail editing compact by default so governance updates remain efficient in high-volume administration workflows
 - Clicking an agent type row opens a comprehensive dialog with:
 	- Agent type details (basic info)
 	- Plan preview tab (shows saved agent plan)
@@ -58,6 +62,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - **Dialog-Based Details**: Agent type details, plan preview, and execution logs are accessible in a single, tabbed dialog
 - **Column Visibility**: Role and identity columns are visible in the agent types table, with clickable names for direct navigation
 - **Agent Identity as OIDC Principal**: All agent identities must be supported as first-class OIDC principals. The MCP Demo App provides a reference implementation for this requirement.
+- **Guardrail Profile**: A per-Agent-Type policy definition for cycle prevention, execution boundaries, delegation boundaries, timeout, and token-budget behavior
 
 
 ## Acceptance Criteria
@@ -86,6 +91,10 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Role and identity view dialogs include an "Edit" button to enable editing mode
 - "Active instances" feature works: clicking agent type row shows current executions for that type
 - After closing any dialog, parent table refreshes automatically to show updated data
+- Authorized administrators can open, edit, and save a distinct guardrail profile for each Agent Type
+- Guardrail token budgets are shown in k-token units with 1000k as the default presentation value
+- Guardrail editing remains compact by default and is easy to scan across large Agent Type portfolios
+- After closing any create/edit/delete or guardrail dialog, parent tables refresh automatically to show updated policy values without manual page reload
 - Conversation agent sessions work correctly:
 	- Sessions tab appears only for agents with input_type = 'conversation'
 	- Users can start new conversation sessions from the Sessions tab

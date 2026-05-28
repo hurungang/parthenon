@@ -1,55 +1,17 @@
 # Parthenon — Enterprise AI Harness Framework
 
-Parthenon is a full-stack Enterprise AI Harness that provides a unified platform for managing AI agents with fine-grained control, security, and observability.
+Parthenon is a self-hosted framework for running enterprise AI agents with strong control, security, and observability.
 
-## Vision
+## Why Parthenon
 
-Parthenon provides a **unified platform to harness AI agents** with enterprise-grade controls:
+- **Secure by design**: three isolated backend services, Agent Runtime-only execution, Control Center-only database access, and no sensitive token exposure to agents.
+- **Governed MCP access**: permissions resolve through `Role -> SOP -> Skill -> Tool`, enforcing least privilege at tool level.
+- **Dual identity model**: separate human and agent identities with clear audit boundaries.
+- **Flexible agent modes**: conversational, trigger-only, and argument-based execution patterns.
+- **Operational confidence**: built-in execution logs plus OpenTelemetry traces, metrics, and logs.
+- **Enterprise-ready deployment**: local Docker Compose workflow and production Kubernetes/Helm path.
 
-- **Fine-Grained Permission Control**: Skill-based MCP tool permission management via a communication hub, ensuring agents can only access the tools they need
-- **Dual Identity Support**: Agents can operate using their own identity or delegate the user's identity for actions
-- **Flexible Agent Input Models**: Support for conversational agents, trigger-only agents (no input required), and argument-based agents (e.g., correlation ID for troubleshooting)
-- **Standard Operating Procedures (SOPs)**: Define and standardize operational workflows based on one or multiple skills
-
-## Core Capabilities
-
-### 🔐 Fine-Grained Access Control
-
-Parthenon implements skill-based permission management at the MCP tool level:
-
-- **Communication Hub**: Acts as a permission gateway between agents and MCP tool servers
-- **Skill-Based Permissions**: Control which MCP tools an agent can access based on assigned skills
-- **Least Privilege Principle**: Agents only get access to tools necessary for their specific function
-- **Centralized Policy Management**: Define and enforce access policies across all agents
-
-### 👤 Dual Identity Support
-
-Agents in Parthenon can operate with flexible identity models:
-
-- **Agent Identity**: Agent operates with its own service principal identity for autonomous operations
-- **User Identity Delegation**: Agent acts on behalf of the user, inheriting their permissions and audit trail
-- **Configurable per Agent Type**: Define identity behavior at the agent type level
-
-### 🤖 Multiple Agent Input Types
-
-Parthenon supports diverse agent interaction patterns:
-
-| Agent Type | Input Model | Use Case Example |
-|------------|-------------|------------------|
-| **Conversational** | Interactive dialogue | Help desk assistant, Q&A bot |
-| **Trigger-Only** | No input, event-triggered | Scheduled reports, monitoring alerts |
-| **Argument-Based** | Structured parameters | Troubleshooting with correlation ID, batch processing |
-
-### 📋 Standard Operating Procedures (SOPs)
-
-Define standardized workflows combining one or multiple skills:
-
-- **Multi-Skill Orchestration**: Chain skills together into repeatable procedures
-- **Standardized Operations**: Ensure consistent execution across teams
-- **Compliance & Audit**: Track SOP execution for regulatory requirements
-- **Version Control**: Maintain SOP definitions as code
-
-## Architecture
+## Tech Stack
 
 - **Backend**: Python 3.11+ / FastAPI / SQLAlchemy 2 (async) / PostgreSQL 16 / Redis
 - **Frontend**: React 19 / TypeScript / MUI 7 / React Router 7 / Vite
