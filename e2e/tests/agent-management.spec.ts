@@ -15,6 +15,15 @@ const MOCK_AGENT_TYPES = [
     input_schema: null,
     output_type: 'markdown',
     output_schema: null,
+    guardrail_max_iterations: 10,
+    guardrail_max_delegation_depth: 3,
+    guardrail_max_delegated_steps: 20,
+    guardrail_execution_timeout_seconds: 300,
+    guardrail_token_budget: null,
+    guardrail_token_enforcement_mode: 'observe',
+    guardrail_token_fallback_mode: 'observe_and_log',
+    guardrail_conversational_token_visibility_mode: 'enabled',
+    guardrail_conversational_continuation_policy: 'allow',
     is_active: true,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -93,6 +102,20 @@ test.describe('Agent Management', () => {
       await expect(page.locator('[class*="MuiDialog-root"]').first()).toBeVisible({ timeout: 5000 })
     } else {
       await expect(page.locator('button:visible').first()).toBeVisible()
+    }
+  })
+
+  test('create agent type dialog exposes guardrail controls', async ({ page }) => {
+    await page.goto('/agents')
+    await page.waitForLoadState('load')
+
+    const createBtn = page.locator('button:visible').filter({ hasText: /Create Agent Type|create|add/i }).first()
+    if (await createBtn.count() > 0) {
+      await createBtn.click()
+      const dialog = page.locator('[class*="MuiDialog-root"]').first()
+      await expect(dialog.getByLabel(/Max Iterations/i)).toBeVisible()
+      await expect(dialog.locator('label').filter({ hasText: 'Token Enforcement Mode' }).first()).toBeVisible()
+      await expect(dialog.getByLabel(/Execution Timeout/i)).toBeVisible()
     }
   })
 })

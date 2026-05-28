@@ -1,12 +1,19 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
+  Divider,
   FormControl,
   FormHelperText,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
   TextField,
+  Typography,
 } from '@mui/material'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
@@ -27,6 +34,15 @@ export interface AgentTypeFormValues {
   output_type: AgentOutputType
   output_schema: string
   primary_sop_id: string
+  guardrail_max_iterations: number
+  guardrail_max_delegation_depth: number
+  guardrail_max_delegated_steps: number
+  guardrail_execution_timeout_seconds: number
+  guardrail_token_budget: string
+  guardrail_token_enforcement_mode: 'observe' | 'enforce'
+  guardrail_token_fallback_mode: 'observe_and_log' | 'stop_on_next_hard_guardrail'
+  guardrail_conversational_token_visibility_mode: 'enabled' | 'disabled'
+  guardrail_conversational_continuation_policy: 'allow'
 }
 
 export const defaultAgentTypeFormValues: AgentTypeFormValues = {
@@ -41,6 +57,15 @@ export const defaultAgentTypeFormValues: AgentTypeFormValues = {
   output_type: 'auto',
   output_schema: '',
   primary_sop_id: '',
+  guardrail_max_iterations: 10,
+  guardrail_max_delegation_depth: 3,
+  guardrail_max_delegated_steps: 20,
+  guardrail_execution_timeout_seconds: 300,
+  guardrail_token_budget: '1000',
+  guardrail_token_enforcement_mode: 'observe',
+  guardrail_token_fallback_mode: 'observe_and_log',
+  guardrail_conversational_token_visibility_mode: 'enabled',
+  guardrail_conversational_continuation_policy: 'allow',
 }
 
 interface AgentTypeFormProps {
@@ -107,7 +132,6 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
       const { data } = await apiClient.get<Sop[]>('/sops')
       return data
     },
-    enabled: values.input_type === 'none',
   })
 
   // Build a flat list of { modelId, label } from all configs' enabled_models
@@ -120,6 +144,17 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
 
   const selectedRole = (roles ?? []).find((r) => r.id === values.role_id)
   const roleSops = (sops ?? []).filter((s) => (selectedRole?.sop_ids ?? []).includes(s.id))
+  const isConversation = values.input_type === 'conversation'
+
+  const tokenBudgetHelperText = isConversation
+    ? t('agents.types.guardrails.tokenBudgetConversationHint', {
+        value: '1000',
+        defaultValue: 'Visible current-session usage threshold. Default: {{value}}k tokens.',
+      })
+    : t('agents.types.guardrails.tokenBudgetNonConversationHint', {
+        value: '1000',
+        defaultValue: 'Budget for non-conversational enforcement. Default: {{value}}k tokens.',
+      })
 
   // When identity changes: keep role if still valid, just update identity_id
   const handleIdentityChange = (newIdentityId: string) => {
@@ -208,7 +243,7 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
           label={t('agents.types.inputType')}
           onChange={(e) => {
             const newType = e.target.value as AgentInputType
-            onChange({ ...values, input_type: newType, primary_sop_id: newType === 'none' ? values.primary_sop_id : '' })
+            onChange({ ...values, input_type: newType })
           }}
         >
           <MenuItem value="none">{t('agents.types.inputNone')}</MenuItem>
@@ -219,18 +254,35 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
 
       {values.input_type === 'none' && (
         <FormControl fullWidth required>
-          <InputLabel>{t('agents.types.form.primarySop')}</InputLabel>
+          <InputLabel>{t('agents.types.form.defaultSop')}</InputLabel>
           <Select
             value={values.primary_sop_id}
-            label={t('agents.types.form.primarySop')}
+            label={t('agents.types.form.defaultSop')}
             onChange={(e) => set('primary_sop_id', e.target.value)}
           >
-            <MenuItem value=""><em>{t('agents.types.form.primarySopPlaceholder')}</em></MenuItem>
+            <MenuItem value=""><em>{t('agents.types.form.defaultSopPlaceholder')}</em></MenuItem>
             {roleSops.map((s) => (
               <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
             ))}
           </Select>
-          <FormHelperText>{t('agents.types.form.primarySopHelper')}</FormHelperText>
+          <FormHelperText>{t('agents.types.form.defaultSopHelper')}</FormHelperText>
+        </FormControl>
+      )}
+
+      {values.input_type !== 'none' && (
+        <FormControl fullWidth>
+          <InputLabel>{t('agents.types.form.defaultSop')}</InputLabel>
+          <Select
+            value={values.primary_sop_id}
+            label={t('agents.types.form.defaultSop')}
+            onChange={(e) => set('primary_sop_id', e.target.value)}
+          >
+            <MenuItem value=""><em>{t('agents.types.form.defaultSopPlaceholder')}</em></MenuItem>
+            {roleSops.map((s) => (
+              <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+            ))}
+          </Select>
+          <FormHelperText>{t('agents.types.form.defaultSopHelper')}</FormHelperText>
         </FormControl>
       )}
 
@@ -266,6 +318,132 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
           helperText={t('agents.types.schemaBuilder.outputSchemaHelper')}
         />
       )}
+
+      <Accordion variant="outlined" defaultExpanded={false}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={600}>
+              {t('agents.types.guardrails.title')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('agents.types.guardrails.sectionHint')}
+            </Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Box display="flex" flexDirection="column" gap={2}>
+            <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2}>
+              <TextField
+                type="number"
+                label={t('agents.types.guardrails.maxIterations')}
+                value={values.guardrail_max_iterations}
+                onChange={(e) => set('guardrail_max_iterations', Number(e.target.value || 0))}
+                inputProps={{ min: 1, max: 1000 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label={t('agents.types.guardrails.timeoutSeconds')}
+                value={values.guardrail_execution_timeout_seconds}
+                onChange={(e) => set('guardrail_execution_timeout_seconds', Number(e.target.value || 0))}
+                inputProps={{ min: 1, max: 86400 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label={t('agents.types.guardrails.maxDelegationDepth')}
+                value={values.guardrail_max_delegation_depth}
+                onChange={(e) => set('guardrail_max_delegation_depth', Number(e.target.value || 0))}
+                inputProps={{ min: 0, max: 32 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label={t('agents.types.guardrails.maxDelegatedSteps')}
+                value={values.guardrail_max_delegated_steps}
+                onChange={(e) => set('guardrail_max_delegated_steps', Number(e.target.value || 0))}
+                inputProps={{ min: 0, max: 5000 }}
+                fullWidth
+              />
+            </Box>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                {isConversation
+                  ? t('agents.types.guardrails.conversationalSectionTitle')
+                  : t('agents.types.guardrails.nonConversationalSectionTitle')}
+              </Typography>
+              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2}>
+                <TextField
+                  type="number"
+                  label={t('agents.types.guardrails.tokenBudget')}
+                  value={values.guardrail_token_budget}
+                  onChange={(e) => set('guardrail_token_budget', e.target.value)}
+                  inputProps={{ min: 1 }}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">{t('agents.types.guardrails.tokenBudgetUnit')}</InputAdornment>,
+                  }}
+                  fullWidth
+                  helperText={tokenBudgetHelperText}
+                />
+
+                {!isConversation ? (
+                  <>
+                    <FormControl fullWidth>
+                      <InputLabel>{t('agents.types.guardrails.tokenEnforcementMode')}</InputLabel>
+                      <Select
+                        value={values.guardrail_token_enforcement_mode}
+                        label={t('agents.types.guardrails.tokenEnforcementMode')}
+                        onChange={(e) => set('guardrail_token_enforcement_mode', e.target.value as 'observe' | 'enforce')}
+                      >
+                        <MenuItem value="observe">{t('agents.types.guardrails.observeMode')}</MenuItem>
+                        <MenuItem value="enforce">{t('agents.types.guardrails.enforceMode')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                      <InputLabel>{t('agents.types.guardrails.tokenFallbackMode')}</InputLabel>
+                      <Select
+                        value={values.guardrail_token_fallback_mode}
+                        label={t('agents.types.guardrails.tokenFallbackMode')}
+                        onChange={(e) => set('guardrail_token_fallback_mode', e.target.value as 'observe_and_log' | 'stop_on_next_hard_guardrail')}
+                      >
+                        <MenuItem value="observe_and_log">{t('agents.types.guardrails.observeAndLog')}</MenuItem>
+                        <MenuItem value="stop_on_next_hard_guardrail">{t('agents.types.guardrails.stopOnNextHardGuardrail')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </>
+                ) : (
+                  <>
+                    <FormControl fullWidth>
+                      <InputLabel>{t('agents.types.guardrails.conversationalVisibilityMode')}</InputLabel>
+                      <Select
+                        value={values.guardrail_conversational_token_visibility_mode}
+                        label={t('agents.types.guardrails.conversationalVisibilityMode')}
+                        onChange={(e) => set('guardrail_conversational_token_visibility_mode', e.target.value as 'enabled' | 'disabled')}
+                      >
+                        <MenuItem value="enabled">{t('agents.types.guardrails.visibilityEnabled')}</MenuItem>
+                        <MenuItem value="disabled">{t('agents.types.guardrails.visibilityDisabled')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                      <InputLabel>{t('agents.types.guardrails.conversationalContinuationPolicy')}</InputLabel>
+                      <Select
+                        value={values.guardrail_conversational_continuation_policy}
+                        label={t('agents.types.guardrails.conversationalContinuationPolicy')}
+                        onChange={(e) => set('guardrail_conversational_continuation_policy', e.target.value as 'allow')}
+                      >
+                        <MenuItem value="allow">{t('agents.types.guardrails.continueAllowed')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </>
+                )}
+              </Box>
+            </Box>
+          </Box>
+        </AccordionDetails>
+      </Accordion>
     </Box>
   )
 }

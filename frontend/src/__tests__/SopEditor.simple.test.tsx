@@ -20,9 +20,12 @@ const mockRoles = [
   { id: 'role-1', name: 'Admin Role', description: 'Admins', role_type: 'user', is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
 ]
 
-vi.mock('../hooks/useSops', () => ({
-  useSopRoles: () => ({ data: ['role-1'], isLoading: false }),
-}))
+vi.mock('../hooks/useSops', () => {
+  const stableRoleIds: string[] = ['role-1']
+  return {
+    useSopRoles: () => ({ data: stableRoleIds, isLoading: false }),
+  }
+})
 
 vi.mock('../api/apiClient', () => ({
   default: {
@@ -51,23 +54,23 @@ describe('SopEditor', () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
     
     const { container } = render(
-      <SopEditor sop={null} onClose={() => {}} onSaved={() => {}} />,
+      <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
       { wrapper }
     )
     
     expect(container).toBeDefined()
-    expect(container.querySelectorAll('input, textarea').length).toBeGreaterThan(0)
+    expect(document.body.querySelectorAll('input, textarea').length).toBeGreaterThan(0)
   })
 
   it('renders instructions field for new SOP', async () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
     
     const { container } = render(
-      <SopEditor sop={null} onClose={() => {}} onSaved={() => {}} />,
+      <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
       { wrapper }
     )
     
-    const textareas = container.querySelectorAll('textarea')
+    const textareas = document.body.querySelectorAll('textarea')
     expect(textareas.length).toBeGreaterThan(0)
   })
 
@@ -75,11 +78,11 @@ describe('SopEditor', () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
     
     const { container } = render(
-      <SopEditor sop={null} onClose={() => {}} onSaved={() => {}} />,
+      <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
       { wrapper }
     )
     
-    const buttons = container.querySelectorAll('button')
+    const buttons = document.body.querySelectorAll('button')
     expect(buttons.length).toBeGreaterThan(0)
   })
 })

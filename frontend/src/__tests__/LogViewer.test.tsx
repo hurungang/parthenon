@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { LogViewer } from '../components/logs/LogViewer'
+import { LogViewer } from '../components/executions/LogViewer'
 import type { ExecutionLogEntry, ExecutionLogRead } from '../types'
 
 vi.mock('react-i18next', () => ({

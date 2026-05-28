@@ -35,6 +35,7 @@ class IdentityYamlConfig(BaseModel):
     setup_complete: bool = False
     completed_at: str = ""  # ISO-8601
     agent_realm_name: str = "ai_agents"  # Name of the dedicated agent realm
+    workflow_generation_model_id: str = ""
 
 
 class ConfigurationError(Exception):

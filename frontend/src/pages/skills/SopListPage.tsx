@@ -19,6 +19,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
@@ -38,6 +39,8 @@ export function SopListPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [editorSop, setEditorSop] = useState<SopDetail | null | undefined>(undefined)
+  const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'view'>('create')
+  const [editorOpen, setEditorOpen] = useState(false)
   const [loadingEditId, setLoadingEditId] = useState<string | null>(null)
 
   const { data: sops, isLoading, error } = useQuery<Sop[]>({
@@ -55,11 +58,13 @@ export function SopListPage() {
       (s.description ?? '').toLowerCase().includes(search.toLowerCase()),
   )
 
-  const handleEdit = async (sop: Sop) => {
+  const handleOpen = async (sop: Sop, mode: 'edit' | 'view') => {
     setLoadingEditId(sop.id)
+    setEditorMode(mode)
     try {
       const { data } = await apiClient.get<SopDetail>(`/sops/${sop.id}`)
       setEditorSop(data)
+      setEditorOpen(true)
     } finally {
       setLoadingEditId(null)
     }
@@ -73,14 +78,22 @@ export function SopListPage() {
   }
 
   return (
-    <Box display="flex" gap={2} alignItems="flex-start">
+    <Box>
       {/* Main list */}
       <Box flex={1} minWidth={0}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h4" fontWeight={700}>
             {t('sops.title')}
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditorSop(null)}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditorMode('create')
+              setEditorSop(null)
+              setEditorOpen(true)
+            }}
+          >
             {t('sops.createSop')}
           </Button>
         </Box>
@@ -111,11 +124,6 @@ export function SopListPage() {
                 {filteredSops.map((sop) => (
                   <TableRow
                     key={sop.id}
-                    selected={
-                      editorSop !== null &&
-                      editorSop !== undefined &&
-                      editorSop.id === sop.id
-                    }
                   >
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>
@@ -141,7 +149,7 @@ export function SopListPage() {
                     <TableCell>
                       <IconButton
                         size="small"
-                        onClick={() => handleEdit(sop)}
+                        onClick={() => void handleOpen(sop, 'edit')}
                         disabled={loadingEditId === sop.id}
                       >
                         {loadingEditId === sop.id ? (
@@ -149,6 +157,13 @@ export function SopListPage() {
                         ) : (
                           <EditIcon fontSize="small" />
                         )}
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => void handleOpen(sop, 'view')}
+                        disabled={loadingEditId === sop.id}
+                      >
+                        <VisibilityIcon fontSize="small" />
                       </IconButton>
                       <IconButton size="small" onClick={() => handleDelete(sop.id)}>
                         <DeleteIcon fontSize="small" />
@@ -169,14 +184,13 @@ export function SopListPage() {
         )}
       </Box>
 
-      {/* In-page editor panel */}
-      {editorSop !== undefined && (
-        <SopEditor
-          sop={editorSop}
-          onClose={() => setEditorSop(undefined)}
-          onSaved={() => setEditorSop(undefined)}
-        />
-      )}
+      <SopEditor
+        open={editorOpen}
+        sop={editorSop ?? null}
+        mode={editorMode}
+        onClose={() => { setEditorOpen(false); setEditorSop(undefined) }}
+        onSaved={() => { setEditorOpen(false); setEditorSop(undefined) }}
+      />
     </Box>
   )
 }

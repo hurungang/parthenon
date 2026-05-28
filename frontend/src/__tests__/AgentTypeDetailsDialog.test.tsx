@@ -220,6 +220,8 @@ describe('AgentTypeDetailsDialog', () => {
     expect(screen.getByText('markdown')).toBeDefined()
     // System instruction
     expect(screen.getByText('You are a research assistant.')).toBeDefined()
+    // Guardrail budget should render in k-token units with default fallback
+    expect(screen.getByText('1000k tokens')).toBeDefined()
   })
 
   it('renders three tabs', async () => {
@@ -235,6 +237,28 @@ describe('AgentTypeDetailsDialog', () => {
     expect(tabs[0].textContent).toBe('agents.types.detailsTab')
     expect(tabs[1].textContent).toBe('agents.types.agentPreviewTab')
     expect(tabs[2].textContent).toBe('agents.types.executionLogsTab')
+  })
+
+  it('keeps Start Chat action visible when switching tabs for conversation agents', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    expect(screen.getByRole('button', { name: 'agents.types.startChat' })).toBeDefined()
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+    expect(screen.getByRole('button', { name: 'agents.types.startChat' })).toBeDefined()
+
+    await act(async () => {
+      fireEvent.click(tabs[2])
+    })
+    expect(screen.getByRole('button', { name: 'agents.types.startChat' })).toBeDefined()
   })
 
   it('shows no-plan placeholder on Agent Preview tab when plan is null', async () => {

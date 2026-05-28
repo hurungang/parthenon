@@ -14,6 +14,7 @@ The Communication Hub provides centralized, reliable message routing between the
 - Maintains session context for all communications, including passthrough session type where agent identity is forwarded directly to compatible MCP servers
 - Supports real-time messaging via WebSocket
 - Enables agent-to-agent message routing
+- Surfaces guardrail-related session outcomes so operations teams can separate policy stops from functional failures during triage
 
 
 ## Key Concepts
@@ -41,4 +42,5 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - UI clearly distinguishes passthrough session type from traditional session selection
 - Real-time messaging is available via WebSocket
 - Agent-to-agent communication is supported and auditable
+- Guardrail stop outcomes are visible in communication-related operational views for fast incident classification
 - All message flows are accessible for monitoring and troubleshooting

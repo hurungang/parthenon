@@ -59,7 +59,8 @@
     "observability": "Observability",
     "settings": "Settings",
     "logout": "Logout",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "systemConfig": "System Config"
   },
   "auth": {
     "login": "Sign In",
@@ -73,11 +74,21 @@
   "setup": {
     "title": "Identity Provider Setup",
     "step": {
-      "providerSelection": { "label": "Select Provider" },
-      "keycloakConfig": { "label": "Keycloak Configuration" },
-      "externalOidc": { "label": "OIDC Configuration" },
-      "verification": { "label": "Configuring..." },
-      "completion": { "label": "Setup Complete" }
+      "providerSelection": {
+        "label": "Select Provider"
+      },
+      "keycloakConfig": {
+        "label": "Keycloak Configuration"
+      },
+      "externalOidc": {
+        "label": "OIDC Configuration"
+      },
+      "verification": {
+        "label": "Configuring..."
+      },
+      "completion": {
+        "label": "Setup Complete"
+      }
     },
     "provider": {
       "bundledKeycloak": "Bundled Keycloak (Recommended)",
@@ -187,38 +198,52 @@
     "title": "Skills",
     "createSkill": "Create Skill",
     "editSkill": "Edit Skill",
+    "viewSkill": "View Skill",
     "toolBindings": "MCP Tool Bindings",
     "noTools": "No tools bound",
     "selectTools": "Select MCP tools",
     "toolCount": "Tools",
     "assignedRoles": "Assigned Roles",
-    "instructions": "Instructions",
+    "instructions": "Workflow",
     "roles": "Roles",
     "toolBinding": "Tool Binding",
     "editor": {
       "basicInfo": "Basic Info",
       "mcpTools": "MCP Tools",
       "assignToRoles": "Assign to Roles",
-      "instructions": "Instructions",
-      "instructionsHint": "System instructions passed to the agent when this skill is invoked",
+      "nameHint": "Use slug format: lowercase letters, digits, and hyphens only (e.g. get-project-name)",
+      "nameInvalid": "Name must start and end with a letter or digit; hyphens allowed in between (e.g. get-project-name)",
+      "workflow": "Workflow",
+      "workflowHint": "Describe how this skill should execute using the selected tools",
+      "instructions": "Workflow",
+      "instructionsHint": "Describe how this skill should execute using the selected tools",
+      "generateWorkflow": "Generate Workflow with AI",
+      "previewWorkflow": "Preview Workflow",
+      "workflowPreviewTitle": "Workflow Preview (Model: {{model}})",
       "generatedToolReference": "Generated Tool Reference",
-      "generatedToolReferenceHint": "Auto-generated from selected tools — read-only. This is appended to agent instructions at runtime.",
+      "generatedToolReferenceHint": "Auto-generated from selected tools — read-only. This is appended to the workflow file at runtime.",
       "filterByServer": "Filter by MCP Server",
-      "noToolsAvailable": "No tools available. Register an MCP server and sync its tools first."
+      "noToolsAvailable": "No tools available. Register an MCP server and sync its tools first.",
+      "selectTools": "Select Tools",
+      "toolsSelected": "{{count}} tool(s) selected",
+      "selectToolsDialogTitle": "Select Tools",
+      "selectToolsHintForGenerate": "Select at least one tool, then generate the workflow.",
+      "confirmSelection": "Confirm Selection"
     }
   },
   "sops": {
     "title": "SOPs",
     "createSop": "Create SOP",
     "editSop": "Edit SOP",
+    "viewSop": "View SOP",
     "steps": "Steps",
     "stepCount": "Steps",
     "addStep": "Add Step",
     "skillStep": "Skill Invocation",
     "delegationStep": "Agent Delegation",
     "reorderHint": "Use arrows to reorder steps",
-    "instructions": "Instructions",
-    "instructionsHint": "Guidance for the agent when executing this SOP",
+    "workflow": "Workflow",
+    "workflowHint": "Describe the end-to-end SOP workflow and intent",
     "stepType": {
       "skillInvocation": "Skill Invocation",
       "agentDelegation": "Agent Delegation"
@@ -227,7 +252,14 @@
       "steps": "Steps",
       "addStep": "Add Step",
       "agentType": "Agent Type",
-      "stepType": "Step Type"
+      "stepType": "Step Type",
+      "nameHint": "Use slug format: lowercase letters, digits, and hyphens only (e.g. onboard-new-user)",
+      "nameInvalid": "Name must start and end with a letter or digit; hyphens allowed in between (e.g. onboard-new-user)",
+      "instructions": "Workflow",
+      "instructionsHint": "Describe the end-to-end SOP workflow and intent",
+      "generateWorkflow": "Generate Workflow with AI",
+      "previewWorkflow": "Preview Workflow",
+      "workflowPreviewTitle": "Workflow Preview (Model: {{model}})"
     }
   },
   "agents": {
@@ -351,6 +383,31 @@
       "agentSkills": "Skills",
       "noSopsAssigned": "No SOPs assigned to this agent's role.",
       "noSkillsAssigned": "No Skills assigned to this agent's role.",
+      "guardrails": {
+        "title": "Execution Guardrails",
+        "sectionHint": "Configure per-agent-type execution boundaries for recursion, delegation, timeout, and token policy.",
+        "conversationalSectionTitle": "Conversational Token Controls",
+        "nonConversationalSectionTitle": "Token Enforcement",
+        "maxIterations": "Max Iterations",
+        "maxDelegationDepth": "Max Delegation Depth",
+        "maxDelegatedSteps": "Max Delegated Steps",
+        "timeoutSeconds": "Execution Timeout (seconds)",
+        "tokenBudget": "Token Budget",
+        "tokenBudgetUnit": "k tokens",
+        "tokenBudgetNonConversationHint": "Budget for non-conversational enforcement. Default: {{value}}k tokens.",
+        "tokenBudgetConversationHint": "Visible current-session usage threshold. Default: {{value}}k tokens.",
+        "tokenEnforcementMode": "Token Enforcement Mode",
+        "observeMode": "Observe only",
+        "enforceMode": "Enforce budget",
+        "tokenFallbackMode": "Token Fallback Mode",
+        "observeAndLog": "Observe and log",
+        "stopOnNextHardGuardrail": "Stop on next hard guardrail",
+        "conversationalVisibilityMode": "Conversational Token Visibility",
+        "visibilityEnabled": "Enabled",
+        "visibilityDisabled": "Disabled",
+        "conversationalContinuationPolicy": "Conversational Continuation Policy",
+        "continueAllowed": "Allow continuation"
+      },
       "form": {
         "primarySop": "Primary SOP",
         "primarySopPlaceholder": "Select a SOP",
@@ -407,7 +464,15 @@
       "chatPlaceholder": "Type a message… (Enter to send)",
       "send": "Send",
       "connected": "Connected",
+      "connecting": "Connecting",
       "disconnected": "Disconnected",
+      "guardrailRealtimeTitle": "Realtime Guardrail Usage",
+      "guardrailHintOpen": "Guardrails",
+      "guardrailHintClose": "Hide Guardrails",
+      "guardrailPanelTitle": "Guardrail Reference",
+      "guardrailPanelSubtitle": "Reference metrics for this conversation. Hidden by default.",
+      "guardrailCollapse": "Collapse",
+      "guardrailFloatingAriaLabel": "Toggle conversational guardrail reference panel",
       "pollingHint": "Refreshing every 3 seconds…",
       "conversationHistory": "Conversation History",
       "dashboardSubtitle": "Monitor and inspect all agent execution sessions",
@@ -443,11 +508,36 @@
           "identity": "Identity",
           "role": "Role",
           "model": "Model",
+          "guardrailUsage": "Guardrail Usage",
+          "guardrailUsageTable": "Guardrail usage table",
+          "guardrailUsageTitle": "Guardrail Usage",
+          "policySnapshotLabel": "Policy Snapshot",
+          "runStateWithinLimits": "Within Limits",
+          "runStateApproachingLimits": "Approaching Limits",
+          "runStateLimitExceeded": "Limit Exceeded",
           "duration": "Duration",
           "sopsSkills": "SOPs / Skills",
           "planProgress": "Plan Progress",
           "planProgressValue": "{{completed}} / {{total}} Steps Completed",
           "resultStatus": "Result",
+          "policySnapshot": "Policy Snapshot",
+          "currentSessionTokens": "Current Session Tokens",
+          "iterations": "Iterations",
+          "delegatedSteps": "Delegated Steps",
+          "delegationDepth": "Delegation Depth",
+          "policySnapshotValue": "Policy Snapshot: {{value}}",
+          "currentSessionTokensValue": "Current Session Tokens: {{value}}",
+          "iterationsValue": "Iterations: {{value}}",
+          "delegatedStepsValue": "Delegated Steps: {{value}}",
+          "delegationDepthValue": "Delegation Depth: {{value}}",
+          "metric": {
+            "limitPrefix": "Limit: {{value}}",
+            "usedPercent": "Used: {{value}}",
+            "stateGood": "Good",
+            "stateNear": "Near",
+            "stateOver": "Over",
+            "notConfigured": "Not Configured"
+          },
           "statusSuccess": "Success",
           "statusFailure": "Failed",
           "statusRunning": "Running",
@@ -472,6 +562,10 @@
     "modelConfigs": {
       "title": "Model Configurations",
       "subtitle": "Configure LLM provider credentials and endpoints for use by agent types",
+      "workflowGenerationTitle": "Workflow Generation Model",
+      "workflowGenerationHint": "Select the model used by Skill and SOP AI workflow generation and preview.",
+      "workflowGenerationModel": "Generation Model",
+      "workflowGenerationNotConfigured": "Not configured",
       "create": "Create Model Config",
       "createTitle": "Create Model Configuration",
       "editTitle": "Edit Model Configuration",
@@ -579,7 +673,14 @@
       "chatPlaceholder": "Type a message… (Enter to send)",
       "send": "Send",
       "connected": "Connected",
+      "connecting": "Connecting",
       "disconnected": "Disconnected",
+      "guardrailHintOpen": "Guardrails",
+      "guardrailHintClose": "Hide Guardrails",
+      "guardrailPanelTitle": "Guardrail Reference",
+      "guardrailPanelSubtitle": "Reference metrics for this conversation. Hidden by default.",
+      "guardrailCollapse": "Collapse",
+      "guardrailFloatingAriaLabel": "Toggle conversational guardrail reference panel",
       "dashboardColumn": "Session",
       "viewMore": "View More Earlier Sessions...",
       "maxActiveReached": "Maximum 10 active sessions reached",
@@ -894,5 +995,14 @@
       "requestJustificationRequired": "A justification is required",
       "requestSubmittedSuccess": "Your access request has been submitted."
     }
+  },
+  "systemConfig": {
+    "title": "System Configuration",
+    "workflowSection": "Workflow Generation",
+    "workflowHint": "Select the AI model used for Skill and SOP workflow generation and preview. Options are loaded from your configured model providers.",
+    "workflowModel": "Generation Model",
+    "workflowNotConfigured": "Not configured",
+    "workflowNoOptions": "No model configurations found. Create a model configuration in Model Configs first.",
+    "saveSuccess": "Configuration saved"
   }
 }

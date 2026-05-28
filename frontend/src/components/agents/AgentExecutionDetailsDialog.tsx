@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogTitle, IconButton, Tab, Tabs, Typography }
 import CloseIcon from '@mui/icons-material/Close'
 import { useTranslation } from 'react-i18next'
 import { AgentJobPage } from '../../pages/agents/AgentJobPage'
-import { LogViewer } from '../logs/LogViewer'
+import { LogViewer } from '../executions/LogViewer'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import apiClient from '../../api/apiClient'
 import type { ExecutionLogEntry } from '../../types'

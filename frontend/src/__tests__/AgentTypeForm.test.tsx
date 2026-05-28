@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -149,6 +149,48 @@ describe('AgentTypeForm', () => {
       { wrapper },
     )
     expect(screen.queryByText('agents.types.outputType', { selector: 'label' })).toBeNull()
+  })
+
+  it('keeps the guardrail editor collapsed by default', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+
+    const accordionButton = screen.getByRole('button', { name: /agents\.types\.guardrails\.title/ })
+    expect(accordionButton).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('spinbutton', { name: 'agents.types.guardrails.maxIterations' })).toBeNull()
+
+    fireEvent.click(accordionButton)
+
+    expect(accordionButton).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('spinbutton', { name: 'agents.types.guardrails.maxIterations' })).toBeDefined()
+  })
+
+  it('switches the guardrail section copy for conversational agents', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const values = { ...defaultAgentTypeFormValues, input_type: 'conversation' as const }
+    render(<AgentTypeForm values={values} onChange={vi.fn()} />, { wrapper })
+
+    fireEvent.click(screen.getByRole('button', { name: /agents\.types\.guardrails\.title/ }))
+    expect(screen.getByText('agents.types.guardrails.conversationalSectionTitle')).toBeDefined()
+    expect(screen.getByText('agents.types.guardrails.tokenBudgetUnit')).toBeDefined()
+    expect(screen.getByText('agents.types.guardrails.conversationalVisibilityMode', { selector: 'label' })).toBeDefined()
+    expect(screen.queryByText('agents.types.guardrails.tokenEnforcementMode', { selector: 'label' })).toBeNull()
+  })
+
+  it('shows token enforcement controls for non-conversational agents', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /agents\.types\.guardrails\.title/ }))
+    expect(screen.getByText('agents.types.guardrails.nonConversationalSectionTitle')).toBeDefined()
+    expect(screen.getByText('agents.types.guardrails.tokenEnforcementMode', { selector: 'label' })).toBeDefined()
+    expect(screen.getByText('agents.types.guardrails.tokenBudgetUnit')).toBeDefined()
   })
 
   it('renders model_id dropdown', async () => {

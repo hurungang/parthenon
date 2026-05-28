@@ -38,6 +38,15 @@ const MOCK_AGENT_TYPE = {
   output_type: 'markdown',
   output_schema: null,
   primary_sop_id: null,
+  guardrail_max_iterations: 10,
+  guardrail_max_delegation_depth: 3,
+  guardrail_max_delegated_steps: 20,
+  guardrail_execution_timeout_seconds: 300,
+  guardrail_token_budget: null,
+  guardrail_token_enforcement_mode: 'observe',
+  guardrail_token_fallback_mode: 'observe_and_log',
+  guardrail_conversational_token_visibility_mode: 'enabled',
+  guardrail_conversational_continuation_policy: 'allow',
   is_active: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -379,6 +388,23 @@ test.describe('Agent Type Details Dialog', () => {
     // System instruction
     await expect(
       page.getByRole('dialog').getByText(/You are a research assistant/),
+    ).toBeVisible({ timeout: 10000 })
+  })
+
+  test('dialog Details tab shows execution guardrails', async ({ page }) => {
+    await setupAgentNavPage(page)
+    await page.goto('/agents')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('cell', { name: 'Research Agent' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10000 })
+
+    await expect(page.getByRole('dialog').getByText('Execution Guardrails')).toBeVisible({
+      timeout: 10000,
+    })
+    await expect(page.getByRole('dialog').getByText('10')).toBeVisible({ timeout: 10000 })
+    await expect(
+      page.getByRole('dialog').getByText('observe_and_log', { exact: true }),
     ).toBeVisible({ timeout: 10000 })
   })
 

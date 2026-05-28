@@ -20,16 +20,13 @@ import {
   TableRow,
   Tooltip,
   Typography,
-  Alert,
 } from '@mui/material'
-import AddIcon from '@mui/icons-material/Add'
 import ReplayIcon from '@mui/icons-material/Replay'
 import StopIcon from '@mui/icons-material/Stop'
 import ArchiveIcon from '@mui/icons-material/Archive'
 import {
   useArchiveConversationSession,
   useConversationSessions,
-  useCreateConversationSession,
   useEndConversationSession,
 } from '../../hooks/useConversationSessions'
 import { useAgentType } from '../../hooks/useAgentTypes'
@@ -67,7 +64,6 @@ export function ConversationSessionsTab({ agentTypeId, onClose }: ConversationSe
 
   const { data: allSessions, isLoading, error } = useConversationSessions(agentTypeId)
   const { data: agentType } = useAgentType(agentTypeId)
-  const createMutation = useCreateConversationSession(agentTypeId)
   const endMutation = useEndConversationSession(agentTypeId)
   const archiveMutation = useArchiveConversationSession(agentTypeId)
 
@@ -85,19 +81,6 @@ export function ConversationSessionsTab({ agentTypeId, onClose }: ConversationSe
     // Limit to top 10
     return sorted.slice(0, 10)
   }, [allSessions])
-
-  // Count active sessions
-  const activeCount = useMemo(() => {
-    return allSessions?.filter(s => s.status === 'active').length ?? 0
-  }, [allSessions])
-
-  const canStartNew = activeCount < 10
-
-  const handleStartNew = () => {
-    if (canStartNew) {
-      createMutation.mutate()
-    }
-  }
 
   const handleViewMore = () => {
     // Close parent dialog before navigating
@@ -137,28 +120,11 @@ export function ConversationSessionsTab({ agentTypeId, onClose }: ConversationSe
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+      <Box display="flex" alignItems="center" mb={2}>
         <Typography variant="subtitle1" fontWeight={600}>
           {t('conversations.sessions.title')}
         </Typography>
-        <Box display="flex" gap={1}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleStartNew}
-            disabled={createMutation.isPending || !canStartNew}
-            title={!canStartNew ? t('conversations.sessions.maxActiveReached') : undefined}
-          >
-            {createMutation.isPending ? t('app.loading') : t('conversations.sessions.startNew')}
-          </Button>
-        </Box>
       </Box>
-
-      {!canStartNew && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          {t('conversations.sessions.maxActiveWarning')}
-        </Alert>
-      )}
 
       {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
@@ -187,7 +153,9 @@ export function ConversationSessionsTab({ agentTypeId, onClose }: ConversationSe
                   <TableCell>
                     <Typography variant="body2">
                       {session.title ?? (
-                        <em style={{ color: 'gray' }}>{t('conversations.sessions.untitled')}</em>
+                        <Typography component="em" color="text.secondary">
+                          {t('conversations.sessions.untitled')}
+                        </Typography>
                       )}
                     </Typography>
                   </TableCell>

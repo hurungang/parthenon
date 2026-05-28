@@ -51,6 +51,12 @@
 - Unauthorized tool call (insufficient permissions): `authorized=false` with reason `insufficient_permissions`; returns 403; decision logged with outcome `denied`; identity token NOT included in response
 - Invalid/expired/revoked certificate: authorization rejected before permission check; 401/403 returned; no identity token exposed
 
+### Agent Execution Guardrail Policy and Persistence (add-agent-execution-guardrails)
+- Internal context endpoints return effective guardrail policy snapshots used by runtime pre-check and loop enforcement
+- Session status updates preserve guardrail stop semantics separately from functional error semantics
+- Execution log persistence captures structured guardrail events used by execution summary views
+- Control Center remains the only persistence owner for guardrail stop outcomes and guardrail event logs
+
 ## Critical Scenarios
 
 ### Scenario: Certificate Authority Bootstrap
@@ -64,6 +70,11 @@
 
 ### Scenario: Token Refresh Under Failure
 - OAuth provider unreachable for extended period → all refresh attempts logged → `token_status = refresh_failed` → 503 returned to callers with actionable error message
+
+### Scenario: Guardrail Policy Snapshot and Stop Metadata
+- Agent Runtime requests context from Control Center before execution starts
+- Control Center returns effective guardrail fields and policy snapshot details through internal APIs
+- Runtime terminal guardrail outcomes are persisted via status/log APIs without schema drift or metadata loss
 
 ## Edge Cases
 - Serial number collision: database unique constraint prevents duplicate serial numbers; tested with bulk issuance
@@ -87,6 +98,7 @@
 - `backend/tests/integration/test_certificate_lifecycle.py` — CA initialization, certificate issuance, validation (valid/expired/revoked), CN parsing, revocation against real database with schema verification
 - `backend/tests/integration/test_authorization_flow.py` — full authorization chain: certificate validation + permission resolution + token retrieval; `certificate_validation_log` population
 - `backend/tests/integration/test_token_refresh_security.py` — token refresh with mocked OAuth provider; retry/backoff; rate-limit; `token_refresh_log` population; `token_status` transitions
+- `backend/tests/integration/test_agent_session_lifecycle.py` — session status lifecycle and persisted terminal outcome behavior used by runtime stop propagation
 - `backend/tests/integration/test_internal_allowlist_partitioning.py` — endpoint partitioning by caller type with explicit allow/deny outcomes
 - `backend/tests/integration/test_internal_deny_audit_events.py` — deny-by-default and structured deny evidence assertions
 - `backend/tests/integration/test_internal_revocation_fail_closed.py` — fail-closed behavior when revocation validation is unavailable

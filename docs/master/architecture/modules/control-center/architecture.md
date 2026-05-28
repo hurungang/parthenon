@@ -5,31 +5,38 @@ flowchart LR
     UI[Web UI]
     CH[Communication Hub]
     AR[Agent Runtime]
-    PEP[Policy Enforcement]
     API[Control Center APIs]
+    POL[Policy Resolution Service]
+    GOV[Governance and Audit Service]
     DB[(Platform DB)]
-    AUD[Security Audit Evidence]
+    OBS[Observability]
 
     UI --> API
     CH -->|Caller: communication_hub| API
     AR -->|Caller: agent_runtime| API
-    API --> PEP
-    PEP --> API
-    API --> DB
-    PEP -->|Denied call records| AUD
+    API --> POL
+    API --> GOV
+    POL --> DB
+    GOV --> DB
+    POL --> OBS
+    GOV --> OBS
 ```
 
 ```mermaid
 flowchart TB
-    PEP2[Control Center Policy Enforcement]
-    CHA[Allowlist: communication_hub scope]
-    ARA[Allowlist: agent_runtime scope]
-    DENY[Default deny]
-    B1[Blocked when scope mismatch]
+    CALL[Inbound caller request]
+    AUTH[Caller scope check]
+    POLICY[Resolve effective guardrail policy]
+    DECIDE[Allow or deny decision]
+    LOG[Governance event recording]
+    REPLY[Response to caller]
+    DB[(Platform DB)]
 
-    PEP2 --> CHA
-    PEP2 --> ARA
-    CHA --> DENY
-    ARA --> DENY
-    DENY --> B1
+    CALL --> AUTH
+    AUTH --> POLICY
+    POLICY --> DECIDE
+    DECIDE --> LOG
+    LOG --> DB
+    DECIDE --> REPLY
+    AUTH -->|Scope mismatch| LOG
 ```

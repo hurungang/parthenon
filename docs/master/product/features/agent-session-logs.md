@@ -23,6 +23,8 @@ Agent session logs provide a record of all actions, decisions, and outcomes gene
 - As a compliance officer, I want to verify which identity and role were used in each agent session, so that I can ensure proper access controls
 - As a support staff member, I want to quickly identify why an agent run failed, so that I can assist users efficiently
 - As a technical user, I want to toggle to raw logs, so that I can investigate complex issues when needed
+- As an operations lead, I want guardrail-stop outcomes clearly labeled, so that I can distinguish policy enforcement from functional failures
+- As a conversational-session stakeholder, I want current-session token usage visible in execution summaries, so that I can review consumption while the conversation continues
 
 
 ## Acceptance Criteria
@@ -34,6 +36,8 @@ Agent session logs provide a record of all actions, decisions, and outcomes gene
 - A "Raw Log Toggle" is available, allowing users to switch to and copy raw technical logs
 - Log UI is accessible and usable for non-technical users (clear language, no jargon)
 - Session logs are accessible from both the "Agent Logs" module and the Agent Executions dialog
+- Execution summaries display conversational guardrail usage, including current-session token consumption
+- Guardrail outcomes are labeled clearly so policy stops are distinguishable from execution errors
 - All acceptance criteria validated via user testing with business and compliance personas
 
 ## Out of Scope

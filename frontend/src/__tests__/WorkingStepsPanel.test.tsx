@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { WorkingStepsPanel } from '../components/logs/WorkingStepsPanel'
+import { WorkingStepsPanel } from '../components/executions/WorkingStepsPanel'
 import type { WorkingStep, WorkingStepSpan } from '../types'
 
 vi.mock('react-i18next', () => ({

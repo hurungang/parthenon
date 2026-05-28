@@ -781,14 +781,14 @@ def _build_ar_job_context_and_client() -> tuple[dict, dict, AsyncMock]:
         "model_id": "gpt-4o-mini",
         "model_config_id": str(uuid.uuid4()),
         "system_instruction": "You are helpful",
-        "allowed_tools": ["agent____receiver-agent"],
+        "allowed_tools": ["delegate_to_agent"],
         "allowed_agent_types": ["receiver-agent", "other-agent"],
-        "tool_name_map": {"agent__receiver-agent": "agent____receiver-agent"},
+        "tool_name_map": {},
         "tool_definitions": [
             {
                 "type": "function",
                 "function": {
-                    "name": "agent__receiver-agent",
+                    "name": "delegate_to_agent",
                     "parameters": {"type": "object"},
                 },
             }
@@ -807,14 +807,14 @@ def _build_ar_job_context_and_client() -> tuple[dict, dict, AsyncMock]:
 
 
 @pytest.mark.asyncio
-async def test_run_task_loop_ar_agent_tool_without_payload_calls_target_with_empty_payload():
-    """agent____<slug> tool delegates to the encoded target even with empty args."""
+async def test_run_task_loop_ar_delegate_missing_target_slug_adds_error_tool_message():
+    """delegate_to_agent without target_agent_type_slug returns error via tool message path."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
 
     executor = AgentRuntimeExecutor()
     job_data, context, data_client = _build_ar_job_context_and_client()
     executor._permission_manager.get_allowed_tools_from_context = MagicMock(
-        return_value={"agent____receiver-agent"}
+        return_value={"delegate_to_agent"}
     )
     executor._permission_manager.check_tool_allowed = MagicMock()
 
@@ -822,18 +822,12 @@ async def test_run_task_loop_ar_agent_tool_without_payload_calls_target_with_emp
         "id": "call-1",
         "type": "function",
         "function": {
-            "name": "agent__receiver-agent",
+            "name": "delegate_to_agent",
             "arguments": json.dumps({}),
         },
     }
 
-    comm_hub_instance = MagicMock()
-    comm_hub_instance.call_a2a_request = AsyncMock(return_value={"status": "accepted"})
-
     with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", True), patch(
-        "app.agent_runtime.comm_hub_client.CommHubToolClient",
-        return_value=comm_hub_instance,
-    ), patch(
         "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
         new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
     ) as mock_complete, patch(
@@ -847,35 +841,23 @@ async def test_run_task_loop_ar_agent_tool_without_payload_calls_target_with_emp
 
     assert result == {"result": "final answer", "model_id": context["model_id"]}
     assert mock_complete.await_count == 2
-    comm_hub_instance.call_a2a_request.assert_awaited_once_with(
-        target_agent_type_slug="receiver-agent",
-        session_id=job_data["id"],
-        requester_role_id=context["role_id"],
-        request_payload={},
-        session_link_id=None,
-    )
+
+    second_messages = mock_complete.await_args_list[1].kwargs["messages"]
+    tool_messages = [m for m in second_messages if m.get("role") == "tool"]
+    assert tool_messages
+    assert "Missing required argument: target_agent_type_slug" in tool_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
 async def test_run_task_loop_ar_delegate_disallowed_target_adds_allowed_targets_error():
-    """agent____<slug> for disallowed target returns error mentioning allowed targets."""
+    """delegate_to_agent for disallowed target returns error mentioning allowed targets."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
 
     executor = AgentRuntimeExecutor()
     job_data, context, data_client = _build_ar_job_context_and_client()
     context["allowed_agent_types"] = ["z-agent", "a-agent"]
-    context["tool_name_map"] = {"agent__forbidden-agent": "agent____forbidden-agent"}
-    context["tool_definitions"] = [
-        {
-            "type": "function",
-            "function": {
-                "name": "agent__forbidden-agent",
-                "parameters": {"type": "object"},
-            },
-        }
-    ]
     executor._permission_manager.get_allowed_tools_from_context = MagicMock(
-        return_value={"agent____forbidden-agent"}
+        return_value={"delegate_to_agent"}
     )
     executor._permission_manager.check_tool_allowed = MagicMock()
 
@@ -883,8 +865,8 @@ async def test_run_task_loop_ar_delegate_disallowed_target_adds_allowed_targets_
         "id": "call-2",
         "type": "function",
         "function": {
-            "name": "agent__forbidden-agent",
-            "arguments": json.dumps({}),
+            "name": "delegate_to_agent",
+            "arguments": json.dumps({"target_agent_type_slug": "forbidden-agent"}),
         },
     }
 
@@ -913,14 +895,14 @@ async def test_run_task_loop_ar_delegate_disallowed_target_adds_allowed_targets_
 
 @pytest.mark.asyncio
 async def test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request():
-    """agent____<slug> for allowed target calls CommHubToolClient.call_a2a_request."""
+    """delegate_to_agent for allowed target calls CommHubToolClient.call_a2a_request."""
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
 
     executor = AgentRuntimeExecutor()
     job_data, context, data_client = _build_ar_job_context_and_client()
     context["allowed_agent_types"] = ["receiver-agent"]
     executor._permission_manager.get_allowed_tools_from_context = MagicMock(
-        return_value={"agent____receiver-agent"}
+        return_value={"delegate_to_agent"}
     )
     executor._permission_manager.check_tool_allowed = MagicMock()
 
@@ -928,10 +910,11 @@ async def test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request():
         "id": "call-3",
         "type": "function",
         "function": {
-            "name": "agent__receiver-agent",
+            "name": "delegate_to_agent",
             "arguments": json.dumps(
                 {
-                    "task": "summarize",
+                    "target_agent_type_slug": "receiver-agent",
+                    "request_payload": {"task": "summarize"},
                     "session_link_id": "link-123",
                 }
             ),
@@ -963,182 +946,4 @@ async def test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request():
         request_payload={"task": "summarize"},
         session_link_id="link-123",
     )
-
-
-@pytest.mark.asyncio
-async def test_run_task_loop_ar_delegate_logs_via_execution_helper():
-    """Dynamic agent delegation tool in AR path emits runtime execution events."""
-    from app.services.agents.runtime_executor import AgentRuntimeExecutor
-
-    executor = AgentRuntimeExecutor()
-    executor._log_execution_event = AsyncMock()
-    job_data, context, data_client = _build_ar_job_context_and_client()
-    context["allowed_agent_types"] = ["receiver-agent"]
-    executor._permission_manager.get_allowed_tools_from_context = MagicMock(
-        return_value={"agent____receiver-agent"}
-    )
-    executor._permission_manager.check_tool_allowed = MagicMock()
-
-    tool_call = {
-        "id": "call-log-1",
-        "type": "function",
-        "function": {
-            "name": "agent__receiver-agent",
-            "arguments": json.dumps({}),
-        },
-    }
-
-    comm_hub_instance = MagicMock()
-    comm_hub_instance.call_a2a_request = AsyncMock(return_value={"status": "accepted"})
-
-    with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", True), patch(
-        "app.agent_runtime.comm_hub_client.CommHubToolClient",
-        return_value=comm_hub_instance,
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
-        new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
-        side_effect=[[tool_call], []],
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.extract_text",
-        side_effect=["delegating", "final answer"],
-    ):
-        await executor._run_task_loop_ar(job_data, context, data_client)
-
-    assert any(
-        call.kwargs.get("event_type") == "tool_call"
-        and call.kwargs.get("data", {}).get("tool") == "agent____receiver-agent"
-        and call.kwargs.get("data_client") is data_client
-        for call in executor._log_execution_event.await_args_list
-    )
-
-
-@pytest.mark.asyncio
-async def test_run_task_loop_ar_save_result_logs_via_execution_helper():
-    """save_result in AR path emits the save_result execution event through the shared helper."""
-    from app.services.agents.runtime_executor import AgentRuntimeExecutor
-
-    executor = AgentRuntimeExecutor()
-    executor._log_execution_event = AsyncMock()
-    job_data, context, data_client = _build_ar_job_context_and_client()
-    executor._permission_manager.get_allowed_tools_from_context = MagicMock(
-        return_value={"save_result"}
-    )
-    executor._permission_manager.check_tool_allowed = MagicMock()
-
-    tool_call = {
-        "id": "call-save-1",
-        "type": "function",
-        "function": {
-            "name": "save_result",
-            "arguments": json.dumps({"content": "done", "title": "Delegation result"}),
-        },
-    }
-
-    with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", True), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
-        new=AsyncMock(return_value={"id": "r1"}),
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
-        return_value=[tool_call],
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.extract_text",
-        return_value="saving",
-    ):
-        result = await executor._run_task_loop_ar(job_data, context, data_client)
-
-    assert result == {"result": "done", "title": "Delegation result"}
-    data_client.submit_result.assert_awaited_once_with(
-        uuid.UUID(job_data["id"]),
-        {"result": "done", "title": "Delegation result"},
-    )
-    assert any(
-        call.kwargs.get("event_type") == "save_result"
-        and call.kwargs.get("data_client") is data_client
-        for call in executor._log_execution_event.await_args_list
-    )
-
-
-@pytest.mark.asyncio
-async def test_execute_conversation_turn_from_context_routes_send_notification_via_comm_hub():
-    """Conversation from-context path should dispatch send_notification via shared CH routing."""
-    from app.services.agents.runtime_executor import AgentRuntimeExecutor
-
-    executor = AgentRuntimeExecutor()
-    executor._permission_manager.get_allowed_tools_from_context = MagicMock(
-        return_value={"send_notification"}
-    )
-    executor._permission_manager.check_tool_allowed = MagicMock()
-    executor._execute_mcp_tool_ar = AsyncMock(return_value={"status": "ok"})
-
-    tool_call = {
-        "id": "call-send-1",
-        "type": "function",
-        "function": {
-            "name": "send_notification",
-            "arguments": json.dumps({"group_slug": "ops", "body": "done"}),
-        },
-    }
-
-    class _DummyCommHubClient:
-        def set_certificate(self, cert_path, key_path):
-            return None
-
-    agent_context = {
-        "model_id": "gpt-4o-mini",
-        "role_id": str(uuid.uuid4()),
-        "allowed_tools": ["system____send_notification"],
-        "tool_definitions": [
-            {
-                "type": "function",
-                "function": {
-                    "name": "send_notification",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            }
-        ],
-        "tool_name_map": {},
-        "role_mcp_sessions": {},
-        "sops": [{"id": "sop-1", "name": "notify"}],
-        "skills": [{"id": "skill-1", "name": "send"}],
-    }
-
-    model_config = {"provider_type": "openai"}
-    conv_session_id = uuid.uuid4()
-    agent_type_id = uuid.uuid4()
-    messages = [
-        {"role": "system", "content": "always notify via send_notification"},
-        {"role": "user", "content": "please notify ops"},
-    ]
-
-    with patch(
-        "app.agent_runtime.comm_hub_client.CommHubToolClient",
-        return_value=_DummyCommHubClient(),
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.complete_from_context",
-        new=AsyncMock(side_effect=[{"id": "r1"}, {"id": "r2"}]),
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.extract_tool_calls",
-        side_effect=[[tool_call], []],
-    ), patch(
-        "app.services.agents.model_binding.ModelBindingLayer.extract_text",
-        side_effect=["calling tool", "done"],
-    ):
-        result = await executor.execute_conversation_turn_from_context(
-            agent_type_id=agent_type_id,
-            agent_context=agent_context,
-            model_config=model_config,
-            messages=messages,
-            conv_session_id=conv_session_id,
-        )
-
-    assert result == "done"
-    assert executor._execute_mcp_tool_ar.await_count == 1
-    dispatched_args = executor._execute_mcp_tool_ar.await_args.args
-    assert dispatched_args[0] == "send_notification"
-    assert dispatched_args[1] == {"group_slug": "ops", "body": "done"}
-    assert dispatched_args[2] == {}
-    assert dispatched_args[3] == str(agent_type_id)
-    assert dispatched_args[4] == str(conv_session_id)
 

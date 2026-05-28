@@ -306,7 +306,7 @@ describe('AgentManagementPage — post-save navigation', () => {
     })
 
     const nameInputs = screen.getAllByRole('textbox')
-    fireEvent.change(nameInputs[0], { target: { value: 'New Agent' } })
+    fireEvent.change(nameInputs[0], { target: { value: 'new-agent' } })
 
     const saveBtn = screen.getByRole('button', { name: /app\.save/i })
     await act(async () => {
@@ -353,7 +353,7 @@ describe('AgentManagementPage — post-save navigation', () => {
     })
 
     const nameInputs = screen.getAllByRole('textbox')
-    fireEvent.change(nameInputs[0], { target: { value: 'No Plan Agent' } })
+    fireEvent.change(nameInputs[0], { target: { value: 'no-plan-agent' } })
 
     const saveBtn = screen.getByRole('button', { name: /app\.save/i })
     await act(async () => {
@@ -516,5 +516,50 @@ describe('AgentManagementPage — row click opens AgentTypeDetailsDialog', () =>
     const dialogs = screen.getAllByRole('dialog')
     // At most one dialog should be open (the edit dialog, not the details dialog)
     expect(dialogs.length).toBe(1)
+  })
+})
+
+// ── Default SOP availability tests ────────────────────────────────────────────
+
+describe('AgentManagementPage — Default SOP field available for all input types', () => {
+  beforeEach(() => {
+    mockAgentTypes = [
+      {
+        id: 'at-1',
+        name: 'Research Agent',
+        description: null,
+        identity_id: null,
+        role_id: null,
+        llm_provider: 'openai',
+        llm_model: 'gpt-4o',
+        system_instruction: null,
+        input_type: 'typed',
+        input_schema: null,
+        output_type: 'markdown',
+        output_schema: null,
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    vi.clearAllMocks()
+  })
+
+  it('Default SOP dropdown is visible in create dialog for typed-input agent', async () => {
+    // The global AgentTypeForm mock sets input_type to 'typed'.
+    // The Default SOP dropdown should appear for all input types (not just no-input).
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+
+    fireEvent.click(screen.getByRole('button', { name: /agents\.createType/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeDefined()
+    })
+
+    // agents.types.form.defaultSop is the i18n key rendered by useTranslation mock as-is
+    // Use queryAllByText since MUI renders the label text in both a <label> and a <span>
+    const defaultSopLabels = screen.queryAllByText('agents.types.form.defaultSop')
+    expect(defaultSopLabels.length).toBeGreaterThan(0)
   })
 })

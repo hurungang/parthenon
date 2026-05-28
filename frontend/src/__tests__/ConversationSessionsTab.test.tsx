@@ -104,11 +104,9 @@ describe('ConversationSessionsTab', () => {
     expect(screen.getByText('conversations.sessions.untitled')).toBeDefined()
   })
 
-  it('"Start New Conversation" button calls create mutation', () => {
+  it('does not render "Start New Conversation" button', () => {
     renderTab([])
-    const btn = screen.getByText('conversations.sessions.startNew')
-    fireEvent.click(btn)
-    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('conversations.sessions.startNew')).toBeNull()
   })
 
   it('Archive action shows confirmation dialog before mutating', async () => {

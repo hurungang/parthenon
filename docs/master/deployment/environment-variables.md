@@ -94,6 +94,49 @@ Variables for the `communication-hub` container, including the Agent Gateway lif
 
 ---
 
+## Agent Execution Guardrails
+
+Guardrail rollout introduces service-specific variables for policy enforcement, forwarding, and persistence. Keep policy ownership in Control Center, runtime enforcement in Agent Runtime, and metadata forwarding in Communication Hub.
+
+### Agent Runtime Guardrail Variables
+
+| Variable | Required for rollout | Default / behavior when unset | Secret |
+|----------|----------------------|--------------------------------|--------|
+| `AGENT_GUARDRAIL_MAX_ITERATIONS` | Yes | Uses service-level default cumulative iteration ceiling when agent policy does not override | |
+| `AGENT_GUARDRAIL_EXEC_TIMEOUT_SECONDS` | Yes | Uses service-level default wall-clock timeout when agent policy does not override | |
+| `AGENT_GUARDRAIL_MAX_DELEGATION_DEPTH` | Yes | Uses service-level default maximum delegation depth | |
+| `AGENT_GUARDRAIL_MAX_DELEGATED_STEPS` | Yes | Uses service-level default delegated-step budget | |
+| `AGENT_GUARDRAIL_TOKEN_BUDGET_ENABLED` | Yes | Enables token-budget evaluation for non-conversational and automated runs | |
+| `AGENT_GUARDRAIL_TOKEN_BUDGET_DEFAULT` | No | Optional default token cap when no policy-specific token budget is present | |
+| `AGENT_GUARDRAIL_TOKEN_FALLBACK_MODE` | Yes | Defines fallback behavior when hard token enforcement is not supported | |
+| `AGENT_GUARDRAIL_CONVERSATIONAL_TOKEN_VISIBILITY_ENABLED` | Yes | Enables continuous current-session token usage visibility for conversational runs | |
+| `AGENT_GUARDRAIL_CONVERSATIONAL_TOKEN_CONTINUE_ENABLED` | Yes | Allows conversational continuation after token threshold unless another hard guardrail is triggered | |
+| `AGENT_GUARDRAIL_CYCLE_DETECTION_ENABLED` | Yes | Enables pre-execution recursive delegation cycle detection and hard block | |
+
+### Control Center Guardrail Variables
+
+| Variable | Required for rollout | Default / behavior when unset | Secret |
+|----------|----------------------|--------------------------------|--------|
+| `AGENT_GUARDRAIL_POLICY_ENFORCEMENT` | Yes | Enables policy resolution and validation for guardrail payload fields | |
+| `AGENT_GUARDRAIL_STOP_REASON_PERSISTENCE` | Yes | Persists structured guardrail stop reasons in session state and logs | |
+| `AGENT_GUARDRAIL_CONVERSATIONAL_TOKEN_TELEMETRY_PERSISTENCE` | Yes | Persists conversational token-usage visibility and continuation metadata | |
+| `AGENT_GUARDRAIL_POLICY_VERSION` | No | Optional rollout marker for version tracking and rollback coordination | |
+
+### Communication Hub Guardrail Variables
+
+| Variable | Required for rollout | Default / behavior when unset | Secret |
+|----------|----------------------|--------------------------------|--------|
+| `AGENT_GUARDRAIL_STOP_REASON_FORWARDING` | Yes | Preserves guardrail stop metadata through direct and delegated routing paths | |
+| `AGENT_GUARDRAIL_POLICY_PAYLOAD_PASSTHROUGH` | Yes | Preserves policy snapshot payload fields without remapping | |
+| `AGENT_GUARDRAIL_TOKEN_TELEMETRY_FORWARDING` | Yes | Preserves conversational token-usage and continuation metadata through routing paths | |
+
+Rollout requirement notes:
+- Configure all required guardrail variables before service cutover.
+- Keep Agent Runtime and Communication Hub free of direct database credentials and direct database access.
+- Use consistent policy/version labels across environments for traceability.
+
+---
+
 ## OIDC / Identity
 
 | Variable | Description | Secret |

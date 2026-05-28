@@ -2,37 +2,48 @@
 
 ```mermaid
 flowchart LR
-    UI[Web UI]
+    UI[Web UI and Schedulers]
     CH[Communication Hub]
     AR[Agent Runtime]
     CC[Control Center]
     DB[(Platform DB)]
-    AUD[Security Audit Evidence]
+    OBS[Observability]
+    AUD[Governance Audit]
 
-    UI -->|Platform APIs| CC
-    UI <-->|Conversation traffic| CH
-    CC -->|Execution trigger| AR
+    UI <-->|Conversation and session traffic| CH
+    CH -->|Route execution request| AR
+    UI -->|Admin and policy APIs| CC
+    AR -->|Policy check and governance outcome| CH
     CH -->|Caller: communication_hub| CC
     AR -->|Caller: agent_runtime| CC
     CC -->|Only database path| DB
-    CH -.->|No direct DB access| DB
-    AR -.->|No direct DB access| DB
-    CC -->|Deny events for blocked calls| AUD
+    CH -.->|No direct database access| DB
+    AR -.->|No direct database access| DB
+    AR --> OBS
+    CC --> OBS
+    CC --> AUD
 ```
 
 ```mermaid
-flowchart TB
-    PEP[Control Center Policy Enforcement]
-    CHC[Caller: communication_hub]
-    ARC[Caller: agent_runtime]
-    CHA[CH allowlist]
-    ARA[AR allowlist]
-    DENY[Deny by default]
+flowchart LR
+    RQ[Session start request]
+    CH[Communication Hub]
+    PV[Pre-Execution Validator]
+    RM[Runtime Guardrail Monitor]
+    FS[Guardrail Fail-Safe Handler]
+    CC[Control Center Policy Service]
+    DB[(Platform DB)]
+    ST[Session status with stop reason]
+    CL[Client or Scheduler]
 
-    CHC --> PEP
-    ARC --> PEP
-    PEP --> CHA
-    PEP --> ARA
-    CHA --> DENY
-    ARA --> DENY
+    RQ --> CH
+    CH --> PV
+    PV -->|Fetch effective policy| CH
+    CH --> CC
+    CC --> DB
+    PV --> RM
+    RM -->|Any guardrail exceeded| FS
+    FS --> ST
+    CH --> ST
+    ST --> CL
 ```

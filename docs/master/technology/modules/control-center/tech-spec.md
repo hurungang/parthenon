@@ -164,7 +164,13 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `_resolve_route_template` | function | Resolves canonical route template used for allowlist matching and deny audit metadata | `backend/app/api/deps.py` |
 | `_raise_internal_policy_deny` | function | Emits structured deny event and returns deterministic 403 error payload for blocked internal calls | `backend/app/api/deps.py` |
 | `InternalAgentDataRouter` | router | Internal runtime context and model/session reference endpoints used by allowlisted internal callers | `backend/app/api/v1/internal/agent_data.py` |
+| `get_agent_context` | endpoint | Internal context endpoint returning effective runtime payload including guardrail policy snapshot fields | `backend/app/api/v1/internal/agent_data.py` |
+| `AgentContextResponse` | schema | Internal context response model carrying runtime context and guardrail policy metadata | `backend/app/api/v1/internal/agent_data.py` |
 | `InternalSessionDataRouter` | router | Internal session, conversation, permission, and A2A coordination endpoints | `backend/app/api/v1/internal/session_data.py` |
+| `update_session_status` | endpoint | Internal persistence endpoint for terminal session outcomes including guardrail stop reasons | `backend/app/api/v1/internal/session_data.py` |
+| `LogExecutionEventRequest` | schema | Structured log payload model for runtime guardrail decision events and counters | `backend/app/api/v1/internal/session_data.py` |
+| `post_session_result` | endpoint | Internal result persistence endpoint that stores execution completion payloads alongside guardrail metadata | `backend/app/api/v1/internal/session_data.py` |
+| `prepare_a2a_request` | endpoint | Internal A2A preparation endpoint for delegated execution routing and parent/child context linkage | `backend/app/api/v1/internal/session_data.py` |
 | `authorize_tool_call_internal` | endpoint | Internal authorizer endpoint for Communication Hub tool call checks | `backend/app/api/v1/internal/authorization.py` |
 | `validate_certificate_internal` | endpoint | Internal certificate validation endpoint for service callers | `backend/app/api/v1/internal/certificates.py` |
 | `check_certificate_revoked` | endpoint | Internal revocation status endpoint on `revoked/{serial_number}` contract | `backend/app/api/v1/internal/certificates.py` |

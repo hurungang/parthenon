@@ -524,6 +524,37 @@ test.describe('Real Backend Integration — Agent Runtime Migration', () => {
     // 200 or 401/403 both indicate the endpoint and table exist (including enabled_models column)
     expect([200, 401, 403, 422]).toContain(response.status())
   })
+
+  test('GET /agents/types returns payload with guardrail fields when backend is reachable', async ({ page }) => {
+    let backendRunning = false
+    try {
+      const response = await page.request.get('http://localhost:8000/api/v1/health')
+      backendRunning = response.ok()
+    } catch {
+      // Backend not running
+    }
+
+    if (!backendRunning) {
+      test.skip()
+      return
+    }
+
+    await standardSetup(page)
+    const response = await page.request.get('http://localhost:8000/api/v1/agents/types', {
+      headers: { Authorization: `Bearer fake-token` },
+    })
+
+    expect([200, 401, 403, 422]).toContain(response.status())
+    if (response.ok()) {
+      const body = await response.json()
+      const firstAgentType = Array.isArray(body) ? body[0] : body?.data?.[0]
+      if (firstAgentType) {
+        expect(firstAgentType).toHaveProperty('guardrail_max_iterations')
+        expect(firstAgentType).toHaveProperty('guardrail_execution_timeout_seconds')
+        expect(firstAgentType).toHaveProperty('guardrail_token_enforcement_mode')
+      }
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------

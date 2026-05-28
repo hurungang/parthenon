@@ -2,26 +2,38 @@
 
 ```mermaid
 flowchart LR
-    UI[Web UI]
+    UI[Web UI and schedulers]
     CH[Communication Hub]
-    CC[Control Center]
     AR[Agent Runtime]
-    MCP[MCP and Channel Integrations]
+    CC[Control Center]
+    MCP[MCP and channel integrations]
+    STAT[Session status channel]
 
-    UI <-->|Realtime conversation| CH
-    CH -->|Caller: communication_hub| CC
-    AR -->|Tool forwarding path| CH
+    UI <-->|Realtime conversation and session control| CH
+    CH -->|Route execution request| AR
+    AR -->|Tool and delegation routing| CH
     CH --> MCP
+    AR -->|Policy lookup and stop outcomes| CH
+    CH -->|Caller: communication_hub| CC
+    CH --> STAT
+    STAT --> UI
 ```
 
 ```mermaid
 flowchart TB
-    CH2[Communication Hub]
-    CHA[CH allowlist scope in Control Center]
-    ARS[Agent Runtime-only scope]
-    DENY[Denied access and audit evidence]
+    P0[Policy fetch request from Agent Runtime]
+    CH[Communication Hub]
+    CC[Control Center Policy Service]
+    P1[Effective policy response]
+    S0[Guardrail stop outcome from Agent Runtime]
+    S1[Session channel update]
+    UI[Client view]
 
-    CH2 --> CHA
-    CH2 -.->|Request to AR-only scope| ARS
-    ARS --> DENY
+    P0 --> CH
+    CH --> CC
+    CC --> CH
+    CH --> P1
+    S0 --> CH
+    CH --> S1
+    S1 --> UI
 ```

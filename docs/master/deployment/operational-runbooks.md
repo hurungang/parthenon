@@ -203,3 +203,48 @@ Use this runbook for certificate bootstrap, renewal, handshake, or revocation-ch
 - Do not switch revocation behavior to fail-open in production.
 - Do not bypass service certificate validation to recover traffic.
 - If service continuity is at risk, switch policy mode to audit and follow rollback runbook guidance.
+
+---
+
+## 8. Agent Execution Guardrails Rollout Verification Checklist
+
+Use this checklist immediately after deploying the `add-agent-execution-guardrails` change.
+
+### Preconditions
+
+- Control Center, Communication Hub, and Agent Runtime versions are guardrail-contract compatible.
+- Required guardrail environment variables are configured for all three services.
+- Approved default thresholds and fallback modes are documented for the target environment.
+
+### Verification sequence
+
+1. Validate policy snapshot readiness
+- Confirm Control Center resolves and serves effective guardrail policy snapshot fields in execution context payloads.
+
+2. Validate forwarding integrity
+- Run direct and delegated execution flows and confirm Communication Hub preserves guardrail policy snapshot and stop-reason metadata end-to-end.
+- Confirm conversational token visibility and continuation metadata are preserved in forwarded payloads.
+
+3. Validate pre-execution cycle detection
+- Execute a known recursive delegation scenario and confirm the run is blocked before execution with a cycle-classified stop reason.
+
+4. Validate cumulative iteration accounting
+- Execute multi-hop delegated sessions and confirm cumulative iteration limits account for local and delegated chain activity.
+
+5. Validate timeout and delegation limits
+- Confirm wall-clock timeout behavior is enforced and classified clearly.
+- Confirm delegation depth and delegated-step limits are enforced with distinct stop reasons.
+
+6. Validate mode-aware token behavior
+- Conversational mode: confirm current-session token usage is continuously visible and sessions continue at token threshold unless another hard guardrail triggers a stop.
+- Non-conversational and automated modes: confirm token-budget enforcement or configured fallback behavior is applied and classified clearly.
+
+7. Validate persistence and observability
+- Confirm structured stop reasons are persisted in session state and logs.
+- Confirm conversational token telemetry and continuation-path metadata are persisted and visible in observability pipelines.
+
+### Exit criteria
+
+- All guardrail stop classes are produced and persisted as expected.
+- No metadata loss is observed across direct or delegated routing paths.
+- No unexpected hard stops occur on known-good conversational workloads.

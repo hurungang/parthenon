@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next'
 import {
   Box,
   Button,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
   Card,
   CardContent,
   Checkbox,
@@ -26,10 +31,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { useSopRoles } from '../../hooks/useSops'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import type { AgentRole, AgentType, Skill, SopDetail, SopStep, SopStepType } from '../../types'
+import type {
+  AgentRole,
+  AgentType,
+  Skill,
+  SopDetail,
+  SopStep,
+  SopStepType,
+  SopWorkflowGenerateResponse,
+  SopWorkflowPreviewResponse,
+} from '../../types'
 
 interface SopEditorProps {
+  open: boolean
   sop: SopDetail | null
+  mode?: 'create' | 'edit' | 'view'
   onClose: () => void
   onSaved: () => void
 }
@@ -57,15 +73,21 @@ const stepFromExisting = (step: SopStep): StepDraft => ({
   description: step.description ?? '',
 })
 
-export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
+export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const isViewMode = mode === 'view'
 
   const [form, setForm] = useState({ name: '', description: '', instructions: '', is_active: true })
   const [steps, setSteps] = useState<StepDraft[]>([])
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([])
   const [editorError, setEditorError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
+  const [working, setWorking] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewContent, setPreviewContent] = useState('')
+  const [previewModelId, setPreviewModelId] = useState<string | null>(null)
 
   const { data: currentRoleIds } = useSopRoles(sop?.id ?? '')
 
@@ -152,7 +174,15 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
     )
   }
 
+  const nameError = form.name
+    ? !/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(form.name)
+      ? t('sops.editor.nameInvalid')
+      : null
+    : null
+
   const handleSave = async () => {
+    if (isViewMode) return
+    if (nameError) return
     try {
       setSaving(true)
       setEditorError(null)
@@ -191,60 +221,128 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
     }
   }
 
+  const stepsForWorkflow = steps.map((s, i) => ({
+    order: i,
+    step_type: s.step_type,
+    skill_id: s.skill_id || null,
+    target_agent_type_id: s.target_agent_type_id || null,
+    name: s.name || null,
+    description: s.description || null,
+  }))
+
+  const handleGenerateWorkflow = async () => {
+    try {
+      setGenerating(true)
+      setEditorError(null)
+      const { data } = await apiClient.post<SopWorkflowGenerateResponse>('/sops/workflow/generate', {
+        description: form.description,
+        steps: stepsForWorkflow,
+      })
+      setForm((f) => ({ ...f, instructions: data.workflow }))
+    } catch (err) {
+      setEditorError(err)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handlePreviewWorkflow = async () => {
+    try {
+      setWorking(true)
+      setEditorError(null)
+      const { data } = await apiClient.post<SopWorkflowPreviewResponse>('/sops/workflow/preview', {
+        workflow: form.instructions,
+        description: form.description,
+        steps: stepsForWorkflow,
+      })
+      setPreviewModelId(data.model_id)
+      setPreviewContent(data.instruction_file)
+      setPreviewOpen(true)
+    } catch (err) {
+      setEditorError(err)
+    } finally {
+      setWorking(false)
+    }
+  }
+
   return (
-    <Box sx={{ borderLeft: 1, borderColor: 'divider', pl: 3, minWidth: 520 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">
-          {sop ? t('sops.editSop') : t('sops.createSop')}
-        </Typography>
-        <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
-      </Box>
+    <>
+      <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">
+              {mode === 'view' ? t('sops.viewSop') : sop ? t('sops.editSop') : t('sops.createSop')}
+            </Typography>
+            <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
 
-      {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
-
-      <Stack spacing={2}>
-        {/* Basic Info */}
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="subtitle2" mb={1}>{t('skills.editor.basicInfo')}</Typography>
-            <Stack spacing={2}>
-              <TextField
-                label={t('app.name')}
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                fullWidth
-                required
-                size="small"
-              />
-              <TextField
-                label={t('app.description')}
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                fullWidth
-                multiline
-                rows={2}
-                size="small"
-              />
-              <TextField
-                label={t('sops.instructions')}
-                value={form.instructions}
-                onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
-                fullWidth
-                multiline
-                rows={4}
-                size="small"
-                helperText={t('sops.instructionsHint')}
-              />
-            </Stack>
-          </CardContent>
-        </Card>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {/* Basic Info */}
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="subtitle2" mb={1}>{t('skills.editor.basicInfo')}</Typography>
+                <Stack spacing={2}>
+                  <TextField
+                    label={t('app.name')}
+                    value={form.name}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setForm((f) => ({ ...f, name: raw.toLowerCase().replace(/[^a-z0-9-]/g, '') }))
+                    }}
+                    disabled={isViewMode}
+                    fullWidth
+                    required
+                    size="small"
+                    error={!!nameError}
+                    helperText={nameError ?? t('sops.editor.nameHint')}
+                  />
+                  <TextField
+                    label={t('app.description')}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    disabled={isViewMode}
+                    fullWidth
+                    multiline
+                    rows={2}
+                    size="small"
+                  />
+                  <TextField
+                    label={t('sops.workflow')}
+                    value={form.instructions}
+                    onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
+                    disabled={isViewMode}
+                    fullWidth
+                    multiline
+                    rows={8}
+                    size="small"
+                    helperText={t('sops.workflowHint')}
+                  />
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => void handleGenerateWorkflow()}
+                      disabled={generating || working}
+                      startIcon={generating ? <CircularProgress size={16} color="inherit" /> : undefined}
+                    >
+                      {generating ? t('app.loading') : t('sops.editor.generateWorkflow')}
+                    </Button>
+                    <Button variant="outlined" onClick={() => void handlePreviewWorkflow()} disabled={working}>
+                      {t('sops.editor.previewWorkflow')}
+                    </Button>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
 
         {/* Steps */}
         <Card variant="outlined">
           <CardContent>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Typography variant="subtitle2">{t('sops.editor.steps')}</Typography>
-              <Button size="small" startIcon={<AddIcon />} onClick={addStep}>
+              <Button size="small" startIcon={<AddIcon />} onClick={addStep} disabled={isViewMode}>
                 {t('sops.editor.addStep')}
               </Button>
             </Box>
@@ -256,10 +354,10 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
                       <Typography variant="caption" color="text.secondary" fontWeight={600}>
                         {idx + 1}
                       </Typography>
-                      <IconButton size="small" onClick={() => moveStep(step.localId, -1)} disabled={idx === 0}>
+                      <IconButton size="small" onClick={() => moveStep(step.localId, -1)} disabled={isViewMode || idx === 0}>
                         <ArrowUpwardIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" onClick={() => moveStep(step.localId, 1)} disabled={idx === steps.length - 1}>
+                      <IconButton size="small" onClick={() => moveStep(step.localId, 1)} disabled={isViewMode || idx === steps.length - 1}>
                         <ArrowDownwardIcon fontSize="small" />
                       </IconButton>
                     </Box>
@@ -269,6 +367,7 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
                           <InputLabel>{t('sops.editor.stepType')}</InputLabel>
                           <Select
                             value={step.step_type}
+                            disabled={isViewMode}
                             label={t('sops.editor.stepType')}
                             onChange={(e) =>
                               updateStep(step.localId, {
@@ -287,6 +386,7 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
                             <InputLabel>{t('skills.title')}</InputLabel>
                             <Select
                               value={step.skill_id ?? ''}
+                              disabled={isViewMode}
                               label={t('skills.title')}
                               onChange={(e) => updateStep(step.localId, { skill_id: e.target.value || null })}
                             >
@@ -302,6 +402,7 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
                             <InputLabel>{t('sops.editor.agentType')}</InputLabel>
                             <Select
                               value={step.target_agent_type_id ?? ''}
+                              disabled={isViewMode}
                               label={t('sops.editor.agentType')}
                               onChange={(e) => updateStep(step.localId, { target_agent_type_id: e.target.value || null })}
                             >
@@ -316,12 +417,13 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
                           label={t('app.name')}
                           value={step.name}
                           onChange={(e) => updateStep(step.localId, { name: e.target.value })}
+                          disabled={isViewMode}
                           size="small"
                           fullWidth
                         />
                       </Stack>
                     </Box>
-                    <IconButton size="small" color="error" onClick={() => removeStep(step.localId)}>
+                    <IconButton size="small" color="error" onClick={() => removeStep(step.localId)} disabled={isViewMode}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Box>
@@ -342,6 +444,7 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
               control={
                 <Switch
                   checked={form.is_active}
+                  disabled={isViewMode}
                   onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
                 />
               }
@@ -361,6 +464,7 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
                   <Checkbox
                     size="small"
                     checked={selectedRoleIds.includes(role.id)}
+                    disabled={isViewMode}
                     onChange={() => toggleRole(role.id)}
                   />
                 }
@@ -374,14 +478,41 @@ export function SopEditor({ sop, onClose, onSaved }: SopEditorProps) {
           </CardContent>
         </Card>
 
-        <Box display="flex" justifyContent="flex-end" gap={1}>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
           <Button onClick={onClose} disabled={saving}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving || !form.name}>
-            {saving ? t('app.loading') : t('app.save')}
-          </Button>
-        </Box>
-      </Stack>
-    </Box>
+          {!isViewMode && (
+            <Button variant="contained" onClick={handleSave} disabled={saving || !form.name || !!nameError}>
+              {saving ? t('app.loading') : t('app.save')}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{t('sops.editor.workflowPreviewTitle', { model: previewModelId ?? '-' })}</DialogTitle>
+        <DialogContent dividers>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              p: 1.5,
+              bgcolor: 'action.hover',
+              borderRadius: 1,
+              fontSize: '0.8rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {previewContent}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreviewOpen(false)}>{t('app.close')}</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
 

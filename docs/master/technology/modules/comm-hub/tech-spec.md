@@ -63,8 +63,8 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `_route_to_system_tool` | function | Forwards `system____*` calls to Control Center system-tools internal endpoints with service-certificate authentication | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `_route_to_mcp_tool` | function | Forwards `<server>____*` calls to Control Center MCP proxy internal endpoint | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `_build_control_center_auth` | function | Builds authenticated CH->CC internal call transport for tool routing and policy checks | `backend/app/communication_hub/api/internal/tool_routing.py` |
-| `trigger_agent_execution` | endpoint | Triggers Agent Runtime execution for queued or conversation work units | `backend/app/communication_hub/api/internal/agent_execute.py` |
-| `request_a2a` | endpoint | Creates agent-to-agent delegation requests through Control Center orchestration APIs | `backend/app/communication_hub/api/a2a.py` |
+| `trigger_agent_execution` | endpoint | Triggers Agent Runtime execution for queued or conversation work units and preserves guardrail stop metadata in forwarded payloads | `backend/app/communication_hub/api/internal/agent_execute.py` |
+| `request_a2a` | endpoint | Creates agent-to-agent delegation requests through Control Center orchestration APIs while preserving delegated guardrail outcome metadata | `backend/app/communication_hub/api/a2a.py` |
 | `disconnect_a2a` | endpoint | Closes linked A2A sessions and updates orchestration state via Control Center | `backend/app/communication_hub/api/a2a.py` |
 | `ChatPage` | component | Real-time user-to-agent chat interface backed by WebSocket connection | `frontend/src/pages/chat/ChatPage.tsx` |
 | `useChatSession` | hook | Manages WebSocket connection lifecycle, inbound message queue, pending question state, and reconnection | `frontend/src/hooks/useChatSession.ts` |

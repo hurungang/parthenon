@@ -18,7 +18,7 @@ import apiClient from '../../api/apiClient'
 import { useChatSession } from '../../hooks/useChatSession'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import { LogViewer } from '../../components/logs/LogViewer'
+import { LogViewer } from '../../components/executions/LogViewer'
 import type { AgentJob, AgentJobStatus, ExecutionLogEntry } from '../../types'
 
 const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed']

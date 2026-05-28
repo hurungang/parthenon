@@ -40,6 +40,24 @@ import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type { AgentIdentity, AgentRole, AgentType } from '../../types'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
+const TOKEN_BUDGET_UNIT = 1000
+
+function rawTokenBudgetToK(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '1000'
+  }
+
+  return String(Math.max(1, Math.round(value / TOKEN_BUDGET_UNIT)))
+}
+
+function tokenBudgetKToRaw(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 1000 * TOKEN_BUDGET_UNIT
+  }
+
+  return Math.round(parsed * TOKEN_BUDGET_UNIT)
+}
 
 /**
  * Agent management page — agent type list, creation/editing, active instance table,
@@ -118,6 +136,15 @@ export function AgentManagementPage() {
       output_type: at.output_type,
       output_schema: at.output_schema ? JSON.stringify(at.output_schema, null, 2) : '',
       primary_sop_id: at.primary_sop_id ?? '',
+      guardrail_max_iterations: at.guardrail_max_iterations ?? 10,
+      guardrail_max_delegation_depth: at.guardrail_max_delegation_depth ?? 3,
+      guardrail_max_delegated_steps: at.guardrail_max_delegated_steps ?? 20,
+      guardrail_execution_timeout_seconds: at.guardrail_execution_timeout_seconds ?? 300,
+      guardrail_token_budget: rawTokenBudgetToK(at.guardrail_token_budget),
+      guardrail_token_enforcement_mode: at.guardrail_token_enforcement_mode ?? 'observe',
+      guardrail_token_fallback_mode: at.guardrail_token_fallback_mode ?? 'observe_and_log',
+      guardrail_conversational_token_visibility_mode: at.guardrail_conversational_token_visibility_mode ?? 'enabled',
+      guardrail_conversational_continuation_policy: at.guardrail_conversational_continuation_policy ?? 'allow',
     })
     setDialogError(null)
     setDialogOpen(true)
@@ -133,7 +160,7 @@ export function AgentManagementPage() {
         return
       }
       if (form.input_type === 'none' && !form.primary_sop_id) {
-        setDialogError(new Error(t('agents.types.form.primarySopRequired')))
+        setDialogError(new Error(t('agents.types.form.defaultSopRequired')))
         setSaving(false)
         return
       }
@@ -148,7 +175,16 @@ export function AgentManagementPage() {
         input_schema: form.input_schema ? JSON.parse(form.input_schema) : null,
         output_type: form.output_type,
         output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
-        primary_sop_id: form.input_type === 'none' ? (form.primary_sop_id || null) : null,
+        primary_sop_id: form.primary_sop_id || null,
+        guardrail_max_iterations: form.guardrail_max_iterations,
+        guardrail_max_delegation_depth: form.guardrail_max_delegation_depth,
+        guardrail_max_delegated_steps: form.guardrail_max_delegated_steps,
+        guardrail_execution_timeout_seconds: form.guardrail_execution_timeout_seconds,
+        guardrail_token_budget: tokenBudgetKToRaw(form.guardrail_token_budget),
+        guardrail_token_enforcement_mode: form.guardrail_token_enforcement_mode,
+        guardrail_token_fallback_mode: form.guardrail_token_fallback_mode,
+        guardrail_conversational_token_visibility_mode: form.guardrail_conversational_token_visibility_mode,
+        guardrail_conversational_continuation_policy: form.guardrail_conversational_continuation_policy,
       }
       let savedAgentType: AgentType
       if (editType) {

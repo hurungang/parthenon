@@ -9,9 +9,12 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
 
-vi.mock('../hooks/useSops', () => ({
-  useSopRoles: () => ({ data: ['role-1'], isLoading: false }),
-}))
+vi.mock('../hooks/useSops', () => {
+  const stableRoleIds: string[] = ['role-1']
+  return {
+    useSopRoles: () => ({ data: stableRoleIds, isLoading: false }),
+  }
+})
 
 vi.mock('../api/apiClient', () => ({
   default: {
@@ -75,14 +78,14 @@ describe('SopEditor — new SOP', () => {
   })
 
   it('renders the SOP editor', async () => {
-    const { container } = render(<SopEditor sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    const { container } = render(<SopEditor open={true} sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       expect(container).toBeDefined()
     })
   })
 
   it('renders name text input', async () => {
-    render(<SopEditor sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const textboxes = screen.queryAllByRole('textbox')
       expect(textboxes.length).toBeGreaterThan(0)
@@ -90,7 +93,7 @@ describe('SopEditor — new SOP', () => {
   })
 
   it('renders instructions field', async () => {
-    render(<SopEditor sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const textareas = screen.queryAllByRole('textbox')
       expect(textareas.length).toBeGreaterThanOrEqual(1)
@@ -98,7 +101,7 @@ describe('SopEditor — new SOP', () => {
   })
 
   it('renders Add Step button', async () => {
-    render(<SopEditor sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const buttons = screen.queryAllByRole('button')
       expect(buttons.length).toBeGreaterThan(0)
@@ -106,7 +109,7 @@ describe('SopEditor — new SOP', () => {
   })
 
   it('adds a new step when Add Step is clicked', async () => {
-    render(<SopEditor sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={null} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const buttons = screen.queryAllByRole('button')
       expect(buttons.length).toBeGreaterThan(0)
@@ -120,7 +123,7 @@ describe('SopEditor — editing existing SOP', () => {
   })
 
   it('pre-populates the name field', async () => {
-    render(<SopEditor sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const textboxes = screen.queryAllByRole('textbox')
       expect(textboxes.length).toBeGreaterThan(0)
@@ -128,7 +131,7 @@ describe('SopEditor — editing existing SOP', () => {
   })
 
   it('pre-populates the instructions field', async () => {
-    render(<SopEditor sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const textboxes = screen.queryAllByRole('textbox')
       expect(textboxes.length).toBeGreaterThan(0)
@@ -136,7 +139,7 @@ describe('SopEditor — editing existing SOP', () => {
   })
 
   it('renders existing steps', async () => {
-    render(<SopEditor sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const buttons = screen.queryAllByRole('button')
       expect(buttons.length).toBeGreaterThan(0)
@@ -153,7 +156,7 @@ describe('SopEditor — editing existing SOP', () => {
         skill_id: null,
       }],
     }
-    render(<SopEditor sop={sopWithDelegation as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={sopWithDelegation as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       const container = document.body
       expect(container).toBeDefined()
@@ -162,7 +165,7 @@ describe('SopEditor — editing existing SOP', () => {
 
   it('renders step type selectors for each step', async () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
-    render(<SopEditor sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       // Step type comboboxes or selects
       const selects = screen.queryAllByRole('combobox')
@@ -179,7 +182,7 @@ describe('SopEditor — editing existing SOP', () => {
       origErr(...args)
     }
     const { SopEditor } = await import('../pages/skills/SopEditor')
-    render(<SopEditor sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
+    render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {}, { timeout: 500 })
     console.error = origErr
     expect(errors).toHaveLength(0)

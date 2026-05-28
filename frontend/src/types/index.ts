@@ -114,6 +114,35 @@ export interface Skill {
   updated_at: string
 }
 
+export interface SkillWorkflowToolInput {
+  id?: string | null
+  name: string
+  description?: string | null
+  input_schema?: Record<string, unknown> | null
+}
+
+export interface SkillWorkflowGenerateRequest {
+  description: string
+  selected_tools: SkillWorkflowToolInput[]
+}
+
+export interface SkillWorkflowGenerateResponse {
+  workflow: string
+  model_id: string
+}
+
+export interface SkillWorkflowPreviewRequest {
+  workflow: string
+  description?: string | null
+  selected_tools: SkillWorkflowToolInput[]
+}
+
+export interface SkillWorkflowPreviewResponse {
+  instruction_file: string
+  model_id: string
+  selected_tools: SkillWorkflowToolInput[]
+}
+
 export interface SopStep {
   id: string
   sop_id: string
@@ -140,6 +169,37 @@ export interface Sop {
 
 export interface SopDetail extends Sop {
   steps: SopStep[]
+}
+
+export interface SopWorkflowStepInput {
+  order: number
+  step_type: SopStepType
+  skill_id?: string | null
+  target_agent_type_id?: string | null
+  name?: string | null
+  description?: string | null
+}
+
+export interface SopWorkflowGenerateRequest {
+  description: string
+  steps: SopWorkflowStepInput[]
+}
+
+export interface SopWorkflowGenerateResponse {
+  workflow: string
+  model_id: string
+}
+
+export interface SopWorkflowPreviewRequest {
+  workflow: string
+  description?: string | null
+  steps: SopWorkflowStepInput[]
+}
+
+export interface SopWorkflowPreviewResponse {
+  instruction_file: string
+  model_id: string
+  steps: SopWorkflowStepInput[]
 }
 
 // ── Agents ─────────────────────────────────────────────────────────────────────
@@ -238,10 +298,33 @@ export interface AgentType {
   output_type: AgentOutputType
   output_schema: Record<string, unknown> | null
   primary_sop_id: string | null
+  guardrail_max_iterations?: number
+  guardrail_max_delegation_depth?: number
+  guardrail_max_delegated_steps?: number
+  guardrail_execution_timeout_seconds?: number
+  guardrail_token_budget?: number | null
+  guardrail_token_enforcement_mode?: 'observe' | 'enforce'
+  guardrail_token_fallback_mode?: 'observe_and_log' | 'stop_on_next_hard_guardrail'
+  guardrail_conversational_token_visibility_mode?: 'enabled' | 'disabled'
+  guardrail_conversational_continuation_policy?: 'allow'
   is_active: boolean
   created_at: string
   updated_at: string
   plan?: AgentPlan | null
+}
+
+export interface GuardrailUsage {
+  policySnapshotId: string | null
+  cumulativeIterations: number | null
+  maxIterations: number | null
+  delegatedSteps: number | null
+  maxDelegatedSteps: number | null
+  delegationDepth: number | null
+  maxDelegationDepth: number | null
+  elapsedSeconds: number | null
+  tokenUsageCurrentSession: number | null
+  tokenBudget: number | null
+  executionTimeoutSeconds: number | null
 }
 
 export type ModelProviderType = 'openai' | 'anthropic' | 'litellm_proxy' | 'azure_openai'
@@ -255,6 +338,18 @@ export interface ModelConfig {
   enabled_models: string[]
   created_at: string
   updated_at: string
+}
+
+export interface WorkflowGenerationModelOption {
+  model_id: string
+  config_id: string
+  config_display_name: string
+  provider_type: ModelProviderType
+}
+
+export interface WorkflowGenerationModelConfig {
+  selected_model_id: string | null
+  options: WorkflowGenerationModelOption[]
 }
 
 export interface ExecutionLogRead {
@@ -347,6 +442,7 @@ export interface ConversationSession {
   created_at: string
   updated_at: string
   closed_at: string | null
+  guardrail_usage?: Record<string, unknown> | null
 }
 
 export interface ConversationSessionDetail extends ConversationSession {
@@ -520,6 +616,7 @@ export interface LogSummary {
   identity: string | null
   role: string | null
   model: string | null
+  inputType: AgentInputType | null
   sopsSkills: string[]
   planCompleted: number
   planTotal: number
@@ -527,6 +624,7 @@ export interface LogSummary {
   startedAt: string | null
   completedAt: string | null
   durationMs: number | null
+  guardrailUsage: GuardrailUsage | null
 }
 
 export interface StructuredLog {

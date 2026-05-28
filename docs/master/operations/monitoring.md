@@ -46,6 +46,16 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Agent Runtime** | `agent.runtime.llm_call_duration` (p99) | Time waiting for LLM inference response; p99 > 60 s indicates LLM provider latency issues |
 | **Agent Runtime** | `agent.runtime.langgraph_node_transitions_total` | Total LangGraph state node transitions across all sessions; used for operational diagnostics |
 | **Agent Runtime** | `agent.runtime.langgraph_errors_total` | LangGraph state machine errors (invalid transitions, missing nodes); any non-zero rate requires investigation |
+| **Agent Execution Guardrails** | `guardrail_stop_total` (labels: `reason`, `agent_type`, `execution_mode`) | Primary signal for policy-enforced session stops by stop reason and execution mode |
+| **Agent Execution Guardrails** | `guardrail_cycle_block_total` (labels: `agent_type`, `root_session`) | Detects recursive delegation cycle blocks before runtime begins |
+| **Agent Execution Guardrails** | `guardrail_iteration_limit_hit_total` (labels: `agent_type`, `parent_session`) | Detects cumulative iteration ceiling pressure including delegated work |
+| **Agent Execution Guardrails** | `guardrail_timeout_limit_hit_total` (labels: `agent_type`) | Detects per-agent wall-clock timeout saturation |
+| **Agent Execution Guardrails** | `guardrail_delegation_budget_hit_total` (labels: `limit_type`, `agent_type`) | Detects delegation depth or delegated-step budget exhaustion |
+| **Agent Execution Guardrails** | `guardrail_token_budget_hit_total` (labels: `provider`, `model`, `agent_type`, `execution_mode`) | Detects hard token budget stops in non-conversational and automated executions |
+| **Agent Execution Guardrails** | `guardrail_conversational_token_usage_snapshot_total` (labels: `provider`, `model`, `agent_type`) | Confirms conversational token-usage visibility events are being emitted |
+| **Agent Execution Guardrails** | `guardrail_conversational_token_threshold_reached_total` (labels: `provider`, `model`, `agent_type`) | Tracks conversational threshold events where continuation remains allowed |
+| **Agent Execution Guardrails** | `guardrail_token_fallback_applied_total` (labels: `provider`, `fallback_mode`, `agent_type`) | Detects fallback-mode activation when strict token enforcement is unsupported |
+| **Agent Execution Guardrails** | `session_terminal_state_total` (labels: `state`, `stop_category`) | Validates guardrail terminal states are classified separately from functional failures |
 | **Agent Permission Manager** | `agent.permission.cache_hits_total` | Permission resolution requests served from LRU cache |
 | **Agent Permission Manager** | `agent.permission.cache_misses_total` | Permission resolution requests that required a full DB query |
 | **Agent Permission Manager** | `agent.permission.cache_hit_rate` (derived) | `cache_hits / (cache_hits + cache_misses)`; below 80% indicates frequent role mutations or undersized cache |
@@ -139,6 +149,19 @@ Agent runtime execution health. Add alongside the existing Agent Engine and MCP 
 - **Permission Cache Hit Rate** — Derived from `agent.permission.cache_hits_total` and `agent.permission.cache_misses_total`; alert annotation when below 80%.
 - **Permission Denials** — `agent.runtime.permission_denials_total` rate; alert annotations when non-zero.
 
+### Agent Execution Guardrails Dashboard
+Guardrail policy behavior and stop-classification view. Add as a dedicated panel group in operations dashboards. Panels:
+
+- **Guardrail Stops by Reason** — `guardrail_stop_total` split by `reason` and `execution_mode`.
+- **Cycle Blocks** — `guardrail_cycle_block_total` trend with agent-type breakdown.
+- **Iteration and Timeout Limit Hits** — `guardrail_iteration_limit_hit_total` and `guardrail_timeout_limit_hit_total` overlay.
+- **Delegation Budget Exhaustion** — `guardrail_delegation_budget_hit_total` split by `limit_type` (`depth`, `delegated_steps`).
+- **Conversational Token Visibility** — `guardrail_conversational_token_usage_snapshot_total` with active conversational session count.
+- **Conversational Threshold Continuation** — `guardrail_conversational_token_threshold_reached_total` trend (should not map to hard-stop outcomes).
+- **Non-Conversational Token Budget Stops** — `guardrail_token_budget_hit_total` split by provider/model.
+- **Token Fallback Activation** — `guardrail_token_fallback_applied_total` by `provider` and `fallback_mode`.
+- **Terminal State Classification Integrity** — `session_terminal_state_total` split by `state` and `stop_category`.
+
 ### Service Segregation Boundary Enforcement
 Dedicated dashboard panel group for internal caller boundary controls. Panels:
 
@@ -181,6 +204,19 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `AgentIdentityTokenFailure` | `rate(agent.identity.token_refresh_failures_total) > 0` for 2 min | Critical | Verify OIDC provider connectivity; check agent client credentials in identity provider |
 | `AgentSessionTimeout` | `rate(agent.session.timeouts_total) > 0` for 5 min | Warning | Inspect timed-out sessions; check LLM provider latency and MCP server responsiveness |
 | `LangGraphStateErrors` | `rate(agent.runtime.langgraph_errors_total) > 0` for 2 min | Critical | Inspect LangGraph state machine errors; validate agent type configurations |
+
+### Agent Execution Guardrail Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `GuardrailStopRateSpike` | `guardrail_stop_total` above baseline for 5 min | Warning | Check stop reasons by `agent_type` and `execution_mode`; confirm no workflow rollout regression |
+| `CycleBlockSurge` | `guardrail_cycle_block_total` above baseline for 5 min | Warning | Follow [runbooks/agent-execution-guardrails.md](runbooks/agent-execution-guardrails.md) cycle triage and isolate recursive delegation paths |
+| `TimeoutRegression` | `guardrail_timeout_limit_hit_total` above baseline for 10 min | Warning | Correlate with LLM and MCP latency; validate timeout policy thresholds |
+| `DelegationBudgetExhaustion` | `guardrail_delegation_budget_hit_total` above baseline for 5 min | Warning | Validate delegation depth and delegated-step budgets for affected agent types |
+| `ConversationalTokenVisibilityGap` | `guardrail_conversational_token_usage_snapshot_total = 0` while conversational sessions are active for 5 min | Critical | Treat as observability gap; verify conversational token snapshot event flow immediately |
+| `ConversationalTokenHardStopDetected` | conversational terminal sessions classified with token-budget stop reason for 2 min | Critical | Treat as policy regression; validate execution-mode branch and continuation behavior |
+| `TokenFallbackOveruse` | `guardrail_token_fallback_applied_total` above baseline for 15 min | Warning | Review provider capability mapping and fallback policy usage |
+| `StopReasonMissing` | terminal sessions without stop reason classification for 2 min | Critical | Validate stop metadata forwarding and persistence fields end-to-end |
 
 ### Notification Service Alerts
 

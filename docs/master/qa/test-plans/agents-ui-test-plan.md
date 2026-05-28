@@ -175,6 +175,28 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
+### 9. Agent Type Guardrail Profile UI (add-agent-execution-guardrails)
+
+**What is tested:**
+- Guardrail editor remains collapsed by default in create/edit flows
+- Guardrail section adapts by input type (conversational versus non-conversational)
+- Token controls render using k-token presentation in editor and details surfaces
+- Agent details dialog renders guardrail profile values for operator review
+
+**Acceptance criteria:**
+- Guardrail section is closed on first render and opens on explicit user action
+- Conversational forms show conversational token-visibility controls and hide non-conversational token-enforcement controls
+- Non-conversational forms show token-enforcement controls and token budget units
+- Details dialog displays readable guardrail profile values, including token budget formatting
+
+**Test files:**
+- [frontend/src/__tests__/AgentTypeForm.test.tsx](../../../../frontend/src/__tests__/AgentTypeForm.test.tsx) — collapsed-by-default behavior and input-type-aware guardrail controls
+- [frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx](../../../../frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx) — guardrail profile rendering and k-token formatting in details dialog
+- [e2e/tests/agent-management.spec.ts](../../../../e2e/tests/agent-management.spec.ts) — guardrail controls visible in create/edit dialog flows
+- [e2e/tests/agent-navigation.spec.ts](../../../../e2e/tests/agent-navigation.spec.ts) — details dialog guardrail section visibility and values
+
+---
+
 ## Manual Testing Requirements
 
 | Scenario | Why Manual |
@@ -208,3 +230,4 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 |--------|-------------|-------|
 | unified-agent-navigation | AI Agent nav group; AgentTypeDetailsDialog; Role/Identity columns; Agent Executions filter; view dialogs with Edit mode; legacy redirect | 2026-05-10 |
 | agent-a2a-communication-and-slug-enforcement | Added A2A delegation preview and slug validation coverage (agent type naming, role allowed-target preview, plan/topology delegation rendering) | 2026-05-22 |
+| add-agent-execution-guardrails | Added Agent Type guardrail profile UI coverage (collapsed editor behavior, input-type adaptation, and k-token rendering checks) | 2026-05-25 |

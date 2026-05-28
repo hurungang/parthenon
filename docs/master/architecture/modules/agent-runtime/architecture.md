@@ -2,29 +2,46 @@
 
 ```mermaid
 flowchart LR
-    CC[Control Center]
-    AR[Agent Runtime]
     CH[Communication Hub]
-    EXEC[Agent Execution Loop]
-    TOOL[Tool Call Path]
+    ORCH[Session Orchestrator]
+    PV[Guardrail Pre-Execution Validator]
+    CD[Delegation Cycle Detector]
+    RM[Runtime Guardrail Monitor]
+    FS[Guardrail Fail-Safe Handler]
+    TC[Tool and Delegation Calls]
+    CC[Control Center]
+    ST[Session status and stop reason]
 
-    CC -->|Execution trigger| AR
-    AR --> EXEC
-    EXEC --> TOOL
-    TOOL --> CH
-    AR -->|Caller: agent_runtime| CC
+    CH --> ORCH
+    ORCH --> PV
+    PV --> CD
+    CD --> RM
+    RM --> TC
+    RM -->|Guardrail exceeded| FS
+    FS --> ST
+    ORCH -->|Caller: agent_runtime| CC
 ```
 
 ```mermaid
 flowchart TB
-    AR2[Agent Runtime]
-    ARA[AR allowlist scope in Control Center]
-    CHS[Communication Hub-only scope]
-    DENY[Denied access and audit evidence]
-    DB[(Platform DB)]
+    STEP[Local or delegated step]
+    IT[Check cumulative iteration budget]
+    DEP[Check delegation depth budget]
+    DSB[Check delegated-step budget]
+    TMO[Check timeout budget]
+    TOK[Check token policy mode]
+    GO[Continue execution]
+    STOP[Deterministic guardrail stop]
 
-    AR2 --> ARA
-    AR2 -.->|Request to CH-only scope| CHS
-    CHS --> DENY
-    AR2 -.->|No direct database path| DB
+    STEP --> IT
+    IT --> DEP
+    DEP --> DSB
+    DSB --> TMO
+    TMO --> TOK
+    TOK --> GO
+    IT -->|Exceeded| STOP
+    DEP -->|Exceeded| STOP
+    DSB -->|Exceeded| STOP
+    TMO -->|Exceeded| STOP
+    TOK -->|Terminal policy stop| STOP
 ```

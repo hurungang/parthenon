@@ -30,6 +30,7 @@ import { NotFoundPage } from '../pages/NotFoundPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { PermissionsPage } from '../pages/permissions/PermissionsPage'
 import { AccessRequestsPage } from '../pages/permissions/AccessRequestsPage'
+import { SystemConfigPage } from '../pages/system/SystemConfigPage'
 import { AccessDeniedPage } from '../pages/AccessDeniedPage'
 import { getIdentityStatus } from '../api/setupApi'
 import { SetupState } from '../types/setup'
@@ -114,6 +115,7 @@ function AppRoutes() {
         <Route path="/admin/notifications/groups" element={<RecipientGroupListPage />} />
         <Route path="/admin/notifications/logs" element={<NotificationLogPage />} />
         <Route path="/observability" element={<ObservabilityDashboard />} />
+        <Route path="/system-config" element={<SystemConfigPage />} />
         <Route path="/chat/:agentTypeId?" element={<ChatPage />} />
         <Route path="/agents/:agentTypeId/chat/:sessionId" element={<ChatPage />} />
         <Route path="/permissions/access-requests" element={<AccessRequestsPage />} />

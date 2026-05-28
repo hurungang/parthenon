@@ -168,6 +168,14 @@
 - Certificate loaded from filesystem on startup; absence or corruption causes startup failure with clear error
 - Security assertion: Agent Runtime validates metadata response structure and rejects responses containing identity tokens
 
+### Execution Guardrails (add-agent-execution-guardrails)
+- Pre-execution delegation graph validation blocks direct and indirect recursion before first model or tool action
+- Runtime enforces cumulative execution ceilings for iterations, delegation depth, delegated steps, and timeout with deterministic stop reasons
+- Guardrail stop reasons remain distinct from functional runtime failures in persisted session state and logs
+- Conversational sessions surface current-session token usage and continuation hints without token-budget-only hard stop
+- Non-conversational sessions enforce token budget behavior consistently with configured fallback visibility
+- Guardrail counters and stop outcomes remain visible in execution summaries used by operators
+
 ## Test File References
 
 ### Backend — Unit Tests
@@ -251,6 +259,12 @@ This module has `has_db_changes: true`. Before running any tests:
 - Agent session executing with a passthrough-type MCP session assigned to its role → `proxy.call_tool()` invoked with agent identity JWT; no credential decryption occurs
 - Agent identity token unavailable at runtime (expired or absent) → tool call returns structured error dict; agent observe-reason-act loop continues without crashing
 
+### Execution Guardrails (add-agent-execution-guardrails)
+- Direct and indirect delegation cycles are rejected in pre-check with deterministic cycle stop classification
+- Runtime enforces bounded execution for iteration, delegation depth, delegated steps, and timeout without ambiguous terminal states
+- Guardrail stop reasons are preserved through status updates and execution logs for operator triage
+- Conversational token usage is visible in execution summary surfaces without forcing token-budget-only termination
+
 ## Edge Cases
 - Circular SOP dependencies resolved without infinite recursion
 - Double-dispatch prevented via `SKIP LOCKED`; verify session dispatched only once under concurrent dispatchers
@@ -263,6 +277,7 @@ This module has `has_db_changes: true`. Before running any tests:
 ## Test File References
 
 ### Backend Unit Tests
+- `backend/tests/unit/test_agent_guardrails.py`
 - `backend/tests/unit/test_agent_role_service.py`
 - `backend/tests/unit/test_agent_identity_service.py`
 - `backend/tests/unit/test_agent_runtime_executor.py` — includes passthrough session dispatch: `_execute_mcp_tool()` passes `agent_jwt` to proxy; structured error returned when agent JWT unavailable
@@ -305,11 +320,18 @@ This module has `has_db_changes: true`. Before running any tests:
 - `frontend/src/__tests__/AgentSessionLaunchDialog.test.tsx`
 - `frontend/src/__tests__/AgentSessionPage.test.tsx`
 - `frontend/src/__tests__/AgentTypeForm.test.tsx`
+- `frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx`
+- `frontend/src/__tests__/ConversationDialog.test.tsx`
+- `frontend/src/__tests__/LogPresenter.test.ts`
+- `frontend/src/__tests__/LogSummaryPanel.test.tsx`
 - `frontend/src/__tests__/ModelConfigListPage.test.tsx`
 - `frontend/src/__tests__/ModelConfigDialog.test.tsx`
 
 ### E2E Tests
 - `e2e/tests/agent-runtime.spec.ts` — Agent Role Management, Agent Identity Management, Agent Type Configuration, Agent Session Launch, Agent Session Status, Model Config CRUD, Agent Instance Dashboard, Conversation History Display, Agent Role Identity Constraints, Identity-First Role Selection, Real Backend Integration suites
+- `e2e/tests/agent-management.spec.ts` — guardrail editor fields and token-enforcement controls in create/edit flows
+- `e2e/tests/agent-navigation.spec.ts` — agent details dialog guardrail rendering and k-token display coverage
+- `e2e/tests/agent-logs.spec.ts` — execution summary visibility path for guardrail usage presentation
 - `e2e/tests/agent-bootstrap.spec.ts` — Agent Realm Bootstrap (Mocked and Real Keycloak Integration suites)
 - `e2e/tests/agent-a2a-communication.spec.ts` — slug validation and delegation preview coverage for A2A-related UI flows
 - `e2e/tests/comm-hub-websocket.spec.ts` — Communication Hub websocket flow coverage

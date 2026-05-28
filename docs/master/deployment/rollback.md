@@ -225,3 +225,60 @@ Run in audit mode until a clean validation window is completed, then re-attempt 
 - do not disable service certificate validation
 - do not disable deny-event telemetry during rollback
 - do not grant direct database access to Agent Runtime or Communication Hub
+
+---
+
+## Change-Specific Rollback: Agent Execution Guardrails
+
+Use this section when rolling back the `add-agent-execution-guardrails` deployment. Execute steps G1-G5 after completing Steps 1-2 of the general procedure above.
+
+### Trigger Conditions
+
+Initiate this rollback if any of the following occur after guardrail rollout:
+
+- unexpected guardrail stops on known-good workloads
+- conversational sessions hard-stop solely because token threshold is reached
+- missing or corrupted guardrail stop metadata in status or log paths
+- missing or corrupted conversational token-usage or continuation metadata
+- cross-service contract mismatch causing execution failures
+
+### Step G1 — Disable Runtime Guardrail Enforcement Flags
+
+Disable newly introduced Agent Runtime guardrail enforcement flags while keeping baseline execution available.
+
+**Completion condition:** New guardrail-triggered stops cease and baseline execution paths recover.
+
+### Step G2 — Revert Communication Hub Guardrail Forwarding Flags
+
+Revert Communication Hub guardrail forwarding and passthrough toggles to the last known-good behavior.
+
+**Completion condition:** Session outcome routing is stable and metadata forwarding no longer regresses traffic.
+
+### Step G3 — Revert Control Center Guardrail Policy and Persistence Toggles
+
+Revert Control Center guardrail policy-enforcement and persistence toggles to the previous stable mode.
+
+**Completion condition:** Policy payloads and persistence paths match last known-good expectations.
+
+### Step G4 — Redeploy Last Known-Good Versions in Reverse Rollout Order
+
+Redeploy services in this order:
+1. Agent Runtime
+2. Communication Hub
+3. Control Center
+
+**Completion condition:** All three services are healthy and contract-compatible at prior stable versions.
+
+### Step G5 — Stabilization Validation
+
+Run direct and delegated smoke sessions and verify:
+
+- guardrail stop metadata is present and parseable where expected
+- conversational sessions no longer hard-stop due to token threshold alone
+- no service acquires direct database access during rollback
+
+### Rollback Guardrails
+
+- do not grant direct database access to Agent Runtime or Communication Hub
+- do not remove stop-outcome visibility needed for audit and triage
+- keep stop-reason field compatibility stable to prevent downstream parsing regressions
