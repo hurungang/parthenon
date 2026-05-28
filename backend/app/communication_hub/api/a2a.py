@@ -80,6 +80,9 @@ async def _wait_for_receiver_result(
                         "status": "failed",
                         "error": content.get("error") or "Receiver session failed",
                         "output_data": content.get("output_data", {}),
+                        "stop_category": content.get("stop_category"),
+                        "stop_reason": content.get("stop_reason"),
+                        "stop_details": content.get("stop_details"),
                     }
                 if payload_status == "timeout":
                     return {

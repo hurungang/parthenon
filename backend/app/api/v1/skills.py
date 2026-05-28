@@ -21,6 +21,19 @@ from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
 from app.db.models.agents import AgentRoleSkill
 from app.schemas.skills import SkillCreate, SkillDetailRead, SkillRead, SkillUpdate
+from app.schemas.skills import (
+    SkillWorkflowGenerateRequest,
+    SkillWorkflowGenerateResponse,
+    SkillWorkflowPreviewRequest,
+    SkillWorkflowPreviewResponse,
+)
+from app.services.agents.workflow_authoring_service import (
+    WorkflowAuthoringError,
+    build_skill_instruction_file,
+    generate_workflow_text,
+    resolve_model_config_for_generation,
+)
+from app.services.agents.workflow_generation_settings import get_workflow_generation_model_id
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 
 logger = logging.getLogger(__name__)
@@ -208,6 +221,16 @@ _SKILL_LOAD_OPTIONS = [
 ]
 
 
+def _require_workflow_model_id() -> str:
+    model_id = get_workflow_generation_model_id()
+    if not model_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Workflow generation model is not configured. Configure it in system settings.",
+        )
+    return model_id
+
+
 @SkillRouter.get("", response_model=list[SkillRead])
 async def list_skills(
     db: DbSession,
@@ -322,6 +345,75 @@ async def update_skill(
         select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
     )
     return _build_skill_detail_read(result.scalar_one())
+
+
+@SkillRouter.post("/workflow/generate", response_model=SkillWorkflowGenerateResponse)
+async def generate_skill_workflow(
+    body: SkillWorkflowGenerateRequest,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SKILL, "update")),
+) -> SkillWorkflowGenerateResponse:
+    if not body.description.strip():
+        raise HTTPException(status_code=422, detail="Description is required to generate workflow")
+    if not body.selected_tools:
+        raise HTTPException(status_code=422, detail="Select at least one tool to generate workflow")
+
+    model_id = _require_workflow_model_id()
+    try:
+        # Ensure the selected model points to a valid configured provider.
+        await resolve_model_config_for_generation(model_id, db)
+
+        tool_lines = [
+            f"- {tool.name}: {(tool.description or 'No description').strip()}"
+            for tool in body.selected_tools
+        ]
+        user_prompt = (
+            "Business description:\n"
+            f"{body.description.strip()}\n\n"
+            "Selected tools:\n"
+            f"{'\n'.join(tool_lines)}\n\n"
+            "Write a concise execution workflow that references the selected tools."
+        )
+        workflow = await generate_workflow_text(
+            model_id=model_id,
+            system_prompt=(
+                "You author SOP/Skill workflows for enterprise agents. "
+                "When referencing skills, use their name directly (e.g. my-skill-name). Skill names are already in slug format. "
+                "Respond with workflow text only. Do not include markdown code fences."
+            ),
+            user_prompt=user_prompt,
+            db=db,
+        )
+    except (WorkflowAuthoringError, Exception) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return SkillWorkflowGenerateResponse(workflow=workflow, model_id=model_id)
+
+
+@SkillRouter.post("/workflow/preview", response_model=SkillWorkflowPreviewResponse)
+async def preview_skill_workflow(
+    body: SkillWorkflowPreviewRequest,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_SKILL, "read")),
+) -> SkillWorkflowPreviewResponse:
+    model_id = _require_workflow_model_id()
+
+    # Validate model selection is resolvable and not stale.
+    try:
+        await resolve_model_config_for_generation(model_id, db)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    selected_tools = [tool.model_dump() for tool in body.selected_tools]
+    instruction_file = build_skill_instruction_file(
+        workflow=body.workflow,
+        tools=selected_tools,
+    )
+    return SkillWorkflowPreviewResponse(
+        instruction_file=instruction_file,
+        model_id=model_id,
+        selected_tools=body.selected_tools,
+    )
 
 
 @SkillRouter.delete("/{skill_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -32,6 +32,7 @@ class ConversationTurnResponse(BaseModel):
     """Final text response for one conversation turn."""
 
     response: str
+    guardrail_usage: dict[str, Any] | None = None
 
 
 @conversation_router.post("/turn", response_model=ConversationTurnResponse)
@@ -76,7 +77,7 @@ async def execute_conversation_turn(
     key_path = str(cert_manager.key_path) if cert_manager and cert_manager.key_path else None
 
     executor = AgentRuntimeExecutor(data_client=data_client)
-    response_text = await executor.execute_conversation_turn_from_context(
+    response_text, guardrail_usage = await executor.execute_conversation_turn_from_context(
         agent_type_id=body.agent_type_id,
         agent_context=agent_context,
         model_config=model_config,
@@ -91,4 +92,4 @@ async def execute_conversation_turn(
         body.conv_session_id,
         body.agent_type_id,
     )
-    return ConversationTurnResponse(response=response_text)
+    return ConversationTurnResponse(response=response_text, guardrail_usage=guardrail_usage)

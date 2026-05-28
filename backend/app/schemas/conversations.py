@@ -53,6 +53,7 @@ class ConversationSessionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    guardrail_usage: dict[str, Any] | None = None
 
 
 class ConversationSessionDetailRead(ConversationSessionRead):

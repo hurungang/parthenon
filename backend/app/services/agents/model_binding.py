@@ -325,3 +325,49 @@ class ModelBindingLayer:
                 msg = choices[0].get("message", {})
                 return msg.get("tool_calls", [])
         return []
+
+    @staticmethod
+    def extract_usage(response: dict[str, Any], provider: ModelProvider | str) -> dict[str, Any] | None:
+        """Extract normalized token usage from provider response when available."""
+        provider_str = provider.value if isinstance(provider, ModelProvider) else provider
+
+        if provider_str in ("openai", "litellm_proxy", "azure_openai"):
+            usage = response.get("usage")
+            if not isinstance(usage, dict):
+                return None
+            prompt_tokens = usage.get("prompt_tokens")
+            completion_tokens = usage.get("completion_tokens")
+            total_tokens = usage.get("total_tokens")
+            if (
+                not isinstance(prompt_tokens, int)
+                and not isinstance(completion_tokens, int)
+                and not isinstance(total_tokens, int)
+            ):
+                return None
+            if not isinstance(total_tokens, int):
+                prompt = prompt_tokens if isinstance(prompt_tokens, int) else 0
+                completion = completion_tokens if isinstance(completion_tokens, int) else 0
+                total_tokens = prompt + completion
+            return {
+                "prompt_tokens": max(0, int(prompt_tokens or 0)),
+                "completion_tokens": max(0, int(completion_tokens or 0)),
+                "total_tokens": max(0, int(total_tokens or 0)),
+            }
+
+        if provider_str == "anthropic":
+            usage = response.get("usage")
+            if not isinstance(usage, dict):
+                return None
+            input_tokens = usage.get("input_tokens")
+            output_tokens = usage.get("output_tokens")
+            if not isinstance(input_tokens, int) and not isinstance(output_tokens, int):
+                return None
+            prompt = max(0, int(input_tokens or 0))
+            completion = max(0, int(output_tokens or 0))
+            return {
+                "prompt_tokens": prompt,
+                "completion_tokens": completion,
+                "total_tokens": prompt + completion,
+            }
+
+        return None

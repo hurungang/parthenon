@@ -159,7 +159,11 @@ class SessionDispatcher:
                     )
                     # Mark failed via CC data API — do NOT open a DB session here
                     try:
-                        await self._data_client.mark_session_failed(session_id, str(exc))
+                        await self._data_client.mark_session_failed(
+                            session_id,
+                            str(exc),
+                            stop_category="functional_failure",
+                        )
                     except Exception:
                         logger.exception(
                             "Failed to mark session %s as failed after executor error",
