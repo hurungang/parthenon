@@ -1,12 +1,19 @@
 ---
-description: Initialize the Parthenon local development environment. Sets up Keycloak realm, OIDC clients, admin user, and database roles/permissions. Idempotent - safe to run multiple times. This is a first-time setup command for new developers or when resetting the local environment.
+description: Initialize the Parthenon local development environment in dev mode: infrastructure in Docker and application services started locally via parthenon script.
 ---
 
-Initialize the Parthenon local development environment.
+Initialize the Parthenon local development environment (dev-focused).
 
 **Usage**: `/init-app`
 
-This command performs a complete local development environment initialization:
+## OS-Specific Command Notes
+
+- Windows PowerShell: use `./parthenon.ps1 ...`
+- macOS (zsh/bash): use shell-native commands for Python/venv/migrations.
+- On macOS, prefer slash commands to start app services (`/start-app --infra`, `/start-app --backend`).
+- `parthenon.ps1` is fully optimized for Windows service orchestration; use it on macOS only where explicitly noted.
+
+This command performs a complete local development setup and startup:
 - ✅ Creates Keycloak **human user realm** (`parthenon`)
 - ✅ Configures OIDC clients in human realm (`parthenon-api`, `parthenon-api-ui`)
 - ✅ Creates Keycloak **agent realm** (`ai_agents`)
@@ -14,6 +21,9 @@ This command performs a complete local development environment initialization:
 - ✅ Creates default admin user with consistent UUID
 - ✅ Seeds database with `system_admin` role and wildcard policy
 - ✅ Assigns system_admin role to admin user
+- ✅ Uses Docker only for infrastructure
+- ✅ Starts app services locally via `./parthenon.ps1 start -Services backend`
+- ✅ Provides login instructions
 
 **Safe to run multiple times** — all operations are idempotent and will skip steps already completed.
 
@@ -23,45 +33,152 @@ This command performs a complete local development environment initialization:
 
 ---
 
+## Step 0: Confirm Dev Setup Mode (Required)
+
+Start by asking via VS Code Generative UI question cards (not freeform terminal prompts):
+
+```text
+Development mode uses:
+1) Infrastructure in Docker Compose
+2) Application services in local terminals via parthenon script
+
+Proceed with this mode?
+```
+
+Implementation note:
+- Use VS Code Generative UI input collection for user-required choices in this command.
+- If user confirms dev setup mode, proceed immediately (do not ask for a second confirmation).
+
+After confirmation, continue with Steps 1-6 below.
+
+## Step 0.1: Start Infra (Docker Only)
+
+Report progress in phases:
+
+```text
+Phase 1/3: Starting infra containers
+Phase 2/3: Waiting for infra health checks
+Phase 3/3: Running initialization bootstrap
+```
+
+Start infrastructure automatically:
+
+```powershell
+./parthenon.ps1 start -Services infra
+```
+
+macOS equivalent:
+
+```bash
+/start-app --infra
+```
+
+If you prefer slash commands, this is equivalent:
+
+```powershell
+/start-app --infra
+```
+
+If startup fails, provide immediate next actions:
+
+```text
+Infra startup failed.
+Recommended checks:
+1) docker compose ps
+2) docker compose logs keycloak
+3) docker compose logs postgres
+4) Re-run /init-app
+```
+
+Then continue with Steps 1-6 below.
+
+---
+
 ## Step 1: Validate Prerequisites
 
 Before initialization, ensure the environment is ready.
 
-**Check 1: Keycloak Container Running**
+### Infra Checks (Docker)
+
+**Check A1: Keycloak Container Running**
 
 ```powershell
 $keycloakRunning = docker ps --filter "name=parthenon-keycloak" --format "{{.Names}}"
 ```
 
 **If Keycloak is NOT running:**
-- Display error: "✗ Keycloak is not running. Start infrastructure first with: `/start-app --infra` or `./parthenon.ps1 start -Services infra`"
+- Display error: "✗ Keycloak is not running. Start infrastructure with `/start-app --infra` or `./parthenon.ps1 start -Services infra`"
 - **STOP HERE** — do not proceed with initialization
 
-**Check 2: Database Accessible**
+**Check A2: Database Container Running**
 
 ```powershell
 $dbCheck = docker ps --filter "name=parthenon-postgres" --filter "status=running" --format "{{.Names}}"
 ```
 
 **If database is NOT running:**
-- Display error: "✗ PostgreSQL is not running. Start infrastructure first with: `/start-app --infra` or `./parthenon.ps1 start -Services infra`"
+- Display error: "✗ PostgreSQL is not running. Start infrastructure with `/start-app --infra` or `./parthenon.ps1 start -Services infra`"
 - **STOP HERE**
 
 **Check 3: Python Virtual Environment**
 
 ```powershell
-Test-Path ".venv\Scripts\Activate.ps1"
+(Test-Path ".venv\Scripts\Activate.ps1") -or (Test-Path ".venv/bin/activate")
+```
+
+macOS equivalent:
+
+```bash
+[[ -f .venv/bin/activate || -f .venv/Scripts/Activate.ps1 ]]
 ```
 
 **If venv doesn't exist:**
-- Display warning: "⚠ Virtual environment not found. Run: `python -m venv .venv` and `pip install -e backend/` first"
-- **STOP HERE**
+- Auto-fix by creating the venv, then continue:
+
+```powershell
+python -m venv .venv
+```
+
+macOS equivalent:
+
+```bash
+python -m venv .venv
+```
+
+**Check 4: Backend package installed in venv**
+
+```powershell
+pip show parthenon | Out-Null
+if ($LASTEXITCODE -ne 0) { Write-Host "Backend package not installed" }
+```
+
+macOS equivalent:
+
+```bash
+pip show parthenon >/dev/null || echo "Backend package not installed"
+```
+
+If missing, auto-fix by installing the editable backend package:
+
+```powershell
+pip install -e backend/
+```
+
+macOS equivalent:
+
+```bash
+pip install -e backend/
+```
+
+Then continue automatically.
 
 ---
 
 ## Step 2: Wait for Keycloak to be Fully Ready
 
 Keycloak takes time to start up. Verify it's ready to accept API calls.
+
+### Keycloak Readiness Check (Docker Infra)
 
 ```powershell
 Write-Host "Waiting for Keycloak to be ready..." -ForegroundColor Cyan
@@ -110,7 +227,14 @@ Write-Host "══════════════════════�
 Write-Host ""
 
 # Activate virtual environment
-& .venv\Scripts\Activate.ps1
+if (Test-Path ".venv\Scripts\Activate.ps1") {
+    & .venv\Scripts\Activate.ps1
+} elseif (Test-Path ".venv/bin/activate") {
+    . .venv/bin/activate
+} else {
+    Write-Host "✗ Virtual environment activation script not found" -ForegroundColor Red
+    exit 1
+}
 
 # Run initialization script
 python scripts\init-local-dev.py
@@ -118,11 +242,59 @@ python scripts\init-local-dev.py
 $exitCode = $LASTEXITCODE
 ```
 
+macOS equivalent:
+
+```bash
+source .venv/bin/activate
+python scripts/init-local-dev.py
+exitCode=$?
+```
+
 ---
 
-## Step 4: Check Initialization Results
+## Step 4: Check Initialization Results and Start App Services
 
 **If exit code is 0 (success):**
+
+Run database migrations before starting app services:
+
+```powershell
+Push-Location backend
+alembic upgrade head
+$migrationExitCode = $LASTEXITCODE
+Pop-Location
+
+if ($migrationExitCode -ne 0) {
+    Write-Host "✗ Database migration failed. Fix migration issues before starting app services." -ForegroundColor Red
+    exit $migrationExitCode
+}
+```
+
+Start backend services locally via the management script:
+
+```powershell
+./parthenon.ps1 start -Services backend
+```
+
+macOS equivalent:
+
+```bash
+/start-app --backend
+```
+
+If you prefer explicit service list, use:
+
+```powershell
+./parthenon.ps1 start -Services control-center,agent-runtime,communication-hub,frontend
+```
+
+macOS equivalent:
+
+```bash
+# Use local terminal commands or /start-app --backend
+```
+
+Then display:
 
 ```powershell
 Write-Host ""
@@ -131,8 +303,8 @@ Write-Host "  ✓ Initialization Complete!" -ForegroundColor Green
 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  1. Run database migrations: cd backend; alembic upgrade head" -ForegroundColor White
-Write-Host "  2. Start the application: /start-app" -ForegroundColor White
+Write-Host "  1. Open the frontend and complete sign-in" -ForegroundColor White
+Write-Host "  2. Optionally run system verification: /test-app" -ForegroundColor White
 Write-Host ""
 Write-Host "Admin credentials:" -ForegroundColor Cyan
 Write-Host "  Email:    admin@parthenon.local" -ForegroundColor White
@@ -142,6 +314,12 @@ Write-Host "Access the application at:" -ForegroundColor Cyan
 Write-Host "  Frontend: http://localhost:5173" -ForegroundColor White
 Write-Host "  Backend:  http://localhost:8000/docs" -ForegroundColor White
 Write-Host "  Keycloak: http://localhost:8082 (admin/admin)" -ForegroundColor White
+Write-Host ""
+Write-Host "Login flow:" -ForegroundColor Cyan
+Write-Host "  1. Open frontend URL" -ForegroundColor White
+Write-Host "  2. Click Sign In" -ForegroundColor White
+Write-Host "  3. Use admin@parthenon.local / admin" -ForegroundColor White
+Write-Host "  4. After redirect, confirm access to admin UI" -ForegroundColor White
 Write-Host ""
 ```
 
@@ -179,7 +357,11 @@ if ($verify -eq 'y') {
     Write-Host "Running verification..." -ForegroundColor Cyan
     
     # Activate venv if not already active
-    & .venv\Scripts\Activate.ps1
+    if (Test-Path ".venv\Scripts\Activate.ps1") {
+        & .venv\Scripts\Activate.ps1
+    } elseif (Test-Path ".venv/bin/activate") {
+        . .venv/bin/activate
+    }
     
     # Run diagnostic script
     python scripts\check-admin-permissions.py
@@ -188,6 +370,34 @@ if ($verify -eq 'y') {
     Write-Host "Verification complete. Check output above for any issues." -ForegroundColor Cyan
 }
 ```
+
+macOS equivalent:
+
+```bash
+read -r -p "Run verification checks? (y/n) " verify
+if [[ "$verify" == "y" ]]; then
+    source .venv/bin/activate
+    python scripts/check-admin-permissions.py
+fi
+```
+
+---
+
+## Step 6: Post-Setup Checklist
+
+Run this quick confirmation checklist:
+
+1. Confirm OIDC discovery endpoint returns 200.
+2. Confirm realms exist (`parthenon`, `ai_agents`).
+3. Confirm OIDC clients exist:
+    - `parthenon-api` (human realm)
+    - `parthenon-api-ui` (human realm)
+    - `parthenon-api` (agent realm)
+4. Confirm database has `system_admin` role and wildcard policy seeded.
+5. Confirm local services are healthy on ports 8000, 8001, 8002, and 5173.
+6. Confirm admin user can authenticate and reach frontend.
+
+If any item fails, surface the exact failed component and recommended fix.
 
 ---
 
@@ -199,6 +409,17 @@ If the user prefers, they can also use the built-in management script:
 .\parthenon.ps1 init
 ```
 
+macOS equivalent:
+
+```bash
+# Recommended flow on macOS:
+/start-app --infra
+source .venv/bin/activate
+python scripts/init-local-dev.py
+cd backend && alembic upgrade head
+/start-app --backend
+```
+
 This is equivalent but doesn't provide the interactive verification step.
 
 ---
@@ -206,7 +427,7 @@ This is equivalent but doesn't provide the interactive verification step.
 ## Troubleshooting
 
 **Issue: "Keycloak is not running"**
-- Solution: Start infrastructure first: `/start-app --infra`
+- Solution: Start infrastructure first: `./parthenon.ps1 start -Services infra`
 
 **Issue: "Admin authentication failed"**
 - Possible cause: Default Keycloak admin password changed
@@ -234,6 +455,7 @@ This is equivalent but doesn't provide the interactive verification step.
 
 - **This command is for LOCAL DEVELOPMENT ONLY** — do not use in production
 - **Idempotent**: Safe to run multiple times if setup fails or Keycloak is reset
+- **Dev-first workflow**: Docker for infra, local terminals for app services
 - **Persistent Data**: Uses Keycloak's assigned UUIDs to maintain consistency
 - **Duplicate Detection**: Script will warn about duplicate admin users with different UUIDs
 - **Manual Cleanup**: If you have duplicate admin users, use the diagnostic scripts in `scripts/` to identify and clean them up

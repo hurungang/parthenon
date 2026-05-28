@@ -63,6 +63,7 @@
 .EXAMPLE
     .\parthenon.ps1 init
     Initialize local development environment (Keycloak realm, admin user, database)
+
 #>
 
 [CmdletBinding()]
@@ -733,43 +734,151 @@ switch ($Action) {
     }
     
     'init' {
-        Write-Host "Initializing local development environment..." -ForegroundColor Cyan
+        Write-Host "Initializing local development environment (dev mode)..." -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "This will set up:" -ForegroundColor Yellow
-        Write-Host "  - Keycloak realm and OIDC clients" -ForegroundColor Yellow
-        Write-Host "  - Default admin user (admin@parthenon.local)" -ForegroundColor Yellow
-        Write-Host "  - Database roles and permissions" -ForegroundColor Yellow
+        Write-Host "This workflow uses:" -ForegroundColor Yellow
+        Write-Host "  - Infrastructure in Docker (Keycloak/PostgreSQL/Redis/OTEL)" -ForegroundColor Yellow
+        Write-Host "  - Application services in local terminals (control-center, agent-runtime, communication-hub, frontend)" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "Prerequisites:" -ForegroundColor Yellow
-        Write-Host "  - Keycloak must be running (./parthenon.ps1 start -Services infra)" -ForegroundColor Yellow
-        Write-Host "  - Database must be accessible" -ForegroundColor Yellow
+        Write-Host "Setup actions:" -ForegroundColor Yellow
+        Write-Host "  1) Ensure Docker infra is running" -ForegroundColor Yellow
+        Write-Host "  2) Run init-local-dev bootstrap" -ForegroundColor Yellow
+        Write-Host "  3) Run database migrations" -ForegroundColor Yellow
+        Write-Host "  4) Start local app services" -ForegroundColor Yellow
         Write-Host ""
-        
-        # Check if Keycloak is running
+
+        # Ensure infrastructure is running in Docker
+        $infraStatus = Get-ServiceStatus -ServiceName 'infra'
+        if (-not $infraStatus.Running) {
+            Write-Host "Infrastructure is not running. Starting infra in Docker..." -ForegroundColor Cyan
+            Start-Service -ServiceName 'infra' -ForceRestart $false
+            Write-Host ""
+        } else {
+            Write-Host "Infrastructure already running in Docker." -ForegroundColor Green
+            Write-Host ""
+        }
+
+        # Verify infra prerequisites after startup check
         $keycloakRunning = docker ps --filter "name=parthenon-keycloak" --format "{{.Names}}"
+        $postgresRunning = docker ps --filter "name=parthenon-postgres" --filter "status=running" --format "{{.Names}}"
         if (-not $keycloakRunning) {
-            Write-Host "✗ Keycloak is not running!" -ForegroundColor Red
-            Write-Host "  Start infrastructure with: ./parthenon.ps1 start -Services infra" -ForegroundColor Yellow
+            Write-Host "✗ Keycloak container is not running." -ForegroundColor Red
+            Write-Host "  Check: docker compose -f docker-compose-infra.yml ps" -ForegroundColor Yellow
             exit 1
         }
-        
+        if (-not $postgresRunning) {
+            Write-Host "✗ PostgreSQL container is not running." -ForegroundColor Red
+            Write-Host "  Check: docker compose -f docker-compose-infra.yml ps" -ForegroundColor Yellow
+            exit 1
+        }
+
         Write-Host "Running initialization script..." -ForegroundColor Cyan
         Write-Host ""
         
         # Activate venv and run init script
         Push-Location $Script:ProjectRoot
         try {
+            if (-not (Test-Path ".venv\Scripts\Activate.ps1") -and -not (Test-Path ".venv/bin/activate")) {
+                Write-Host "Python virtual environment not found. Creating .venv..." -ForegroundColor Yellow
+                python -m venv .venv
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "✗ Failed to create .venv" -ForegroundColor Red
+                    Write-Host "  Ensure Python 3 is installed and available as 'python'" -ForegroundColor Yellow
+                    exit $LASTEXITCODE
+                }
+                Write-Host "✓ Created .venv" -ForegroundColor Green
+            }
+
             if (Test-Path ".venv\Scripts\Activate.ps1") {
                 & .venv\Scripts\Activate.ps1
+            } elseif (Test-Path ".venv/bin/activate") {
+                . .venv/bin/activate
+            } else {
+                Write-Host "✗ Python virtual environment activation script not found" -ForegroundColor Red
+                exit 1
             }
+
+            # Ensure editable backend package is installed in the active venv
+            python -m pip show parthenon >$null 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Backend package missing in venv. Installing editable backend package..." -ForegroundColor Yellow
+                python -m pip install -e backend/
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "✗ Failed to install backend package with: python -m pip install -e backend/" -ForegroundColor Red
+                    exit $LASTEXITCODE
+                }
+                Write-Host "✓ Installed backend package" -ForegroundColor Green
+            }
+
             python scripts\init-local-dev.py
             $exitCode = $LASTEXITCODE
             
             if ($exitCode -eq 0) {
                 Write-Host ""
+                Write-Host "Running database migrations..." -ForegroundColor Cyan
+                Push-Location $Script:BackendDir
+                alembic upgrade head
+                $migrationExitCode = $LASTEXITCODE
+                Pop-Location
+
+                if ($migrationExitCode -ne 0) {
+                    Write-Host ""
+                    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
+                    Write-Host "  Initialization Failed During Migrations" -ForegroundColor Red
+                    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
+                    Write-Host ""
+                    Write-Host "Fix migration issues and retry:" -ForegroundColor Yellow
+                    Write-Host "  Windows PowerShell: .\parthenon.ps1 init" -ForegroundColor Yellow
+                    Write-Host "  macOS (PowerShell 7): pwsh ./parthenon.ps1 init" -ForegroundColor Yellow
+                    exit $migrationExitCode
+                }
+
+                if (-not $IsWindows) {
+                    Write-Host "" 
+                    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
+                    Write-Host "  Initialization Complete (Dev Mode)!" -ForegroundColor Green
+                    Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
+                    Write-Host ""
+                    Write-Host "macOS/Linux next steps:" -ForegroundColor Cyan
+                    Write-Host "  1) Start backend services with: /start-app --backend" -ForegroundColor White
+                    Write-Host "  2) Open frontend at: http://localhost:5173" -ForegroundColor White
+                    Write-Host ""
+                    Write-Host "Login with:" -ForegroundColor Cyan
+                    Write-Host "  Email:    admin@parthenon.local" -ForegroundColor White
+                    Write-Host "  Password: admin" -ForegroundColor White
+                    Write-Host ""
+                    Write-Host "Access URLs:" -ForegroundColor Cyan
+                    Write-Host "  Frontend: http://localhost:5173" -ForegroundColor White
+                    Write-Host "  Control Center: http://localhost:8000/docs" -ForegroundColor White
+                    Write-Host "  Keycloak: http://localhost:8082" -ForegroundColor White
+                    return
+                }
+
+                Write-Host ""
+                Write-Host "Starting local application services..." -ForegroundColor Cyan
+                foreach ($svc in @('control-center', 'agent-runtime', 'communication-hub', 'frontend')) {
+                    $svcStatus = Get-ServiceStatus -ServiceName $svc
+                    if (-not $svcStatus.Running) {
+                        Start-Service -ServiceName $svc -ForceRestart $false
+                        Write-Host ""
+                    } else {
+                        Write-Host "$($Script:ServiceConfig[$svc].Name) already running." -ForegroundColor Gray
+                    }
+                }
+
+                Write-Host ""
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
-                Write-Host "  Initialization Complete!" -ForegroundColor Green
+                Write-Host "  Initialization Complete (Dev Mode)!" -ForegroundColor Green
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
+                Write-Host ""
+                Write-Host "Login with:" -ForegroundColor Cyan
+                Write-Host "  Email:    admin@parthenon.local" -ForegroundColor White
+                Write-Host "  Password: admin" -ForegroundColor White
+                Write-Host ""
+                Write-Host "Access URLs:" -ForegroundColor Cyan
+                Write-Host "  Frontend: http://localhost:5173" -ForegroundColor White
+                Write-Host "  Control Center: http://localhost:8000/docs" -ForegroundColor White
+                Write-Host "  Keycloak: http://localhost:8082" -ForegroundColor White
             } else {
                 Write-Host ""
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red

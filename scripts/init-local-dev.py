@@ -14,6 +14,7 @@ Safe to run multiple times - will skip steps that are already complete.
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -94,13 +95,16 @@ class LocalDevInitializer:
             # Step 6: Ensure admin user exists in Keycloak
             admin_user_id = await self._ensure_admin_user_in_keycloak()
             
-            # Step 7: Initialize database (roles, policies)
+            # Step 7: Ensure database schema exists before seeding
+            self._run_migrations()
+
+            # Step 8: Initialize database (roles, policies)
             await self._initialize_database()
             
-            # Step 8: Ensure admin user in platform_users with correct sub
+            # Step 9: Ensure admin user in platform_users with correct sub
             await self._ensure_admin_in_platform_users(admin_user_id)
             
-            # Step 9: Assign system_admin role to admin user
+            # Step 10: Assign system_admin role to admin user
             await self._assign_admin_role(admin_user_id)
             
             print()
@@ -108,8 +112,9 @@ class LocalDevInitializer:
             print("✓ INITIALIZATION COMPLETE")
             print("=" * 80)
             print()
-            print("You can now start the backend with:")
-            print("  ./parthenon.ps1 start-backend")
+            print("You can now start local application services with:")
+            print("  Windows PowerShell: ./parthenon.ps1 start -Services backend")
+            print("  macOS (VS Code slash command): /start-app --backend")
             print()
             print("Admin credentials:")
             print(f"  Email:    {self.ADMIN_EMAIL}")
@@ -122,6 +127,22 @@ class LocalDevInitializer:
         except Exception as e:
             logger.exception("Initialization failed")
             raise InitializationError(f"Initialization failed: {e}")
+
+    def _run_migrations(self):
+        """Apply Alembic migrations before database initialization."""
+        logger.info("Step 6.5: Applying database migrations...")
+
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                cwd=backend_dir,
+                check=True,
+            )
+            print("  ✓ Database migrations are up to date")
+        except subprocess.CalledProcessError as exc:
+            raise InitializationError(
+                f"Database migration failed with exit code {exc.returncode}"
+            ) from exc
     
     async def _authenticate_keycloak(self):
         """Authenticate with Keycloak admin API."""
@@ -136,7 +157,9 @@ class LocalDevInitializer:
         except KeycloakAdminError as e:
             if e.error_code == "keycloak_unreachable":
                 print(f"  ✗ Keycloak is not running at {self.KEYCLOAK_BASE_URL}")
-                print(f"    Start Keycloak with: ./parthenon.ps1 start -Services keycloak")
+                print("    Start infrastructure with:")
+                print("      Windows PowerShell: ./parthenon.ps1 start -Services infra")
+                print("      macOS (VS Code slash command): /start-app --infra")
                 raise
             else:
                 print(f"  ✗ Authentication failed: {e.detail}")
@@ -170,12 +193,12 @@ class LocalDevInitializer:
         if api_client_exists:
             print("  ✓ API client 'parthenon-api' already exists in human realm")
         else:
-            await self.kc_client.create_confidential_client(
+            await self.kc_client.create_oidc_client(
                 self.admin_token,
                 self.REALM_NAME,
                 "parthenon-api",
-                "Parthenon API",
-                ["http://localhost:8000/*"]
+                ["http://localhost:8000/*"],
+                public_client=False,
             )
             print("  ✓ Created API client 'parthenon-api' in human realm")
         
@@ -188,16 +211,16 @@ class LocalDevInitializer:
         if ui_client_exists:
             print("  ✓ UI client 'parthenon-api-ui' already exists in human realm")
         else:
-            await self.kc_client.create_public_client(
+            await self.kc_client.create_oidc_client(
                 self.admin_token,
                 self.REALM_NAME,
                 "parthenon-api-ui",
-                "Parthenon UI",
                 [
                     "http://localhost:5173/*",
                     "http://localhost:4173/*",
-                    "http://localhost:3000/*"
-                ]
+                    "http://localhost:3000/*",
+                ],
+                public_client=True,
             )
             print("  ✓ Created UI client 'parthenon-api-ui' in human realm")
     
@@ -233,17 +256,17 @@ class LocalDevInitializer:
             print(f"  ✓ Agent client '{agent_client_id}' already exists in agent realm")
         else:
             # Create public client for agent OAuth flow
-            await self.kc_client.create_public_client(
+            await self.kc_client.create_oidc_client(
                 self.admin_token,
                 self.AGENT_REALM_NAME,
                 agent_client_id,
-                "Parthenon Agent OAuth Client",
                 [
                     "http://localhost:8000/api/v1/agents/oauth/callback",
                     "http://localhost:5173/agents/identities/oauth/callback",
                     "http://localhost:4173/agents/identities/oauth/callback",
                     "http://localhost:3000/agents/identities/oauth/callback",
-                ]
+                ],
+                public_client=True,
             )
             print(f"  ✓ Created agent client '{agent_client_id}' in agent realm")
     
