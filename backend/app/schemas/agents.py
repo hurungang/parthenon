@@ -14,8 +14,80 @@ from app.db.models.agents import (
     AgentJobStatus,
     AgentOutputType,
     AgentPlanStatus,
+    GuardrailConversationalContinuationPolicy,
+    GuardrailConversationalTokenVisibilityMode,
+    GuardrailTokenEnforcementMode,
+    GuardrailTokenFallbackMode,
+    SessionStopCategory,
+    SessionStopReason,
     ModelProvider,
 )
+
+_MIN_MAX_ITERATIONS = 1
+_MAX_MAX_ITERATIONS = 1000
+_MIN_MAX_DELEGATION_DEPTH = 0
+_MAX_MAX_DELEGATION_DEPTH = 32
+_MIN_MAX_DELEGATED_STEPS = 0
+_MAX_MAX_DELEGATED_STEPS = 5000
+_MIN_EXECUTION_TIMEOUT_SECONDS = 1
+_MAX_EXECUTION_TIMEOUT_SECONDS = 86400
+_MIN_TOKEN_BUDGET = 1
+_MAX_TOKEN_BUDGET = 10_000_000
+
+
+def _validate_guardrail_contract(
+    *,
+    input_type: AgentInputType,
+    guardrail_max_iterations: int,
+    guardrail_max_delegation_depth: int,
+    guardrail_max_delegated_steps: int,
+    guardrail_execution_timeout_seconds: int,
+    guardrail_token_budget: int | None,
+    guardrail_token_enforcement_mode: GuardrailTokenEnforcementMode,
+) -> None:
+    if not (_MIN_MAX_ITERATIONS <= guardrail_max_iterations <= _MAX_MAX_ITERATIONS):
+        raise ValueError(
+            f"guardrail_max_iterations must be between {_MIN_MAX_ITERATIONS} and {_MAX_MAX_ITERATIONS}"
+        )
+    if not (
+        _MIN_MAX_DELEGATION_DEPTH
+        <= guardrail_max_delegation_depth
+        <= _MAX_MAX_DELEGATION_DEPTH
+    ):
+        raise ValueError(
+            f"guardrail_max_delegation_depth must be between {_MIN_MAX_DELEGATION_DEPTH} and {_MAX_MAX_DELEGATION_DEPTH}"
+        )
+    if not (
+        _MIN_MAX_DELEGATED_STEPS
+        <= guardrail_max_delegated_steps
+        <= _MAX_MAX_DELEGATED_STEPS
+    ):
+        raise ValueError(
+            f"guardrail_max_delegated_steps must be between {_MIN_MAX_DELEGATED_STEPS} and {_MAX_MAX_DELEGATED_STEPS}"
+        )
+    if not (
+        _MIN_EXECUTION_TIMEOUT_SECONDS
+        <= guardrail_execution_timeout_seconds
+        <= _MAX_EXECUTION_TIMEOUT_SECONDS
+    ):
+        raise ValueError(
+            "guardrail_execution_timeout_seconds must be between "
+            f"{_MIN_EXECUTION_TIMEOUT_SECONDS} and {_MAX_EXECUTION_TIMEOUT_SECONDS}"
+        )
+    if guardrail_token_budget is not None and not (
+        _MIN_TOKEN_BUDGET <= guardrail_token_budget <= _MAX_TOKEN_BUDGET
+    ):
+        raise ValueError(
+            f"guardrail_token_budget must be between {_MIN_TOKEN_BUDGET} and {_MAX_TOKEN_BUDGET} when provided"
+        )
+
+    if (
+        input_type == AgentInputType.conversation
+        and guardrail_token_enforcement_mode == GuardrailTokenEnforcementMode.enforce
+    ):
+        raise ValueError(
+            "Conversational agent types cannot use hard token enforcement mode; use observe mode"
+        )
 
 
 # ── Plan / Topology Schemas ────────────────────────────────────────────────────
@@ -250,6 +322,22 @@ class AgentIdentityOAuthAuthorizeResponse(BaseModel):
     authorization_url: str
 
 
+class WorkflowGenerationModelOption(BaseModel):
+    model_id: str
+    config_id: uuid.UUID
+    config_display_name: str
+    provider_type: ModelProvider
+
+
+class WorkflowGenerationModelConfigRead(BaseModel):
+    selected_model_id: str | None = None
+    options: list[WorkflowGenerationModelOption]
+
+
+class WorkflowGenerationModelConfigUpdate(BaseModel):
+    model_id: str | None = None
+
+
 # ── Agent Job Schemas ──────────────────────────────────────────────────────────
 
 
@@ -264,6 +352,9 @@ class AgentJobStatusRead(BaseModel):
     id: uuid.UUID
     agent_type_id: uuid.UUID
     status: AgentJobStatus
+    stop_category: SessionStopCategory | None = None
+    stop_reason: SessionStopReason | None = None
+    stop_details: dict[str, Any] | None = None
     started_at: datetime | None
     completed_at: datetime | None
     error_message: str | None
@@ -278,6 +369,9 @@ class AgentJobRead(BaseModel):
     triggered_by_user_id: uuid.UUID | None
     input_data: dict[str, Any] | None
     status: AgentJobStatus
+    stop_category: SessionStopCategory | None = None
+    stop_reason: SessionStopReason | None = None
+    stop_details: dict[str, Any] | None = None
     started_at: datetime | None
     completed_at: datetime | None
     output_data: dict[str, Any] | None
@@ -392,6 +486,36 @@ class AgentTypeCreate(BaseModel):
     output_type: AgentOutputType = AgentOutputType.auto
     output_schema: dict[str, Any] | None = None
     primary_sop_id: uuid.UUID | None = None
+    guardrail_max_iterations: int = 10
+    guardrail_max_delegation_depth: int = 3
+    guardrail_max_delegated_steps: int = 20
+    guardrail_execution_timeout_seconds: int = 300
+    guardrail_token_budget: int | None = None
+    guardrail_token_enforcement_mode: GuardrailTokenEnforcementMode = (
+        GuardrailTokenEnforcementMode.observe
+    )
+    guardrail_token_fallback_mode: GuardrailTokenFallbackMode = (
+        GuardrailTokenFallbackMode.observe_and_log
+    )
+    guardrail_conversational_token_visibility_mode: GuardrailConversationalTokenVisibilityMode = (
+        GuardrailConversationalTokenVisibilityMode.enabled
+    )
+    guardrail_conversational_continuation_policy: GuardrailConversationalContinuationPolicy = (
+        GuardrailConversationalContinuationPolicy.allow
+    )
+
+    @model_validator(mode="after")
+    def _validate_guardrails(self) -> "AgentTypeCreate":
+        _validate_guardrail_contract(
+            input_type=self.input_type,
+            guardrail_max_iterations=self.guardrail_max_iterations,
+            guardrail_max_delegation_depth=self.guardrail_max_delegation_depth,
+            guardrail_max_delegated_steps=self.guardrail_max_delegated_steps,
+            guardrail_execution_timeout_seconds=self.guardrail_execution_timeout_seconds,
+            guardrail_token_budget=self.guardrail_token_budget,
+            guardrail_token_enforcement_mode=self.guardrail_token_enforcement_mode,
+        )
+        return self
 
 
 class AgentTypeUpdate(BaseModel):
@@ -410,6 +534,15 @@ class AgentTypeUpdate(BaseModel):
     output_type: AgentOutputType | None = None
     output_schema: dict[str, Any] | None = None
     primary_sop_id: uuid.UUID | None = None
+    guardrail_max_iterations: int | None = None
+    guardrail_max_delegation_depth: int | None = None
+    guardrail_max_delegated_steps: int | None = None
+    guardrail_execution_timeout_seconds: int | None = None
+    guardrail_token_budget: int | None = None
+    guardrail_token_enforcement_mode: GuardrailTokenEnforcementMode | None = None
+    guardrail_token_fallback_mode: GuardrailTokenFallbackMode | None = None
+    guardrail_conversational_token_visibility_mode: GuardrailConversationalTokenVisibilityMode | None = None
+    guardrail_conversational_continuation_policy: GuardrailConversationalContinuationPolicy | None = None
 
 
 class AgentTypeRead(BaseModel):
@@ -428,6 +561,15 @@ class AgentTypeRead(BaseModel):
     output_type: AgentOutputType
     output_schema: dict[str, Any] | None
     primary_sop_id: uuid.UUID | None
+    guardrail_max_iterations: int
+    guardrail_max_delegation_depth: int
+    guardrail_max_delegated_steps: int
+    guardrail_execution_timeout_seconds: int
+    guardrail_token_budget: int | None
+    guardrail_token_enforcement_mode: GuardrailTokenEnforcementMode
+    guardrail_token_fallback_mode: GuardrailTokenFallbackMode
+    guardrail_conversational_token_visibility_mode: GuardrailConversationalTokenVisibilityMode
+    guardrail_conversational_continuation_policy: GuardrailConversationalContinuationPolicy
     created_at: datetime
     updated_at: datetime
     plan: AgentPlanRead | None = None
@@ -463,6 +605,15 @@ class AgentTypeRead(BaseModel):
                 "output_type": obj.output_type,
                 "output_schema": obj.output_schema,
                 "primary_sop_id": obj.primary_sop_id,
+                "guardrail_max_iterations": obj.guardrail_max_iterations,
+                "guardrail_max_delegation_depth": obj.guardrail_max_delegation_depth,
+                "guardrail_max_delegated_steps": obj.guardrail_max_delegated_steps,
+                "guardrail_execution_timeout_seconds": obj.guardrail_execution_timeout_seconds,
+                "guardrail_token_budget": obj.guardrail_token_budget,
+                "guardrail_token_enforcement_mode": obj.guardrail_token_enforcement_mode,
+                "guardrail_token_fallback_mode": obj.guardrail_token_fallback_mode,
+                "guardrail_conversational_token_visibility_mode": obj.guardrail_conversational_token_visibility_mode,
+                "guardrail_conversational_continuation_policy": obj.guardrail_conversational_continuation_policy,
                 "created_at": obj.created_at,
                 "updated_at": obj.updated_at,
                 "plan": plan,

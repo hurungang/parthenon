@@ -182,6 +182,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("identity_setup_complete", "setup_complete"),
     )
+    workflow_generation_model_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("workflow_generation_model_id"),
+    )
 
     # Credential Vault — must be exactly 32 bytes for AES-256
     credential_vault_key: str = Field(default="change-me-32-byte-key-for-aes256!")

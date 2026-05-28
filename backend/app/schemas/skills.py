@@ -1,9 +1,10 @@
 """Pydantic v2 schemas for Skills and SOPs."""
+import re
 import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, StringConstraints, model_validator
+from pydantic import BaseModel, StringConstraints, field_validator, model_validator
 from typing import Annotated
 from sqlalchemy import inspect as sa_inspect
 
@@ -16,6 +17,13 @@ class SkillCreate(BaseModel):
     instructions: str | None = None
     tool_ids: list[uuid.UUID] = []
 
+    @field_validator("name")
+    @classmethod
+    def name_must_be_slug(cls, v: str) -> str:
+        if not re.match(r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$', v):
+            raise ValueError("Name must be slug format: lowercase letters, digits, and hyphens only (e.g. my-skill-name)")
+        return v
+
 
 class SkillUpdate(BaseModel):
     name: str | None = None
@@ -23,6 +31,13 @@ class SkillUpdate(BaseModel):
     instructions: str | None = None
     tool_ids: list[uuid.UUID] | None = None
     is_active: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_be_slug(cls, v: str | None) -> str | None:
+        if v is not None and not re.match(r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$', v):
+            raise ValueError("Name must be slug format: lowercase letters, digits, and hyphens only")
+        return v
 
 
 class SkillRead(BaseModel):
@@ -53,6 +68,35 @@ class SkillDetailRead(SkillRead):
     instructions: str | None = None
 
 
+class SkillWorkflowToolInput(BaseModel):
+    id: uuid.UUID | None = None
+    name: str
+    description: str | None = None
+    input_schema: dict[str, Any] | None = None
+
+
+class SkillWorkflowGenerateRequest(BaseModel):
+    description: str
+    selected_tools: list[SkillWorkflowToolInput]
+
+
+class SkillWorkflowGenerateResponse(BaseModel):
+    workflow: str
+    model_id: str
+
+
+class SkillWorkflowPreviewRequest(BaseModel):
+    workflow: str
+    description: str | None = None
+    selected_tools: list[SkillWorkflowToolInput] = []
+
+
+class SkillWorkflowPreviewResponse(BaseModel):
+    instruction_file: str
+    model_id: str
+    selected_tools: list[SkillWorkflowToolInput]
+
+
 class SopStepCreate(BaseModel):
     order: int
     step_type: SopStepType = SopStepType.skill_invocation
@@ -78,10 +122,48 @@ class SopStepRead(BaseModel):
     created_at: datetime
 
 
+class SopWorkflowStepInput(BaseModel):
+    order: int
+    step_type: SopStepType
+    skill_id: uuid.UUID | None = None
+    target_agent_type_id: uuid.UUID | None = None
+    name: str | None = None
+    description: str | None = None
+
+
+class SopWorkflowGenerateRequest(BaseModel):
+    description: str
+    steps: list[SopWorkflowStepInput]
+
+
+class SopWorkflowGenerateResponse(BaseModel):
+    workflow: str
+    model_id: str
+
+
+class SopWorkflowPreviewRequest(BaseModel):
+    workflow: str
+    description: str | None = None
+    steps: list[SopWorkflowStepInput] = []
+
+
+class SopWorkflowPreviewResponse(BaseModel):
+    instruction_file: str
+    model_id: str
+    steps: list[SopWorkflowStepInput]
+
+
 class SopCreate(BaseModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=200)]
     description: str | None = None
     instructions: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_be_slug(cls, v: str) -> str:
+        if not re.match(r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$', v):
+            raise ValueError("Name must be slug format: lowercase letters, digits, and hyphens only (e.g. onboard-new-user)")
+        return v
 
 
 class SopUpdate(BaseModel):
@@ -89,6 +171,13 @@ class SopUpdate(BaseModel):
     description: str | None = None
     instructions: str | None = None
     is_active: bool | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_be_slug(cls, v: str | None) -> str | None:
+        if v is not None and not re.match(r'^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$', v):
+            raise ValueError("Name must be slug format: lowercase letters, digits, and hyphens only")
+        return v
 
 
 class SopRead(BaseModel):

@@ -279,16 +279,28 @@ class ControlCenterDataClient:
         )
 
     async def mark_session_failed(
-        self, session_id: uuid.UUID, error_message: str
+        self,
+        session_id: uuid.UUID,
+        error_message: str,
+        stop_category: str | None = None,
+        stop_reason: str | None = None,
+        stop_details: dict[str, Any] | None = None,
     ) -> None:
         """Transition a session to failed and record the error.
 
         Calls ``PATCH /internal/data/sessions/{session_id}/status``.
         """
-        await self._patch(
-            f"/sessions/{session_id}/status",
-            {"status": "failed", "error_message": error_message},
-        )
+        payload: dict[str, Any] = {
+            "status": "failed",
+            "error_message": error_message,
+        }
+        if stop_category is not None:
+            payload["stop_category"] = stop_category
+        if stop_reason is not None:
+            payload["stop_reason"] = stop_reason
+        if stop_details is not None:
+            payload["stop_details"] = stop_details
+        await self._patch(f"/sessions/{session_id}/status", payload)
 
     async def submit_result(
         self, session_id: uuid.UUID, output_data: dict[str, Any]

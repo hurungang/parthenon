@@ -77,6 +77,7 @@ class ConversationSession(Base):
         nullable=False,
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    guardrail_usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     turns: Mapped[list["ConversationTurn"]] = relationship(

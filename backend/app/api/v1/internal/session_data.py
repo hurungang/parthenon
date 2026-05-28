@@ -68,6 +68,9 @@ class SessionResponse(BaseModel):
     completed_at: datetime | None
     output_data: dict | None
     error_message: str | None
+    stop_category: str | None
+    stop_reason: str | None
+    stop_details: dict | None
     conversation_history: list | None
     created_at: datetime
 
@@ -115,6 +118,9 @@ class SessionStatusUpdateRequest(BaseModel):
     status: Literal["running", "completed", "failed"]
     output_data: dict | None = None
     error_message: str | None = None
+    stop_category: str | None = None
+    stop_reason: str | None = None
+    stop_details: dict | None = None
 
 
 class SessionStatusUpdateResponse(BaseModel):
@@ -166,6 +172,7 @@ class ConversationTurnAppendRequest(BaseModel):
     agent_reply: str
     is_first_message: bool = False
     first_user_message: str | None = None
+    guardrail_usage: dict[str, Any] | None = None
 
 
 class ConversationTurnAppendResponse(BaseModel):
@@ -251,6 +258,9 @@ async def get_session(
         completed_at=job.completed_at,
         output_data=job.output_data,
         error_message=job.error_message,
+        stop_category=(job.stop_category.value if job.stop_category else None),
+        stop_reason=(job.stop_reason.value if job.stop_reason else None),
+        stop_details=job.stop_details,
         conversation_history=job.conversation_history,
         created_at=job.created_at,
     )
@@ -510,7 +520,12 @@ async def update_session_status(
     Agent Runtime calls this endpoint to report execution progress without
     direct database access.
     """
-    from app.db.models.agents import AgentJob, AgentJobStatus
+    from app.db.models.agents import (
+        AgentJob,
+        AgentJobStatus,
+        SessionStopCategory,
+        SessionStopReason,
+    )
 
     job = await db.get(AgentJob, session_id)
     if job is None:
@@ -525,11 +540,20 @@ async def update_session_status(
         job.completed_at = now
         if body.output_data is not None:
             job.output_data = body.output_data
+        job.stop_category = None
+        job.stop_reason = None
+        job.stop_details = None
     elif body.status == "failed":
         job.status = AgentJobStatus.failed
         job.completed_at = now
         if body.error_message is not None:
             job.error_message = body.error_message
+        if body.stop_category is not None:
+            job.stop_category = SessionStopCategory(body.stop_category)
+        if body.stop_reason is not None:
+            job.stop_reason = SessionStopReason(body.stop_reason)
+        if body.stop_details is not None:
+            job.stop_details = body.stop_details
 
     await db.flush()
     await db.commit()
@@ -549,6 +573,9 @@ async def update_session_status(
                 "status": "failed",
                 "error": body.error_message or "Receiver session failed",
                 "output_data": body.output_data or {},
+                "stop_category": body.stop_category,
+                "stop_reason": body.stop_reason,
+                "stop_details": body.stop_details,
             },
         )
 
@@ -795,9 +822,12 @@ async def append_conversation_turn(
     store = ConversationStore()
     await store.add_turn(conv_session_id, TurnRole.agent, body.agent_reply, db)
 
+    conv_session = await db.get(ConversationSession, conv_session_id)
+    if conv_session is not None and body.guardrail_usage is not None:
+        conv_session.guardrail_usage = body.guardrail_usage
+
     title: str | None = None
     if body.is_first_message and body.first_user_message:
-        conv_session = await db.get(ConversationSession, conv_session_id)
         agent_type_id = conv_session.agent_type_id if conv_session else None
         try:
             namer = SessionAutoNamer()

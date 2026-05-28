@@ -105,7 +105,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
             )
 
             # Persist turns, call LLM, optionally auto-name
-            agent_reply, session_title = await _process_message(
+            agent_reply, session_title, guardrail_usage = await _process_message(
                 conv_session_id=conv_session_id,
                 user_message=user_message,
                 is_first_message=(message_count == 1),
@@ -134,6 +134,11 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                     {"type": "title_update", "title": session_title}
                 )
 
+            if guardrail_usage:
+                await websocket.send_json(
+                    {"type": "guardrail_update", "guardrail_usage": guardrail_usage}
+                )
+
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected: session=%s", session_id)
     except Exception as exc:
@@ -145,17 +150,19 @@ async def _process_message(
     user_message: str,
     is_first_message: bool,
     app: Any,
-) -> tuple[str, str | None]:
+) -> tuple[str, str | None, dict[str, Any] | None]:
     """
     Persist user turn, call LLM, persist agent turn, optionally auto-name the session.
 
     Returns:
-        (agent_reply, session_title) — session_title is set only on the first message.
+        (agent_reply, session_title, guardrail_usage) — session_title is set only on the first message.
     """
     data_client: ControlCenterDataClient | None = getattr(app.state, "data_client", None)
     if data_client is None:
         logger.error("Control Center data client is unavailable in Communication Hub app state")
-        return "Service temporarily unavailable. Please try again.", None
+        return "Service temporarily unavailable. Please try again.", None, None
+
+    guardrail_usage: dict[str, Any] | None = None
 
     prepared = await data_client.prepare_conversation_turn(conv_session_id, user_message)
 
@@ -166,7 +173,7 @@ async def _process_message(
     if no_agent_message:
         agent_reply = str(no_agent_message)
     elif agent_type_id_raw:
-        agent_reply = await _call_llm(
+        agent_reply, guardrail_usage = await _call_llm(
             conv_session_id=conv_session_id,
             agent_type_id=uuid.UUID(str(agent_type_id_raw)),
             messages=prepared_messages,
@@ -180,9 +187,10 @@ async def _process_message(
         agent_reply=agent_reply,
         is_first_message=is_first_message,
         first_user_message=user_message if is_first_message else None,
+        guardrail_usage=guardrail_usage,
     )
     session_title = appended.get("title")
-    return agent_reply, (str(session_title) if session_title else None)
+    return agent_reply, (str(session_title) if session_title else None), guardrail_usage
 
 
 async def _call_llm(
@@ -190,7 +198,7 @@ async def _call_llm(
     agent_type_id: uuid.UUID,
     messages: list[dict[str, str]],
     app: Any,
-) -> str:
+) -> tuple[str, dict[str, Any] | None]:
     """Execute one conversation turn using the deep agent framework.
 
     Returns the agent's text response, or a friendly error string on failure.
@@ -232,7 +240,7 @@ async def _call_llm(
 
     except ModelBindingError as exc:
         logger.warning("Model binding error for session %s: %s", conv_session_id, exc)
-        return f"Unable to process your message: {exc}"
+        return f"Unable to process your message: {exc}", None
     except Exception as exc:
         logger.error(
             "LLM call error for session %s: %s",
@@ -240,7 +248,7 @@ async def _call_llm(
             exc,
             exc_info=True,
         )
-        return "An error occurred while processing your message. Please try again."
+        return "An error occurred while processing your message. Please try again.", None
 
 
 async def _delegate_conversation_turn_to_agent_runtime(
@@ -248,7 +256,7 @@ async def _delegate_conversation_turn_to_agent_runtime(
     conv_session_id: uuid.UUID,
     agent_type_id: uuid.UUID,
     messages: list[dict[str, str]],
-) -> str:
+) -> tuple[str, dict[str, Any] | None]:
     """Call Agent Runtime to execute one conversation turn.
 
     Communication Hub owns websocket transport but delegates execution logic to
@@ -286,6 +294,6 @@ async def _delegate_conversation_turn_to_agent_runtime(
         response = await client.post(endpoint, json=payload, headers=headers)
         response.raise_for_status()
         body = response.json()
-        return str(body.get("response") or "")
+        return str(body.get("response") or ""), body.get("guardrail_usage")
 
 
