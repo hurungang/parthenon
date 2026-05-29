@@ -5,43 +5,51 @@ flowchart LR
     CH[Communication Hub]
     ORCH[Session Orchestrator]
     PV[Guardrail Pre-Execution Validator]
-    CD[Delegation Cycle Detector]
+    WDG[Workflow Draft Generator]
+    WPC[Workflow Preview Composer]
+    PGS[PlanGenerationService]
+    RIB[RuntimeInstructionBuilder]
+    SOP{SOP names in system instruction?}
+    DSOP[Default SOP fallback]
     RM[Runtime Guardrail Monitor]
     FS[Guardrail Fail-Safe Handler]
     TC[Tool and Delegation Calls]
-    CC[Control Center]
-    ST[Session status and stop reason]
+    ST[Workflow status and stop reason]
 
     CH --> ORCH
     ORCH --> PV
-    PV --> CD
-    CD --> RM
+    ORCH --> WDG
+    ORCH --> WPC
+    WDG --> PGS
+    WPC --> RIB
+    PGS --> SOP
+    RIB --> SOP
+    SOP -->|No| DSOP
+    SOP -->|Yes| RM
+    DSOP --> RM
     RM --> TC
     RM -->|Guardrail exceeded| FS
     FS --> ST
-    ORCH -->|Caller: agent_runtime| CC
+    ST --> CH
 ```
 
 ```mermaid
 flowchart TB
-    STEP[Local or delegated step]
-    IT[Check cumulative iteration budget]
-    DEP[Check delegation depth budget]
-    DSB[Check delegated-step budget]
-    TMO[Check timeout budget]
-    TOK[Check token policy mode]
-    GO[Continue execution]
-    STOP[Deterministic guardrail stop]
+    SI[System instruction]
+    SN{Named SOP found?}
+    NSOP[Referenced SOP context]
+    DSOP[Default SOP context]
+    PGS[PlanGenerationService]
+    RIB[RuntimeInstructionBuilder]
+    OUT[Workflow output]
 
-    STEP --> IT
-    IT --> DEP
-    DEP --> DSB
-    DSB --> TMO
-    TMO --> TOK
-    TOK --> GO
-    IT -->|Exceeded| STOP
-    DEP -->|Exceeded| STOP
-    DSB -->|Exceeded| STOP
-    TMO -->|Exceeded| STOP
-    TOK -->|Terminal policy stop| STOP
+    SI --> SN
+    SN -->|Yes| NSOP
+    SN -->|No| DSOP
+    NSOP --> PGS
+    DSOP --> PGS
+    NSOP --> RIB
+    DSOP --> RIB
+    PGS --> OUT
+    RIB --> OUT
 ```

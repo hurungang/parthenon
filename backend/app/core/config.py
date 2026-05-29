@@ -94,10 +94,13 @@ class TelemetrySettings(BaseModel):
     log_levels: dict[str, str] = Field(
         default_factory=lambda: {
             "root": "INFO",
-            "httpx": "WARNING",
-            "httpcore": "WARNING",
         }
     )
+
+    # Dedicated control for httpx / httpcore log verbosity.
+    # Defaults to WARNING (silent in normal operation).
+    # Set TELEMETRY__HTTP_CLIENT_LOG_LEVEL=DEBUG to see full HTTP wire traffic.
+    http_client_log_level: str = Field(default="WARNING")
 
     @field_validator("log_levels", mode="before")
     @classmethod
@@ -110,6 +113,17 @@ class TelemetrySettings(BaseModel):
                     f"Must be one of: {', '.join(sorted(valid_levels))}"
                 )
         return {k: lv.upper() for k, lv in v.items()}
+
+    @field_validator("http_client_log_level", mode="before")
+    @classmethod
+    def validate_http_client_log_level(cls, v: str) -> str:
+        valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if v.upper() not in valid_levels:
+            raise ValueError(
+                f"Invalid http_client_log_level '{v}'. "
+                f"Must be one of: {', '.join(sorted(valid_levels))}"
+            )
+        return v.upper()
 
 
 def _identity_yaml_path() -> str:

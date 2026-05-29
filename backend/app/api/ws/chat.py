@@ -3,7 +3,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
@@ -17,6 +17,20 @@ from app.services.agents.model_binding import ModelBindingError
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter(tags=["WebSocket"])
+
+
+def _build_chat_status_event(
+    status_value: str,
+    agent_type: str | None = None,
+    tool_name: str | None = None,
+) -> dict[str, str]:
+    """Build a normalized websocket status event payload for chat UI."""
+    payload = {"status": status_value}
+    if agent_type:
+        payload["agent_type"] = agent_type
+    if tool_name:
+        payload["tool_name"] = tool_name
+    return payload
 
 
 class WebSocketServer:
@@ -96,7 +110,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                 continue
 
             message_count += 1
-            logger.info(
+            logger.debug(
                 "Conversation user prompt received: message=%d session=%s length=%d",
                 message_count,
                 session_id,
@@ -104,12 +118,30 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                 extra={"data": {"user_prompt": user_message}},
             )
 
+            await websocket.send_json(
+                {
+                    "type": "chat_status",
+                    **_build_chat_status_event("thinking"),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+
+            async def send_status_event(status_event: dict[str, str]) -> None:
+                await websocket.send_json(
+                    {
+                        "type": "chat_status",
+                        **status_event,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+
             # Persist turns, call LLM, optionally auto-name
-            agent_reply, session_title, guardrail_usage = await _process_message(
+            agent_reply, session_title, guardrail_usage, status_events = await _process_message(
                 conv_session_id=conv_session_id,
                 user_message=user_message,
                 is_first_message=(message_count == 1),
                 app=websocket.app,
+                on_status_event=send_status_event,
             )
 
             # Send agent response back to client
@@ -120,7 +152,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             )
-            logger.info(
+            logger.debug(
                 "Conversation agent response sent: message=%d session=%s length=%d",
                 message_count,
                 session_id,
@@ -150,19 +182,21 @@ async def _process_message(
     user_message: str,
     is_first_message: bool,
     app: Any,
-) -> tuple[str, str | None, dict[str, Any] | None]:
+    on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+) -> tuple[str, str | None, dict[str, Any] | None, list[dict[str, str]]]:
     """
     Persist user turn, call LLM, persist agent turn, optionally auto-name the session.
 
     Returns:
-        (agent_reply, session_title, guardrail_usage) — session_title is set only on the first message.
+        (agent_reply, session_title, guardrail_usage, status_events) — session_title is set only on the first message.
     """
     data_client: ControlCenterDataClient | None = getattr(app.state, "data_client", None)
     if data_client is None:
         logger.error("Control Center data client is unavailable in Communication Hub app state")
-        return "Service temporarily unavailable. Please try again.", None, None
+        return "Service temporarily unavailable. Please try again.", None, None, []
 
     guardrail_usage: dict[str, Any] | None = None
+    status_events: list[dict[str, str]] = []
 
     prepared = await data_client.prepare_conversation_turn(conv_session_id, user_message)
 
@@ -173,11 +207,12 @@ async def _process_message(
     if no_agent_message:
         agent_reply = str(no_agent_message)
     elif agent_type_id_raw:
-        agent_reply, guardrail_usage = await _call_llm(
+        agent_reply, guardrail_usage, status_events = await _call_llm(
             conv_session_id=conv_session_id,
             agent_type_id=uuid.UUID(str(agent_type_id_raw)),
             messages=prepared_messages,
             app=app,
+            on_status_event=on_status_event,
         )
     else:
         agent_reply = "No model is configured for this agent."
@@ -190,7 +225,7 @@ async def _process_message(
         guardrail_usage=guardrail_usage,
     )
     session_title = appended.get("title")
-    return agent_reply, (str(session_title) if session_title else None), guardrail_usage
+    return agent_reply, (str(session_title) if session_title else None), guardrail_usage, status_events
 
 
 async def _call_llm(
@@ -198,13 +233,14 @@ async def _call_llm(
     agent_type_id: uuid.UUID,
     messages: list[dict[str, str]],
     app: Any,
-) -> tuple[str, dict[str, Any] | None]:
+    on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+) -> tuple[str, dict[str, Any] | None, list[dict[str, str]]]:
     """Execute one conversation turn using the deep agent framework.
 
     Returns the agent's text response, or a friendly error string on failure.
     """
     try:
-        logger.info(
+        logger.debug(
             "Conversation message history assembled for session %s",
             conv_session_id,
             extra={
@@ -236,11 +272,23 @@ async def _call_llm(
             conv_session_id=conv_session_id,
             agent_type_id=agent_type_id,
             messages=messages,
+            on_status_event=on_status_event,
         )
 
     except ModelBindingError as exc:
         logger.warning("Model binding error for session %s: %s", conv_session_id, exc)
-        return f"Unable to process your message: {exc}", None
+        return (
+            f"Unable to process your message: {exc}",
+            None,
+            [_build_chat_status_event("timeout_or_failed")],
+        )
+    except httpx.TimeoutException as exc:
+        logger.warning("Conversation timeout for session %s: %s", conv_session_id, exc)
+        return (
+            "An error occurred while processing your message. Please try again.",
+            None,
+            [_build_chat_status_event("timeout_or_failed")],
+        )
     except Exception as exc:
         logger.error(
             "LLM call error for session %s: %s",
@@ -248,7 +296,11 @@ async def _call_llm(
             exc,
             exc_info=True,
         )
-        return "An error occurred while processing your message. Please try again.", None
+        return (
+            "An error occurred while processing your message. Please try again.",
+            None,
+            [_build_chat_status_event("timeout_or_failed")],
+        )
 
 
 async def _delegate_conversation_turn_to_agent_runtime(
@@ -256,7 +308,8 @@ async def _delegate_conversation_turn_to_agent_runtime(
     conv_session_id: uuid.UUID,
     agent_type_id: uuid.UUID,
     messages: list[dict[str, str]],
-) -> tuple[str, dict[str, Any] | None]:
+    on_status_event: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+) -> tuple[str, dict[str, Any] | None, list[dict[str, str]]]:
     """Call Agent Runtime to execute one conversation turn.
 
     Communication Hub owns websocket transport but delegates execution logic to
@@ -272,6 +325,7 @@ async def _delegate_conversation_turn_to_agent_runtime(
         "conv_session_id": str(conv_session_id),
         "agent_type_id": str(agent_type_id),
         "messages": messages,
+        "stream_status_events": bool(on_status_event),
     }
 
     cert_manager = getattr(app.state, "certificate_manager", None)
@@ -291,9 +345,71 @@ async def _delegate_conversation_turn_to_agent_runtime(
             headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
 
     async with httpx.AsyncClient(**client_kwargs) as client:
+        if on_status_event is not None:
+            status_events: list[dict[str, str]] = []
+            final_response = ""
+            final_guardrail_usage: dict[str, Any] | None = None
+
+            async with client.stream("POST", endpoint, json=payload, headers=headers) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    chunk = json.loads(line)
+                    chunk_type = chunk.get("type")
+                    if chunk_type == "status_event":
+                        item = chunk.get("event")
+                        if not isinstance(item, dict):
+                            continue
+                        status_value = item.get("status")
+                        if not isinstance(status_value, str) or not status_value:
+                            continue
+                        agent_type = item.get("agent_type")
+                        tool_name = item.get("tool_name")
+                        normalized = _build_chat_status_event(
+                            status_value,
+                            agent_type if isinstance(agent_type, str) and agent_type else None,
+                            tool_name if isinstance(tool_name, str) and tool_name else None,
+                        )
+                        status_events.append(normalized)
+                        await on_status_event(normalized)
+                        continue
+
+                    if chunk_type == "final":
+                        final_response = str(chunk.get("response") or "")
+                        guardrail_raw = chunk.get("guardrail_usage")
+                        final_guardrail_usage = (
+                            guardrail_raw if isinstance(guardrail_raw, dict) else None
+                        )
+                        break
+
+                    if chunk_type == "error":
+                        raise RuntimeError("Agent Runtime streaming error")
+
+            return final_response, final_guardrail_usage, status_events
+
         response = await client.post(endpoint, json=payload, headers=headers)
         response.raise_for_status()
         body = response.json()
-        return str(body.get("response") or ""), body.get("guardrail_usage")
+        status_events_raw = body.get("status_events")
+        status_events: list[dict[str, str]] = []
+        if isinstance(status_events_raw, list):
+            for item in status_events_raw:
+                if not isinstance(item, dict):
+                    continue
+                status_value = item.get("status")
+                if not isinstance(status_value, str) or not status_value:
+                    continue
+                agent_type = item.get("agent_type")
+                tool_name = item.get("tool_name")
+                status_events.append(
+                    _build_chat_status_event(
+                        status_value,
+                        agent_type if isinstance(agent_type, str) and agent_type else None,
+                        tool_name if isinstance(tool_name, str) and tool_name else None,
+                    )
+                )
+
+        return str(body.get("response") or ""), body.get("guardrail_usage"), status_events
 
 

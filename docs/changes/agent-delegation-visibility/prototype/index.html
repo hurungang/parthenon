@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Delegation Visibility Prototype</title>
+  <style>
+    :root {
+      --bg: #f2f5f2;
+      --panel: #f9fbf8;
+      --ink: #17261d;
+      --muted: #5d6f63;
+      --line: #d6dfd7;
+      --brand: #256a45;
+      --brand-soft: #d8ebe0;
+      --warn: #8a3d24;
+      --warn-soft: #f9dfd4;
+      --ok: #155238;
+      --ok-soft: #d8f0e4;
+      --waiting: #815f1a;
+      --waiting-soft: #f8ecc9;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 10%, #ffffff 0%, transparent 45%),
+        radial-gradient(circle at 85% 90%, #dceadf 0%, transparent 40%),
+        var(--bg);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(980px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fefefe 0%, var(--panel) 100%);
+      box-shadow: 0 20px 50px rgba(24, 44, 28, 0.12);
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #eef4ee;
+    }
+
+    .title {
+      font-size: 15px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #33483a;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid #b4c6b9;
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: #ffffff;
+      color: #233629;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: #78947f;
+      transform: translateY(-1px);
+    }
+
+    button.primary {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+
+    .chat {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 440px;
+    }
+
+    .bubble {
+      max-width: min(82%, 680px);
+      border-radius: 14px;
+      padding: 10px 12px;
+      line-height: 1.35;
+      font-size: 14px;
+    }
+
+    .user {
+      align-self: flex-end;
+      background: #d7ebe0;
+      border: 1px solid #b9d8c6;
+    }
+
+    .agent {
+      align-self: flex-start;
+      background: #f7faf7;
+      border: 1px solid #d4ded7;
+    }
+
+    .status-card {
+      align-self: flex-start;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 10px 12px;
+      display: none;
+      gap: 10px;
+      align-items: center;
+      max-width: min(90%, 760px);
+      width: fit-content;
+    }
+
+    .status-card.show {
+      display: inline-flex;
+    }
+
+    .status-card.thinking {
+      background: var(--brand-soft);
+      border-color: #a9cfb8;
+      color: var(--brand);
+    }
+
+    .status-card.delegating {
+      background: #e3eef8;
+      border-color: #bdd2ea;
+      color: #234a73;
+    }
+
+    .status-card.waiting {
+      background: var(--waiting-soft);
+      border-color: #e3cb89;
+      color: var(--waiting);
+    }
+
+    .status-card.completed {
+      background: var(--ok-soft);
+      border-color: #a8dbc2;
+      color: var(--ok);
+    }
+
+    .status-card.failed {
+      background: var(--warn-soft);
+      border-color: #e7b19a;
+      color: var(--warn);
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      position: relative;
+      opacity: 0.9;
+    }
+
+    .spin::after {
+      content: "";
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      width: 10px;
+      height: 10px;
+      border-top: 2px solid currentColor;
+      border-right: 2px solid transparent;
+      border-bottom: 2px solid transparent;
+      border-left: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    .dots {
+      display: inline-flex;
+      gap: 3px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.25;
+      animation: pulse 1.2s infinite;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    .check::after {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 2px;
+      width: 5px;
+      height: 9px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(40deg);
+    }
+
+    .warn::after {
+      content: "!";
+      position: absolute;
+      left: 5px;
+      top: -1px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .legend {
+      border-top: 1px solid var(--line);
+      background: #f3f7f3;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 12px 16px;
+      line-height: 1.45;
+    }
+
+    .legend strong {
+      color: #2c4134;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+      40% { opacity: 0.85; transform: translateY(-2px); }
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .chat {
+        min-height: 500px;
+      }
+
+      .bubble,
+      .status-card {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="title">Delegation Visibility Prototype</div>
+      <div class="controls">
+        <button class="primary" id="btn-success">Play Success Flow</button>
+        <button id="btn-timeout">Play Timeout Flow</button>
+        <button id="btn-reset">Reset</button>
+      </div>
+    </header>
+
+    <section class="chat" id="chat">
+      <div class="bubble user">Please generate a compliance summary and route unresolved items for review.</div>
+
+      <div class="status-card" id="status-card">
+        <span class="icon spin" id="status-icon"></span>
+        <span id="status-text">Thinking...</span>
+      </div>
+
+      <div class="bubble agent" id="final-reply" style="display:none;">
+        Completed. I delegated to risk-auditor, received results, and prepared a concise summary with next actions.
+      </div>
+    </section>
+
+    <footer class="legend">
+      <strong>UX intent:</strong> show immediate thinking feedback, then exact text <strong>Delegating to agent &lt;agent_type&gt;</strong>, then waiting feedback until response or timeout. This prototype is UI-only and does not represent runtime logic changes.
+    </footer>
+  </main>
+
+  <script>
+    const card = document.getElementById("status-card");
+    const icon = document.getElementById("status-icon");
+    const text = document.getElementById("status-text");
+    const finalReply = document.getElementById("final-reply");
+
+    let timerIds = [];
+
+    function clearTimers() {
+      timerIds.forEach((id) => window.clearTimeout(id));
+      timerIds = [];
+    }
+
+    function setStatus(mode, label, animatedDots = false) {
+      card.className = "status-card show " + mode;
+      icon.className = "icon";
+
+      if (mode === "thinking" || mode === "waiting" || mode === "delegating") {
+        icon.classList.add("spin");
+      }
+      if (mode === "completed") {
+        icon.classList.add("check");
+      }
+      if (mode === "failed") {
+        icon.classList.add("warn");
+      }
+
+      text.textContent = label;
+      if (animatedDots) {
+        text.innerHTML = label + '<span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
+      }
+    }
+
+    function resetView() {
+      clearTimers();
+      card.className = "status-card";
+      icon.className = "icon spin";
+      text.textContent = "Thinking...";
+      finalReply.style.display = "none";
+    }
+
+    function playSuccessFlow() {
+      resetView();
+      setStatus("thinking", "Thinking", true);
+
+      timerIds.push(window.setTimeout(() => {
+        setStatus("delegating", "Delegating to agent risk-auditor");
+      }, 1200));
+
+      timerIds.push(window.setTimeout(() => {
+        setStatus("waiting", "Waiting for delegated response", true);
+      }, 2500));
+
+      timerIds.push(window.setTimeout(() => {
+        setStatus("completed", "Delegation completed by risk-auditor");
+        finalReply.style.display = "block";
+      }, 4200));
+    }
+
+    function playTimeoutFlow() {
+      resetView();
+      setStatus("thinking", "Thinking", true);
+
+      timerIds.push(window.setTimeout(() => {
+        setStatus("delegating", "Delegating to agent risk-auditor");
+      }, 1200));
+
+      timerIds.push(window.setTimeout(() => {
+        setStatus("waiting", "Waiting for delegated response", true);
+      }, 2500));
+
+      timerIds.push(window.setTimeout(() => {
+        setStatus("failed", "Delegation timed out. Please try again.");
+      }, 4600));
+    }
+
+    document.getElementById("btn-success").addEventListener("click", playSuccessFlow);
+    document.getElementById("btn-timeout").addEventListener("click", playTimeoutFlow);
+    document.getElementById("btn-reset").addEventListener("click", resetView);
+
+    playSuccessFlow();
+  </script>
+</body>
+</html>

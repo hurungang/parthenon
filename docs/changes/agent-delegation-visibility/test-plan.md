@@ -2,13 +2,17 @@
 
 ## 1. Test Strategy
 
-This change touches three distinct layers that must all be validated independently and together:
+This change is a UX visibility adjustment only. Testing must validate user-visible status behavior while explicitly avoiding assumptions about core runtime logic rewrites.
 
-- **Backend unit tests (pytest)** — verify `SopOrchestrator` emits the correct `BrokerMessage` at each delegation lifecycle stage, and that `BrokerMessage` serialises/deserialises `message_type` with proper backward-compatible defaulting.
-- **Frontend component/unit tests (Vitest)** — verify `DelegationStatusCard` renders the correct visual state for each `DelegationStage`, and that `useChatSession` correctly parses delegation WebSocket events into `ChatMessage` entries with `role: 'delegation'`.
-- **End-to-end tests (Playwright)** — verify the complete flow from the browser perspective: user sends a message, delegation events appear inline in the chat stream with correct stage transitions, and existing chat messages are unaffected.
+- Backend tests confirm that existing conversation/delegation pathways still emit or forward the status signals needed by the UI and honor timeout boundaries.
+- Frontend tests validate rendering and text behavior for three user-visible states in conversational flow: thinking, delegating, waiting (plus clear terminal status on timeout/failure).
+- E2E tests validate end-user visibility in the real conversation surface, including non-regression for normal chat messages.
+- Manual verification is required for animation clarity (thinking/waiting indicators), because visual pacing and perceived responsiveness are not fully captured by unit assertions.
 
-All three layers must pass before the change is considered complete. A passing frontend test suite alone does not confirm backend event publishing works, and passing backend tests alone do not confirm the UI renders correctly.
+Definition of done for this change:
+- Backend, frontend, and e2e suites covering this scope all pass.
+- Every PRD acceptance criterion is mapped to at least one scenario and verified by at least one test layer.
+- No behavior change is required for delegation decisioning, orchestration, identity, or authorization logic.
 
 ---
 
@@ -16,158 +20,125 @@ All three layers must pass before the change is considered complete. A passing f
 
 | Area | Why It Is Critical |
 |---|---|
-| `BrokerMessage.message_type` serialisation and backward compatibility | Old messages without the field must not break client parsing or existing chat rendering. This is the highest-risk change in the entire feature. |
-| `SopOrchestrator` delegation event publishing | If events are not published, the entire feature is silently missing — no error, just nothing shown to the user. |
-| `useChatSession` delegation event parsing | If parsing fails, delegation messages are silently dropped or cause unhandled errors. |
-| `DelegationStatusCard` stage rendering | Each stage (`started`, `in_progress`, `completed`, `failed`) must show the correct icon, colour, and human-readable text. |
-| `ChatPage` delegation vs. chat rendering split | Messages with `role: 'delegation'` must render `DelegationStatusCard`; messages with `role: 'user'` or `role: 'agent'` must continue using existing renderers. |
-| WebSocket forwarding (`_forward_broker_events`) | Events must be forwarded to the WebSocket client concurrently with normal agent replies and must not block or delay chat messages. |
-| Task lifecycle (creation and cancellation) | The asyncio task must be cancelled and awaited on every WebSocket exit path to prevent resource leaks. |
+| Conversational thinking indicator visibility | Users must see immediate activity feedback while the conversational agent is processing before delegation starts. |
+| Delegation start label format | UX requires exact wording: `Delegating to agent <agent_type>` for clear handoff context. |
+| Delegation target derivation from tool name | Internal delegation naming may use `agent____<slug>` (with model/tool alias `agent__<agent_type>`), but the displayed label must be normalized to the user-readable target format. |
+| Waiting indicator during delegated execution | Users need continuous feedback until delegated response or timeout to prevent perceived hangs. |
+| Timeout/failure terminal state | Waiting must always resolve to a clear end state; no indefinite loading indicators are acceptable. |
+| Visibility consistency in conversational views | Status messaging must appear where users converse, not in separate technical panels. |
+| Non-regression of existing chat UX | User/agent chat messages and send flow must remain unchanged by this visibility-focused update. |
 
 ---
 
 ## 3. Critical Scenarios
 
-### 3.1 Delegation Started Event Received by Frontend
+### S1. Thinking Indicator Before Delegation
 
-**WHEN** a primary agent begins delegating to a sub-agent and the backend publishes a `delegation / started` `BrokerMessage` to the session channel,  
-**THEN** the frontend WebSocket handler receives the event, `useChatSession` appends a `ChatMessage` with `role: 'delegation'` and `stage: Started` to the messages array, and `ChatPage` renders a `DelegationStatusCard` inline in the message stream showing a spinner and the delegated agent's name without any page reload.
+**WHEN** a user sends a conversational prompt and the primary agent is processing before any delegation starts,  
+**THEN** the chat view displays a visible thinking animation until either delegation begins or a direct response is produced.
 
----
+### S2. Delegation Start Label Uses Required Format
 
-### 3.2 Progress Events Appear in Real Time
+**WHEN** delegation begins for an internal target identified as `agent____<slug>` (or surfaced alias `agent__<agent_type>`),  
+**THEN** the chat status text is shown exactly as `Delegating to agent <agent_type>` in the conversational stream.
 
-**WHEN** the sub-agent emits one or more `in_progress` delegation events during its execution,  
-**THEN** each event is forwarded over the WebSocket concurrently with any normal agent chat messages, the messages array grows with additional `role: 'delegation'` entries, and the user sees the in-progress state update in the chat stream without waiting for the sub-agent to finish.
+### S3. Waiting Indicator Persists Until Resolution
 
----
+**WHEN** the delegation start state is shown,  
+**THEN** a waiting animation remains visible until a delegated response arrives or a timeout is reached.
 
-### 3.3 Delegation Completion Updates the Card
+### S4. Timeout Produces Final Visible State
 
-**WHEN** the sub-agent finishes successfully and the backend publishes a `delegation / completed` `BrokerMessage`,  
-**THEN** the frontend renders a `DelegationStatusCard` with `stage: Completed`, displaying a check-mark icon and a clear completion label that includes the agent name, replacing the in-progress visual state for that delegation.
+**WHEN** delegated execution exceeds timeout,  
+**THEN** the UI transitions from waiting to a clear final timeout/failure status and does not remain in indefinite waiting.
 
----
+### S5. Delegation Failure Produces Final Visible State
 
-### 3.4 Delegation Failure Shows Error State
+**WHEN** delegated execution fails before completion,  
+**THEN** the user sees a clear final failure status in the same conversational view.
 
-**WHEN** sub-agent execution raises an exception and the backend publishes a `delegation / failed` `BrokerMessage` (before re-raising the error),  
-**THEN** the frontend renders a `DelegationStatusCard` with `stage: Failed`, displaying a warning icon and a user-readable failure message, so the user never sees an indefinite spinner.
+### S6. Non-Technical Readability
 
----
+**WHEN** users view thinking/delegating/waiting/final states,  
+**THEN** labels are concise and understandable without technical terminology or log inspection.
 
-### 3.5 Backward Compatibility — Existing Chat Messages Still Render Correctly
+### S7. Visibility in All Conversational Surfaces Where Delegation Occurs
 
-**WHEN** the WebSocket receives a message that was produced before this change and therefore lacks the `message_type` field,  
-**THEN** `useChatSession` treats the message as `message_type: "chat"` (the default), does not attempt to parse `content` as a delegation event, and renders the message through the existing chat message path without error or visual regression.
+**WHEN** delegation is triggered from supported conversational UI surfaces,  
+**THEN** the same status experience (thinking, delegation label, waiting, terminal outcome) is visible consistently in those surfaces.
 
-> **Risk note:** This scenario is the single highest-risk compatibility gap. `BrokerMessage.from_dict` must default `message_type` to `"chat"` when the key is absent. Both the backend unit tests and a dedicated frontend Vitest test must cover this case explicitly before the change ships.
+### S8. Regression Guard for Core Chat Experience
 
----
-
-### 3.6 Multiple Concurrent Delegations
-
-**WHEN** a session triggers two or more delegation steps in rapid succession (e.g., a multi-step SOP that delegates to Agent A then Agent B),  
-**THEN** each delegation produces its own independent sequence of `ChatMessage` entries in the messages array, the cards for both delegations are visible in the chat stream in chronological order, and the state of one delegation does not interfere with the display state of another.
-
----
-
-### 3.7 WebSocket Reconnection During Active Delegation
-
-**WHEN** the user's WebSocket connection drops while a delegation is in the `started` or `in_progress` state and then reconnects,  
-**THEN** the `started` card that was already rendered remains visible in the message history (it was already appended), the asyncio task for the previous connection is cancelled cleanly without a resource leak, and any events published after reconnection are forwarded correctly over the new connection.
+**WHEN** standard non-delegated chat messages are sent and received,  
+**THEN** existing message rendering, input behavior, and conversation flow remain unchanged.
 
 ---
 
 ## 4. Edge Cases & Risks
 
-### BrokerMessage Backward Compatibility (Highest Risk)
-
-Messages stored in Redis or arriving from older backend instances will not contain a `message_type` key. If `from_dict` does not default the field, the deserialization will raise a validation error and break the WebSocket handler for all sessions on that pod. The backend unit test for `BrokerMessage` must include an explicit test with a dict that has no `message_type` key and assert the resulting object has `message_type == "chat"`.
-
-### WebSocket Task Lifecycle
-
-The `_forward_broker_events` task must be cancelled on every WebSocket exit path: clean disconnect, protocol error, and unhandled exception. If cancellation is not awaited, the task continues holding a Redis subscription, leaking memory and connection slots. The backend unit test for `websocket_chat` must verify the task is cancelled after the connection closes, including in error paths.
-
-### Sub-Agent Failure with No Progress Events
-
-If the A2A HTTP call to the sub-agent raises immediately (e.g., network timeout before any response), there will be a `started` event but no `in_progress` events before the `failed` event. The `DelegationStatusCard` must handle the transition from `started` directly to `failed` without requiring an intermediate `in_progress` entry.
-
-### Rapid-Succession Delegations
-
-If a SOP delegates to multiple agents in a tight loop, the Redis pub/sub channel may receive interleaved events for different delegation stages. Because each event carries `agent_type_slug` and `stage`, the frontend must not assume events arrive strictly sequenced. Each event is an independent immutable message in the array; the card for each message renders only its own event's stage without shared mutable state.
-
-### `DelegationStatusCard` Rendered with Missing `delegationEvent`
-
-If a `ChatMessage` with `role: 'delegation'` is received but `delegationEvent` is `undefined` (e.g., malformed content that failed JSON parse), `DelegationStatusCard` must not crash the chat view. It should render a safe fallback or nothing rather than an unhandled exception that blanks the conversation.
-
-### i18n Coverage
-
-All human-readable strings rendered by `DelegationStatusCard` must use `t()` keys. Hard-coded English strings are a convention violation. The Vitest test must render the component in at least one locale to confirm no missing translation keys cause runtime errors.
+- Rapid delegation completion: delegation may complete quickly after start; UI must still render a readable handoff transition instead of flickering or skipping directly with no visibility.
+- Consecutive delegations in one conversation: each delegation must show its own start/wait/final progression without state bleed between turns.
+- Timeout and response race: if a response arrives near timeout boundary, terminal state resolution must be deterministic and user-visible.
+- Agent type formatting risk: deriving display text from `agent____<slug>` and/or alias `agent__<agent_type>` must not leak raw internal tokens or malformed labels to users; normalization/mapping must still show `Delegating to agent <agent_type>`.
+- Reconnect/reload during waiting: conversation should not return to an ambiguous loading state with no terminal outcome indicator.
+- i18n consistency risk: status text should remain readable and consistent through translation keys used in conversational UI components.
 
 ---
 
 ## 5. Acceptance Criteria Checklist
 
-These map directly to the PRD acceptance criteria and are expressed as observable user outcomes.
+| PRD Acceptance Criterion | Scenario Coverage | Primary Test Layers |
+|---|---|---|
+| While the primary conversational agent is processing, the front chatbox shows a visible thinking indicator. | S1 | Frontend, E2E |
+| When delegation starts, the chat displays the label exactly in the format: `Delegating to agent <agent_type>` after any internal naming normalization/mapping. | S2 | Frontend, E2E |
+| After delegation begins, the chat shows a waiting indicator until a delegated response is received or a timeout occurs. | S3, S4 | Frontend, E2E, Backend timeout boundary regression |
+| If delegated execution times out or fails, users see a clear final status state and are not left in an indefinite waiting state. | S4, S5 | Frontend, E2E, Backend timeout/failure pathway regression |
+| Delegation-related status messages are understandable to non-technical users and consistently visible in conversational views where delegation occurs. | S6, S7 | Frontend, E2E, Manual UX validation |
+| The required user experience is limited to simple conversational status visibility and does not require altering core delegation or runtime business logic. | S8 (plus scope guard in strategy and regression) | Backend regression, Frontend regression, E2E regression |
 
-- [ ] A delegation status indicator appears in the chat stream immediately when delegation starts — before the delegated agent has finished any work.
-- [ ] The delegation status card explicitly shows the delegated agent's name in all three stages (started, in-progress, completed).
-- [ ] While the sub-agent is running, the card shows a visually distinct in-progress state (spinner or similar) so users know the task is still active.
-- [ ] When the sub-agent finishes, the card changes to a clear completion state (check-mark or similar), confirming that delegation has ended.
-- [ ] All three delegation states (started, in-progress, completed) are understandable to a non-technical user reading them in the chat view without requiring external logs or a separate dashboard.
-- [ ] Delegation cards appear in the same conversation view that shows the primary agent's messages — no separate panel or navigation required.
-- [ ] Key delegated activities (in-progress steps) are surfaced as visible chat entries, not buried in a separate log, but do not disrupt reading the primary conversation.
-- [ ] If the sub-agent fails, the card shows a clear failure state instead of leaving the user with an indefinite spinner.
-- [ ] Existing user and agent chat messages are unaffected by the change — they render identically to pre-change behaviour.
+Checklist:
+- [x] AC1 verified by at least one frontend and one e2e scenario.
+- [x] AC2 verified with exact string assertion for delegation label format after internal-name normalization/mapping.
+- [x] AC3 verified for both success path and timeout boundary.
+- [x] AC4 verified for timeout and explicit failure path.
+- [x] AC5 verified for readability and cross-surface consistency.
+- [x] AC6 verified by regression coverage confirming no core runtime behavior rewrite assumptions.
 
 ---
 
 ## 6. Test File References
 
-Test implementation should be distributed across all three test layers defined in `docs/config.yaml` under `source.tests`.
+The following files are in scope for implementing and validating this narrowed UX adjustment.
 
-### Backend — `backend/tests/` (pytest)
+### Backend (pytest)
 
-- Unit tests for `BrokerMessage`:
-  - Serialises `message_type` correctly in `to_dict`.
-  - Deserialises `message_type` correctly in `from_dict`.
-  - **Backward compatibility**: `from_dict` with a dict lacking `message_type` produces `message_type == "chat"`.
-- Unit tests for `DelegationStage` and `DelegationEvent`:
-  - Each enum member serialises to the expected string value.
-  - `DelegationEvent` round-trips through JSON without data loss.
-- Unit tests for `SopOrchestrator._execute_step` (agent_delegation branch):
-  - With a mock broker supplied: asserts `publish` is called three times (started, completed, failed paths) with the correct `message_type`, `stage`, `agent_type_slug`, and `agent_type_name`.
-  - With no broker supplied: asserts no publish calls are made and existing callers are unaffected.
-- Integration/functional tests for `_forward_broker_events` and `websocket_chat`:
-  - Task is created when the WebSocket connects and cancelled when it disconnects.
-  - A delegation event published to the session channel is received by the WebSocket client.
+- `backend/tests/unit/test_fix_support_role_conversation_delegation_tools.py`
+  - Existing delegation wait behavior and delegated response timing regression anchor.
+- `backend/tests/unit/test_fix_20260521_tool_routing_and_chat_timeout.py`
+  - Existing timeout boundary coverage relevant to waiting-until-timeout UX expectations.
+- `backend/tests/unit/test_fix_20260521_192300_ws_chat_runtime_boundary.py`
+  - Existing runtime-boundary regression guard to ensure no core runtime logic shift in chat path.
+- `backend/tests/unit/test_ws_delegation_visibility.py` (new)
+  - Add focused coverage for conversation-channel status event forwarding required by thinking/delegating/waiting/final UI states.
 
-### Frontend — `frontend/src/__tests__/` (Vitest)
+### Frontend (Vitest)
 
-- `DelegationStatusCard` component tests:
-  - Renders a spinner-style icon for `stage: Started` and `stage: InProgress`.
-  - Renders a check-mark icon for `stage: Completed`.
-  - Renders a warning icon for `stage: Failed`.
-  - Includes the agent name from `agentTypeName` in the rendered text for all stages.
-  - Does not crash when `delegationEvent` is `undefined`.
-  - Uses `t()` for all visible strings (no hard-coded English).
-- `useChatSession` hook tests:
-  - A WebSocket message with `message_type: "delegation"` appends a `ChatMessage` with `role: 'delegation'` and a correctly parsed `delegationEvent`.
-  - A WebSocket message **without** `message_type` (backward-compatibility case) is treated as a normal chat message and does not produce a `role: 'delegation'` entry.
-  - A WebSocket message with `message_type: "chat"` continues to produce the existing `ChatMessage` format unchanged.
-- `ChatPage` rendering tests:
-  - A `messages` array containing a mix of `role: 'user'`, `role: 'agent'`, and `role: 'delegation'` entries renders `DelegationStatusCard` only for delegation entries.
-  - Existing chat message renderers are not invoked for delegation entries.
+- `frontend/src/__tests__/ConversationDialog.test.tsx`
+  - Existing conversational UI behavior tests; extend with status visibility assertions.
+- `frontend/src/__tests__/useChatSession.test.ts`
+  - Existing chat-session hook test anchor; extend for delegation status event handling.
+- `frontend/src/__tests__/AgentSessionPage.test.tsx`
+  - Regression coverage for mixed message rendering around conversational status updates.
+- `frontend/src/__tests__/ConversationDelegationVisibility.test.tsx` (new)
+  - Add explicit assertions for: thinking animation visibility, exact `Delegating to agent <agent_type>` label, waiting animation lifecycle, and terminal timeout/failure visibility.
 
-### E2E — `e2e/tests/` (Playwright)
+### E2E (Playwright)
 
-- Full delegation visibility flow:
-  - User sends a message that triggers an agent delegation.
-  - The chat stream shows a `DelegationStatusCard` with the sub-agent's name in the `started` state without a page reload.
-  - The card transitions to `completed` after the sub-agent finishes.
-  - Existing user and agent messages above the delegation card remain visually unchanged.
-- Delegation failure flow (if a controllable failure scenario is available in the test environment):
-  - A failed delegation shows the failure state card rather than a spinner.
-- Backward-compatibility regression:
-  - A session that receives only chat messages (no delegation events) renders the conversation identically to pre-change behaviour with no visual artifacts.
+- `e2e/tests/chat.spec.ts`
+  - Existing baseline chat rendering and send-flow regression anchor.
+- `e2e/tests/conversations.spec.ts`
+  - Existing conversation-view regression anchor for message history stability.
+- `e2e/tests/agent-a2a-communication.spec.ts`
+  - Existing delegation-related flow anchor; extend to conversational visibility assertions where applicable.
+- `e2e/tests/conversation-delegation-visibility.spec.ts` (new)
+  - Add end-user scenarios for S1-S7 with success and timeout/failure outcomes in conversational UI.

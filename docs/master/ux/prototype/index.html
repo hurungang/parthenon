@@ -431,12 +431,86 @@ strong{font-weight:600}
 <!-- ═══════════════════════════════ VIEW: MODEL CONFIGS ═══════════════════════════════ -->
 <div id="view-model-configs" class="view">
   <div class="view-header">
-    <div><h2>Model Configs</h2><div class="view-desc">Configure LLM providers and models</div></div>
+    <div><h2>Model Configs</h2><div class="view-desc">Configure model providers and workflow generation settings</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-model-config')">+ Create Model Config</button>
   </div>
-  <div class="empty-state">
-    <div class="empty-icon">🎛️</div>
-    <h3>No Model Configs</h3>
-    <p>Configure model access for your agents.</p>
+
+  <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;align-items:start">
+    <div class="card">
+      <div class="card-header"><h3>Configured Model Providers</h3></div>
+      <div class="card-body" style="padding:0">
+        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+          <table>
+            <thead><tr><th>Name</th><th>Provider</th><th>Enabled Models</th><th>Credentials</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>OpenAI Production</strong></td>
+                <td><span class="chip chip-blue">openai</span></td>
+                <td><span class="chip chip-gray">gpt-5.4-mini</span> <span class="chip chip-gray">gpt-5.4</span></td>
+                <td><span class="chip chip-green">Configured</span></td>
+              </tr>
+              <tr>
+                <td><strong>Anthropic Primary</strong></td>
+                <td><span class="chip chip-purple">anthropic</span></td>
+                <td><span class="chip chip-gray">claude-sonnet-4</span></td>
+                <td><span class="chip chip-green">Configured</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>System Configuration</h3></div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Workflow Generation</label>
+          <div class="form-hint" style="margin-top:0">Select the AI model used for Skill and SOP workflow generation and preview.</div>
+        </div>
+        <div class="form-group">
+          <label>Generation Model</label>
+          <select id="wf-system-model" class="form-control" onchange="wfSetModelFromSelect(this.value)"></select>
+          <div class="form-hint">Options are loaded from configured model providers.</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="wfSaveSystemModel()">Save</button>
+          <button class="btn btn-secondary" onclick="wfSyncPreviewHeader()">Refresh Preview Header</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
+    <div class="card">
+      <div class="card-header"><h3>Skill Workflow Authoring</h3></div>
+      <div class="card-body">
+        <div class="text-secondary text-sm" style="margin-bottom:10px">Create, edit, and preview workflow text with AI from selected MCP tools.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="wfOpenEditor('skill')">Open Skill Editor</button>
+          <button class="btn btn-secondary btn-sm" onclick="wfOpenPreviewOnly('skill')">Open Preview</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>SOP Workflow Authoring</h3></div>
+      <div class="card-body">
+        <div class="text-secondary text-sm" style="margin-bottom:10px">Create, edit, and preview workflow text with AI from ordered SOP steps, including delegation.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="wfOpenEditor('sop')">Open SOP Editor</button>
+          <button class="btn btn-secondary btn-sm" onclick="wfOpenPreviewOnly('sop')">Open Preview</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Agent Types Default SOP</h3></div>
+      <div class="card-body">
+        <div class="text-secondary text-sm" style="margin-bottom:10px">Default SOP is available for all input types and required only for no-input agents.</div>
+        <button class="btn btn-secondary btn-sm" onclick="openModal('modal-agent-type')">Open Agent Type Form</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3941,6 +4015,285 @@ function toggleCredentials(val) {
     </div>
   </div>
 </div>
+
+<!-- MODEL CONFIG MODAL -->
+<div id="modal-model-config" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Create Model Configuration</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Display Name</label>
+          <input class="form-control" value="OpenAI Production">
+        </div>
+        <div class="form-group">
+          <label>Provider Type</label>
+          <select class="form-control">
+            <option selected>openai</option>
+            <option>anthropic</option>
+            <option>litellm_proxy</option>
+            <option>azure_openai</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>API Base URL</label>
+        <input class="form-control" placeholder="Optional — leave blank to use provider default">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>API Key</label>
+        <input type="password" class="form-control" value="••••••••••••••••">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-model-config')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW: SKILL EDITOR MODAL -->
+<div id="modal-wf-skill-editor" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Skill Editor</h3>
+      <button class="modal-close" onclick="closeModal('modal-wf-skill-editor')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="wf-skill-error" class="alert alert-warning" style="display:none"></div>
+      <div class="form-group">
+        <label>Name</label>
+        <input id="wf-skill-name" class="form-control" value="vendor-risk-summary-skill">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="wf-skill-description" class="form-control" rows="2">Summarize vendor risk posture from approved evidence sources.</textarea>
+      </div>
+      <div class="form-group">
+        <label>Workflow</label>
+        <textarea id="wf-skill-workflow" class="form-control" rows="7">1. Query approved risk registry sources.
+2. Normalize findings by severity and date.
+3. Produce concise risk summary with traceable evidence citations.</textarea>
+        <div class="form-hint">Describe how this skill should execute using the selected tools.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="wfGenerate('skill')">Generate Workflow with AI</button>
+        <button class="btn btn-secondary btn-sm" onclick="wfPreview('skill')">Preview Workflow</button>
+      </div>
+      <div class="inline-form">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Select MCP Tools</div>
+        <label class="checkbox-item"><input type="checkbox" class="wf-skill-tool" value="risk_registry.search" checked>risk_registry.search</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-skill-tool" value="policy_docs.fetch" checked>policy_docs.fetch</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-skill-tool" value="incident_feed.lookup">incident_feed.lookup</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wf-skill-editor')">Close</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-wf-skill-editor')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW: SOP EDITOR MODAL -->
+<div id="modal-wf-sop-editor" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>SOP Editor</h3>
+      <button class="modal-close" onclick="closeModal('modal-wf-sop-editor')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="wf-sop-error" class="alert alert-warning" style="display:none"></div>
+      <div class="form-group">
+        <label>Name</label>
+        <input id="wf-sop-name" class="form-control" value="quarterly-access-recertification">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="wf-sop-description" class="form-control" rows="2">Coordinate access review, delegate approvals, and persist audit evidence.</textarea>
+      </div>
+      <div class="form-group">
+        <label>Workflow</label>
+        <textarea id="wf-sop-workflow" class="form-control" rows="7">1. Validate request scope and review period.
+2. Route reviews by ownership domain.
+3. Delegate unresolved approvals to designated team leads.
+4. Persist audit summary and close procedure.</textarea>
+        <div class="form-hint">Describe the end-to-end SOP workflow and intent.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="wfGenerate('sop')">Generate Workflow with AI</button>
+        <button class="btn btn-secondary btn-sm" onclick="wfPreview('sop')">Preview Workflow</button>
+      </div>
+      <div class="inline-form">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Ordered Steps</div>
+        <label class="checkbox-item"><input type="checkbox" class="wf-sop-step" value="Collect access inventory" checked>Skill Invocation: Collect access inventory</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-sop-step" value="Delegate ownership review" checked>Agent Delegation: Delegate ownership review</label>
+        <label class="checkbox-item"><input type="checkbox" class="wf-sop-step" value="Publish compliance report" checked>Skill Invocation: Publish compliance report</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wf-sop-editor')">Close</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-wf-sop-editor')">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKFLOW PREVIEW MODAL -->
+<div id="modal-wf-preview" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="wf-preview-title">Workflow Preview (Model: -)</h3>
+      <button class="modal-close" onclick="closeModal('modal-wf-preview')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-hint" style="margin-bottom:8px">Single formatted instruction file preview.</div>
+      <pre id="wf-preview-content" style="margin:0;padding:12px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;white-space:pre-wrap;font-size:12px;line-height:1.6"></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-wf-preview')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const wfState = {
+  systemModel: '',
+  options: [
+    { modelId: 'gpt-5.4-mini', configDisplayName: 'OpenAI Production' },
+    { modelId: 'gpt-5.4', configDisplayName: 'OpenAI Premium' },
+    { modelId: 'claude-sonnet-4', configDisplayName: 'Anthropic Primary' }
+  ]
+};
+
+function wfById(id) {
+  return document.getElementById(id);
+}
+
+function wfPopulateSystemModels() {
+  const select = wfById('wf-system-model');
+  if (!select) return;
+  const options = ['<option value="">Not configured</option>'];
+  wfState.options.forEach((option) => {
+    const selected = option.modelId === wfState.systemModel ? ' selected' : '';
+    options.push('<option value="' + option.modelId + '"' + selected + '>' + option.modelId + ' (' + option.configDisplayName + ')</option>');
+  });
+  select.innerHTML = options.join('');
+}
+
+function wfSetModelFromSelect(value) {
+  wfState.systemModel = value;
+}
+
+function wfSaveSystemModel() {
+  wfState.systemModel = wfById('wf-system-model').value;
+  wfSyncPreviewHeader();
+}
+
+function wfSyncPreviewHeader() {
+  const modelLabel = wfState.systemModel || '-';
+  const title = wfById('wf-preview-title');
+  if (title) {
+    title.textContent = 'Workflow Preview (Model: ' + modelLabel + ')';
+  }
+}
+
+function wfEnsureModel(type) {
+  if (wfState.systemModel) return true;
+  const target = type === 'skill' ? wfById('wf-skill-error') : wfById('wf-sop-error');
+  if (target) {
+    target.textContent = 'Workflow generation model is not configured. Configure it in system settings.';
+    target.style.display = 'block';
+  }
+  return false;
+}
+
+function wfClearError(type) {
+  const target = type === 'skill' ? wfById('wf-skill-error') : wfById('wf-sop-error');
+  if (target) {
+    target.textContent = '';
+    target.style.display = 'none';
+  }
+}
+
+function wfOpenEditor(type) {
+  wfClearError(type);
+  openModal(type === 'skill' ? 'modal-wf-skill-editor' : 'modal-wf-sop-editor');
+}
+
+function wfGenerate(type) {
+  if (!wfEnsureModel(type)) return;
+  wfClearError(type);
+
+  if (type === 'skill') {
+    const description = wfById('wf-skill-description').value.trim();
+    const tools = Array.from(document.querySelectorAll('.wf-skill-tool:checked')).map((el) => el.value);
+    if (!description || tools.length === 0) return;
+    const lines = tools.map((tool, idx) => (idx + 1) + '. Use tool ' + tool + ' to execute the requested task scope.');
+    wfById('wf-skill-workflow').value = 'Workflow Objective: ' + description + '\n\n' + lines.join('\n');
+    return;
+  }
+
+  const description = wfById('wf-sop-description').value.trim();
+  const steps = Array.from(document.querySelectorAll('.wf-sop-step:checked')).map((el) => el.value);
+  if (!description || steps.length === 0) return;
+  const lines = steps.map((step, idx) => (idx + 1) + '. Execute step: ' + step + '.');
+  wfById('wf-sop-workflow').value = 'Workflow Objective: ' + description + '\n\n' + lines.join('\n');
+}
+
+function wfPreview(type) {
+  if (!wfEnsureModel(type)) return;
+  wfClearError(type);
+
+  const model = wfState.systemModel || '-';
+  wfById('wf-preview-title').textContent = 'Workflow Preview (Model: ' + model + ')';
+
+  if (type === 'skill') {
+    const name = wfById('wf-skill-name').value;
+    const description = wfById('wf-skill-description').value;
+    const workflow = wfById('wf-skill-workflow').value;
+    const tools = Array.from(document.querySelectorAll('.wf-skill-tool:checked')).map((el) => el.value).join(', ');
+    wfById('wf-preview-content').textContent = [
+      '# Skill Workflow File',
+      '',
+      'Name: ' + name,
+      'Description: ' + description,
+      'Selected Tools: ' + tools,
+      '',
+      'Formatted Instruction',
+      '---',
+      workflow
+    ].join('\n');
+    openModal('modal-wf-preview');
+    return;
+  }
+
+  const name = wfById('wf-sop-name').value;
+  const description = wfById('wf-sop-description').value;
+  const workflow = wfById('wf-sop-workflow').value;
+  const steps = Array.from(document.querySelectorAll('.wf-sop-step:checked')).map((el) => el.value).join(', ');
+  wfById('wf-preview-content').textContent = [
+    '# SOP Workflow File',
+    '',
+    'Name: ' + name,
+    'Description: ' + description,
+    'Selected Steps: ' + steps,
+    '',
+    'Formatted Instruction',
+    '---',
+    workflow
+  ].join('\n');
+  openModal('modal-wf-preview');
+}
+
+function wfOpenPreviewOnly(type) {
+  wfPreview(type);
+}
+
+wfPopulateSystemModels();
+wfSyncPreviewHeader();
+</script>
 
 </body>
 </html>

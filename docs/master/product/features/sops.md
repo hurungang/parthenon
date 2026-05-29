@@ -13,12 +13,18 @@ SOPs represent business workflows composed of orchestrated steps and delegated t
 - Supports delegated execution across agents while enforcing bounded delegation behavior
 - Detects and blocks direct and indirect cyclic delegation chains
 - Produces clear policy-stop outcomes for governance and incident triage
+- Supports a Default SOP fallback policy for agent execution when no explicit SOP is referenced in agent instruction
+- Applies Default SOP behavior consistently across all supported agent input types
 
 ## Acceptance Criteria
 - SOP delegation supports business workflows without unbounded recursion
 - Direct and indirect cyclic delegation paths are blocked with clear user-visible outcomes
 - Delegation depth and delegated-step boundaries are enforced as part of execution policy
 - SOP outcomes remain auditable and distinguish policy enforcement stops from functional failures
+- Default SOP terminology is used consistently in governance and authoring contexts
+- If an agent instruction explicitly references one or more SOP names, only those named SOPs are used for planning and execution context
+- If an agent instruction does not reference any SOP name, the Default SOP is applied as fallback context
+- Default SOP assignment and fallback policy are available across all supported agent input types
 
 ## Out of Scope
 - Technical workflow engine design details

@@ -21,7 +21,7 @@ import json
 import logging
 import uuid
 from copy import deepcopy
-from typing import Any, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
 from opentelemetry import trace
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1936,7 +1936,8 @@ class AgentRuntimeExecutor:
         conv_session_id: uuid.UUID,
         cert_path: str | None = None,
         key_path: str | None = None,
-    ) -> tuple[str, dict[str, Any]]:
+        status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None = None,
+    ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
         """Execute one conversation turn using Control Center context only.
 
         This is the Agent Runtime DB-free path: all execution context and model
@@ -1991,7 +1992,7 @@ class AgentRuntimeExecutor:
             tool_name_map,
         )
         allowed_tool_names = _canonicalize_tool_list_for_log(allowed_tools)
-        logger.info(
+        logger.debug(
             "Conversation runtime initialized (from context): session=%s agent=%s role=%s",
             conv_session_id,
             agent_type_id,
@@ -2041,6 +2042,12 @@ class AgentRuntimeExecutor:
             }
 
         max_iterations = max(1, guardrail_state.max_iterations)
+        status_events: list[dict[str, str]] = []
+
+        async def emit_status_event(event: dict[str, str]) -> None:
+            status_events.append(event)
+            if status_event_callback is not None:
+                await status_event_callback(event)
 
         for iteration in range(max_iterations):
             guardrail_state.cumulative_iterations += 1
@@ -2052,7 +2059,7 @@ class AgentRuntimeExecutor:
                     conv_session_id,
                     exc.reason,
                 )
-                return exc.message, build_conversation_guardrail_usage()
+                return exc.message, build_conversation_guardrail_usage(), status_events
 
             raw_response = await binding.complete_from_context(
                 model_id=str(model_id),
@@ -2112,6 +2119,7 @@ class AgentRuntimeExecutor:
                 return (
                     response_text or "I processed your message but received an empty response.",
                     build_conversation_guardrail_usage(),
+                    status_events,
                 )
 
             local_messages.append(
@@ -2125,6 +2133,23 @@ class AgentRuntimeExecutor:
             for tc in raw_tool_calls:
                 sanitized_name = tc.get("function", {}).get("name", "")
                 original_name = _restore_tool_name_from_openai(sanitized_name, tool_name_map)
+                tool_display_name = original_name
+                try:
+                    server_name, bare_tool_name = parse_tool_name(original_name)
+                    if bare_tool_name:
+                        tool_display_name = bare_tool_name
+                    elif server_name:
+                        tool_display_name = server_name
+                except ValueError:
+                    # Keep original_name when not parseable by canonical parser.
+                    pass
+
+                await emit_status_event(
+                    {
+                        "status": "using_tool",
+                        "tool_name": tool_display_name,
+                    }
+                )
                 args_raw = tc.get("function", {}).get("arguments", "{}")
                 args: dict[str, Any] = (
                     json.loads(args_raw)
@@ -2150,12 +2175,32 @@ class AgentRuntimeExecutor:
                 else:
                     delegated_target_slug = _extract_agent_delegation_target(original_name)
                     if delegated_target_slug is not None:
+                        await emit_status_event(
+                            {
+                                "status": "delegating",
+                                "agent_type": delegated_target_slug,
+                            }
+                        )
+                        await emit_status_event(
+                            {
+                                "status": "waiting",
+                                "agent_type": delegated_target_slug,
+                            }
+                        )
                         guardrail_state.delegated_steps += 1
                         next_depth = guardrail_state.delegation_depth + 1
                         if next_depth > guardrail_state.max_delegation_depth:
-                            return "Delegation depth limit exceeded.", build_conversation_guardrail_usage()
+                            return (
+                                "Delegation depth limit exceeded.",
+                                build_conversation_guardrail_usage(),
+                                status_events,
+                            )
                         if guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
-                            return "Delegated-step budget exceeded.", build_conversation_guardrail_usage()
+                            return (
+                                "Delegated-step budget exceeded.",
+                                build_conversation_guardrail_usage(),
+                                status_events,
+                            )
 
                         delegation_payload = _build_delegation_request_payload(args)
                         delegation_payload["__delegation_depth"] = next_depth
@@ -2195,6 +2240,7 @@ class AgentRuntimeExecutor:
         return (
             "I was unable to complete the task within the allowed number of steps.",
             build_conversation_guardrail_usage(),
+            status_events,
         )
 
     async def _save_result_for_conversation(

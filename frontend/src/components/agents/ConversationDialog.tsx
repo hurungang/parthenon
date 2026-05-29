@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  Alert,
   Avatar,
   Box,
   Button,
+  CircularProgress,
   Chip,
   Dialog,
   DialogActions,
@@ -98,7 +100,15 @@ export function ConversationDialog({
 
   const endSession = useEndConversationSession(agentTypeId)
 
-  const { messages: wsMessages, connected, pendingQuestion, sessionTitle, guardrailUsage, sendMessage } =
+  const {
+    messages: wsMessages,
+    connected,
+    pendingQuestion,
+    sessionTitle,
+    guardrailUsage,
+    chatStatus,
+    sendMessage,
+  } =
     useChatSession(wsSessionId, convSessionId)
   const effectiveGuardrailUsage = guardrailUsage ?? resumedGuardrailUsage
 
@@ -396,6 +406,54 @@ export function ConversationDialog({
                         </Paper>
                       </Box>
                     ))
+                  )}
+
+                  {chatStatus && chatStatus.kind === 'timeout_or_failed' && (
+                    <Alert
+                      severity="warning"
+                      sx={{ mt: 1 }}
+                      data-testid="conversation-dialog-chat-status-terminal"
+                    >
+                      {t('conversations.sessions.statusTimeoutOrFailed')}
+                    </Alert>
+                  )}
+
+                  {chatStatus && chatStatus.kind !== 'timeout_or_failed' && (
+                    <Paper
+                      elevation={0}
+                      variant="outlined"
+                      sx={{ mt: 1, p: 1.25, display: 'flex', alignItems: 'center', gap: 1 }}
+                      data-testid="conversation-dialog-chat-status-indicator"
+                    >
+                      <CircularProgress size={16} />
+                      <Box display="flex" flexDirection="column">
+                        {chatStatus.kind === 'using_tool' && chatStatus.toolName && (
+                          <Typography variant="body2" fontWeight={600}>
+                            {t('conversations.sessions.statusUsingTool', {
+                              toolName: chatStatus.toolName,
+                            })}
+                          </Typography>
+                        )}
+                        {(chatStatus.kind === 'delegating' || chatStatus.kind === 'waiting') &&
+                          chatStatus.agentType && (
+                            <Typography variant="body2" fontWeight={600}>
+                              {t('conversations.sessions.statusDelegatingToAgent', {
+                                agentType: chatStatus.agentType,
+                              })}
+                            </Typography>
+                          )}
+                        {chatStatus.kind === 'thinking' && (
+                          <Typography variant="body2">
+                            {t('conversations.sessions.statusThinking')}
+                          </Typography>
+                        )}
+                        {chatStatus.kind === 'waiting' && (
+                          <Typography variant="caption" color="text.secondary">
+                            {t('conversations.sessions.statusWaiting')}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Paper>
                   )}
                 </Paper>
 

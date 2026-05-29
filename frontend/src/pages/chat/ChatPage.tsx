@@ -7,6 +7,7 @@ import {
   Avatar,
   Box,
   Button,
+  CircularProgress,
   Chip,
   Dialog,
   DialogActions,
@@ -70,7 +71,7 @@ export function ChatPage() {
     }
   }
 
-  const { messages: wsMessages, connected, pendingQuestion, sessionTitle, sendMessage } =
+  const { messages: wsMessages, connected, pendingQuestion, sessionTitle, chatStatus, sendMessage } =
     useChatSession(wsSessionId, convSessionId)
 
   // Combine resumed history with live WebSocket messages
@@ -291,6 +292,54 @@ export function ChatPage() {
               <Typography variant="body2" color="text.secondary" textAlign="center" mt={4}>
                 {t('conversations.sessions.chatEmpty')}
               </Typography>
+            )}
+
+            {chatStatus && chatStatus.kind === 'timeout_or_failed' && (
+              <Alert
+                severity="warning"
+                sx={{ mt: 1 }}
+                data-testid="chat-status-terminal"
+              >
+                {t('conversations.sessions.statusTimeoutOrFailed')}
+              </Alert>
+            )}
+
+            {chatStatus && chatStatus.kind !== 'timeout_or_failed' && (
+              <Paper
+                elevation={0}
+                variant="outlined"
+                sx={{ mt: 1, p: 1.25, display: 'flex', alignItems: 'center', gap: 1 }}
+                data-testid="chat-status-indicator"
+              >
+                <CircularProgress size={16} />
+                <Box display="flex" flexDirection="column">
+                  {chatStatus.kind === 'using_tool' && chatStatus.toolName && (
+                    <Typography variant="body2" fontWeight={600}>
+                      {t('conversations.sessions.statusUsingTool', {
+                        toolName: chatStatus.toolName,
+                      })}
+                    </Typography>
+                  )}
+                  {(chatStatus.kind === 'delegating' || chatStatus.kind === 'waiting') &&
+                    chatStatus.agentType && (
+                      <Typography variant="body2" fontWeight={600}>
+                        {t('conversations.sessions.statusDelegatingToAgent', {
+                          agentType: chatStatus.agentType,
+                        })}
+                      </Typography>
+                    )}
+                  {chatStatus.kind === 'thinking' && (
+                    <Typography variant="body2">
+                      {t('conversations.sessions.statusThinking')}
+                    </Typography>
+                  )}
+                  {chatStatus.kind === 'waiting' && (
+                    <Typography variant="caption" color="text.secondary">
+                      {t('conversations.sessions.statusWaiting')}
+                    </Typography>
+                  )}
+                </Box>
+              </Paper>
             )}
           </Paper>
 

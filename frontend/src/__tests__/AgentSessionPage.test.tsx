@@ -42,6 +42,7 @@ vi.mock('../hooks/useChatSession', () => ({
     messages: [],
     sendMessage: vi.fn(),
     connected: false,
+    chatStatus: null,
   }),
 }))
 
@@ -300,6 +301,7 @@ describe('AgentJobPage', () => {
         ],
         sendMessage: vi.fn(),
         connected: true,
+        chatStatus: null,
       }),
     }))
 

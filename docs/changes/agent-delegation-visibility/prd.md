@@ -1,46 +1,43 @@
 # Agent Delegation Visibility PRD
 
 ## Epic Overview
-When Parthenon delegates work from a primary conversational agent to a specialized sub-agent, users currently experience a silent wait with no clear indication of what is happening. This epic introduces clear, real-time delegation visibility so users can immediately see when delegation starts, which agent is handling the delegated task, and when delegation is complete. Improving this transparency reduces uncertainty, increases trust in multi-agent execution, and improves the perceived responsiveness and usability of enterprise agent workflows.
+When Parthenon processes conversational requests and delegates work to specialized agents, users can experience uncertainty during periods with no visible feedback. This epic introduces a simple, clear status experience in the chat flow so users can see active thinking, know exactly when delegation starts and to which agent, and understand whether the delegated step completes or times out. The business value is higher trust, lower confusion, and better perceived reliability for enterprise multi-agent conversations.
 
 ## Business Goals
-- Reduce user-reported confusion during delegated agent executions by at least 40% within one release cycle.
-- Increase successful completion rate of longer multi-agent sessions by at least 15% through clearer in-progress guidance.
-- Improve user trust score for conversational execution transparency by at least 20% in post-release feedback.
-- Decrease manual session refresh or repeated status-check actions during delegated tasks by at least 30%.
+- Reduce user-reported confusion during conversational delegation flows by at least 40% within one release cycle.
+- Improve user trust score for execution transparency by at least 20% in post-release feedback.
+- Decrease repeated manual status-check behavior during delegated tasks by at least 30%.
+- Increase successful completion rate of longer delegated conversations by at least 15% through clearer in-progress guidance.
 
 ## Users & Personas
-- Business Operator: Runs operational workflows and needs confidence that delegated work is actively progressing.
-- Platform Administrator: Monitors agent behavior and needs clear runtime visibility to support users and diagnose stalled sessions.
-- Process Owner: Relies on predictable agent orchestration for business-critical outcomes and needs transparent execution states.
+- Business Operator: Runs operational workflows and needs immediate confirmation that the system is actively working.
+- Platform Administrator: Supports users during long-running conversations and needs clear user-facing status to distinguish progress from delay.
+- Process Owner: Depends on reliable multi-agent outcomes and needs transparent conversational state changes.
 
 ## User Stories
-- As a business operator, I want to immediately see that delegation has started, so that I know my request is actively being handled.
-- As a business operator, I want to see which delegated agent is currently working, so that I understand who is responsible for the current step.
-- As a platform administrator, I want clear in-progress delegation status, so that I can distinguish active work from a stalled run.
-- As a process owner, I want a clear delegation completion indicator, so that I know when control returns to the primary agent and results are ready.
-- As a business operator, I want optional visibility into key delegated activities, so that I can better understand progress on complex tasks.
+- As a business operator, I want to see a thinking indicator while the primary conversational agent is processing, so that I know my request is being handled.
+- As a business operator, I want the chat to show "Delegating to agent <agent_type>" when delegation starts, so that I know which agent is taking over the delegated step.
+- As a business operator, I want a waiting indicator during delegated execution, so that I know the conversation is still active.
+- As a platform administrator, I want a clear timeout or failure state in the chat flow, so that stalled delegations are visible to users without ambiguity.
+- As a process owner, I want clear completion feedback after delegation returns, so that users can confidently continue the conversation.
 
 ## Acceptance Criteria
-- When a primary agent delegates work, users see a delegation status indicator immediately without waiting for delegated work to finish.
-- The delegation status explicitly identifies the delegated agent by user-visible name.
-- While delegated work is running, users see a clear in-progress state indicating the delegated task is still active.
-- When delegated work finishes, users see a clear completion indicator and can tell delegation has ended.
-- Delegation start, in-progress, and completion states are understandable to non-technical users without requiring external logs.
-- Delegation visibility is shown consistently across supported conversational session views where delegation occurs.
-- For sessions that provide deeper transparency, key delegated activities are surfaced as optional progress details without overwhelming the primary user flow.
-- If delegated execution fails or cannot proceed, users see a clear user-facing status outcome rather than indefinite waiting.
+- While the primary conversational agent is processing, the front chatbox shows a visible thinking indicator.
+- When delegation starts, the chat displays the label exactly in the format: "Delegating to agent <agent_type>".
+- After delegation begins, the chat shows a waiting indicator until a delegated response is received or a timeout occurs.
+- If delegated execution times out or fails, users see a clear final status state and are not left in an indefinite waiting state.
+- Delegation-related status messages are understandable to non-technical users and consistently visible in conversational views where delegation occurs.
+- The required user experience is limited to simple conversational status visibility and does not require altering core delegation or runtime business logic.
 
 ## Out of Scope
-- Redesign of the full conversation experience beyond delegation visibility states.
+- Redesign of the full conversation interface beyond simple status indicators.
 - Changes to agent authorization, role assignment, identity, or security model.
-- New workflow automation features unrelated to delegation transparency.
-- Deep technical diagnostics intended only for engineering users.
-- Historical analytics or reporting dashboards for delegation performance trends.
+- Changes to delegation decisioning, runtime orchestration behavior, or core business logic.
+- Engineering-only diagnostic panels, technical trace views, or implementation-level observability additions.
+- Historical analytics or reporting dashboards for delegation performance.
 
 ## Dependencies & Constraints
-- Delegation visibility must align with existing Parthenon conversation and session patterns.
-- User-facing status language must remain clear, concise, and understandable for non-technical stakeholders.
-- The epic must preserve enterprise trust and audit expectations by accurately reflecting runtime state.
-- The minimum deliverable is immediate "delegating to [Agent Name]" visibility and a clear completion indication.
-- Any additional delegated activity detail is optional and must not block delivery of the minimum requirement.
+- The status experience must align with existing Parthenon conversational patterns and language conventions.
+- User-facing status text must be clear, concise, and understandable for non-technical stakeholders.
+- Delegation status must accurately reflect user-visible execution state to maintain trust and reduce ambiguity.
+- Delivery must focus on simple UX signaling (thinking, delegating, waiting, timeout/failure outcome) without expanding scope into runtime redesign.
