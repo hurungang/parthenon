@@ -2,46 +2,56 @@
 
 ```mermaid
 flowchart LR
-    UI[Web UI and Schedulers]
+    AU[Author or Reviewer]
+    UI[Workflow Authoring UI]
+    CFG[System Configuration]
     CH[Communication Hub]
     AR[Agent Runtime]
-    CC[Control Center]
+    CCA[Control Center APIs]
+    CCTX[Governed Context]
     DB[(Platform DB)]
     OBS[Observability]
     AUD[Governance Audit]
 
-    UI <-->|Conversation and session traffic| CH
-    CH -->|Route execution request| AR
-    UI -->|Admin and policy APIs| CC
-    AR -->|Policy check and governance outcome| CH
-    CH -->|Caller: communication_hub| CC
-    AR -->|Caller: agent_runtime| CC
-    CC -->|Only database path| DB
-    CH -.->|No direct database access| DB
-    AR -.->|No direct database access| DB
+    AU --> UI
+    AU --> CFG
+    CFG --> CH
+    UI -->|Generate and preview workflow| CH
+    CH --> AR
+    AR -->|Context request| CH
+    CH --> CCA
+    CCA --> DB
+    CCA --> CCTX
+    CCTX --> CH
+    CH --> AR
+    AR --> CH
     AR --> OBS
-    CC --> OBS
-    CC --> AUD
+    CCA --> OBS
+    CCA --> AUD
 ```
 
 ```mermaid
 flowchart LR
-    RQ[Session start request]
+    RQ[Workflow generation request]
     CH[Communication Hub]
+    AR[Agent Runtime]
     PV[Pre-Execution Validator]
     RM[Runtime Guardrail Monitor]
     FS[Guardrail Fail-Safe Handler]
-    CC[Control Center Policy Service]
+    CC[Control Center]
     DB[(Platform DB)]
-    ST[Session status with stop reason]
-    CL[Client or Scheduler]
+    ST[Workflow status with stop reason]
+    CL[Author or Scheduler]
 
     RQ --> CH
-    CH --> PV
-    PV -->|Fetch effective policy| CH
+    CH --> AR
+    AR --> PV
+    PV -->|Fetch policy and governed context| CH
     CH --> CC
     CC --> DB
-    PV --> RM
+    CC --> CH
+    CH --> AR
+    AR --> RM
     RM -->|Any guardrail exceeded| FS
     FS --> ST
     CH --> ST

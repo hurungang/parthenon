@@ -36,7 +36,7 @@ async def test_call_llm_chat_path_must_not_instantiate_local_runtime_executor() 
         "app.api.ws.chat.httpx.AsyncClient",
         return_value=mock_http_client,
     ), patch("app.services.agents.runtime_executor.AgentRuntimeExecutor") as runtime_executor_cls:
-        response = await chat._call_llm(
+        response, guardrail_usage, status_events = await chat._call_llm(
             conv_session_id=conv_session_id,
             agent_type_id=agent_type_id,
             messages=messages,
@@ -44,5 +44,7 @@ async def test_call_llm_chat_path_must_not_instantiate_local_runtime_executor() 
         )
 
     assert response == "agent reply"
+    assert guardrail_usage is None
+    assert status_events == []
     runtime_executor_cls.assert_not_called()
     mock_http_client.post.assert_awaited_once()

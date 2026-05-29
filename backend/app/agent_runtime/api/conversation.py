@@ -9,9 +9,13 @@ from __future__ import annotations
 import logging
 import uuid
 from typing import Any
+import asyncio
+import json
+import contextlib
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
 
 from app.services.agents.runtime_executor import AgentRuntimeExecutor
 
@@ -26,6 +30,7 @@ class ConversationTurnRequest(BaseModel):
     conv_session_id: uuid.UUID
     agent_type_id: uuid.UUID
     messages: list[dict[str, Any]]
+    stream_status_events: bool = False
 
 
 class ConversationTurnResponse(BaseModel):
@@ -33,13 +38,14 @@ class ConversationTurnResponse(BaseModel):
 
     response: str
     guardrail_usage: dict[str, Any] | None = None
+    status_events: list[dict[str, str]] = Field(default_factory=list)
 
 
 @conversation_router.post("/turn", response_model=ConversationTurnResponse)
 async def execute_conversation_turn(
     body: ConversationTurnRequest,
     request: Request,
-) -> ConversationTurnResponse:
+) -> ConversationTurnResponse | StreamingResponse:
     """Execute one conversation turn in Agent Runtime.
 
     Security is enforced by Agent Runtime certificate middleware, which allows
@@ -77,7 +83,60 @@ async def execute_conversation_turn(
     key_path = str(cert_manager.key_path) if cert_manager and cert_manager.key_path else None
 
     executor = AgentRuntimeExecutor(data_client=data_client)
-    response_text, guardrail_usage = await executor.execute_conversation_turn_from_context(
+    if body.stream_status_events:
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+        async def on_status_event(event: dict[str, str]) -> None:
+            await queue.put({"type": "status_event", "event": event})
+
+        async def run_turn() -> None:
+            try:
+                response_text, guardrail_usage, status_events = await executor.execute_conversation_turn_from_context(
+                    agent_type_id=body.agent_type_id,
+                    agent_context=agent_context,
+                    model_config=model_config,
+                    messages=body.messages,
+                    conv_session_id=body.conv_session_id,
+                    cert_path=cert_path,
+                    key_path=key_path,
+                    status_event_callback=on_status_event,
+                )
+                await queue.put(
+                    {
+                        "type": "final",
+                        "response": response_text,
+                        "guardrail_usage": guardrail_usage,
+                        "status_events": status_events,
+                    }
+                )
+            except Exception as exc:
+                logger.error(
+                    "Conversation streaming execution failed: session=%s agent_type=%s error=%s",
+                    body.conv_session_id,
+                    body.agent_type_id,
+                    exc,
+                    exc_info=True,
+                )
+                await queue.put({"type": "error"})
+
+        task = asyncio.create_task(run_turn())
+
+        async def stream_events():
+            try:
+                while True:
+                    item = await queue.get()
+                    yield json.dumps(item) + "\n"
+                    if item.get("type") in {"final", "error"}:
+                        break
+            finally:
+                if not task.done():
+                    task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+        return StreamingResponse(stream_events(), media_type="application/x-ndjson")
+
+    response_text, guardrail_usage, status_events = await executor.execute_conversation_turn_from_context(
         agent_type_id=body.agent_type_id,
         agent_context=agent_context,
         model_config=model_config,
@@ -92,4 +151,8 @@ async def execute_conversation_turn(
         body.conv_session_id,
         body.agent_type_id,
     )
-    return ConversationTurnResponse(response=response_text, guardrail_usage=guardrail_usage)
+    return ConversationTurnResponse(
+        response=response_text,
+        guardrail_usage=guardrail_usage,
+        status_events=status_events,
+    )

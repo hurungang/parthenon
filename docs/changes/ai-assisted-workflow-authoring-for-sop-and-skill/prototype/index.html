@@ -141,6 +141,8 @@ textarea.form-control{resize:vertical;min-height:90px}
     <div class="nav-item">MCP Hub</div>
     <div class="nav-item">Skills</div>
     <div class="nav-item active">SOPs</div>
+    <div class="nav-item">Model Configs</div>
+    <div class="nav-item">System Configuration</div>
     <div class="nav-item">Agent Roles</div>
     <div class="nav-item">Audit</div>
   </aside>
@@ -217,30 +219,30 @@ textarea.form-control{resize:vertical;min-height:90px}
       <section class="card" style="margin-top:18px;">
         <div class="card-header">
           <h3>System Configuration</h3>
-          <span class="badge blue">Controls AI generation defaults</span>
+          <span class="badge blue">Workflow Generation</span>
         </div>
         <div class="card-body settings-grid">
           <div>
-            <p>Choose the model used when generating Skill and SOP workflows. Model choices are loaded from the existing model config module. If no model is configured, generation and preview show an error.</p>
+            <p>Select the AI model used for Skill and SOP workflow generation and preview. Options are loaded from configured model providers. If none is configured, generate and preview return an explicit validation error.</p>
             <div class="card-row" style="margin-top:14px;">
               <button class="btn btn-primary" onclick="openSystemConfig()">Open System Configuration</button>
-              <button class="btn btn-secondary" onclick="syncConfigToPreview()">Refresh Preview Model</button>
+              <button class="btn btn-secondary" onclick="syncConfigToPreview()">Refresh Preview Header</button>
             </div>
           </div>
           <div>
             <div class="setting-row">
               <div>
-                <strong>Instruction AI model</strong>
-                <small>Used for workflow generation and preview composition.</small>
+                <strong>Generation Model</strong>
+                <small>Selected in System Configuration and reused by Skill/SOP generation.</small>
               </div>
-              <select id="systemModel" class="select-inline" onchange="updateConfiguredModel(this.value)">
-                <option value="">No model configured</option>
+              <select id="systemModel" class="select-inline" aria-label="Generation Model" onchange="updateConfiguredModel(this.value)">
+                <option value="">Not configured</option>
               </select>
             </div>
             <div class="setting-row">
               <div>
-                <strong>Preview rendering</strong>
-                <small>Shows the final single instruction file in Skill and SOP dialogs.</small>
+                <strong>Model Configurations</strong>
+                <small>Provider configs and enabled models are maintained separately in Model Configs.</small>
               </div>
               <span class="badge green">Enabled</span>
             </div>
@@ -303,7 +305,7 @@ textarea.form-control{resize:vertical;min-height:90px}
     <div class="modal-footer">
       <div class="mini" id="editorFooterMeta">Draft state: unsaved</div>
       <div class="card-row" style="margin-top:0;">
-        <button class="btn btn-ghost" onclick="generateWorkflow()">Generate with AI Assistant</button>
+        <button class="btn btn-ghost" onclick="generateWorkflow()">Generate Workflow with AI</button>
         <button class="btn btn-secondary" onclick="openPreview('editor')">Preview Workflow</button>
         <button class="btn btn-primary" onclick="saveDraft()">Save Draft</button>
       </div>
@@ -375,15 +377,15 @@ textarea.form-control{resize:vertical;min-height:90px}
     <div class="modal-body">
       <div id="systemConfigError" class="alert error"></div>
       <div class="form-group">
-        <label for="configModel">Instruction AI model</label>
+        <label for="configModel">Generation Model</label>
         <select id="configModel" class="select-inline">
-          <option value="">No model configured</option>
+          <option value="">Not configured</option>
         </select>
-        <div class="form-hint">Used by Skill and SOP AI generation and reflected in preview metadata.</div>
+        <div class="form-hint">Used by Skill and SOP generation and reflected in workflow preview headers.</div>
       </div>
       <div class="form-group">
-        <label>Generation behavior</label>
-        <div class="mini">The selected model controls the workflow draft generation experience and the preview header shown to reviewers.</div>
+        <label>Configuration source</label>
+        <div class="mini">Options are loaded from Model Configurations and can be changed without editing authoring dialogs.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -514,11 +516,11 @@ const editorState = {
   selected: []
 };
 
-// In real implementation this list is loaded from the existing model config module/API.
+// In real implementation this list is loaded from /agents/model-configs/workflow-generation.
 const modelConfigModuleList = [
-  { id: 'cfg-openai-prod', displayName: 'GPT-5.4 Mini' },
-  { id: 'cfg-openai-premium', displayName: 'GPT-5.4' },
-  { id: 'cfg-anthropic', displayName: 'Claude Sonnet 4' }
+  { modelId: 'gpt-5.4-mini', configDisplayName: 'OpenAI Production' },
+  { modelId: 'gpt-5.4', configDisplayName: 'OpenAI Premium' },
+  { modelId: 'claude-sonnet-4', configDisplayName: 'Anthropic Primary' }
 ];
 
 const systemState = {
@@ -530,24 +532,25 @@ function byId(id){ return document.getElementById(id); }
 function populateModelSelect(selectId, selectedValue){
   const select = byId(selectId);
   if(!select) return;
-  const options = ['<option value="">No model configured</option>'];
+  const options = ['<option value="">Not configured</option>'];
   modelConfigModuleList.forEach((entry) => {
-    const selected = entry.id === selectedValue ? ' selected' : '';
-    options.push('<option value="' + escapeHtml(entry.id) + '"' + selected + '>' + escapeHtml(entry.displayName) + '</option>');
+    const selected = entry.modelId === selectedValue ? ' selected' : '';
+    const label = entry.modelId + ' (' + entry.configDisplayName + ')';
+    options.push('<option value="' + escapeHtml(entry.modelId) + '"' + selected + '>' + escapeHtml(label) + '</option>');
   });
   select.innerHTML = options.join('');
 }
 
 function getConfiguredModelLabel(){
-  const match = modelConfigModuleList.find((entry) => entry.id === systemState.model);
-  return match ? match.displayName : '';
+  const match = modelConfigModuleList.find((entry) => entry.modelId === systemState.model);
+  return match ? match.modelId : '';
 }
 
 function ensureModelConfigured(errorTarget){
   if(systemState.model){
     return true;
   }
-  const message = 'No generation model configured. Select a model in System Configuration before using AI generate or preview.';
+  const message = 'Workflow generation model is not configured. Configure it in system settings.';
   if(errorTarget === 'editor'){
     setAlert('editorError', message);
     setAlert('editorInfo', '');
@@ -609,10 +612,6 @@ function updateConfiguredModel(model){
 
 function saveSystemConfig(){
   const selectedModel = byId('configModel').value;
-  if(!selectedModel){
-    ensureModelConfigured('system');
-    return;
-  }
   systemState.model = selectedModel;
   populateModelSelect('systemModel', systemState.model);
   populateModelSelect('configModel', systemState.model);
@@ -763,6 +762,7 @@ function openPreview(source){
   byId('previewDocumentName').textContent = (type === 'sop' ? 'sop-workflow.md' : 'skill-workflow.md');
   const modelLabel = getConfiguredModelLabel();
   byId('previewDocumentMeta').textContent = 'Model: ' + modelLabel + ' | ' + (isEditor ? 'Draft preview' : 'Saved preview') + ' | ' + (editorState.source.toUpperCase()) + ' | ' + new Date().toLocaleString();
+  byId('previewTitle').textContent = 'Workflow Preview (Model: ' + modelLabel + ')';
 
   if(!workflow){
     byId('previewWorkflow').innerHTML = '<span class="preview-empty">No workflow text available yet. Return to the dialog and draft manually or use AI Generate.</span>';

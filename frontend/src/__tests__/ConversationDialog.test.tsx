@@ -8,6 +8,14 @@ const sendMessageSpy = vi.fn(() => true)
 const endSessionSpy = vi.fn()
 let connectedState = false
 let guardrailUsageState: Record<string, unknown> | null = null
+let chatStatusState:
+  | {
+      kind: 'thinking' | 'delegating' | 'waiting' | 'using_tool' | 'timeout_or_failed'
+      agentType: string | null
+      toolName: string | null
+      timestamp: string
+    }
+  | null = null
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -22,6 +30,7 @@ vi.mock('../hooks/useChatSession', () => ({
     pendingQuestion: null,
     sessionTitle: null,
     guardrailUsage: guardrailUsageState,
+    chatStatus: chatStatusState,
     sendMessage: sendMessageSpy,
     clearMessages: vi.fn(),
   })),
@@ -50,6 +59,7 @@ describe('ConversationDialog', () => {
   beforeEach(() => {
     connectedState = false
     guardrailUsageState = null
+    chatStatusState = null
     sendMessageSpy.mockClear()
     endSessionSpy.mockClear()
     vi.mocked(apiClient.post).mockReset()
@@ -200,5 +210,87 @@ describe('ConversationDialog', () => {
 
     expect(screen.getByText('policy-resume-1')).toBeDefined()
     expect(screen.getByText('2.1k tokens / 10k tokens')).toBeDefined()
+  })
+
+  it('renders delegation and waiting status in the dialog chat area', () => {
+    connectedState = true
+    chatStatusState = {
+      kind: 'waiting',
+      agentType: 'research-agent',
+      toolName: null,
+      timestamp: new Date().toISOString(),
+    }
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId={null}
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('conversations.sessions.statusDelegatingToAgent')).toBeDefined()
+    expect(screen.getByText('conversations.sessions.statusWaiting')).toBeDefined()
+    expect(screen.getByTestId('conversation-dialog-chat-status-indicator')).toBeDefined()
+  })
+
+  it('renders using_tool status in the dialog chat area', () => {
+    connectedState = true
+    chatStatusState = {
+      kind: 'using_tool',
+      agentType: null,
+      toolName: 'send_notification',
+      timestamp: new Date().toISOString(),
+    }
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId={null}
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('conversations.sessions.statusUsingTool')).toBeDefined()
+    expect(screen.getByTestId('conversation-dialog-chat-status-indicator')).toBeDefined()
+  })
+
+  it('renders timeout_or_failed terminal status in the dialog chat area', () => {
+    connectedState = true
+    chatStatusState = {
+      kind: 'timeout_or_failed',
+      agentType: null,
+      toolName: null,
+      timestamp: new Date().toISOString(),
+    }
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId={null}
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('conversations.sessions.statusTimeoutOrFailed')).toBeDefined()
+    expect(screen.getByTestId('conversation-dialog-chat-status-terminal')).toBeDefined()
   })
 })

@@ -2,31 +2,38 @@
 
 ```mermaid
 flowchart LR
-    UI[Web UI and schedulers]
+    UI[Workflow Authoring UI]
+    CFG[System Configuration]
     CH[Communication Hub]
     AR[Agent Runtime]
     CC[Control Center]
     MCP[MCP and channel integrations]
-    STAT[Session status channel]
+    STAT[Workflow status channel]
+    CTX[Governed Context Package]
 
-    UI <-->|Realtime conversation and session control| CH
-    CH -->|Route execution request| AR
+    UI <-->|Workflow generation and preview| CH
+    CFG -->|Selected generation model| CH
+    CH -->|Route workflow request| AR
     AR -->|Tool and delegation routing| CH
+    AR -->|Request governed context| CH
+    CH --> CC
+    CC --> CTX
+    CTX --> CH
+    CH --> AR
     CH --> MCP
-    AR -->|Policy lookup and stop outcomes| CH
-    CH -->|Caller: communication_hub| CC
+    AR -->|Policy and stop outcomes| CH
     CH --> STAT
     STAT --> UI
 ```
 
 ```mermaid
 flowchart TB
-    P0[Policy fetch request from Agent Runtime]
+    P0[Policy and context fetch from Agent Runtime]
     CH[Communication Hub]
-    CC[Control Center Policy Service]
-    P1[Effective policy response]
+    CC[Control Center]
+    P1[Effective policy and governed context]
     S0[Guardrail stop outcome from Agent Runtime]
-    S1[Session channel update]
+    S1[Workflow channel update]
     UI[Client view]
 
     P0 --> CH

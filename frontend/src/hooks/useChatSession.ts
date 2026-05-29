@@ -22,6 +22,84 @@ export interface ConversationalGuardrailUsage {
   maxDelegationDepth: number | null
 }
 
+export type ChatStatusKind =
+  | 'thinking'
+  | 'delegating'
+  | 'waiting'
+  | 'using_tool'
+  | 'timeout_or_failed'
+
+export interface ChatStatus {
+  kind: ChatStatusKind
+  agentType: string | null
+  toolName: string | null
+  timestamp: string
+}
+
+function normalizeToolDisplayName(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeDelegatedAgentType(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (trimmed.startsWith('agent____') && trimmed.length > 'agent____'.length) {
+    return trimmed.slice('agent____'.length)
+  }
+
+  if (trimmed.startsWith('agent__') && trimmed.length > 'agent__'.length) {
+    return trimmed.slice('agent__'.length)
+  }
+
+  return trimmed
+}
+
+function parseChatStatus(value: unknown): ChatStatus | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const payload = value as Record<string, unknown>
+  const type = payload['type']
+  if (type !== 'chat_status') {
+    return null
+  }
+
+  const status = payload['status']
+  if (
+    status !== 'thinking' &&
+    status !== 'delegating' &&
+    status !== 'waiting' &&
+    status !== 'using_tool' &&
+    status !== 'timeout_or_failed'
+  ) {
+    return null
+  }
+
+  const timestamp = typeof payload['timestamp'] === 'string'
+    ? payload['timestamp']
+    : new Date().toISOString()
+
+  return {
+    kind: status,
+    agentType: normalizeDelegatedAgentType(payload['agent_type']),
+    toolName: normalizeToolDisplayName(payload['tool_name']),
+    timestamp,
+  }
+}
+
 function toNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -56,6 +134,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
   const [sessionTitle, setSessionTitle] = useState<string | null>(null)
   const [guardrailUsage, setGuardrailUsage] = useState<ConversationalGuardrailUsage | null>(null)
+  const [chatStatus, setChatStatus] = useState<ChatStatus | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const outboundQueueRef = useRef<string[]>([])
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -96,6 +175,14 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           content?: string
           timestamp?: string
           guardrail_usage?: unknown
+          status?: string
+          agent_type?: string
+        }
+
+        const parsedStatus = parseChatStatus(data)
+        if (parsedStatus) {
+          setChatStatus(parsedStatus)
+          return
         }
 
         // Handle title_update server event without adding it to messages
@@ -119,6 +206,9 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           timestamp: data.timestamp ?? new Date().toISOString(),
         }
         setMessages((prev) => [...prev, msg])
+        if (data.sender_role === 'agent') {
+          setChatStatus((prev) => (prev?.kind === 'timeout_or_failed' ? prev : null))
+        }
         if (data.sender_role === 'agent' && (data.content ?? '').startsWith('?')) {
           setPendingQuestion(data.content ?? null)
         }
@@ -161,11 +251,26 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       timestamp: new Date().toISOString(),
     }
     setMessages((prev) => [...prev, msg])
+    setChatStatus({
+      kind: 'thinking',
+      agentType: null,
+      toolName: null,
+      timestamp: new Date().toISOString(),
+    })
     setPendingQuestion(null)
     return true
   }, [])
 
   const clearMessages = useCallback(() => setMessages([]), [])
 
-  return { messages, connected, pendingQuestion, sessionTitle, guardrailUsage, sendMessage, clearMessages }
+  return {
+    messages,
+    connected,
+    pendingQuestion,
+    sessionTitle,
+    guardrailUsage,
+    chatStatus,
+    sendMessage,
+    clearMessages,
+  }
 }

@@ -412,7 +412,11 @@
         "primarySop": "Primary SOP",
         "primarySopPlaceholder": "Select a SOP",
         "primarySopRequired": "Primary SOP is required for agents with no input",
-        "primarySopHelper": "Select the SOP this agent will execute"
+        "primarySopHelper": "Select the SOP this agent will execute",
+        "defaultSop": "Default SOP",
+        "defaultSopPlaceholder": "Select a SOP",
+        "defaultSopRequired": "A default SOP is required for agents with no input",
+        "defaultSopHelper": "Select the SOP this agent will execute when triggered without input"
       },
       "schemaBuilder": {
         "noFields": "No fields defined. Click 'Add Field' to define the schema.",
@@ -672,6 +676,11 @@
       "chatEmpty": "Send a message to begin the conversation.",
       "chatPlaceholder": "Type a message… (Enter to send)",
       "send": "Send",
+      "statusThinking": "Thinking…",
+      "statusUsingTool": "Using tool {{toolName}}…",
+      "statusDelegatingToAgent": "Delegating to agent {{agentType}}",
+      "statusWaiting": "Waiting for delegated response…",
+      "statusTimeoutOrFailed": "Delegated step timed out or failed. Please try again.",
       "connected": "Connected",
       "connecting": "Connecting",
       "disconnected": "Disconnected",

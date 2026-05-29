@@ -26,6 +26,8 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - As a Business Analyst, I want to preview the agent's SOPs, skills, and tools in a visual diagram, so that I can understand how the agent will operate.
 - As a Compliance Officer, I want to review the agent's plan and associated SOPs/skills, so that I can approve agents for production use.
 - As a Developer, I want to ensure the agent's plan aligns with integration requirements, so that downstream systems are not impacted by misconfiguration.
+- As an Agent Designer, I want plan generation to include only SOPs explicitly named in agent instruction, so that plan context remains focused and predictable.
+- As an Agent Designer, I want the Default SOP used only when no SOP is named in instruction, so that fallback behavior is transparent and non-conflicting.
 
 
 ## 5. Acceptance Criteria
@@ -37,6 +39,9 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - The saved plan is loaded into the agent's execution context during runtime, guiding the agent to follow the pre-approved workflow.
 - Plan preview and execution context support both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - The plan and diagram update automatically if the agent's configuration, role, SOPs, or skills change (triggers re-generation on save).
+- Plan generation includes only SOPs explicitly referenced in agent instruction text.
+- When no SOP is explicitly referenced in agent instruction text, plan generation includes the configured Default SOP as fallback.
+- If one or more SOPs are explicitly referenced in agent instruction text, Default SOP content is not included in plan context.
 - All UI text is internationalized via i18next.
 - The feature is accessible and usable on both desktop and tablet devices.
 - Error handling: If plan generation fails, users receive a clear, actionable error message and the agent save is not blocked.

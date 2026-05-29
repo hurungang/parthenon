@@ -8,6 +8,7 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -32,7 +33,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAgentType } from '../../hooks/useAgentTypes'
+import { useAgentType, useAgentTypes } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import AgentPlanContent from './AgentPlanContent'
 import TopologyDiagramRenderer from './TopologyDiagramRenderer'
@@ -170,6 +171,9 @@ export function AgentTypeDetailsDialog({
 
   // Agent Preview: SOPs and Skills — only fetched for conversation agents on tab 1
   const isConversation = agentType?.input_type === 'conversation'
+
+  // All agent types — for resolving delegation target names in preview/topology
+  const { data: allAgentTypes } = useAgentTypes()
 
   const { data: allSops } = useQuery<Sop[]>({
     queryKey: ['sops'],
@@ -362,10 +366,11 @@ export function AgentTypeDetailsDialog({
               const delegatedNodeId = `agent_type_${targetAgentTypeId}`
               if (!addedDelegatedAgentTypeIds.has(targetAgentTypeId)) {
                 addedDelegatedAgentTypeIds.add(targetAgentTypeId)
+                const delegatedAgentTypeName = (allAgentTypes ?? []).find((at) => at.id === targetAgentTypeId)?.name ?? targetAgentTypeId
                 nodes.push({
                   id: delegatedNodeId,
                   type: 'agent_type',
-                  label: targetAgentTypeId,
+                  label: delegatedAgentTypeName,
                 })
               }
               edges.push({ source: sopNodeId, target: delegatedNodeId, label: 'delegates' })
@@ -395,7 +400,7 @@ export function AgentTypeDetailsDialog({
     }
 
     return { convTopologyNodes: nodes, convTopologyEdges: edges }
-  }, [agentType, isConversation, identityName, roleName, roleSops, roleSkills, sopDetails, allSkills, allMcpTools])
+  }, [agentType, isConversation, identityName, roleName, roleSops, roleSkills, sopDetails, allSkills, allMcpTools, allAgentTypes])
 
   const handleClose = () => {
     setDialogError(null)
@@ -431,7 +436,7 @@ export function AgentTypeDetailsDialog({
           <Typography variant="h6" component="span">
             {agentType ? agentType.name : t('agents.types.dialogTitle')}
           </Typography>
-          <Box>
+          <Box display="flex" alignItems="center" gap={1}>
             {agentType && (
               <Tooltip title={t('app.edit')}>
                 <IconButton size="small" onClick={handleEdit} aria-label={t('app.edit')}>
@@ -621,28 +626,6 @@ export function AgentTypeDetailsDialog({
                     </Box>
                   )}
 
-                  <Divider sx={{ my: 2 }} />
-
-                  {/* Action buttons */}
-                  <Box display="flex" gap={1} flexWrap="wrap">
-                    {isConversation ? (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => setConversationDialogOpen(true)}
-                      >
-                        {t('agents.types.startChat')}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => setLaunchOpen(true)}
-                      >
-                        {t('agents.types.runAgent')}
-                      </Button>
-                    )}
-                  </Box>
                 </TabPanel>
 
                 {/* ── Tab 1: Plan Preview OR Agent Preview ──────────────── */}
@@ -721,9 +704,12 @@ export function AgentTypeDetailsDialog({
                               [...detail.steps]
                                 .sort((a, b) => a.order - b.order)
                                 .map((step) => {
+                                  const delegatedName = step.step_type === 'agent_delegation' && step.target_agent_type_id
+                                    ? ((allAgentTypes ?? []).find((at) => at.id === step.target_agent_type_id)?.name ?? step.target_agent_type_id)
+                                    : null
                                   const stepLabel =
                                     step.step_type === 'agent_delegation'
-                                      ? `${step.name ?? 'Agent delegation'} (${step.target_agent_type_id ?? 'unknown'})`
+                                      ? `${step.name ?? 'Agent delegation'} → ${delegatedName ?? 'unknown'}`
                                       : step.name ?? 'Skill invocation'
                                   return (
                                     <ListItem key={step.id} disableGutters>
@@ -853,6 +839,26 @@ export function AgentTypeDetailsDialog({
             </>
           )}
         </DialogContent>
+
+        {agentType && (
+          <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+            {isConversation ? (
+              <Button
+                variant="contained"
+                onClick={() => setConversationDialogOpen(true)}
+              >
+                {t('agents.types.startChat')}
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={() => setLaunchOpen(true)}
+              >
+                {t('agents.types.runAgent')}
+              </Button>
+            )}
+          </DialogActions>
+        )}
       </Dialog>
 
       {/* Launch dialog — mounted inside so it shares the agent type context */}

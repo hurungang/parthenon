@@ -16,6 +16,8 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Presents token-budget values in k-token units, with 1000k as the default presentation value
 - Keeps the guardrail editor compact by default for efficient policy administration
 - Reflects saved guardrail values in policy views used for governance and oversight
+- Provides system-level configuration for selecting the model used by AI-assisted Skill and SOP workflow authoring
+- Uses centrally managed model options so workflow-generation governance aligns with enterprise model policy
 
 ## Key Concepts
 - **Per-Agent-Type Guardrail Profile**: A policy profile tied to one Agent Type for consistent execution governance
@@ -23,6 +25,7 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - **Delegation Boundaries**: Policy limits that bound delegation depth and delegated-step volume
 - **Conversational Policy Behavior**: Continuous token usage visibility while preserving conversation continuity unless other guardrails require a stop
 - **Policy Outcome Transparency**: Clear representation of guardrail outcomes for triage and governance reporting
+- **Workflow Generation Model Policy**: Central selection of the approved model used for AI-assisted workflow drafting and preview
 
 ## Acceptance Criteria
 - A distinct guardrail profile is visible for each Agent Type
@@ -32,6 +35,9 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Guardrail editing remains compact by default and supports efficient policy review across many Agent Types
 - After closing create/edit/delete or guardrail dialogs, parent tables refresh automatically to show updated data without manual page reload
 - Governance views clearly distinguish guardrail policy outcomes from functional execution failures
+- Authorized administrators can select the workflow-generation model from system configuration
+- Workflow-generation model choices align with the centrally managed model configuration catalog
+- If no workflow-generation model is configured, AI-assisted generation and preview actions show a clear user-facing error instead of silently using a fallback
 
 ## Out of Scope
 - Technical implementation details, architecture internals, or service-level configuration mechanics

@@ -358,12 +358,23 @@ def setup_telemetry(config: "TelemetrySettings") -> None:
     # Per-component log levels
     _apply_log_levels(config.log_levels)
 
+    # HTTP client log level — always applied after log_levels so this dedicated
+    # setting wins over anything inadvertently set via the generic dict.
+    _apply_http_client_log_level(config.http_client_log_level)
+
     _telemetry_initialised = True
     logger.info(
         "OpenTelemetry initialised — service=%s exporters=%s",
         config.service_name,
         [e.value for e in config.exporters],
     )
+
+
+def _apply_http_client_log_level(level_str: str) -> None:
+    """Apply the dedicated HTTP client log level to httpx and httpcore loggers."""
+    level = getattr(logging, level_str.upper(), logging.WARNING)
+    logging.getLogger("httpx").setLevel(level)
+    logging.getLogger("httpcore").setLevel(level)
 
 
 def _apply_log_levels(log_levels: dict) -> None:
