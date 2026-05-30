@@ -32,7 +32,8 @@ For **conversation-type agents**, the module provides persistent, user-named ses
 | `ConversationSessionsTab` | New sessions list UI with start/resume/end/archive actions; embedded in AgentManagementPage for conversation agents; displays session title, status, and last active time |
 | `ChatPage` | Real-time chat interface; updated to support session creation and resume via route param; displays live `sessionTitle` received from WebSocket `title_update` event |
 | `useConversationSessions` | New React Query hook; exposes sessions list, create/end/archive mutations for a given agent type |
-| `useChatSession` | WebSocket session manager hook; extended with `sessionTitle` state and `title_update` handling |
+| `useChatSession` | WebSocket session manager hook; handles `sessionTitle`, additive `chat_status` events, and folded delegation snippets |
+| `ConversationDialog` | Embedded conversation surface used in agent execution flows; renders compact status and folded delegation snippets |
 
 ---
 
@@ -66,8 +67,13 @@ For **conversation-type agents**, the module provides persistent, user-named ses
 | `ConversationRouter` | router | FastAPI router at /conversations; extended with create, resume, end, archive endpoints; guarded by `require_permission(RT_CONVERSATION, "read")` | `backend/app/api/v1/conversations.py` |
 | `AgentSessionService` | service | WebSocket lifecycle handler for agent sessions; extended to dispatch SessionAutoNamer and push `title_update` events | `backend/app/services/agents/session_service.py` |
 | `useConversationSessions` | hook | New React Query hook; exposes sessions list, create/end/archive mutations for a given agent type | `frontend/src/hooks/useConversationSessions.ts` |
-| `useChatSession` | hook | WebSocket session manager hook; extended with `sessionTitle` state and `title_update` handling | `frontend/src/hooks/useChatSession.ts` |
+| `ChatRole` | TypeScript type | Role union used for chat turn rendering in conversation surfaces | `frontend/src/hooks/useChatSession.ts` |
+| `ChatMessage` | TypeScript interface | Conversation message model for user/agent/system turns | `frontend/src/hooks/useChatSession.ts` |
+| `ChatStatus` | TypeScript interface | Transient status model for thinking/delegating/waiting/tool-use/timeout states | `frontend/src/hooks/useChatSession.ts` |
+| `DelegationSnippetLine` | TypeScript interface | Folded snippet line model derived from delegation-related status/tool events | `frontend/src/hooks/useChatSession.ts` |
+| `useChatSession` | hook | WebSocket session manager hook; handles `sessionTitle`, additive status parsing, and delegation snippet aggregation | `frontend/src/hooks/useChatSession.ts` |
 | `ConversationSessionsTab` | component | New sessions list UI with start/resume/end/archive actions; embedded in AgentManagementPage for conversation agents | `frontend/src/components/agents/ConversationSessionsTab.tsx` |
+| `ConversationDialog` | component | Conversation dialog surface with compact status indicator and folded delegation snippet panel | `frontend/src/components/agents/ConversationDialog.tsx` |
 | `ChatPage` | component | Real-time chat interface; updated to support session creation and resume via route param; displays live `sessionTitle` | `frontend/src/pages/chat/ChatPage.tsx` |
 | `AgentManagementPage` | component | Agent type list and detail management; updated to show Sessions tab for conversation-type agents | `frontend/src/pages/agents/AgentManagementPage.tsx` |
 | `AgentTypeDetailsDialog` | component | Agent type detail dialog; updated to show Sessions tab (index 3) conditionally for conversation-type agents | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
@@ -75,3 +81,4 @@ For **conversation-type agents**, the module provides persistent, user-named ses
 | `ConversationHistoryPage` | component | Existing read-only conversation history view; receives schema updates to ConversationSession type | `frontend/src/pages/conversations/ConversationHistoryPage.tsx` |
 | `ConversationSession` | TypeScript interface | Frontend type for session; updated to add `title`, `triggered_by_user_id`, `agent_job_id`, `updated_at`, `channel`, `turn_count`, `closed_at`; remove `agent_instance_id`, `initiator_subject` | `frontend/src/types/index.ts` |
 | `ConversationSessionDetail` | TypeScript interface | Extends ConversationSession with a `turns: ConversationTurn[]` array; used by ChatPage when loading resumed session history | `frontend/src/types/index.ts` |
+| `conversations.sessions.*` | i18n namespace | Conversation session labels, live status strings, and delegation snippet panel copy | `frontend/src/i18n/locales/en.json` |

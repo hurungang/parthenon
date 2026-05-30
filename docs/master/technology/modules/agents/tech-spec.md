@@ -143,6 +143,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `GET` | `/api/v1/agents/sessions/{id}/result` | Full output; 409 if session not yet completed |
 | `GET` | `/api/v1/agents/sessions/{id}/execution-logs` | `ExecutionLogRead[]` — system instruction and user prompt captured before first LLM call; 404 if session not found |
 | `GET` | `/api/v1/agents/sessions/{id}/logs` | `ExecutionLogEntryRead[]` — ordered event entries (event_type, log_level, message, data, timestamp) emitted during execution; 404 if session not found |
+| `GET` | `/api/v1/agents/sessions/{id}/logs/stream` | Live NDJSON stream of append-only execution log entries during active runs; emits terminal completion marker |
 
 ### Model Configurations
 
@@ -228,8 +229,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
 | `SessionDispatcher` | class | Background dispatch worker; `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor` | `backend/app/services/agents/session_dispatcher.py` |
 | `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; enforces A2A target-agent permission checks and session-link lifecycle handoff metadata during delegation; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token | `backend/app/services/agents/runtime_executor.py` |
+| `_extract_agent_delegation_target` | function | Extracts delegated target slug from canonical delegation tool names for status/event labeling | `backend/app/services/agents/runtime_executor.py` |
 | `_run_task_loop_ar` | method | Runtime task loop enforcement path for iteration ceilings, delegated step budgets, and timeout guardrails | `backend/app/services/agents/runtime_executor.py` |
 | `execute_conversation_turn` | method | Conversational runtime path with mode-aware token guardrail handling and current-session usage reporting | `backend/app/services/agents/runtime_executor.py` |
+| `execute_conversation_turn_from_context` | method | Context-driven conversation execution path used by chat transport, including additive status/tool events for delegation visibility | `backend/app/services/agents/runtime_executor.py` |
 | `RuntimeExecutor` | class alias | Alias used in change docs for `AgentRuntimeExecutor` workflow and session lifecycle orchestration | `backend/app/services/agents/runtime_executor.py` |
 | `_get_agent_identity_jwt` | method | `AgentRuntimeExecutor._get_agent_identity_jwt()`; decrypts the executing agent's identity access token from the credential vault for passthrough sessions; returns error dict if token unavailable | `backend/app/services/agents/runtime_executor.py` |
 | `_load_role_mcp_session_map` | method | `AgentRuntimeExecutor._load_role_mcp_session_map()`; returns `{session_id, auth_type}` per server; used to detect passthrough sessions at execution time | `backend/app/services/agents/runtime_executor.py` |
@@ -263,6 +266,9 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `update_agent_type` | endpoint | Agent type update endpoint where guardrail policy compatibility checks and validation are applied | `backend/app/api/v1/agents.py` |
 | `AgentInstanceRouter` | router | Instance listing and force-termination; unchanged | `backend/app/api/v1/agents.py` |
 | `ModelConfigRouter` | router | Mounts all `/agents/model-configs` endpoints | `backend/app/api/v1/agents.py` |
+| `get_session_execution_logs` | endpoint | Pull endpoint returning ordered `ExecutionLogEntryRead[]` for a session | `backend/app/api/v1/agents.py` |
+| `stream_session_execution_logs` | endpoint | Live NDJSON stream endpoint for incremental execution-log entries and terminal completion marker | `backend/app/api/v1/agents.py` |
+| `get_session_prompt_logs` | endpoint | Pull endpoint returning captured system-instruction and user-prompt records (`ExecutionLogRead[]`) | `backend/app/api/v1/agents.py` |
 | `get_workflow_generation_model` | endpoint | Returns selected workflow generation model and available model options | `backend/app/api/v1/agents.py` |
 | `set_workflow_generation_model` | endpoint | Validates and updates selected workflow generation model setting | `backend/app/api/v1/agents.py` |
 
@@ -370,6 +376,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `useExecutionLogs` | hook | Fetches `ExecutionLogRead[]` from `GET /agents/sessions/{id}/execution-logs`; used by `AgentJobPage` to supply system instruction and user prompt to `LogViewer` | `frontend/src/hooks/useExecutionLogs.ts` |
+| `useSessionExecutionLogStream` | hook | Consumes `GET /agents/sessions/{id}/logs/stream` live updates with reconnect and pull-backfill fallback for non-conversation execution logs | `frontend/src/hooks/useSessionExecutionLogStream.ts` |
 
 ### Frontend i18n (`frontend/src/i18n/locales/`)
 

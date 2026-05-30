@@ -2,6 +2,7 @@
 
 ```mermaid
 sequenceDiagram
+    participant CHAT as Conversation UI
     participant UI as Instance Detail View
     participant CH as Communication Hub
     participant AR as Agent Runtime
@@ -15,14 +16,20 @@ sequenceDiagram
     DB-->>CC: Policy snapshot
     CC-->>CH: Effective policy
     CH-->>AR: Effective policy
+    AR->>CH: Publish chat status events
+    CH-->>CHAT: Forward status and delegation snippets
     AR->>AR: Append execution events and guardrail checks
+    AR->>CC: Stream incremental execution-log entries
+    CC-->>UI: Push live append-only execution updates
     alt Guardrail stop
         AR->>CH: Publish stop reason and terminal status
         CH->>CC: Route governance outcome
         CC->>DB: Persist governance event
+        CH-->>CHAT: Display terminal timeout or failure state
         CH-->>UI: Display terminal guardrail stop
     else Completed
         AR->>CH: Publish completion status
+        CH-->>CHAT: Display completion state
         CH-->>UI: Display completion
     end
 ```

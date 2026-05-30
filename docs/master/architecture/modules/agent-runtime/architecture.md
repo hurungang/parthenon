@@ -14,6 +14,7 @@ flowchart LR
     RM[Runtime Guardrail Monitor]
     FS[Guardrail Fail-Safe Handler]
     TC[Tool and Delegation Calls]
+    EVT[Status and execution events]
     ST[Workflow status and stop reason]
 
     CH --> ORCH
@@ -28,6 +29,8 @@ flowchart LR
     SOP -->|Yes| RM
     DSOP --> RM
     RM --> TC
+    TC --> EVT
+    EVT --> CH
     RM -->|Guardrail exceeded| FS
     FS --> ST
     ST --> CH

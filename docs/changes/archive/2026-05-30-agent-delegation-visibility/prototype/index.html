@@ -69,6 +69,8 @@ button{cursor:pointer;font-family:inherit;font-size:14px}
 .snippet-body.open{display:block}
 .snippet-list{display:flex;flex-direction:column;gap:8px}
 .snippet-line{font-family:'Courier New',monospace;font-size:12px;padding:8px 10px;border-radius:6px;background:#F8FAFC;border:1px solid #E7ECF2;color:#334155}
+.snippet-footer-link{padding:0 12px 10px}
+.hidden{display:none}
 
 .meta-grid{display:grid;gap:10px}
 .meta-row{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;background:#FCFDFE}
@@ -142,20 +144,23 @@ button{cursor:pointer;font-family:inherit;font-size:14px}
         </div>
 
         <div class="snippet-card" id="snippetCard">
-          <div class="snippet-head" id="snippetToggle" aria-expanded="false">
+          <div class="snippet-head" id="snippetToggle">
             <div>
-              <div class="snippet-title">Delegation execution log snippets</div>
+              <div class="snippet-title">Delegation Progress</div>
               <div class="snippet-meta" id="snippetMeta">Folded by default - 0 snippets</div>
-              <div class="snippet-preview" id="snippetPreview">No log snippets yet.</div>
+              <div class="snippet-preview" id="snippetPreview">No delegation snippets yet.</div>
             </div>
-            <button class="btn-link" id="snippetToggleText" type="button">Expand</button>
+            <button class="btn-link" id="snippetToggleText" type="button">Show Details</button>
           </div>
           <div class="snippet-body" id="snippetBody">
             <div class="snippet-list" id="snippetList"></div>
           </div>
+          <div id="viewExecutionLogsWrap" class="snippet-footer-link hidden">
+            <button class="btn-link" type="button">View Execution Logs</button>
+          </div>
         </div>
 
-        <div class="bubble agent" id="chatFinal" style="display:none;">
+        <div class="bubble agent hidden" id="chatFinal">
           Delegation completed. I returned a compliance summary, flagged unresolved controls, and queued legal review follow-up.
         </div>
       </div>
@@ -254,6 +259,7 @@ const snippetToggleText = document.getElementById("snippetToggleText");
 
 const runState = document.getElementById("runState");
 const liveLog = document.getElementById("liveLog");
+const viewExecutionLogsWrap = document.getElementById("viewExecutionLogsWrap");
 const steps = [
   document.getElementById("step1"),
   document.getElementById("step2"),
@@ -290,7 +296,7 @@ function updateSnippetHeader() {
   if (chatSnippetCount > 0) {
     snippetPreview.textContent = lines[chatSnippetCount - 1].textContent;
   } else {
-    snippetPreview.textContent = "No log snippets yet.";
+    snippetPreview.textContent = "No delegation snippets yet.";
   }
 }
 
@@ -301,7 +307,7 @@ function toggleSnippetBody(forceExpanded) {
     chatSnippetExpanded = !chatSnippetExpanded;
   }
   snippetBody.classList.toggle("open", chatSnippetExpanded);
-  snippetToggleText.textContent = chatSnippetExpanded ? "Collapse" : "Expand";
+  snippetToggleText.textContent = chatSnippetExpanded ? "Hide Details" : "Show Details";
 }
 
 function addSnippetLine(text) {
@@ -324,16 +330,17 @@ function resetConversationView() {
   chatStatus.className = "status-pill";
   chatStatusText.textContent = "Thinking";
   chatDots.style.display = "inline-flex";
-  chatFinal.style.display = "none";
+  chatFinal.classList.add("hidden");
   chatSummary.textContent = "Ready to simulate delegation visibility states.";
   snippetList.innerHTML = "";
+  viewExecutionLogsWrap.classList.add("hidden");
   toggleSnippetBody(false);
   updateSnippetHeader();
 }
 
 function playConversationFlow(isTimeout) {
   resetConversationView();
-  setChatStatus("thinking", "Thinking", true);
+  setChatStatus("thinking", "Thinking…", true);
   chatSummary.textContent = "Primary conversational agent is processing.";
 
   chatTimers.push(window.setTimeout(function () {
@@ -343,13 +350,13 @@ function playConversationFlow(isTimeout) {
   }, 1100));
 
   chatTimers.push(window.setTimeout(function () {
-    setChatStatus("waiting", "Waiting for delegated response", true);
+    setChatStatus("waiting", "Waiting for delegated response…", true);
     chatSummary.textContent = "Waiting state remains visible while delegated work runs.";
-    addSnippetLine("[10:42:09] risk-auditor accepted task and started evidence checks");
+    addSnippetLine("Waiting for delegated response…");
   }, 2300));
 
   chatTimers.push(window.setTimeout(function () {
-    addSnippetLine("[10:42:11] evidence-scan tool completed (12 controls processed)");
+    addSnippetLine("Using tool evidence-scan…");
   }, 3200));
 
   chatTimers.push(window.setTimeout(function () {
@@ -358,15 +365,16 @@ function playConversationFlow(isTimeout) {
 
   chatTimers.push(window.setTimeout(function () {
     if (isTimeout) {
-      setChatStatus("fail", "Delegation timed out. Please retry.", false);
+      setChatStatus("fail", "Delegated step timed out or failed. Please try again.", false);
       chatSummary.textContent = "Final state is explicit timeout to avoid indefinite waiting.";
       addSnippetLine("[10:42:18] delegated execution timeout threshold reached");
       return;
     }
     setChatStatus("done", "Delegation completed by risk-auditor", false);
     chatSummary.textContent = "Delegated work completed and conversation can continue.";
-    chatFinal.style.display = "block";
+    chatFinal.classList.remove("hidden");
     addSnippetLine("[10:42:18] delegated response merged into conversation output");
+    viewExecutionLogsWrap.classList.remove("hidden");
   }, 5200));
 }
 
@@ -404,24 +412,24 @@ function appendLogLine(level, content) {
 function startLiveStream() {
   resetStreamView();
   const streamLines = [
-    { level: "info", text: "10:43:01 session queued by scheduler" },
-    { level: "info", text: "10:43:02 planner initialized for non-conversation run" },
-    { level: "info", text: "10:43:04 plan step 1 accepted: gather policy deltas" },
-    { level: "warn", text: "10:43:07 external source latency above baseline" },
-    { level: "info", text: "10:43:09 tool call complete: policy-index.fetch" },
-    { level: "info", text: "10:43:12 tool call complete: risk-correlation.compute" },
-    { level: "info", text: "10:43:15 final synthesis in progress" },
-    { level: "info", text: "10:43:18 run completed successfully" }
+    { level: "info", text: "10:43:01 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"session_queued\"}}" },
+    { level: "info", text: "10:43:02 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"planner_initialized\"}}" },
+    { level: "info", text: "10:43:04 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"iteration_started\"}}" },
+    { level: "warn", text: "10:43:07 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"external_latency_warning\"}}" },
+    { level: "info", text: "10:43:09 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"tool_call\",\"tool\":\"policy-index.fetch\"}}" },
+    { level: "info", text: "10:43:12 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"tool_call\",\"tool\":\"risk-correlation.compute\"}}" },
+    { level: "info", text: "10:43:15 {\"type\":\"log_entry\",\"entry\":{\"event_type\":\"final_synthesis\"}}" },
+    { level: "info", text: "10:43:18 {\"type\":\"stream_completed\",\"session_status\":\"completed\"}" }
   ];
 
-  runState.textContent = "Running (streaming live updates)";
+  runState.textContent = "Live stream: connected";
   setStepState(0, "active");
 
   streamTimer = window.setInterval(function () {
     if (streamIndex >= streamLines.length) {
       window.clearInterval(streamTimer);
       streamTimer = null;
-      runState.textContent = "Completed";
+      runState.textContent = "Stream completed (session terminal)";
       setStepState(3, "done");
       return;
     }

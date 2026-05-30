@@ -84,7 +84,7 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 | `CommHubToolClient` | class | Sends tool and A2A requests from Agent Runtime to Communication Hub internal routes with service identity headers or mTLS | `backend/app/agent_runtime/comm_hub_client.py` |
 | `trigger_execution` | endpoint | Runtime execution trigger endpoint used by Communication Hub for asynchronous session execution | `backend/app/agent_runtime/api/execute.py` |
 | `_execute_session` | function | Executes one queued session with control-plane state updates and tool routing through Communication Hub | `backend/app/agent_runtime/api/execute.py` |
-| `execute_conversation_turn` | endpoint | Executes conversation turn requests delegated from Communication Hub chat flows | `backend/app/agent_runtime/api/conversation.py` |
+| `execute_conversation_turn` | endpoint | Executes conversation turn requests delegated from Communication Hub chat flows; supports NDJSON status-event streaming before final payload | `backend/app/agent_runtime/api/conversation.py` |
 
 ### Certificate Manager (`backend/app/agent_runtime/certificate_manager.py`)
 
