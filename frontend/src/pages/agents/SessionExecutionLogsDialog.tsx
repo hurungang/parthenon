@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
   Box,
-  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
   IconButton,
-  Paper,
-  Stack,
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
@@ -15,14 +12,22 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import { useTranslation } from 'react-i18next'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { LogViewer } from '../../components/executions/LogViewer'
+import { useExecutionLogs } from '../../hooks/useExecutionLogs'
+import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
+import type { AgentJobStatus, ExecutionLogEntry } from '../../types'
 
-interface ExecutionLogEntry {
-  id: string
-  timestamp: string
-  event_type: string
-  log_level: string
-  message: string
-  data: Record<string, unknown>
+function mergeLogEntries(existing: ExecutionLogEntry[], incoming: ExecutionLogEntry[]): ExecutionLogEntry[] {
+  const map = new Map<string, ExecutionLogEntry>()
+  for (const entry of existing) {
+    map.set(entry.id, entry)
+  }
+  for (const entry of incoming) {
+    map.set(entry.id, entry)
+  }
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  )
 }
 
 interface Props {
@@ -34,8 +39,16 @@ interface Props {
 export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) {
   const { t } = useTranslation()
   const [logs, setLogs] = useState<ExecutionLogEntry[]>([])
+  const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
+  const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(sessionId)
+
+  const { entries: streamedEntries } = useSessionExecutionLogStream({
+    sessionId,
+    enabled: open,
+    sessionStatus,
+  })
 
   const fetchLogs = async () => {
     if (!sessionId) return
@@ -46,6 +59,8 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
         `/agents/sessions/${sessionId}/logs`
       )
       setLogs(data)
+      const statusResponse = await apiClient.get<{ status: AgentJobStatus }>(`/agents/sessions/${sessionId}`)
+      setSessionStatus(statusResponse.data.status)
     } catch (err) {
       setDialogError(err)
     } finally {
@@ -59,33 +74,16 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
     }
   }, [open, sessionId])
 
+  useEffect(() => {
+    if (!streamedEntries.length) {
+      return
+    }
+    setLogs((prev) => mergeLogEntries(prev, streamedEntries))
+  }, [streamedEntries])
+
   const handleClose = () => {
     setDialogError(null)
     onClose()
-  }
-
-  const getEventTypeColor = (
-    eventType: string
-  ): 'primary' | 'secondary' | 'error' | 'default' => {
-    switch (eventType) {
-      case 'llm_call':
-        return 'primary'
-      case 'tool_call':
-        return 'secondary'
-      case 'error':
-        return 'error'
-      default:
-        return 'default'
-    }
-  }
-
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      fractionalSecondDigits: 3,
-    } as Intl.DateTimeFormatOptions)
   }
 
   return (
@@ -114,48 +112,16 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
         {loading && (
           <Typography color="text.secondary">{t('app.loading')}</Typography>
         )}
-        {!loading && !dialogError && logs.length === 0 && (
+        {!loading && !dialogError && !execLogsLoading && logs.length === 0 && execLogs.length === 0 && (
           <Typography color="text.secondary">{t('agents.sessions.noLogsAvailable')}</Typography>
         )}
-        <Stack spacing={1} mt={dialogError || logs.length > 0 ? 2 : 0}>
-          {logs.map((log) => (
-            <Paper key={log.id} sx={{ p: 2 }} variant="outlined">
-              <Box display="flex" gap={1} alignItems="center" mb={1}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ minWidth: 100 }}
-                >
-                  {formatTimestamp(log.timestamp)}
-                </Typography>
-                <Chip
-                  label={log.event_type}
-                  size="small"
-                  color={getEventTypeColor(log.event_type)}
-                />
-                <Typography variant="body2" sx={{ flex: 1 }}>
-                  {log.message}
-                </Typography>
-              </Box>
-              {Object.keys(log.data).length > 0 && (
-                <Box
-                  component="pre"
-                  sx={{
-                    bgcolor: 'grey.100',
-                    p: 1,
-                    borderRadius: 1,
-                    fontSize: '0.75rem',
-                    overflow: 'auto',
-                    maxHeight: 200,
-                    m: 0,
-                  }}
-                >
-                  {JSON.stringify(log.data, null, 2)}
-                </Box>
-              )}
-            </Paper>
-          ))}
-        </Stack>
+        {!loading && !dialogError && !execLogsLoading && (logs.length > 0 || execLogs.length > 0) && (
+          <LogViewer
+            executionLog={execLogs[0] ?? null}
+            entries={logs}
+            sessionStatus={sessionStatus}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )

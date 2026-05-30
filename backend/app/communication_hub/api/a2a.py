@@ -10,7 +10,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.schemas.agents import A2ARequest, A2AResponse
 from app.services.comm_hub.broker import MessageBroker
@@ -200,6 +200,20 @@ async def request_a2a(
         receiver_session_id=(str(receiver_session_id) if receiver_session_id else None),
         response_payload=response_payload,
     )
+
+
+@router.get("/wait/{receiver_session_id}")
+async def wait_for_a2a_response(
+    receiver_session_id: uuid.UUID,
+    timeout_seconds: float = Query(default=20.0, ge=1.0, le=120.0),
+) -> dict[str, Any]:
+    """Wait for a delegated receiver session result.
+
+    This keeps request acceptance and result waiting decoupled so callers can
+    emit receiver_session_id immediately and still wait for completion.
+    """
+
+    return await _wait_for_receiver_result(receiver_session_id, timeout_seconds)
 
 
 @router.post("/disconnect/{session_link_id}")

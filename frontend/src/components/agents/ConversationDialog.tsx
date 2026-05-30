@@ -29,14 +29,20 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
+import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import {
   useChatSession,
   type ChatMessage,
+  type DelegationCycle,
   type ConversationalGuardrailUsage,
+  type DelegationSnippetLine,
 } from '../../hooks/useChatSession'
 import { useEndConversationSession } from '../../hooks/useConversationSessions'
+import { buildDelegationHistoryFromTurns, buildHistoryMessagesFromTurns } from '../../utils/delegationHistory'
 import type { ConversationSessionDetail } from '../../types'
 
 interface ConversationDialogProps {
@@ -45,10 +51,19 @@ interface ConversationDialogProps {
   agentTypeId: string
   agentTypeName: string
   onClose: () => void
+  initialFullscreen?: boolean
+  testIdPrefix?: string
 }
 
 function toNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function pickRecordValue(payload: Record<string, unknown>, snakeKey: string, camelKey: string): unknown {
+  if (snakeKey in payload) {
+    return payload[snakeKey]
+  }
+  return payload[camelKey]
 }
 
 function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUsage | null {
@@ -58,16 +73,26 @@ function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUs
 
   const payload = value as Record<string, unknown>
   return {
-    policySnapshotId:
-      typeof payload['policy_snapshot_id'] === 'string' ? payload['policy_snapshot_id'] : null,
-    tokenUsageCurrentSession: toNullableNumber(payload['token_usage_current_session']),
-    tokenBudget: toNullableNumber(payload['token_budget']),
-    cumulativeIterations: toNullableNumber(payload['cumulative_iterations']),
-    maxIterations: toNullableNumber(payload['max_iterations']),
-    delegatedSteps: toNullableNumber(payload['delegated_steps']),
-    maxDelegatedSteps: toNullableNumber(payload['max_delegated_steps']),
-    delegationDepth: toNullableNumber(payload['delegation_depth']),
-    maxDelegationDepth: toNullableNumber(payload['max_delegation_depth']),
+    policySnapshotId: (() => {
+      const raw = pickRecordValue(payload, 'policy_snapshot_id', 'policySnapshotId')
+      return typeof raw === 'string' ? raw : null
+    })(),
+    tokenUsageCurrentSession: toNullableNumber(
+      pickRecordValue(payload, 'token_usage_current_session', 'tokenUsageCurrentSession'),
+    ),
+    tokenBudget: toNullableNumber(pickRecordValue(payload, 'token_budget', 'tokenBudget')),
+    cumulativeIterations: toNullableNumber(
+      pickRecordValue(payload, 'cumulative_iterations', 'cumulativeIterations'),
+    ),
+    maxIterations: toNullableNumber(pickRecordValue(payload, 'max_iterations', 'maxIterations')),
+    delegatedSteps: toNullableNumber(pickRecordValue(payload, 'delegated_steps', 'delegatedSteps')),
+    maxDelegatedSteps: toNullableNumber(
+      pickRecordValue(payload, 'max_delegated_steps', 'maxDelegatedSteps'),
+    ),
+    delegationDepth: toNullableNumber(pickRecordValue(payload, 'delegation_depth', 'delegationDepth')),
+    maxDelegationDepth: toNullableNumber(
+      pickRecordValue(payload, 'max_delegation_depth', 'maxDelegationDepth'),
+    ),
   }
 }
 
@@ -81,6 +106,8 @@ export function ConversationDialog({
   agentTypeId,
   agentTypeName,
   onClose,
+  initialFullscreen = false,
+  testIdPrefix = 'conversation-dialog',
 }: ConversationDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -92,13 +119,124 @@ export function ConversationDialog({
   const [error, setError] = useState<unknown>(null)
   const [endError, setEndError] = useState<unknown>(null)
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
+  const [fullscreen, setFullscreen] = useState(initialFullscreen)
   const [pendingInitialMessage, setPendingInitialMessage] = useState<string | null>(null)
+  const [executionDetailsOpen, setExecutionDetailsOpen] = useState(false)
+  const [executionDetailsSessionId, setExecutionDetailsSessionId] = useState<string | null>(null)
   const [guardrailHintAnchorEl, setGuardrailHintAnchorEl] = useState<HTMLElement | null>(null)
   const [resumedGuardrailUsage, setResumedGuardrailUsage] =
     useState<ConversationalGuardrailUsage | null>(null)
 
   const endSession = useEndConversationSession(agentTypeId)
+  const testId = (suffix: string) => `${testIdPrefix}-${suffix}`
+
+  const formatSnippetLine = (snippet: DelegationSnippetLine): string => {
+    if (snippet.kind === 'delegating' && snippet.agentType) {
+      return t('conversations.sessions.statusDelegatingToAgent', { agentType: snippet.agentType })
+    }
+    if (snippet.kind === 'waiting') {
+      return t('conversations.sessions.statusWaiting')
+    }
+    if (snippet.kind === 'using_tool' && snippet.toolName) {
+      return t('conversations.sessions.statusUsingTool', { toolName: snippet.toolName })
+    }
+    if (snippet.kind === 'log_title' && snippet.logTitle) {
+      return snippet.logTitle
+    }
+    return t('conversations.sessions.snippetPanelEmpty')
+  }
+
+  const formatDateTime = (value: string | null | undefined): string => {
+    if (!value) {
+      return new Date().toLocaleString()
+    }
+    return new Date(value).toLocaleString()
+  }
+
+  const toEpochMs = (value: string | null | undefined): number => {
+    if (!value) {
+      return Number.MAX_SAFE_INTEGER
+    }
+    const ms = Date.parse(value)
+    return Number.isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms
+  }
+
+  const resolveCycleAgentType = (cycle: DelegationCycle, isActiveCycle: boolean): string | null => {
+    const snippetWithAgent =
+      cycle.snippets.find(
+        (snippet) =>
+          (snippet.kind === 'delegating' || snippet.kind === 'waiting') &&
+          Boolean(snippet.agentType),
+      ) ?? null
+    if (snippetWithAgent?.agentType) {
+      return snippetWithAgent.agentType
+    }
+
+    if (
+      isActiveCycle &&
+      (chatStatus?.kind === 'delegating' || chatStatus?.kind === 'waiting') &&
+      chatStatus.agentType
+    ) {
+      return chatStatus.agentType
+    }
+
+    return null
+  }
+
+  const buildCyclesFromLegacySnippets = (): DelegationCycle[] => {
+    if (delegationSnippets.length === 0) {
+      return []
+    }
+
+    const cycles: DelegationCycle[] = []
+    let current: DelegationCycle | null = null
+
+    for (const snippet of delegationSnippets) {
+      if (!current || snippet.kind === 'delegating') {
+        current = {
+          id: `legacy-cycle-${cycles.length + 1}`,
+          startedAt: snippet.timestamp,
+          snippets: [],
+          snippetsCollapsed: true,
+          completed: false,
+          executionLogAvailable: false,
+          executionSessionId: null,
+        }
+        cycles.push(current)
+      }
+      current.snippets.push(snippet)
+    }
+
+    if (cycles.length === 1) {
+      cycles[0] = {
+        ...cycles[0],
+        snippetsCollapsed: delegationSnippetsCollapsed,
+        completed: delegationCompleted,
+        executionLogAvailable: delegationExecutionLogAvailable,
+        executionSessionId: delegationExecutionSessionId,
+      }
+      return cycles
+    }
+
+    for (let index = 0; index < cycles.length; index += 1) {
+      const isLast = index === cycles.length - 1
+      cycles[index] = {
+        ...cycles[index],
+        snippetsCollapsed: isLast ? delegationSnippetsCollapsed : true,
+        completed: !isLast,
+      }
+    }
+
+    if (delegationExecutionSessionId && cycles.length > 0) {
+      cycles[0] = {
+        ...cycles[0],
+        executionLogAvailable: delegationExecutionLogAvailable,
+        executionSessionId: delegationExecutionSessionId,
+      }
+    }
+
+    return cycles
+  }
 
   const {
     messages: wsMessages,
@@ -107,6 +245,15 @@ export function ConversationDialog({
     sessionTitle,
     guardrailUsage,
     chatStatus,
+    delegationCycles,
+    activeDelegationCycleId,
+    delegationSnippets,
+    delegationSnippetsCollapsed,
+    delegationCompleted,
+    delegationExecutionLogAvailable,
+    delegationExecutionSessionId,
+    toggleDelegationSnippetsCollapsed,
+    hydrateDelegationFromHistory,
     sendMessage,
   } =
     useChatSession(wsSessionId, convSessionId)
@@ -156,6 +303,52 @@ export function ConversationDialog({
 
   // Combine resumed history with live WebSocket messages
   const messages = [...resumedMessages, ...wsMessages]
+  const filterEmptyDelegationCycles = (cycles: DelegationCycle[]) =>
+    cycles.filter((cycle) => {
+      if (!cycle.snippets || cycle.snippets.length === 0) return false
+      if (cycle.snippets.length === 1 && !cycle.snippets[0].agentType) return false
+      return true
+    })
+
+  const legacyCycles = buildCyclesFromLegacySnippets()
+  const effectiveDelegationCycles =
+    Array.isArray(delegationCycles) && delegationCycles.length > 0
+      ? filterEmptyDelegationCycles(delegationCycles)
+      : filterEmptyDelegationCycles(legacyCycles)
+  const effectiveActiveDelegationCycleId =
+    activeDelegationCycleId ??
+    (effectiveDelegationCycles.length > 0 ? effectiveDelegationCycles[effectiveDelegationCycles.length - 1].id : null)
+  const timelineEntries: Array<
+    | { kind: 'message'; id: string; timestamp: string; message: ChatMessage }
+    | { kind: 'delegation_cycle'; id: string; timestamp: string; cycle: DelegationCycle }
+  > = [
+    ...messages.map((message) => ({
+      kind: 'message' as const,
+      id: `message-${message.id}`,
+      timestamp: message.timestamp,
+      message,
+    })),
+    ...effectiveDelegationCycles.map((cycle) => ({
+      kind: 'delegation_cycle' as const,
+      id: `delegation-cycle-${cycle.id}`,
+      timestamp: cycle.startedAt,
+      cycle,
+    })),
+  ].sort((a, b) => toEpochMs(a.timestamp) - toEpochMs(b.timestamp))
+  const standaloneDelegationStatusLine =
+    chatStatus?.kind === 'waiting'
+      ? t('conversations.sessions.statusWaiting')
+      : chatStatus?.kind === 'using_tool' && chatStatus.toolName
+        ? t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
+        : chatStatus?.kind === 'delegating' && chatStatus.agentType
+          ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
+          : null
+  const shouldShowStandaloneDelegationStatus =
+    effectiveDelegationCycles.length === 0 &&
+    Boolean(standaloneDelegationStatusLine) &&
+    Boolean(chatStatus) &&
+    chatStatus?.kind !== 'thinking' &&
+    chatStatus?.kind !== 'timeout_or_failed'
 
   // Resume session when dialog opens with a sessionId
   // For new chats, session is created only when user sends first message
@@ -220,13 +413,12 @@ export function ConversationDialog({
       setConvSessionId(data.id)
       setResumedGuardrailUsage(parsePersistedGuardrailUsage(data.guardrail_usage))
       // Convert history turns to ChatMessages for display
-      const history: ChatMessage[] = (data.turns ?? []).map((turn) => ({
-        id: turn.id,
-        role: turn.role === 'agent' ? 'agent' : turn.role === 'user' ? 'user' : 'system',
-        content: turn.content,
-        timestamp: turn.created_at,
-      }))
+      const history: ChatMessage[] = buildHistoryMessagesFromTurns(
+        data.turns,
+        (agentType) => t('conversations.sessions.statusDelegatingToAgent', { agentType }),
+      )
       setResumedMessages(history)
+      hydrateDelegationFromHistory(buildDelegationHistoryFromTurns(data.turns))
       // Use conv session id as ws handle
       setWsSessionId(data.id)
     } catch (err) {
@@ -370,90 +562,222 @@ export function ConversationDialog({
                   variant="outlined"
                   sx={{ height: '100%', overflow: 'auto', p: 2, bgcolor: 'grey.50' }}
                 >
-                  {messages.length === 0 ? (
+                  {timelineEntries.length === 0 ? (
                     <Typography color="text.secondary" align="center">
                       {t('conversations.sessions.chatEmpty')}
                     </Typography>
                   ) : (
-                    messages.map((msg: ChatMessage) => (
-                      <Box
-                        key={msg.id}
-                        display="flex"
-                        flexDirection={msg.role === 'user' ? 'row-reverse' : 'row'}
-                        alignItems="flex-start"
-                        gap={1}
-                        mb={2}
-                      >
-                        <Avatar
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            bgcolor: msg.role === 'user' ? 'primary.main' : 'secondary.main',
-                          }}
+                    timelineEntries.map((entry) => {
+                      if (entry.kind === 'message') {
+                        const msg = entry.message
+                        return (
+                          <Box
+                            key={entry.id}
+                            display="flex"
+                            flexDirection={msg.role === 'user' ? 'row-reverse' : 'row'}
+                            alignItems="flex-start"
+                            gap={1}
+                            mb={2}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                bgcolor: msg.role === 'user' ? 'primary.main' : 'secondary.main',
+                              }}
+                            >
+                              {msg.role === 'user' ? <PersonIcon /> : <SmartToyIcon />}
+                            </Avatar>
+                            <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
+                              <Paper
+                                sx={{
+                                  p: 1.5,
+                                  width: 'fit-content',
+                                  maxWidth: '100%',
+                                  bgcolor: msg.role === 'user' ? 'primary.light' : 'background.paper',
+                                }}
+                              >
+                                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                  {msg.content}
+                                </Typography>
+                              </Paper>
+                              <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
+                                {formatDateTime(msg.timestamp)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )
+                      }
+
+                      const cycle = entry.cycle
+                      const isActiveCycle = cycle.id === effectiveActiveDelegationCycleId
+                      const introAgentType = resolveCycleAgentType(cycle, isActiveCycle)
+                      const introText = introAgentType
+                        ? t('conversations.sessions.statusDelegatingToAgent', { agentType: introAgentType })
+                        : t('conversations.sessions.snippetPanelTitle')
+                      const statusLine =
+                        chatStatus?.kind === 'waiting'
+                          ? t('conversations.sessions.statusWaiting')
+                          : chatStatus?.kind === 'using_tool' && chatStatus.toolName
+                            ? t('conversations.sessions.statusUsingTool', { toolName: chatStatus.toolName })
+                            : chatStatus?.kind === 'delegating' && chatStatus.agentType
+                              ? t('conversations.sessions.statusDelegatingToAgent', { agentType: chatStatus.agentType })
+                              : null
+                      const showLiveStatus = Boolean(
+                        isActiveCycle &&
+                          statusLine &&
+                          chatStatus &&
+                          chatStatus.kind !== 'thinking' &&
+                          chatStatus.kind !== 'timeout_or_failed',
+                      )
+                      const displaySnippets = cycle.snippets
+                      const displaySnippet = displaySnippets[displaySnippets.length - 1]
+                      const previewSnippet =
+                        displaySnippets.length > 1 || displaySnippet?.kind === 'log_title'
+                          ? displaySnippet
+                          : null
+
+                      return (
+                        <Box
+                          key={entry.id}
+                          display="flex"
+                          flexDirection="row"
+                          alignItems="flex-start"
+                          gap={1}
+                          mb={2}
+                          data-testid={testId('delegation-inline-row')}
                         >
-                          {msg.role === 'user' ? <PersonIcon /> : <SmartToyIcon />}
-                        </Avatar>
-                        <Paper
-                          sx={{
-                            p: 1.5,
-                            maxWidth: '70%',
-                            bgcolor: msg.role === 'user' ? 'primary.light' : 'background.paper',
-                          }}
-                        >
-                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                            {msg.content}
-                          </Typography>
-                        </Paper>
-                      </Box>
-                    ))
+                          <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                            <SmartToyIcon />
+                          </Avatar>
+                          <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
+                            <Paper sx={{ p: 1.5, width: 'fit-content', maxWidth: '100%', bgcolor: 'background.paper' }}>
+                              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
+                                {introText}
+                              </Typography>
+
+                              {showLiveStatus && (
+                                  <Box display="flex" alignItems="center" gap={1} mb={1} data-testid={testId('chat-status-indicator')}>
+                                  <CircularProgress size={16} />
+                                  <Typography variant="body2">{statusLine}</Typography>
+                                </Box>
+                              )}
+
+                              <Box data-testid={isActiveCycle ? testId('delegation-snippets') : testId('delegation-snippets-history')}>
+                                <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                                  <Typography variant="subtitle2" fontWeight={600}>
+                                    {t('conversations.sessions.snippetPanelTitle')}
+                                  </Typography>
+                                  {isActiveCycle && displaySnippets.length > 0 ? (
+                                    <Button
+                                      size="small"
+                                      onClick={toggleDelegationSnippetsCollapsed}
+                                      endIcon={cycle.snippetsCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+                                    >
+                                      {cycle.snippetsCollapsed
+                                        ? t('conversations.sessions.snippetPanelExpand')
+                                        : t('conversations.sessions.snippetPanelCollapse')}
+                                    </Button>
+                                  ) : null}
+                                </Box>
+
+                                {cycle.snippetsCollapsed ? (
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    data-testid={isActiveCycle ? testId('snippet-preview') : testId('snippet-preview-history')}
+                                  >
+                                    {previewSnippet ? formatSnippetLine(previewSnippet) : t('conversations.sessions.snippetPanelEmpty')}
+                                  </Typography>
+                                ) : (
+                                  <Box
+                                    display="flex"
+                                    flexDirection="column"
+                                    gap={0.5}
+                                    data-testid={isActiveCycle ? testId('snippet-expanded') : testId('snippet-expanded-history')}
+                                  >
+                                    {displaySnippets.map((snippet) => (
+                                      <Typography key={snippet.id} variant="caption" color="text.secondary">
+                                        {formatSnippetLine(snippet)}
+                                      </Typography>
+                                    ))}
+                                  </Box>
+                                )}
+
+                                {cycle.completed && cycle.executionLogAvailable && cycle.executionSessionId && (
+                                  <Box mt={1}>
+                                    <Button
+                                      size="small"
+                                      onClick={() => {
+                                        setExecutionDetailsSessionId(cycle.executionSessionId)
+                                        setExecutionDetailsOpen(true)
+                                      }}
+                                    >
+                                      {t('conversations.sessions.snippetPanelViewExecutionLogs')}
+                                    </Button>
+                                  </Box>
+                                )}
+                              </Box>
+                            </Paper>
+                            <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
+                              {formatDateTime(cycle.startedAt)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )
+                    })
                   )}
 
                   {chatStatus && chatStatus.kind === 'timeout_or_failed' && (
                     <Alert
                       severity="warning"
                       sx={{ mt: 1 }}
-                      data-testid="conversation-dialog-chat-status-terminal"
+                      data-testid={testId('chat-status-terminal')}
                     >
                       {t('conversations.sessions.statusTimeoutOrFailed')}
                     </Alert>
                   )}
 
-                  {chatStatus && chatStatus.kind !== 'timeout_or_failed' && (
-                    <Paper
-                      elevation={0}
-                      variant="outlined"
-                      sx={{ mt: 1, p: 1.25, display: 'flex', alignItems: 'center', gap: 1 }}
-                      data-testid="conversation-dialog-chat-status-indicator"
-                    >
-                      <CircularProgress size={16} />
-                      <Box display="flex" flexDirection="column">
-                        {chatStatus.kind === 'using_tool' && chatStatus.toolName && (
-                          <Typography variant="body2" fontWeight={600}>
-                            {t('conversations.sessions.statusUsingTool', {
-                              toolName: chatStatus.toolName,
-                            })}
-                          </Typography>
-                        )}
-                        {(chatStatus.kind === 'delegating' || chatStatus.kind === 'waiting') &&
-                          chatStatus.agentType && (
-                            <Typography variant="body2" fontWeight={600}>
-                              {t('conversations.sessions.statusDelegatingToAgent', {
-                                agentType: chatStatus.agentType,
-                              })}
+                  {chatStatus?.kind === 'thinking' && (
+                    <Box display="flex" flexDirection="row" alignItems="flex-start" gap={1} mb={2} data-testid={testId('chat-status-indicator')}>
+                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                        <SmartToyIcon />
+                      </Avatar>
+                      <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
+                        <Paper sx={{ p: 1.5, width: 'fit-content', maxWidth: '100%', bgcolor: 'background.paper' }}>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <CircularProgress size={16} />
+                            <Typography variant="body2">
+                              {t('conversations.sessions.statusThinking')}
                             </Typography>
-                          )}
-                        {chatStatus.kind === 'thinking' && (
-                          <Typography variant="body2">
-                            {t('conversations.sessions.statusThinking')}
-                          </Typography>
-                        )}
-                        {chatStatus.kind === 'waiting' && (
-                          <Typography variant="caption" color="text.secondary">
-                            {t('conversations.sessions.statusWaiting')}
-                          </Typography>
-                        )}
+                          </Box>
+                        </Paper>
+                        <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
+                          {formatDateTime(chatStatus?.timestamp)}
+                        </Typography>
                       </Box>
-                    </Paper>
+                    </Box>
+                  )}
+
+                  {shouldShowStandaloneDelegationStatus && (
+                    <Box display="flex" flexDirection="row" alignItems="flex-start" gap={1} mb={2} data-testid={testId('chat-status-indicator')}>
+                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                        <SmartToyIcon />
+                      </Avatar>
+                      <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
+                        <Paper sx={{ p: 1.5, width: 'fit-content', maxWidth: '100%', bgcolor: 'background.paper' }}>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <CircularProgress size={16} />
+                            <Typography variant="body2">
+                              {standaloneDelegationStatusLine}
+                            </Typography>
+                          </Box>
+                        </Paper>
+                        <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
+                          {formatDateTime(chatStatus?.timestamp)}
+                        </Typography>
+                      </Box>
+                    </Box>
                   )}
                 </Paper>
 
@@ -616,6 +940,17 @@ export function ConversationDialog({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {executionDetailsSessionId && executionDetailsOpen && (
+        <AgentExecutionDetailsDialog
+          open={true}
+          sessionId={executionDetailsSessionId}
+          onClose={() => {
+            setExecutionDetailsOpen(false)
+            setExecutionDetailsSessionId(null)
+          }}
+        />
+      )}
     </>
   )
 }

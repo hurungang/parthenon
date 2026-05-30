@@ -2,100 +2,181 @@
 
 ## 1. Technical Overview
 
-This adjustment scopes the change to minimal, user-facing chat status signals only:
+This refinement extends visibility in two user-facing paths while keeping core delegation/runtime behavior unchanged:
 
-- Show a thinking animation immediately after the user sends a message and while the conversational agent turn is still running.
-- When delegation starts, show text in this exact format: `Delegating to agent <agent_type>`.
-- After delegation starts, keep a waiting animation visible until the delegated step returns or the existing timeout path is reached.
+- Conversational path: continue real-time chat status signaling, and add delegation execution log snippets that are folded by default and expandable on demand.
+- Non-conversation path: stream session execution logs live while a run is active so users do not need manual refresh to observe progress.
 
-Core delegation/runtime behavior remains unchanged. No new services, no orchestration redesign, no database changes, and no new REST endpoints are introduced.
+Scope remains additive:
+
+- No changes to delegation authorization, role resolution, or runtime business logic.
+- No schema changes.
+- Existing pull-based log endpoints remain for compatibility and fallback.
 
 ## 2. Component Breakdown
 
-### `runtime_executor` (additive status metadata only)
+### `runtime_executor` (status and snippet-source events)
 
 **File:** `backend/app/services/agents/runtime_executor.py`
 
-- Reuse existing delegation target parsing from tool names (`agent____<slug>` via current parsing helpers).
-- Emit lightweight, additive conversation status metadata when a delegation tool call begins.
+- Continue emitting additive conversation status events (`thinking`, `delegating`, `waiting`, `using_tool`, terminal timeout/failure).
+- Keep delegation target extraction from canonical tool names as the source for `agent_type` display text.
+- Provide stable event ordering so chat snippet aggregation remains deterministic for UI folding/expansion.
 - Do not alter permission checks, delegation dispatch, wait timeout values, or response composition logic.
 
-### `websocket_chat` and `_process_message` (pass-through status events)
+### `websocket_chat` and Agent Runtime streaming bridge (chat transport)
 
 **File:** `backend/app/api/ws/chat.py`
 
-- Keep the current request/response turn flow.
-- Add minimal status event messages over the existing WebSocket channel so frontend can render thinking/delegating/waiting feedback during execution.
-- Continue sending final agent reply, title update, and guardrail update as currently done.
+- Keep current WebSocket request/response turn flow.
+- Continue forwarding status events from Agent Runtime streaming to chat clients as `chat_status` messages.
+- Preserve backward compatibility for existing chat payloads while adding fields required for snippet rendering (`tool_name`, `agent_type`, timestamp).
 
-### `useChatSession` (status event handling)
+### Agent Runtime conversational streaming endpoint
+
+**File:** `backend/app/agent_runtime/api/conversation.py`
+
+- Continue NDJSON streaming for conversation turns when status streaming is requested.
+- Maintain `status_event` and `final` event sequence so Communication Hub can forward low-latency updates.
+
+### Session execution-log live stream endpoint (non-conversation)
+
+**File:** `backend/app/api/v1/agents.py`
+
+- Add a live stream endpoint for per-session execution logs during active runs.
+- Stream append-only execution log entries in timestamp order and emit a terminal marker when session reaches terminal status.
+- Keep existing `GET /logs` and `GET /execution-logs` endpoints as pull/fallback APIs.
+
+### `useChatSession` (status + snippet model)
 
 **File:** `frontend/src/hooks/useChatSession.ts`
 
-- Extend WebSocket message handling with a small status-event branch.
-- Track transient chat status state for: thinking, delegating, waiting, timeout/failure end-state.
-- Parse delegated target slug from payload and surface it to UI for the required `Delegating to agent <agent_type>` label.
+- Keep current transient status model for thinking/delegating/waiting/tool-use/timeout.
+- Add a lightweight in-memory snippet list derived from delegation-related status/tool events.
+- Expose folded-by-default snippet state and toggle handlers to chat UI consumers.
+- Parse and normalize `agent_type`/`tool_name` for both status label and snippet preview lines.
 
-### `ChatPage` (simple status UI)
+### `ChatPage` and `ConversationDialog` (folded snippet UX)
 
-**File:** `frontend/src/pages/chat/ChatPage.tsx`
+**Files:**
 
-- Render a compact status row/bubble in the chat area using existing MUI building blocks.
-- Show animation for thinking/waiting states.
-- Show delegation label exactly per requirement when delegation status is active.
-- Clear transient status when final response arrives or a timeout/failure terminal status is emitted.
+- `frontend/src/pages/chat/ChatPage.tsx`
+- `frontend/src/components/agents/ConversationDialog.tsx`
+
+- Keep the compact status indicator for immediate feedback.
+- Keep the live waiting/delegating status indicator visible during active delegation even before the first delegated agent reply is rendered.
+- Add a delegation snippet panel in chat that is collapsed by default.
+- Show preview text while collapsed; allow manual expand/collapse to inspect snippet lines.
+- Keep exact delegation label format `Delegating to agent <agent_type>`.
+
+### Non-conversation live log consumers
+
+**Files:**
+
+- `frontend/src/pages/agents/AgentJobPage.tsx`
+- `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx`
+- `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx`
+- `frontend/src/components/executions/LogViewer.tsx`
+- `frontend/src/components/executions/WorkingStepsPanel.tsx`
+
+- Replace refresh-only behavior with live append while session is running.
+- Feed streamed entries into existing span-based presentation (`LogViewer` + `WorkingStepsPanel`) to preserve hierarchy.
+- Retain pull fallback for reconnect/recovery and historical replay.
 
 ### Locale strings (translation keys)
 
 **File:** `frontend/src/i18n/locales/en.json`
 
-- Add keys for thinking/waiting/timeout labels.
-- Add delegation label template with agent placeholder.
+- Keep existing status keys for thinking/delegating/waiting/timeout.
+- Add snippet-panel labels (title, folded preview, expand/collapse controls, empty-state text).
 - Keep all user-facing text under i18n (`t()`).
 
 ## 3. API Changes
 
-No REST API changes.
+### Existing (unchanged)
 
-Additive WebSocket event contract update on existing `/ws/sessions/{session_id}` channel:
+- `GET /api/v1/agents/sessions/{session_id}/logs`
+- `GET /api/v1/agents/sessions/{session_id}/execution-logs`
+- `WS /ws/sessions/{session_id}` chat channel continues sending additive `chat_status` events.
+- `POST /internal/conversation/turn` in Agent Runtime continues optional NDJSON status streaming for conversation turns.
 
-- Existing chat payloads remain unchanged for backward compatibility.
-- Add a small status-event shape used only for transient UI indicators.
-- Event types are limited to what UI needs: thinking started, delegation started (with `agent_type`), waiting, and timeout/failure terminal state.
+### New (additive)
 
-This is additive and does not change existing message semantics.
+- Live execution-log stream endpoint for non-conversation sessions under `agents/sessions/{session_id}`.
+- Event payload carries incremental execution-log entries and terminal completion marker.
+- Contract is append-only; no mutation/deletion events.
+
+### Chat status/snippet event contract
+
+- Existing chat payloads remain backward compatible.
+- `chat_status` events include normalized fields used by snippet extraction:
+	- `status`
+	- optional `agent_type`
+	- optional `tool_name`
+	- `timestamp`
+- Snippet rendering derives from this event stream; no separate persistence schema is introduced.
+
+All changes are additive and do not change existing message semantics.
 
 ## 4. State Management
 
-`useChatSession` adds a minimal transient status object independent from persisted chat history messages.
+### Conversational state (`useChatSession`)
 
-- Status is set to thinking on outbound send.
-- Status transitions to delegation/waiting when matching WebSocket status events arrive.
-- Status is cleared on final agent response or on terminal timeout/failure display completion.
+- Keep transient `chatStatus` independent from persisted messages.
+- Add transient `delegationSnippets` collection with folded-by-default UI state.
+- Keep terminal timeout/failure behavior sticky until next outbound message.
 
-`ChatPage` reads this status and conditionally renders one lightweight indicator block. No new global store is introduced.
+### Non-conversation state (`AgentJobPage` and log dialogs)
+
+- Split state into:
+	- Session lifecycle state (queued/running/completed/failed).
+	- Live execution-log stream state (connected/reconnecting/fallback).
+	- Render-ready log entry list for `LogViewer`.
+- Use stream as primary source while running; reconcile with pull endpoint on reconnect and at terminal completion.
+
+No new global store is introduced.
 
 ## 5. Data Access Patterns
 
-No new data-access pattern is introduced.
+### Conversational path
 
-- No database reads/writes are added for this feature.
-- Existing runtime delegation detection (tool name parsing) is reused only to produce additive UI status metadata.
-- Frontend consumes transient status events from existing WebSocket connection only.
+- Client receives status/snippet source events via existing chat WebSocket.
+- Status/snippet data remains transient in frontend state; persisted conversation turns remain unchanged.
+
+### Non-conversation path
+
+- Primary: live stream endpoint for execution-log append events during active runs.
+- Fallback/recovery: existing pull endpoint (`/logs`) for backfill, reconnect recovery, and terminal consistency checks.
+- Existing execution prompt log endpoint (`/execution-logs`) remains used for prompt/system-instruction context.
+
+No new database tables are introduced; feature relies on existing execution-log persistence and transport additions only.
 
 ## 6. Code Reference Map
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `_extract_agent_delegation_target` | function | Parses delegated target slug from `agent____<slug>` tool names | `backend/app/services/agents/runtime_executor.py` |
-| `_canonicalize_tool_name_for_log` | function | Existing canonical tool-name normalization used around tool-call handling | `backend/app/services/agents/runtime_executor.py` |
-| `execute_conversation_turn` | method | Conversation-turn execution path where delegation tool calls are dispatched | `backend/app/services/agents/runtime_executor.py` |
-| `execute_conversation_turn_from_context` | method | Context-based conversation execution path with delegation handling | `backend/app/services/agents/runtime_executor.py` |
-| `websocket_chat` | function | Existing WebSocket endpoint; emits chat/status updates to client | `backend/app/api/ws/chat.py` |
-| `_process_message` | function | Processes one user message and returns reply plus metadata | `backend/app/api/ws/chat.py` |
-| `_call_llm` | function | Delegates conversation turn execution to Agent Runtime | `backend/app/api/ws/chat.py` |
+| `execute_conversation_turn_from_context` | method | Emits additive status/tool events used by chat status and snippet rendering | `backend/app/services/agents/runtime_executor.py` |
+| `_build_chat_status_event` | function | Normalizes status payload shape sent to chat clients | `backend/app/api/ws/chat.py` |
+| `websocket_chat` | function | WebSocket endpoint that sends `chat_status` and agent replies | `backend/app/api/ws/chat.py` |
+| `_delegate_conversation_turn_to_agent_runtime` | function | Streams Agent Runtime status events and forwards to chat WebSocket | `backend/app/api/ws/chat.py` |
+| `execute_conversation_turn` | function | Agent Runtime API endpoint supporting NDJSON status streaming | `backend/app/agent_runtime/api/conversation.py` |
+| `get_session_execution_logs` | function | Pull endpoint for chronological execution log entries | `backend/app/api/v1/agents.py` |
+| `get_session_prompt_logs` | function | Pull endpoint for system-instruction/user-prompt capture | `backend/app/api/v1/agents.py` |
+| `stream_session_execution_logs` | function | Live NDJSON stream endpoint for non-conversation execution logs with terminal completion marker | `backend/app/api/v1/agents.py` |
 | `ChatRole` | type | Existing chat role union used by message rendering | `frontend/src/hooks/useChatSession.ts` |
 | `ChatMessage` | interface | Existing chat message model for user/agent/system turns | `frontend/src/hooks/useChatSession.ts` |
-| `useChatSession` | hook | WebSocket lifecycle + inbound event parsing + transient status state | `frontend/src/hooks/useChatSession.ts` |
-| `ChatPage` | component | Chat UI surface that renders message list and transient status indicator | `frontend/src/pages/chat/ChatPage.tsx` |
+| `ChatStatus` | interface | Transient chat status shape for thinking/delegating/waiting/tool/timeout states | `frontend/src/hooks/useChatSession.ts` |
+| `DelegationSnippetLine` | interface | Folded-snippet line model derived from delegation-related status/tool events | `frontend/src/hooks/useChatSession.ts` |
+| `useChatSession` | hook | WebSocket lifecycle, status parsing, and delegation snippet aggregation | `frontend/src/hooks/useChatSession.ts` |
+| `ChatPage` | component | Chat page rendering status indicator and folded delegation snippets | `frontend/src/pages/chat/ChatPage.tsx` |
+| `ConversationDialog` | component | In-dialog chat surface rendering status indicator and folded delegation snippets | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `useExecutionLogs` | hook | Prompt/system-instruction log fetch for session context | `frontend/src/hooks/useExecutionLogs.ts` |
+| `useSessionExecutionLogStream` | hook | Live stream consumer with reconnect and fallback state for non-conversation execution logs | `frontend/src/hooks/useSessionExecutionLogStream.ts` |
+| `AgentJobPage` | component | Non-conversation session view that consumes live logs and shows progress | `frontend/src/pages/agents/AgentJobPage.tsx` |
+| `AgentExecutionDetailsDialog` | component | Execution details dialog that merges live streamed entries into `LogViewer` | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
+| `SessionExecutionLogsDialog` | component | Execution logs dialog using live stream updates with span-based `LogViewer` rendering | `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` |
+| `LogViewer` | component | Span-based execution log visualization container | `frontend/src/components/executions/LogViewer.tsx` |
+| `WorkingStepsPanel` | component | Collapsible hierarchical step visualization for execution spans | `frontend/src/components/executions/WorkingStepsPanel.tsx` |
 | `conversations.sessions.*` | i18n keys | Existing conversation UI copy section for chat-related labels | `frontend/src/i18n/locales/en.json` |
+| `agents.sessions.logViewer.*` | i18n keys | Existing execution log viewer labels and status copy for session log surfaces | `frontend/src/i18n/locales/en.json` |

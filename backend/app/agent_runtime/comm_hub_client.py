@@ -234,3 +234,55 @@ class CommHubToolClient:
             ) from exc
         except Exception as exc:
             raise CommHubToolClientError(f"A2A delegation error: {exc}") from exc
+
+    async def wait_for_a2a_response(
+        self,
+        receiver_session_id: str,
+        timeout_seconds: float = 20.0,
+    ) -> dict[str, Any]:
+        """Wait for a delegated receiver session to complete.
+
+        Args:
+            receiver_session_id: Receiver session UUID string.
+            timeout_seconds: Wait timeout in seconds.
+
+        Returns:
+            Response payload from Communication Hub wait endpoint.
+
+        Raises:
+            CommHubToolClientError: If wait request fails.
+        """
+
+        endpoint = f"{self._comm_hub_url}/internal/a2a/wait/{receiver_session_id}"
+
+        try:
+            client_kwargs: dict[str, Any] = {
+                "timeout": max(5.0, timeout_seconds + 5.0),
+                "verify": get_ssl_context(),
+            }
+            headers: dict[str, str] = {}
+
+            if self._cert_path and self._key_path:
+                if self._comm_hub_url.startswith("https://"):
+                    client_kwargs["cert"] = (self._cert_path, self._key_path)
+                else:
+                    from pathlib import Path
+
+                    cert_content = Path(self._cert_path).read_text()
+                    headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                response = await client.get(
+                    endpoint,
+                    params={"timeout_seconds": timeout_seconds},
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500] if exc.response else "Unknown error"
+            raise CommHubToolClientError(
+                f"A2A wait failed: HTTP {exc.response.status_code if exc.response else 'unknown'} - {detail}"
+            ) from exc
+        except Exception as exc:
+            raise CommHubToolClientError(f"A2A wait error: {exc}") from exc

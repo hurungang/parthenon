@@ -23,6 +23,8 @@ def _build_chat_status_event(
     status_value: str,
     agent_type: str | None = None,
     tool_name: str | None = None,
+    receiver_session_id: str | None = None,
+    timestamp: str | None = None,
 ) -> dict[str, str]:
     """Build a normalized websocket status event payload for chat UI."""
     payload = {"status": status_value}
@@ -30,6 +32,9 @@ def _build_chat_status_event(
         payload["agent_type"] = agent_type
     if tool_name:
         payload["tool_name"] = tool_name
+    if receiver_session_id:
+        payload["receiver_session_id"] = receiver_session_id
+    payload["timestamp"] = timestamp or datetime.now(timezone.utc).isoformat()
     return payload
 
 
@@ -127,11 +132,12 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
             )
 
             async def send_status_event(status_event: dict[str, str]) -> None:
+                event_timestamp = status_event.get("timestamp")
                 await websocket.send_json(
                     {
                         "type": "chat_status",
                         **status_event,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": event_timestamp or datetime.now(timezone.utc).isoformat(),
                     }
                 )
 
@@ -223,6 +229,7 @@ async def _process_message(
         is_first_message=is_first_message,
         first_user_message=user_message if is_first_message else None,
         guardrail_usage=guardrail_usage,
+        status_events=status_events,
     )
     session_title = appended.get("title")
     return agent_reply, (str(session_title) if session_title else None), guardrail_usage, status_events
@@ -370,6 +377,13 @@ async def _delegate_conversation_turn_to_agent_runtime(
                             status_value,
                             agent_type if isinstance(agent_type, str) and agent_type else None,
                             tool_name if isinstance(tool_name, str) and tool_name else None,
+                            item.get("receiver_session_id")
+                            if isinstance(item.get("receiver_session_id"), str)
+                            and item.get("receiver_session_id")
+                            else None,
+                            item.get("timestamp")
+                            if isinstance(item.get("timestamp"), str) and item.get("timestamp")
+                            else None,
                         )
                         status_events.append(normalized)
                         await on_status_event(normalized)
@@ -407,6 +421,10 @@ async def _delegate_conversation_turn_to_agent_runtime(
                         status_value,
                         agent_type if isinstance(agent_type, str) and agent_type else None,
                         tool_name if isinstance(tool_name, str) and tool_name else None,
+                        item.get("receiver_session_id")
+                        if isinstance(item.get("receiver_session_id"), str)
+                        and item.get("receiver_session_id")
+                        else None,
                     )
                 )
 

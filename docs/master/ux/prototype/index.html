@@ -1235,7 +1235,7 @@ strong{font-weight:600}
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>Model Config</th><th>Primary SOP</th><th>Status</th><th>Role</th><th>Identity</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Model Config</th><th>Default SOP</th><th>Status</th><th>Role</th><th>Identity</th><th>Actions</th></tr></thead>
       <tbody>
         <tr onclick="openAgentDetails('pr-reviewer')" style="cursor:pointer;">
           <td><strong>pr-reviewer</strong></td>
@@ -2437,7 +2437,7 @@ Returns: { request_id, status }</div>
       </div>
       <div id="agent-sop-field">
         <div class="form-group">
-          <label>Primary SOP</label>
+          <label>Default SOP</label>
           <select class="form-control">
             <option>pr-review-workflow</option><option>daily-report-gen</option>
             <option>incident-response</option><option>data-pipeline-audit</option>
@@ -3587,7 +3587,7 @@ function setExecutionLogMode(mode) {
         </div>
         <div class="form-row" style="margin-bottom:16px">
           <div><div class="summary-key">LLM Model</div><div class="summary-value">gpt-4-turbo</div></div>
-          <div><div class="summary-key">Primary SOP</div><div class="summary-value">github-pr-workflow</div></div>
+          <div><div class="summary-key">Default SOP</div><div class="summary-value">github-pr-workflow</div></div>
         </div>
         <div class="form-row">
           <div><div class="summary-key">Input Type</div><div class="summary-value">typed</div></div>

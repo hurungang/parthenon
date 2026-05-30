@@ -1,136 +1,96 @@
 ---
-description: Stop the Parthenon application. By default stops everything (frontend, backend, infrastructure). Supports --frontend, --backend, --infra flags to stop only specific parts. Use --docker to stop docker compose services. Named terminals remain open for reuse.
+description: Stop Parthenon services using parthenon.ps1. Defaults to all services. Supports --infra, --backend, --frontend, --control-center, --agent-runtime, --communication-hub, and --force.
 ---
 
 Stop the Parthenon application.
 
-**Usage**: `/stop-app [--frontend] [--backend] [--infra] [--docker]`
+**Usage**: `/stop-app [--infra] [--backend] [--frontend] [--control-center] [--agent-runtime] [--communication-hub] [--force]`
 
-- No flags → stop everything (frontend, backend, infra containers)
-- `--frontend` → stop only the frontend dev/preview server
-- `--backend` → stop only the backend API process
-- `--infra` → stop only infrastructure containers (postgres, redis)
-- `--docker` → stop all docker compose services
-
-**Note**: Terminals remain open after stopping processes and can be reused:
-- **"Parthenon Backend"** terminal
-- **"Parthenon Frontend"** terminal
-- **"Parthenon Preview"** terminal
+- No flags -> stop all services (`frontend,communication-hub,agent-runtime,control-center,infra`)
+- `--infra` -> stop infrastructure only
+- `--backend` -> stop backend stack (control-center, agent-runtime, communication-hub, frontend)
+- `--frontend` -> stop frontend only
+- `--control-center` -> stop Control Center only
+- `--agent-runtime` -> stop Agent Runtime only
+- `--communication-hub` -> stop Communication Hub only
+- `--force` -> pass `-Force` to `parthenon.ps1`
 
 ---
 
 ## Step 1: Parse Input
 
-Read the user's message for flags: `--frontend`, `--backend`, `--infra`, `--docker`.
+Read the user's message and map flags to `-Services` values.
 
-If no flags, default mode = stop everything.
+Service mapping:
+- `--infra` -> `infra`
+- `--backend` -> `backend`
+- `--frontend` -> `frontend`
+- `--control-center` -> `control-center`
+- `--agent-runtime` -> `agent-runtime`
+- `--communication-hub` -> `communication-hub`
+
+If no service flags are provided, use `all`.
+
+If multiple service flags are present, combine as comma-separated values.
+
+If `--backend` is present with other backend-service flags, prefer `backend`.
 
 ---
 
-## Step 2: Check What Is Running
+## Step 2: Run Stack Command
+
+From the project root, execute:
 
 ```powershell
-# Check backend (port 8000)
-$backend = netstat -ano | Select-String ":8000 .*LISTEN"
-
-# Check frontend (port 5173 or 4173)
-$frontend5173 = netstat -ano | Select-String ":5173 .*LISTEN"
-$frontend4173 = netstat -ano | Select-String ":4173 .*LISTEN"
-
-# Check docker containers
-docker ps --format "{{.Names}}\t{{.Status}}" 2>$null | Select-String "parthenon"
+.\parthenon.ps1 stop -Services <resolved_services> <optional_force>
 ```
 
-Report what is found running before stopping.
-
----
-
-## Step 3: Stop Frontend (if applicable)
-
-**Skip if `--backend` or `--infra` only.**
-
-Find and stop the Vite dev server or preview server:
-```powershell
-# Find PID listening on 5173 or 4173
-$pids = (netstat -ano | Select-String ":(5173|4173) .*LISTEN" | ForEach-Object {
-    ($_ -split '\s+')[-1]
-}) | Sort-Object -Unique
-
-if ($pids) {
-    Write-Host "Stopping frontend server(s)..."
-    $pids | ForEach-Object { 
-        Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue 
-        Write-Host "  Stopped PID $_"
-    }
-    Write-Host "✅ Frontend stopped (terminals 'Parthenon Frontend' and 'Parthenon Preview' can be reused)"
-} else {
-    Write-Host "Frontend not running"
-}
-```
-
-Confirm port 5173/4173 is no longer listening.
-
----
-
-## Step 4: Stop Backend (if applicable)
-
-**Skip if `--frontend` or `--infra` only.**
-
-Find and stop the uvicorn process:
-```powershell
-# Find PID listening on 8000
-$pids = (netstat -ano | Select-String ":8000 .*LISTEN" | ForEach-Object {
-    ($_ -split '\s+')[-1]
-}) | Sort-Object -Unique
-
-if ($pids) {
-    Write-Host "Stopping backend server..."
-    $pids | ForEach-Object { 
-        Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue 
-        Write-Host "  Stopped PID $_"
-    }
-    Write-Host "✅ Backend stopped (terminal 'Parthenon Backend' can be reused)"
-} else {
-    Write-Host "Backend not running"
-}
-```
-
-Confirm port 8000 is no longer listening.
-
----
-
-## Step 5: Stop Infrastructure Containers (if applicable)
-
-**Skip if `--frontend` or `--backend` only.**
+Examples:
 
 ```powershell
-cd <project_root>
-docker compose stop postgres redis keycloak
+.\parthenon.ps1 stop -Services all
+.\parthenon.ps1 stop -Services backend
+.\parthenon.ps1 stop -Services infra
+.\parthenon.ps1 stop -Services control-center,agent-runtime
 ```
 
----
-
-## Step 6: Docker Mode (--docker flag)
-
-**Instead of Steps 3–5**, stop all compose services:
+If script execution is blocked, run:
 
 ```powershell
-cd <project_root>
-docker compose down
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+```
+
+Then retry once.
+
+---
+
+## Step 3: Verify Services Stopped
+
+Always run:
+
+```powershell
+.\parthenon.ps1 status
+```
+
+Optionally validate key ports are no longer listening for requested services:
+
+```powershell
+netstat -ano | Select-String ":5173 .*LISTEN|:8000 .*LISTEN|:8001 .*LISTEN|:8002 .*LISTEN"
+```
+
+For infra checks, confirm containers are stopped:
+
+```powershell
+docker ps --format "{{.Names}}"
 ```
 
 ---
 
-## Step 7: Report Status
+## Step 4: Report Outcome
 
-```
-## 🛑 Parthenon Application Stopped
+Provide:
 
-| Component     | Action                    |
-|---------------|---------------------------|
-| Frontend      | ✅ Stopped / ⏭️ Not running |
-| Backend API   | ✅ Stopped / ⏭️ Not running |
-| PostgreSQL    | ✅ Stopped / ⏭️ Not running |
-| Redis         | ✅ Stopped / ⏭️ Not running |
-| Keycloak      | ✅ Stopped / ⏭️ Not running |
-```
+- Executed command
+- Resolved service set
+- Status per requested service: Stopped / Not running / Failed
+- Any remaining listening ports or containers if stop was incomplete

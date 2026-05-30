@@ -36,6 +36,7 @@ import {
 } from './AgentTypeForm'
 import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
 import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
+import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
 import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type { AgentIdentity, AgentRole, AgentType } from '../../types'
 
@@ -95,6 +96,8 @@ export function AgentManagementPage() {
   const [form, setForm] = useState<AgentTypeFormValues>(defaultAgentTypeFormValues)
   const [launchType, setLaunchType] = useState<AgentType | null>(null)
   const [launchOpen, setLaunchOpen] = useState(false)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [executionDetailsDialogOpen, setExecutionDetailsDialogOpen] = useState(false)
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
   const [conversationAgentType, setConversationAgentType] = useState<AgentType | null>(null)
   const [saving, setSaving] = useState(false)
@@ -379,7 +382,20 @@ export function AgentManagementPage() {
           onLaunched={(sessionId) => {
             setLaunchOpen(false)
             setLaunchType(null)
-            void navigate(`/agents/sessions/${sessionId}`)
+            setSelectedSessionId(sessionId)
+            setExecutionDetailsDialogOpen(true)
+          }}
+        />
+      )}
+
+      {/* Execution Details Dialog for non-conversation launches */}
+      {executionDetailsDialogOpen && selectedSessionId && (
+        <AgentExecutionDetailsDialog
+          open={true}
+          sessionId={selectedSessionId}
+          onClose={() => {
+            setExecutionDetailsDialogOpen(false)
+            setSelectedSessionId(null)
           }}
         />
       )}

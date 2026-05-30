@@ -197,6 +197,26 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
+### 10. Agent Type Form Default SOP Behavior (ai-assisted-workflow-authoring-for-sop-and-skill)
+
+**What is tested:**
+- Agent type form uses "Default SOP" terminology (legacy "Primary SOP" wording is not shown)
+- Default SOP dropdown is visible for all input types (`none`, `typed`, `conversation`)
+- Default SOP is required only for no-input agent types and optional for other input types
+- Switching input type away from no-input does not clear an already-selected default SOP value
+- Agent type payload preserves `primary_sop_id` for all input types; client-side validation enforces required-only-for-none behavior
+
+**Acceptance criteria:**
+- Default SOP label appears consistently in create and edit flows
+- Required marker appears only when input type is `none`
+- Existing selected SOP remains when input type changes
+- Save payload includes `primary_sop_id` when selected, regardless of input type
+
+**Test files:**
+- [frontend/src/__tests__/AgentManagementPage.test.tsx](../../../../frontend/src/__tests__/AgentManagementPage.test.tsx) — Default SOP label coverage, required/optional behavior by input type, payload behavior for `primary_sop_id`
+
+---
+
 ## Manual Testing Requirements
 
 | Scenario | Why Manual |
@@ -231,3 +251,4 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | unified-agent-navigation | AI Agent nav group; AgentTypeDetailsDialog; Role/Identity columns; Agent Executions filter; view dialogs with Edit mode; legacy redirect | 2026-05-10 |
 | agent-a2a-communication-and-slug-enforcement | Added A2A delegation preview and slug validation coverage (agent type naming, role allowed-target preview, plan/topology delegation rendering) | 2026-05-22 |
 | add-agent-execution-guardrails | Added Agent Type guardrail profile UI coverage (collapsed editor behavior, input-type adaptation, and k-token rendering checks) | 2026-05-25 |
+| ai-assisted-workflow-authoring-for-sop-and-skill | Added Agent Type form Default SOP behavior coverage (label rename, visibility across input types, required-only-for-none validation, and payload preservation) | 2026-05-29 |

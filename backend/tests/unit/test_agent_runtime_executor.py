@@ -273,6 +273,158 @@ async def test_run_marks_completed_on_success():
     executor._session_service.mark_completed.assert_called_once_with(session_id, output, db)
 
 
+@pytest.mark.asyncio
+async def test_default_sop_content_is_skipped_when_instruction_explicitly_mentions_same_sop_name():
+    """Default SOP is fallback-only; do not inject when instruction already names that SOP."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    data_client.get_agent_plan = AsyncMock(return_value=None)
+    data_client.log_prompt = AsyncMock()
+
+    sop_name = "check-db-name"
+    job_data = {
+        "id": str(uuid.uuid4()),
+        "agent_type_id": str(uuid.uuid4()),
+        "input_data": {"query": "run task"},
+    }
+    context = {
+        "system_instruction": f"You are a project checker, follow {sop_name} SOP to finish the work.",
+        "sop_content": (
+            f"Follow this SOP to complete the task: {sop_name}\n"
+            "\nInstructions: fallback SOP instructions"
+        ),
+        "primary_sop_id": str(uuid.uuid4()),
+        "mcp_session_context": None,
+        "model_id": "gpt-4o-mini",
+        "model_config_id": None,
+        "input_type": "typed",
+        "allowed_tools": [],
+        "tool_definitions": [],
+        "tool_name_map": {},
+        "role_mcp_sessions": {},
+        "allowed_agent_types": [],
+        "role_id": None,
+        "identity_name": None,
+        "role_name": None,
+        "sops": [],
+        "skills": [],
+        "guardrail_policy": {
+            "max_iterations": 1,
+            "max_delegation_depth": 3,
+            "max_delegated_steps": 10,
+            "execution_timeout_seconds": 300,
+            "token_budget": None,
+        },
+    }
+
+    await executor._run_task_loop_ar(job_data, context, data_client)
+
+    data_client.log_prompt.assert_awaited_once()
+    injected_instruction = data_client.log_prompt.call_args.kwargs["system_instruction"]
+    assert f"follow {sop_name} SOP" in injected_instruction
+    assert "Follow this SOP to complete the task:" not in injected_instruction
+
+
+@pytest.mark.asyncio
+async def test_default_sop_content_is_skipped_when_instruction_mentions_other_sop_name():
+    """Fallback SOP must be skipped when instruction already references any SOP."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    data_client = AsyncMock()
+    data_client.log_execution_event = AsyncMock()
+    data_client.get_agent_plan = AsyncMock(return_value=None)
+    data_client.log_prompt = AsyncMock()
+
+    job_data = {
+        "id": str(uuid.uuid4()),
+        "agent_type_id": str(uuid.uuid4()),
+        "input_data": {"query": "run task"},
+    }
+    context = {
+        "system_instruction": "You are a project checker, follow query-supabase SOP to finish the work.",
+        "sop_content": (
+            "Follow this SOP to complete the task: check-db-name\n"
+            "\nInstructions: fallback SOP instructions"
+        ),
+        "primary_sop_id": str(uuid.uuid4()),
+        "mcp_session_context": None,
+        "model_id": "gpt-4o-mini",
+        "model_config_id": None,
+        "input_type": "typed",
+        "allowed_tools": [],
+        "tool_definitions": [],
+        "tool_name_map": {},
+        "role_mcp_sessions": {},
+        "allowed_agent_types": [],
+        "role_id": None,
+        "identity_name": None,
+        "role_name": None,
+        "sops": [],
+        "skills": [],
+        "guardrail_policy": {
+            "max_iterations": 1,
+            "max_delegation_depth": 3,
+            "max_delegated_steps": 10,
+            "execution_timeout_seconds": 300,
+            "token_budget": None,
+        },
+    }
+
+    await executor._run_task_loop_ar(job_data, context, data_client)
+
+    data_client.log_prompt.assert_awaited_once()
+    injected_instruction = data_client.log_prompt.call_args.kwargs["system_instruction"]
+    assert "query-supabase SOP" in injected_instruction
+    assert "Follow this SOP to complete the task:" not in injected_instruction
+
+
+@pytest.mark.asyncio
+async def test_conversational_loop_skips_fallback_sop_when_instruction_mentions_sop():
+    """Conversational path must follow the same SOP fallback-skip rule."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    executor._load_sop_content = AsyncMock(
+        return_value=(
+            "Follow this SOP to complete the task: check-db-name\n"
+            "\nInstructions: fallback SOP instructions"
+        )
+    )
+    executor._load_mcp_session_context = AsyncMock(return_value=None)
+    executor._capture_prompt_log = AsyncMock()
+    executor._log_execution_event = AsyncMock()
+    executor._runtime_loader.inject_plan_into_system_instruction = AsyncMock(
+        return_value=("You are a checker. Follow query-supabase SOP.", False)
+    )
+
+    job = MagicMock()
+    job.id = uuid.uuid4()
+    job.agent_type_id = uuid.uuid4()
+    job.input_data = {"message": "hello"}
+
+    output_type = MagicMock()
+    output_type.value = "auto"
+
+    agent_type = MagicMock()
+    agent_type.id = uuid.uuid4()
+    agent_type.role_id = None
+    agent_type.primary_sop_id = uuid.uuid4()
+    agent_type.system_instruction = "You are a checker. Follow query-supabase SOP."
+    agent_type.output_type = output_type
+    agent_type.output_schema = None
+
+    db = AsyncMock()
+
+    await executor._run_conversational_loop(job, agent_type, set(), db)
+
+    events = [call.kwargs.get("event_type") for call in executor._log_execution_event.await_args_list]
+    assert "sop_fallback_skipped" in events
+
+
 # ── LangChain observe-reason-act phases ───────────────────────────────────────
 
 

@@ -35,11 +35,11 @@ Env defaults for local dev (`frontend/.env.local`):
 - `VITE_OIDC_CLIENT_ID=parthenon-api-ui`
 - `VITE_API_BASE_URL=http://localhost:8000/api/v1`
 
-## Running Frontend Vitest Tests (Windows / Copilot CLI)
+<!-- ## Running Frontend Vitest Tests (Windows / Copilot CLI)
 
 **NEVER run `npx vitest run` with a terminal reporter inside the Copilot CLI agent.**  
-Vitest's default and verbose reporters use ANSI escape sequences that overflow/deadlock the Copilot CLI's stdout pipe on Windows, causing the process to hang indefinitely after ~988 lines of output. This affects all Vitest versions including 4.x. (See: https://github.com/github/copilot-cli/issues/3308)
-
+Vitest's default and verbose reporters use ANSI escape sequences that overflow/deadlock the Copilot CLI's stdout pipe on Windows, causing the process to hang indefinitely after ~988 lines of output. This affects all Vitest versions including 4.x. (See: https://github.com/github/copilot-cli/issues/3308) -->
+<!-- 
 **Always use the JSON reporter writing directly to a file:**
 
 ```powershell
@@ -66,4 +66,6 @@ $j.testResults | Where-Object { $_.status -eq 'failed' } | ForEach-Object {
 
 temporary test scripts for quick local testing of auth flows, etc. must be saved under `scripts/` and should be named descriptively (e.g. `test-auth-flows.ps1`) to avoid confusion with production scripts. These are not intended for long-term use and can be deleted after testing is complete.
 
-temporary output files generated during testing (e.g. token dumps, test logs) should be saved under `tmp/` with descriptive names (e.g. `auth-flow-test-output.txt`) and can be deleted after review. This keeps the project organized and prevents clutter in the main directories.  
+temporary output files generated during testing (e.g. token dumps, test logs) should be saved under `tmp/` with descriptive names (e.g. `auth-flow-test-output.txt`) and can be deleted after review. This keeps the project organized and prevents clutter in the main directories.   -->
+
+## use tmp folder for any temporary output files generated during testing (e.g. token dumps, test logs) with descriptive names (e.g. `auth-flow-test-output.txt`) and can be deleted after review. This keeps the project organized and prevents clutter in the main directories.
