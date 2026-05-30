@@ -108,7 +108,7 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `LogPresenter` | service module | Derives guardrail usage summaries and conversational token-usage visibility from execution log entries | `frontend/src/services/LogPresenter.ts` |
-| `LogSummaryPanel` | component | Renders execution summary chips including guardrail usage and token-visibility information | `frontend/src/components/logs/LogSummaryPanel.tsx` |
+| `LogSummaryPanel` | component | Renders execution summary chips including guardrail usage and token-visibility information | `frontend/src/components/executions/LogSummaryPanel.tsx` |
 | `AgentTypeForm` | component | Agent Type editor surface where guardrail policy values are configured and displayed in k-token units | `frontend/src/pages/agents/AgentTypeForm.tsx` |
 | `AgentTypeDetailsDialog` | component | Read-only/details surface that presents the configured guardrail profile for an Agent Type | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
 

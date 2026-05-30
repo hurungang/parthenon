@@ -46,6 +46,7 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `create_app` | function | Communication Hub application bootstrap and middleware composition entry point | `backend/app/communication_hub/main.py` |
 | `_register_routers` | function | Registers API routers for internal routing, A2A, and WebSocket/chat surfaces | `backend/app/communication_hub/main.py` |
 | `WebSocketServer` | class | WebSocket endpoint handler; authenticates connection and bridges to MessageBroker | `backend/app/api/ws/chat.py` |
+| `_build_chat_status_event` | function | Normalizes additive `chat_status` payloads (status, tool name, delegated agent type, timestamp) before WebSocket emission | `backend/app/api/ws/chat.py` |
 | `websocket_chat` | endpoint | WebSocket endpoint for browser chat sessions and streaming replies | `backend/app/api/ws/chat.py` |
 | `_delegate_conversation_turn_to_agent_runtime` | function | Forwards prepared conversation turns from hub transport layer to Agent Runtime execution path | `backend/app/api/ws/chat.py` |
 | `AgentRouter` | class | Routes inter-agent messages to target instance channels via MessageBroker | `backend/app/services/comm_hub/agent_router.py` |

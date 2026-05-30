@@ -3,18 +3,22 @@
 ```mermaid
 flowchart LR
     UI[Workflow Authoring UI]
+    CHAT[Conversation UI]
     CFG[System Configuration]
     CH[Communication Hub]
     AR[Agent Runtime]
     CC[Control Center]
     MCP[MCP and channel integrations]
     STAT[Workflow status channel]
+    CSTAT[Chat status channel]
     CTX[Governed Context Package]
 
     UI <-->|Workflow generation and preview| CH
+    CHAT <-->|Conversation turn exchange| CH
     CFG -->|Selected generation model| CH
     CH -->|Route workflow request| AR
     AR -->|Tool and delegation routing| CH
+    AR -->|Thinking and delegation status events| CH
     AR -->|Request governed context| CH
     CH --> CC
     CC --> CTX
@@ -23,7 +27,9 @@ flowchart LR
     CH --> MCP
     AR -->|Policy and stop outcomes| CH
     CH --> STAT
+    CH --> CSTAT
     STAT --> UI
+    CSTAT --> CHAT
 ```
 
 ```mermaid

@@ -23,6 +23,7 @@ This test plan validates the persistent conversation session lifecycle for conve
 | Session resume | `POST /conversations/{id}/resume` must return full turn history with tool call records; `ChatPage` must restore context from the `sessionId` route param without requiring a page reload |
 | Parent table refresh | After create/end/archive operations the sessions list must update automatically without a manual page reload |
 | Conversational guardrail hint visibility | Conversation dialog must expose current-session token usage hint data without forcing a token-budget-only terminal stop |
+| Delegation visibility lifecycle | Conversational surfaces must show thinking, normalized delegation label, waiting, folded snippet preview, and terminal timeout/failure states without requiring technical log inspection |
 | `AgentTypeForm` output field | The output type field must be hidden when creating/editing a conversation agent type |
 | `AgentInstanceDashboardPage` Session column | The session title column must render for conversation-type agent jobs and must remain absent for non-conversational jobs |
 
@@ -76,6 +77,14 @@ This test plan validates the persistent conversation session lifecycle for conve
 - **WHEN** conversation session payloads include guardrail usage fields **THEN** the hint is collapsed by default and can be expanded on demand
 - **WHEN** a session is resumed with persisted guardrail usage **THEN** token usage values are restored and shown consistently in the hint panel
 
+### Delegation Visibility in Conversation Surfaces (agent-delegation-visibility)
+
+- **WHEN** a conversational prompt is sent and delegation has not started yet **THEN** a thinking indicator is visible until delegation starts or a direct final response is produced
+- **WHEN** delegation starts from tool identifiers like `agent____<slug>` (or alias `agent__<agent_type>`) **THEN** chat shows `Delegating to agent <agent_type>`
+- **WHEN** delegation is in progress **THEN** a waiting indicator remains visible until delegated response, timeout, or failure terminal state
+- **WHEN** delegation snippets are emitted in chat **THEN** snippets are folded by default with concise preview context and can be expanded/collapsed without breaking conversation continuity
+- **WHEN** delegated execution times out or fails **THEN** the conversation shows a clear final status and does not remain indefinitely waiting
+
 ## Edge Cases & Risks
 
 | Risk | Mitigation |
@@ -105,11 +114,12 @@ This test plan validates the persistent conversation session lifecycle for conve
 ### Frontend Component Tests — 9/9 passed ✅
 
 **Hook tests** (`frontend/src/__tests__/`):
-- `frontend/src/__tests__/useChatSession.test.ts` — Disconnected initial state, empty messages, sendMessage adds user message, clearMessages resets (4 tests)
+- `frontend/src/__tests__/useChatSession.test.ts` — Hook lifecycle baseline plus delegation status parsing, waiting lifecycle handling, and folded snippet state transitions
 
 **Component tests** (`frontend/src/__tests__/`):
 - `frontend/src/__tests__/ConversationSessionsTab.test.tsx` — Renders session titles and status chips, untitled placeholder, Start New Conversation button calls mutation, Archive confirmation dialog, empty state (5 tests)
 - `frontend/src/__tests__/ConversationDialog.test.tsx` — conversational guardrail hint collapsed-by-default behavior and resumed-session usage restoration
+- `frontend/src/__tests__/ConversationDelegationVisibility.test.tsx` — thinking/delegating/waiting/final status rendering and folded delegation snippet behavior
 
 ### E2E Tests — 4/4 passed (1 skipped) ✅
 
@@ -123,3 +133,6 @@ This test plan validates the persistent conversation session lifecycle for conve
 
 **Real Backend Integration variant** (1 test — skipped):
 - POST /conversations creates session; POST /end closes it — skips gracefully when no conversation agent type found in DB
+
+**Delegation visibility coverage:**
+- `e2e/tests/conversation-delegation-visibility.spec.ts` — conversational thinking/delegating/waiting/final visibility, folded snippets by default, and snippet expand/collapse interactions

@@ -12,6 +12,8 @@
 - Agent Management > shows create agent type button and opens dialog on click
 - Chat > chat page shows agent type selector or session list
 - Conversation History > clicking a conversation expand button shows its turns
+- Conversation Delegation Visibility > shows delegating label and waiting indicator with fold-expand-collapse snippet behavior
+- Conversation Delegation Visibility > shows timeout_or_failed terminal status in chat
 - Gateway Configuration > gateway page shows agent type names
 - MCP Hub > MCP Hub shows server names from API
 - MCP Hub > MCP Hub has a register/add server button
@@ -88,10 +90,12 @@
 - Agent Plan Mode — Mocked > Failed plan: modal opens with error message when generation_status is failed
 - Real Backend Integration — Agent Plan Mode > POST /api/v1/agents/types returns plan field in response
 - Agent Log Viewer > Summary panel displays identity and role from system instruction
+- Agent Log Viewer > Agent Working Steps section is collapsed by default
 - Agent Log Viewer > Expand working steps section reveals step rows
 - Agent Log Viewer > Expand individual step detail block
 - Agent Log Viewer > Toggle to raw mode shows monospace raw log block
 - Agent Log Viewer > Raw mode copy button is visible
+- Agent Live Logs Stream > uses live stream endpoint for running non-conversation session and shows live-stream hint
 - AI Agent nav group > nav group is expanded by default and shows child items
 - AI Agent nav group > collapses and expands nav group on header click
 - Agent Executions page > selecting agent type filter refetches sessions
@@ -234,3 +238,7 @@
 | 103 | SOP Workflow Terminology Rename | SOP editor uses Workflow terminology and removes legacy System Instruction wording | ai-assisted-workflow-authoring-for-sop-and-skill | sops-workflow-generation-preview.spec.ts |
 | 104 | SOP Workflow Preview Freshness | SOP workflow preview renders single instruction file using latest unsaved workflow and description | ai-assisted-workflow-authoring-for-sop-and-skill | sops-workflow-generation-preview.spec.ts |
 | 105 | SOP Missing-Model Guardrail | SOP generation shows user-visible not-configured error and preserves manual workflow text without fallback | ai-assisted-workflow-authoring-for-sop-and-skill | sops-workflow-generation-preview.spec.ts |
+| 106 | Delegation Handoff Visibility | Conversational chat shows normalized delegation label, waiting indicator, and fold/expand snippet behavior during delegated execution | agent-delegation-visibility | conversation-delegation-visibility.spec.ts |
+| 107 | Delegation Timeout/Failure Terminal State | Conversational delegated execution resolves waiting to a clear timeout/failure terminal state in the same chat surface | agent-delegation-visibility | conversation-delegation-visibility.spec.ts |
+| 108 | Live Non-Conversation Progress Stream | Running non-conversation session appends execution progress from live stream endpoint without manual refresh | agent-delegation-visibility | agent-live-logs-stream.spec.ts |
+| 109 | Working Steps Collapsed-by-Default Readability | Agent log viewer starts with Working Steps collapsed so users can expand details on demand | agent-delegation-visibility | agent-logs.spec.ts |

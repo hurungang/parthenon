@@ -39,6 +39,13 @@
 - `LogViewer` routing: summary panel and working steps panel rendered in friendly mode; monospace raw log block rendered in raw mode; `RawLogToggle` always present in header
 - `AgentJobPage` regression: `LogViewer` renders in place of old raw execution log section; "View Execution Logs" button and `SessionExecutionLogsDialog` trigger absent from page; partial log displays without crash when session is still running
 
+### Delegation Visibility and Live Session Stream (agent-delegation-visibility change)
+- Conversation-status transport forwards thinking/delegating/waiting/final states in order and preserves terminal timeout/failure signaling
+- Delegation target display text is normalized from internal tool naming to user-readable `Delegating to agent <agent_type>`
+- Chat surfaces fold delegation snippets by default, retain concise preview context, and preserve expand/collapse interaction state
+- Running non-conversation sessions append execution logs live via stream path with deterministic ordering and terminal reconciliation
+- Pull fallback remains compatible during stream interruption/reconnect and does not duplicate or lose final status
+
 ## Critical Scenarios
 - User without `agent:read` receives 403 on `GET /api/v1/agents/types`; UI shows permission-denied snackbar
 - User without `agent:create` receives 403 on `POST /api/v1/agents/types`; snackbar pre-filled with resource type and action
@@ -63,6 +70,14 @@
 - `LogViewer` mode switching: friendly mode shows summary and working steps; toggle to raw → replaced by monospace log block; toggle back → summary and working steps restored
 - `AgentJobPage` with completed session → no "View Execution Logs" button or `SessionExecutionLogsDialog` trigger present on page
 - `AgentJobPage` with running session → `LogViewer` renders with partial log data; no crash
+
+### Delegation Visibility and Live Session Stream (agent-delegation-visibility change)
+- Conversational run starts without immediate delegation: thinking state is visible in chat before handoff begins
+- Delegation starts from internal tool name: chat shows normalized `Delegating to agent <agent_type>` label and transitions to waiting
+- Delegation times out or fails: waiting state resolves to a clear terminal timeout/failure status
+- Delegation snippets arrive during chat: snippets remain folded by default and can be expanded/collapsed without disturbing message continuity
+- Non-conversation running session receives stream updates: new log rows append without manual refresh and terminal completion state is rendered once
+- Stream interruption occurs mid-run: fallback path reconciles final status without duplicate terminal rows
 
 ## Edge Cases
 - Permission revoked mid-session; next request denied
@@ -95,13 +110,25 @@
 - `backend/tests/unit/test_agent_session_service.py`
 - `backend/tests/unit/test_agent_runtime_executor.py`
 - `backend/tests/api/test_agents_api.py`
+- `backend/tests/api/test_agents_session_log_stream_api.py`
+- `backend/tests/unit/test_ws_delegation_visibility.py`
+- `backend/tests/unit/test_fix_support_role_conversation_delegation_tools.py`
+- `backend/tests/unit/test_fix_20260521_tool_routing_and_chat_timeout.py`
+- `backend/tests/unit/test_fix_20260521_192300_ws_chat_runtime_boundary.py`
 - `frontend/src/__tests__/AgentManagementPage.test.tsx`
 - `frontend/src/__tests__/AgentSessionLaunchDialog.test.tsx`
 - `frontend/src/__tests__/AgentSessionPage.test.tsx`
+- `frontend/src/__tests__/ConversationDelegationVisibility.test.tsx`
+- `frontend/src/__tests__/ConversationDialog.test.tsx`
+- `frontend/src/__tests__/SessionExecutionLogsDialog.test.tsx`
 - `frontend/src/__tests__/AgentTypeForm.test.tsx`
 - `frontend/src/__tests__/AgentInstanceDashboard.test.tsx`
+- `frontend/src/__tests__/useChatSession.test.ts`
+- `frontend/src/__tests__/useSessionExecutionLogStream.test.ts`
 - `e2e/tests/agent-management.spec.ts`
 - `e2e/tests/agent-runtime.spec.ts` — Agent Type Configuration, Agent Session Launch, Agent Session Status, Agent Instance Dashboard, Conversation History Display suites
+- `e2e/tests/conversation-delegation-visibility.spec.ts` — conversational visibility cues, folded snippets, and terminal waiting resolution
+- `e2e/tests/agent-live-logs-stream.spec.ts` — running-session live stream updates and no-refresh progress visibility
 - `e2e/tests/access-control.spec.ts` — `Permission Denied: Snackbar` and `Permission Denied: Request Access Flow`
 - `e2e/tests/permission-errors.spec.ts` — structured 403 error rendering per page
 - `backend/tests/unit/services/test_plan_generation_service.py` — PlanGenerationService unit tests (LLM mocking, upsert, non-blocking failure, hash computation, no-role path)
