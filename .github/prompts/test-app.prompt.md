@@ -1,5 +1,5 @@
 ---
-description: Run Parthenon tests. By default runs all 3 layers (backend pytest, frontend Vitest, E2E Playwright). Supports --backend, --frontend, --e2e to target specific layers. Supports --filter <pattern> to run specific tests or scenarios. Runs in IDE terminals for immediate feedback.
+description: Run Parthenon tests. By default runs backend pytest, frontend Vitest, and E2E Playwright. Supports --backend, --frontend, --e2e and --filter <pattern>. Uses Vitest JSON reporter on Windows.
 ---
 
 Run Parthenon application tests.
@@ -23,6 +23,33 @@ Examples:
 
 ---
 
+## Step 0: Prerequisite Stack Check
+
+Before running tests, verify required services are up:
+
+- Backend and frontend tests: service dependencies from fixtures/environment.
+- E2E tests: frontend preview on port 4173 and backend stack available.
+
+Use stack status command:
+
+```powershell
+.\parthenon.ps1 status
+```
+
+If backend stack is down and test scope requires it:
+
+```powershell
+.\parthenon.ps1 start -Services backend
+```
+
+If infra is needed and not running:
+
+```powershell
+.\parthenon.ps1 start -Services infra
+```
+
+---
+
 ## Step 1: Parse Input
 
 Read flags from the user's message.
@@ -34,6 +61,8 @@ If no layer flag is given, run all 3 layers. Capture `--filter <pattern>` if pro
 ## Step 2: Run Backend Tests (pytest)
 
 **Skip if `--frontend` or `--e2e` only.**
+
+This layer validates Python services across the three-service backend architecture.
 
 Run in IDE terminal (synchronous mode to see results immediately):
 

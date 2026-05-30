@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="14" time="2.623" timestamp="2026-05-30T10:21:59.446174+10:00" hostname="SYDL208162"><testcase classname="tests.unit.test_fix_support_role_conversation_delegation_tools" name="test_conversation_turn_includes_delegated_agent_tools_from_role_permissions" time="0.233" /><testcase classname="tests.unit.test_fix_support_role_conversation_delegation_tools" name="test_conversation_turn_delegation_waits_for_receiver_response" time="0.005" /><testcase classname="tests.unit.test_fix_20260521_tool_routing_and_chat_timeout" name="test_delegate_conversation_turn_uses_agent_question_timeout" time="0.005" /><testcase classname="tests.unit.test_fix_20260521_tool_routing_and_chat_timeout" name="test_delegate_conversation_turn_preserves_tool_name_in_status_events" time="0.024"><failure message="AssertionError: assert [{'status': '...otification'}] == [{'status': '...otification'}]&#10;  &#10;  At index 0 diff: #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33musing_tool#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33mtool_name#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33msend_notification#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33mtimestamp#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33m2026-05-30T00:22:00.003280+00:00#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m}#x1B[90m#x1B[39;49;00m != #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33musing_tool#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;0...&#10;  &#10;  ...Full output truncated (2 lines hidden), use '-vv' to show">@pytest.mark.asyncio
+    async def test_delegate_conversation_turn_preserves_tool_name_in_status_events() -&gt; None:
+        conv_session_id = uuid.uuid4()
+        agent_type_id = uuid.uuid4()
+        app = SimpleNamespace(state=SimpleNamespace(certificate_manager=None))
+    
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "response": "ok",
+            "status_events": [
+                {
+                    "status": "using_tool",
+                    "tool_name": "send_notification",
+                }
+            ],
+        }
+    
+        mock_http_client = AsyncMock()
+        mock_http_client.post = AsyncMock(return_value=mock_response)
+        mock_http_client.__aenter__.return_value = mock_http_client
+    
+        with patch(
+            "app.api.ws.chat.get_settings",
+            return_value=SimpleNamespace(
+                agent_runtime_url="http://localhost:8001",
+                agent_question_timeout_seconds=120,
+            ),
+        ), patch("app.api.ws.chat.httpx.AsyncClient", return_value=mock_http_client):
+            result, guardrail_usage, status_events = await chat._delegate_conversation_turn_to_agent_runtime(
+                app=app,
+                conv_session_id=conv_session_id,
+                agent_type_id=agent_type_id,
+                messages=[{"role": "user", "content": "hello"}],
+            )
+    
+        assert result == "ok"
+        assert guardrail_usage is None
+&gt;       assert status_events == [{"status": "using_tool", "tool_name": "send_notification"}]
+E       AssertionError: assert [{'status': '...otification'}] == [{'status': '...otification'}]
+E         
+E         At index 0 diff: #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33musing_tool#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33mtool_name#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33msend_notification#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33mtimestamp#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33m2026-05-30T00:22:00.003280+00:00#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m}#x1B[90m#x1B[39;49;00m != #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33musing_tool#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;0...
+E         
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+tests\unit\test_fix_20260521_tool_routing_and_chat_timeout.py:84: AssertionError</failure></testcase><testcase classname="tests.unit.test_fix_20260521_tool_routing_and_chat_timeout" name="test_delegate_conversation_turn_streams_status_events_to_callback" time="0.004"><failure message="AssertionError: assert [{'agent_type...81124+00:00'}] == [{'agent_type...': 'waiting'}]&#10;  &#10;  At index 0 diff: #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33mdelegating#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33magent_type#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33mresearch-agent#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33mtimestamp#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33m2026-05-30T00:22:00.681105+00:00#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m}#x1B[90m#x1B[39;49;00m != #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33mdelegating#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m...&#10;  &#10;  ...Full output truncated (2 lines hidden), use '-vv' to show">@pytest.mark.asyncio
+    async def test_delegate_conversation_turn_streams_status_events_to_callback() -&gt; None:
+        conv_session_id = uuid.uuid4()
+        agent_type_id = uuid.uuid4()
+        app = SimpleNamespace(state=SimpleNamespace(certificate_manager=None))
+    
+        streamed_lines = [
+            '{"type":"status_event","event":{"status":"delegating","agent_type":"research-agent"}}',
+            '{"type":"status_event","event":{"status":"waiting","agent_type":"research-agent"}}',
+            '{"type":"final","response":"ok","guardrail_usage":null,"status_events":[]}',
+        ]
+    
+        async def iter_lines():
+            for line in streamed_lines:
+                yield line
+    
+        mock_stream_response = MagicMock()
+        mock_stream_response.raise_for_status.return_value = None
+        mock_stream_response.aiter_lines = MagicMock(return_value=iter_lines())
+    
+        mock_stream_cm = AsyncMock()
+        mock_stream_cm.__aenter__.return_value = mock_stream_response
+        mock_stream_cm.__aexit__.return_value = None
+    
+        mock_http_client = AsyncMock()
+        mock_http_client.stream = MagicMock(return_value=mock_stream_cm)
+        mock_http_client.__aenter__.return_value = mock_http_client
+    
+        emitted: list[dict[str, str]] = []
+    
+        async def on_status_event(event: dict[str, str]) -&gt; None:
+            emitted.append(event)
+    
+        with patch(
+            "app.api.ws.chat.get_settings",
+            return_value=SimpleNamespace(
+                agent_runtime_url="http://localhost:8001",
+                agent_question_timeout_seconds=120,
+            ),
+        ), patch("app.api.ws.chat.httpx.AsyncClient", return_value=mock_http_client):
+            result, guardrail_usage, status_events = await chat._delegate_conversation_turn_to_agent_runtime(
+                app=app,
+                conv_session_id=conv_session_id,
+                agent_type_id=agent_type_id,
+                messages=[{"role": "user", "content": "hello"}],
+                on_status_event=on_status_event,
+            )
+    
+        assert result == "ok"
+        assert guardrail_usage is None
+&gt;       assert status_events == [
+            {"status": "delegating", "agent_type": "research-agent"},
+            {"status": "waiting", "agent_type": "research-agent"},
+        ]
+E       AssertionError: assert [{'agent_type...81124+00:00'}] == [{'agent_type...': 'waiting'}]
+E         
+E         At index 0 diff: #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33mdelegating#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33magent_type#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33mresearch-agent#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m#x1B[33mtimestamp#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33m2026-05-30T00:22:00.681105+00:00#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m}#x1B[90m#x1B[39;49;00m != #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mstatus#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[33m'#x1B[39;49;00m#x1B[33mdelegating#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m, #x1B[33m'#x1B[39;49;00m...
+E         
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+tests\unit\test_fix_20260521_tool_routing_and_chat_timeout.py:137: AssertionError</failure></testcase><testcase classname="tests.unit.test_fix_20260521_tool_routing_and_chat_timeout" name="test_system_send_notification_missing_required_args_returns_error" time="0.003" /><testcase classname="tests.unit.test_fix_20260521_tool_routing_and_chat_timeout" name="test_system_tool_control_center_400_is_not_masked_as_502" time="0.005" /><testcase classname="tests.unit.test_fix_20260521_192300_ws_chat_runtime_boundary" name="test_call_llm_chat_path_must_not_instantiate_local_runtime_executor" time="0.004" /><testcase classname="tests.unit.test_ws_delegation_visibility" name="test_conversation_context_emits_delegation_status_events" time="0.004"><failure message="AssertionError: expected await not found.&#10;Expected: call_a2a_request(target_agent_type_slug='research-agent', session_id='6cbaa35a-37bc-4615-bf57-03a1518bcb2f', requester_role_id='249caca7-8911-46ab-8dfd-651311bee02f', request_payload={'__delegation_depth': 1}, session_link_id=None, wait_for_response=True, wait_timeout_seconds=45.0)&#10;  Actual: call_a2a_request(target_agent_type_slug='research-agent', session_id='6cbaa35a-37bc-4615-bf57-03a1518bcb2f', requester_role_id='249caca7-8911-46ab-8dfd-651311bee02f', request_payload={'__delegation_depth': 1}, session_link_id=None, wait_for_response=False)">@pytest.mark.asyncio
+    async def test_conversation_context_emits_delegation_status_events() -&gt; None:
+        executor = AgentRuntimeExecutor()
+        conv_session_id = uuid.uuid4()
+        agent_type_id = uuid.uuid4()
+        role_id = uuid.uuid4()
+    
+        agent_context = {
+            'model_id': str(uuid.uuid4()),
+            'role_id': str(role_id),
+            'allowed_tools': [build_tool_name('agent', 'research-agent')],
+            'tool_definitions': [
+                {
+                    'type': 'function',
+                    'function': {
+                        'name': 'agent__research-agent',
+                        'description': 'delegate',
+                        'parameters': {'type': 'object', 'properties': {}},
+                    },
+                },
+            ],
+            'tool_name_map': {
+                'agent__research-agent': build_tool_name('agent', 'research-agent'),
+            },
+            'role_mcp_sessions': {},
+            'guardrail_policy': {
+                'max_iterations': 5,
+                'max_delegation_depth': 3,
+                'max_delegated_steps': 10,
+                'execution_timeout_seconds': 300,
+            },
+            'sops': [],
+            'skills': [],
+        }
+        model_config = {'provider_type': 'openai'}
+    
+        with patch('app.services.agents.model_binding.ModelBindingLayer') as model_binding_cls, patch(
+            'app.agent_runtime.comm_hub_client.CommHubToolClient'
+        ) as comm_hub_client_cls:
+            binding = model_binding_cls.return_value
+            binding.complete_from_context = AsyncMock(side_effect=[{'step': 1}, {'step': 2}])
+            model_binding_cls.extract_text.side_effect = ['', 'delegation complete']
+            model_binding_cls.extract_tool_calls.side_effect = [
+                [
+                    {
+                        'id': 'call-1',
+                        'function': {
+                            'name': 'agent__research-agent',
+                            'arguments': '{}',
+                        },
+                    }
+                ],
+                [],
+            ]
+            model_binding_cls.extract_usage.return_value = None
+    
+            comm_hub_client = comm_hub_client_cls.return_value
+            comm_hub_client.call_a2a_request = AsyncMock(
+                return_value={'status': 'accepted', 'response_payload': {'status': 'completed'}}
+            )
+    
+            response, guardrail_usage, status_events = await executor.execute_conversation_turn_from_context(
+                agent_type_id=agent_type_id,
+                agent_context=agent_context,
+                model_config=model_config,
+                messages=[{'role': 'user', 'content': 'delegate'}],
+                conv_session_id=conv_session_id,
+            )
+    
+        assert response == 'delegation complete'
+        assert guardrail_usage['delegated_steps'] == 1
+        assert status_events == [
+            {'status': 'using_tool', 'tool_name': 'research-agent'},
+            {'status': 'delegating', 'agent_type': 'research-agent'},
+            {'status': 'waiting', 'agent_type': 'research-agent'},
+        ]
+&gt;       comm_hub_client.call_a2a_request.assert_awaited_once_with(
+            target_agent_type_slug='research-agent',
+            session_id=str(conv_session_id),
+            requester_role_id=str(role_id),
+            request_payload={'__delegation_depth': 1},
+            session_link_id=None,
+            wait_for_response=True,
+            wait_timeout_seconds=45.0,
+        )
+
+tests\unit\test_ws_delegation_visibility.py:86: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:2393: in assert_awaited_once_with
+    return self.assert_awaited_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;AsyncMock name='CommHubToolClient().call_a2a_request' id='2731639136880'&gt;
+args = ()
+kwargs = {'request_payload': {'__delegation_depth': 1}, 'requester_role_id': '249caca7-8911-46ab-8dfd-651311bee02f', 'session_id': '6cbaa35a-37bc-4615-bf57-03a1518bcb2f', 'session_link_id': None, ...}
+expected = call(target_agent_type_slug='research-agent', session_id='6cbaa35a-37bc-4615-bf57-03a1518bcb2f', requester_role_id='24...f', request_payload={'__delegation_depth': 1}, session_link_id=None, wait_for_response=True, wait_timeout_seconds=45.0)
+_error_message = &lt;function AsyncMockMixin.assert_awaited_with.&lt;locals&gt;._error_message at 0x0000027C0279F560&gt;
+actual = call(target_agent_type_slug='research-agent', session_id='6cbaa35a-37bc-4615-bf57-03a1518bcb2f', requester_role_id='24...8911-46ab-8dfd-651311bee02f', request_payload={'__delegation_depth': 1}, session_link_id=None, wait_for_response=False)
+cause = None
+
+    def assert_awaited_with(self, /, *args, **kwargs):
+        """
+        Assert that the last await was with the specified arguments.
+        """
+        if self.await_args is None:
+            expected = self._format_mock_call_signature(args, kwargs)
+            raise AssertionError(f'Expected await: {expected}\nNot awaited')
+    
+        def _error_message():
+            msg = self._format_mock_failure_message(args, kwargs, action='await')
+            return msg
+    
+        expected = self._call_matcher(_Call((args, kwargs), two=True))
+        actual = self._call_matcher(self.await_args)
+        if actual != expected:
+            cause = expected if isinstance(expected, Exception) else None
+&gt;           raise AssertionError(_error_message()) from cause
+E           AssertionError: expected await not found.
+E           Expected: call_a2a_request(target_agent_type_slug='research-agent', session_id='6cbaa35a-37bc-4615-bf57-03a1518bcb2f', requester_role_id='249caca7-8911-46ab-8dfd-651311bee02f', request_payload={'__delegation_depth': 1}, session_link_id=None, wait_for_response=True, wait_timeout_seconds=45.0)
+E             Actual: call_a2a_request(target_agent_type_slug='research-agent', session_id='6cbaa35a-37bc-4615-bf57-03a1518bcb2f', requester_role_id='249caca7-8911-46ab-8dfd-651311bee02f', request_payload={'__delegation_depth': 1}, session_link_id=None, wait_for_response=False)
+
+C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:2382: AssertionError</failure></testcase><testcase classname="tests.api.test_agents_api" name="test_get_session_logs_returns_200_with_empty_list" time="0.178" /><testcase classname="tests.api.test_agents_api" name="test_stream_session_logs_emits_entries_and_terminal_marker" time="0.348" /><testcase classname="tests.api.test_agents_api" name="test_create_no_input_agent_without_sop_fails" time="0.261"><failure message="AssertionError: Expected 400 when creating none-input agent without primary_sop_id, got 422.&#10;  Body: {&quot;detail&quot;:[{&quot;type&quot;:&quot;string_pattern_mismatch&quot;,&quot;loc&quot;:[&quot;body&quot;,&quot;name&quot;],&quot;msg&quot;:&quot;String should match pattern '^[a-z0-9\\-]+$'&quot;,&quot;input&quot;:&quot;AutoSopAgent&quot;,&quot;ctx&quot;:{&quot;pattern&quot;:&quot;^[a-z0-9\\-]+$&quot;}}],&quot;body&quot;:{&quot;name&quot;:&quot;AutoSopAgent&quot;,&quot;model_id&quot;:&quot;gpt-4o-mini&quot;,&quot;input_type&quot;:&quot;none&quot;,&quot;output_type&quot;:&quot;auto&quot;,&quot;role_id&quot;:&quot;4ca1c624-3735-4892-9ba6-00ccec971ea9&quot;}}&#10;assert 422 == 400&#10; +  where 422 = &lt;Response [422 Unprocessable Entity]&gt;.status_code">@pytest.mark.asyncio
+    async def test_create_no_input_agent_without_sop_fails():
+        """POST /api/v1/agents/types with input_type=none and no primary_sop_id must return 400."""
+        role_id = uuid.uuid4()
+    
+        mock_session = AsyncMock()
+    
+        def _result(scalar_val=None, scalars_list=None):
+            res = MagicMock()
+            res.scalar_one_or_none = MagicMock(return_value=scalar_val)
+            res.scalar_one = MagicMock(return_value=scalar_val)
+            res.scalars = MagicMock(
+                return_value=MagicMock(
+                    all=MagicMock(return_value=scalars_list or []),
+                    first=MagicMock(return_value=scalars_list[0] if scalars_list else None),
+                )
+            )
+            res.first = MagicMock(return_value=scalars_list[0] if scalars_list else None)
+            return res
+    
+        async def execute_side_effect(query, *args, **kwargs):
+            # Permission check: user lookup — allow
+            return _result(scalar_val=MagicMock())
+    
+        mock_session.execute = AsyncMock(side_effect=execute_side_effect)
+        mock_session.get = AsyncMock(return_value=None)
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+    
+        async def db_override():
+            yield mock_session
+    
+        app = create_app()
+        app.dependency_overrides[get_db] = db_override
+    
+        payload = {
+            "name": "AutoSopAgent",
+            "model_id": "gpt-4o-mini",
+            "input_type": "none",
+            "output_type": "auto",
+            "role_id": str(role_id),
+            # primary_sop_id intentionally omitted
+        }
+    
+        with _bypass_auth(), _mock_permission_allow():
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.post("/api/v1/agents/types", json=payload)
+    
+&gt;       assert resp.status_code == 400, (
+            f"Expected 400 when creating none-input agent without primary_sop_id, "
+            f"got {resp.status_code}.\nBody: {resp.text}"
+        )
+E       AssertionError: Expected 400 when creating none-input agent without primary_sop_id, got 422.
+E         Body: {"detail":[{"type":"string_pattern_mismatch","loc":["body","name"],"msg":"String should match pattern '^[a-z0-9\\-]+$'","input":"AutoSopAgent","ctx":{"pattern":"^[a-z0-9\\-]+$"}}],"body":{"name":"AutoSopAgent","model_id":"gpt-4o-mini","input_type":"none","output_type":"auto","role_id":"4ca1c624-3735-4892-9ba6-00ccec971ea9"}}
+E       assert 422 == 400
+E        +  where 422 = &lt;Response [422 Unprocessable Entity]&gt;.status_code
+
+tests\api\test_agents_api.py:317: AssertionError</failure></testcase><testcase classname="tests.api.test_agents_session_log_stream_api" name="test_stream_session_logs_emits_log_entries_then_completed_terminal_marker" time="0.265" /><testcase classname="tests.api.test_agents_session_log_stream_api" name="test_stream_session_logs_emits_failed_terminal_marker_when_session_disappears" time="0.221" /></testsuite></testsuites>

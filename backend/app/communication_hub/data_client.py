@@ -232,6 +232,7 @@ class ControlCenterDataClient:
         is_first_message: bool = False,
         first_user_message: str | None = None,
         guardrail_usage: dict[str, Any] | None = None,
+        status_events: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Persist agent turn and optionally auto-name the session title."""
         body: dict[str, Any] = {
@@ -242,6 +243,8 @@ class ControlCenterDataClient:
             body["first_user_message"] = first_user_message
         if guardrail_usage is not None:
             body["guardrail_usage"] = guardrail_usage
+        if status_events:
+            body["status_events"] = status_events
 
         return await self._post(
             f"/internal/data/conversations/{conv_session_id}/append-turn",

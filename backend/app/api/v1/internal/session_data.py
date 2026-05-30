@@ -173,6 +173,7 @@ class ConversationTurnAppendRequest(BaseModel):
     is_first_message: bool = False
     first_user_message: str | None = None
     guardrail_usage: dict[str, Any] | None = None
+    status_events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ConversationTurnAppendResponse(BaseModel):
@@ -820,7 +821,26 @@ async def append_conversation_turn(
     from app.services.conversations.store import ConversationStore
 
     store = ConversationStore()
-    await store.add_turn(conv_session_id, TurnRole.agent, body.agent_reply, db)
+    agent_turn = await store.add_turn(conv_session_id, TurnRole.agent, body.agent_reply, db)
+
+    for status_event in body.status_events:
+        if not isinstance(status_event, dict):
+            continue
+        status_value = status_event.get("status")
+        if not isinstance(status_value, str):
+            continue
+        await store.add_tool_call(
+            turn_id=agent_turn.id,
+            tool_name="chat_status",
+            db=db,
+            tool_output={
+                "status": status_value,
+                "agent_type": status_event.get("agent_type"),
+                "tool_name": status_event.get("tool_name"),
+                "receiver_session_id": status_event.get("receiver_session_id"),
+                "timestamp": status_event.get("timestamp"),
+            },
+        )
 
     conv_session = await db.get(ConversationSession, conv_session_id)
     if conv_session is not None and body.guardrail_usage is not None:

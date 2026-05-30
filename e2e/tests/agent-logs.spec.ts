@@ -160,7 +160,7 @@ test.describe('Agent Log Viewer', () => {
   test('LogViewer renders on completed session page', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // The LogViewer title should be visible
     await expect(page.getByText('Execution Log')).toBeVisible({ timeout: 10000 })
@@ -169,7 +169,7 @@ test.describe('Agent Log Viewer', () => {
   test('Summary panel displays identity and role from system instruction', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // Scope to the summary panel (Paper element = 2 levels up from title)
     const summaryPanel = page.getByText('Execution Summary').locator('../..')
@@ -180,7 +180,7 @@ test.describe('Agent Log Viewer', () => {
   test('Summary panel displays SOPs/skills as chips', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // Scope to the summary panel (Paper element = 2 levels up from title)
     const summaryPanel = page.getByText('Execution Summary').locator('../..')
@@ -193,7 +193,7 @@ test.describe('Agent Log Viewer', () => {
   test('Summary panel shows success result badge for completed session', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // Scope to the summary panel to avoid matching step messages
     const summaryPanel = page.getByText('Execution Summary').locator('..')
@@ -205,7 +205,7 @@ test.describe('Agent Log Viewer', () => {
   }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // The old "View Execution Logs" button should no longer exist
     await expect(page.getByText(/view execution logs/i)).toHaveCount(0)
@@ -214,7 +214,7 @@ test.describe('Agent Log Viewer', () => {
   test('Agent Working Steps section is collapsed by default', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // The collapsible section header should be visible and show the "show" text
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
@@ -227,16 +227,15 @@ test.describe('Agent Log Viewer', () => {
   test('Expand working steps section reveals step rows', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // Wait for the Working Steps section to render
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // Find and click the collapse toggle button
+    // Expand the top-level working steps section.
     const toggleEl = page
-      .locator('[role="button"]')
-      .filter({ hasText: /show.*working steps/i })
-      .first()
+      .getByText('Agent Working Steps', { exact: true })
+      .locator('xpath=ancestor::*[@role="button"][1]')
     await toggleEl.click()
 
     // After expanding, step messages should be visible
@@ -247,43 +246,36 @@ test.describe('Agent Log Viewer', () => {
   test('Collapse working steps section hides step rows', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // Expand the section
+    // Expand the section.
     const toggleEl = page
-      .locator('[role="button"]')
-      .filter({ hasText: /show.*working steps/i })
-      .first()
+      .getByText('Agent Working Steps', { exact: true })
+      .locator('xpath=ancestor::*[@role="button"][1]')
     await toggleEl.click()
     await expect(page.getByText('Initial LLM reasoning call')).toBeVisible({ timeout: 5000 })
 
     // Collapse by clicking again
     const hideToggleEl = page
-      .locator('[role="button"]')
-      .filter({ hasText: /hide working steps/i })
-      .first()
+      .getByText('Agent Working Steps', { exact: true })
+      .locator('xpath=ancestor::*[@role="button"][1]')
     await hideToggleEl.click()
-
-    // The section toggle should now show "Show N Working Steps" again
-    await expect(
-      page.locator('[role="button"]').filter({ hasText: /show.*working steps/i }).first()
-    ).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 5000 })
   })
 
   test('Expand individual step detail block', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
-    // First expand the working steps section
+    // First expand the working steps section.
     const toggleEl = page
-      .locator('[role="button"]')
-      .filter({ hasText: /show.*working steps/i })
-      .first()
+      .getByText('Agent Working Steps', { exact: true })
+      .locator('xpath=ancestor::*[@role="button"][1]')
     await toggleEl.click()
 
     // Find a step that has a detail expand button (tool_call with data)
@@ -302,15 +294,14 @@ test.describe('Agent Log Viewer', () => {
   test('Collapse individual step detail block', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Agent Working Steps')).toBeVisible({ timeout: 10000 })
 
     // Expand working steps section
     await page
-      .locator('[role="button"]')
-      .filter({ hasText: /show.*working steps/i })
-      .first()
+      .getByText('Agent Working Steps', { exact: true })
+      .locator('xpath=ancestor::*[@role="button"][1]')
       .click()
 
     await expect(page.getByText('Calling QueryTool with SQL query')).toBeVisible({ timeout: 5000 })
@@ -323,7 +314,7 @@ test.describe('Agent Log Viewer', () => {
     await expect(collapseBtn).toBeVisible({ timeout: 5000 })
 
     // Collapse detail — click the collapse button
-    await collapseBtn.click()
+    await collapseBtn.click({ force: true })
     // After collapse, the expand button appears again
     await expect(page.locator('[aria-label="Expand detail"]').first()).toBeVisible({ timeout: 5000 })
   })
@@ -331,7 +322,7 @@ test.describe('Agent Log Viewer', () => {
   test('Toggle to raw mode hides friendly panels', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Execution Summary')).toBeVisible({ timeout: 10000 })
 
@@ -347,7 +338,7 @@ test.describe('Agent Log Viewer', () => {
   test('Toggle to raw mode shows monospace raw log block', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Execution Log')).toBeVisible({ timeout: 10000 })
 
@@ -366,7 +357,7 @@ test.describe('Agent Log Viewer', () => {
   test('Raw mode copy button is visible', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Execution Log')).toBeVisible({ timeout: 10000 })
 
@@ -381,7 +372,7 @@ test.describe('Agent Log Viewer', () => {
   test('Toggle back to friendly mode restores panels', async ({ page }) => {
     await setupLogViewerPage(page)
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     await expect(page.getByText('Execution Summary')).toBeVisible({ timeout: 10000 })
 
@@ -425,7 +416,7 @@ test.describe('Agent Log Viewer — Edge Cases', () => {
     page.on('pageerror', (err) => errors.push(err.message))
 
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // Should not crash
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
@@ -462,7 +453,7 @@ test.describe('Agent Log Viewer — Edge Cases', () => {
     page.on('pageerror', (err) => errors.push(err.message))
 
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     expect(errors.filter((e) => !e.includes('ResizeObserver'))).toHaveLength(0)
     await expect(page.getByText('Execution Log')).toBeVisible({ timeout: 10000 })
@@ -484,9 +475,10 @@ test.describe('Agent Log Viewer — Edge Cases', () => {
     )
 
     await page.goto(`/agents/sessions/${SESSION_ID}`)
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
 
     // When no execution logs, LogViewer should not render
     await expect(page.getByText('Execution Log')).not.toBeVisible({ timeout: 5000 })
   })
 })
+

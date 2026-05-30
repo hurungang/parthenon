@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -32,6 +32,18 @@ Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
 })
 
 const mockGet = vi.fn()
+let streamHookState: {
+  entries: Array<{
+    id: string
+    timestamp: string
+    event_type: string
+    log_level: string
+    message: string
+    data: Record<string, unknown>
+  }>
+  connectionState: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'fallback'
+  isFallback: boolean
+}
 
 vi.mock('../api/apiClient', () => ({
   default: { get: mockGet },
@@ -43,7 +55,18 @@ vi.mock('../hooks/useChatSession', () => ({
     sendMessage: vi.fn(),
     connected: false,
     chatStatus: null,
+    delegationSnippets: [],
+    delegationSnippetsCollapsed: true,
+    delegationCompleted: false,
+    delegationExecutionLogAvailable: false,
+    delegationExecutionSessionId: null,
+    toggleDelegationSnippetsCollapsed: vi.fn(),
+    hydrateDelegationFromHistory: vi.fn(),
   }),
+}))
+
+vi.mock('../hooks/useSessionExecutionLogStream', () => ({
+  useSessionExecutionLogStream: () => streamHookState,
 }))
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -61,6 +84,14 @@ describe('AgentJobPage', () => {
   afterEach(() => {
     vi.clearAllMocks()
     vi.useRealTimers()
+  })
+
+  beforeEach(() => {
+    streamHookState = {
+      entries: [],
+      connectionState: 'connected',
+      isFallback: false,
+    }
   })
 
   it('shows loading spinner initially', async () => {
@@ -175,6 +206,30 @@ describe('AgentJobPage', () => {
 
     // First fetch + at least one poll tick
     expect(callCount).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows live stream status label while non-conversation session is running', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        id: 'sess-abc',
+        agent_type_id: 'at-1',
+        triggered_by_user_id: null,
+        input_data: null,
+        status: 'running',
+        started_at: '2026-01-01T00:00:01Z',
+        completed_at: null,
+        output_data: null,
+        error_message: null,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    const { AgentJobPage } = await import('../pages/agents/AgentJobPage')
+    render(<AgentJobPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.sessions.logViewer.streamConnected')).toBeDefined()
+    })
   })
 
   it('stops polling when session reaches completed status', async () => {
@@ -299,6 +354,13 @@ describe('AgentJobPage', () => {
           { id: 'msg-1', role: 'user', content: 'Hello agent', timestamp: '2026-01-01T00:00:01Z' },
           { id: 'msg-2', role: 'assistant', content: 'Hello! How can I help?', timestamp: '2026-01-01T00:00:02Z' },
         ],
+        delegationSnippets: [],
+        delegationSnippetsCollapsed: true,
+        delegationCompleted: false,
+        delegationExecutionLogAvailable: false,
+        delegationExecutionSessionId: null,
+        toggleDelegationSnippetsCollapsed: vi.fn(),
+        hydrateDelegationFromHistory: vi.fn(),
         sendMessage: vi.fn(),
         connected: true,
         chatStatus: null,

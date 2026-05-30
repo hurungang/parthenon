@@ -28,11 +28,17 @@
 - Skills > skills page has create skill button
 - Skill editor with instructions and tool binding > skills API response includes instructions field
 - Skill editor with instructions and tool binding > create skill POST payload can include instructions field
+- Skill workflow generation and preview (mocked API) > uses Workflow terminology and not legacy System Instruction in editor
+- Skill workflow generation and preview (mocked API) > preview renders one instruction file and uses latest unsaved workflow text
+- Skill workflow generation and preview (mocked API) > missing model returns user-visible error and does not fallback to generated workflow
 - SOPs > SOPs page lists SOP names from API
 - SOPs > clicking a SOP shows its steps
 - SOP editor with instructions and steps > SOP steps use skill_invocation type (not legacy skill)
 - SOP editor with instructions and steps > SOPs API response includes instructions field
 - SOP editor with instructions and steps > create SOP POST payload can include instructions field
+- SOP workflow generation and preview (mocked API) > uses Workflow terminology and not legacy System Instruction in editor
+- SOP workflow generation and preview (mocked API) > preview renders one SOP instruction file and uses latest unsaved workflow text
+- SOP workflow generation and preview (mocked API) > missing model returns user-visible error and does not fallback to generated SOP workflow
 - Tags Management > renders tag definitions table
 - Roles Management > navigates to Roles tab and shows role data
 - Groups Management > groups tab shows group data
@@ -111,7 +117,7 @@
 - Real Backend Integration - Service Segregation Deny Paths > revocation contract endpoint uses revoked/{serial_number} path
 - Browser Boundary - Frontend Uses API/WS Boundaries Only > dashboard traffic does not attempt direct database connections
 
-## Scenario Index
+## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
 |---|---------|---------------|--------|-----------|
 | 1 | Authentication | Unauthenticated user is redirected away from protected pages | enterprise-ai-harness | auth.spec.ts |
@@ -222,3 +228,9 @@
 | 97 | Internal System-Tools Endpoint Hardening | Real backend call confirms internal system-tools endpoint is wired and denies unauthenticated direct invocation without service certificate | service-segregation-security-audit | service-segregation-security-audit.spec.ts |
 | 98 | Revocation Contract Endpoint | Real backend call confirms revocation check path uses `revoked/{serial_number}` contract and is operationally wired | service-segregation-security-audit | service-segregation-security-audit.spec.ts |
 | 99 | Frontend API/WS Boundary | Browser traffic inspection confirms dashboard flow uses API boundary and does not attempt direct database channels (`postgres`, `supabase`, `:5432`) | service-segregation-security-audit | service-segregation-security-audit.spec.ts |
+| 100 | Skill Workflow Terminology Rename | Skill editor uses Workflow terminology and removes legacy System Instruction wording | ai-assisted-workflow-authoring-for-sop-and-skill | skills-workflow-generation-preview.spec.ts |
+| 101 | Skill Workflow Preview Freshness | Skill workflow preview renders single instruction file using latest unsaved workflow and description | ai-assisted-workflow-authoring-for-sop-and-skill | skills-workflow-generation-preview.spec.ts |
+| 102 | Skill Missing-Model Guardrail | Skill generation shows user-visible not-configured error and preserves manual workflow text without fallback | ai-assisted-workflow-authoring-for-sop-and-skill | skills-workflow-generation-preview.spec.ts |
+| 103 | SOP Workflow Terminology Rename | SOP editor uses Workflow terminology and removes legacy System Instruction wording | ai-assisted-workflow-authoring-for-sop-and-skill | sops-workflow-generation-preview.spec.ts |
+| 104 | SOP Workflow Preview Freshness | SOP workflow preview renders single instruction file using latest unsaved workflow and description | ai-assisted-workflow-authoring-for-sop-and-skill | sops-workflow-generation-preview.spec.ts |
+| 105 | SOP Missing-Model Guardrail | SOP generation shows user-visible not-configured error and preserves manual workflow text without fallback | ai-assisted-workflow-authoring-for-sop-and-skill | sops-workflow-generation-preview.spec.ts |

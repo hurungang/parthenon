@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from copy import deepcopy
 from typing import Any, Awaitable, Callable, TYPE_CHECKING
@@ -182,6 +183,35 @@ def _int_or_default(value: Any, default: int) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _extract_sop_name_from_fallback_content(sop_content: str | None) -> str | None:
+    """Extract SOP name from fallback content header if present."""
+    if not sop_content:
+        return None
+
+    first_line = sop_content.strip().splitlines()[0].strip()
+    match = re.match(r"^Follow this SOP to complete the task:\s*(.+?)\s*$", first_line)
+    if not match:
+        return None
+
+    sop_name = match.group(1).strip()
+    return sop_name or None
+
+
+def _instruction_mentions_any_sop_reference(system_instruction: str | None) -> bool:
+    """Return True when instruction already references any SOP guidance.
+
+    Default(primary) SOP content is fallback-only and should not be appended when the
+    base instruction already directs the model via an SOP reference.
+    """
+    if not system_instruction:
+        return False
+
+    return bool(
+        re.search(r"\bsop\b", system_instruction, re.IGNORECASE)
+        or re.search(r"standard\s+operating\s+procedure", system_instruction, re.IGNORECASE)
+    )
 
 
 def _build_dynamic_agent_tool_definition(
@@ -1103,18 +1133,30 @@ class AgentRuntimeExecutor:
         system_instruction: str | None = context.get("system_instruction")
         sop_content: str | None = context.get("sop_content")
         if sop_content:
-            base = system_instruction or ""
-            system_instruction = f"{base}\n\n{sop_content}".strip()
-            await data_client.log_execution_event(
-                session_id=session_id,
-                event_type="sop_loaded",
-                message="SOP content loaded into system instruction",
-                data={
-                    "primary_sop_id": context.get("primary_sop_id"),
-                    "sop_content_preview": sop_content[:300],
-                    "total_instruction_length": len(system_instruction),
-                },
-            )
+            sop_name = _extract_sop_name_from_fallback_content(sop_content)
+            if _instruction_mentions_any_sop_reference(system_instruction):
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="sop_fallback_skipped",
+                    message="Skipped SOP fallback append; SOP already explicitly referenced",
+                    data={
+                        "primary_sop_id": context.get("primary_sop_id"),
+                        "sop_name": sop_name,
+                    },
+                )
+            else:
+                base = system_instruction or ""
+                system_instruction = f"{base}\n\n{sop_content}".strip()
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="sop_loaded",
+                    message="SOP content loaded into system instruction",
+                    data={
+                        "primary_sop_id": context.get("primary_sop_id"),
+                        "sop_content_preview": sop_content[:300],
+                        "total_instruction_length": len(system_instruction),
+                    },
+                )
 
         mcp_context: str | None = context.get("mcp_session_context")
         if mcp_context:
@@ -2210,9 +2252,30 @@ class AgentRuntimeExecutor:
                             requester_role_id=(str(role_id_raw) if role_id_raw else None),
                             request_payload=delegation_payload,
                             session_link_id=args.get("session_link_id"),
-                            wait_for_response=True,
-                            wait_timeout_seconds=45.0,
+                            wait_for_response=False,
                         )
+
+                        delegated_session_id = None
+                        if isinstance(tool_result, dict):
+                            receiver_session_id = tool_result.get("receiver_session_id")
+                            if isinstance(receiver_session_id, str) and receiver_session_id.strip():
+                                delegated_session_id = receiver_session_id.strip()
+
+                        if delegated_session_id:
+                            await emit_status_event(
+                                {
+                                    "status": "waiting",
+                                    "agent_type": delegated_target_slug,
+                                    "receiver_session_id": delegated_session_id,
+                                }
+                            )
+
+                            wait_payload = await comm_hub_client.wait_for_a2a_response(
+                                receiver_session_id=delegated_session_id,
+                                timeout_seconds=45.0,
+                            )
+                            if isinstance(tool_result, dict):
+                                tool_result["response_payload"] = wait_payload
                     else:
                         logger.info(
                             "Conversation tool dispatch (from context): session=%s tool=%s route_type=%s",
@@ -2407,19 +2470,31 @@ class AgentRuntimeExecutor:
             if agent_type.primary_sop_id:
                 sop_content = await self._load_sop_content(agent_type.primary_sop_id, db)
                 if sop_content:
-                    base = ctx.system_instruction or ""
-                    ctx.system_instruction = f"{base}\n\n{sop_content}".strip()
-                    await self._log_execution_event(
-                        session_id=job.id,
-                        event_type="sop_loaded",
-                        message=f"SOP content loaded into system instruction",
-                        data={
-                            "primary_sop_id": str(agent_type.primary_sop_id),
-                            "sop_content": sop_content,
-                            "sop_content_preview": sop_content[:300],
-                            "total_instruction_length": len(ctx.system_instruction),
-                        },
-                    )
+                    sop_name = _extract_sop_name_from_fallback_content(sop_content)
+                    if _instruction_mentions_any_sop_reference(ctx.system_instruction):
+                        await self._log_execution_event(
+                            session_id=job.id,
+                            event_type="sop_fallback_skipped",
+                            message="Skipped SOP fallback append; SOP already explicitly referenced",
+                            data={
+                                "primary_sop_id": str(agent_type.primary_sop_id),
+                                "sop_name": sop_name,
+                            },
+                        )
+                    else:
+                        base = ctx.system_instruction or ""
+                        ctx.system_instruction = f"{base}\n\n{sop_content}".strip()
+                        await self._log_execution_event(
+                            session_id=job.id,
+                            event_type="sop_loaded",
+                            message=f"SOP content loaded into system instruction",
+                            data={
+                                "primary_sop_id": str(agent_type.primary_sop_id),
+                                "sop_content": sop_content,
+                                "sop_content_preview": sop_content[:300],
+                                "total_instruction_length": len(ctx.system_instruction),
+                            },
+                        )
 
             # ── Load MCP session context and append to system instruction ────
             if agent_type.role_id:
@@ -2525,8 +2600,20 @@ class AgentRuntimeExecutor:
             if agent_type.primary_sop_id:
                 sop_content = await self._load_sop_content(agent_type.primary_sop_id, db)
                 if sop_content:
-                    base = ctx.system_instruction or ""
-                    ctx.system_instruction = f"{base}\n\n{sop_content}".strip()
+                    sop_name = _extract_sop_name_from_fallback_content(sop_content)
+                    if _instruction_mentions_any_sop_reference(ctx.system_instruction):
+                        await self._log_execution_event(
+                            session_id=job.id,
+                            event_type="sop_fallback_skipped",
+                            message="Skipped SOP fallback append; SOP already explicitly referenced",
+                            data={
+                                "primary_sop_id": str(agent_type.primary_sop_id),
+                                "sop_name": sop_name,
+                            },
+                        )
+                    else:
+                        base = ctx.system_instruction or ""
+                        ctx.system_instruction = f"{base}\n\n{sop_content}".strip()
 
             # ── Load MCP session context and append to system instruction ────
             if agent_type.role_id:

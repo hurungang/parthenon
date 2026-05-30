@@ -1,4 +1,5 @@
 """Agent management API routers: AgentRole, AgentIdentity, AgentJob, AgentType, AgentInstance, ModelConfig."""
+import asyncio
 import json
 import uuid
 import logging
@@ -6,6 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -666,6 +668,70 @@ async def get_session_execution_logs(
     )
     entries = result.scalars().all()
     return [ExecutionLogEntryRead.model_validate(e) for e in entries]
+
+
+@AgentJobRouter.get("/{session_id}/logs/stream")
+async def stream_session_execution_logs(
+    session_id: uuid.UUID,
+    db: DbSession,
+    poll_ms: int = Query(1000, ge=250, le=5000),
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> StreamingResponse:
+    """Stream append-only execution log entries for a session while it is active.
+
+    Emits NDJSON events in timestamp order:
+    - {"type":"log_entry","entry":{...}}
+    - {"type":"stream_completed","session_id":"...","session_status":"completed|failed"}
+    """
+    from app.db.models.session_logs import ExecutionLogEntry
+
+    job = await _session_service.get_session(session_id, db)
+    if not job:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    async def stream_events():
+        sent_ids: set[uuid.UUID] = set()
+
+        while True:
+            result = await db.execute(
+                select(ExecutionLogEntry)
+                .where(ExecutionLogEntry.session_id == session_id)
+                .order_by(ExecutionLogEntry.timestamp, ExecutionLogEntry.id)
+            )
+            entries = result.scalars().all()
+
+            for entry in entries:
+                if entry.id in sent_ids:
+                    continue
+                sent_ids.add(entry.id)
+                payload = {
+                    "type": "log_entry",
+                    "entry": ExecutionLogEntryRead.model_validate(entry).model_dump(mode="json"),
+                }
+                yield json.dumps(payload) + "\n"
+
+            current_job = await _session_service.get_session(session_id, db)
+            if not current_job:
+                terminal_payload = {
+                    "type": "stream_completed",
+                    "session_id": str(session_id),
+                    "session_status": "failed",
+                }
+                yield json.dumps(terminal_payload) + "\n"
+                break
+
+            if current_job.status in (AgentJobStatus.completed, AgentJobStatus.failed):
+                terminal_payload = {
+                    "type": "stream_completed",
+                    "session_id": str(session_id),
+                    "session_status": current_job.status.value,
+                }
+                yield json.dumps(terminal_payload) + "\n"
+                break
+
+            await asyncio.sleep(poll_ms / 1000)
+
+    return StreamingResponse(stream_events(), media_type="application/x-ndjson")
 
 
 @AgentJobRouter.get("/{session_id}/execution-logs", response_model=list[ExecutionLogRead])

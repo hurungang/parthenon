@@ -1,5 +1,5 @@
 ---
-description: Demo the Parthenon application by running Playwright E2E tests in headed (visible browser) mode. By default runs curated demo scenarios from master demo-cases file. Supports --cases, --filter, --speed, and --pause flags. Uses named IDE terminal for preview server.
+description: Demo the Parthenon application by running Playwright E2E tests in headed (visible browser) mode. Supports --cases <file>, --filter, --speed, and --pause flags. Uses master demo-cases by default when available.
 ---
 
 Demo the Parthenon application using Playwright in headed browser mode.
@@ -7,7 +7,7 @@ Demo the Parthenon application using Playwright in headed browser mode.
 **Usage**: `/demo-app [--cases <file>] [--filter <scenario>] [--speed <fast|normal|slow>] [--pause]`
 
 - No flags → reads `docs/master/qa/demo-cases.md` if it exists; otherwise runs all scenarios. Asks user to choose speed before starting.
-- `--cases <file>` → load grep patterns from the specified demo-cases.md file (e.g. `docs/changes/my-change/demo-cases.md` or `docs/master/qa/demo-cases.md`). Only the tests matching those patterns will run.
+- `--cases <file>` → load grep patterns from the specified cases file (typically `demo-cases.md`, including change-specific files like `docs/changes/agent-delegation-visibility/demo-cases.md`). Only matching tests run.
 - `--filter <scenario>` → additionally filter by scenario/feature name (applies on top of `--cases` if both given)
 - `--speed fast` → 1000ms delay between actions (quick review)
 - `--speed normal` → 5000ms delay (default — comfortable viewing pace)
@@ -17,6 +17,7 @@ Demo the Parthenon application using Playwright in headed browser mode.
 Examples:
 - `/demo-app` — curated product demo at normal speed (uses master demo-cases if available)
 - `/demo-app --cases docs/changes/enterprise-ai-harness/demo-cases.md` — demo only the change's curated cases
+- `/demo-app --cases docs/changes/agent-delegation-visibility/demo-cases.md` — run refined delegation-visibility demo cases
 - `/demo-app --cases docs/master/qa/demo-cases.md --speed slow` — full product demo, slow pace
 - `/demo-app --filter notifications` — demo notification management only
 - `/demo-app --speed slow` — slow, presentation-friendly demo
@@ -27,6 +28,7 @@ Available scenarios (from `e2e/tests/`):
 - `dashboard` — main dashboard overview
 - `conversations` — conversation history and chat
 - `conversation-sessions` — start, resume, end, and archive conversation agent sessions
+- `conversation-delegation-visibility` — delegating label, waiting indicator, and timeout/failure terminal state in chat
 - `chat` — real-time chat with AI agents
 - `notifications` — notification management
 - `scheduling` — job scheduling
@@ -34,6 +36,7 @@ Available scenarios (from `e2e/tests/`):
 - `agent-management` — agent configuration and management
 - `agent-runtime` — agent roles, identities, model configs, session launch, instance dashboard, and conversation history
 - `agent-logs` — user-friendly agent execution logs (summary, collapsible steps, raw mode toggle)
+- `agent-live-logs-stream` — running non-conversation sessions consume `/logs/stream` and show live progress hints
 - `agent-bootstrap` — agent realm initialization and OAuth-based identity creation
 - `agent-security-segregation` — certificate-based auth, token refresh automation, zero-trust tool authorization
 - `service-segregation-security-audit` — caller-scoped internal API allowlists, deny-by-default enforcement, revocation fail-closed checks
@@ -53,7 +56,7 @@ Available scenarios (from `e2e/tests/`):
 
 Determine which test cases to run:
 
-1. **If `--cases <file>` is provided**: Read the specified demo-cases.md file. Extract all lines under the `## Grep Patterns` heading that start with `- ` and strip the `- ` prefix. These are the Playwright test title patterns. Join them with `|` to form the `--grep` regex.
+1. **If `--cases <file>` is provided**: Read the specified markdown cases file. Extract all lines under the `## Grep Patterns` heading that start with `- ` and strip the `- ` prefix. These are the Playwright test title patterns. Join them with `|` to form the `--grep` regex.
 
 2. **If no `--cases` flag but `docs/master/qa/demo-cases.md` exists**: Read it and extract grep patterns the same way. Announce: "Using master demo-cases from `docs/master/qa/demo-cases.md`."
 

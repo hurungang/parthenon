@@ -17,12 +17,34 @@ import SendIcon from '@mui/icons-material/Send'
 import apiClient from '../../api/apiClient'
 import { useChatSession } from '../../hooks/useChatSession'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
+import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { LogViewer } from '../../components/executions/LogViewer'
 import type { AgentJob, AgentJobStatus, ExecutionLogEntry } from '../../types'
 
 const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed']
 const POLL_INTERVAL_MS = 3_000
+
+function mergeLogEntries(
+  existing: ExecutionLogEntry[],
+  incoming: ExecutionLogEntry[],
+): ExecutionLogEntry[] {
+  if (incoming.length === 0) {
+    return existing
+  }
+
+  const map = new Map<string, ExecutionLogEntry>()
+  for (const entry of existing) {
+    map.set(entry.id, entry)
+  }
+  for (const entry of incoming) {
+    map.set(entry.id, entry)
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  )
+}
 
 function statusColor(status: AgentJobStatus): 'default' | 'warning' | 'info' | 'success' | 'error' {
   if (status === 'queued') return 'default'
@@ -76,6 +98,23 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
     typeof session.input_data === 'object' &&
     'message' in session.input_data
 
+  const shouldStreamLogs = Boolean(
+    id &&
+    session &&
+    !isConversational &&
+    !TERMINAL_STATUSES.includes(session.status),
+  )
+
+  const {
+    entries: streamedLogEntries,
+    connectionState: logStreamState,
+    isFallback: isLogStreamFallback,
+  } = useSessionExecutionLogStream({
+    sessionId: id ?? null,
+    enabled: shouldStreamLogs,
+    sessionStatus: session?.status,
+  })
+
   // WebSocket chat — only active for conversational agents
   const { messages, sendMessage, connected } = useChatSession(
     isConversational && id ? id : null,
@@ -119,6 +158,13 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
       if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
     }
   }, [fetchSession, fetchLogEntries])
+
+  useEffect(() => {
+    if (!streamedLogEntries.length) {
+      return
+    }
+    setLogEntries((prev) => mergeLogEntries(prev, streamedLogEntries))
+  }, [streamedLogEntries])
 
   // Start polling when session is in a non-terminal status
   useEffect(() => {
@@ -436,7 +482,14 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
               : t('agents.sessions.statusRunning')}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {t('agents.sessions.pollingHint')}
+            {isLogStreamFallback
+              ? t('agents.sessions.pollingHint')
+              : t('agents.sessions.statusRunning')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+            {isLogStreamFallback
+              ? t('agents.sessions.pollingHint')
+              : t('agents.sessions.logViewer.streamConnected', { defaultValue: `Live stream: ${logStreamState}` })}
           </Typography>
         </Paper>
       )}

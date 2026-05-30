@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import apiClient from '../api/apiClient'
 import { ConversationDialog } from '../components/agents/ConversationDialog'
@@ -13,13 +13,26 @@ let chatStatusState:
       kind: 'thinking' | 'delegating' | 'waiting' | 'using_tool' | 'timeout_or_failed'
       agentType: string | null
       toolName: string | null
+      receiverSessionId: string | null
       timestamp: string
     }
   | null = null
+let delegationSnippetsState: Array<{
+  id: string
+  kind: 'delegating' | 'waiting' | 'using_tool'
+  agentType: string | null
+  toolName: string | null
+  timestamp: string
+}> = []
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (k: string, options?: { value?: string }) => (options?.value ? `${k} ${options.value}` : k),
+    t: (k: string, options?: { value?: string; agentType?: string }) => {
+      if (k === 'conversations.sessions.statusDelegatingToAgent') {
+        return `Delegating to agent ${String(options?.agentType ?? '')}`
+      }
+      return options?.value ? `${k} ${options.value}` : k
+    },
   }),
 }))
 
@@ -31,6 +44,14 @@ vi.mock('../hooks/useChatSession', () => ({
     sessionTitle: null,
     guardrailUsage: guardrailUsageState,
     chatStatus: chatStatusState,
+    delegationSnippets: delegationSnippetsState,
+    delegationSnippetsCollapsed: true,
+    delegationCompleted: false,
+    delegationExecutionLogAvailable: false,
+    delegationExecutionSessionId: null,
+    setDelegationSnippetsCollapsed: vi.fn(),
+    toggleDelegationSnippetsCollapsed: vi.fn(),
+    hydrateDelegationFromHistory: vi.fn(),
     sendMessage: sendMessageSpy,
     clearMessages: vi.fn(),
   })),
@@ -60,6 +81,7 @@ describe('ConversationDialog', () => {
     connectedState = false
     guardrailUsageState = null
     chatStatusState = null
+    delegationSnippetsState = []
     sendMessageSpy.mockClear()
     endSessionSpy.mockClear()
     vi.mocked(apiClient.post).mockReset()
@@ -212,14 +234,87 @@ describe('ConversationDialog', () => {
     expect(screen.getByText('2.1k tokens / 10k tokens')).toBeDefined()
   })
 
+  it('shows policy snapshot id from resumed camelCase guardrail payload instead of unknown', async () => {
+    connectedState = true
+    guardrailUsageState = null
+
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        id: 'conversation-session-1',
+        agent_type_id: 'agent-type-1',
+        triggered_by_user_id: null,
+        agent_job_id: null,
+        title: 'Saved conversation',
+        channel: 'web',
+        status: 'active',
+        turn_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        closed_at: null,
+        guardrail_usage: {
+          policySnapshotId: 'policy-camel-1',
+          tokenUsageCurrentSession: 2100,
+          tokenBudget: 10000,
+          cumulativeIterations: 1,
+          maxIterations: 6,
+          delegatedSteps: 0,
+          maxDelegatedSteps: 8,
+          delegationDepth: 0,
+          maxDelegationDepth: 2,
+        },
+        turns: [],
+      },
+    } as never)
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId="conversation-session-1"
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/conversations/conversation-session-1/resume')
+    })
+
+    fireEvent.click(screen.getByText('conversations.sessions.guardrailHintOpen'))
+
+    // Expected behavior: panel must render concrete policy snapshot id from resume payload.
+    expect(screen.getByText('policy-camel-1')).toBeDefined()
+  })
+
   it('renders delegation and waiting status in the dialog chat area', () => {
     connectedState = true
     chatStatusState = {
       kind: 'waiting',
       agentType: 'research-agent',
       toolName: null,
+      receiverSessionId: null,
       timestamp: new Date().toISOString(),
     }
+    delegationSnippetsState = [
+      {
+        id: 'snippet-1',
+        kind: 'delegating',
+        agentType: 'research-agent',
+        toolName: null,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: 'snippet-2',
+        kind: 'waiting',
+        agentType: 'research-agent',
+        toolName: null,
+        timestamp: new Date().toISOString(),
+      },
+    ]
 
     const onClose = vi.fn()
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -235,9 +330,83 @@ describe('ConversationDialog', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByText('conversations.sessions.statusDelegatingToAgent')).toBeDefined()
-    expect(screen.getByText('conversations.sessions.statusWaiting')).toBeDefined()
-    expect(screen.getByTestId('conversation-dialog-chat-status-indicator')).toBeDefined()
+    expect(screen.getByText('Delegating to agent research-agent')).toBeDefined()
+    expect(within(screen.getByTestId('conversation-dialog-chat-status-indicator')).getByText('conversations.sessions.statusWaiting')).toBeDefined()
+    expect(screen.getByTestId('conversation-dialog-delegation-inline-row')).toBeDefined()
+  })
+
+  it('uses waiting snippet agent type for delegation bubble title when delegating snippet is missing', () => {
+    connectedState = true
+    chatStatusState = {
+      kind: 'waiting',
+      agentType: 'supabase-agent',
+      toolName: null,
+      receiverSessionId: 'delegated-session-2',
+      timestamp: new Date().toISOString(),
+    }
+    delegationSnippetsState = [
+      {
+        id: 'snippet-1',
+        kind: 'waiting',
+        agentType: 'supabase-agent',
+        toolName: null,
+        timestamp: new Date().toISOString(),
+      },
+    ]
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId={null}
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('Delegating to agent supabase-agent')).toBeDefined()
+    expect(within(screen.getByTestId('conversation-dialog-chat-status-indicator')).getByText('conversations.sessions.statusWaiting')).toBeDefined()
+  })
+
+  it('renders folded delegation snippet preview in dialog chat area', () => {
+    connectedState = true
+    chatStatusState = {
+      kind: 'waiting',
+      agentType: 'research-agent',
+      toolName: null,
+      receiverSessionId: null,
+      timestamp: new Date().toISOString(),
+    }
+    delegationSnippetsState = [
+      {
+        id: 'snippet-1',
+        kind: 'delegating',
+        agentType: 'research-agent',
+        toolName: null,
+        timestamp: new Date().toISOString(),
+      },
+    ]
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId={null}
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByTestId('conversation-dialog-delegation-snippets')).toBeDefined()
+    expect(screen.getByTestId('conversation-dialog-snippet-preview')).toBeDefined()
   })
 
   it('renders using_tool status in the dialog chat area', () => {
@@ -246,6 +415,7 @@ describe('ConversationDialog', () => {
       kind: 'using_tool',
       agentType: null,
       toolName: 'send_notification',
+      receiverSessionId: null,
       timestamp: new Date().toISOString(),
     }
 
@@ -267,12 +437,50 @@ describe('ConversationDialog', () => {
     expect(screen.getByTestId('conversation-dialog-chat-status-indicator')).toBeDefined()
   })
 
+  it('does not render a duplicate progress indicator when active cycle is already delegating', () => {
+    connectedState = true
+    chatStatusState = {
+      kind: 'delegating',
+      agentType: 'research-agent',
+      toolName: null,
+      receiverSessionId: 'delegated-session-1',
+      timestamp: new Date().toISOString(),
+    }
+    delegationSnippetsState = [
+      {
+        id: 'snippet-1',
+        kind: 'delegating',
+        agentType: 'research-agent',
+        toolName: null,
+        timestamp: new Date().toISOString(),
+      },
+    ]
+
+    const onClose = vi.fn()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationDialog
+          open
+          sessionId={null}
+          agentTypeId="agent-type-1"
+          agentTypeName="Conversational Agent"
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByTestId('conversation-dialog-delegation-inline-row')).toBeDefined()
+    expect(screen.queryAllByTestId('conversation-dialog-chat-status-indicator')).toHaveLength(1)
+  })
+
   it('renders timeout_or_failed terminal status in the dialog chat area', () => {
     connectedState = true
     chatStatusState = {
       kind: 'timeout_or_failed',
       agentType: null,
       toolName: null,
+      receiverSessionId: null,
       timestamp: new Date().toISOString(),
     }
 

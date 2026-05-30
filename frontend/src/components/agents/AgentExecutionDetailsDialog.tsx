@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle, IconButton, Tab, Tabs, Typography } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useTranslation } from 'react-i18next'
 import { AgentJobPage } from '../../pages/agents/AgentJobPage'
 import { LogViewer } from '../executions/LogViewer'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
+import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import apiClient from '../../api/apiClient'
-import type { ExecutionLogEntry } from '../../types'
+import type { AgentJobStatus, ExecutionLogEntry } from '../../types'
 
 interface AgentExecutionDetailsDialogProps {
   open: boolean
@@ -25,11 +26,33 @@ export function AgentExecutionDetailsDialog({
   sessionId,
 }: AgentExecutionDetailsDialogProps) {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState(0)
+  const [activeTab, setActiveTab] = useState(1)
   const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
+  const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | undefined>(undefined)
+  const logEndRef = useRef<HTMLDivElement | null>(null)
+  const prevLogCountRef = useRef(0)
 
   // Fetch execution logs (system instruction + user prompt)
   const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(sessionId)
+
+  const { entries: streamedEntries } = useSessionExecutionLogStream({
+    sessionId,
+    enabled: open && activeTab === 1,
+    sessionStatus,
+  })
+
+  const mergeLogEntries = (existing: ExecutionLogEntry[], incoming: ExecutionLogEntry[]) => {
+    const map = new Map<string, ExecutionLogEntry>()
+    for (const entry of existing) {
+      map.set(entry.id, entry)
+    }
+    for (const entry of incoming) {
+      map.set(entry.id, entry)
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    )
+  }
 
   // Fetch log entries for detailed span visualization
   const fetchLogEntries = useCallback(async () => {
@@ -44,8 +67,37 @@ export function AgentExecutionDetailsDialog({
   useEffect(() => {
     if (open && activeTab === 1) {
       void fetchLogEntries()
+      void apiClient
+        .get<{ status: AgentJobStatus }>(`/agents/sessions/${sessionId}`)
+        .then(({ data }) => setSessionStatus(data.status))
+        .catch(() => setSessionStatus(undefined))
     }
   }, [open, activeTab, fetchLogEntries])
+
+  useEffect(() => {
+    if (!streamedEntries.length) {
+      return
+    }
+    setLogEntries((prev) => mergeLogEntries(prev, streamedEntries))
+  }, [streamedEntries])
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab(1)
+    }
+  }, [open, sessionId])
+
+  useEffect(() => {
+    const previousCount = prevLogCountRef.current
+    const currentCount = logEntries.length
+    prevLogCountRef.current = currentCount
+
+    if (!open || activeTab !== 1 || currentCount <= previousCount) {
+      return
+    }
+
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [open, activeTab, logEntries.length])
 
   return (
     <Dialog
@@ -74,10 +126,14 @@ export function AgentExecutionDetailsDialog({
       <DialogContent>
         {activeTab === 0 && <AgentJobPage sessionId={sessionId} hideResults={true} hideLogs={true} />}
         {activeTab === 1 && !execLogsLoading && (logEntries.length > 0 || execLogs.length > 0) ? (
-          <LogViewer
-            executionLog={execLogs[0] ?? null}
-            entries={logEntries}
-          />
+          <>
+            <LogViewer
+              executionLog={execLogs[0] ?? null}
+              entries={logEntries}
+              sessionStatus={sessionStatus}
+            />
+            <div ref={logEndRef} aria-hidden="true" />
+          </>
         ) : activeTab === 1 && !execLogsLoading ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
             {t('agents.executionLogs.noLogs', { defaultValue: 'No execution logs available.' })}

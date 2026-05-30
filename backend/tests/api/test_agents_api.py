@@ -28,8 +28,11 @@ should pass.
 """
 from __future__ import annotations
 
+import json
 import os
 import uuid
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -43,6 +46,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
 from app.db.session import get_db
+from app.db.models.agents import AgentJobStatus
 from app.middleware.auth import JWTAuthMiddleware
 
 
@@ -167,6 +171,93 @@ async def test_get_session_logs_returns_200_with_empty_list():
     data = resp.json()
     assert isinstance(data, list), f"Expected a list, got {type(data)}: {data}"
     assert data == [], f"Expected empty list for session with no logs, got: {data}"
+
+
+@pytest.mark.asyncio
+async def test_stream_session_logs_emits_entries_and_terminal_marker() -> None:
+    """GET /api/v1/agents/sessions/{session_id}/logs/stream streams log entries then completion marker."""
+    session_id = uuid.uuid4()
+    log_entry_id = uuid.uuid4()
+    timestamp = datetime.now(timezone.utc)
+
+    running_job = SimpleNamespace(id=session_id, status=AgentJobStatus.running)
+    completed_job = SimpleNamespace(id=session_id, status=AgentJobStatus.completed)
+
+    mock_session = AsyncMock()
+
+    execute_call_count = 0
+
+    def _result(*, scalar_val=None, scalars_list=None):
+        res = MagicMock()
+        res.scalar_one_or_none = MagicMock(return_value=scalar_val)
+        res.scalar_one = MagicMock(return_value=scalar_val)
+        res.scalars = MagicMock(
+            return_value=MagicMock(all=MagicMock(return_value=scalars_list or []))
+        )
+        return res
+
+    async def execute_side_effect(query, *args, **kwargs):
+        nonlocal execute_call_count
+        execute_call_count += 1
+        if execute_call_count == 1:
+            # permission-check query
+            return _result(scalar_val=MagicMock())
+
+        # execution log query
+        return _result(
+            scalars_list=[
+                SimpleNamespace(
+                    id=log_entry_id,
+                    session_id=session_id,
+                    timestamp=timestamp,
+                    log_level="INFO",
+                    event_type="system",
+                    message="runtime started",
+                    data={"iteration": 1},
+                )
+            ]
+        )
+
+    mock_session.execute = AsyncMock(side_effect=execute_side_effect)
+
+    async def db_override():
+        yield mock_session
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_override
+
+    with _bypass_auth(), _mock_permission_allow():
+        with patch(
+            "app.services.agents.session_service.AgentSessionService.get_session",
+            AsyncMock(side_effect=[running_job, completed_job]),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                async with client.stream(
+                    "GET", f"/api/v1/agents/sessions/{session_id}/logs/stream"
+                ) as resp:
+                    assert resp.status_code == 200
+                    lines = []
+                    async for line in resp.aiter_lines():
+                        if line:
+                            lines.append(line)
+
+    assert len(lines) == 2, f"Expected one log_entry and one stream_completed event, got: {lines}"
+
+    first = json.loads(lines[0])
+    second = json.loads(lines[1])
+
+    assert first["type"] == "log_entry"
+    assert first["entry"]["id"] == str(log_entry_id)
+    assert first["entry"]["session_id"] == str(session_id)
+    assert first["entry"]["message"] == "runtime started"
+
+    assert second == {
+        "type": "stream_completed",
+        "session_id": str(session_id),
+        "session_status": "completed",
+    }
 
 
 # ── Validation: none-input agent type requires a role with SOPs ─────────────────

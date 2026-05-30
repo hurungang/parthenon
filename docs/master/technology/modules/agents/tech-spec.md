@@ -2,7 +2,7 @@
 
 ## Overview
 
-The agents module is the central execution layer for AI agents on the platform. It manages agent type definitions, a role-governed permission model, first-class OIDC agent identities, and an asynchronous session queue dispatched by a background `SessionDispatcher` and executed by `AgentRuntimeExecutor` using the **LangChain deep agent** observe-reason-act loop. Permissions flow through `AgentRole → SOPs → Skills → MCP tools` and are resolved by `AgentPermissionManager` with an LRU cache. Agent identities are registered users in a dedicated agent realm and authenticate via the OAuth authorization code flow; their tokens are stored AES-256 encrypted and proactively refreshed by `TokenRefreshService`. LLM provider configuration is managed through `ModelConfig` records, and `ModelBindingLayer` resolves an `AgentType.model_id` string to the correct provider client at runtime. On every agent type save, `PlanGenerationService` traverses the role→SOP→Skill→Tool graph, invokes the configured LLM, and persists a structured implementation plan and topology in the `agent_plans` table; plan generation is non-blocking (failures write a `failed` status row without blocking the save). When a session starts, `AgentRuntimeLoader` injects the saved plan into the agent's system context to ensure compliant, predictable execution.
+The agents module is the central execution layer for AI agents on the platform. It manages agent type definitions, a role-governed permission model, first-class OIDC agent identities, and an asynchronous session queue dispatched by a background `SessionDispatcher` and executed by `AgentRuntimeExecutor` using the **LangChain deep agent** observe-reason-act loop. Permissions flow through `AgentRole → SOPs → Skills → MCP tools` and are resolved by `AgentPermissionManager` with an LRU cache. Agent identities are registered users in a dedicated agent realm and authenticate via the OAuth authorization code flow; their tokens are stored AES-256 encrypted and proactively refreshed by `TokenRefreshService`. LLM provider configuration is managed through `ModelConfig` records, and `ModelBindingLayer` resolves an `AgentType.model_id` string to the correct provider client at runtime. The module also owns workflow-generation model selection settings consumed by Skill and SOP AI authoring endpoints. On every agent type save, `PlanGenerationService` traverses the role→SOP→Skill→Tool graph, invokes the configured LLM, and persists a structured implementation plan and topology in the `agent_plans` table; plan generation is non-blocking (failures write a `failed` status row without blocking the save). When a session starts, `AgentRuntimeLoader` injects the saved plan into the agent's system context to ensure compliant, predictable execution.
 
 **Dependency**: `langchain` and `langchain-community` (replaces the removed `langgraph` dependency).
 
@@ -31,8 +31,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `ConversationalAgentLoop` | LangChain deep agent loop for conversational agents; multi-turn observe-reason-act loop with `conversation_history` state |
 | `ModelBindingLayer` | Resolves `AgentType.model_id` string to a matching `ModelConfig` (scans `enabled_models`; falls back to provider-prefix matching); instantiates the correct LangChain/LiteLLM client; sends chat completion requests |
 | `ModelConfigService` | CRUD for `ModelConfig`; encrypts/decrypts API credentials (AES-256); `fetch_available_models(config_id)` returns `enabled_models` if non-empty, otherwise queries live from the configured provider |
+| `workflow_generation_settings` | Settings module that gets and sets the selected workflow generation model identifier used by authoring APIs |
+| `workflow_authoring_service` | Shared workflow authoring service module used by Skill and SOP generation and preview endpoints |
 | `AgentInstanceManager` | Retained for session handle management; execution logic removed |
-| `PlanGenerationService` | Orchestrates LLM-based plan generation on agent type save; traverses role→SOP→Skill→Tool graph; constructs prompt with agent context (instructions, role, SOPs, skills, tools); invokes configured LLM; parses response into structured plan steps; calls `TopologyBuilderService`; upserts `AgentPlan`; non-blocking — exceptions write a `failed` status row |
+| `PlanGenerationService` | Orchestrates LLM-based plan generation on agent type save; traverses role→SOP→Skill→Tool graph; applies system-instruction-aware SOP filtering before prompt assembly; constructs prompt with agent context (instructions, role, SOPs, skills, tools); invokes configured LLM; parses response into structured plan steps; calls `TopologyBuilderService`; upserts `AgentPlan`; non-blocking — exceptions write a `failed` status row |
 | `TopologyBuilderService` | Converts the role→SOP→Skill→Tool graph to a `nodes`/`edges` topology dict with deterministic node IDs; called by `PlanGenerationService` on every save |
 | `AgentRuntimeLoader` | Loads the saved plan from `agent_plans` on session initialisation; injects plan into agent system context (LLM prompt); graceful degradation when no plan exists |
 
@@ -70,14 +72,14 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentityDialog` | Create/edit form for `AgentIdentity`; realm_name and realm_username text fields; **"Sign In as Agent"** OAuth button that fetches the authorization URL and opens the agent realm sign-in in a popup; reflects updated token status after OAuth callback |
 | `AssignRolesToIdentityDialog` | Multi-select dialog to bulk-assign roles to an identity |
 | `AgentOAuthCallbackPage` | Loaded in the OAuth popup; exchanges code via backend callback, postMessages result to opener, then calls `window.close()` |
-| `AgentTypeForm` | Modified — full form component; new fields: `identity_id`, `role_id`, `model_id` (string dropdown populated across all `ModelConfig` records), `system_instruction`, `input_type` (+schema), `output_type` (+schema); removed: `model_config_id`, `model_name`, `llm_*` fields; ADD validation: selected identity must be assigned to selected role |
+| `AgentTypeForm` | Modified — full form component; new fields: `identity_id`, `role_id`, `model_id` (string dropdown populated across all `ModelConfig` records), `system_instruction`, `input_type` (+schema), `output_type` (+schema); default SOP selector is shown for all input types and required only when `input_type = none`; removed: `model_config_id`, `model_name`, `llm_*` fields; ADD validation: selected identity must be assigned to selected role |
 | `AgentJobLaunchDialog` | Dynamic input form per `input_type` (none / typed / conversation); POSTs to `/agents/sessions`; shows returned session ID |
 | `AgentJobPage` | Session metadata, status chip, 3 s polling for task agents; WebSocket chat UI for conversational agents; result panel (typed JSON or markdown); execution log section (system instruction + user prompt from `ExecutionLogEntry`) |
-| `AgentManagementPage` | Modified — uses updated `AgentTypeForm`; adds Launch (▶) action per row linking to `AgentJobPage`; after a successful save reads `plan` from the response, stores it in `planData` state, and opens `PlanPreviewModal`; clears plan state on modal close |
+| `AgentManagementPage` | Modified — uses updated `AgentTypeForm`; sends `primary_sop_id` for all input types while requiring it only when `input_type = none`; adds Launch (▶) action per row linking to `AgentJobPage`; after a successful save reads `plan` from the response, stores it in `planData` state, and opens `PlanPreviewModal`; clears plan state on modal close |
 | `PlanPreviewModal` | MUI Dialog opened after a successful agent type save; displays plan steps as an ordered list with step-type chips; hosts `TopologyDiagramRenderer`; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard |
 | `TopologyDiagramRenderer` | Renders node-edge topology payload as a visual diagram; distinguishes node types (role, sop, skill, tool) by colour/icon; handles empty state |
 | `AgentInstanceDashboardPage` | Admin view of all `AgentJob` instances; columns: agent type name, status chip, triggered by, started/completed times; `status` and `since` filter controls |
-| `ModelConfigListPage` | Table view of all model configurations; display_name, provider_type, credential status chip, Edit/Delete actions |
+| `ModelConfigListPage` | Table view of all model configurations; display_name, provider_type, credential status chip, Edit/Delete actions; includes workflow generation model selection and persistence |
 | `ModelConfigDialog` | Create/edit form for `ModelConfig`; provider_type select, display_name, api_base_url, api_key (masked), enabled_models chip multi-select via **"List Models"** button |
 
 ---
@@ -152,6 +154,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `PUT` | `/api/v1/agents/model-configs/{id}` | Update config; omitted `api_key` leaves existing credential unchanged |
 | `DELETE` | `/api/v1/agents/model-configs/{id}` | Delete config; 409 if any `AgentType` references it |
 | `GET` | `/api/v1/agents/model-configs/{id}/models` | Returns `enabled_models` if non-empty; otherwise queries live from the provider |
+| `GET` | `/api/v1/agents/model-configs/workflow-generation` | Returns selected workflow generation model and available model options |
+| `PUT` | `/api/v1/agents/model-configs/workflow-generation` | Updates selected workflow generation model after validation against available options |
 
 ---
 
@@ -201,6 +205,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `ModelConfigCreate` | Pydantic model | `provider_type`, `display_name`, `api_base_url`, `api_key`, `enabled_models: list[str]` | `backend/app/schemas/agents.py` |
 | `ModelConfigUpdate` | Pydantic model | All fields optional; omitting `api_key` leaves existing credential unchanged | `backend/app/schemas/agents.py` |
 | `ModelConfigRead` | Pydantic model | `id`, `provider_type`, `display_name`, `api_base_url`, `has_credentials: bool`, `enabled_models: list[str]`; no credential fields | `backend/app/schemas/agents.py` |
+| `WorkflowGenerationModelConfigRead` | Pydantic model | Response contract for selected workflow generation model and available options | `backend/app/schemas/agents.py` |
+| `WorkflowGenerationModelConfigUpdate` | Pydantic model | Request contract for updating selected workflow generation model | `backend/app/schemas/agents.py` |
 | `AgentTypeCreate` | Pydantic model | Modified — added `model_id: str`; removed `model_config_id`, `model_name`, `llm_provider`, `llm_model`, `llm_api_key` | `backend/app/schemas/agents.py` |
 | `AgentTypeUpdate` | Pydantic model | Modified — same field changes as `AgentTypeCreate` | `backend/app/schemas/agents.py` |
 | `AgentTypeRead` | Pydantic model | Modified — exposes `model_id: str`; gains `plan: AgentPlanRead \| None`; no `model_config_id` FK, no raw LLM credential fields | `backend/app/schemas/agents.py` |
@@ -231,8 +237,11 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `ConversationalAgentLoop` | class | LangChain deep agent loop for conversational agents; multi-turn with `conversation_history` state | `backend/app/services/agents/agent_loop.py` |
 | `ModelBindingLayer` | class | Resolves `AgentType.model_id` string to a `ModelConfig`; instantiates correct LangChain/LiteLLM client; sends chat completion requests | `backend/app/services/agents/model_binding.py` |
 | `ModelConfigService` | class | CRUD for `ModelConfig`; encrypts/decrypts credentials; `fetch_available_models(config_id)` | `backend/app/services/agents/model_config_service.py` |
+| `workflow_generation_settings` | module | Stores and retrieves selected workflow generation model identifier used by authoring APIs | `backend/app/services/agents/workflow_generation_settings.py` |
+| `workflow_authoring_service` | module | Shared workflow generation and preview composition service used by Skill and SOP endpoints | `backend/app/services/agents/workflow_authoring_service.py` |
 | `AgentInstanceManager` | class | Session handle management; execution logic removed | `backend/app/services/agents/instance_manager.py` |
 | `PlanGenerationService` | class | LLM-based plan generation on agent type save; constructs prompt with agent context; invokes LLM; parses response into structured plan steps; traverses role→SOP→Skill→Tool graph; upserts `AgentPlan`; non-blocking error handling | `backend/app/services/agents/plan_generation_service.py` |
+| `PlanGenerationService._resolve_graph` | method | Resolves role graph and applies system-instruction or default-SOP based filtering before plan prompt generation | `backend/app/services/agents/plan_generation_service.py` |
 | `plan_generation_service` | module | Module containing plan generation orchestration and A2A-aware plan semantics surfaced by `PlanGenerationService` | `backend/app/services/agents/plan_generation_service.py` |
 | `TopologyBuilderService` | class | Converts role→SOP→Skill→Tool graph to `nodes`/`edges` topology dict; deterministic node IDs for stable rendering | `backend/app/services/agents/topology_builder_service.py` |
 | `AgentRuntimeLoader` | class | Loads saved plan from `agent_plans` on session init; injects plan into system context for execution guidance; graceful degradation when no plan exists | `backend/app/services/agents/runtime_loader.py` |
@@ -254,12 +263,15 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `update_agent_type` | endpoint | Agent type update endpoint where guardrail policy compatibility checks and validation are applied | `backend/app/api/v1/agents.py` |
 | `AgentInstanceRouter` | router | Instance listing and force-termination; unchanged | `backend/app/api/v1/agents.py` |
 | `ModelConfigRouter` | router | Mounts all `/agents/model-configs` endpoints | `backend/app/api/v1/agents.py` |
+| `get_workflow_generation_model` | endpoint | Returns selected workflow generation model and available model options | `backend/app/api/v1/agents.py` |
+| `set_workflow_generation_model` | endpoint | Validates and updates selected workflow generation model setting | `backend/app/api/v1/agents.py` |
 
 ### Backend Internal APIs (`backend/app/api/v1/internal/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `agent_data` | module | Internal API surface for agent-specific data operations and A2A routing metadata | `backend/app/api/v1/internal/agent_data.py` |
+| `get_agent_context` | endpoint | Returns runtime context including SOP content and role-derived SOP summaries for system-instruction assembly | `backend/app/api/v1/internal/agent_data.py` |
 | `session_data` | module | Internal API surface for session-bound state and lifecycle transitions used by A2A flows | `backend/app/api/v1/internal/session_data.py` |
 
 ### Alembic Migrations
@@ -280,14 +292,15 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentityDialog` | component | Create/edit; realm_name, realm_username; "Sign In as Agent" OAuth button opens agent realm popup; reflects token status after callback | `frontend/src/pages/agents/AgentIdentityDialog.tsx` |
 | `AssignRolesToIdentityDialog` | component | Multi-select dialog to bulk-assign roles to an identity | `frontend/src/pages/agents/AssignRolesToIdentityDialog.tsx` |
 | `AgentOAuthCallbackPage` | component | Loaded in OAuth popup; exchanges code via backend callback; postMessages result to opener; calls `window.close()` | `frontend/src/pages/agents/AgentOAuthCallbackPage.tsx` |
-| `AgentTypeForm` | component | Modified — fields: `identity_id`, `role_id`, `model_id` (string dropdown across all configs), `system_instruction`, `input_type`/`output_type` (+schemas); removed `model_config_id`, `model_name`, `llm_*`; validates identity is assigned to selected role | `frontend/src/pages/agents/AgentTypeForm.tsx` |
+| `AgentTypeForm` | component | Modified — fields: `identity_id`, `role_id`, `model_id` (string dropdown across all configs), `system_instruction`, `input_type`/`output_type` (+schemas); default SOP selector shown for all input types and required only for no-input; removed `model_config_id`, `model_name`, `llm_*`; validates identity is assigned to selected role | `frontend/src/pages/agents/AgentTypeForm.tsx` |
 | `AgentJobLaunchDialog` | component | Dynamic input form per `input_type`; POSTs to `/agents/sessions`; shows returned session ID | `frontend/src/pages/agents/AgentJobLaunchDialog.tsx` |
 | `AgentJobPage` | component | Session metadata, status chip, 3 s polling (task agents), WebSocket chat UI (conversational agents), result panel; fetches `ExecutionLogEntry[]` inline and passes to `LogViewer`; optional `sessionId` prop for embedded dialog usage; conditionally hides back button when embedded | `frontend/src/pages/agents/AgentJobPage.tsx` |
 | `SessionExecutionLogsDialog` | component | Retained but no longer opened from `AgentJobPage`; "View Execution Logs" button removed from the job page | `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` |
-| `AgentManagementPage` | component | Agent types table; row click opens `AgentTypeDetailsDialog` (via `detailsDialogTypeId` state); inline instances sub-table removed; added "Role" and "Identity" columns resolved via `useAgentRoles()`/`useAgentIdentities()` name lookup maps; `AgentTypeDetailsDialog` invalidates `['agents','types']` query on close; Launch (▶) action per row retained; plan preview still opens `PlanPreviewModal` after save | `frontend/src/pages/agents/AgentManagementPage.tsx` |
+| `AgentManagementPage` | component | Agent types table; row click opens `AgentTypeDetailsDialog` (via `detailsDialogTypeId` state); inline instances sub-table removed; added "Role" and "Identity" columns resolved via `useAgentRoles()`/`useAgentIdentities()` name lookup maps; preserves and submits `primary_sop_id` for all input types with required enforcement only for no-input; `AgentTypeDetailsDialog` invalidates `['agents','types']` query on close; Launch (▶) action per row retained; plan preview still opens `PlanPreviewModal` after save | `frontend/src/pages/agents/AgentManagementPage.tsx` |
 | `AgentInstanceDashboardPage` | component | Renamed to "Agent Executions"; route `/agents/executions` (redirect from `/agents/instances`); optional `agentTypeId` prop for dialog embedding; agent type filter dropdown via `useAgentTypes()`; View button opens `AgentExecutionDetailsDialog` instead of navigating away; status, date range, and agent type filter controls | `frontend/src/pages/agents/AgentInstanceDashboardPage.tsx` |
-| `ModelConfigListPage` | component | Table view; display_name, provider_type, credential status chip, Edit/Delete | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
+| `ModelConfigListPage` | component | Table view; display_name, provider_type, credential status chip, Edit/Delete; workflow generation model section loads and saves `/agents/model-configs/workflow-generation` | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
 | `ModelConfigDialog` | component | Create/edit; provider_type select, display_name, api_base_url, api_key (masked), enabled_models chip multi-select via "List Models" | `frontend/src/pages/agents/ModelConfigDialog.tsx` |
+| `ModelConfigListPage.handleSaveWorkflowModel` | function | Persists selected workflow generation model while preserving existing selection when save is invoked without change | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
 
 ### Frontend Types (`frontend/src/types/index.ts`)
 
@@ -337,14 +350,14 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `PlanPreviewModal` | component | MUI Dialog displaying plan steps as an ordered list with step-type chips and topology diagram after agent type save; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard; plan content rendered via `AgentPlanContent` | `frontend/src/components/agents/PlanPreviewModal.tsx` |
 | `TopologyDiagramRenderer` | component | Renders node-edge topology payload as a visual diagram; includes delegation nodes/edges for A2A plan preview; distinguishes node types (role, sop, skill, tool) by colour/icon; handles empty state | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
 
-### Frontend Components (`frontend/src/components/logs/`)
+### Frontend Components (`frontend/src/components/executions/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `LogViewer` | component | Root log display component; owns `rawMode` boolean state; calls `presentLog()` once per render cycle; conditionally renders `LogSummaryPanel` + `WorkingStepsPanel` or a monospace raw log block; renders `RawLogToggle` in the header | `frontend/src/components/logs/LogViewer.tsx` |
-| `LogSummaryPanel` | component | Execution Summary card: identity, role, model, SOPs/skills as MUI Chip elements, plan progress, result status badge; receives `LogSummary` prop; no data fetching or transformation | `frontend/src/components/logs/LogSummaryPanel.tsx` |
-| `WorkingStepsPanel` | component | Execution Details card: flat top-level steps as log rows; all LLM iterations and tool calls in a single MUI `Collapse` section collapsed by default; each step may contain an expandable detail block for plan text or tool input/output; receives `WorkingStep[]` prop | `frontend/src/components/logs/WorkingStepsPanel.tsx` |
-| `RawLogToggle` | component | "Friendly / Raw Output" labelled toggle switch and copy-to-clipboard button (visible in raw mode only); receives `checked`, `onChange`, and `rawLogText` props; no internal state | `frontend/src/components/logs/RawLogToggle.tsx` |
+| `LogViewer` | component | Root log display component; owns `rawMode` boolean state; calls `presentLog()` once per render cycle; conditionally renders `LogSummaryPanel` + `WorkingStepsPanel` or a monospace raw log block; renders `RawLogToggle` in the header | `frontend/src/components/executions/LogViewer.tsx` |
+| `LogSummaryPanel` | component | Execution Summary card: identity, role, model, SOPs/skills as MUI Chip elements, plan progress, result status badge; receives `LogSummary` prop; no data fetching or transformation | `frontend/src/components/executions/LogSummaryPanel.tsx` |
+| `WorkingStepsPanel` | component | Execution Details card: flat top-level steps as log rows; all LLM iterations and tool calls in a single MUI `Collapse` section collapsed by default; each step may contain an expandable detail block for plan text or tool input/output; receives `WorkingStep[]` prop | `frontend/src/components/executions/WorkingStepsPanel.tsx` |
+| `RawLogToggle` | component | "Friendly / Raw Output" labelled toggle switch and copy-to-clipboard button (visible in raw mode only); receives `checked`, `onChange`, and `rawLogText` props; no internal state | `frontend/src/components/executions/RawLogToggle.tsx` |
 
 ### Frontend Services (`frontend/src/services/`)
 
@@ -382,6 +395,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `test_topology_builder_service` | unit test | Happy path, empty graph, node ID stability, duplicate tool deduplication | `backend/tests/unit/services/test_topology_builder_service.py` |
 | `test_plan_generation_service` | unit test | Happy path, error path (non-blocking), hash stability, no-role case, LLM timeout handling | `backend/tests/unit/services/test_plan_generation_service.py` |
 | `test_agent_types_plan` | integration test | Schema verification, unique constraint, CASCADE delete, save-response shape, upsert behaviour, failed generation path | `backend/tests/integration/api/test_agent_types_plan.py` |
+| `ModelConfigListPage.workflow-generation` | frontend component test | Verifies workflow generation model section load and save behavior on model config page | `frontend/src/__tests__/ModelConfigListPage.workflow-generation.test.tsx` |
 | `PlanPreviewModal.test` | frontend component test | Renders plan steps, error state, close callback, hidden when closed, Dialog Error Handling Standard | `frontend/src/__tests__/PlanPreviewModal.test.tsx` |
 | `AgentTypeDetailsDialog.test` | frontend component test | Loading state, all three tabs, clickable role/identity name behaviour, error handling, tab reset on open | `frontend/src/__tests__/AgentTypeDetailsDialog.test.tsx` |
 | `AgentRoleViewDialog.test` | frontend component test | Renders role detail grid, edit and close actions, loading and error states | `frontend/src/__tests__/AgentRoleViewDialog.test.tsx` |

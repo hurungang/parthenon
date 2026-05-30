@@ -102,7 +102,7 @@ async function installMockWebSocket(
 }
 
 test.describe('Conversation Delegation Visibility', () => {
-  test('shows delegating label and waiting indicator in chat', async ({ page }) => {
+  test('shows delegating label and waiting indicator with fold-expand-collapse snippet behavior', async ({ page }) => {
     await standardSetup(page)
     await mockChatResumeRoutes(page)
     await installMockWebSocket(page, 'waiting')
@@ -112,7 +112,26 @@ test.describe('Conversation Delegation Visibility', () => {
 
     await expect(page.getByTestId('chat-status-indicator')).toBeVisible()
     await expect(page.getByText('Delegating to agent research-agent')).toBeVisible()
-    await expect(page.getByText('Waiting for delegated response…')).toBeVisible()
+    await expect(page.getByTestId('chat-status-indicator').getByText('Waiting for delegated response…')).toBeVisible()
+
+    const snippetsPanel = page.getByTestId('chat-delegation-snippets')
+    await expect(snippetsPanel).toBeVisible()
+
+    // Folded by default: preview visible, expanded details hidden.
+    await expect(page.getByTestId('chat-delegation-snippets-preview')).toBeVisible()
+    await expect(page.getByTestId('chat-delegation-snippets-expanded')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Show Details' }).click()
+
+    // Expanded on demand: details visible, folded preview hidden.
+    await expect(page.getByTestId('chat-delegation-snippets-expanded')).toBeVisible()
+    await expect(page.getByTestId('chat-delegation-snippets-preview')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Hide Details' }).click()
+
+    // Can be collapsed again.
+    await expect(page.getByTestId('chat-delegation-snippets-preview')).toBeVisible()
+    await expect(page.getByTestId('chat-delegation-snippets-expanded')).toHaveCount(0)
   })
 
   test('shows timeout_or_failed terminal status in chat', async ({ page }) => {

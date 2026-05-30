@@ -55,6 +55,14 @@
 - Changing identity clears role selection
 - Save blocked unless a model is selected
 
+### Runtime SOP Selection and Fallback Injection (ai-assisted-workflow-authoring-for-sop-and-skill)
+- `PlanGenerationService._resolve_graph` filters `sop_data_list` to SOPs referenced in `system_instruction` when names are present
+- If no SOP names are referenced and `primary_sop_id` is set, `_resolve_graph` falls back to the default SOP only
+- If no SOP names are referenced and no default SOP is configured, `_resolve_graph` keeps all role SOPs
+- `get_agent_context` skips default SOP content injection when `system_instruction` already references SOP names
+- `get_agent_context` injects default SOP content when `system_instruction` references no SOP names
+- SOP name matching is case-insensitive in both planning and runtime context assembly paths
+
 ### A2A Communication and Slug Enforcement
 - A2A routing uses target agent type slug and preserves requester/receiver session continuity.
 - Runtime fallback creates dynamic receiver on target miss, then links conversation state for continued turns.
@@ -248,6 +256,11 @@ This module has `has_db_changes: true`. Before running any tests:
 - Role with no SOPs and no Skills → empty allowed tool set → all tool calls rejected
 - Role assigned two SOPs → preview shows union of tools without duplicates → save → cache invalidated
 
+### System-Instruction-Aware SOP Behavior
+- `system_instruction` explicitly names a SOP available on the role → plan generation and runtime context include that SOP path only
+- `system_instruction` omits SOP names and `primary_sop_id` is configured → default SOP is used as fallback for both plan context and runtime SOP content
+- `system_instruction` omits SOP names and no default SOP is configured → all role SOPs remain available to planning path and runtime avoids forced default injection
+
 ### Token Refresh During Execution
 - Access token expires mid-session → executor calls `TokenRefreshService` inline → tool call retried with new token
 - Refresh token expired → identity status → `suspended` → session fails gracefully
@@ -286,6 +299,7 @@ This module has `has_db_changes: true`. Before running any tests:
 - `backend/tests/unit/test_model_config_service.py`
 - `backend/tests/unit/test_model_binding.py`
 - `backend/tests/unit/test_permission_manager.py`
+- `backend/tests/unit/services/test_plan_generation_service.py`
 - `backend/tests/unit/test_a2a_core_flow.py`
 - `backend/tests/unit/test_a2a_communication.py`
 - `backend/tests/unit/test_token_refresh_service.py`
@@ -293,6 +307,7 @@ This module has `has_db_changes: true`. Before running any tests:
 - `backend/tests/unit/test_lifecycle_handler.py`
 - `backend/tests/unit/test_execution_log.py`
 - `backend/tests/unit/test_communication_hub.py`
+- `backend/tests/unit/test_agent_data_sop_injection.py`
 
 ### Backend Integration Tests
 - `backend/tests/integration/test_agent_session_lifecycle.py`

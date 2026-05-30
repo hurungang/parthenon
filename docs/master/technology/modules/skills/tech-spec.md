@@ -2,7 +2,7 @@
 
 ## Overview
 
-The skills module defines the execution primitives that agents use to interact with external tools. A Skill is a named, permission-assignable unit that wraps one or more MCP tool calls with an optional `instructions` text; a Standard Operating Procedure (SOP) is a higher-level composition of multiple Skills with explicit sequencing logic and its own `instructions` text. The module provides REST endpoints for managing Skill and SOP records (including role membership management), a Skill Executor for MCP tool invocation, and a SOP Orchestrator for ordered multi-step execution. SOP steps use `target_agent_type_id` for agent-delegation steps and `step_config` for per-step configuration; step types are `skill_invocation` and `agent_delegation`.
+The skills module defines the execution primitives that agents use to interact with external tools. A Skill is a named, permission-assignable unit that wraps one or more MCP tool calls with an optional `instructions` text; a Standard Operating Procedure (SOP) is a higher-level composition of multiple Skills with explicit sequencing logic and its own `instructions` text. The module provides REST endpoints for managing Skill and SOP records (including role membership management), AI-assisted workflow generation and preview for both Skill and SOP authoring, a Skill Executor for MCP tool invocation, and a SOP Orchestrator for ordered multi-step execution. SOP steps use `target_agent_type_id` for agent-delegation steps and `step_config` for per-step configuration; step types are `skill_invocation` and `agent_delegation`.
 
 ---
 
@@ -12,8 +12,8 @@ The skills module defines the execution primitives that agents use to interact w
 
 | Component | Description |
 |-----------|-------------|
-| `SkillRouter` | FastAPI router for Skill CRUD; eager-loads `tool_bindings` to return `tool_ids` in all responses; includes role membership endpoints (`GET`/`PUT` `/skills/{id}/roles`) |
-| `SopRouter` | FastAPI router for SOP CRUD and step management; accepts and returns `instructions` field; step replacement uses `target_agent_type_id` and `step_config`; includes role membership endpoints (`GET`/`PUT` `/sops/{id}/roles`) |
+| `SkillRouter` | FastAPI router for Skill CRUD and workflow authoring endpoints; eager-loads `tool_bindings` to return `tool_ids` in all responses; includes role membership endpoints (`GET`/`PUT` `/skills/{id}/roles`) |
+| `SopRouter` | FastAPI router for SOP CRUD, step management, and workflow authoring endpoints; accepts and returns `instructions` field; step replacement uses `target_agent_type_id` and `step_config`; includes role membership endpoints (`GET`/`PUT` `/sops/{id}/roles`) |
 | `SkillExecutor` | Service class that resolves the MCP tool bindings for a named skill, verifies permissions, and invokes tool calls via `McpProxyEngine`; supports single and chained tool sequences |
 | `SopOrchestrator` | Service class that iterates over ordered SOP steps, dispatching skill steps to `SkillExecutor` and agent-delegation steps to the Agent Engine; coordinates result passing between steps |
 | `Skill` | SQLAlchemy model for a named, permission-assignable MCP tool wrapper; has `tool_bindings` relationship to `SkillToolBinding` |
@@ -44,6 +44,8 @@ The skills module defines the execution primitives that agents use to interact w
 | `DELETE` | `/api/v1/skills/{skill_id}` | Delete a skill |
 | `GET` | `/api/v1/skills/{skill_id}/roles` | List role IDs that include this skill (via `agent_role_skills`) |
 | `PUT` | `/api/v1/skills/{skill_id}/roles` | Atomically replace skill's role membership; body: `{"role_ids": [uuid, ...]}` |
+| `POST` | `/api/v1/skills/generate-workflow` | Generate Skill workflow text from description and selected tools |
+| `POST` | `/api/v1/skills/preview-workflow` | Return formatted Skill workflow preview plus selected model metadata |
 | `GET` | `/api/v1/sops` | List all SOPs |
 | `POST` | `/api/v1/sops` | Create a SOP; accepts `instructions` field |
 | `GET` | `/api/v1/sops/{sop_id}` | Get SOP detail; includes `instructions` and steps |
@@ -53,6 +55,8 @@ The skills module defines the execution primitives that agents use to interact w
 | `PUT` | `/api/v1/sops/{sop_id}/steps` | Replace full ordered step list; uses `target_agent_type_id`, `step_config` |
 | `GET` | `/api/v1/sops/{sop_id}/roles` | List role IDs that include this SOP (via `agent_role_sops`) |
 | `PUT` | `/api/v1/sops/{sop_id}/roles` | Atomically replace SOP's role membership; body: `{"role_ids": [uuid, ...]}` |
+| `POST` | `/api/v1/sops/generate-workflow` | Generate SOP workflow text from description and ordered steps |
+| `POST` | `/api/v1/sops/preview-workflow` | Return formatted SOP workflow preview plus selected model metadata |
 
 ---
 
@@ -67,16 +71,28 @@ The skills module defines the execution primitives that agents use to interact w
 | `get_skill` | endpoint function | Returns one skill with eager-loaded `tool_ids` | `backend/app/api/v1/skills.py` |
 | `get_skill_roles` | endpoint function | Returns role IDs that include a given skill via `agent_role_skills` join table | `backend/app/api/v1/skills.py` |
 | `set_skill_roles` | endpoint function | Atomically replaces skill's role membership (delete + insert) | `backend/app/api/v1/skills.py` |
+| `assemble_tool_section` | function | Composes Skill tool context text from tool records for persisted and preview payloads | `backend/app/api/v1/skills.py` |
+| `_build_skill_read` | function | Produces Skill list or read responses including workflow-related tool context fields | `backend/app/api/v1/skills.py` |
+| `_build_skill_detail_read` | function | Produces Skill detail response including editable workflow text and tool context | `backend/app/api/v1/skills.py` |
+| `generate_skill_workflow` | endpoint function | Generates Skill workflow text from unsaved description and selected tool context | `backend/app/api/v1/skills.py` |
+| `preview_skill_workflow` | endpoint function | Returns single-file Skill workflow preview with selected model metadata | `backend/app/api/v1/skills.py` |
 | `replace_sop_steps` | endpoint function | Replaces full step list atomically; uses `target_agent_type_id`, `step_config` | `backend/app/api/v1/sops.py` |
 | `get_sop_roles` | endpoint function | Returns role IDs that include a given SOP via `agent_role_sops` join table | `backend/app/api/v1/sops.py` |
 | `set_sop_roles` | endpoint function | Atomically replaces SOP's role membership (delete + insert) | `backend/app/api/v1/sops.py` |
+| `generate_sop_workflow` | endpoint function | Generates SOP workflow text from unsaved description and ordered steps | `backend/app/api/v1/sops.py` |
+| `preview_sop_workflow` | endpoint function | Returns single-file SOP workflow preview with selected model metadata | `backend/app/api/v1/sops.py` |
 | `SkillCreate` | Pydantic schema | Skill creation payload; includes `instructions` field | `backend/app/schemas/skills.py` |
 | `SkillUpdate` | Pydantic schema | Skill partial update payload; includes `instructions` field | `backend/app/schemas/skills.py` |
 | `SkillRead` | Pydantic schema | Skill response schema; includes `tool_ids: list[uuid.UUID]` derived from `tool_bindings` | `backend/app/schemas/skills.py` |
+| `SkillDetailRead` | Pydantic schema | Skill detail response schema with workflow text and tool-context fields | `backend/app/schemas/skills.py` |
+| `SkillWorkflowGenerateRequest` | Pydantic schema | Skill workflow generation request contract | `backend/app/schemas/skills.py` |
+| `SkillWorkflowPreviewResponse` | Pydantic schema | Skill workflow preview response including model identifier and formatted output | `backend/app/schemas/skills.py` |
 | `SopCreate` | Pydantic schema | SOP creation payload; includes `instructions` field | `backend/app/schemas/skills.py` |
 | `SopUpdate` | Pydantic schema | SOP partial update payload; includes `instructions` field | `backend/app/schemas/skills.py` |
 | `SopRead` | Pydantic schema | SOP response schema; includes `instructions` field | `backend/app/schemas/skills.py` |
 | `SopDetailRead` | Pydantic schema | SOP response with `instructions` and full `steps` list | `backend/app/schemas/skills.py` |
+| `SopWorkflowGenerateRequest` | Pydantic schema | SOP workflow generation request contract | `backend/app/schemas/skills.py` |
+| `SopWorkflowPreviewResponse` | Pydantic schema | SOP workflow preview response including model identifier and formatted output | `backend/app/schemas/skills.py` |
 | `SopStepCreate` | Pydantic schema | Step creation payload; uses `target_agent_type_id`, `step_config`; default `step_type` is `skill_invocation` | `backend/app/schemas/skills.py` |
 | `SopStepRead` | Pydantic schema | Step response schema; uses `target_agent_type_id`, `step_config` | `backend/app/schemas/skills.py` |
 | `SkillExecutor` | class | Resolves MCP tool bindings for a skill and invokes them via McpProxyEngine | `backend/app/services/skills/executor.py` |
@@ -94,5 +110,18 @@ The skills module defines the execution primitives that agents use to interact w
 | `useSopRoles` | hook | React Query hook fetching role IDs for a SOP (`GET /sops/{sopId}/roles`) | `frontend/src/hooks/useSops.ts` |
 | `SkillListPage` | component | Skill list with tool count badges and role chips; hosts `SkillEditor` in-page panel | `frontend/src/pages/skills/SkillListPage.tsx` |
 | `SkillEditor` | component | In-page skill editor: name, description, instructions, MCP Tools multi-select grouped by server, role assignment sidebar | `frontend/src/pages/skills/SkillEditor.tsx` |
+| `extractGeneratedToolSection` | function | Extracts generated tool context section from a persisted instructions payload | `frontend/src/pages/skills/SkillEditor.tsx` |
+| `buildGeneratedToolSectionFromSelection` | function | Builds generated tool context section from current selected tools in editor state | `frontend/src/pages/skills/SkillEditor.tsx` |
+| `SkillEditor.handleGenerateWorkflow` | function | Calls Skill workflow generation API using unsaved form state | `frontend/src/pages/skills/SkillEditor.tsx` |
+| `SkillEditor.handlePreviewWorkflow` | function | Calls Skill workflow preview API and renders model-tagged preview content | `frontend/src/pages/skills/SkillEditor.tsx` |
 | `SopListPage` | component | SOP list with step count; hosts `SopEditor` in-page panel | `frontend/src/pages/skills/SopListPage.tsx` |
 | `SopEditor` | component | In-page SOP editor: name, description, instructions field, step cards with drag reorder, and `agent_delegation` step authoring used for derived A2A permission mappings | `frontend/src/pages/skills/SopEditor.tsx` |
+| `SopEditor.handleGenerateWorkflow` | function | Calls SOP workflow generation API using unsaved description and ordered steps | `frontend/src/pages/skills/SopEditor.tsx` |
+| `SopEditor.handlePreviewWorkflow` | function | Calls SOP workflow preview API and renders model-tagged preview content | `frontend/src/pages/skills/SopEditor.tsx` |
+| `apiClient` | module | Shared REST client used by Skill and SOP editor workflow generation and preview actions | `frontend/src/api/apiClient.ts` |
+| `PermissionDeniedAlert` | component | Standard dialog-visible error rendering used by workflow generation and preview flows | `frontend/src/components/permissions/PermissionDeniedAlert.tsx` |
+| `test_skills_workflow_generation_preview` | test module | Backend API tests for Skill workflow generation and preview behavior | `backend/tests/api/v1/test_skills_workflow_generation_preview.py` |
+| `test_sops_workflow_generation_preview` | test module | Backend API tests for SOP workflow generation and preview behavior | `backend/tests/api/v1/test_sops_workflow_generation_preview.py` |
+| `SkillEditor.workflow-generation-preview` | test module | Frontend tests for Skill workflow generation, preview, and dialog-visible errors | `frontend/src/__tests__/SkillEditor.workflow-generation-preview.test.tsx` |
+| `SopEditor.workflow-generation-preview` | test module | Frontend tests for SOP workflow generation, preview, and dialog-visible errors | `frontend/src/__tests__/SopEditor.workflow-generation-preview.test.tsx` |
+| `SkillEditor.generatedToolReference` | test module | Frontend tests for generated tool reference extraction and composition helpers | `frontend/src/__tests__/SkillEditor.generatedToolReference.test.ts` |
