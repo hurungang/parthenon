@@ -680,6 +680,66 @@ async def get_model_config(
     )
 
 
+# ── Pre-execution availability preflight (Phase 3.10) ─────────────────────────
+
+
+class PreflightAvailabilityInternalRequest(BaseModel):
+    """Internal request body for the pre-execution availability check.
+
+    The Agent Runtime data client populates this from the resolved
+    ``ModelConfig.id`` (when known) and the provider-scoped model name.
+    """
+
+    model_id: str
+    vendor_model_config_id: uuid.UUID | None = None
+
+
+class PreflightAvailabilityInternalResponse(BaseModel):
+    """Internal response body for the pre-execution availability check."""
+
+    allowed: bool
+    reason: str | None = None
+    disabled_reason: str | None = None
+    blocked_by: str | None = None
+
+
+@InternalAgentDataRouter.post(
+    "/preflight/availability",
+    response_model=PreflightAvailabilityInternalResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Pre-execution availability check for Agent Runtime",
+)
+async def preflight_availability(
+    body: PreflightAvailabilityInternalRequest,
+    db: DbSession,
+) -> PreflightAvailabilityInternalResponse:
+    """Return an allow/deny verdict for the supplied model.
+
+    Called by Agent Runtime before dispatching any agent execution; on
+    deny the runtime records the reason in an execution log event and
+    blocks dispatch with ``AgentJob.termination_category`` of
+    ``model_disabled`` or ``vendor_disabled``.
+    """
+    from app.services.control_center.model_availability_service import (
+        ModelAvailabilityService,
+    )
+
+    service = ModelAvailabilityService()
+    outcome = await service.check_availability(
+        db,
+        model_name=body.model_id,
+        vendor_config_id=body.vendor_model_config_id,
+    )
+    return PreflightAvailabilityInternalResponse(
+        allowed=outcome.allowed,
+        reason=outcome.reason,
+        disabled_reason=(
+            outcome.disabled_reason.value if outcome.disabled_reason else None
+        ),
+        blocked_by=outcome.blocked_by,
+    )
+
+
 async def _get_agent_identity_jwt(
     agent_type: "AgentType", db: DbSession
 ) -> str | None:

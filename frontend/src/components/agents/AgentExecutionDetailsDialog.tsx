@@ -74,6 +74,37 @@ export function AgentExecutionDetailsDialog({
     }
   }, [open, activeTab, fetchLogEntries])
 
+  // Re-fetch sessionStatus while the dialog is open and the session is
+  // not yet in a terminal state.  Without this, the LogSummaryPanel's
+  // status badge would stay stuck on "running" even after the session
+  // fails — the working-steps log would show "failed" (because the
+  // log entries were emitted) but the badge would be stale.
+  useEffect(() => {
+    if (!open || activeTab !== 1) {
+      return
+    }
+    if (
+      sessionStatus === 'completed' ||
+      sessionStatus === 'failed' ||
+      sessionStatus === 'terminated'
+    ) {
+      return
+    }
+    const pollHandle = window.setInterval(() => {
+      void apiClient
+        .get<{ status: AgentJobStatus }>(`/agents/sessions/${sessionId}`)
+        .then(({ data }) => {
+          setSessionStatus(data.status)
+        })
+        .catch(() => {
+          /* ignore transient errors — the next tick will retry */
+        })
+    }, 3000)
+    return () => {
+      window.clearInterval(pollHandle)
+    }
+  }, [open, activeTab, sessionId, sessionStatus])
+
   useEffect(() => {
     if (!streamedEntries.length) {
       return

@@ -22,7 +22,11 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
-import type { AgentJob, AgentJobStatus, ConversationSession } from '../../types'
+import type {
+  AgentJob,
+  AgentJobStatus,
+  ConversationSession,
+} from '../../types'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
@@ -264,6 +268,9 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
                 </TableRow>
               ))}
             </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       {/* Agent execution details dialog */}
       {selectedSessionId && (
@@ -275,9 +282,6 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
           }}
           sessionId={selectedSessionId}
         />
-      )}
-          </Table>
-        </TableContainer>
       )}
     </Box>
   )

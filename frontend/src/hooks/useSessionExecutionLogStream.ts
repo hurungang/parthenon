@@ -31,7 +31,7 @@ interface StreamCompletedEvent {
 type StreamEvent = StreamLogEntryEvent | StreamCompletedEvent
 
 function isTerminalStatus(status: AgentJobStatus | undefined): boolean {
-  return status === 'completed' || status === 'failed'
+  return status === 'completed' || status === 'failed' || status === 'terminated'
 }
 
 function toAbsoluteUrl(path: string): string {

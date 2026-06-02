@@ -38,6 +38,7 @@ from app.services.agents.guardrails import (
     GuardrailInfoReason,
     GuardrailStop,
     GuardrailStopReason,
+    ModelAvailabilityBlockedError,
     RuntimeGuardrailState,
     detect_cycle_path,
     extract_total_tokens_from_usage,
@@ -526,6 +527,76 @@ class AgentRuntimeExecutor:
             },
         )
 
+    async def _preflight_model_availability(
+        self,
+        *,
+        session_id: uuid.UUID,
+        context: dict[str, Any],
+        data_client: "ControlCenterDataClient",
+    ) -> None:
+        """Consult Control Center preflight before dispatch.
+
+        Phase 3.10: any agent execution that would use a disabled model
+        or a model under a disabled vendor is blocked here.  On deny
+        we raise :class:`ModelAvailabilityBlockedError` so the calling
+        ``run`` loop can record the policy outcome in execution logs and
+        attribute the stop to ``model_disabled`` or ``vendor_disabled``
+        on the ``AgentJob``.
+
+        Failures of the preflight call itself (network / 5xx) DO NOT
+        block execution — runtime stays available, and the missing check
+        is logged at WARN so the operator can spot degraded mode.
+        """
+        model_id = context.get("model_id")
+        if not model_id:
+            # No model bound — nothing to check.  Most commonly hit during
+            # the cold-start context build.
+            return
+        vendor_model_config_id: uuid.UUID | None = None
+        raw = context.get("model_config_id")
+        if raw:
+            try:
+                vendor_model_config_id = uuid.UUID(str(raw))
+            except (TypeError, ValueError):
+                vendor_model_config_id = None
+
+        try:
+            outcome = await data_client.preflight_availability(
+                model_name=str(model_id),
+                vendor_model_config_id=vendor_model_config_id,
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.warning(
+                "Preflight availability check failed for session %s model %s: %s; "
+                "continuing execution in degraded mode",
+                session_id,
+                model_id,
+                exc,
+            )
+            return
+
+        if outcome.get("allowed"):
+            return
+
+        blocked_by = str(outcome.get("blocked_by") or "model_disabled")
+        disabled_reason = outcome.get("disabled_reason")
+        reason = str(outcome.get("reason") or "Model is not available")
+        raise ModelAvailabilityBlockedError(
+            message=reason,
+            blocked_by=blocked_by,
+            disabled_reason=disabled_reason,
+            details={
+                "model_id": str(model_id),
+                "vendor_model_config_id": (
+                    str(vendor_model_config_id)
+                    if vendor_model_config_id
+                    else None
+                ),
+                "blocked_by": blocked_by,
+                "disabled_reason": disabled_reason,
+            },
+        )
+
     def _check_runtime_limits_or_raise(
         self,
         state: RuntimeGuardrailState,
@@ -581,6 +652,7 @@ class AgentRuntimeExecutor:
         message: str,
         data: dict[str, Any],
         log_level: str = "INFO",
+        event_category: str = "functional",
         data_client: Any | None = None,
     ) -> None:
         """Persist a structured execution event via Control Center data API and emit to logger."""
@@ -603,6 +675,7 @@ class AgentRuntimeExecutor:
                 message=message,
                 data=data or {},
                 log_level=log_level,
+                event_category=event_category,
             )
         except Exception as exc:
             logger.error(
@@ -1001,6 +1074,11 @@ class AgentRuntimeExecutor:
                     data_client=data_client,
                     guardrail_state=guardrail_state,
                 )
+                await self._preflight_model_availability(
+                    session_id=session_id,
+                    context=context,
+                    data_client=data_client,
+                )
                 output_data = await self._run_task_loop_ar(job_data, context, data_client)
                 await data_client.mark_session_completed(session_id, output_data)
                 span.set_attribute("status", "completed")
@@ -1032,6 +1110,60 @@ class AgentRuntimeExecutor:
                     stop_details=exc.details,
                 )
                 span.set_attribute("status", "guardrail_stop")
+            except ModelAvailabilityBlockedError as exc:
+                logger.warning(
+                    "Session %s blocked by availability preflight: %s",
+                    session_id,
+                    exc.blocked_by,
+                )
+                # Map blocked_by to event_category / termination_category
+                # vocabulary from the data model:
+                #   "vendor_disabled"     -> vendor_disabled
+                #   "model_disabled"      -> model_disabled
+                #   "model_not_found"     -> model_disabled (closest sibling)
+                #   "guardrail_breached"  -> guardrail_breached
+                #   anything else         -> model_disabled (conservative)
+                if exc.blocked_by == "vendor_disabled":
+                    event_category = "vendor_disabled"
+                    termination_category = "vendor_disabled"
+                    stop_reason = "vendor_disabled"
+                    stop_category = "guardrail_stop"
+                elif exc.blocked_by == "guardrail_breached":
+                    event_category = "guardrail_breached"
+                    termination_category = "guardrail_breached"
+                    stop_reason = "guardrail_breached"
+                    stop_category = "guardrail_stop"
+                else:
+                    event_category = "model_disabled"
+                    termination_category = "model_disabled"
+                    stop_reason = "model_disabled"
+                    stop_category = "guardrail_stop"
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="model_availability.blocked",
+                    log_level="WARN",
+                    message=exc.message,
+                    event_category=event_category,
+                    data={
+                        "blocked_by": exc.blocked_by,
+                        "disabled_reason": exc.disabled_reason,
+                        **(exc.details or {}),
+                    },
+                )
+                await data_client.mark_session_failed(
+                    session_id,
+                    exc.message,
+                    stop_category=stop_category,
+                    stop_reason=stop_reason,
+                    stop_details={
+                        "termination_category": termination_category,
+                        "blocked_by": exc.blocked_by,
+                        "disabled_reason": exc.disabled_reason,
+                        **(exc.details or {}),
+                    },
+                )
+                span.set_attribute("status", "availability_blocked")
+                span.set_attribute("blocked_by", exc.blocked_by)
             except PermissionDeniedError as exc:
                 error_msg = f"Permission denied: {exc}"
                 logger.warning("Session %s permission denied: %s", session_id, exc)
@@ -1457,6 +1589,27 @@ class AgentRuntimeExecutor:
                             "threshold_value": token_budget,
                             "policy_snapshot_id": guardrail_state.policy_snapshot_id,
                         },
+                    )
+
+                if guardrail_state.token_enforcement_mode != "enforce":
+                    # Observe-only mode: emit structured guardrail threshold alert
+                    await data_client.log_execution_event(
+                        session_id=session_id,
+                        event_type="guardrail.token_budget.threshold_reached",
+                        log_level="WARNING",
+                        message=(
+                            f"Token budget threshold reached (observe mode) — "
+                            f"{guardrail_state.token_usage_current_session} / {token_budget} tokens used"
+                        ),
+                        data={
+                            "guardrail_reason": GuardrailInfoReason.TOKEN_THRESHOLD_OBSERVED,
+                            "enforcement_mode": guardrail_state.token_enforcement_mode,
+                            "current_value": guardrail_state.token_usage_current_session,
+                            "threshold_value": token_budget,
+                            "execution_mode": execution_mode,
+                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                        },
+                        event_category="guardrail",
                     )
 
             await self._log_execution_event(

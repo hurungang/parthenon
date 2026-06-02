@@ -35,6 +35,7 @@ Available scenarios (from `e2e/tests/`):
 - `results` — results viewing
 - `agent-management` — agent configuration and management
 - `agent-runtime` — agent roles, identities, model configs, session launch, instance dashboard, and conversation history
+- `runtime-control-dashboard` — running sessions, topology view, policy-event visibility, node termination controls, and recursion preflight outcomes
 - `agent-logs` — user-friendly agent execution logs (summary, collapsible steps, raw mode toggle)
 - `agent-live-logs-stream` — running non-conversation sessions consume `/logs/stream` and show live progress hints
 - `agent-bootstrap` — agent realm initialization and OAuth-based identity creation

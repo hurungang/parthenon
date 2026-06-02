@@ -22,6 +22,7 @@ class GuardrailInfoReason:
     """Non-terminal informational guardrail event reason taxonomy."""
 
     CONVERSATIONAL_TOKEN_THRESHOLD_OBSERVED = "conversational_token_threshold_observed"
+    TOKEN_THRESHOLD_OBSERVED = "token_budget_threshold_reached_observe_mode"
 
 
 class GuardrailStop(Exception):
@@ -31,6 +32,31 @@ class GuardrailStop(Exception):
         super().__init__(message)
         self.reason = reason
         self.message = message
+        self.details = details or {}
+
+
+class ModelAvailabilityBlockedError(RuntimeError):
+    """Raised when the pre-execution availability check denies dispatch.
+
+    The pre-execution check is performed by Agent Runtime before any
+    model action; on deny, dispatch is blocked and the run is recorded
+    with the appropriate ``AgentJob.termination_category`` and an
+    execution log entry tagged with the matching ``event_category``
+    (model_disabled or vendor_disabled).
+    """
+
+    def __init__(
+        self,
+        *,
+        message: str,
+        blocked_by: str,
+        disabled_reason: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.blocked_by = blocked_by
+        self.disabled_reason = disabled_reason
         self.details = details or {}
 
 

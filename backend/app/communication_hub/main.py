@@ -116,6 +116,7 @@ def _register_routers(app: FastAPI) -> None:
     from app.communication_hub.api.dispatch import dispatch_router  # Phase 5.2
     from app.communication_hub.api.internal.tool_routing import router as tool_routing_router
     from app.communication_hub.api.internal.agent_execute import router as agent_execute_router
+    from app.communication_hub.api.internal.agent_terminate import router as agent_terminate_router
     from app.communication_hub.api.a2a import router as a2a_router  # Phase 1.1
 
     app.include_router(GatewayRouter)
@@ -123,6 +124,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(dispatch_router)  # POST /internal/dispatch
     app.include_router(tool_routing_router)  # POST /internal/tools/call
     app.include_router(agent_execute_router)  # POST /internal/agent/execute
+    app.include_router(agent_terminate_router)  # POST /internal/agent/terminate/{session_id}
     app.include_router(a2a_router)  # POST /internal/a2a/request, /internal/a2a/disconnect/{session_link_id}
 
 

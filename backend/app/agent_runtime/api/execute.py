@@ -11,6 +11,10 @@ Security:
     ``service:control-center`` before this handler runs.
 
 Phase 5.1 — Control Flow Implementation.
+
+Phase 3.11: the background task is registered in
+``app.state.session_tasks`` so the Control Center can cancel it via
+``POST /terminate/{session_id}`` when an operator requests termination.
 """
 from __future__ import annotations
 
@@ -57,6 +61,11 @@ async def trigger_execution(
     executor as a background asyncio task.  Returns ``accepted`` once the
     status transition is confirmed — execution continues asynchronously.
 
+    The background task is registered in
+    ``app.state.session_tasks[session_id]`` so the Control Center's
+    termination orchestrator can cancel it via
+    ``POST /terminate/{session_id}``.
+
     Authentication is enforced by ControlCenterCertificateMiddleware — any
     request without a valid ``service:control-center`` certificate is rejected
     with 401 before this handler is called.
@@ -93,11 +102,24 @@ async def trigger_execution(
             detail=f"Failed to transition session to running: {exc}",
         )
 
-    # Launch execution as a background task (non-blocking)
-    asyncio.create_task(
+    # Launch execution as a background task (non-blocking) and register
+    # it in ``app.state.session_tasks`` so the Control Center can cancel
+    # it via ``POST /terminate/{session_id}`` when an operator requests
+    # termination.  Without this registry, the in-memory task would
+    # outlive the operator's intent and continue running the agent until
+    # the natural completion path.
+    task = asyncio.create_task(
         _execute_session(body.session_id, data_client, semaphore),
         name=f"execute-{body.session_id}",
     )
+    session_tasks: dict[uuid.UUID, asyncio.Task] = getattr(
+        request.app.state, "session_tasks", None
+    )
+    if session_tasks is None:
+        session_tasks = {}
+        request.app.state.session_tasks = session_tasks
+    session_tasks[body.session_id] = task
+    task.add_done_callback(lambda t: session_tasks.pop(body.session_id, None))
 
     logger.info(
         "Execution trigger received: session=%s agent_type=%s — started immediately",
@@ -125,6 +147,18 @@ async def _execute_session(
                 from app.services.agents.runtime_executor import AgentRuntimeExecutor
                 executor = AgentRuntimeExecutor(data_client=data_client)
                 await executor.run(session_id, data_client)
+            except asyncio.CancelledError:
+                # Operator-requested termination.  Re-raise so the parent
+                # task wrapper (and asyncio) see the cancellation, but
+                # the session state has already been marked failed by
+                # the caller of terminate.  We do NOT mark the session
+                # as failed here because the terminate endpoint is the
+                # single source of truth for that attribution.
+                logger.info(
+                    "Session %s execution task was cancelled (operator termination)",
+                    session_id,
+                )
+                raise
             except Exception as exc:
                 logger.exception("Session %s failed: %s", session_id, exc)
                 try:

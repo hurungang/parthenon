@@ -37,6 +37,28 @@ tooling:
     Supports start/stop/restart/status commands with health checks.
     See PARTHENON-SCRIPT-GUIDE.md or read the script for usage details.
 
+# Runtime logs — locations for troubleshooting live issues
+logs:
+  directory: backend/logs
+  files:
+    - name: control-center.log
+      service: Control Center (port 8000)
+      purpose: HTTP request log, DB queries, orchestrator outcomes, cert validation
+    - name: agent-runtime.log
+      service: Agent Runtime (port 8001)
+      purpose: Execution triggers, in-flight task registry, certificate middleware rejections
+    - name: communication-hub.log
+      service: Communication Hub (port 8002)
+      purpose: Agent execute/terminate forwarding, control plane middleware decisions
+    - name: otel.log
+      service: OpenTelemetry Collector
+      purpose: Trace/log export diagnostics (rotated separately)
+  retention: files rotate at ~10 MB; .1 and .2 are kept as the two most recent rolls
+  troubleshooting_notes:
+    - Certificate rejections on AR: search agent-runtime.log for 'rejected' lines
+    - Termination not stopping the agent: search control-center.log for 'terminate' and agent-runtime.log for '/terminate'
+    - A2A routing failures: search communication-hub.log for '/internal/a2a'
+
 # Technology stack — context for agents, not prescriptive
 tech_stack:
   frontend: React 19 + TypeScript + Material-UI (MUI 7) + React Router 7 + Vite + i18next + OpenTelemetry

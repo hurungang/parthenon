@@ -81,10 +81,26 @@ def create_app() -> FastAPI:
                 return str(obj)
             return obj
 
+        serializable_errors = _make_serializable(exc.errors())
+        # Truncate body to keep logs bounded for large payloads
+        body_repr = exc.body
+        if isinstance(body_repr, (dict, list)):
+            body_repr = str(body_repr)
+        if isinstance(body_repr, str) and len(body_repr) > 1000:
+            body_repr = body_repr[:1000] + "...<truncated>"
+
+        logger.warning(
+            "Request validation failed (422): method=%s path=%s errors=%s body=%s",
+            request.method,
+            request.url.path,
+            serializable_errors,
+            body_repr,
+        )
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "detail": _make_serializable(exc.errors()),
+                "detail": serializable_errors,
                 "body": exc.body,
             },
         )
@@ -160,6 +176,26 @@ async def _run_bootstrap() -> None:
         logger.exception("Bootstrap service failed; application will continue.")
 
 
+async def _cleanup_stale_sessions_on_startup() -> None:
+    """Close all queued/running sessions so restart always starts clean."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.agents.session_recovery_service import SessionRecoveryService
+
+        async with AsyncSessionLocal() as db:
+            closed_count = await SessionRecoveryService().cleanup_non_terminal_sessions(db)
+            await db.commit()
+        if closed_count:
+            logger.warning(
+                "Startup cleanup closed %d non-terminal session(s)",
+                closed_count,
+            )
+        else:
+            logger.info("Startup cleanup found no non-terminal sessions")
+    except Exception:
+        logger.exception("Startup session cleanup failed; application will continue.")
+
+
 async def _seed_system_tools() -> None:
     """Seed system MCP server and tools into database on startup."""
     try:
@@ -183,6 +219,7 @@ async def startup_event() -> None:
     Session dispatching is handled by the Agent Runtime service.
     """
     _log_http_client_log_policy()
+    await _cleanup_stale_sessions_on_startup()
     await _run_bootstrap()
     await _seed_system_tools()
     await _run_skill_seeder()

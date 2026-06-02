@@ -83,6 +83,7 @@ const AI_AGENT_GROUP: NavGroup = {
     { labelKey: 'nav.agentIdentities', path: '/agents/identities', icon: <BadgeIcon /> },
     { labelKey: 'nav.agentTypes', path: '/agents', icon: <SmartToyIcon /> },
     { labelKey: 'nav.agentExecutions', path: '/agents/executions', icon: <MonitorHeartIcon /> },
+    { labelKey: 'nav.runtimeControl', path: '/agents/runtime-control', icon: <AccountTreeIcon /> },
     { labelKey: 'nav.agentLogs', path: '/conversations', icon: <HistoryIcon /> },
   ],
 }

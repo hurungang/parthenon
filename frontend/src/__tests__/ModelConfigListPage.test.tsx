@@ -60,7 +60,18 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe('ModelConfigListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGet.mockResolvedValue({ data: MOCK_CONFIGS })
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/agents/model-availability')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.startsWith('/agents/guardrails/model-usage-posture')) {
+        return Promise.resolve({ data: [] })
+      }
+      if (url.startsWith('/agents/model-configs')) {
+        return Promise.resolve({ data: MOCK_CONFIGS })
+      }
+      return Promise.resolve({ data: [] })
+    })
     mockDelete.mockResolvedValue({})
   })
 
