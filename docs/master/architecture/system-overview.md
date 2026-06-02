@@ -17,6 +17,7 @@ flowchart LR
     AU --> CFG
     CFG --> CH
     UI -->|Generate and preview workflow| CH
+    UI -->|Runtime control dashboard| CH
     CH --> AR
     AR -->|Context request| CH
     CH --> CCA
@@ -28,6 +29,9 @@ flowchart LR
     AR --> OBS
     CCA --> OBS
     CCA --> AUD
+    UI -->|Terminate selected node| CCA
+    CCA -->|Forward terminate| CH
+    CH --> AR
 ```
 
 ```mermaid

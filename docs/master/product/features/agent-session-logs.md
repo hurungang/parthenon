@@ -19,6 +19,7 @@ For active non-conversation runs, execution progress is visible live so users an
 - Compliance/audit staff: Require clear, traceable records of agent activity
 - Support staff: Need to quickly identify issues without deep technical analysis
 - Technical users: Require access to raw logs for advanced troubleshooting
+- **Operations leads: Need to distinguish policy-stop, termination, and disabled-model/vendor events from functional failures**
 
 ## User Stories
 - As a business user, I want to see a simple summary of what the agent did, so that I can understand the outcome without technical details
@@ -28,6 +29,9 @@ For active non-conversation runs, execution progress is visible live so users an
 - As an operations lead, I want guardrail-stop outcomes clearly labeled, so that I can distinguish policy enforcement from functional failures
 - As a conversational-session stakeholder, I want current-session token usage visible in execution summaries, so that I can review consumption while the conversation continues
 - As an operator, I want non-conversation execution progress to update live while a run is active, so that I can detect stalls early without repeatedly refreshing
+- As a compliance owner, I want **observe-only guardrail limit events shown in execution logs** so that policy risks are visible even when runs are not automatically blocked
+- As a compliance owner, I want **attempts to use a disabled model or a model under a disabled vendor to be clearly logged and blocked** so that policy violations are auditable
+- As an operations lead, I want **operator-initiated termination recorded as a distinct outcome** so that I can distinguish it from genuine agent or runtime failures
 
 
 ## Acceptance Criteria
@@ -45,6 +49,10 @@ For active non-conversation runs, execution progress is visible live so users an
 - Live progress remains readable for non-technical users while preserving optional access to full detail
 - When a non-conversation run reaches completion or failure, the final state is reflected clearly in the execution log view
 - All acceptance criteria validated via user testing with business and compliance personas
+- **Observe-only guardrail limit alerts appear as user-visible operational signals distinct from standard execution failures**
+- **Disabled-model and disabled-vendor block events appear in execution logs as user-visible operational signals distinct from standard execution failures**
+- **Operator-initiated termination is recorded as a distinct `terminated` outcome, visually distinct from `failed` (genuine agent or runtime error)**
+
 
 ## Out of Scope
 - Changes to backend log capture or storage format
@@ -56,3 +64,4 @@ For active non-conversation runs, execution progress is visible live so users an
 - Must preserve access to full raw logs for technical users
 - No changes to backend log structure or API responses
 - Must comply with existing audit and traceability requirements
+- **Guardrail, termination, and disable-state outcomes must be reflected in execution logs so operators can distinguish policy events from functional failures**

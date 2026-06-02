@@ -25,6 +25,12 @@ This feature strengthens cross-agent collaboration by enabling reliable agent-to
 - **Step-Derived Permissions**: Delegation rights derived from SOP step definitions
 - **Slug Enforcement**: Stable, integration-safe naming for routing and identity surfaces
 
+## Recursion and Dead-Loop Prevention
+- **Recursive delegation risk is validated** in SOP and delegation configuration at create and update entry points
+- Recursion-prone agent delegation configurations are **blocked before submission** with a clear user-visible error
+- **Recursion/dead-loop risk is validated at run initiation** and execution is prevented when risk conditions are detected
+- Validation outcomes are reflected in execution logs
+
 ## Acceptance Criteria
 - A2A requests can target agents by agent type slug through the Communication Hub
 - If no active target exists, a dynamic receiver instance is created and connected to the active session
@@ -33,3 +39,11 @@ This feature strengthens cross-agent collaboration by enabling reliable agent-to
 - Role editing surfaces show allowed target agent type slugs before save
 - Plan preview includes agent-delegation steps in both list and topology views
 - Non-slug values are rejected for agent type names, agent names, and MCP server names in create and update flows
+- **Recursive delegation risk is validated during agent create, update, and run flows; invalid configurations and dead-loop risks are blocked before execution**
+
+## Out of Scope
+- (none additional)
+
+## Dependencies & Constraints
+- Recursion validation depends on a stable SOP and delegation step graph; configuration changes that would create cycles must be rejected at create/update and again at run initiation
+- All changes must align with enterprise segregation and audit requirements

@@ -17,6 +17,7 @@ flowchart LR
     CHAT <-->|Conversation turn exchange| CH
     CFG -->|Selected generation model| CH
     CH -->|Route workflow request| AR
+    CH -->|Route terminate request| AR
     AR -->|Tool and delegation routing| CH
     AR -->|Thinking and delegation status events| CH
     AR -->|Request governed context| CH
@@ -26,6 +27,7 @@ flowchart LR
     CH --> AR
     CH --> MCP
     AR -->|Policy and stop outcomes| CH
+    AR -->|Terminate acknowledgement| CH
     CH --> STAT
     CH --> CSTAT
     STAT --> UI

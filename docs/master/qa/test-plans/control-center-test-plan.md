@@ -57,6 +57,32 @@
 - Execution log persistence captures structured guardrail events used by execution summary views
 - Control Center remains the only persistence owner for guardrail stop outcomes and guardrail event logs
 
+### Model-Usage Guardrails (vendor → model → guardrail hierarchy)
+- Per-period guardrail CRUD: `POST /api/v1/agents/guardrails/model-usage-limits` creates exactly one guardrail per `(model_id, model_name, period)`; `(model_id, model_name, period)` uniqueness is enforced and returns 409 on duplicate
+- `GET` / `PUT` / `DELETE` per-period guardrail: list/read/update/delete a single per-period guardrail row using the per-guardrail shape (`period`, `limit_value`, `unit`, `enforcement_posture`, `is_active`)
+- Default `unit = 'k'` and default `enforcement_posture = 'terminate'` on create; explicit values preserved through update
+- `GET /api/v1/agents/guardrails/model-usage-posture` returns current posture rollups (within_limit, approaching_limit, breached) for all configured per-period guardrails
+- `ModelAvailabilityService._check_guardrail_breach()` is invoked on every pre-execution availability check; multi-vendor breach dominates other deny reasons
+- Vendor `is_disabled` toggle cascades to every `ModelAvailability` row under the vendor (set `is_disabled = true`, `disabled_reason = vendor_cascaded`); re-enable restores each row to its prior manual state
+- Per-model `ModelAvailability` toggle sets `disabled_reason = manual` on operator-driven changes
+- `preflight_availability` returns `{ allowed, reason?, disabled_reason? }` for the resolved model; on deny, the run is recorded with `AgentJob.termination_category` of `model_disabled` or `vendor_disabled`
+- `ExecutionEventCategory` accepts `model_disabled`, `vendor_disabled`, and `guardrail_breached` as user-visible event categories; these are distinct from standard execution failures
+
+### Runtime Topology and Operator Termination
+- `RuntimeTopologyController` merges three sources: `AgentJob` (live), `ConversationSession` (synthetic active/sleep), and `AgentInstance` (created/active/closed/error)
+- `AgentJob.status = terminated` is a distinct enum value from `failed`; migration `f4a5b6c7d8e9` adds it
+- Late-arriving status updates from the underlying LangChain framework are rejected by terminal-state guards in `update_session_status`
+- `TerminationOrchestrator` performs permission-gated terminate requests; the request is routed Control Center → Communication Hub → Agent Runtime
+- Cascade termination: terminating a parent `AgentJob` walks the delegation graph and cancels all active delegated children
+- Sleep conversations (no live agent) cannot be terminated — only ended via the conversation session management endpoint
+- 404 from Agent Runtime `/terminate` is treated as success
+
+### Recursion and Dead-Loop Prevention
+- `RecursionValidationService` runs at agent create, update, and run initiation
+- `result = fail` blocks the action; `result = pass` allows it
+- The validation outcome is recorded in `SopRecursionValidationCheck` with `check_trigger = create | update | run`
+- Specific cycle paths are recorded in `SopRecursionValidationFinding` as JSON arrays of SOP IDs
+
 ## Critical Scenarios
 
 ### Scenario: Certificate Authority Bootstrap

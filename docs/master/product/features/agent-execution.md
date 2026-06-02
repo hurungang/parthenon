@@ -23,6 +23,20 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 - Non-conversational and automated runs keep token-budget enforcement where provider support exists
 - When token-budget enforcement is unavailable, a defined fallback behavior is applied and surfaced to operators
 - Guardrail outcomes are represented as policy-stop outcomes so operators can distinguish them from functional failures
+- **Guardrail enforcement is applied consistently across direct and delegated execution paths** with no policy bypass between parent and child runs
+- **The default enforcement mode for newly configured guardrails is `terminate`** unless an authorized operator explicitly selects a different posture
+- **Observe-only guardrail limit events are surfaced as user-visible alerts** in frontend execution logs for the affected run
+- **Agent execution is blocked when the requested model is disabled**, or when the model is under a disabled vendor, and the block is surfaced in execution logs with a clear operator-visible reason
+
+## Model-Usage Guardrails
+- Model-usage guardrails are organised under a **vendor → model → guardrail hierarchy**: vendors group their models, and each model carries one to four guardrail records, one per period (hour, day, week, month)
+- Operators configure only the periods they actually need — no forced four-period entry
+- Each guardrail has its own enforcement posture (`terminate` or `observe-only`) and can be individually enabled, disabled, or removed
+- An authorized operator can temporarily disable an individual model; while disabled, any agent execution that would use that model is blocked
+- An authorized operator can temporarily disable an entire vendor; while disabled, every model under that vendor is treated as disabled
+- When a vendor is disabled, the per-model disable affordances remain visible to show the cascade source
+- Disabled-model and disabled-vendor block events appear in execution logs as user-visible operational signals distinct from standard execution failures
+- A multi-vendor guardrail breach dominates other deny reasons in the execution log block reason
 
 ## Unified Tool Naming Convention
 
@@ -38,6 +52,21 @@ This convention ensures tool names are globally unique across all registered ser
 
 The agent runtime does **not** automatically save results at the end of execution. If an SOP or agent instruction requires a result to be persisted, the agent must explicitly call the `system____save_result` tool. If no such instruction is given, no result record is created. This design ensures result creation is intentional and traceable to a specific SOP step.
 
+## Runtime Control and Termination Governance
+- A **runtime control dashboard** surfaces all currently running agents, their delegated children, and operator-controlled termination actions
+- A **topology diagram** visualises active parent-child agent execution relationships with selectable nodes
+- Authorized operators can **terminate any running or delegated node** from the dashboard
+- **Terminating a parent execution cascades** to all active delegated child executions it triggered
+- Operator-initiated termination is recorded as a distinct `terminated` outcome in execution logs, distinct from `failed` (genuine agent or runtime error)
+- Termination requests are routed from Control Center through the Communication Hub to Agent Runtime to preserve service segregation and certificate-based authentication boundaries
+- If a user lacks required permission, termination controls are unavailable or rejected with a clear user-visible message
+
+## Recursion and Dead-Loop Prevention
+- Agent create, update, and run flows **validate recursive delegation risk** at entry points
+- Recursion-prone agent delegation configurations are blocked before execution proceeds
+- Dead-loop scenarios are prevented during run initiation when risk conditions are detected
+- Recursion validation outcomes are reflected in execution logs
+
 ## User Impact
 - Security administrators can verify and revoke agent instances
 - Platform operators do not manage or distribute identity tokens
@@ -45,6 +74,8 @@ The agent runtime does **not** automatically save results at the end of executio
 - SOP authors control when and what results are saved by including explicit save instructions
 - Tool naming is predictable and consistent across all agent interactions
 - Operations leads can identify cycle, iteration, delegation, timeout, and token-policy outcomes quickly in session summaries
+- Operations leads can see live execution topology and stop problematic execution trees quickly, including all active child delegations
+- Compliance owners can verify evidence of observe-only guardrail alerts and disabled-model / disabled-vendor block events
 
 ## Acceptance Criteria
 - Delegation cycle checks prevent direct and indirect recursion and provide a clear stop reason
@@ -56,6 +87,10 @@ The agent runtime does **not** automatically save results at the end of executio
 - Non-conversational and automated runs enforce token budgets when supported
 - Unsupported token-budget enforcement follows a transparent fallback while other guardrails stay active
 - Session summaries and monitoring views clearly distinguish guardrail-policy stops from functional failures
+- **Guardrail enforcement is applied consistently for agent execution and delegation paths, with no policy bypass between parent and child runs**
+- **The default enforcement mode for newly configured guardrails is terminate unless an authorized operator explicitly selects a different posture**
+- **When guardrail limits are reached in observe-only mode, a clear alert is visible in user-facing execution logs for the affected run**
+- **Agent execution is blocked when the requested model is disabled or when the model is under a disabled vendor, and the block is surfaced in execution logs**
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams
@@ -65,4 +100,11 @@ The agent runtime does **not** automatically save results at the end of executio
 - Requires Control Center for certificate management and audit logging
 - Relies on OIDC-compliant identity provider
 - Requires approved service-boundary policies and runtime allowlist governance
-- All changes must comply with Parthenon’s security and audit conventions
+- All changes must comply with Parthenon's security and audit conventions
+- Must comply with service segregation rules: execution remains in Agent Runtime; governance and control remain in Control Center boundaries
+- Must preserve secure handling of sensitive credentials and identity material; no expansion of agent access to sensitive data
+- Depends on trustworthy model-usage measurement and period rollup data so hourly, daily, weekly, and monthly posture can be shown accurately
+- Depends on a vendor and model catalogue that the new hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
+- Depends on reliable runtime state and delegation relationship signals to render accurate running-agent topology
+- Depends on permission enforcement so only authorized users can configure guardrails, disable vendors or models, and terminate executions
+- Constrained by enterprise auditability requirements: guardrail alerts, model-usage posture changes, vendor/model disable changes, and termination actions must be visible in operational logs
