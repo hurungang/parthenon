@@ -19,6 +19,8 @@ flowchart LR
     AR -->|Caller: agent_runtime| API
     API --> POL
     API --> CTX
+    API --> TOPO[Runtime Topology Controller]
+    API --> TERM[Termination Orchestrator]
     CTX --> CFG
     CTX --> SOP
     CFG --> DB
@@ -26,9 +28,12 @@ flowchart LR
     API --> GOV
     POL --> DB
     GOV --> DB
+    TOPO --> DB
+    TERM --> CH
     CTX --> CH
     POL --> OBS
     GOV --> OBS
+    TERM --> OBS
 ```
 
 ```mermaid

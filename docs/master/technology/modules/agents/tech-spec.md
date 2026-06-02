@@ -409,3 +409,155 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentityViewDialog.test` | frontend component test | Renders identity detail grid, edit and close actions, loading and error states | `frontend/src/__tests__/AgentIdentityViewDialog.test.tsx` |
 | `AgentManagementPage.test` | frontend component test | Row-click opens dialog, Role/Identity column rendering, plan preview launch; mock updated for `useAgentType` and `defaultAgentTypeFormValues` | `frontend/src/__tests__/AgentManagementPage.test.tsx` |
 | `agent-navigation.spec.ts` | E2E test | Nav group expand/collapse, agent executions page, agent type filter dropdown, dialog open/close flows | `e2e/tests/agent-navigation.spec.ts` |
+
+## Runtime Control & Model Guardrail Hierarchy
+
+The following components and services support the **vendor → model → guardrail hierarchy** for model-usage guardrails and the **Runtime Control Dashboard** for live execution visibility and operator-controlled termination. Operator-initiated termination is a distinct `terminated` state, separate from `failed` (genuine agent or runtime error). The dashboard merges three node kinds — `agent` (live `AgentJob`), `conversation` (`ConversationSession` with synthetic active/sleep status), and `instance` (`AgentInstance`) — and supports a tickable filter legend.
+
+### Frontend Components (`frontend/src/components/agents/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `RuntimeControlDashboardPage` | page | Dedicated runtime control dashboard at `/agents/runtime-control`; hosts the live SVG topology, selected-node details, the new Model Guardrails view (vendor → model → guardrail hierarchy), and the terminate entry point. Owns the `Set<string>` filter state and `SleepConversationActions` sub-component | `frontend/src/pages/agents/RuntimeControlDashboardPage.tsx` |
+| `RuntimeTopologyDiagram` | component | SVG-based live delegation topology with rounded-rect nodes, status fills, click-to-select, tickable filter legend (12 entries: 5 agent + 4 conversation + 3 instance), single-row-per-depth layout, and horizontal scrollbar via `overflowX:'auto'` wrapping Box | `frontend/src/components/agents/RuntimeTopologyDiagram.tsx` |
+| `RuntimeTopologyPanel` | component | Legacy flat-card grouped-by-depth runtime execution-tree view with selected-node details and terminate entry point (retained for compatibility) | `frontend/src/components/agents/RuntimeTopologyPanel.tsx` |
+| `NodeTerminationDialog` | component | Terminate modal with permission/API denial feedback and cascade scope selection | `frontend/src/components/agents/NodeTerminationDialog.tsx` |
+| `VendorModelGuardrailPanel` | component | Hierarchy-aware panel: vendor rows (with vendor enable/disable toggle and enabled-model count) → model rows (with per-model enable/disable toggle, cascade source indicator) → guardrail rows (with period, limit, unit, posture state, per-guardrail enable/edit/remove) | `frontend/src/components/agents/VendorModelGuardrailPanel.tsx` |
+| `AddGuardrailForm` | component | Inline (non-modal) form inside an expanded model row; period select filtered to periods not yet configured on the model; single per-period create dispatch | `frontend/src/components/agents/AddGuardrailForm.tsx` |
+
+### Frontend Hooks (`frontend/src/hooks/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `useRuntimeTopology` | hook | Server-state hook for active runtime topology and polling refresh | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `useNodeTermination` | hook | Mutation/query hooks for terminate requests and cascade outcome polling | `frontend/src/hooks/useNodeTermination.ts` |
+| `useModelUsagePosture` | hook | Server-state hook for model-usage posture data and refresh | `frontend/src/hooks/useModelUsagePosture.ts` |
+| `useModelUsageLimits` | hook | Server-state hook for per-guardrail configurations and refresh | `frontend/src/hooks/useModelUsagePosture.ts` |
+| `useAvailableModels` | hook | Flattens `ModelConfig.enabled_models` into `AvailableModel[]` for guardrail configuration surfaces | `frontend/src/hooks/useAvailableModels.ts` |
+| `useCreateModelUsageLimit` | hook | Mutation hook to create a per-period guardrail row using the per-guardrail shape | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
+| `useUpdateModelUsageLimit` | hook | Mutation hook to update a per-period guardrail row using the per-guardrail shape | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
+| `useDeleteModelUsageLimit` | hook | Mutation hook to delete a per-period guardrail row | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
+| `useModelAvailability` | hook | Server-state hook for the full vendor → model → enabled state and refresh | `frontend/src/hooks/useModelAvailability.ts` |
+| `useToggleVendorDisabled` | hook | Mutation hook for the vendor-level `is_disabled` toggle | `frontend/src/hooks/useModelAvailabilityMutations.ts` |
+| `useToggleModelDisabled` | hook | Mutation hook for the per-model availability toggle | `frontend/src/hooks/useModelAvailabilityMutations.ts` |
+| `usePreflightAvailability` | hook | Mutation hook Agent Runtime (or server-to-server test harness) uses for the pre-execution availability check | `frontend/src/hooks/usePreflightAvailability.ts` |
+| `useEndConversationSession` | hook | Mutation hook to end a sleep conversation session | `frontend/src/hooks/useConversationSessions.ts` |
+
+### Frontend Types (`frontend/src/types/index.ts`)
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `AgentJobStatus` | enum | Extended with `terminated` (distinct from `failed`) |
+| `RuntimeTopologyNode` | interface | Topology node: `kind: 'agent' \| 'conversation' \| 'instance'`, `status: string`, `title?: string`, plus delegation metadata |
+| `RuntimeTopologyEdge` | interface | Topology edge: `source: string`, `target: string` |
+| `RuntimeTopologyRead` | interface | Topology response: `nodes: RuntimeTopologyNode[]`, `edges: RuntimeTopologyEdge[]` |
+| `LogSummary` | interface | Extended with `terminated` outcome distinct from `failed` (renders amber `BlockIcon` Chip) |
+| `AvailableModel` | interface | `model_id`, `model_name`, `vendor` |
+| `ModelAvailability` | interface | `model_id`, `model_name`, `is_disabled`, `disabled_reason?: 'manual' \| 'vendor_cascaded'` |
+| `ModelUsagePosture` | interface | `posture_state: 'within_limit' \| 'approaching_limit' \| 'breached'`, `current_units`, `period` |
+
+### Frontend i18n (`frontend/src/i18n/locales/en.json`)
+
+| Symbol | Kind | Description |
+|--------|------|-------------|
+| `runtime.runtimeControlTitle` | i18n key | Title for the runtime control dashboard page |
+| `runtime.statusActive` | i18n key | "Active" runtime status label |
+| `runtime.statusSleep` | i18n key | "Sleep" runtime status label (synthetic, no live agent job) |
+| `runtime.statusClosed` | i18n key | "Closed" runtime status label |
+| `runtime.statusArchived` | i18n key | "Archived" runtime status label |
+| `runtime.statusError` | i18n key | "Error" runtime status label |
+| `runtime.runtimeEndSession` | i18n key | "End session" button label (sleep conversations) |
+| `runtime.runtimeTopologyConversationLabel` | i18n key | Prefix label for conversation nodes in topology |
+| `runtime.runtimeTopologyFilteredEmpty` | i18n key | Empty state message when all nodes are filtered out |
+| `agents.statusCreated` | i18n key | "Created" instance status label |
+| `agents.statusTerminated` | i18n key | "Terminated" agent job status label (2 places: dialog badge, page warning) |
+
+### Backend Services (`backend/app/services/control_center/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `RuntimeTopologyController` | service | Active runtime topology projection; merges `AgentJob` (live), `ConversationSession` (synthetic active/sleep), and `AgentInstance` (created/active/closed/error) sources | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `TerminationOrchestrator` | service | Permission-gated node terminate and cascade orchestration; routes terminate requests from CC through CH to AR; records `TerminationRequest` and `TerminationCascadeOutcome` rows | `backend/app/services/control_center/termination_orchestrator.py` |
+| `RecursionValidationService` | service | Recursion/dead-loop risk validation at create, update, and run entry points; persists `SopRecursionValidationCheck` and `SopRecursionValidationFinding` | `backend/app/services/control_center/recursion_validation_service.py` |
+| `ModelAvailabilityService` | service | Vendor and per-model enabled state; exposes the pre-execution availability check; materialises the vendor-cascade transaction | `backend/app/services/control_center/model_availability_service.py` |
+| `ModelUsageGuardrailService` | service | Per-guardrail CRUD and period-rollup aggregation; defaults to `terminate` posture and `k` unit | `backend/app/services/control_center/model_usage_guardrail_service.py` |
+| `AgentRuntimeClient` | class | Outbound client from Control Center to Communication Hub for agent execute and terminate forwarding | `backend/app/services/control_center/agent_runtime_client.py` |
+
+### Backend Communication Hub (`backend/app/communication_hub/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `agent_terminate_internal` | endpoint | CH-internal terminate forwarder; calls AR's `/internal/agent/terminate/{session_id}` with 30s read timeout and 3-attempt retry (delays 0s, 2s, 4s) | `backend/app/communication_hub/api/internal/agent_terminate.py` |
+| `ControlPlaneMiddleware` | middleware | Mounts internal AR paths including terminate prefix; mirrors the shape of the execute path | `backend/app/communication_hub/middleware/control_plane.py` |
+| `_AGENT_TERMINATE_PATH_PREFIX` | constant | Path prefix registered for terminate forwarding | `backend/app/communication_hub/middleware/control_plane.py` |
+
+### Backend Agent Runtime (`backend/app/agent_runtime/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `terminate_agent_session` | endpoint | AR-internal terminate endpoint; cancels in-flight task via task registry; walks delegation graph to cascade children; updates `AgentJob.status` to `terminated` | `backend/app/agent_runtime/api/terminate.py` |
+| `ControlCenterCertificateMiddleware` | middleware | Accepts only `service:communication-hub` service certificates on `/internal/agent/*` paths (including terminate); `_EXPECTED_SERVICE_NAME = "communication-hub"` | `backend/app/agent_runtime/middleware.py` |
+| `AgentRuntimeExecutor._preflight_availability` | method | Pre-execution availability check; calls Control Center preflight endpoint for the resolved model; on deny, produces a policy-block outcome with `termination_category` of `model_disabled` or `vendor_disabled` | `backend/app/services/agents/runtime_executor.py` |
+| `add_done_callback` (session task registry) | mechanism | Cleans up session entries in the in-flight task registry on completion | `backend/app/agent_runtime/session_task_registry.py` |
+
+### Backend Database Models (`backend/app/db/models/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ModelGuardrailConfiguration` | model | Per-period model usage limit; one row per `(model_id, model_name, period)`; `period`, `limit_value`, `unit`, `enforcement_posture`, `is_active` | `backend/app/db/models/model_guardrail_configuration.py` |
+| `ModelUsagePosture` | model | Dashboard-facing model usage posture snapshot per configured period; `posture_state: within_limit \| approaching_limit \| breached` | `backend/app/db/models/model_usage_posture.py` |
+| `ModelAvailability` | model | Per-model enabled state; `is_disabled`, `disabled_reason: manual \| vendor_cascaded`; unique on `(vendor_model_config_id, model_name)` | `backend/app/db/models/model_availability.py` |
+| `ModelGuardrailEvaluation` | model | Per-run model guardrail policy evaluation outcomes | `backend/app/db/models/model_guardrail_evaluation.py` |
+| `GuardrailThresholdEvent` | model | Observe-only threshold alerts; `event_category: model_disabled \| vendor_disabled \| guardrail_breached` | `backend/app/db/models/guardrail_threshold_event.py` |
+| `AgentRunRelationship` | model | Parent-child runtime relationship for active topology mapping | `backend/app/db/models/agent_run_relationship.py` |
+| `TerminationRequest` | model | Termination request record with permission outcome and request lifecycle | `backend/app/db/models/termination_request.py` |
+| `TerminationCascadeOutcome` | model | Per-node cascade result for terminate orchestration | `backend/app/db/models/termination_cascade_outcome.py` |
+| `SopRecursionValidationCheck` | model | Validation-check audit model for create/update/run contexts | `backend/app/db/models/sop_recursion_validation_check.py` |
+| `SopRecursionValidationFinding` | model | Detailed recursion-risk finding model linked to validation checks | `backend/app/db/models/sop_recursion_validation_finding.py` |
+| `AgentInstance` | model | Agent instance dashboard record; `instance_id`, `status: created \| active \| closed \| error` | `backend/app/db/models/agent_instance.py` |
+| `AgentJobStatus.terminated` | enum value | New `terminated` value added to `agent_job_status_enum`; distinct from `failed` | `backend/app/db/models/agents.py` |
+| `ExecutionEventCategory.guardrail_breached` | enum value | New `guardrail_breached` event category | `backend/app/db/models/session_logs.py` |
+| `ExecutionEventCategory.model_disabled` | enum value | New `model_disabled` event category for vendor-cascaded or manual model blocks | `backend/app/db/models/session_logs.py` |
+| `ExecutionEventCategory.vendor_disabled` | enum value | New `vendor_disabled` event category for vendor-level blocks | `backend/app/db/models/session_logs.py` |
+| `AgentInstanceStatus` | enum | `created` / `active` / `closed` / `error` for the agent instance dashboard | `backend/app/db/models/agent_instance.py` |
+| `ModelGuardrailPeriod` | enum | `hour` / `day` / `week` / `month` for per-period guardrail rows | `backend/app/db/models/model_guardrail_configuration.py` |
+| `ModelGuardrailEnforcementPosture` | enum | `terminate` (default) / `observe_only` for per-guardrail posture | `backend/app/db/models/model_guardrail_configuration.py` |
+| `ModelUsageUnit` | enum | `k` (thousand tokens, default) / `tokens` (raw tokens) for per-period limit value | `backend/app/db/models/model_guardrail_configuration.py` |
+| `ModelAvailabilityDisabledReason` | enum | `manual` (operator-driven) / `vendor_cascaded` (vendor `is_disabled` cascade) | `backend/app/db/models/model_availability.py` |
+
+### Backend API Endpoints (`backend/app/api/v1/agents.py`)
+
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `get_runtime_topology` | endpoint | Returns active runtime topology projection (nodes, edges, depth, statuses) for the dashboard |
+| `request_runtime_termination` | endpoint | Performs permission-gated terminate requests with explicit denial reasons |
+| `get_runtime_termination_outcomes` | endpoint | Returns per-node cascade outcomes for a termination request |
+| `list_runtime_policy_events` | endpoint | Returns structured policy/guardrail/termination log events for runtime correlation |
+| `get_model_usage_posture` | endpoint | Returns current posture rollups (within_limit, approaching_limit, breached) for configured per-period guardrails |
+| `list_model_usage_limits` | endpoint | Lists configured per-guardrail rows (one period per item); per-guardrail shape |
+| `create_model_usage_limit` | endpoint | Creates a single per-period guardrail row; returns 409 on `(model_id, model_name, period)` conflict |
+| `get_model_usage_limit` | endpoint | Fetches a single per-period guardrail configuration |
+| `update_model_usage_limit` | endpoint | Updates a single per-period guardrail row using the per-guardrail shape |
+| `delete_model_usage_limit` | endpoint | Deletes a single per-period guardrail configuration |
+| `set_vendor_disabled` | endpoint | Toggles vendor-level `is_disabled` on `ModelConfig` and triggers the cascade transaction |
+| `set_model_availability` | endpoint | Toggles a single `(vendor, model_name)` `ModelAvailability` row; sets `disabled_reason = manual` |
+| `list_model_availability` | endpoint | Returns the full vendor → model → enabled state for the dashboard hierarchy, including the cascade source indicator |
+| `preflight_availability` | endpoint | Agent Runtime pre-execution availability check; accepts `model_id` + `model_name`, returns `{ allowed, reason?, disabled_reason? }` |
+
+### Tests
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_agent_runtime_controls_api` | test | Backend API tests for recursion validation 422 on create/update and instance termination 204/404 | `backend/tests/api/v1/test_agent_runtime_controls_api.py` |
+| `test_model_usage_guardrails_api` | test | Backend API tests for per-guardrail CRUD endpoints and posture refresh query; per-period shape, `unit` round-trip, `(model_id, model_name, period)` conflict 409 | `backend/tests/api/v1/test_model_usage_guardrails_api.py` |
+| `test_model_availability_api` | test | Backend API tests for the four new availability endpoints (vendor toggle, per-model toggle, list, preflight); cascade semantics and deny paths | `backend/tests/api/v1/test_model_availability_api.py` |
+| `test_runtime_topology_controller` | test | 19 unit tests for topology controller: 14 conversation + 5 instance scenarios | `backend/tests/unit/services/test_runtime_topology_controller.py` |
+| `test_termination_orchestrator` | test | 3 orchestrator tests updated for `terminated` handling | `backend/tests/services/test_termination_orchestrator.py` |
+| `test_agent_runtime_client_terminate` | test | 4 CH-routed terminate tests | `backend/tests/services/test_agent_runtime_client_terminate.py` |
+| `test_session_status_update_guards` | test | 2 new `terminated` late-update guard tests | `backend/tests/api/v1/internal/test_session_status_update_guards.py` |
+| `test_model_availability_service` | test | 5 unit tests for guardrail breach enforcement | `backend/tests/services/test_model_availability_service.py` |
+| `RuntimeControlDashboardPage.test` | frontend test | 4 tests for the dedicated `/agents/runtime-control` page — route registration, live SVG topology rendering, rect/line counts, sleep conversation gets "End session" instead of "Terminate" | `frontend/src/__tests__/RuntimeControlDashboardPage.test.tsx` |
+| `RuntimeTopologyPanel.test` | frontend test | 2 tests for topology grouping/selection and permission-gated terminate control state | `frontend/src/__tests__/RuntimeTopologyPanel.test.tsx` |
+| `LogPresenter.test` | frontend test | 116 tests verifying `terminated` mapping to a distinct `terminated` outcome (not `failed`) | `frontend/src/__tests__/LogPresenter.test.ts` |
+| `LogSummaryPanel.test` | frontend test | 17 tests verifying amber `BlockIcon` Chip for `terminated` distinct from red `ErrorIcon` for `failed` | `frontend/src/__tests__/LogSummaryPanel.test.tsx` |
+| `runtime-control-dashboard.spec` | E2E test | Observe-only policy visibility, topology/terminate flow, recursion contract, real-backend runtime-control checks, vendor/model availability hierarchy | `e2e/tests/runtime-control-dashboard.spec.ts` |

@@ -4,6 +4,8 @@
 
 The Agent Instance Dashboard is a Web UI component that gives platform admins and business users visibility into all running and historical agent executions. Each row in the dashboard corresponds to one `AgentSession` record. Users can filter by session status and time range, then drill into an individual instance to see its structured input, output, and full conversation turn history.
 
+The dashboard now also hosts the **Runtime Control Dashboard** — a read-only operator view that surfaces currently running agents, their delegation topology, configured model-usage guardrails, current usage posture, and operator-controlled termination actions.
+
 ## Component Architecture
 
 ```mermaid
@@ -12,6 +14,7 @@ flowchart LR
 
     subgraph WebUI[Web UI]
         AID[Agent Instance Dashboard]
+        RCD[Runtime Control Dashboard]
         subgraph Detail[Instance Detail View]
             LogViewer[Log Viewer]
         end
@@ -19,15 +22,23 @@ flowchart LR
 
     subgraph API[Platform API]
         SQ[Session Query Endpoints]
+        RT[Runtime Topology Endpoints]
+        TR[Terminate Endpoints]
+        AR_RT[Agent Runtime Topology Source]
+        AR_TR[Agent Runtime Terminate Source]
     end
 
     subgraph Data[Data Store]
         AS[AgentSession]
         Conv[Conversation History]
         EL[Execution Logs]
+        MG[Model Guardrail Configuration]
+        MU[Model Usage Posture]
+        AI[AgentInstance]
     end
 
     User --> AID
+    User --> RCD
     AID -->|filter by status and time| SQ
     AID --> Detail
     Detail -->|fetch input, output, steps| SQ
@@ -35,6 +46,15 @@ flowchart LR
     SQ --> Conv
     SQ --> EL
     EL -->|raw log| LogViewer
+
+    RCD -->|topology query| RT
+    RCD -->|terminate selected node| TR
+    RT --> AS
+    RT --> AI
+    RT --> Conv
+    RT --> MG
+    RT --> MU
+    TR -->|forward through Communication Hub| AR_TR
 ```
 
 ## Dashboard Features
@@ -42,7 +62,7 @@ flowchart LR
 ### Session List
 
 - Lists all agent instances (one row per `AgentSession`)
-- **Status filter:** `running` / `completed` / `failed` / `cancelled`
+- **Status filter:** `running` / `completed` / `failed` / `cancelled` / `terminated`
 - **Time-range picker:** scopes results to a selected window
 - Columns: agent type, status, start time, duration, session title (for conversation-type agents)
 - **Session column:** For conversation-type agent executions, displays the linked conversation session title; empty for non-conversational agents
@@ -59,6 +79,45 @@ For conversation-type agents, the Agent Type detail dialog includes a dedicated 
 
 The Sessions tab is visible **only** for agent types with `input_type = 'conversation'`. All other agent types (single-shot, workflow, etc.) do not display this tab.
 
+### Runtime Control Dashboard
+
+The Runtime Control Dashboard is a read-only operator view of currently running agents and their delegation topology. It surfaces three node kinds — agent runs (`AgentJob`), conversation sessions (`ConversationSession`), and agent instances (`AgentInstance`) — with status filtering through a tickable legend.
+
+```mermaid
+flowchart LR
+    Operator[Authorized Operator]
+    subgraph Dashboard[Runtime Control Dashboard]
+        Legend[Filter Legend]
+        Topology[Topology Diagram]
+        Actions[Node Actions: Terminate or End Session]
+    end
+    subgraph Sources[Sources]
+        AJ[AgentJob status]
+        CS[ConversationSession status]
+        AI[AgentInstance status]
+        MG[Model Guardrail Configuration]
+        MU[Model Usage Posture]
+    end
+    Operator --> Legend
+    Legend --> Topology
+    Topology --> Actions
+    Topology --> AJ
+    Topology --> CS
+    Topology --> AI
+    Topology --> MG
+    Topology --> MU
+    Actions -->|terminate live agent| AR[Agent Runtime via CH]
+    Actions -->|end sleep conversation| CS
+```
+
+Key behaviors:
+
+- **Topology view** shows active agents, their delegated children, conversation sessions, and agent instances
+- **Filter legend** lets operators toggle visibility of any combination of status + node kind via tickable checkboxes
+- **Status color** is rendered as a dot in the top-right corner of each box, with shape varying by node kind
+- **Node actions** — for live agents, **Terminate**; for sleep conversations (no live agent), **End session** (closes the conversation session)
+- **Cascade termination** — terminating a parent execution stops all active delegated child executions
+
 ### Instance Detail View
 
 Selecting a session opens the Instance Detail View, which surfaces:
@@ -73,3 +132,12 @@ Selecting a session opens the Instance Detail View, which surfaces:
 ## Backend Query Endpoints
 
 The Platform API exposes session query endpoints that accept `status` and `time_range` parameters. No additional persistence schema is required beyond what the Agent Session Queue already tracks — the `AgentSession` record, conversation history table, and Execution Log Store are queried directly. See [Agent Runtime](agent-runtime/architecture.md) for session state management.
+
+The Runtime Control Dashboard reads the **runtime topology** from a Control Center endpoint that merges three sources — `AgentJob` (live agent runs), `ConversationSession` (conversation sessions with synthetic active/sleep status derived from backing job state), and `AgentInstance` (agent instance dashboard entries). Operator-initiated termination is routed through the Communication Hub to Agent Runtime to preserve service segregation and certificate-based authentication boundaries.
+
+## Related Modules
+- [Runtime Control Dashboard](runtime-control-dashboard.md) — operator surface for live execution state and termination
+- [Execution Logs](execution-logs.md) — execution log view, status colors, and terminated/failed distinction
+- [Model Config](model-config.md) — vendor → model → guardrail hierarchy
+- [Agent Runtime](../services/agent-runtime.md) — agent execution and termination
+- [Communication Hub](../services/communication-hub.md) — control-plane routing for termination

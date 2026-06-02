@@ -1,5 +1,11 @@
 # Agent Runtime Architecture
 
+## Termination Governance
+
+Agent Runtime exposes a control-plane termination endpoint that allows authorized callers to cancel an in-flight agent job. The endpoint is only reachable through the Communication Hub, which authenticates the caller with a service certificate. Agent Runtime's `ControlCenterCertificateMiddleware` rejects direct calls from Control Center — this preserves service segregation. The certificate middleware accepts only `service:communication-hub` service certificates on `/internal/agent/terminate/*` paths.
+
+When a parent agent job is terminated, Agent Runtime cancels the in-flight task and walks the delegation graph to cancel all active delegated child jobs. The `AgentJob.status` is updated to `terminated`, a distinct state from `failed` (genuine agent or runtime error). Late-arriving tool call completions or status updates from the underlying LangChain deep-agent framework are rejected by terminal-state guards in the internal session-data endpoint.
+
 ```mermaid
 flowchart LR
     CH[Communication Hub]
@@ -16,6 +22,8 @@ flowchart LR
     TC[Tool and Delegation Calls]
     EVT[Status and execution events]
     ST[Workflow status and stop reason]
+    TR[Terminate Endpoint]
+    CB[Cascade Terminate Children]
 
     CH --> ORCH
     ORCH --> PV
@@ -34,6 +42,10 @@ flowchart LR
     RM -->|Guardrail exceeded| FS
     FS --> ST
     ST --> CH
+    CH -->|terminate request| TR
+    TR --> ORCH
+    ORCH --> CB
+    CB --> CH
 ```
 
 ```mermaid

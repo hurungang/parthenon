@@ -120,6 +120,12 @@
 - Real Backend Integration - Service Segregation Deny Paths > internal system-tools endpoint is wired and rejects missing service certificate
 - Real Backend Integration - Service Segregation Deny Paths > revocation contract endpoint uses revoked/{serial_number} path
 - Browser Boundary - Frontend Uses API/WS Boundaries Only > dashboard traffic does not attempt direct database connections
+- Runtime Control Dashboard > shows running sessions and opens execution details dialog
+- Runtime Control Dashboard > surfaces observe-only threshold policy events in execution logs
+- Runtime Control Dashboard > shows topology selection and opens termination dialog for selected node
+- Runtime Control Dashboard > returns recursion_validation_failed contract for run preflight dead-loop checks
+- Runtime Control Dashboard > renders vendor → model → guardrail hierarchy in the runtime control panel
+- Runtime Control Dashboard > vendor disable cascades the cascade-source badge to all child models
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -242,3 +248,9 @@
 | 107 | Delegation Timeout/Failure Terminal State | Conversational delegated execution resolves waiting to a clear timeout/failure terminal state in the same chat surface | agent-delegation-visibility | conversation-delegation-visibility.spec.ts |
 | 108 | Live Non-Conversation Progress Stream | Running non-conversation session appends execution progress from live stream endpoint without manual refresh | agent-delegation-visibility | agent-live-logs-stream.spec.ts |
 | 109 | Working Steps Collapsed-by-Default Readability | Agent log viewer starts with Working Steps collapsed so users can expand details on demand | agent-delegation-visibility | agent-logs.spec.ts |
+| 110 | Runtime visibility and execution drill-down | Operator opens Agent Executions, sees active sessions, and drills into a run from the dashboard detail flow | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
+| 111 | Guardrail policy visibility | Operator reviews execution logs and sees an observe-only guardrail threshold event surfaced as a policy signal rather than a functional failure | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
+| 112 | Runtime topology and termination control | Operator selects a running node from topology, opens the terminate dialog, submits a reason, and triggers a governed termination request | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
+| 113 | Recursion and dead-loop prevention | Operator attempts to start a risky run and sees the request blocked before execution with a recursion validation failure contract | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
+| 114 | Model guardrail hierarchy (vendor → model → guardrail) | Operator opens the runtime control panel and sees a vendor row with its enabled models and per-period guardrails, replacing the previous flat list | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
+| 115 | Vendor disable cascade | Operator disables a vendor and immediately sees the cascade-source badge on every model underneath; pre-execution availability check returns `vendor_disabled` for those models | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |

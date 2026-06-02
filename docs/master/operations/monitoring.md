@@ -56,6 +56,14 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Agent Execution Guardrails** | `guardrail_conversational_token_threshold_reached_total` (labels: `provider`, `model`, `agent_type`) | Tracks conversational threshold events where continuation remains allowed |
 | **Agent Execution Guardrails** | `guardrail_token_fallback_applied_total` (labels: `provider`, `fallback_mode`, `agent_type`) | Detects fallback-mode activation when strict token enforcement is unsupported |
 | **Agent Execution Guardrails** | `session_terminal_state_total` (labels: `state`, `stop_category`) | Validates guardrail terminal states are classified separately from functional failures |
+| **Model-Usage Guardrails** | `model_guardrail_breach_total` (labels: `vendor`, `model`, `period`, `enforcement_posture`) | Detects guardrail breach events; `terminate` posture should map to execution block, `observe_only` should map to alert |
+| **Model-Usage Guardrails** | `model_disabled_block_total` (labels: `vendor`, `model`, `disabled_reason`) | Detects blocks from disabled models or vendor-cascaded disables |
+| **Model-Usage Guardrails** | `model_usage_posture_transitions_total` (labels: `vendor`, `model`, `period`, `from_state`, `to_state`) | Tracks posture state changes (`within_limit` → `approaching_limit` → `breached`) |
+| **Runtime Control** | `runtime_topology_nodes_total` (labels: `kind`, `status`) | Active nodes in the runtime topology by kind (`agent` / `conversation` / `instance`) and status |
+| **Runtime Control** | `runtime_topology_polling_requests_total` (labels: `endpoint`, `status`) | Operator topology polling rate and HTTP outcomes |
+| **Runtime Control** | `runtime_termination_requests_total` (labels: `outcome`, `cascade_complete`) | Operator-initiated termination requests and cascade completion rate |
+| **Runtime Control** | `runtime_terminated_sessions_total` (labels: `cascade_depth`, `node_kind`) | Sessions transitioning to `terminated` status; distinct from `failed` |
+| **Recursion Validation** | `recursion_validation_total` (labels: `trigger`, `result`) | Recursion/dead-loop validation outcomes at create, update, and run entry points |
 | **Agent Permission Manager** | `agent.permission.cache_hits_total` | Permission resolution requests served from LRU cache |
 | **Agent Permission Manager** | `agent.permission.cache_misses_total` | Permission resolution requests that required a full DB query |
 | **Agent Permission Manager** | `agent.permission.cache_hit_rate` (derived) | `cache_hits / (cache_hits + cache_misses)`; below 80% indicates frequent role mutations or undersized cache |
@@ -217,6 +225,19 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `ConversationalTokenHardStopDetected` | conversational terminal sessions classified with token-budget stop reason for 2 min | Critical | Treat as policy regression; validate execution-mode branch and continuation behavior |
 | `TokenFallbackOveruse` | `guardrail_token_fallback_applied_total` above baseline for 15 min | Warning | Review provider capability mapping and fallback policy usage |
 | `StopReasonMissing` | terminal sessions without stop reason classification for 2 min | Critical | Validate stop metadata forwarding and persistence fields end-to-end |
+
+### Model-Usage Guardrail Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `GuardrailBreachSurge` | `rate(model_guardrail_breach_total{enforcement_posture="terminate"}) > baseline` for 5 min | Critical | Expect execution blocks; check operator posture intent and model usage |
+| `ObserveOnlyGuardrailAlertSurge` | `rate(model_guardrail_breach_total{enforcement_posture="observe_only"}) > baseline` for 5 min | Warning | Review observe-only threshold alerts in execution logs |
+| `ModelDisabledSurge` | `rate(model_disabled_block_total{disabled_reason="model_disabled"}) > baseline` for 5 min | Warning | Verify operator-driven disables; expect execution blocks |
+| `VendorDisabledSurge` | `rate(model_disabled_block_total{disabled_reason="vendor_cascaded"}) > baseline` for 5 min | Warning | Verify vendor disable; check cascade transaction completed |
+| `ApproachingLimitSurge` | `rate(model_usage_posture_transitions_total{to_state="approaching_limit"}) > baseline` for 10 min | Warning | Notify FinOps / Platform Governance Lead before breach |
+| `RuntimeTopologyPollingFailure` | `rate(runtime_topology_polling_requests_total{status=~"5.."}) > 0` for 2 min | Warning | Verify topology endpoint health; check operator permission |
+| `RuntimeTerminateCascadeIncomplete` | `rate(runtime_termination_requests_total{outcome="cascade_incomplete"}) > 0` for 2 min | Critical | Follow [runbooks/agent-execution-guardrails.md](runbooks/agent-execution-guardrails.md) operator termination triage |
+| `RecursionValidationFailureSurge` | `rate(recursion_validation_total{result="fail"}) > baseline` for 5 min | Warning | Follow recursion triage in [runbooks/agent-execution-guardrails.md](runbooks/agent-execution-guardrails.md) section 1 |
 
 ### Notification Service Alerts
 
