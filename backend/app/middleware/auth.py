@@ -112,6 +112,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     )
                     request.state.platform_user_id = platform_user.id
 
+                    # Mirror the user into the Identity table so governance
+                    # flows (e.g. request_termination) can resolve the
+                    # requesting actor by OIDC subject. Both rows are upserted
+                    # in the same transaction; failures here are non-fatal
+                    # because the request is already authenticated.
+                    await user_cache.upsert_identity(
+                        session,
+                        sub=sub,
+                        display_name=display_name,
+                        email=email or None,
+                    )
+
                     group_claims: list[str] = claims.get("groups", [])
                     if group_claims:
                         mapper = GroupClaimMapper()

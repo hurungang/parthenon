@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy import inspect as sa_inspect
 
 from app.db.models.agents import (
@@ -21,6 +21,20 @@ from app.db.models.agents import (
     SessionStopCategory,
     SessionStopReason,
     ModelProvider,
+)
+from app.db.models.model_guardrail_configuration import (
+    ModelGuardrailEnforcementPosture,
+    ModelGuardrailPeriod,
+    ModelUsageUnit,
+)
+from app.db.models.model_availability import ModelAvailabilityDisabledReason
+from app.db.models.model_usage_posture import ModelUsagePosturePeriod, ModelUsagePostureState
+from app.db.models.session_logs import ExecutionActorType, ExecutionEventCategory
+from app.db.models.termination_cascade_outcome import TerminationOutcome
+from app.db.models.termination_request import (
+    TerminationPermissionEvaluationOutcome,
+    TerminationRequestStatus,
+    TerminationScope,
 )
 
 _MIN_MAX_ITERATIONS = 1
@@ -447,6 +461,7 @@ class ModelConfigRead(BaseModel):
     api_base_url: str | None
     has_credentials: bool
     enabled_models: list[str]
+    is_disabled: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -461,11 +476,294 @@ class ModelConfigRead(BaseModel):
                 "api_base_url": obj.api_base_url,
                 "has_credentials": bool(obj.encrypted_api_key),
                 "enabled_models": obj.enabled_models or [],
+                "is_disabled": bool(getattr(obj, "is_disabled", False)),
                 "created_at": obj.created_at,
                 "updated_at": obj.updated_at,
             }
             return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
+
+
+# ── Model Usage Guardrail Schemas ───────────────────────────────────────────
+#
+# Phase 3.7 rework: the previous flat per-model row with four period-limit
+# columns is replaced by ONE row per (model, period). The body shape below
+# creates exactly one guardrail per call. The frontend passes the model
+# NAME (the canonical provider-scoped identifier, e.g. "gpt-4.1-nano") as
+# ``model_id``; ``model_config_id`` is the resolved vendor UUID so the API
+# contract can carry both shapes for backwards compatibility with the
+# existing `useAvailableModels` hook. The service resolves the name to a
+# ModelConfig in-Python (see ``ModelUsageGuardrailService``).
+
+
+class ModelUsageGuardrailLimitCreate(BaseModel):
+    """Create a single per-period guardrail row.
+
+    The service resolves ``model_id`` (the provider-scoped model name) to a
+    ModelConfig UUID and stores the FK + the human-friendly name. Callers
+    MAY also pass ``model_config_id`` directly if they already know the
+    vendor UUID.
+    """
+
+    model_id: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+    model_name: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+    model_config_id: uuid.UUID | None = None
+    period: ModelGuardrailPeriod
+    limit_value: int = Field(ge=0)
+    unit: ModelUsageUnit = ModelUsageUnit.k
+    enforcement_posture: ModelGuardrailEnforcementPosture = (
+        ModelGuardrailEnforcementPosture.terminate
+    )
+    is_active: bool = True
+    details: dict[str, Any] | None = None
+
+
+class ModelUsageGuardrailLimitUpdate(BaseModel):
+    """Partial update of a single per-period guardrail row.
+
+    ``model_id`` and ``period`` are immutable (use delete + create to change
+    them); everything else can be updated independently.
+    """
+
+    limit_value: int | None = Field(default=None, ge=0)
+    unit: ModelUsageUnit | None = None
+    enforcement_posture: ModelGuardrailEnforcementPosture | None = None
+    is_active: bool | None = None
+    details: dict[str, Any] | None = None
+
+
+class ModelUsageGuardrailLimitRead(BaseModel):
+    """Read shape for a single per-period guardrail row."""
+
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    model_id: uuid.UUID
+    model_name: str
+    period: ModelGuardrailPeriod
+    limit_value: int
+    unit: ModelUsageUnit
+    enforcement_posture: ModelGuardrailEnforcementPosture
+    is_active: bool
+    details: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+# ── Model Availability Schemas ──────────────────────────────────────────────
+
+
+class ModelAvailabilityCreate(BaseModel):
+    """Create a per-model availability row under a vendor."""
+
+    model_name: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+    vendor_model_config_id: uuid.UUID
+    is_disabled: bool = False
+    disabled_reason: ModelAvailabilityDisabledReason = (
+        ModelAvailabilityDisabledReason.manual
+    )
+
+
+class ModelAvailabilityRead(BaseModel):
+    """Read shape for a per-model availability row."""
+
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    model_name: str
+    vendor_model_config_id: uuid.UUID
+    is_disabled: bool
+    disabled_reason: ModelAvailabilityDisabledReason
+    created_at: datetime
+    updated_at: datetime
+
+
+class ModelAvailabilityUpdate(BaseModel):
+    """Update payload for a per-model availability row.
+
+    Operators can also use the ``reason`` field to record why a vendor or
+    model was disabled, surfacing in the dashboard and execution logs.
+    """
+
+    is_disabled: bool
+    reason: Annotated[str | None, StringConstraints(max_length=500)] = None
+
+
+class VendorDisabledUpdate(BaseModel):
+    """Update payload for the vendor-level ``ModelConfig.is_disabled`` toggle."""
+
+    is_disabled: bool
+    reason: Annotated[str | None, StringConstraints(max_length=500)] = None
+
+
+class PreflightAvailabilityRequest(BaseModel):
+    """Request shape for the Agent Runtime pre-execution availability check.
+
+    ``model_id`` is the provider-scoped model name (e.g. "gpt-4o"); the
+    service resolves it to a vendor ModelConfig to evaluate the cascade
+    state. ``vendor_model_config_id`` is optional — when omitted, the
+    service considers all vendors that offer the model.
+    """
+
+    model_id: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+    vendor_model_config_id: uuid.UUID | None = None
+
+
+class PreflightAvailabilityResponse(BaseModel):
+    """Response shape for the pre-execution availability check."""
+
+    allowed: bool
+    reason: str | None = None
+    disabled_reason: ModelAvailabilityDisabledReason | None = None
+    blocked_by: Annotated[
+        str | None,
+        StringConstraints(max_length=64),
+    ] = None  # "model_disabled" | "vendor_disabled" | "model_not_found"
+
+
+class ModelAvailabilityGuardrailSummary(BaseModel):
+    """One guardrail row summary as embedded in the hierarchy view."""
+
+    id: uuid.UUID
+    period: ModelGuardrailPeriod
+    limit_value: int
+    unit: ModelUsageUnit
+    enforcement_posture: ModelGuardrailEnforcementPosture
+    is_active: bool
+    usage_value: int | None = None
+    posture_state: ModelUsagePostureState | None = None
+
+
+class ModelAvailabilityModelRead(BaseModel):
+    """One model row in the vendor → model hierarchy."""
+
+    model_name: str
+    # Effective disable state for this (vendor, model_name) pair —
+    # true when the per-model row is disabled OR the vendor is disabled
+    # (vendor cascade). Frontend-facing field name is ``is_disabled``
+    # so it can be treated as a simple on/off flag in the UI.
+    is_disabled: bool
+    disabled_reason: ModelAvailabilityDisabledReason
+    guardrails: list[ModelAvailabilityGuardrailSummary] = []
+
+
+class ModelAvailabilityVendorRead(BaseModel):
+    """One vendor row in the vendor → model hierarchy.
+
+    Field names are aligned with the frontend
+    ``ModelAvailabilityHierarchy = VendorAvailabilityNode[]`` type so
+    the dashboard's ``hierarchy.map(vendor => ...)`` and switch handlers
+    work without ad-hoc renames.
+    """
+
+    vendor_config_id: uuid.UUID
+    vendor_display_name: str
+    is_disabled: bool
+    models: list[ModelAvailabilityModelRead] = []
+
+
+class ModelUsagePostureRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    model_guardrail_configuration_id: uuid.UUID
+    model_id: uuid.UUID
+    posture_period: ModelUsagePosturePeriod
+    usage_value: int
+    limit_value: int
+    posture_state: ModelUsagePostureState
+    observed_at: datetime
+    details: dict[str, Any]
+
+
+# ── Runtime Control Schemas ────────────────────────────────────────────────
+
+
+class RuntimeTopologyNodeRead(BaseModel):
+    session_id: uuid.UUID
+    agent_type_id: uuid.UUID
+    agent_type_name: str | None = None
+    # Phase 3.13/3.16: ``status`` is a free-form string.  For
+    # ``kind="agent"`` nodes it carries the ``AgentJobStatus``
+    # value (queued/running/completed/failed/terminated).  For
+    # ``kind="instance"`` nodes it carries the
+    # ``AgentInstanceStatus`` value (created/active/closed/error).
+    # For ``kind="conversation"`` nodes it carries the effective
+    # *runtime* status — either the literal ``ConversationStatus``
+    # value (closed/archived/error) or one of the synthetic runtime
+    # values:
+    #   - "active" — a backing AgentJob is in {queued, running}
+    #   - "sleep"  — the session is open but no agent is currently
+    #               driving it (e.g. user opened the chat but hasn't
+    #               sent a message yet, or the previous turn's agent
+    #               has finished and a new one hasn't started)
+    # Frontend renders it via the appropriate i18n key based on
+    # ``kind``.
+    status: str
+    depth_from_root: int
+    parent_session_id: uuid.UUID | None = None
+    started_at: datetime | None = None
+    created_at: datetime
+    termination_category: str | None = None
+    # Phase 3.13/3.16: distinguishes agent runs ("agent"),
+    # conversation sessions ("conversation"), and agent instances
+    # ("instance").  Defaults to "agent" for backwards
+    # compatibility.
+    kind: str = "agent"
+    title: str | None = None
+
+
+class RuntimeTopologyEdgeRead(BaseModel):
+    parent_session_id: uuid.UUID
+    child_session_id: uuid.UUID
+    depth_from_root: int
+
+
+class RuntimeTopologyRead(BaseModel):
+    nodes: list[RuntimeTopologyNodeRead]
+    edges: list[RuntimeTopologyEdgeRead]
+    root_session_ids: list[uuid.UUID]
+
+
+class RuntimeTerminalJobPurgeRead(BaseModel):
+    """Result of purging completed/failed agent jobs to release resources."""
+
+    purged_count: int
+    remaining_terminal_count: int
+    cutoff: datetime
+    statuses: list[AgentJobStatus]
+
+
+class RuntimeTerminateRequest(BaseModel):
+    target_session_id: uuid.UUID
+    termination_scope: TerminationScope = TerminationScope.cascade_subtree
+    operator_reason: Annotated[str | None, StringConstraints(max_length=1000)] = None
+
+
+class TerminationRequestRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    requested_by_user_id: uuid.UUID
+    target_agent_job_id: uuid.UUID
+    termination_scope: TerminationScope
+    permission_evaluation_outcome: TerminationPermissionEvaluationOutcome
+    permission_evaluation_reason: str | None = None
+    request_status: TerminationRequestStatus
+    requested_at: datetime
+    completed_at: datetime | None = None
+
+
+class TerminationCascadeOutcomeRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    termination_request_id: uuid.UUID
+    affected_agent_job_id: uuid.UUID
+    cascade_level: int
+    termination_outcome: TerminationOutcome
+    outcome_reason: str | None = None
+    processed_at: datetime
 
 
 # ── Agent Type Schemas ─────────────────────────────────────────────────────────────────────────────────
@@ -654,6 +952,9 @@ class ExecutionLogEntryRead(BaseModel):
     timestamp: datetime
     log_level: str
     event_type: str
+    event_category: ExecutionEventCategory
+    correlation_id: str | None = None
+    actor_type: ExecutionActorType
     message: str
     data: dict[str, Any]
 

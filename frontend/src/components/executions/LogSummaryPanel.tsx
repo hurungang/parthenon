@@ -10,6 +10,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import BlockIcon from '@mui/icons-material/Block'
 import { useTranslation } from 'react-i18next'
 import type { LogSummary } from '../../types'
 
@@ -35,6 +36,18 @@ function ResultBadge({ status }: { status: LogSummary['resultStatus'] }) {
           icon={<ErrorIcon />}
           label={t('agents.sessions.logViewer.summary.statusFailure')}
           color="error"
+          size="small"
+        />
+      )
+    case 'terminated':
+      // Phase 3.12: operator-initiated terminations get a neutral
+      // "warning" badge (amber) — distinct from the red "Failed"
+      // badge which is reserved for genuine agent/runtime errors.
+      return (
+        <Chip
+          icon={<BlockIcon />}
+          label={t('agents.sessions.logViewer.summary.statusTerminated')}
+          color="warning"
           size="small"
         />
       )

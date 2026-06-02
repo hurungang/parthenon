@@ -1,10 +1,10 @@
 ---
-description: Start Parthenon services using parthenon.ps1. Defaults to all services. Supports --infra, --backend, --frontend, --control-center, --agent-runtime, --communication-hub, and --force.
+description: Start Parthenon services using parthenon.ps1. Defaults to all services. Supports --infra, --backend, --frontend, --control-center, --agent-runtime, --communication-hub, --docker, and --force.
 ---
 
 Start the Parthenon application.
 
-**Usage**: `/start-app [--infra] [--backend] [--frontend] [--control-center] [--agent-runtime] [--communication-hub] [--force]`
+**Usage**: `/start-app [--infra] [--backend] [--frontend] [--control-center] [--agent-runtime] [--communication-hub] [--docker] [--force]`
 
 - No flags -> start all services (`infra,control-center,agent-runtime,communication-hub,frontend`)
 - `--infra` -> start infrastructure only (Keycloak, Postgres, Redis, OTEL)
@@ -13,6 +13,7 @@ Start the Parthenon application.
 - `--control-center` -> start Control Center only (port 8000)
 - `--agent-runtime` -> start Agent Runtime only (port 8001)
 - `--communication-hub` -> start Communication Hub only (port 8002)
+- `--docker` -> start dockerized stack services supported by `parthenon.ps1` (equivalent service target in script)
 - `--force` -> pass `-Force` to `parthenon.ps1`
 
 ---
@@ -28,6 +29,7 @@ Service mapping:
 - `--control-center` -> `control-center`
 - `--agent-runtime` -> `agent-runtime`
 - `--communication-hub` -> `communication-hub`
+- `--docker` -> `docker`
 
 If no service flags are provided, use `all`.
 
@@ -38,7 +40,42 @@ If `--backend` is present with other backend-service flags, prefer `backend` (do
 
 ---
 
-## Step 2: Run Stack Command
+## Step 2: Prerequisite Checks
+
+If requested services include `infra`, `backend`, `all`, or `docker`, verify Docker engine availability before starting:
+
+```powershell
+$dockerReady = $false
+try {
+  docker info | Out-Null
+  $dockerReady = $true
+} catch {
+  $dockerReady = $false
+}
+
+if (-not $dockerReady) {
+  Write-Host "Docker engine is not ready. Start Docker Desktop, then retry when `docker info` succeeds."
+  return
+}
+```
+
+If frontend is requested, prevent stale preview confusion:
+- Frontend dev server must be `http://localhost:5173`
+- Port 4173 is Vite preview and should not be treated as frontend-ready for `/start-app`
+
+If `:4173` is listening and `:5173` is not, stop the stale preview process before start:
+
+```powershell
+$previewPid = (netstat -ano | Select-String ":4173 .*LISTEN" | ForEach-Object { ($_ -split '\s+')[-1] } | Select-Object -First 1)
+$devPid = (netstat -ano | Select-String ":5173 .*LISTEN" | ForEach-Object { ($_ -split '\s+')[-1] } | Select-Object -First 1)
+
+if ($previewPid -and -not $devPid) {
+  Stop-Process -Id [int]$previewPid -Force -ErrorAction SilentlyContinue
+  Write-Host "Stopped stale preview process on port 4173 (PID $previewPid)."
+}
+```
+
+## Step 3: Run Stack Command
 
 From the project root, execute the management script:
 
@@ -65,7 +102,7 @@ Then retry once.
 
 ---
 
-## Step 3: Verify Service Health
+## Step 4: Verify Service Health
 
 Always run status after start:
 
@@ -92,11 +129,11 @@ Invoke-WebRequest -Uri "http://localhost:8002/health" -UseBasicParsing -TimeoutS
 Invoke-WebRequest -Uri "http://localhost:5173" -UseBasicParsing -TimeoutSec 5
 ```
 
-If any requested service fails health checks, report startup as incomplete and include the failed endpoint(s).
+If any requested service fails health checks, report startup as incomplete and include the failed endpoint(s). Do not print a success summary until all requested probes pass.
 
 ---
 
-## Step 4: Report Outcome
+## Step 5: Report Outcome
 
 Provide a concise result with:
 

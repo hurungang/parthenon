@@ -295,6 +295,11 @@ function buildSummary(
       resultStatus = 'success'
     } else if (sessionStatus === 'failed') {
       resultStatus = 'failure'
+    } else if (sessionStatus === 'terminated') {
+      // Phase 3.12: operator-initiated terminations are
+      // distinct from "failed" — they show a neutral "Terminated"
+      // badge instead of a red "Failed" badge.
+      resultStatus = 'terminated'
     } else if (sessionStatus === 'running') {
       resultStatus = 'running'
     } else {

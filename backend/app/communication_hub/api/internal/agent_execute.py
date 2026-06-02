@@ -7,6 +7,7 @@ Route: POST /internal/agent/execute
 This enables all agent communication to flow through Communication Hub,
 supporting future agent-to-agent communication patterns.
 """
+import asyncio
 import logging
 import uuid
 from typing import Any
@@ -65,8 +66,6 @@ async def trigger_agent_execution(
     Raises:
         HTTPException: 502 if Agent Runtime is unavailable after retries or rejects request
     """
-    import asyncio
-    
     logger.info(
         "Agent execution trigger: session=%s agent_type=%s",
         body.session_id,
@@ -164,7 +163,20 @@ async def trigger_agent_execution(
                 max_retries,
                 exc.response.text[:200],
             )
-        
+
+        except httpx.TimeoutException as exc:
+            # Catches ReadTimeout, ConnectTimeout, WriteTimeout, PoolTimeout.
+            # Treat as retriable and as a transient availability issue (503)
+            # once retries are exhausted — Agent Runtime is reachable but
+            # slow / unresponsive, which is distinct from a hard rejection (502).
+            last_error = exc
+            logger.warning(
+                "Agent Runtime timeout (attempt %d/%d): %s",
+                attempt + 1,
+                max_retries,
+                exc,
+            )
+
         except httpx.ConnectError as exc:
             last_error = exc
             logger.warning(
@@ -173,7 +185,7 @@ async def trigger_agent_execution(
                 max_retries,
                 exc,
             )
-        
+
         except Exception as exc:
             last_error = exc
             logger.exception(
@@ -181,10 +193,10 @@ async def trigger_agent_execution(
                 attempt + 1,
                 max_retries,
             )
-    
+
     # All retries exhausted
-    if isinstance(last_error, httpx.ConnectError):
-        error_msg = "Agent Runtime unavailable after retries - connection failed"
+    if isinstance(last_error, (httpx.ConnectError, httpx.TimeoutException)):
+        error_msg = "Agent Runtime unavailable after retries - request timed out or connection failed"
         logger.error("%s: session=%s", error_msg, body.session_id)
         raise HTTPException(status_code=503, detail=error_msg)
     else:

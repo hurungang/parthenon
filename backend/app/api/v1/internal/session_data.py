@@ -135,6 +135,8 @@ class LogExecutionEventRequest(BaseModel):
     log_level: str = Field(default="INFO", max_length=20)
     message: str
     data: dict = Field(default_factory=dict)
+    event_category: str = Field(default="functional", max_length=50)
+    actor_type: str = Field(default="system", max_length=20)
 
 
 class LogExecutionEventResponse(BaseModel):
@@ -520,10 +522,18 @@ async def update_session_status(
 
     Agent Runtime calls this endpoint to report execution progress without
     direct database access.
+
+    Phase 3.11: refuses to OVERWRITE a terminal state (completed/failed)
+    with a non-terminal one (running) and refuses to clear an existing
+    ``stop_category``/``stop_reason``/``stop_details`` when the
+    session was previously terminated by the operator.  This is the
+    last line of defence against the agent's late "I'm done!" call
+    racing the operator's "Terminate" request.
     """
     from app.db.models.agents import (
         AgentJob,
         AgentJobStatus,
+        AgentTerminationCategory,
         SessionStopCategory,
         SessionStopReason,
     )
@@ -531,6 +541,56 @@ async def update_session_status(
     job = await db.get(AgentJob, session_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    # Phase 3.12: terminal-state guards.  Once a session is in a
+    # terminal state, the only way OUT is via a NEW termination
+    # request (which the orchestrator handles directly on the DB, not
+    # through this endpoint).  A late "running" or "completed" call
+    # from Agent Runtime after operator termination must be ignored.
+    is_already_terminal = job.status in (
+        AgentJobStatus.completed,
+        AgentJobStatus.failed,
+        AgentJobStatus.terminated,
+    )
+    is_terminated_by_operator = (
+        getattr(job, "termination_category", None)
+        in (
+            AgentTerminationCategory.user_requested,
+            AgentTerminationCategory.cascade_parent_terminated,
+        )
+    )
+    if is_already_terminal and body.status in ("running",):
+        logger.info(
+            "Ignoring late 'running' status update for already-terminal session %s "
+            "(status=%s, termination_category=%s)",
+            session_id,
+            job.status.value,
+            getattr(job, "termination_category", None),
+        )
+        return SessionStatusUpdateResponse(
+            session_id=session_id, status=job.status.value
+        )
+    if is_terminated_by_operator and body.status == "completed":
+        # The agent's late "I finished!" call.  Persist the output
+        # data on the row (so the operator can see what would have
+        # been produced) but DO NOT change the status, do NOT clear
+        # the termination attribution, do NOT clear the stop fields.
+        # The session stays "failed" with the operator's
+        # termination_category attached.
+        logger.info(
+            "Refusing to overwrite operator-terminated session %s with 'completed' "
+            "(recording output_data but keeping status=%s, termination_category=%s)",
+            session_id,
+            job.status.value,
+            getattr(job, "termination_category", None),
+        )
+        if body.output_data is not None:
+            job.output_data = body.output_data
+        await db.flush()
+        await db.commit()
+        return SessionStatusUpdateResponse(
+            session_id=session_id, status=job.status.value
+        )
 
     now = datetime.now(timezone.utc)
     if body.status == "running":
@@ -541,9 +601,15 @@ async def update_session_status(
         job.completed_at = now
         if body.output_data is not None:
             job.output_data = body.output_data
-        job.stop_category = None
-        job.stop_reason = None
-        job.stop_details = None
+        # Only clear stop fields if there is no prior termination
+        # attribution — otherwise we'd be erasing the operator's
+        # intent (the call above already returned early when the
+        # session was terminated by the operator, so this branch
+        # only fires for sessions that reached completion naturally).
+        if not is_terminated_by_operator:
+            job.stop_category = None
+            job.stop_reason = None
+            job.stop_details = None
     elif body.status == "failed":
         job.status = AgentJobStatus.failed
         job.completed_at = now
@@ -884,7 +950,17 @@ async def log_execution_event(
     Allows Agent Runtime to write audit-quality event entries without
     direct database access.
     """
-    from app.db.models.session_logs import ExecutionLogEntry
+    from app.db.models.session_logs import ExecutionLogEntry, ExecutionEventCategory, ExecutionActorType
+
+    # Map string values to enums with fallback to safe defaults
+    try:
+        category = ExecutionEventCategory(body.event_category)
+    except ValueError:
+        category = ExecutionEventCategory.functional
+    try:
+        actor = ExecutionActorType(body.actor_type)
+    except ValueError:
+        actor = ExecutionActorType.system
 
     entry_id = uuid.uuid4()
     entry = ExecutionLogEntry(
@@ -894,6 +970,8 @@ async def log_execution_event(
         log_level=body.log_level.upper(),
         message=body.message,
         data=body.data,
+        event_category=category,
+        actor_type=actor,
         timestamp=datetime.now(timezone.utc),
     )
     db.add(entry)

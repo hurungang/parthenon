@@ -81,6 +81,10 @@ def create_app() -> FastAPI:
     from app.agent_runtime.api.execute import execute_router
     app.include_router(execute_router)
 
+    # Phase 3.11 — session cancellation endpoint (Control Center → Agent Runtime)
+    from app.agent_runtime.api.terminate import terminate_router
+    app.include_router(terminate_router)
+
     # WebSocket chat execution delegation (Communication Hub → Agent Runtime)
     from app.agent_runtime.api.conversation import conversation_router
     app.include_router(conversation_router)
@@ -147,6 +151,11 @@ async def _init_execution_engine() -> None:
 
         # Bound concurrent sessions (same limit as the former SessionDispatcher)
         app.state.execution_semaphore = asyncio.Semaphore(4)
+
+        # Phase 3.11: session_id -> asyncio.Task registry.  Populated
+        # by /execute, consumed by /terminate/{session_id}.  Done
+        # callbacks remove completed tasks so the dict stays bounded.
+        app.state.session_tasks = {}
 
         logger.info("Agent Runtime execution engine initialised (trigger-based, no polling)")
     except Exception:

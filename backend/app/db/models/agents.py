@@ -65,6 +65,7 @@ class AgentJobStatus(str, enum.Enum):
     running = "running"
     completed = "completed"
     failed = "failed"
+    terminated = "terminated"
 
 
 class ModelProvider(str, enum.Enum):
@@ -137,6 +138,29 @@ class SessionStopReason(str, enum.Enum):
     execution_timeout_exceeded = "execution_timeout_exceeded"
     token_budget_exceeded_non_conversational = "token_budget_exceeded_non_conversational"
     token_guardrail_fallback_applied = "token_guardrail_fallback_applied"
+
+
+class AgentTerminationCategory(str, enum.Enum):
+    """Normalized termination attribution for runtime dashboards."""
+
+    none = "none"
+    user_requested = "user_requested"
+    cascade_parent_terminated = "cascade_parent_terminated"
+    policy_blocked = "policy_blocked"
+
+
+class AgentRecursionValidationMode(str, enum.Enum):
+    """Recursion validation behavior used by create/update/run prechecks."""
+
+    strict_block = "strict_block"
+    warn_only = "warn_only"
+
+
+class AgentRecursionValidationStatus(str, enum.Enum):
+    """Most recent recursion validation result snapshot."""
+
+    pass_ = "pass"
+    fail = "fail"
 
 
 class AgentTokenStatus(str, enum.Enum):
@@ -409,6 +433,13 @@ class ModelConfig(Base):
     encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Allowlist of model IDs available through this config (empty = all models allowed by provider)
     enabled_models: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # Vendor-level enable/disable toggle (Phase 3.8). When true, every
+    # ModelAvailability row for this vendor cascades to is_disabled=True and
+    # disabled_reason=vendor_cascaded. Pre-execution availability checks
+    # block dispatch on the cascaded models.
+    is_disabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -420,7 +451,10 @@ class ModelConfig(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<ModelConfig id={self.id} display_name={self.display_name} provider_type={self.provider_type}>"
+        return (
+            f"<ModelConfig id={self.id} display_name={self.display_name} "
+            f"provider_type={self.provider_type} is_disabled={self.is_disabled}>"
+        )
 
 
 # ── AgentType ─────────────────────────────────────────────────────────────────
@@ -530,6 +564,23 @@ class AgentType(Base):
         nullable=False,
         default=GuardrailConversationalContinuationPolicy.allow,
     )
+    recursion_validation_mode: Mapped[AgentRecursionValidationMode] = mapped_column(
+        Enum(AgentRecursionValidationMode, name="agent_recursion_validation_mode_enum"),
+        nullable=False,
+        default=AgentRecursionValidationMode.strict_block,
+        server_default=AgentRecursionValidationMode.strict_block.value,
+    )
+    last_recursion_validation_status: Mapped[AgentRecursionValidationStatus | None] = mapped_column(
+        Enum(
+            AgentRecursionValidationStatus,
+            name="agent_last_recursion_validation_status_enum",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=True,
+    )
+    last_recursion_validation_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -617,6 +668,29 @@ class AgentJob(Base):
     )
     triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("identities.id", ondelete="SET NULL"), nullable=True
+    )
+    parent_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    root_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    delegation_depth: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    model_guardrail_configuration_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("model_guardrail_configurations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    terminated_by_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("termination_requests.id", ondelete="SET NULL"), nullable=True
+    )
+    termination_category: Mapped[AgentTerminationCategory] = mapped_column(
+        Enum(AgentTerminationCategory, name="agent_termination_category_enum"),
+        nullable=False,
+        default=AgentTerminationCategory.none,
+        server_default=AgentTerminationCategory.none.value,
     )
     input_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[AgentJobStatus] = mapped_column(

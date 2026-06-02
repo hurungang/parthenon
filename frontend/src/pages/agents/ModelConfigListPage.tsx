@@ -17,12 +17,14 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import ShieldIcon from '@mui/icons-material/Shield'
 import VpnKeyIcon from '@mui/icons-material/VpnKey'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import type { ModelConfig } from '../../types'
 import { ModelConfigDialog } from './ModelConfigDialog'
+import { VendorModelGuardrailPanel } from '../../components/agents/VendorModelGuardrailPanel'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 
 export function ModelConfigListPage() {
@@ -66,6 +68,14 @@ export function ModelConfigListPage() {
     }
   }
 
+  const handleGuardrail = () => {
+    // Scroll to the inline hierarchy panel and flash the first vendor
+    const el = document.querySelector('[data-testid="vendor-model-guardrail-panel"]')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
   const providerColor = (pt: string): 'default' | 'primary' | 'secondary' | 'info' | 'warning' => {
     if (pt === 'openai') return 'primary'
     if (pt === 'anthropic') return 'secondary'
@@ -102,11 +112,11 @@ export function ModelConfigListPage() {
       {deleteError != null && <PermissionDeniedAlert error={deleteError} fallbackMessage={t('app.error')} />}
 
       {configs && configs.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
+        <Paper sx={{ p: 4, textAlign: 'center', mb: 3 }}>
           <Typography color="text.secondary">{t('agents.modelConfigs.empty')}</Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ mb: 3 }}>
           <Table>
             <TableHead>
               <TableRow>
@@ -154,6 +164,14 @@ export function ModelConfigListPage() {
                     )}
                   </TableCell>
                   <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      onClick={handleGuardrail}
+                      title={t('agents.modelConfigs.guardrails')}
+                      data-testid="open-guardrail-panel"
+                    >
+                      <ShieldIcon fontSize="small" />
+                    </IconButton>
                     <IconButton size="small" onClick={() => handleEdit(config)} title={t('app.edit')}>
                       <EditIcon fontSize="small" />
                     </IconButton>
@@ -167,6 +185,9 @@ export function ModelConfigListPage() {
           </Table>
         </TableContainer>
       )}
+
+      {/* Vendor → model → guardrail hierarchy */}
+      <VendorModelGuardrailPanel />
 
       <ModelConfigDialog
         open={dialogOpen}

@@ -51,6 +51,7 @@ function statusColor(status: AgentJobStatus): 'default' | 'warning' | 'info' | '
   if (status === 'running') return 'info'
   if (status === 'completed') return 'success'
   if (status === 'failed') return 'error'
+  if (status === 'terminated') return 'warning'
   return 'default'
 }
 

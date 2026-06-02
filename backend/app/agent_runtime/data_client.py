@@ -236,6 +236,30 @@ class ControlCenterDataClient:
         """
         return await self._get(f"/model-configs/{model_config_id}")
 
+    # ── Availability preflight (Phase 3.10) ─────────────────────────────────
+
+    async def preflight_availability(
+        self,
+        model_name: str,
+        vendor_model_config_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """Pre-execution availability check via Control Center.
+
+        Called by Agent Runtime before dispatching any agent execution.
+        On deny, the runtime records the reason in an execution log
+        event and blocks dispatch with ``AgentJob.termination_category``
+        of ``model_disabled`` or ``vendor_disabled``.
+
+        Calls ``POST /internal/data/preflight/availability``.
+
+        Returns dict with keys: allowed (bool), reason (str|None),
+        disabled_reason (str|None), blocked_by (str|None).
+        """
+        body: dict[str, Any] = {"model_id": model_name}
+        if vendor_model_config_id is not None:
+            body["vendor_model_config_id"] = str(vendor_model_config_id)
+        return await self._post("/preflight/availability", body)
+
     # ── Session management ────────────────────────────────────────────────────
 
     async def get_session(self, session_id: uuid.UUID) -> dict[str, Any] | None:
@@ -324,6 +348,8 @@ class ControlCenterDataClient:
         message: str,
         data: dict[str, Any],
         log_level: str = "INFO",
+        event_category: str = "functional",
+        actor_type: str = "system",
     ) -> None:
         """Write a structured execution log entry to Control Center.
 
@@ -338,6 +364,8 @@ class ControlCenterDataClient:
                     "log_level": log_level,
                     "message": message,
                     "data": data,
+                    "event_category": event_category,
+                    "actor_type": actor_type,
                 },
             )
         except Exception as exc:

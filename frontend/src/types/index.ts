@@ -207,7 +207,12 @@ export interface SopWorkflowPreviewResponse {
 export type AgentInstanceStatus = 'created' | 'active' | 'closed' | 'error'
 export type AgentIdentityType = 'realm_user'
 export type AgentIdentityStatus = 'active' | 'suspended' | 'deprovisioned'
-export type AgentJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+export type AgentJobStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'terminated'
 export type AgentInputType = 'none' | 'typed' | 'conversation'
 export type AgentOutputType = 'auto' | 'typed' | 'markdown'
 
@@ -246,7 +251,148 @@ export interface AgentJob {
   output_data: Record<string, unknown> | null
   error_message: string | null
   conversation_history: Array<{ role: string; content: string }> | null
+  stop_category?: string | null
+  stop_reason?: string | null
+  stop_details?: Record<string, unknown> | null
   created_at: string
+}
+
+export interface RuntimeTopologyNode {
+  session_id: string
+  agent_type_id: string
+  agent_type_name: string | null
+  // Phase 3.13/3.16: status is now a free-form string.  For
+  // kind="agent" it carries the AgentJobStatus (queued/running/
+  // completed/failed/terminated).  For kind="conversation" it
+  // carries the runtime ConversationStatus (active/sleep/closed/
+  // archived/error).  For kind="instance" it carries the
+  // AgentInstanceStatus (created/active/closed/error).
+  status: string
+  depth_from_root: number
+  parent_session_id: string | null
+  started_at: string | null
+  created_at: string
+  termination_category: string | null
+  // Phase 3.13/3.16: distinguishes agent runs ("agent"),
+  // conversation sessions ("conversation"), and agent instances
+  // ("instance").  Defaults to "agent" for backwards
+  // compatibility with older payloads.
+  kind?: 'agent' | 'conversation' | 'instance'
+  // Phase 3.13: optional human-friendly title for conversation
+  // nodes (auto-generated conversation name).
+  title?: string | null
+}
+
+export interface RuntimeTopologyEdge {
+  parent_session_id: string
+  child_session_id: string
+  depth_from_root: number
+}
+
+export interface RuntimeTopologyProjection {
+  nodes: RuntimeTopologyNode[]
+  edges: RuntimeTopologyEdge[]
+  root_session_ids: string[]
+}
+
+export type TerminationScope = 'node_only' | 'cascade_subtree'
+export type TerminationPermissionEvaluationOutcome = 'allowed' | 'denied'
+export type TerminationRequestStatus =
+  | 'accepted'
+  | 'rejected'
+  | 'completed'
+  | 'partially_completed'
+  | 'failed'
+export type TerminationOutcome =
+  | 'terminated'
+  | 'already_completed'
+  | 'not_found'
+  | 'permission_denied'
+  | 'failed'
+
+export interface RuntimeTerminationRequestPayload {
+  target_session_id: string
+  termination_scope: TerminationScope
+  operator_reason?: string
+}
+
+export interface RuntimeTerminationRequest {
+  id: string
+  requested_by_user_id: string
+  target_agent_job_id: string
+  termination_scope: TerminationScope
+  permission_evaluation_outcome: TerminationPermissionEvaluationOutcome
+  permission_evaluation_reason: string | null
+  request_status: TerminationRequestStatus
+  requested_at: string
+  completed_at: string | null
+}
+
+export interface RuntimeTerminationCascadeOutcome {
+  id: string
+  termination_request_id: string
+  affected_agent_job_id: string
+  cascade_level: number
+  termination_outcome: TerminationOutcome
+  outcome_reason: string | null
+  processed_at: string
+}
+
+export type ModelUsagePosturePeriod = 'hour' | 'day' | 'week' | 'month'
+export type ModelGuardrailPeriod = ModelUsagePosturePeriod
+export type ModelUsagePostureState = 'within_limit' | 'approaching_limit' | 'breached'
+export type ModelGuardrailEnforcementPosture = 'terminate' | 'observe_only'
+export type ModelUsageUnit = 'k' | 'tokens'
+
+export interface ModelUsageGuardrailLimit {
+  id: string
+  model_config_id: string
+  model_id: string
+  model_name: string
+  period: ModelGuardrailPeriod
+  limit_value: number
+  enforcement_posture: ModelGuardrailEnforcementPosture
+  unit: ModelUsageUnit
+  is_active: boolean
+  details: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface ModelUsagePosture {
+  id: string
+  model_guardrail_configuration_id: string
+  model_id: string
+  posture_period: ModelUsagePosturePeriod
+  usage_value: number
+  limit_value: number
+  posture_state: ModelUsagePostureState
+  observed_at: string
+  details: Record<string, unknown>
+}
+
+export type ModelAvailabilityDisabledReason = 'manual' | 'vendor_cascaded'
+
+export interface ModelAvailabilityEntry {
+  model_name: string
+  is_disabled: boolean
+  disabled_reason: ModelAvailabilityDisabledReason | null
+  guardrails: ModelUsageGuardrailLimit[]
+}
+
+export interface VendorAvailabilityNode {
+  vendor_config_id: string
+  vendor_display_name: string
+  is_disabled: boolean
+  models: ModelAvailabilityEntry[]
+}
+
+export type ModelAvailabilityHierarchy = VendorAvailabilityNode[]
+
+export interface PreflightAvailabilityOutcome {
+  allowed: boolean
+  reason: string | null
+  blocked_by: ModelAvailabilityDisabledReason | null
 }
 
 export type AgentPlanStatus = 'pending' | 'success' | 'failed'
@@ -582,9 +728,13 @@ export interface AuthState {
 
 export interface ExecutionLogEntry {
   id: string
+  session_id?: string
   timestamp: string
   event_type: string
   log_level: string
+  event_category?: 'functional' | 'guardrail' | 'posture' | 'termination' | 'validation'
+  correlation_id?: string | null
+  actor_type?: 'system' | 'user' | 'operator'
   message: string
   data: Record<string, unknown>
 }
@@ -620,7 +770,7 @@ export interface LogSummary {
   sopsSkills: string[]
   planCompleted: number
   planTotal: number
-  resultStatus: 'success' | 'failure' | 'running' | 'unknown'
+  resultStatus: 'success' | 'failure' | 'terminated' | 'running' | 'unknown'
   startedAt: string | null
   completedAt: string | null
   durationMs: number | null

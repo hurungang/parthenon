@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon Runtime Control Dashboard Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#F5F7FA;--border:#E0E0E0;
+  --success:#2E7D32;--warning:#EF6C00;--error:#C62828;--info:#0277BD;
+  --text-primary:#212121;--text-secondary:#616161;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:264px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+
+.app-shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.sidebar-logo{padding:18px 18px 14px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:18px;font-weight:700}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;margin-right:12px;border-radius:0 24px 24px 0;color:var(--sidebar-text);-webkit-user-select:none;user-select:none;transition:background var(--transition)}
+.nav-item:hover{background:#F7F9FC}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.nav-icon{width:18px;text-align:center}
+
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px}
+.topbar-title{font-size:18px;font-weight:600;flex:1}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.main-content{flex:1;overflow:auto;padding:20px}
+
+.view{display:none}
+.view.active{display:block}
+.view-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary)}
+
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:16px}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+.metric-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;font-weight:600;letter-spacing:.4px}
+.metric-value{font-size:26px;font-weight:700;line-height:1.1;margin-top:6px}
+.metric-note{font-size:12px;color:var(--text-secondary);margin-top:6px}
+
+.summary-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start;margin-bottom:16px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.status-card{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#FBFDFF}
+.status-card h4{font-size:13px;margin-bottom:8px}
+.status-meta{font-size:12px;color:var(--text-secondary);margin-top:6px}
+.usage-list{display:flex;flex-direction:column;gap:10px}
+.usage-row{display:grid;grid-template-columns:112px 1fr auto;gap:10px;align-items:center}
+.usage-row strong{font-size:12px}
+.usage-bar{position:relative;height:10px;border-radius:999px;background:#E8EEF5;overflow:hidden}
+.usage-fill{height:100%;border-radius:999px}
+.usage-fill.green{background:#2E7D32}.usage-fill.yellow{background:#EF6C00}.usage-fill.red{background:#C62828}.usage-fill.blue{background:#1976D2}
+.w-41{width:41%}.w-44{width:44%}.w-61{width:61%}.w-63{width:63%}.w-82{width:82%}.w-88{width:88%}.w-96{width:96%}
+.usage-value{font-size:12px;font-weight:700}
+.policy-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);background:#F9FBFD;margin-bottom:16px}
+.policy-copy{font-size:13px;color:var(--text-secondary)}
+.mini-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.mini-kpi{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff}
+.mini-kpi .k{font-size:11px;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:.35px}
+.mini-kpi .v{font-size:20px;font-weight:700;margin-top:4px}
+.section-title{font-size:13px;font-weight:700;margin-bottom:10px}
+.limit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.limit-box{border:1px solid var(--border);border-radius:8px;background:#fff;padding:12px}
+.limit-box .label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:.35px;margin-bottom:4px}
+.limit-box .value{font-size:20px;font-weight:700}
+.limit-box .hint{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.form-section{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#FBFDFF;margin-bottom:14px}
+.inline-banner{padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#F9FBFD;font-size:13px;margin-bottom:14px}
+.matrix-summary{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-top:14px}
+.compact-table td,.compact-table th{padding:9px 10px}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-header h3{font-size:15px}
+.card-body{padding:16px}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:auto}
+table{width:100%;border-collapse:collapse}
+thead{background:#F6F8FA}
+thead th{padding:10px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--text-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#FAFCFF}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);border:none;font-weight:600;letter-spacing:.1px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:#fff;color:var(--text-primary);border:1px solid var(--border)}
+.btn-danger{background:var(--error);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.chip{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.chip-green{background:#DDF4E2;color:#1B5E20}
+.chip-red{background:#FDE2E1;color:#B71C1C}
+.chip-yellow{background:#FFE8D3;color:#B45309}
+.chip-blue{background:#E3F2FD;color:#0D47A1}
+.chip-gray{background:#EEF2F6;color:#455A64}
+
+.layout-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start}
+.topology-wrap{border:1px solid var(--border);background:#FBFDFF;border-radius:var(--radius);padding:14px;min-height:360px}
+svg{width:100%;height:auto;display:block}
+.node{cursor:pointer;transition:all .2s ease}
+.node rect{fill:#fff;stroke:#B0BEC5;stroke-width:1.2}
+.node text{font-size:12px;fill:#263238;font-weight:600}
+.node .sub{font-size:11px;fill:#607D8B;font-weight:500}
+.node.active rect{stroke:#1976D2;stroke-width:2.2;fill:#EAF4FF}
+.node.risk rect{stroke:#EF6C00;stroke-width:2}
+.connector{stroke:#90A4AE;stroke-width:1.4;fill:none;marker-end:url(#arrow)}
+
+.node-panel .kv{display:grid;grid-template-columns:118px 1fr;gap:8px;margin-bottom:8px;font-size:13px}
+.node-panel .k{color:var(--text-secondary)}
+.alert{padding:10px 12px;border-radius:6px;border-left:4px solid;margin:10px 0;font-size:13px}
+.alert-warning{background:#FFF3E0;border-color:var(--warning);color:#7A3E00}
+.alert-error{background:#FFEBEE;border-color:var(--error);color:#8E0000}
+.alert-info{background:#E3F2FD;border-color:var(--info);color:#0D47A1}
+
+.log-stream{background:#111827;border-radius:8px;padding:14px;font-family:Consolas,Monaco,monospace;font-size:12px;line-height:1.8;max-height:300px;overflow:auto}
+.log-line{white-space:pre;display:block}
+.log-info{color:#9CA3AF}
+.log-warn{color:#FDE68A}
+.log-error{color:#FCA5A5}
+.log-guardrail{color:#FED7AA}
+.log-policy{color:#BFDBFE}
+
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:5px}
+.form-control{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:#fff}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:12px}
+.tab{padding:9px 14px;border-bottom:2px solid transparent;cursor:pointer;color:var(--text-secondary);font-weight:600}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow-md);width:100%;max-width:580px;max-height:88vh;display:flex;flex-direction:column}
+.modal-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-body{padding:16px 18px;overflow:auto}
+.modal-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+
+.permission-banner{padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;display:flex;align-items:center;gap:10px}
+.w-220{width:220px}
+.metric-warning{color:var(--warning)}
+.toolbar-actions{display:flex;gap:8px}
+.mb-14{margin-bottom:14px}
+.inline-actions{display:flex;gap:8px}
+.inline-check{display:flex;align-items:center;gap:8px}
+.hidden{display:none}
+
+/* ── MODEL GUARDRAILS HIERARCHY (vendor → model → guardrail) ── */
+.hierarchy-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:#F9FBFD;margin-bottom:14px;font-size:13px}
+.hierarchy-intro .intro-copy{color:var(--text-secondary)}
+.hierarchy{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.h-level + .h-level{border-top:1px solid var(--border)}
+.h-level.collapsed .h-children{display:none}
+.h-row{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:12px;padding:11px 14px;transition:background var(--transition)}
+.h-row:hover{background:#F9FBFD}
+.h-level.vendor .h-row{background:#F4F8FC}
+.h-level.vendor .h-row:hover{background:#ECF3FA}
+.h-level.model .h-row{background:#FFFFFF}
+.h-level.guardrail .h-row{background:#FBFDFF;padding:9px 14px 9px 44px}
+.h-level.guardrail.disabled .h-row{opacity:.6}
+.h-children{border-top:1px dashed var(--border);background:#F9FBFD}
+.h-level.model .h-children{background:#F4F8FC}
+.h-chevron{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;user-select:none;border-radius:4px;transition:transform var(--transition),background var(--transition);font-size:14px;line-height:1}
+.h-chevron:hover{background:#E3F2FD;color:var(--primary)}
+.h-level.collapsed .h-chevron{transform:rotate(-90deg)}
+.h-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.h-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-meta{font-size:12px;color:var(--text-secondary);font-weight:500}
+.h-status{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.h-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.h-empty{padding:14px 18px 14px 44px;font-size:12px;color:var(--text-secondary);background:#F4F8FC;border-top:1px dashed var(--border)}
+.h-empty .empty-cta{color:var(--primary);font-weight:600;cursor:pointer}
+.h-empty.no-models{padding-left:18px;background:#FBFDFF;font-style:italic}
+
+.cascade-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#F1F5F9;color:#475569;border:1px solid #E2E8F0}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+
+.guardrail-row-grid{display:grid;grid-template-columns:78px 1fr auto auto 28px;gap:10px;align-items:center;width:100%}
+.period-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)}
+.limit-value{font-size:14px;font-weight:600}
+.limit-unit{font-size:12px;color:var(--text-secondary);margin-left:4px}
+.icon-btn{background:none;border:1px solid var(--border);color:var(--text-secondary);width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--transition);font-size:14px;line-height:1}
+.icon-btn:hover{background:#FFEBEE;color:var(--error);border-color:#F8B4B4}
+
+.toggle{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:36px;height:20px;background:#CBD5E1;border-radius:10px;transition:background var(--transition);position:relative;flex-shrink:0}
+.toggle-slider::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+.toggle-slider{background:var(--success)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(16px)}
+.toggle input:disabled+.toggle-slider{opacity:.5;cursor:not-allowed}
+.toggle-label{font-size:12px;font-weight:600;color:var(--text-secondary)}
+
+.add-guardrail-form{padding:12px 14px 14px 44px;background:#F0F7FE;border-top:1px dashed #BBD8F0;display:none}
+.add-guardrail-form.open{display:block}
+.add-guardrail-form .form-row{margin-bottom:8px}
+.add-guardrail-form .form-group{margin-bottom:0}
+.add-guardrail-form .form-group label{font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.4px;color:var(--text-secondary);margin-bottom:4px}
+.add-guardrail-form .form-control{padding:7px 9px;font-size:13px}
+.add-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+
+@media (max-width:1100px){
+  .summary-grid,.matrix-summary{grid-template-columns:1fr}
+  .limit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .layout-grid{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .app-shell{flex-direction:column}
+  .sidebar{width:100%;height:auto}
+  .nav-item{margin-right:0;border-radius:0}
+  .topbar{height:auto;padding:10px 12px;flex-wrap:wrap}
+  .main-content{padding:12px}
+  .metrics-grid{grid-template-columns:1fr}
+  .status-grid,.limit-grid{grid-template-columns:1fr}
+  .form-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Parthenon</h1>
+      <small>Runtime Governance Console</small>
+    </div>
+    <div class="nav-item active" data-view="runtime-dashboard" onclick="nav(this,'runtime-dashboard')"><span class="nav-icon">1</span>Running Agents Dashboard</div>
+    <div class="nav-item" data-view="topology" onclick="nav(this,'topology')"><span class="nav-icon">2</span>Delegation Topology</div>
+    <div class="nav-item" data-view="execution-logs" onclick="nav(this,'execution-logs')"><span class="nav-icon">3</span>Execution Logs</div>
+    <div class="nav-item" data-view="model-guardrails" onclick="nav(this,'model-guardrails')"><span class="nav-icon">4</span>Model Guardrails</div>
+    <div class="nav-item" data-view="agent-guardrails" onclick="nav(this,'agent-guardrails')"><span class="nav-icon">5</span>Create, Update, Run Validation</div>
+  </aside>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <div id="topbar-title" class="topbar-title">Running Agents Dashboard</div>
+      <div class="topbar-actions permission-banner">
+        <label for="permissionRole"><strong>Operator Permission</strong></label>
+        <select id="permissionRole" class="form-control w-220" onchange="onPermissionChange()">
+          <option value="authorized">AI Operations Lead (can terminate)</option>
+          <option value="read-only">Read-only Observer (cannot terminate)</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section id="view-runtime-dashboard" class="view active">
+        <div class="view-header">
+          <div>
+            <h2>Running Agents Dashboard</h2>
+            <div class="view-desc">Consolidated view of active parent sessions and delegated agent executions with terminate-by-default guardrails, model usage posture across hour, day, week, and month windows, and operator controls.</div>
+          </div>
+          <button class="btn btn-primary" onclick="nav(null,'topology')">Open Live Topology</button>
+        </div>
+
+        <div class="policy-strip">
+          <div>
+            <div class="section-title">Default Enforcement Posture</div>
+            <div class="policy-copy">New execution guardrails default to <strong>terminate</strong>. Model-level usage limits are shown across hour, day, week, and month windows, and observe-only remains available only as an explicit authorized override for selected policies and models.</div>
+          </div>
+          <span class="chip chip-red">Terminate Default Active</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card"><div class="metric-label">Running Parent Sessions</div><div class="metric-value">3</div><div class="metric-note">Across 2 business workflows</div></div>
+          <div class="metric-card"><div class="metric-label">Active Delegations</div><div class="metric-value">7</div><div class="metric-note">2 branches flagged for recursion risk</div></div>
+          <div class="metric-card"><div class="metric-label">Terminate Guardrail Events</div><div class="metric-value metric-warning">4</div><div class="metric-note">3 auto-stopped, 1 pending operator review</div></div>
+          <div class="metric-card"><div class="metric-label">Terminate Actions (24h)</div><div class="metric-value">2</div><div class="metric-note">Both cascaded to child nodes</div></div>
+          <div class="metric-card"><div class="metric-label">Model Posture Alerts</div><div class="metric-value metric-warning">3</div><div class="metric-note">1 approaching, 2 breached this hour</div></div>
+          <div class="metric-card"><div class="metric-label">Observe-only Overrides</div><div class="metric-value">1</div><div class="metric-note">Explicit operator exception on gpt-4.1-mini</div></div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="card">
+            <div class="card-header"><h3>Runtime Guardrail and Model Usage Posture</h3><span class="chip chip-blue">Unified operator view</span></div>
+            <div class="card-body stack">
+              <div class="status-grid">
+                <div class="status-card">
+                  <h4>Execution Guardrails</h4>
+                  <div><span class="chip chip-red">Terminate by default</span></div>
+                  <div class="status-meta">Parent and delegated runs inherit the same enforcement posture unless an authorized override is recorded.</div>
+                </div>
+                <div class="status-card">
+                  <h4>Model Consumption</h4>
+                  <div><span class="chip chip-yellow">2 models breached</span></div>
+                  <div class="status-meta">Hour and day windows are evaluated continuously and surfaced in the runtime workflow.</div>
+                </div>
+              </div>
+
+              <div>
+                <div class="section-title">Current Usage Visibility by Hour, Day, Week, and Month</div>
+                <div class="usage-list">
+                  <div class="usage-row"><strong>Hour</strong><div class="usage-bar"><div class="usage-fill red w-96"></div></div><div class="usage-value">96 / 100</div></div>
+                  <div class="usage-row"><strong>Day</strong><div class="usage-bar"><div class="usage-fill yellow w-82"></div></div><div class="usage-value">820 / 1000</div></div>
+                  <div class="usage-row"><strong>Week</strong><div class="usage-bar"><div class="usage-fill blue w-61"></div></div><div class="usage-value">6100 / 10000</div></div>
+                  <div class="usage-row"><strong>Month</strong><div class="usage-bar"><div class="usage-fill green w-44"></div></div><div class="usage-value">44000 / 100000</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h3>Tracked Models</h3><span class="chip chip-gray">Live sample data</span></div>
+            <div class="card-body">
+              <div class="table-wrap compact-table">
+                <table>
+                  <thead><tr><th>Model</th><th>Posture</th><th>Current Usage Posture</th><th>Default Action</th></tr></thead>
+                  <tbody>
+                    <tr><td>gpt-4.1</td><td><span class="chip chip-red">Breached</span></td><td>Hour 96/100</td><td>Terminate new runs</td></tr>
+                    <tr><td>claude-sonnet-4</td><td><span class="chip chip-yellow">Approaching</span></td><td>Day 820/1000</td><td>Warn + watch</td></tr>
+                    <tr><td>gpt-4.1-mini</td><td><span class="chip chip-blue">Observe override</span></td><td>Week 6100/10000</td><td>Explicit exception</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="mini-kpis">
+                <div class="mini-kpi"><div class="k">Breached runs held</div><div class="v">5</div></div>
+                <div class="mini-kpi"><div class="k">Override reviews due</div><div class="v">1</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Session</th><th>Agent</th><th>Execution Type</th><th>Parent</th><th>Status</th><th>Execution Guardrail</th><th>Model Posture</th><th>Started</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>sess-parent-7412</td><td>procurement-orchestrator</td><td><span class="chip chip-blue">Parent</span></td><td>-</td><td><span class="chip chip-green">Running</span></td><td><span class="chip chip-red">Terminate default armed</span></td><td><span class="chip chip-yellow">Day nearing limit</span></td><td>09:14:05</td>
+                <td><button class="btn btn-sm btn-secondary" onclick="selectNode('P1');nav(null,'topology')">Inspect Node</button></td>
+              </tr>
+              <tr>
+                <td>sess-child-7412-a</td><td>vendor-policy-checker</td><td><span class="chip chip-gray">Delegated</span></td><td>sess-parent-7412</td><td><span class="chip chip-green">Running</span></td><td><span class="chip chip-blue">Within limits</span></td><td><span class="chip chip-green">Within limit</span></td><td>09:14:13</td>
+                <td><button class="btn btn-sm btn-secondary" onclick="selectNode('C1');nav(null,'topology')">Inspect Node</button></td>
+              </tr>
+              <tr>
+                <td>sess-child-7412-b</td><td>invoice-reconciler</td><td><span class="chip chip-gray">Delegated</span></td><td>sess-parent-7412</td><td><span class="chip chip-green">Running</span></td><td><span class="chip chip-red">Terminate threshold reached</span></td><td><span class="chip chip-red">Hour breached</span></td><td>09:14:19</td>
+                <td><button class="btn btn-sm btn-secondary" onclick="selectNode('C2');nav(null,'topology')">Inspect Node</button></td>
+              </tr>
+              <tr>
+                <td>sess-child-7412-c</td><td>invoice-reconciler</td><td><span class="chip chip-gray">Delegated</span></td><td>sess-child-7412-b</td><td><span class="chip chip-red">Loop risk</span></td><td><span class="chip chip-red">Recursion risk detected</span></td><td><span class="chip chip-blue">Observe override</span></td><td>09:14:31</td>
+                <td><button class="btn btn-sm btn-secondary" onclick="selectNode('C3');nav(null,'topology')">Inspect Node</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-topology" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Runtime Topology</h2>
+            <div class="view-desc">Live execution tree for parent and delegated sessions. Select any node to review execution posture, model usage status, permissions, and terminate options.</div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" onclick="nav(null,'execution-logs')">Open Logs</button>
+            <button id="terminateButton" class="btn btn-danger" onclick="requestTerminate()">Terminate Selected Node</button>
+          </div>
+        </div>
+
+        <div class="layout-grid">
+          <div class="card">
+            <div class="card-header"><h3>Delegation Graph</h3><span class="chip chip-gray">Live refresh: 5s</span></div>
+            <div class="card-body">
+              <div class="topology-wrap">
+                <svg viewBox="0 0 900 420" aria-label="Delegation topology">
+                  <defs>
+                    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                      <path d="M0,0 L8,4 L0,8 z" fill="#90A4AE"></path>
+                    </marker>
+                  </defs>
+
+                  <path class="connector" d="M210 100 C260 100,280 150,340 150"></path>
+                  <path class="connector" d="M210 100 C260 100,280 250,340 250"></path>
+                  <path class="connector" d="M480 250 C550 250,560 310,630 310"></path>
+
+                  <g id="node-P1" class="node active" onclick="selectNode('P1')" transform="translate(60,60)">
+                    <rect x="0" y="0" rx="8" ry="8" width="150" height="78"></rect>
+                    <text x="12" y="28">Parent: P1</text>
+                    <text class="sub" x="12" y="49">procurement-orchestrator</text>
+                    <text class="sub" x="12" y="67">Terminate default armed</text>
+                  </g>
+
+                  <g id="node-C1" class="node" onclick="selectNode('C1')" transform="translate(340,112)">
+                    <rect x="0" y="0" rx="8" ry="8" width="160" height="72"></rect>
+                    <text x="12" y="27">Delegation: C1</text>
+                    <text class="sub" x="12" y="47">vendor-policy-checker</text>
+                    <text class="sub" x="12" y="64">Healthy</text>
+                  </g>
+
+                  <g id="node-C2" class="node risk" onclick="selectNode('C2')" transform="translate(340,214)">
+                    <rect x="0" y="0" rx="8" ry="8" width="160" height="76"></rect>
+                    <text x="12" y="27">Delegation: C2</text>
+                    <text class="sub" x="12" y="47">invoice-reconciler</text>
+                    <text class="sub" x="12" y="66">Terminated on hour breach</text>
+                  </g>
+
+                  <g id="node-C3" class="node risk" onclick="selectNode('C3')" transform="translate(630,274)">
+                    <rect x="0" y="0" rx="8" ry="8" width="170" height="80"></rect>
+                    <text x="12" y="27">Delegation: C3</text>
+                    <text class="sub" x="12" y="47">invoice-reconciler</text>
+                    <text class="sub" x="12" y="67">Observe override on model guardrail</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="card node-panel">
+            <div class="card-header"><h3>Selected Node Details</h3><span id="selectedNodeChip" class="chip chip-blue">P1</span></div>
+            <div class="card-body">
+              <div class="kv"><div class="k">Session ID</div><div id="detailSession">sess-parent-7412</div></div>
+              <div class="kv"><div class="k">Agent Type</div><div id="detailAgent">procurement-orchestrator</div></div>
+              <div class="kv"><div class="k">Parent Session</div><div id="detailParent">-</div></div>
+              <div class="kv"><div class="k">Execution Guardrail</div><div id="detailGuardrail">Terminate default armed</div></div>
+              <div class="kv"><div class="k">Model Guardrail</div><div id="detailModelGuardrail">Hour usage at 96/100, terminate on breach</div></div>
+              <div class="kv"><div class="k">Current Usage</div><div id="detailUsage">Hour 96/100, Day 820/1000, Week 6100/10000, Month 44000/100000</div></div>
+              <div class="kv"><div class="k">Operator Permission</div><div id="detailPermission">Authorized to terminate</div></div>
+              <div class="kv"><div class="k">Cascade Scope</div><div id="detailCascade">Parent + all active delegated descendants</div></div>
+
+              <div id="permissionMessage" class="alert alert-info">
+                Terminate is the default guardrail outcome for this runtime posture. You can also request a manual termination for this node; parent execution still cascades to all active delegated children.
+              </div>
+
+              <div id="modelGuardrailMessage" class="alert alert-warning">
+                Model posture is visible alongside execution posture. Breached models stop new runs by default unless an authorized observe-only exception is documented.
+              </div>
+
+              <button id="nodeTerminateButton" class="btn btn-danger" onclick="requestTerminate()">Terminate this node</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-execution-logs" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Execution Logs and Guardrail Events</h2>
+            <div class="view-desc">Guardrail and model-usage events are visible alongside run events so operators can distinguish terminate-default enforcement, explicit observe-only overrides, and manual intervention.</div>
+          </div>
+          <button class="btn btn-secondary" onclick="appendGuardrailEvent()">Simulate Model Guardrail Event</button>
+        </div>
+
+        <div class="card mb-14">
+          <div class="card-header"><h3>Run sess-parent-7412</h3><span class="chip chip-red">Terminate default active</span></div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              Guardrail policy defaults to terminate. Observe-only events still appear in the log when an authorized operator has explicitly downgraded a specific model or policy for supervised execution.
+            </div>
+            <div id="logStream" class="log-stream">
+              <span class="log-line log-info">[09:14:05.221] [INFO ] [runtime] Started session sess-parent-7412 for procurement-orchestrator</span>
+              <span class="log-line log-policy">[09:14:05.247] [POLICY] [guardrail] Enforcement posture resolved: terminate_default for direct and delegated execution</span>
+              <span class="log-line log-info">[09:14:13.004] [INFO ] [delegation] Created delegated child sess-child-7412-a (vendor-policy-checker)</span>
+              <span class="log-line log-info">[09:14:19.781] [INFO ] [delegation] Created delegated child sess-child-7412-b (invoice-reconciler)</span>
+              <span class="log-line log-guardrail">[09:14:24.009] [WARN ] [guardrail] Terminate threshold reached: model_usage_hourly (model=gpt-4.1, limit=100, observed=101)</span>
+              <span class="log-line log-policy">[09:14:24.010] [POLICY] [ui-signal] Dashboard updated: model posture=breached, action=terminate_new_runs</span>
+              <span class="log-line log-error">[09:14:25.116] [WARN ] [runtime] Child session sess-child-7412-b stopped by default enforcement after inherited model guardrail breach</span>
+              <span class="log-line log-guardrail">[09:14:31.660] [WARN ] [guardrail] Recursive delegation pattern detected in sess-child-7412-c</span>
+              <span class="log-line log-info">[09:14:31.661] [INFO ] [runtime] Observe-only exception recorded for gpt-4.1-mini under operator-supervised validation branch</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Termination and Policy Outcomes</h3></div>
+          <div class="card-body">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Time</th><th>Event</th><th>Outcome</th><th>Visibility</th></tr></thead>
+                <tbody>
+                  <tr><td>09:14:24</td><td>Hourly model threshold breached</td><td>Terminate default enforced for new and delegated work</td><td>Execution logs + dashboard posture</td></tr>
+                  <tr><td>09:14:31</td><td>Recursive delegation risk detected</td><td>Operator warning shown; observe override branch isolated</td><td>Validation screens and execution logs</td></tr>
+                  <tr><td>09:15:02</td><td>Terminate requested by authorized user</td><td>Cascade termination in progress</td><td>Execution logs + node state</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-model-guardrails" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Model Guardrails</h2>
+            <div class="view-desc">Vendor &rarr; model &rarr; guardrail hierarchy. Each guardrail is scoped to a single period; operators add only the periods they want. Disabling a vendor cascades to every model under it.</div>
+          </div>
+          <span class="chip chip-blue">Source of truth: ModelConfig.enabled_models</span>
+        </div>
+
+        <div class="hierarchy-intro">
+          <div class="intro-copy">New guardrails default to <strong>terminate</strong>. Disabling a vendor blocks all of its models; per-model disable controls remain visible to show the cascade source.</div>
+        </div>
+
+        <div id="hierarchyContainer" class="hierarchy" aria-label="Model guardrail hierarchy"></div>
+      </section>
+
+      <section id="view-agent-guardrails" class="view">
+        <div class="view-header">
+          <div>
+            <h2>Dead-loop, Recursive Delegation, and Model Guardrail Validation</h2>
+            <div class="view-desc">Risk checks are surfaced before runtime during create, update, and run initiation workflows, with model-specific limits and terminate-by-default posture visible to administrators.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Validation Touchpoints</h3></div>
+          <div class="card-body">
+            <div class="inline-banner">New guardrails default to <strong>terminate</strong>. Operators can still define authorized observe-only exceptions, but those overrides are explicit and auditable at both execution and model level.</div>
+            <div class="tabs">
+              <div class="tab active" onclick="switchTab(this,'create-tab')">Create Agent Type</div>
+              <div class="tab" onclick="switchTab(this,'update-tab')">Update Agent Type</div>
+              <div class="tab" onclick="switchTab(this,'run-tab')">Run Agent</div>
+            </div>
+
+            <div id="create-tab" class="tab-panel active">
+              <div class="form-row">
+                <div class="form-group"><label>Agent Name</label><input class="form-control" value="invoice-reconciler"></div>
+                <div class="form-group"><label>Entry SOP</label><input class="form-control" value="invoice-review-and-escalate"></div>
+              </div>
+              <div class="form-section">
+                <div class="section-title">Model-level Guardrail Configuration</div>
+                <div class="form-row">
+                  <div class="form-group"><label>Primary Model</label><select class="form-control"><option>gpt-4.1</option><option>claude-sonnet-4</option><option>gpt-4.1-mini</option></select></div>
+                  <div class="form-group"><label>Default Enforcement Mode</label><select class="form-control"><option selected>Terminate</option><option>Observe-only override</option></select></div>
+                </div>
+                <div class="alert alert-info">
+                  Model-usage guardrails are managed under the new <strong>vendor &rarr; model &rarr; guardrail</strong> hierarchy. Per-period limits (hour, day, week, month) are configured individually per model — only add the periods you actually need.
+                </div>
+                <button class="btn btn-secondary" type="button" onclick="nav(null,'model-guardrails')">Open Model Guardrails</button>
+              </div>
+              <div class="form-group"><label>Delegation Rules</label><textarea class="form-control" rows="4">invoice-reconciler -> vendor-policy-checker -> invoice-reconciler</textarea></div>
+              <div id="createWarning" class="alert alert-error">Risk warning: recursive delegation path detected (invoice-reconciler -> vendor-policy-checker -> invoice-reconciler). Submission blocked.</div>
+              <div class="inline-actions"><button class="btn btn-secondary" onclick="toggleWarning('createWarning')">Re-run Validation</button><button class="btn btn-primary" disabled>Create Agent Type</button></div>
+            </div>
+
+            <div id="update-tab" class="tab-panel">
+              <div class="form-row">
+                <div class="form-group"><label>Existing Agent</label><input class="form-control" value="procurement-orchestrator"></div>
+                <div class="form-group"><label>Proposed SOP Change</label><input class="form-control" value="add invoice-reconciler delegation"></div>
+              </div>
+              <div class="matrix-summary">
+                <div class="form-section">
+                  <div class="section-title">Current Model Usage Posture</div>
+                  <div class="usage-list">
+                    <div class="usage-row"><strong>Hour</strong><div class="usage-bar"><div class="usage-fill yellow w-82"></div></div><div class="usage-value">82%</div></div>
+                    <div class="usage-row"><strong>Day</strong><div class="usage-bar"><div class="usage-fill yellow w-88"></div></div><div class="usage-value">88%</div></div>
+                    <div class="usage-row"><strong>Week</strong><div class="usage-bar"><div class="usage-fill blue w-63"></div></div><div class="usage-value">63%</div></div>
+                    <div class="usage-row"><strong>Month</strong><div class="usage-bar"><div class="usage-fill green w-41"></div></div><div class="usage-value">41%</div></div>
+                  </div>
+                </div>
+                <div class="form-section">
+                  <div class="section-title">Posture Summary</div>
+                  <div class="status-card">
+                    <h4>procurement-orchestrator</h4>
+                    <div><span class="chip chip-red">Terminate default</span> <span class="chip chip-yellow">Day nearing limit</span></div>
+                    <div class="status-meta">Update will be blocked if the revised delegation path increases recursion risk or binds to a model already in breached posture.</div>
+                  </div>
+                </div>
+              </div>
+              <div id="updateWarning" class="alert alert-warning">Risk warning: delegation depth may exceed policy limit and create dead-loop potential under terminate-default posture. Model day usage is also nearing the configured upper limit.</div>
+              <div class="inline-actions"><button class="btn btn-secondary" onclick="toggleWarning('updateWarning')">Re-run Validation</button><button class="btn btn-primary" disabled>Save Update</button></div>
+            </div>
+
+            <div id="run-tab" class="tab-panel">
+              <div class="form-row">
+                <div class="form-group"><label>Agent to Run</label><input class="form-control" value="invoice-reconciler"></div>
+                <div class="form-group"><label>Run Profile</label><input class="form-control" value="quarter-end-fast-track"></div>
+              </div>
+              <div class="form-section">
+                <div class="section-title">Preflight Runtime Posture</div>
+                <div class="table-wrap compact-table">
+                  <table>
+                    <thead><tr><th>Control</th><th>Status</th><th>Result</th></tr></thead>
+                    <tbody>
+                      <tr><td>Execution guardrail default</td><td><span class="chip chip-red">Terminate</span></td><td>Will stop on breach</td></tr>
+                      <tr><td>Model hourly usage</td><td><span class="chip chip-red">Breached</span></td><td>New run blocked</td></tr>
+                      <tr><td>Recursive delegation validation</td><td><span class="chip chip-red">Failed</span></td><td>Cycle detected</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div id="runWarning" class="alert alert-error">Run blocked: preflight recursion validation failed and the selected model has already exceeded its hourly upper limit. Terminate-default posture prevents execution from starting.</div>
+              <div class="inline-actions"><button class="btn btn-secondary" onclick="toggleWarning('runWarning')">Re-run Validation</button><button class="btn btn-primary" disabled>Start Run</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div id="terminateModal" class="modal-overlay" onclick="closeModalIfOverlay(event,'terminateModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Confirm Termination</h3>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('terminateModal')">Close</button>
+    </div>
+    <div class="modal-body">
+      <div id="terminateSummary" class="alert alert-info">You are terminating session sess-parent-7412.</div>
+      <div class="form-group">
+        <label for="terminationReason">Operator reason (required for audit)</label>
+        <textarea id="terminationReason" class="form-control" rows="3" placeholder="Example: recursive delegation risk escalated; stopping full tree"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="inline-check">
+          <input id="cascadeConfirm" type="checkbox" checked>
+          Cascade termination to all active delegated child sessions
+        </label>
+      </div>
+      <div class="alert alert-warning">
+        Cascade impact preview: P1 will terminate C1, C2, and C3. Child states will transition to terminated_by_parent.
+      </div>
+      <div id="terminatePermissionError" class="alert alert-error hidden">
+        Permission denied: your role does not include runtime.terminate permission for selected node.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('terminateModal')">Cancel</button>
+      <button id="confirmTerminateBtn" class="btn btn-danger" onclick="confirmTerminate()">Confirm Termination</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var currentView = 'runtime-dashboard';
+var selectedNodeId = 'P1';
+
+var viewTitles = {
+  'runtime-dashboard':'Running Agents Dashboard',
+  'topology':'Delegation Topology',
+  'execution-logs':'Execution Logs',
+  'model-guardrails':'Model Guardrails',
+  'agent-guardrails':'Create, Update, Run Validation'
+};
+
+var nodeData = {
+  P1:{session:'sess-parent-7412',agent:'procurement-orchestrator',parent:'-',guardrail:'Terminate default armed for execution and delegation',modelGuardrail:'gpt-4.1 day posture approaching limit; terminate on breach',usage:'Hour 96/100, Day 820/1000, Week 6100/10000, Month 44000/100000',cascade:'Parent + all active delegated descendants'},
+  C1:{session:'sess-child-7412-a',agent:'vendor-policy-checker',parent:'sess-parent-7412',guardrail:'Within limits',modelGuardrail:'claude-sonnet-4 within approved thresholds',usage:'Hour 41/100, Day 330/1000, Week 2100/10000, Month 15000/100000',cascade:'Node only unless selected as branch root'},
+  C2:{session:'sess-child-7412-b',agent:'invoice-reconciler',parent:'sess-parent-7412',guardrail:'Terminate threshold reached and child stopped',modelGuardrail:'gpt-4.1 hour breached; new work terminated by default',usage:'Hour 101/100, Day 841/1000, Week 6200/10000, Month 44110/100000',cascade:'Node + descendants'},
+  C3:{session:'sess-child-7412-c',agent:'invoice-reconciler',parent:'sess-child-7412-b',guardrail:'Recursive delegation risk warning',modelGuardrail:'gpt-4.1-mini observe-only override under review',usage:'Hour 18/40, Day 140/400, Week 900/4000, Month 6800/20000',cascade:'Node only'}
+};
+
+function nav(el, viewId){
+  showView(viewId);
+  document.querySelectorAll('.nav-item').forEach(function(item){ item.classList.remove('active'); });
+  if(el&&el.classList){
+    el.classList.add('active');
+  } else {
+    var item=document.querySelector('.nav-item[data-view="'+viewId+'"]');
+    if(item){ item.classList.add('active'); }
+  }
+}
+
+function showView(viewId){
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+  var target=document.getElementById('view-'+viewId);
+  if(target){
+    target.classList.add('active');
+    currentView=viewId;
+    document.getElementById('topbar-title').textContent=viewTitles[viewId]||viewId;
+  }
+}
+
+function switchTab(el,panelId){
+  var tabs=el.parentElement.querySelectorAll('.tab');
+  tabs.forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  var container=el.closest('.card-body');
+  container.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.getElementById(panelId).classList.add('active');
+}
+
+function openModal(modalId){
+  var modal=document.getElementById(modalId);
+  if(modal){modal.classList.add('open');}
+}
+
+function closeModal(modalId){
+  var modal=document.getElementById(modalId);
+  if(modal){modal.classList.remove('open');}
+}
+
+function closeModalIfOverlay(event,modalId){
+  if(event.target===event.currentTarget){closeModal(modalId);} 
+}
+
+function onPermissionChange(){
+  updatePermissionState();
+}
+
+function isAuthorized(){
+  return document.getElementById('permissionRole').value==='authorized';
+}
+
+function selectNode(nodeId){
+  selectedNodeId=nodeId;
+  document.querySelectorAll('.node').forEach(function(n){n.classList.remove('active');});
+  var node=document.getElementById('node-'+nodeId);
+  if(node){node.classList.add('active');}
+  var data=nodeData[nodeId];
+  document.getElementById('selectedNodeChip').textContent=nodeId;
+  document.getElementById('detailSession').textContent=data.session;
+  document.getElementById('detailAgent').textContent=data.agent;
+  document.getElementById('detailParent').textContent=data.parent;
+  document.getElementById('detailGuardrail').textContent=data.guardrail;
+  document.getElementById('detailModelGuardrail').textContent=data.modelGuardrail;
+  document.getElementById('detailUsage').textContent=data.usage;
+  document.getElementById('detailCascade').textContent=data.cascade;
+  updatePermissionState();
+}
+
+function updatePermissionState(){
+  var authorized=isAuthorized();
+  var message=document.getElementById('permissionMessage');
+  var detailPermission=document.getElementById('detailPermission');
+  var nodeButton=document.getElementById('nodeTerminateButton');
+  var headerButton=document.getElementById('terminateButton');
+
+  if(authorized){
+    detailPermission.textContent='Authorized to terminate';
+    message.className='alert alert-info';
+    message.textContent='You can terminate this node. Terminate remains the default enforcement posture, and a parent execution still cascades to all active delegated children.';
+    nodeButton.disabled=false;
+    headerButton.disabled=false;
+  } else {
+    detailPermission.textContent='Not authorized';
+    message.className='alert alert-error';
+    message.textContent='Terminate action is permission-gated. Your current role is read-only for runtime control operations.';
+    nodeButton.disabled=true;
+    headerButton.disabled=true;
+  }
+}
+
+function requestTerminate(){
+  var data=nodeData[selectedNodeId];
+  var summary='You are terminating session '+data.session+' ('+selectedNodeId+').';
+  if(selectedNodeId==='P1'){
+    summary+=' This parent termination will cascade to all delegated descendants.';
+  }
+  document.getElementById('terminateSummary').textContent=summary;
+  document.getElementById('terminationReason').value='';
+  document.getElementById('terminatePermissionError').classList.add('hidden');
+  document.getElementById('confirmTerminateBtn').disabled=false;
+  openModal('terminateModal');
+}
+
+function confirmTerminate(){
+  if(!isAuthorized()){
+    document.getElementById('terminatePermissionError').classList.remove('hidden');
+    return;
+  }
+  var reason=document.getElementById('terminationReason').value.trim();
+  if(!reason){
+    alert('Operator reason is required for enterprise audit logging.');
+    return;
+  }
+
+  var cascade=document.getElementById('cascadeConfirm').checked;
+  var log=document.getElementById('logStream');
+  var ts='[09:15:02.118]';
+  log.innerHTML += '<span class="log-line log-policy">'+ts+' [POLICY] [ui-action] Terminate requested for '+nodeData[selectedNodeId].session+' by authorized operator</span>';
+  if(cascade){
+    log.innerHTML += '<span class="log-line log-error">[09:15:02.221] [WARN ] [runtime] Cascade termination initiated for parent and delegated descendants</span>';
+  } else {
+    log.innerHTML += '<span class="log-line log-error">[09:15:02.221] [WARN ] [runtime] Termination initiated for selected node only</span>';
+  }
+  log.innerHTML += '<span class="log-line log-info">[09:15:02.349] [INFO ] [audit] reason="'+escapeHtml(reason)+'"</span>';
+  log.scrollTop=log.scrollHeight;
+
+  closeModal('terminateModal');
+  nav(null,'execution-logs');
+}
+
+function appendGuardrailEvent(){
+  var log=document.getElementById('logStream');
+  log.innerHTML += '<span class="log-line log-guardrail">[09:15:12.701] [WARN ] [guardrail] Model usage posture changed: claude-sonnet-4 daily window approaching upper limit (880/1000)</span>';
+  log.innerHTML += '<span class="log-line log-policy">[09:15:12.702] [POLICY] [ui-signal] Dashboard updated with model posture=approaching and terminate_default unchanged</span>';
+  log.scrollTop=log.scrollHeight;
+}
+
+function toggleWarning(id){
+  var el=document.getElementById(id);
+  if(el.style.display==='none'){
+    el.style.display='block';
+  } else {
+    el.style.display='none';
+  }
+}
+
+function escapeHtml(str){
+  return str.replace(/[&<>"']/g,function(ch){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+  });
+}
+
+selectNode('P1');
+updatePermissionState();
+
+/* ── MODEL GUARDRAILS HIERARCHY ── */
+
+var PERIODS = [
+  {id:'hourly',  label:'Hourly'},
+  {id:'daily',   label:'Daily'},
+  {id:'weekly',  label:'Weekly'},
+  {id:'monthly', label:'Monthly'}
+];
+var UNITS = ['requests','tokens','usd'];
+
+var hierarchy = {
+  vendors: [
+    {
+      id:'openai', name:'OpenAI', enabled:true,
+      models:[
+        {id:'gpt-4.1', name:'gpt-4.1', enabled:true,
+          guardrails:[
+            {id:'gr-1', period:'hourly', limit:100, unit:'requests', posture:'terminate',   enabled:true},
+            {id:'gr-2', period:'daily',  limit:1000,unit:'requests', posture:'terminate',   enabled:true}
+          ]
+        },
+        {id:'gpt-4.1-mini', name:'gpt-4.1-mini', enabled:true,
+          guardrails:[]
+        }
+      ]
+    },
+    {
+      id:'anthropic', name:'Anthropic', enabled:false,
+      models:[
+        {id:'claude-sonnet-4', name:'claude-sonnet-4', enabled:true,
+          guardrails:[
+            {id:'gr-3', period:'hourly', limit:60, unit:'requests', posture:'observe_only', enabled:true},
+            {id:'gr-4', period:'weekly', limit:4000,unit:'requests', posture:'terminate',   enabled:true}
+          ]
+        }
+      ]
+    },
+    {
+      id:'azure-openai', name:'Azure OpenAI', enabled:true,
+      models:[]
+    }
+  ]
+};
+
+var expandedVendors = {'openai': true, 'anthropic': true};
+var expandedModels  = {'gpt-4.1': true};
+
+function enabledModelCount(vendor){
+  return vendor.models.filter(function(m){return m.enabled && vendor.enabled;}).length;
+}
+function totalModelCount(vendor){ return vendor.models.length; }
+function modelIsEffectivelyEnabled(model, vendor){
+  return vendor.enabled && model.enabled;
+}
+function postureChipClass(posture){
+  return posture==='terminate' ? 'chip chip-red' : 'chip chip-blue';
+}
+function postureLabel(posture){
+  return posture==='terminate' ? 'Terminate' : 'Observe-only';
+}
+function availablePeriodsFor(model){
+  var taken = {};
+  model.guardrails.forEach(function(g){ taken[g.period] = true; });
+  return PERIODS.filter(function(p){ return !taken[p.id]; });
+}
+function periodLabel(periodId){
+  for(var i=0;i<PERIODS.length;i++){ if(PERIODS[i].id===periodId) return PERIODS[i].label; }
+  return periodId;
+}
+function uid(){ return 'gr-'+Math.random().toString(36).slice(2,9); }
+
+function renderHierarchy(){
+  var root = document.getElementById('hierarchyContainer');
+  if(!root) return;
+  if(hierarchy.vendors.length === 0){
+    root.innerHTML = '<div class="h-empty no-models">No vendors registered. Add a ModelConfig provider to begin.</div>';
+    return;
+  }
+
+  var html = '';
+  hierarchy.vendors.forEach(function(vendor){
+    var vOpen = !!expandedVendors[vendor.id];
+    var enabledCount = enabledModelCount(vendor);
+    var totalCount = totalModelCount(vendor);
+
+    html += '<div class="h-level vendor'+(vOpen?'':' collapsed')+'" data-vendor="'+vendor.id+'">';
+    html += '  <div class="h-row">';
+    html += '    <span class="h-chevron" onclick="toggleVendor(\''+vendor.id+'\')" aria-label="Toggle '+escapeHtml(vendor.name)+'">&#9662;</span>';
+    html += '    <div class="h-identity">';
+    html += '      <span class="h-name">'+escapeHtml(vendor.name)+'</span>';
+    html += '      <span class="h-meta">'+enabledCount+' / '+totalCount+' models enabled</span>';
+    if(!vendor.enabled){
+      html += '    <span class="cascade-badge" title="All models under this vendor are blocked from agent execution">Vendor disabled</span>';
+    }
+    html += '    </div>';
+    html += '    <div class="h-actions">';
+    html += '      <label class="toggle" title="Enable or disable this vendor">';
+    html += '        <input type="checkbox" '+(vendor.enabled?'checked':'')+' onchange="toggleVendorEnabled(\''+vendor.id+'\', this.checked)">';
+    html += '        <span class="toggle-slider"></span>';
+    html += '        <span class="toggle-label">'+((vendor.enabled)?'Enabled':'Disabled')+'</span>';
+    html += '      </label>';
+    html += '    </div>';
+    html += '  </div>';
+
+    html += '  <div class="h-children">';
+    if(vendor.models.length === 0){
+      html += '  <div class="h-empty no-models">No models available for this vendor. Add models to '+escapeHtml(vendor.name)+' in <strong>ModelConfig</strong> to enable guardrails here.</div>';
+    } else {
+      vendor.models.forEach(function(model){
+        var mOpen = !!expandedModels[model.id];
+        var cascade = !vendor.enabled;
+        var effective = modelIsEffectivelyEnabled(model, vendor);
+        var dotClass = effective ? 'dot-green' : 'dot-gray';
+        var dotTitle = effective ? 'Enabled' : (cascade ? 'Disabled (cascade from vendor)' : 'Disabled');
+
+        html += '<div class="h-level model'+(mOpen?'':' collapsed')+'" data-model="'+model.id+'">';
+        html += '  <div class="h-row">';
+        html += '    <span class="h-chevron" onclick="toggleModel(\''+model.id+'\')" aria-label="Toggle '+escapeHtml(model.name)+'">&#9662;</span>';
+        html += '    <div class="h-identity">';
+        html += '      <span class="status-dot '+dotClass+'" title="'+dotTitle+'"></span>';
+        html += '      <span class="h-name">'+escapeHtml(model.name)+'</span>';
+        html += '      <span class="h-meta">'+model.guardrails.length+' / 4 guardrails</span>';
+        if(cascade){
+          html += '    <span class="cascade-badge">Disabled (cascade from vendor)</span>';
+        }
+        html += '    </div>';
+        html += '    <div class="h-actions">';
+        html += '      <label class="toggle" title="Enable or disable this model">';
+        html += '        <input type="checkbox" '+(model.enabled?'checked':'')+(cascade?' disabled':'')+' onchange="toggleModelEnabled(\''+model.id+'\', this.checked)">';
+        html += '        <span class="toggle-slider"></span>';
+        html += '        <span class="toggle-label">'+((model.enabled)?'Enabled':'Disabled')+'</span>';
+        html += '      </label>';
+        html += '    </div>';
+        html += '  </div>';
+
+        html += '  <div class="h-children">';
+        model.guardrails.forEach(function(gr){
+          html += renderGuardrailRow(gr, model, vendor);
+        });
+        if(model.guardrails.length === 0){
+          html += '  <div class="h-empty">';
+          html += '    No guardrails yet. <span class="empty-cta" onclick="openAddGuardrailForm(\''+model.id+'\')">Add a guardrail</span> to limit consumption for this model.';
+          html += '  </div>';
+        } else {
+          var remaining = availablePeriodsFor(model);
+          if(remaining.length === 0){
+            html += '  <div class="h-empty">All four periods (hour, day, week, month) are configured for this model.</div>';
+          } else {
+            html += '  <div class="h-empty">';
+            html += '    <span class="empty-cta" onclick="openAddGuardrailForm(\''+model.id+'\')">+ Add guardrail</span>';
+            html += '    <span style="margin-left:8px">Available periods: '+remaining.map(function(p){return p.label;}).join(', ')+'</span>';
+            html += '  </div>';
+          }
+        }
+        html += renderAddForm(model);
+        html += '  </div>'; // .h-children for model
+        html += '</div>'; // .h-level.model
+      });
+    }
+    html += '  </div>'; // .h-children for vendor
+    html += '</div>'; // .h-level.vendor
+  });
+  root.innerHTML = html;
+}
+
+function renderGuardrailRow(gr, model, vendor){
+  var disabledCls = gr.enabled ? '' : ' disabled';
+  var gId = gr.id, mId = model.id, vId = vendor.id;
+  var html = '<div class="h-level guardrail'+disabledCls+'" data-guardrail="'+gId+'">';
+  html += '  <div class="h-row">';
+  html += '    <span class="h-chevron" style="visibility:hidden">&#9662;</span>';
+  html += '    <div class="h-identity">';
+  html += '      <div class="guardrail-row-grid">';
+  html += '        <span class="period-label">'+periodLabel(gr.period)+'</span>';
+  html += '        <span><span class="limit-value">'+gr.limit+'</span><span class="limit-unit">'+gr.unit+'</span></span>';
+  html += '        <span class="'+postureChipClass(gr.posture)+'">'+postureLabel(gr.posture)+'</span>';
+  html += '        <label class="toggle">';
+  html += '          <input type="checkbox" '+(gr.enabled?'checked':'')+' onchange="toggleGuardrailEnabled(\''+mId+'\', \''+gId+'\', this.checked)">';
+  html += '          <span class="toggle-slider"></span>';
+  html += '        </label>';
+  html += '        <button class="icon-btn" title="Remove guardrail" onclick="removeGuardrail(\''+mId+'\', \''+gId+'\')" aria-label="Remove guardrail">&times;</button>';
+  html += '      </div>';
+  html += '    </div>';
+  html += '    <div class="h-actions" style="visibility:hidden; min-width:0"></div>';
+  html += '  </div>';
+  html += '</div>';
+  return html;
+}
+
+function renderAddForm(model){
+  var remaining = availablePeriodsFor(model);
+  if(remaining.length === 0) return '';
+  var periodOptions = remaining.map(function(p){return '<option value="'+p.id+'">'+p.label+'</option>';}).join('');
+  var unitOptions = UNITS.map(function(u){return '<option value="'+u+'">'+u+'</option>';}).join('');
+  var fId = 'addForm-'+model.id;
+  return ''+
+    '<div id="'+fId+'" class="add-guardrail-form">'+
+    '  <div class="form-row">'+
+    '    <div class="form-group"><label>Period</label><select class="form-control" id="'+fId+'-period">'+periodOptions+'</select></div>'+
+    '    <div class="form-group"><label>Limit</label><input class="form-control" type="number" min="1" id="'+fId+'-limit" placeholder="e.g. 100"></div>'+
+    '  </div>'+
+    '  <div class="form-row">'+
+    '    <div class="form-group"><label>Unit</label><select class="form-control" id="'+fId+'-unit">'+unitOptions+'</select></div>'+
+    '    <div class="form-group"><label>Posture</label><select class="form-control" id="'+fId+'-posture"><option value="terminate" selected>Terminate (default)</option><option value="observe_only">Observe-only</option></select></div>'+
+    '  </div>'+
+    '  <div class="add-form-actions">'+
+    '    <button class="btn btn-secondary btn-sm" onclick="closeAddGuardrailForm(\''+model.id+'\')">Cancel</button>'+
+    '    <button class="btn btn-primary btn-sm" onclick="saveGuardrail(\''+model.id+'\')">Save</button>'+
+    '  </div>'+
+    '</div>';
+}
+
+function toggleVendor(vendorId){
+  expandedVendors[vendorId] = !expandedVendors[vendorId];
+  renderHierarchy();
+}
+function toggleModel(modelId){
+  expandedModels[modelId] = !expandedModels[modelId];
+  renderHierarchy();
+}
+function toggleVendorEnabled(vendorId, on){
+  var v = hierarchy.vendors.find(function(x){return x.id===vendorId;});
+  if(v) v.enabled = on;
+  renderHierarchy();
+}
+function toggleModelEnabled(modelId, on){
+  hierarchy.vendors.forEach(function(v){
+    v.models.forEach(function(m){ if(m.id===modelId) m.enabled = on; });
+  });
+  renderHierarchy();
+}
+function toggleGuardrailEnabled(modelId, guardrailId, on){
+  hierarchy.vendors.forEach(function(v){
+    v.models.forEach(function(m){
+      if(m.id===modelId){
+        m.guardrails.forEach(function(g){ if(g.id===guardrailId) g.enabled = on; });
+      }
+    });
+  });
+  renderHierarchy();
+}
+function removeGuardrail(modelId, guardrailId){
+  hierarchy.vendors.forEach(function(v){
+    v.models.forEach(function(m){
+      if(m.id===modelId){
+        m.guardrails = m.guardrails.filter(function(g){ return g.id !== guardrailId; });
+      }
+    });
+  });
+  renderHierarchy();
+}
+function openAddGuardrailForm(modelId){
+  var f = document.getElementById('addForm-'+modelId);
+  if(f){ f.classList.add('open'); }
+}
+function closeAddGuardrailForm(modelId){
+  var f = document.getElementById('addForm-'+modelId);
+  if(f){ f.classList.remove('open'); }
+}
+function saveGuardrail(modelId){
+  var fId = 'addForm-'+modelId;
+  var periodEl = document.getElementById(fId+'-period');
+  var limitEl  = document.getElementById(fId+'-limit');
+  var unitEl   = document.getElementById(fId+'-unit');
+  var postureEl= document.getElementById(fId+'-posture');
+  if(!periodEl || !limitEl || !unitEl || !postureEl) return;
+
+  var period = periodEl.value;
+  var limit  = parseInt(limitEl.value, 10);
+  if(!limit || limit <= 0){
+    alert('Limit must be a positive number.');
+    return;
+  }
+  var unit = unitEl.value;
+  var posture = postureEl.value;
+
+  hierarchy.vendors.forEach(function(v){
+    v.models.forEach(function(m){
+      if(m.id===modelId){
+        var exists = m.guardrails.some(function(g){ return g.period === period; });
+        if(exists){
+          alert('A guardrail for the '+periodLabel(period)+' period already exists on this model.');
+          return;
+        }
+        m.guardrails.push({
+          id: uid(),
+          period: period,
+          limit: limit,
+          unit: unit,
+          posture: posture,
+          enabled: true
+        });
+      }
+    });
+  });
+  renderHierarchy();
+}
+
+renderHierarchy();
+</script>
+</body>
+</html>

@@ -3,12 +3,12 @@ import asyncio
 import json
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission, get_current_claims
@@ -44,9 +44,25 @@ from app.schemas.agents import (
     AgentTypeUpdate,
     ExecutionLogEntryRead,
     ExecutionLogRead,
+    ModelAvailabilityVendorRead,
+    ModelAvailabilityUpdate,
     ModelConfigCreate,
     ModelConfigRead,
     ModelConfigUpdate,
+    ModelUsageGuardrailLimitCreate,
+    ModelUsageGuardrailLimitRead,
+    ModelUsageGuardrailLimitUpdate,
+    ModelUsagePostureRead,
+    PreflightAvailabilityRequest,
+    PreflightAvailabilityResponse,
+    RuntimeTerminalJobPurgeRead,
+    RuntimeTerminateRequest,
+    RuntimeTopologyEdgeRead,
+    RuntimeTopologyNodeRead,
+    RuntimeTopologyRead,
+    TerminationCascadeOutcomeRead,
+    TerminationRequestRead,
+    VendorDisabledUpdate,
     WorkflowGenerationModelConfigRead,
     WorkflowGenerationModelConfigUpdate,
     WorkflowGenerationModelOption,
@@ -77,6 +93,24 @@ from app.services.agents.session_service import AgentSessionService
 from app.services.agents.permission_manager import AgentPermissionManager
 from app.services.agents.tool_naming import build_tool_name, is_system_tool
 from app.services.gateway.lifecycle_handler import AgentAuthError, GatewayLifecycleHandler
+from app.services.control_center.recursion_validation_service import (
+    RecursionValidationError,
+    get_recursion_validation_service,
+)
+from app.services.control_center.model_usage_guardrail_service import (
+    ModelGuardrailDuplicatePeriodError,
+    ModelGuardrailModelNotFoundError,
+    ModelUsageGuardrailService,
+)
+from app.services.control_center.model_availability_service import (
+    ModelAvailabilityService,
+)
+from app.services.control_center.runtime_topology_controller import RuntimeTopologyController
+from app.services.control_center.termination_orchestrator import (
+    TerminationDeniedError,
+    TerminationOrchestrator,
+)
+from app.db.models.sop_recursion_validation_check import SopRecursionCheckContext
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +120,10 @@ _identity_service = AgentIdentityService()
 _session_service = AgentSessionService()
 _permission_manager = AgentPermissionManager()
 _model_config_service = ModelConfigService()
+_model_usage_guardrail_service = ModelUsageGuardrailService()
+_model_availability_service = ModelAvailabilityService()
+_runtime_topology_controller = RuntimeTopologyController()
+_termination_orchestrator = TerminationOrchestrator()
 _lifecycle_handler = GatewayLifecycleHandler()
 _plan_generation_service = PlanGenerationService()
 
@@ -99,6 +137,9 @@ AgentJobRouter = APIRouter(prefix="/agents/sessions", tags=["Agents"])
 AgentTypeRouter = APIRouter(prefix="/agents/types", tags=["Agents"])
 AgentInstanceRouter = APIRouter(prefix="/agents/instances", tags=["Agents"])
 ModelConfigRouter = APIRouter(prefix="/agents/model-configs", tags=["Agents"])
+ModelUsageGuardrailRouter = APIRouter(prefix="/agents/guardrails", tags=["Agents"])
+ModelAvailabilityRouter = APIRouter(prefix="/agents", tags=["Agents"])
+RuntimeControlRouter = APIRouter(prefix="/agents/runtime", tags=["Agents"])
 
 
 # ── Agent Role Endpoints ───────────────────────────────────────────────────────
@@ -540,6 +581,32 @@ async def launch_agent_session(
     user_id_str: str | None = claims.get("platform_user_id")
     user_id = uuid.UUID(user_id_str) if user_id_str else None
 
+    # Recursion pre-flight validation before launching
+    try:
+        await get_recursion_validation_service().validate_agent_type(
+            agent_type_id=body.agent_type_id,
+            context=SopRecursionCheckContext.run,
+            db=db,
+            checked_by_user_id=user_id,
+        )
+    except RecursionValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "recursion_validation_failed",
+                "summary": exc.summary,
+                "findings": [
+                    {
+                        "type": f.finding_type.value,
+                        "severity": f.severity.value,
+                        "path": f.path_signature,
+                        "recommendation": f.recommendation,
+                    }
+                    for f in exc.findings
+                ],
+            },
+        )
+
     try:
         result = await _lifecycle_handler.launch(
             agent_type_id=body.agent_type_id,
@@ -614,7 +681,11 @@ async def get_agent_session_result(
     job = await _session_service.get_session(session_id, db)
     if not job:
         raise HTTPException(status_code=404, detail="Session not found")
-    if job.status not in (AgentJobStatus.completed, AgentJobStatus.failed):
+    if job.status not in (
+        AgentJobStatus.completed,
+        AgentJobStatus.failed,
+        AgentJobStatus.terminated,
+    ):
         raise HTTPException(
             status_code=409,
             detail=f"Session is not yet complete (status={job.status})",
@@ -720,7 +791,11 @@ async def stream_session_execution_logs(
                 yield json.dumps(terminal_payload) + "\n"
                 break
 
-            if current_job.status in (AgentJobStatus.completed, AgentJobStatus.failed):
+            if current_job.status in (
+                AgentJobStatus.completed,
+                AgentJobStatus.failed,
+                AgentJobStatus.terminated,
+            ):
                 terminal_payload = {
                     "type": "stream_completed",
                     "session_id": str(session_id),
@@ -807,6 +882,7 @@ async def list_agent_types(
 @AgentTypeRouter.post("", response_model=AgentTypeRead, status_code=status.HTTP_201_CREATED)
 async def create_agent_type(
     body: AgentTypeCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentTypeRead:
@@ -832,6 +908,35 @@ async def create_agent_type(
     db.add(agent_type)
     await db.flush()
     await db.refresh(agent_type)
+
+    # Recursion/dead-loop validation (may block in strict_block mode)
+    claims = get_current_claims(request)
+    user_id_str: str | None = claims.get("platform_user_id")
+    checked_by = uuid.UUID(user_id_str) if user_id_str else None
+    try:
+        await get_recursion_validation_service().validate_agent_type(
+            agent_type_id=agent_type.id,
+            context=SopRecursionCheckContext.create,
+            db=db,
+            checked_by_user_id=checked_by,
+        )
+    except RecursionValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "recursion_validation_failed",
+                "summary": exc.summary,
+                "findings": [
+                    {
+                        "type": f.finding_type.value,
+                        "severity": f.severity.value,
+                        "path": f.path_signature,
+                        "recommendation": f.recommendation,
+                    }
+                    for f in exc.findings
+                ],
+            },
+        )
 
     # Generate plan after commit (non-blocking — failures are recorded, not raised)
     await _plan_generation_service.generate_plan(agent_type, db)
@@ -867,6 +972,7 @@ async def get_agent_type(
 async def update_agent_type(
     type_id: uuid.UUID,
     body: AgentTypeUpdate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
 ) -> AgentTypeRead:
@@ -893,6 +999,35 @@ async def update_agent_type(
 
     await db.flush()
     await db.refresh(agent_type)
+
+    # Recursion/dead-loop validation (may block in strict_block mode)
+    claims = get_current_claims(request)
+    user_id_str: str | None = claims.get("platform_user_id")
+    checked_by = uuid.UUID(user_id_str) if user_id_str else None
+    try:
+        await get_recursion_validation_service().validate_agent_type(
+            agent_type_id=agent_type.id,
+            context=SopRecursionCheckContext.update,
+            db=db,
+            checked_by_user_id=checked_by,
+        )
+    except RecursionValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "recursion_validation_failed",
+                "summary": exc.summary,
+                "findings": [
+                    {
+                        "type": f.finding_type.value,
+                        "severity": f.severity.value,
+                        "path": f.path_signature,
+                        "recommendation": f.recommendation,
+                    }
+                    for f in exc.findings
+                ],
+            },
+        )
 
     # Regenerate plan after update (non-blocking — failures are recorded, not raised)
     await _plan_generation_service.generate_plan(agent_type, db)
@@ -1224,4 +1359,497 @@ async def list_models_for_config(
         return await _model_config_service.list_models_for_config(config_id, db)
     except ModelConfigNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ── Model Usage Guardrail Endpoints ──────────────────────────────────────────
+#
+# Phase 3.7 rework: each POST creates exactly one (model, period) row.
+# A duplicate (model_id, period) returns 409 with a deterministic error
+# code so the UI can render the conflict without parsing free text.
+
+
+@ModelUsageGuardrailRouter.get("/model-usage-limits", response_model=list[ModelUsageGuardrailLimitRead])
+async def list_model_usage_limits(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[ModelUsageGuardrailLimitRead]:
+    configs = await _model_usage_guardrail_service.list_configurations(db)
+    return [ModelUsageGuardrailLimitRead.model_validate(c) for c in configs]
+
+
+@ModelUsageGuardrailRouter.post(
+    "/model-usage-limits",
+    response_model=ModelUsageGuardrailLimitRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_model_usage_limit(
+    body: ModelUsageGuardrailLimitCreate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "create")),
+) -> ModelUsageGuardrailLimitRead:
+    try:
+        config = await _model_usage_guardrail_service.create_configuration(
+            model_id=body.model_id,
+            model_name=body.model_name,
+            model_config_id=body.model_config_id,
+            period=body.period,
+            limit_value=body.limit_value,
+            unit=body.unit,
+            enforcement_posture=body.enforcement_posture,
+            is_active=body.is_active,
+            details=body.details,
+            db=db,
+        )
+    except ModelGuardrailDuplicatePeriodError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "guardrail_period_conflict",
+                "model_config_id": str(exc.model_config_id),
+                "period": exc.period.value,
+            },
+        ) from exc
+    except ModelGuardrailModelNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return ModelUsageGuardrailLimitRead.model_validate(config)
+
+
+@ModelUsageGuardrailRouter.get(
+    "/model-usage-limits/{config_id}",
+    response_model=ModelUsageGuardrailLimitRead,
+)
+async def get_model_usage_limit(
+    config_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> ModelUsageGuardrailLimitRead:
+    config = await _model_usage_guardrail_service.get_configuration(config_id, db)
+    if config is None:
+        raise HTTPException(status_code=404, detail="Model usage limit not found")
+    return ModelUsageGuardrailLimitRead.model_validate(config)
+
+
+@ModelUsageGuardrailRouter.put(
+    "/model-usage-limits/{config_id}",
+    response_model=ModelUsageGuardrailLimitRead,
+)
+async def update_model_usage_limit(
+    config_id: uuid.UUID,
+    body: ModelUsageGuardrailLimitUpdate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> ModelUsageGuardrailLimitRead:
+    payload = body.model_dump(exclude_unset=True)
+    config = await _model_usage_guardrail_service.update_configuration(
+        config_id,
+        db=db,
+        **payload,
+    )
+    if config is None:
+        raise HTTPException(status_code=404, detail="Model usage limit not found")
+    return ModelUsageGuardrailLimitRead.model_validate(config)
+
+
+@ModelUsageGuardrailRouter.delete(
+    "/model-usage-limits/{config_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_model_usage_limit(
+    config_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "delete")),
+) -> None:
+    deleted = await _model_usage_guardrail_service.delete_configuration(config_id, db)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Model usage limit not found")
+
+
+@ModelUsageGuardrailRouter.get("/model-usage-posture", response_model=list[ModelUsagePostureRead])
+async def get_model_usage_posture(
+    db: DbSession,
+    refresh: bool = Query(True),
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[ModelUsagePostureRead]:
+    if refresh:
+        await _model_usage_guardrail_service.refresh_posture_snapshots(db)
+    postures = await _model_usage_guardrail_service.get_current_posture(db)
+    return [ModelUsagePostureRead.model_validate(p) for p in postures]
+
+
+# ── Model Availability Endpoints ─────────────────────────────────────────────
+
+
+@ModelAvailabilityRouter.put(
+    "/model-configs/{config_id}/disabled",
+    response_model=ModelConfigRead,
+)
+async def set_vendor_disabled(
+    config_id: uuid.UUID,
+    body: VendorDisabledUpdate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> ModelConfigRead:
+    """Toggle vendor-level ``ModelConfig.is_disabled`` and cascade to
+    ModelAvailability rows.
+    """
+    try:
+        config = await _model_availability_service.set_vendor_disabled(
+            db, config_id, body.is_disabled
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ModelConfigRead.model_validate(config)
+
+
+@ModelAvailabilityRouter.put(
+    "/model-configs/{config_id}/models/{model_name}/disabled",
+)
+async def set_model_availability(
+    config_id: uuid.UUID,
+    model_name: str,
+    body: ModelAvailabilityUpdate,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "update")),
+) -> dict:
+    """Toggle per-model availability with ``disabled_reason = manual``."""
+    try:
+        row = await _model_availability_service.set_model_disabled(
+            db, config_id, model_name, body.is_disabled
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "id": str(row.id),
+        "model_name": row.model_name,
+        "vendor_model_config_id": str(row.vendor_model_config_id),
+        "is_disabled": row.is_disabled,
+        "disabled_reason": row.disabled_reason.value,
+    }
+
+
+@ModelAvailabilityRouter.get(
+    "/model-availability",
+    response_model=list[ModelAvailabilityVendorRead],
+)
+async def get_model_availability(
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[ModelAvailabilityVendorRead]:
+    """Return the full vendor → model → guardrail hierarchy.
+
+    The response is a flat list of vendor rows, each carrying the
+    effective (vendor-cascaded) model disable state and embedded
+    guardrail summaries. The list shape matches the frontend's
+    ``ModelAvailabilityHierarchy`` type and the
+    ``useModelAvailability`` hook contract.
+    """
+    from app.schemas.agents import (
+        ModelAvailabilityGuardrailSummary,
+        ModelAvailabilityModelRead,
+    )
+
+    hierarchy = await _model_availability_service.list_hierarchy(db)
+    return [
+        ModelAvailabilityVendorRead(
+            vendor_config_id=v["vendor_model_config_id"],
+            vendor_display_name=v["display_name"],
+            is_disabled=v["is_disabled"],
+            models=[
+                ModelAvailabilityModelRead(
+                    model_name=m["model_name"],
+                    is_disabled=m["effective_is_disabled"],
+                    disabled_reason=m["disabled_reason"],
+                    guardrails=[
+                        ModelAvailabilityGuardrailSummary(
+                            id=g["id"],
+                            period=g["period"],
+                            limit_value=g["limit_value"],
+                            unit=g["unit"],
+                            enforcement_posture=g["enforcement_posture"],
+                            is_active=g["is_active"],
+                            usage_value=g["usage_value"],
+                            posture_state=g["posture_state"],
+                        )
+                        for g in m["guardrails"]
+                    ],
+                )
+                for m in v["models"]
+            ],
+        )
+        for v in hierarchy
+    ]
+
+
+@ModelAvailabilityRouter.post(
+    "/preflight/availability",
+    response_model=PreflightAvailabilityResponse,
+    # The Agent Runtime pre-execution check is permission-gated the same
+    # way the rest of the guardrail surface is — it is a runtime/control
+    # plane contract, not a public endpoint.
+    dependencies=[Depends(require_permission(RT_AGENT, "read"))],
+)
+async def preflight_availability(
+    body: PreflightAvailabilityRequest,
+    db: DbSession,
+) -> PreflightAvailabilityResponse:
+    """Pre-execution availability check used by Agent Runtime before dispatch.
+
+    Returns ``allowed=True`` when the supplied model is enabled by at
+    least one vendor; otherwise returns a deny verdict with a stable
+    ``blocked_by`` token (model_disabled / vendor_disabled /
+    model_not_found).
+    """
+    outcome = await _model_availability_service.check_availability(
+        db, model_name=body.model_id, vendor_config_id=body.vendor_model_config_id
+    )
+    return PreflightAvailabilityResponse(
+        allowed=outcome.allowed,
+        reason=outcome.reason,
+        disabled_reason=outcome.disabled_reason,
+        blocked_by=outcome.blocked_by,
+    )
+
+
+# ── Runtime Control Endpoints ───────────────────────────────────────────────
+
+
+@RuntimeControlRouter.get("/topology", response_model=RuntimeTopologyRead)
+async def get_runtime_topology(
+    db: DbSession,
+    include_terminal: bool = Query(False),
+    max_nodes: int = Query(200, ge=1, le=1000),
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> RuntimeTopologyRead:
+    from app.db.models.agents import AgentJobStatus
+
+    statuses = (
+        [AgentJobStatus.queued, AgentJobStatus.running]
+        if not include_terminal
+        else [
+            AgentJobStatus.queued,
+            AgentJobStatus.running,
+            AgentJobStatus.completed,
+            AgentJobStatus.failed,
+            AgentJobStatus.terminated,
+        ]
+    )
+
+    projection = await _runtime_topology_controller.get_active_topology(
+        db,
+        include_statuses=statuses,
+        max_nodes=max_nodes,
+    )  # include_conversations and include_instances default to True
+
+    return RuntimeTopologyRead(
+        nodes=[
+            RuntimeTopologyNodeRead(
+                session_id=node.session_id,
+                agent_type_id=node.agent_type_id,
+                agent_type_name=node.agent_type_name,
+                status=node.status,
+                depth_from_root=node.depth_from_root,
+                parent_session_id=node.parent_session_id,
+                started_at=node.started_at,
+                created_at=node.created_at,
+                termination_category=node.termination_category,
+                kind=node.kind,
+                title=node.title,
+            )
+            for node in projection.nodes
+        ],
+        edges=[
+            RuntimeTopologyEdgeRead(
+                parent_session_id=edge.parent_session_id,
+                child_session_id=edge.child_session_id,
+                depth_from_root=edge.depth_from_root,
+            )
+            for edge in projection.edges
+        ],
+        root_session_ids=projection.root_session_ids,
+    )
+
+
+@RuntimeControlRouter.post(
+    "/terminal-jobs/purge",
+    response_model=RuntimeTerminalJobPurgeRead,
+)
+async def purge_terminal_jobs(
+    db: DbSession,
+    older_than_hours: int = Query(
+        24,
+        ge=0,
+        le=8760,
+        description=(
+            "Delete AgentJob rows with status in {completed, failed} whose "
+            "updated_at is older than this many hours. Defaults to 24h; "
+            "pass 0 to purge all terminal jobs."
+        ),
+    ),
+    _: dict = Depends(require_permission(RT_AGENT, "delete")),
+) -> RuntimeTerminalJobPurgeRead:
+    """Purge completed/failed agent jobs to release database resources.
+
+    The runtime control dashboard intentionally only shows *live* runs
+    (queued + running). Terminal jobs are kept for audit and observability
+    for a configurable retention window, but operators can force a purge
+    earlier than the retention horizon via this endpoint.
+
+    Includes ``terminated`` sessions (operator-initiated
+    cancellations) alongside ``completed`` and ``failed`` so they
+    count toward the same retention horizon.
+
+    Deletion cascades to ``agent_run_relationships`` (FK ON DELETE
+    CASCADE) and to ``session_logs`` rows that reference the session
+    through the application-level delete path.
+    """
+    from app.db.models.agents import AgentJob, AgentJobStatus
+    from sqlalchemy import delete as sql_delete
+
+    statuses = [
+        AgentJobStatus.completed,
+        AgentJobStatus.failed,
+        AgentJobStatus.terminated,
+    ]
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+
+    # Count before deletion so the response can show the remaining terminal
+    # population (which is the same set, just minus what we deleted).
+    count_stmt = select(func.count(AgentJob.id)).where(AgentJob.status.in_(statuses))
+    if older_than_hours > 0:
+        count_stmt = count_stmt.where(AgentJob.updated_at < cutoff)
+    total_before = (await db.execute(count_stmt)).scalar_one()
+
+    delete_stmt = sql_delete(AgentJob).where(AgentJob.status.in_(statuses))
+    if older_than_hours > 0:
+        delete_stmt = delete_stmt.where(AgentJob.updated_at < cutoff)
+    delete_result = await db.execute(delete_stmt)
+    purged = delete_result.rowcount or 0
+
+    await db.commit()
+
+    return RuntimeTerminalJobPurgeRead(
+        purged_count=purged,
+        remaining_terminal_count=max(total_before - purged, 0),
+        cutoff=cutoff,
+        statuses=statuses,
+    )
+
+
+@RuntimeControlRouter.post("/terminate", response_model=TerminationRequestRead)
+async def request_runtime_termination(
+    body: RuntimeTerminateRequest,
+    request: Request,
+    db: DbSession,
+) -> TerminationRequestRead:
+    """Submit a permission-gated runtime terminate request.
+
+    This endpoint returns explicit policy-denial reasons and always records
+    termination request outcomes in Control Center persistence.
+    """
+    from app.db.models.identity import Identity
+    from app.db.models.platform_user import PlatformUser
+    from app.services.permissions.permission_engine import PermissionEngine
+
+    claims = get_current_claims(request)
+    sub: str | None = claims.get("sub")
+    if not sub:
+        raise HTTPException(status_code=403, detail="No identity claims found.")
+
+    user_result = await db.execute(select(PlatformUser).where(PlatformUser.sub == sub))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=403,
+            detail="User not found in platform. Please re-authenticate.",
+        )
+
+    identity_result = await db.execute(select(Identity).where(Identity.subject == sub))
+    identity = identity_result.scalar_one_or_none()
+    if identity is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Identity not found in platform. Please re-authenticate.",
+        )
+
+    auth = await PermissionEngine().authorize(
+        db=db,
+        user_id=user.id,
+        module=RT_AGENT,
+        action="execute",
+        resource_id="*",
+        resource_tags={},
+    )
+
+    try:
+        request_record = await _termination_orchestrator.request_termination(
+            target_session_id=body.target_session_id,
+            requested_by_user_id=identity.id,
+            scope=body.termination_scope,
+            operator_reason=body.operator_reason,
+            db=db,
+            can_terminate=auth.allowed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except TerminationDeniedError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "termination_permission_denied",
+                "reason": exc.reason,
+            },
+        )
+
+    return TerminationRequestRead.model_validate(request_record)
+
+
+@RuntimeControlRouter.get(
+    "/terminate/{request_id}",
+    response_model=list[TerminationCascadeOutcomeRead],
+)
+async def get_runtime_termination_outcomes(
+    request_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[TerminationCascadeOutcomeRead]:
+    request_record = await _termination_orchestrator.get_termination_request(request_id, db)
+    if request_record is None:
+        raise HTTPException(status_code=404, detail="Termination request not found")
+
+    outcomes = await _termination_orchestrator.get_cascade_outcomes(request_id, db)
+    return [TerminationCascadeOutcomeRead.model_validate(o) for o in outcomes]
+
+
+@RuntimeControlRouter.get("/policy-events", response_model=list[ExecutionLogEntryRead])
+async def list_runtime_policy_events(
+    db: DbSession,
+    session_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> list[ExecutionLogEntryRead]:
+    """List structured runtime policy events for dashboard/log correlation."""
+    from app.db.models.session_logs import ExecutionEventCategory, ExecutionLogEntry
+
+    stmt = select(ExecutionLogEntry).where(
+        ExecutionLogEntry.event_category.in_(
+            [
+                ExecutionEventCategory.guardrail,
+                ExecutionEventCategory.validation,
+                ExecutionEventCategory.termination,
+                ExecutionEventCategory.posture,
+            ]
+        )
+    )
+    if session_id is not None:
+        stmt = stmt.where(ExecutionLogEntry.session_id == session_id)
+
+    result = await db.execute(
+        stmt.order_by(ExecutionLogEntry.timestamp.desc(), ExecutionLogEntry.id.desc()).limit(limit)
+    )
+    entries = list(result.scalars().all())
+    entries.reverse()
+    return [ExecutionLogEntryRead.model_validate(e) for e in entries]
 
