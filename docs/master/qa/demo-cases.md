@@ -76,6 +76,11 @@
 - Agent Realm Bootstrap — Real Keycloak Integration > agent realm openid-configuration is reachable after bootstrap
 - Real Backend Integration — Agent Runtime Migration > GET /agents/roles returns valid response (validates DB schema)
 - Model Config CRUD > renders model configs page with config list
+- Model Config CRUD > renders provider type chip for openai config
+- Model Config CRUD > renders provider type chip for litellm_proxy config
+- Real Backend Integration - Model Configurations > GET /agents/model-configs returns all 12 provider types from the live catalogue
+- Real Backend Integration - Model Configurations > POST /agents/model-configs accepts a new-provider key (gemini)
+- Real Backend Integration - Model Configurations > Model Configurations page renders provider chips for a new-provider record
 - Agent Instance Dashboard > shows status filter dropdown
 - Conversation History Display > renders chat interface for conversational session
 - Real Backend Integration — Agent Runtime Migration > GET /agents/model-configs returns valid response (validates model_configs table with enabled_models)
@@ -254,3 +259,6 @@
 | 113 | Recursion and dead-loop prevention | Operator attempts to start a risky run and sees the request blocked before execution with a recursion validation failure contract | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
 | 114 | Model guardrail hierarchy (vendor → model → guardrail) | Operator opens the runtime control panel and sees a vendor row with its enabled models and per-period guardrails, replacing the previous flat list | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
 | 115 | Vendor disable cascade | Operator disables a vendor and immediately sees the cascade-source badge on every model underneath; pre-execution availability check returns `vendor_disabled` for those models | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
+| 116 | Model Configurations — Expanded 12-Provider Catalogue | Admin opens the Model Configurations page to see provider chips for all 12 supported LLM vendors (including Gemini, Mistral, Cohere, Groq, Together, Fireworks, Perplexity, DeepSeek) each with a unique colour | expand-model-config-providers | agent-runtime.spec.ts |
+| 117 | Model Configurations — Real Backend Confirms Migration | Live backend (no `page.route()` mocks) validates that the Postgres `model_provider_enum` migration was applied — the list endpoint returns configs for all 12 provider types | expand-model-config-providers | agent-runtime.spec.ts |
+| 118 | Model Configurations — Create a New Provider (Gemini) | Admin creates a `ModelConfig` for the Gemini provider through the real backend; the API key is AES-256 encrypted and never returned; the new row appears on the list page without page reload | expand-model-config-providers | agent-runtime.spec.ts |

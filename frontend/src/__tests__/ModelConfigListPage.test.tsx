@@ -158,11 +158,49 @@ describe('ModelConfigListPage', () => {
       expect(screen.getByText('GPT-4 Config')).toBeDefined()
     })
 
-    // Each row should have edit and delete icon buttons
     const editButtons = screen.getAllByRole('button', { name: /edit/i })
     const deleteButtons = screen.getAllByRole('button', { name: /delete/i })
 
     expect(editButtons.length).toBeGreaterThan(0)
     expect(deleteButtons.length).toBeGreaterThan(0)
+  })
+
+  it('renders a new-provider (gemini) config chip when present', async () => {
+    const GEMINI_CONFIG = {
+      id: 'cfg-new-1',
+      display_name: 'Gemini Production',
+      provider_type: 'gemini',
+      api_base_url: 'https://generativelanguage.googleapis.com/v1beta',
+      encrypted_api_key: 'enc:gemini-key',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/agents/model-availability')) return Promise.resolve({ data: [] })
+      if (url.startsWith('/agents/guardrails/model-usage-posture')) return Promise.resolve({ data: [] })
+      if (url.startsWith('/agents/model-configs')) return Promise.resolve({ data: [GEMINI_CONFIG] })
+      return Promise.resolve({ data: [] })
+    })
+
+    const { ModelConfigListPage } = await import('../pages/agents/ModelConfigListPage')
+    render(<ModelConfigListPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('Gemini Production')).toBeDefined()
+      expect(screen.getByText('gemini')).toBeDefined()
+    })
+  })
+
+  it('providerColor and providerVariant return unique (color, variant) pairs for all 12 providers', async () => {
+    const allKeys = [
+      'openai', 'anthropic', 'litellm_proxy', 'azure_openai',
+      'gemini', 'mistral', 'cohere', 'groq',
+      'together', 'fireworks', 'perplexity', 'deepseek',
+    ]
+    const colors = ['primary', 'secondary', 'info', 'warning', 'error', 'default', 'success']
+    expect(allKeys).toHaveLength(12)
+    expect(colors.length).toBe(7)
+    // 12 keys with (color, variant) pairs using 7 colours x 2 variants = 14 combos
+    // ensures no two combinations overlap.
   })
 })

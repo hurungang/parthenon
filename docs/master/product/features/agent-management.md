@@ -18,7 +18,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Enables explicit, many-to-many assignment of agent identities to roles, managed through the UI
 - Provides guided forms for defining agent types, selecting identities, roles, models, and input/output options
 - Manages agent identity authentication, token storage, refresh, and re-authentication flows
-- Centralizes model provider configuration and selection for agent types
+- Centralizes model provider configuration and selection for agent types, backed by the [Model Configurations](./model-configurations.md) catalogue supporting twelve LLM providers across two dispatch families (OpenAI-compatible and native-API)
 - Enforces max-instance limits for each agent type
 - Manages agent execution lifecycle (creation, operation, termination)
 - Provides real-time preview of allowed actions for each role
@@ -56,7 +56,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - **Agent Type**: A defined class of agent with specific identity, role, and model configuration
 - **Conversation Agent Session**: A persistent, user-named conversation with a conversation-type agent; includes automatic title generation, session management (start/resume/end/archive), and full turn history
 - **Session Type**: Either traditional (named session) or passthrough (direct agent identity propagation to MCP server)
-- **Model Configuration**: Central management of model providers and enabled models for agent use
+- **Model Configuration**: Central management of model providers and enabled models for agent use; the supported provider catalogue and lifecycle are defined in the [Model Configurations](./model-configurations.md) feature spec
 - **Execution Lifecycle**: The process of creating, running, and terminating agent executions (formerly instances)
 - **Filtering**: Ability to filter agent executions by agent type for targeted review
 - **Dialog-Based Details**: Agent type details, plan preview, and execution logs are accessible in a single, tabbed dialog

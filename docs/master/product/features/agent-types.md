@@ -16,6 +16,7 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - Supports clear visibility of guardrail usage and policy outcomes in execution summaries
 - Validates SOP/delegation configuration for **recursive delegation risk** at create and update entry points, blocking recursion-prone submissions
 - Validates **recursion/dead-loop risk** at run initiation and prevents execution when risk conditions are detected
+- The model picker in the Agent Type form is sourced from the centrally managed [Model Configurations](./model-configurations.md) catalogue and grows automatically as new providers and models are configured
 
 ## Recursion and Dead-Loop Prevention
 - Agent Type create and update flows **validate recursive delegation risk** in SOP and delegation configuration

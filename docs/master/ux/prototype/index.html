@@ -112,8 +112,85 @@ tbody tr:last-child{border-bottom:none}
 .chip-purple{background:#EDE9FE;color:#6D28D9}
 .chip-gray{background:#F1F5F9;color:#475569}
 .chip-orange{background:#FED7AA;color:#C2410C}
+/* 12 distinct provider chip colours — extended for expand-model-config-providers */
+.chip-teal{background:#D1FAE5;color:#065F46}
+.chip-pink{background:#FCE7F3;color:#9D174D}
+.chip-indigo{background:#DBEAFE;color:#3730A3}
+.chip-cyan{background:#CFFAFE;color:#155E75}
+.chip-red-dark{background:#FECACA;color:#991B1B}
+.chip-amber{background:#FEF3C7;color:#92400E}
+.chip-violet{background:#DDD6FE;color:#4C1D95}
+.chip-green-dark{background:#DCFCE7;color:#166534}
+.chip-slate{background:#E5E7EB;color:#1F2937}
+.chip-new-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:3px}
 .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 .dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+
+/* ── MODEL CONFIG TABLE ENHANCEMENTS ── */
+.model-chip-list{display:flex;flex-wrap:wrap;gap:4px}
+.model-chip-inline{display:inline-flex;align-items:center;padding:2px 8px;border-radius:12px;font-size:10.5px;font-weight:500;background:#F1F5F9;color:#475569;border:1px solid #E2E8F0}
+.mc-table td{vertical-align:middle;padding:10px 14px}
+.mc-table .actions-cell{display:flex;align-items:center;gap:6px;white-space:nowrap}
+
+/* ── PROVIDER DROPDOWN (custom-styled for the prototype) ── */
+.provider-select-shell{position:relative}
+.provider-select{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--primary);border-radius:var(--radius-sm);background:#fff;cursor:pointer;box-shadow:0 0 0 3px var(--primary-light);min-height:40px}
+.provider-select.readonly{border-color:var(--border);box-shadow:none;cursor:default}
+.provider-select .ps-caret{margin-left:auto;color:var(--text-secondary);font-size:11px}
+.provider-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);z-index:200;max-height:380px;overflow-y:auto}
+.provider-dropdown .pd-group-label{padding:8px 14px 4px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);background:#F8FAFC;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px}
+.provider-dropdown .pd-group-label.new{background:#FFFBEB;color:#92400E}
+.provider-dropdown .pd-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;transition:background .12s}
+.provider-dropdown .pd-item:hover{background:#F0F7FE}
+.provider-dropdown .pd-item.selected{background:#E3F2FD}
+.provider-dropdown .pd-item .pd-meta{display:flex;flex-direction:column;gap:1px;min-width:0}
+.provider-dropdown .pd-item .pd-meta small{font-size:10.5px;color:var(--text-secondary)}
+.provider-dropdown .pd-divider{height:1px;background:#E5E7EB;margin:0}
+
+/* ── MODEL FETCH CHECKBOX LIST ── */
+.model-fetch-wrap{border:1px solid var(--border);border-radius:var(--radius-sm);max-height:220px;overflow-y:auto;background:#fff;margin-top:8px}
+.model-fetch-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12.5px;transition:background var(--transition)}
+.model-fetch-item:hover{background:#F0F7FE}
+.model-fetch-item input{accent-color:var(--primary);cursor:pointer}
+
+/* ── CASCADE VISUALISATION ── */
+.cascade-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:6px}
+.cascade-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#FBFDFF;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-secondary)}
+.cascade-toggle-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;font-weight:600;cursor:pointer}
+.cascade-toggle-btn .ct-dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.cascade-toggle-btn.disabled .ct-dot{background:var(--text-secondary)}
+.cascade-level + .cascade-level{border-top:1px solid var(--border)}
+.cascade-row{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:12px;padding:10px 14px}
+.cascade-level.vendor .cascade-row{background:#F4F8FC}
+.cascade-level.model .cascade-row{background:#fff}
+.cascade-level.effect .cascade-row{background:#FFF8E1;font-size:12px}
+.cascade-chevron{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;border-radius:4px;font-size:13px;line-height:1}
+.cascade-chevron:hover{background:#E3F2FD;color:var(--primary)}
+.cascade-level.collapsed .cascade-children{display:none}
+.cascade-level.collapsed .cascade-chevron{transform:rotate(-90deg)}
+.cascade-name{font-weight:600;font-size:13.5px}
+.cascade-meta{font-size:11.5px;color:var(--text-secondary);font-weight:500}
+.cascade-state-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#E8F5E9;color:#1B5E20}
+.cascade-state-badge.disabled{background:#F1F5F9;color:#475569}
+.cascade-children{padding:6px 0 8px 38px;background:#FBFDFF;border-top:1px dashed var(--border)}
+.cascade-effect-line{display:flex;align-items:center;gap:8px;padding:4px 14px 4px 38px;font-size:12px;color:#7A3E00;background:#FFF8E1}
+.cascade-effect-line .arrow{color:var(--warning);font-weight:700}
+
+/* ── CHIP LEGEND STRIP ── */
+.legend-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:12px}
+.legend-strip strong{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-right:4px}
+.legend-strip .legend-item{display:inline-flex;align-items:center;gap:5px}
+
+/* ── CHANGE BANNER ── */
+.change-banner{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:18px}
+.change-banner .cb-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.change-banner .cb-body{flex:1}
+.change-banner h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+.change-banner .cb-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-left:6px;vertical-align:middle}
+
+/* ── TOAST ── */
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
 /* ── FORMS ── */
 .form-group{margin-bottom:16px}
@@ -464,32 +541,83 @@ strong{font-weight:600}
 <!-- ═══════════════════════════════ VIEW: MODEL CONFIGS ═══════════════════════════════ -->
 <div id="view-model-configs" class="view">
   <div class="view-header">
-    <div><h2>Model Configs</h2><div class="view-desc">Configure model providers and workflow generation settings</div></div>
-    <button class="btn btn-primary" onclick="openModal('modal-model-config')">+ Create Model Config</button>
+    <div><h2>Model Configs</h2><div class="view-desc">Configure LLM provider credentials and endpoints. 12 providers supported with distinct chip colours.</div></div>
+    <button class="btn btn-primary" onclick="mcOpenCreate()">+ Create Model Config</button>
   </div>
 
+  <!-- Change banner -->
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>8 new LLM providers added to the catalogue <span class="cb-tag">expand-model-config-providers</span></h4>
+      <p>The dropdown now offers twelve providers: the four incumbent ones (<strong>openai, anthropic, litellm_proxy, azure_openai</strong>) and eight new ones (<strong>gemini, mistral, cohere, groq, together, fireworks, perplexity, deepseek</strong>). Each has a distinct chip colour.</p>
+    </div>
+  </div>
+
+  <!-- Chip legend -->
+  <div class="legend-strip">
+    <strong>Provider chips</strong>
+    <span class="legend-item"><span class="chip chip-blue">openai</span></span>
+    <span class="legend-item"><span class="chip chip-purple">anthropic</span></span>
+    <span class="legend-item"><span class="chip chip-teal">litellm_proxy</span></span>
+    <span class="legend-item"><span class="chip chip-orange">azure_openai</span></span>
+    <span class="legend-item text-secondary">— new —</span>
+    <span class="legend-item"><span class="chip chip-pink">gemini</span></span>
+    <span class="legend-item"><span class="chip chip-indigo">mistral</span></span>
+    <span class="legend-item"><span class="chip chip-cyan">cohere</span></span>
+    <span class="legend-item"><span class="chip chip-red-dark">groq</span></span>
+    <span class="legend-item"><span class="chip chip-amber">together</span></span>
+    <span class="legend-item"><span class="chip chip-violet">fireworks</span></span>
+    <span class="legend-item"><span class="chip chip-green-dark">perplexity</span></span>
+    <span class="legend-item"><span class="chip chip-slate">deepseek</span></span>
+  </div>
+
+  <!-- Model configs table -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+      <h3>Configured LLM Providers <span class="text-secondary" style="font-size:12px;font-weight:400">12 rows &middot; 4 incumbent &middot; 8 new</span></h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="form-control" style="width:200px;padding:6px 10px;font-size:12px" placeholder="Filter by name or provider…">
+        <button class="btn btn-secondary btn-sm">Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Provider</th><th>API Base URL</th>
+              <th>Credentials</th><th>Enabled Models</th>
+              <th>Status</th><th style="text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mcConfigTable">
+            <!-- Injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Configuration card -->
   <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:16px;align-items:start">
     <div class="card">
-      <div class="card-header"><h3>Configured Model Providers</h3></div>
-      <div class="card-body" style="padding:0">
-        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
-          <table>
-            <thead><tr><th>Name</th><th>Provider</th><th>Enabled Models</th><th>Credentials</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><strong>OpenAI Production</strong></td>
-                <td><span class="chip chip-blue">openai</span></td>
-                <td><span class="chip chip-gray">gpt-5.4-mini</span> <span class="chip chip-gray">gpt-5.4</span></td>
-                <td><span class="chip chip-green">Configured</span></td>
-              </tr>
-              <tr>
-                <td><strong>Anthropic Primary</strong></td>
-                <td><span class="chip chip-purple">anthropic</span></td>
-                <td><span class="chip chip-gray">claude-sonnet-4</span></td>
-                <td><span class="chip chip-green">Configured</span></td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="card-header"><h3>Vendor Disable Cascade</h3></div>
+      <div class="card-body">
+        <div class="cascade-card" id="mcCascadeCard">
+          <div class="cascade-intro">
+            <div>
+              <strong style="color:var(--text-primary)">Cohere &rarr; 3 models &rarr; 5 guardrails</strong>
+              <span class="text-secondary"> &middot; Same semantics for all 12 providers.</span>
+            </div>
+            <div>
+              <span id="mcCascadeState" class="chip chip-green">Enabled</span>
+              <button class="cascade-toggle-btn" id="mcCascadeToggleBtn" onclick="mcToggleCascade()">
+                <span class="ct-dot"></span> <span id="mcCascadeToggleLabel">Disable vendor</span>
+              </button>
+            </div>
+          </div>
+          <div id="mcCascadeTree"></div>
         </div>
       </div>
     </div>
@@ -525,7 +653,6 @@ strong{font-weight:600}
         </div>
       </div>
     </div>
-
     <div class="card">
       <div class="card-header"><h3>SOP Workflow Authoring</h3></div>
       <div class="card-body">
@@ -536,7 +663,6 @@ strong{font-weight:600}
         </div>
       </div>
     </div>
-
     <div class="card">
       <div class="card-header"><h3>Agent Types Default SOP</h3></div>
       <div class="card-body">
@@ -2930,7 +3056,12 @@ const viewTitles = {
   'chat': 'Communication Hub',
   'conversations': 'Conversations',
   'results': 'Results',
-  'permissions': 'Permissions & Access'
+  'permissions': 'Permissions & Access',
+  'model-configs': 'Model Configs',
+  'agent-roles': 'Agent Roles',
+  'agent-identities': 'Agent Identities',
+  'agent-executions': 'Agent Executions',
+  'agent-logs': 'Agent Logs'
 };
 
 
@@ -4291,41 +4422,243 @@ function toggleCredentials(val) {
   </div>
 </div>
 
-<!-- MODEL CONFIG MODAL -->
-<div id="modal-model-config" class="modal-overlay">
-  <div class="modal modal-lg">
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG CREATE/EDIT DIALOG — 12 providers                    -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config')">
+  <div class="modal modal-lg" style="max-width:780px">
     <div class="modal-header">
-      <h3>Create Model Configuration</h3>
+      <h3 id="mcDialogTitle">Create Model Configuration</h3>
       <button class="modal-close" onclick="closeModal('modal-model-config')">×</button>
     </div>
     <div class="modal-body">
+      <div id="mcDialogError" class="alert alert-warning" style="display:none"></div>
+
+      <div class="alert alert-info">
+        The provider catalogue supports 12 LLM providers. The dropdown is grouped into <strong>Existing (validated)</strong> and <strong>New (this change)</strong>.
+      </div>
+
+      <div class="form-group">
+        <label>Display Name <span style="color:var(--error)">*</span></label>
+        <input class="form-control" id="mcName" placeholder="e.g. Gemini 2.5 Pro Production">
+      </div>
+
+      <!-- Custom provider dropdown -->
+      <div class="form-group">
+        <label>Provider Type <span style="color:var(--error)">*</span></label>
+        <div class="provider-select-shell" id="mcProviderShell">
+          <div class="provider-select" id="mcProviderSelect" onclick="mcToggleProviderDropdown(event)">
+            <span class="chip chip-blue">openai</span>
+            <span>OpenAI</span>
+            <span class="ps-caret">▾</span>
+          </div>
+          <div class="provider-dropdown" id="mcProviderDropdown" style="display:none">
+            <div class="pd-group-label">Existing (validated)</div>
+            <div class="pd-item selected" onclick="mcPickProvider(this,'openai','OpenAI','chip-blue')">
+              <span class="chip chip-blue">openai</span>
+              <div class="pd-meta"><strong>OpenAI</strong><small>Flagship OpenAI chat-completions</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'anthropic','Anthropic','chip-purple')">
+              <span class="chip chip-purple">anthropic</span>
+              <div class="pd-meta"><strong>Anthropic</strong><small>Claude native messages API</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'litellm_proxy','LiteLLM Proxy','chip-teal')">
+              <span class="chip chip-teal">litellm_proxy</span>
+              <div class="pd-meta"><strong>LiteLLM Proxy</strong><small>Aggregator gateway</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'azure_openai','Azure OpenAI','chip-orange')">
+              <span class="chip chip-orange">azure_openai</span>
+              <div class="pd-meta"><strong>Azure OpenAI</strong><small>Azure-hosted OpenAI</small></div>
+            </div>
+            <div class="pd-divider"></div>
+            <div class="pd-group-label new">New in this change · +8</div>
+            <div class="pd-item" onclick="mcPickProvider(this,'gemini','Google Gemini','chip-pink')">
+              <span class="chip chip-pink">gemini</span>
+              <div class="pd-meta"><strong>Google Gemini</strong><small>Hyperscaler — native generateContent API</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'mistral','Mistral AI','chip-indigo')">
+              <span class="chip chip-indigo">mistral</span>
+              <div class="pd-meta"><strong>Mistral AI</strong><small>European cloud — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'cohere','Cohere','chip-cyan')">
+              <span class="chip chip-cyan">cohere</span>
+              <div class="pd-meta"><strong>Cohere</strong><small>Enterprise chat — native /chat endpoint</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'groq','Groq','chip-red-dark')">
+              <span class="chip chip-red-dark">groq</span>
+              <div class="pd-meta"><strong>Groq</strong><small>Specialty fast inference — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'together','Together AI','chip-amber')">
+              <span class="chip chip-amber">together</span>
+              <div class="pd-meta"><strong>Together AI</strong><small>Open-weights hosting — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'fireworks','Fireworks AI','chip-violet')">
+              <span class="chip chip-violet">fireworks</span>
+              <div class="pd-meta"><strong>Fireworks AI</strong><small>Open-weights hosting — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'perplexity','Perplexity','chip-green-dark')">
+              <span class="chip chip-green-dark">perplexity</span>
+              <div class="pd-meta"><strong>Perplexity</strong><small>Search-augmented chat — OpenAI-compatible</small></div>
+            </div>
+            <div class="pd-item" onclick="mcPickProvider(this,'deepseek','DeepSeek','chip-slate')">
+              <span class="chip chip-slate">deepseek</span>
+              <div class="pd-meta"><strong>DeepSeek</strong><small>Chinese open-weights — OpenAI-compatible</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
-          <label>Display Name</label>
-          <input class="form-control" value="OpenAI Production">
+          <label>API Base URL</label>
+          <input class="form-control" id="mcBaseUrl" placeholder="Optional — leave blank to use provider default">
+          <div class="form-hint">Leave blank to use the provider's default endpoint.</div>
         </div>
         <div class="form-group">
-          <label>Provider Type</label>
-          <select class="form-control">
-            <option selected>openai</option>
-            <option>anthropic</option>
-            <option>litellm_proxy</option>
-            <option>azure_openai</option>
-          </select>
+          <label>API Key <span style="color:var(--error)">*</span></label>
+          <input type="password" class="form-control" id="mcApiKey" placeholder="Paste the provider's API key">
+          <div class="form-hint" id="mcApiKeyHint">Encrypted with platform vault before storage. Never returned to client.</div>
         </div>
       </div>
-      <div class="form-group">
-        <label>API Base URL</label>
-        <input class="form-control" placeholder="Optional — leave blank to use provider default">
-      </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>API Key</label>
-        <input type="password" class="form-control" value="••••••••••••••••">
+
+      <!-- Enabled models + Fetch Models (edit only) -->
+      <div id="mcEditModelsSection" style="display:none;margin-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div>
+            <div class="section-title" style="margin-bottom:2px">Enabled Models</div>
+            <div class="form-hint" style="margin:0"><span id="mcEnabledCount">0</span> model(s) currently enabled</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="mcFetchStatus" class="chip chip-green" style="display:none">Loaded</span>
+            <button class="btn btn-secondary btn-sm" onclick="mcFetchModels()">
+              <span id="mcFetchSpinner" style="display:none">⟳</span>
+              <span>Fetch Models</span>
+            </button>
+          </div>
+        </div>
+        <div class="model-chip-list" id="mcEnabledChips" style="margin-bottom:8px"></div>
+        <div id="mcFetchHintText" class="form-hint" style="margin-bottom:6px">Click <strong>Fetch Models</strong> to load the curated list of well-known model identifiers for this provider.</div>
+        <div class="model-fetch-wrap" id="mcFetchList" style="display:none"></div>
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-danger" id="mcDeleteBtn" style="display:none" onclick="closeModal('modal-model-config');openModal('modal-model-config-delete')">Delete</button>
+      <div style="flex:1"></div>
       <button class="btn btn-secondary" onclick="closeModal('modal-model-config')">Cancel</button>
-      <button class="btn btn-primary" onclick="closeModal('modal-model-config')">Save</button>
+      <button class="btn btn-primary" onclick="mcSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG DELETE CONFIRMATION                                 -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config-delete" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config-delete')">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>Delete model config &ldquo;<span id="mcDeleteName">Mistral AI Production</span>&rdquo;?</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config-delete')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning">
+        This will permanently remove the configuration and the encrypted API key from the platform vault. Agent types that reference one of the enabled models will lose access on their next invocation.
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label style="font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">References detected (safety guard)</label>
+        <div class="table-wrap" style="margin:6px 0 0;border-radius:6px">
+          <table>
+            <thead><tr><th>Agent Type</th><th>Model</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>procurement-orchestrator</td>
+                <td><span class="font-mono text-sm">mistral-large-latest</span></td>
+                <td><span class="chip chip-red">Blocks deletion</span></td>
+              </tr>
+              <tr>
+                <td>contract-reviewer</td>
+                <td><span class="font-mono text-sm">mistral-small-latest</span></td>
+                <td><span class="chip chip-red">Blocks deletion</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="alert alert-warning" style="margin-top:14px;margin-bottom:0;background:#FFEBEE;color:#8E0000;border-left:4px solid var(--error)">
+        <strong>Deletion blocked</strong>: 2 agent type(s) still reference enabled models on this configuration. Reassign or remove those references first, then retry.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config-delete')">Close</button>
+      <button class="btn btn-danger" disabled>Delete anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG ERROR PATTERN DIALOG (403)                          -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config-error" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config-error')">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h3>Create Model Configuration</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config-error')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning" style="background:#FFEBEE;color:#8E0000;border-left:4px solid var(--error)">
+        <strong>Permission denied (HTTP 403)</strong>
+        Your role does not include <span class="font-mono text-sm" style="background:#F1F5F9;padding:1px 4px;border-radius:3px">agents:model_configs:create</span>. Ask a platform administrator to grant this permission.
+      </div>
+      <div class="form-group">
+        <label>Display Name</label>
+        <input class="form-control" value="Cohere Command R Plus Production" readonly>
+      </div>
+      <div class="form-group">
+        <label>Provider Type</label>
+        <input class="form-control" value="cohere" readonly>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>API Key</label>
+        <input type="password" class="form-control" value="••••••••••" readonly>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config-error')">Close</button>
+      <button class="btn btn-primary" disabled>Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- MODEL CONFIG CASCADE MODAL (enlarged view)                       -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div id="modal-model-config-cascade" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-model-config-cascade')">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <h3>Disabled-Vendor Cascade</h3>
+      <button class="modal-close" onclick="closeModal('modal-model-config-cascade')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info">
+        Toggling a vendor's <strong>is_disabled</strong> flag cascades to every model and guardrail under it. The same semantics apply to all twelve providers, including the eight new ones.
+      </div>
+      <div class="cascade-card" id="mcCascadeModalCard" style="margin-top:6px">
+        <div class="cascade-intro">
+          <div>
+            <strong style="color:var(--text-primary)">Cohere &rarr; 3 models &rarr; 5 guardrails</strong>
+            <span class="text-secondary"> &middot; Toggle the vendor to see the cascade.</span>
+          </div>
+          <div>
+            <span id="mcCascadeModalState" class="chip chip-green">Enabled</span>
+            <button class="cascade-toggle-btn" id="mcCascadeModalToggleBtn" onclick="mcToggleCascade()">
+              <span class="ct-dot"></span> <span id="mcCascadeModalToggleLabel">Disable vendor</span>
+            </button>
+          </div>
+        </div>
+        <div id="mcCascadeModalTree"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-model-config-cascade')">Close</button>
     </div>
   </div>
 </div>
@@ -4436,9 +4769,19 @@ function toggleCredentials(val) {
 const wfState = {
   systemModel: '',
   options: [
-    { modelId: 'gpt-5.4-mini', configDisplayName: 'OpenAI Production' },
-    { modelId: 'gpt-5.4', configDisplayName: 'OpenAI Premium' },
-    { modelId: 'claude-sonnet-4', configDisplayName: 'Anthropic Primary' }
+    { modelId: 'gpt-4.1', configDisplayName: 'OpenAI Production' },
+    { modelId: 'gpt-4.1-mini', configDisplayName: 'OpenAI Production' },
+    { modelId: 'claude-sonnet-4', configDisplayName: 'Anthropic Primary' },
+    { modelId: 'claude-opus-4', configDisplayName: 'Anthropic Primary' },
+    { modelId: 'gemini-2.5-pro', configDisplayName: 'Google Gemini Production' },
+    { modelId: 'gemini-2.5-flash', configDisplayName: 'Google Gemini Production' },
+    { modelId: 'mistral-large-latest', configDisplayName: 'Mistral AI Production' },
+    { modelId: 'mistral-medium-latest', configDisplayName: 'Mistral AI Production' },
+    { modelId: 'command-r-plus', configDisplayName: 'Cohere Production' },
+    { modelId: 'command-r', configDisplayName: 'Cohere Production' },
+    { modelId: 'deepseek-chat', configDisplayName: 'DeepSeek Production' },
+    { modelId: 'deepseek-reasoner', configDisplayName: 'DeepSeek Production' },
+    { modelId: 'sonar-pro', configDisplayName: 'Perplexity Production' }
   ]
 };
 
@@ -4568,6 +4911,305 @@ function wfOpenPreviewOnly(type) {
 
 wfPopulateSystemModels();
 wfSyncPreviewHeader();
+
+// ════════════════════════════════════════════════════════════════
+// MODEL CONFIGS — 12 providers with distinct chip colours
+// ════════════════════════════════════════════════════════════════
+var MC_PROVIDERS = [
+  { key:'openai',        label:'OpenAI',         chip:'chip-blue',       isNew:false, status:'enabled',  creds:true,  models:['gpt-4.1','gpt-4.1-mini','o3-mini'], url:'https://api.openai.com/v1' },
+  { key:'anthropic',     label:'Anthropic',      chip:'chip-purple',    isNew:false, status:'enabled',  creds:true,  models:['claude-opus-4','claude-sonnet-4','claude-3-haiku'], url:'https://api.anthropic.com' },
+  { key:'litellm_proxy', label:'LiteLLM Proxy',  chip:'chip-teal',      isNew:false, status:'enabled',  creds:true,  models:['gpt-4.1','claude-sonnet-4','gemini-2.5-pro'], url:'http://litellm-proxy:4000' },
+  { key:'azure_openai',  label:'Azure OpenAI',   chip:'chip-orange',    isNew:false, status:'enabled',  creds:false, models:[], url:'https://acme-openai.openai.azure.com' },
+  { key:'gemini',        label:'Google Gemini',  chip:'chip-pink',      isNew:true,  status:'enabled',  creds:true,  models:['gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash'], url:'https://generativelanguage.googleapis.com/v1beta' },
+  { key:'mistral',       label:'Mistral AI',     chip:'chip-indigo',    isNew:true,  status:'enabled',  creds:true,  models:['mistral-large-latest','mistral-medium-latest','mistral-small-latest'], url:'https://api.mistral.ai/v1' },
+  { key:'cohere',        label:'Cohere',         chip:'chip-cyan',      isNew:true,  status:'enabled',  creds:true,  models:['command-r-plus','command-r','command-light'], url:'https://api.cohere.com/v1' },
+  { key:'groq',          label:'Groq',           chip:'chip-red-dark',  isNew:true,  status:'disabled', creds:true,  models:['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768'], url:'https://api.groq.com/openai/v1' },
+  { key:'together',      label:'Together AI',    chip:'chip-amber',     isNew:true,  status:'enabled',  creds:true,  models:['meta-llama/Llama-3.3-70B-Instruct-Turbo','Qwen/Qwen2.5-72B-Instruct-Turbo'], url:'https://api.together.xyz/v1' },
+  { key:'fireworks',     label:'Fireworks AI',   chip:'chip-violet',    isNew:true,  status:'enabled',  creds:false, models:[], url:'https://api.fireworks.ai/inference/v1' },
+  { key:'perplexity',    label:'Perplexity',     chip:'chip-green-dark',isNew:true,  status:'enabled',  creds:true,  models:['sonar-pro','sonar','llama-3.1-sonar-small-128k-online'], url:'https://api.perplexity.ai' },
+  { key:'deepseek',      label:'DeepSeek',       chip:'chip-slate',     isNew:true,  status:'enabled',  creds:true,  models:['deepseek-chat','deepseek-reasoner'], url:'https://api.deepseek.com/v1' }
+];
+
+var mcSelectedProvider = 'openai';
+var mcEditingKey = null;
+var mcCascadeDisabled = false;
+var mcFetchedModels = [];
+
+// Render the model configs table
+function mcRenderTable() {
+  var html = '';
+  MC_PROVIDERS.forEach(function(p) {
+    var rowStyle = '';
+    if (p.status === 'disabled') rowStyle = 'opacity:.55;background:#F8F8F8';
+    var statusChip = p.status === 'enabled'
+      ? '<span class="chip chip-green">Enabled</span>'
+      : '<span class="chip chip-yellow">Disabled</span>';
+    var credsChip = p.creds
+      ? '<span class="chip chip-green">✓ Credentials set</span>'
+      : '<span class="chip chip-gray">No credentials</span>';
+    var modelsCell = p.models.length === 0
+      ? '<span class="text-secondary font-mono text-sm">—</span>'
+      : '<div class="model-chip-list">' + p.models.map(function(m){return '<span class="model-chip-inline">'+m+'</span>';}).join('') + '</div>';
+    var editBtn = p.status !== 'disabled'
+      ? ' <button class="btn-icon-sm" title="Edit" onclick="mcOpenEdit(\''+p.key+'\')">✎</button>'
+      : ' <button class="btn-icon-sm" title="Re-enable" onclick="mcReEnable(\''+p.key+'\')">↻</button>';
+    html += '<tr style="'+rowStyle+'">'+
+      '<td><strong>'+p.label+' Production</strong><div class="text-secondary font-mono" style="font-size:11px">cfg_'+p.key.replace(/_/g,'')+'_001</div></td>'+
+      '<td><span class="chip '+p.chip+'">'+p.key+'</span>'+(p.isNew?' <span class="chip-new-badge">NEW</span>':'')+'</td>'+
+      '<td class="font-mono text-sm">'+p.url+'</td>'+
+      '<td>'+credsChip+'</td>'+
+      '<td style="max-width:220px">'+modelsCell+'</td>'+
+      '<td>'+statusChip+'</td>'+
+      '<td class="actions-cell" style="text-align:right">'+
+        '<button class="btn-icon-sm" title="View cascade" onclick="openModal(\'modal-model-config-cascade\')">⛨</button>'+
+        editBtn+
+        ' <button class="btn-icon-sm" title="Delete" onclick="mcOpenDelete(\''+p.key+'\')">🗑</button>'+
+      '</td>'+
+    '</tr>';
+  });
+  var tbl = document.getElementById('mcConfigTable');
+  if (tbl) tbl.innerHTML = html;
+}
+
+// ── Cascade visualisation ──
+function mcRenderCascade(targetId) {
+  var node = document.getElementById(targetId);
+  if (!node) return;
+  var vState = mcCascadeDisabled ? 'disabled' : 'enabled';
+  var vClass = mcCascadeDisabled ? 'disabled' : '';
+  var models = [
+    { id:'command-r-plus', label:'command-r-plus', enabled:true, guardrails:[
+      { label:'Hourly — 200 requests', enabled:true }, { label:'Daily — 5,000 requests', enabled:true }
+    ]},
+    { id:'command-r', label:'command-r', enabled:true, guardrails:[
+      { label:'Hourly — 300 requests', enabled:true }
+    ]},
+    { id:'command-light', label:'command-light', enabled:false, guardrails:[
+      { label:'Daily — 10,000 requests', enabled:false }
+    ]}
+  ];
+  var html = '<div class="cascade-level vendor"><div class="cascade-row">'+
+    '<span class="cascade-chevron" onclick="mcToggleCascadeLevel(this)">▾</span>'+
+    '<div style="display:flex;align-items:center;gap:10px">'+
+      '<span class="chip chip-cyan">cohere</span>'+
+      '<span class="cascade-name">Cohere</span>'+
+      '<span class="cascade-state-badge '+vClass+'">'+vState+'</span>'+
+    '</div>'+
+    '<div class="text-secondary text-sm">'+models.length+' models &middot; '+models.reduce(function(a,m){return a+m.guardrails.length;},0)+' guardrails</div>'+
+  '</div><div class="cascade-children">';
+  models.forEach(function(m) {
+    var mClass = (mcCascadeDisabled || !m.enabled) ? 'disabled' : '';
+    var mState = (mcCascadeDisabled || !m.enabled) ? 'disabled' : 'enabled';
+    var effect = mcCascadeDisabled ? '<div class="cascade-effect-line"><span class="arrow">↳</span> <strong>cascade:</strong> vendor disabled — all calls blocked</div>' : '';
+    html += '<div class="cascade-level model"><div class="cascade-row">'+
+      '<span class="cascade-chevron" onclick="mcToggleCascadeLevel(this)">▾</span>'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<span class="model-chip-inline">'+m.label+'</span>'+
+        '<span class="cascade-state-badge '+mClass+'">'+mState+'</span>'+
+      '</div>'+
+      '<div class="text-secondary text-sm">'+m.guardrails.length+' guardrail'+(m.guardrails.length===1?'':'s')+'</div>'+
+    '</div>'+effect+'<div class="cascade-children">';
+    m.guardrails.forEach(function(g) {
+      var gClass = (mcCascadeDisabled || !m.enabled || !g.enabled) ? 'disabled' : '';
+      var gState = (mcCascadeDisabled || !m.enabled || !g.enabled) ? 'disabled' : 'enabled';
+      html += '<div class="cascade-level effect"><div class="cascade-row">'+
+        '<span class="cascade-chevron" style="visibility:hidden">▾</span>'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<span class="font-mono text-sm">⛨ '+g.label+'</span>'+
+          '<span class="cascade-state-badge '+gClass+'">'+gState+'</span>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text-secondary)">'+(mcCascadeDisabled?'inherited disabled':(m.enabled?(g.enabled?'enforced':'paused'):'parent disabled'))+'</div>'+
+      '</div></div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  node.innerHTML = html;
+}
+function mcToggleCascadeLevel(chevron) {
+  chevron.parentElement.parentElement.classList.toggle('collapsed');
+}
+function mcToggleCascade() {
+  mcCascadeDisabled = !mcCascadeDisabled;
+  function update(id, stateElId, toggleBtnId, toggleLabelId) {
+    var st = document.getElementById(stateElId);
+    if (st) { st.textContent = mcCascadeDisabled ? 'Disabled' : 'Enabled'; st.className = mcCascadeDisabled ? 'chip chip-yellow' : 'chip chip-green'; }
+    var btn = document.getElementById(toggleBtnId);
+    if (btn) btn.classList.toggle('disabled', mcCascadeDisabled);
+    var lbl = document.getElementById(toggleLabelId);
+    if (lbl) lbl.textContent = mcCascadeDisabled ? 'Re-enable vendor' : 'Disable vendor';
+    mcRenderCascade(id);
+  }
+  update('mcCascadeTree', 'mcCascadeState', 'mcCascadeToggleBtn', 'mcCascadeToggleLabel');
+  update('mcCascadeModalTree', 'mcCascadeModalState', 'mcCascadeModalToggleBtn', 'mcCascadeModalToggleLabel');
+}
+function mcReEnable(key) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===key;});
+  if (p) { p.status = 'enabled'; mcRenderTable(); }
+}
+
+// ── Dialog: Create ──
+function mcOpenCreate() {
+  mcEditingKey = null;
+  mcFetchedModels = [];
+  document.getElementById('mcDialogTitle').textContent = 'Create Model Configuration';
+  document.getElementById('mcName').value = '';
+  document.getElementById('mcBaseUrl').value = '';
+  document.getElementById('mcApiKey').value = '';
+  document.getElementById('mcApiKeyHint').textContent = 'Encrypted with platform vault before storage. Never returned to client.';
+  document.getElementById('mcDialogError').style.display = 'none';
+  document.getElementById('mcEditModelsSection').style.display = 'none';
+  document.getElementById('mcDeleteBtn').style.display = 'none';
+  mcSelectedProvider = 'openai';
+  mcUpdateProviderSelect('openai', 'OpenAI', 'chip-blue');
+  document.getElementById('mcProviderDropdown').style.display = 'none';
+  openModal('modal-model-config');
+}
+
+// ── Dialog: Edit ──
+function mcOpenEdit(key) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===key;}) || MC_PROVIDERS[0];
+  mcEditingKey = key;
+  mcFetchedModels = [];
+  document.getElementById('mcDialogTitle').textContent = 'Edit Model Configuration — ' + p.label + ' Production';
+  document.getElementById('mcName').value = p.label + ' Production';
+  document.getElementById('mcBaseUrl').value = p.url;
+  document.getElementById('mcApiKey').value = p.creds ? '••••••••••••••••' : '';
+  document.getElementById('mcApiKeyHint').textContent = p.creds ? '✓ API key is currently set. Clear and type a new key to update.' : 'No API key set. Provide one to enable this provider.';
+  document.getElementById('mcDialogError').style.display = 'none';
+  document.getElementById('mcEditModelsSection').style.display = 'block';
+  document.getElementById('mcDeleteBtn').style.display = 'inline-flex';
+  document.getElementById('mcFetchStatus').style.display = 'none';
+  document.getElementById('mcFetchList').style.display = 'none';
+  document.getElementById('mcFetchHintText').innerHTML = 'Click <strong>Fetch Models</strong> to load the curated list of well-known model identifiers for this provider.';
+  mcSelectedProvider = key;
+  mcUpdateProviderSelect(key, p.label, p.chip);
+  document.getElementById('mcProviderDropdown').style.display = 'none';
+  // Render enabled model chips
+  var chipsHtml = '';
+  p.models.forEach(function(m){ chipsHtml += '<span class="model-chip-inline">'+m+' <span style="opacity:.55">✓</span></span>'; });
+  document.getElementById('mcEnabledChips').innerHTML = chipsHtml || '<span class="text-secondary text-sm">None</span>';
+  document.getElementById('mcEnabledCount').textContent = p.models.length;
+  openModal('modal-model-config');
+}
+
+// ── Dialog: Delete ──
+function mcOpenDelete(key) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===key;}) || MC_PROVIDERS[0];
+  document.getElementById('mcDeleteName').textContent = p.label + ' Production';
+  openModal('modal-model-config-delete');
+}
+
+// ── Dialog: Save ──
+function mcSave() {
+  var name = document.getElementById('mcName').value.trim();
+  if (!name) {
+    document.getElementById('mcDialogError').style.display = 'block';
+    document.getElementById('mcDialogError').innerHTML = '<strong>Validation error</strong>: Display name is required.';
+    return;
+  }
+  closeModal('modal-model-config');
+  mcFlashToast(mcEditingKey ? 'Model config updated. Table refreshes automatically.' : 'Model config created. The new row appears in the list.');
+}
+
+// ── Provider dropdown ──
+function mcToggleProviderDropdown(e) {
+  e.stopPropagation();
+  var dd = document.getElementById('mcProviderDropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+function mcPickProvider(el, key, label, chipClass) {
+  document.querySelectorAll('#mcProviderDropdown .pd-item').forEach(function(n){n.classList.remove('selected');});
+  el.classList.add('selected');
+  mcUpdateProviderSelect(key, label, chipClass);
+  mcSelectedProvider = key;
+  document.getElementById('mcProviderDropdown').style.display = 'none';
+  // Update base URL placeholder
+  var urls = {
+    openai:'https://api.openai.com/v1', anthropic:'https://api.anthropic.com',
+    litellm_proxy:'http://litellm-proxy:4000', azure_openai:'https://<resource>.openai.azure.com',
+    gemini:'https://generativelanguage.googleapis.com/v1beta', mistral:'https://api.mistral.ai/v1',
+    cohere:'https://api.cohere.com/v1', groq:'https://api.groq.com/openai/v1',
+    together:'https://api.together.xyz/v1', fireworks:'https://api.fireworks.ai/inference/v1',
+    perplexity:'https://api.perplexity.ai', deepseek:'https://api.deepseek.com/v1'
+  };
+  document.getElementById('mcBaseUrl').placeholder = urls[key] || '';
+}
+function mcUpdateProviderSelect(key, label, chipClass) {
+  var sel = document.getElementById('mcProviderSelect');
+  sel.innerHTML = '<span class="chip '+chipClass+'">'+key+'</span><span>'+label+'</span><span class="ps-caret">▾</span>';
+}
+
+// ── Fetch Models ──
+function mcFetchModels() {
+  if (!mcEditingKey) return;
+  var p = MC_PROVIDERS.find(function(x){return x.key===mcEditingKey;});
+  if (!p) return;
+  // Simulate a network fetch with a curated list
+  var curated = {
+    gemini: ['gemini-2.5-pro','gemini-2.5-flash','gemini-2.0-flash','gemini-1.5-pro','gemini-1.5-flash'],
+    mistral: ['mistral-large-latest','mistral-medium-latest','mistral-small-latest','mistral-embed'],
+    cohere: ['command-r-plus','command-r','command-light','command-a-03-2025'],
+    groq: ['llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768','gemma2-9b-it'],
+    together: ['meta-llama/Llama-3.3-70B-Instruct-Turbo','Qwen/Qwen2.5-72B-Instruct-Turbo','deepseek-ai/DeepSeek-V3'],
+    fireworks: ['llama-v3p3-70b-instruct','mixtral-8x7b-instruct','yi-large'],
+    perplexity: ['sonar-pro','sonar','llama-3.1-sonar-small-128k-online','llama-3.1-sonar-large-128k-online'],
+    deepseek: ['deepseek-chat','deepseek-reasoner']
+  };
+  mcFetchedModels = curated[mcEditingKey] || p.models.concat(['model-a','model-b']);
+  // Show loading state briefly
+  document.getElementById('mcFetchSpinner').style.display = 'inline';
+  setTimeout(function() {
+    document.getElementById('mcFetchSpinner').style.display = 'none';
+    document.getElementById('mcFetchStatus').style.display = 'inline-flex';
+    document.getElementById('mcFetchStatus').textContent = 'Loaded ' + mcFetchedModels.length + ' models';
+    document.getElementById('mcFetchHintText').innerHTML = '✓ Curated list loaded for <strong>'+mcEditingKey+'</strong>. Select models to enable below.';
+    // Render checkbox list
+    var p2 = MC_PROVIDERS.find(function(x){return x.key===mcEditingKey;});
+    var enabled = p2 ? p2.models : [];
+    var html = '';
+    mcFetchedModels.forEach(function(m) {
+      var checked = enabled.indexOf(m) !== -1 ? ' checked' : '';
+      html += '<label class="model-fetch-item"><input type="checkbox"'+checked+' onchange="mcToggleFetchedModel(this,\''+m+'\')"> '+m+'</label>';
+    });
+    document.getElementById('mcFetchList').innerHTML = html;
+    document.getElementById('mcFetchList').style.display = 'block';
+  }, 500);
+}
+function mcToggleFetchedModel(cb, model) {
+  var p = MC_PROVIDERS.find(function(x){return x.key===mcEditingKey;});
+  if (!p) return;
+  if (cb.checked) { if (p.models.indexOf(model) === -1) p.models.push(model); }
+  else { p.models = p.models.filter(function(m){return m!==model;}); }
+  // Update chips
+  var chipsHtml = '';
+  p.models.forEach(function(m){ chipsHtml += '<span class="model-chip-inline">'+m+' <span style="opacity:.55">✓</span></span>'; });
+  document.getElementById('mcEnabledChips').innerHTML = chipsHtml || '<span class="text-secondary text-sm">None</span>';
+  document.getElementById('mcEnabledCount').textContent = p.models.length;
+}
+
+// ── Toast ──
+function mcFlashToast(msg) {
+  var t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1B5E20;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;animation:toastIn .3s ease';
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s ease'; setTimeout(function(){ document.body.removeChild(t); }, 350); }, 3200);
+}
+
+// Close provider dropdown on outside click
+document.addEventListener('click', function(e) {
+  var shell = document.getElementById('mcProviderShell');
+  if (shell && !shell.contains(e.target)) {
+    var dd = document.getElementById('mcProviderDropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
+// Initialise on page load
+mcRenderTable();
+mcRenderCascade('mcCascadeTree');
+mcRenderCascade('mcCascadeModalTree');
 </script>
 
 </body>

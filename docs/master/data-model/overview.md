@@ -314,7 +314,7 @@ erDiagram
     ModelConfig {
         uuid id
         string name
-        enum provider_type
+        enum provider_type "12 providers — 4 incumbent (openai, anthropic, litellm_proxy, azure_openai) + 8 new (gemini, mistral, cohere, groq, together, fireworks, perplexity, deepseek). Adding a new value is a release-led activity."
         string api_endpoint
         string api_key_encrypted
         json enabled_models

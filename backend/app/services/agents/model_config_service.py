@@ -4,6 +4,7 @@ import uuid
 import logging
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 
 from app.core.credential_vault import get_vault
@@ -12,6 +13,39 @@ from app.db.models.agents import AgentType, ModelConfig, ModelProvider
 from app.db.session import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+
+# ── Curated static model lists (no public listing endpoint) ──────────────────
+#
+# Reviewed against each vendor's "generally available" model catalogue at
+# release time.  Sorted ascending by the alphabetic ordering applied by
+# ``list_models_for_config``; no per-list re-sorting is needed.
+
+# Curated list of well-known Google Gemini model identifiers.  Source:
+# Google's official "generally available" Gemini model documentation.
+GEMINI_CURATED_MODELS: list[str] = sorted(
+    [
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+    ]
+)
+
+# Curated list of well-known Cohere model identifiers.  Source: Cohere's
+# official "generally available" model documentation for the Command family.
+COHERE_CURATED_MODELS: list[str] = sorted(
+    [
+        "command",
+        "command-light",
+        "command-r",
+        "command-r-plus",
+        "command-r7b",
+    ]
+)
 
 
 class ModelConfigNotFoundError(Exception):
@@ -138,9 +172,9 @@ class ModelConfigService:
 
         Returns a static list for providers that don't support programmatic
         model listing, and queries the live API when possible.
-        """
-        import httpx
 
+        Network or credential failures degrade to ``[]`` and log an error.
+        """
         obj = await self.get_model_config(config_id, db)
         provider = obj.provider_type
 
@@ -155,6 +189,7 @@ class ModelConfigService:
                 logger.warning("Failed to decrypt credentials for ModelConfig %s: %s", config_id, exc)
 
         base_url = obj.api_base_url
+        provider_value = provider.value if isinstance(provider, ModelProvider) else str(provider)
 
         try:
             if provider == ModelProvider.openai:
@@ -172,6 +207,20 @@ class ModelConfigService:
                 models = await self._list_azure_models(api_key, base_url)
             elif provider == ModelProvider.litellm_proxy:
                 models = await self._list_litellm_models(api_key, base_url)
+            elif provider == ModelProvider.gemini:
+                models = await self._list_gemini_models(api_key, base_url)
+            elif provider == ModelProvider.cohere:
+                models = await self._list_cohere_models(api_key, base_url)
+            elif provider_value in {
+                "mistral",
+                "groq",
+                "together",
+                "fireworks",
+                "perplexity",
+                "deepseek",
+            }:
+                # Six new OpenAI-compatible providers share the same /models endpoint shape.
+                models = await self._list_openai_compat_models(api_key, base_url)
             else:
                 models = []
         except Exception as exc:
@@ -183,10 +232,45 @@ class ModelConfigService:
     async def _list_openai_models(
         self, api_key: str | None, base_url: str | None
     ) -> list[str]:
-        """Fetch model list from OpenAI-compatible endpoint."""
-        import httpx
+        """Fetch model list from OpenAI-compatible endpoint.
 
-        url = f"{base_url.rstrip('/')}/models" if base_url else "https://api.openai.com/v1/models"
+        Implementation note: delegates to the shared ``_list_openai_compat_models``
+        helper; the dedicated name is kept for the public API surface and for
+        the existing unit-test patch points.
+        """
+        return await self._list_openai_compat_models(
+            api_key=api_key,
+            base_url=base_url or "https://api.openai.com/v1",
+        )
+
+    async def _list_litellm_models(
+        self, api_key: str | None, base_url: str | None
+    ) -> list[str]:
+        """Fetch model list from a LiteLLM proxy /models endpoint.
+
+        Like ``_list_openai_models``, delegates to the shared
+        ``_list_openai_compat_models`` helper.
+        """
+        return await self._list_openai_compat_models(api_key=api_key, base_url=base_url)
+
+    async def _list_openai_compat_models(
+        self, api_key: str | None, base_url: str | None
+    ) -> list[str]:
+        """Fetch model list from any OpenAI-compatible ``/models`` endpoint.
+
+        Used by all 9 OpenAI-compatible providers (the 3 incumbent
+        ``openai`` / ``litellm_proxy`` / ``azure_openai`` and the 6 new
+        ``mistral`` / ``groq`` / ``together`` / ``fireworks`` / ``perplexity`` /
+        ``deepseek``).
+
+        Returns ``[]`` if ``base_url`` is missing for a provider that does not
+        have a hard-coded default — the caller handles the empty result and
+        returns a 200 with the list, per the existing failure-degradation
+        contract.
+        """
+        if not base_url:
+            return []
+        url = f"{base_url.rstrip('/')}/models"
         headers: dict[str, str] = {}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -203,21 +287,30 @@ class ModelConfigService:
         """Return static list of common Azure OpenAI deployment names."""
         return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-35-turbo"]
 
-    async def _list_litellm_models(
+    async def _list_gemini_models(
         self, api_key: str | None, base_url: str | None
     ) -> list[str]:
-        """Fetch model list from a LiteLLM proxy /models endpoint."""
-        import httpx
+        """Return the curated list of well-known Google Gemini model identifiers.
 
-        if not base_url:
-            return []
-        url = f"{base_url.rstrip('/')}/models"
-        headers: dict[str, str] = {}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+        Gemini does not expose a stable public listing endpoint that returns
+        the full catalogue in a single response, so the list is curated from
+        Google's official "generally available" documentation.  An empty or
+        missing ``api_key`` does not prevent the curated list from being
+        returned (the operator will be able to choose any of these when
+        creating the configuration).
+        """
+        del api_key, base_url  # curated list does not depend on credentials
+        return list(GEMINI_CURATED_MODELS)
 
-        async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return [m["id"] for m in data.get("data", []) if isinstance(m.get("id"), str)]
+    async def _list_cohere_models(
+        self, api_key: str | None, base_url: str | None
+    ) -> list[str]:
+        """Return the curated list of well-known Cohere model identifiers.
+
+        Cohere does not expose a stable public listing endpoint that returns
+        the full catalogue, so the list is curated from Cohere's official
+        "generally available" documentation.  An empty or missing
+        ``api_key`` does not prevent the curated list from being returned.
+        """
+        del api_key, base_url  # curated list does not depend on credentials
+        return list(COHERE_CURATED_MODELS)

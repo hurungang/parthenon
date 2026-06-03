@@ -426,3 +426,236 @@ async def test_list_models_for_openai_returns_structured_error_on_failure():
 
     # Must not raise; returns an empty list or error-indicator list
     assert isinstance(result, list)
+
+
+# ── Eight new providers (Phase 5.1) ────────────────────────────────────────────
+#
+# Per ``implementation-plan.md`` Task 5.1: each of the 8 new providers gets
+# a CRUD lifecycle test that exercises the AES-256 vault, and a list-models
+# test that confirms the curated / shared lister is invoked.
+
+
+NEW_PROVIDERS: list[ModelProvider] = [
+    ModelProvider.gemini,
+    ModelProvider.mistral,
+    ModelProvider.cohere,
+    ModelProvider.groq,
+    ModelProvider.together,
+    ModelProvider.fireworks,
+    ModelProvider.perplexity,
+    ModelProvider.deepseek,
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", NEW_PROVIDERS, ids=[p.value for p in NEW_PROVIDERS])
+async def test_create_model_config_new_provider_encrypts_api_key(provider: ModelProvider):
+    """create_model_config encrypts the api_key for every new provider."""
+    service = ModelConfigService()
+    db = _mock_db()
+    vault = _mock_vault(f"enc:{provider.value}-key")
+    config = _make_config(provider_type=provider, encrypted_api_key=f"enc:{provider.value}-key")
+
+    async def refresh(obj, attrs=None):
+        pass
+
+    db.refresh.side_effect = refresh
+
+    with (
+        patch("app.services.agents.model_config_service.ModelConfig", return_value=config),
+        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
+    ):
+        result = await service.create_model_config(
+            display_name=f"{provider.value} config",
+            provider_type=provider,
+            api_base_url=None,
+            api_key="sk-rawkey",
+            enabled_models=[],
+            db=db,
+        )
+
+    vault.encrypt.assert_called_once()
+    call_arg = vault.encrypt.call_args[0][0]
+    assert "sk-rawkey" in call_arg
+    assert result.id == config.id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", NEW_PROVIDERS, ids=[p.value for p in NEW_PROVIDERS])
+async def test_update_model_config_new_provider_re_encrypts_api_key(provider: ModelProvider):
+    """update_model_config re-encrypts the api_key for every new provider."""
+    service = ModelConfigService()
+    db = _mock_db()
+    vault = _mock_vault(f"enc:{provider.value}-new")
+    config = _make_config(provider_type=provider, encrypted_api_key="enc:old")
+    db.get.return_value = config
+
+    async def refresh(obj, attrs=None):
+        pass
+
+    db.refresh.side_effect = refresh
+
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
+        await service.update_model_config(
+            config.id,
+            display_name=None,
+            provider_type=None,
+            api_base_url=None,
+            api_key="new-raw-key",
+            enabled_models=None,
+            db=db,
+        )
+
+    vault.encrypt.assert_called_once()
+    assert config.encrypted_api_key == f"enc:{provider.value}-new"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", NEW_PROVIDERS, ids=[p.value for p in NEW_PROVIDERS])
+async def test_delete_model_config_new_provider_succeeds_when_not_referenced(provider: ModelProvider):
+    """delete_model_config succeeds for every new provider when not referenced."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(
+        provider_type=provider,
+        enabled_models=[f"{provider.value}-model"],
+    )
+    db.get.return_value = config
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = mock_result
+
+    await service.delete_model_config(config.id, db)
+    db.delete.assert_called_once_with(config)
+
+
+@pytest.mark.asyncio
+async def test_list_models_for_gemini_returns_curated_list():
+    """list_models_for_config for ``gemini`` returns the curated list (no API call)."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(provider_type=ModelProvider.gemini)
+    db.get.return_value = config
+
+    vault = _mock_vault()
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
+        models = await service.list_models_for_config(config.id, db)
+
+    assert len(models) > 0
+    # Curated list contains well-known Gemini model identifiers
+    assert any("gemini" in m for m in models)
+    # No network call should have been made for the curated list path
+    assert models == sorted(models)
+
+
+@pytest.mark.asyncio
+async def test_list_models_for_gemini_curated_list_works_with_no_api_key():
+    """Gemini curated list is returned even when no API key is stored."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(provider_type=ModelProvider.gemini, encrypted_api_key=None)
+    db.get.return_value = config
+
+    # No vault patching needed — the curated list is independent of credentials.
+    models = await service.list_models_for_config(config.id, db)
+    assert len(models) > 0
+    assert all(isinstance(m, str) for m in models)
+
+
+@pytest.mark.asyncio
+async def test_list_models_for_cohere_returns_curated_list():
+    """list_models_for_config for ``cohere`` returns the curated list (no API call)."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(provider_type=ModelProvider.cohere)
+    db.get.return_value = config
+
+    vault = _mock_vault()
+    with patch("app.services.agents.model_config_service.get_vault", return_value=vault):
+        models = await service.list_models_for_config(config.id, db)
+
+    assert len(models) > 0
+    # Curated list contains well-known Cohere model identifiers
+    assert any("command" in m for m in models)
+    assert models == sorted(models)
+
+
+@pytest.mark.asyncio
+async def test_list_models_for_cohere_curated_list_works_with_no_api_key():
+    """Cohere curated list is returned even when no API key is stored."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(provider_type=ModelProvider.cohere, encrypted_api_key=None)
+    db.get.return_value = config
+
+    models = await service.list_models_for_config(config.id, db)
+    assert len(models) > 0
+    assert all(isinstance(m, str) for m in models)
+
+
+# All six new OpenAI-compatible providers share the same _list_openai_compat_models
+# helper; we exercise the wiring via the public list_models_for_config method.
+NEW_OPENAI_COMPAT_PROVIDERS: list[ModelProvider] = [
+    ModelProvider.mistral,
+    ModelProvider.groq,
+    ModelProvider.together,
+    ModelProvider.fireworks,
+    ModelProvider.perplexity,
+    ModelProvider.deepseek,
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "provider", NEW_OPENAI_COMPAT_PROVIDERS, ids=[p.value for p in NEW_OPENAI_COMPAT_PROVIDERS]
+)
+async def test_list_models_for_new_openai_compat_provider_invokes_shared_helper(
+    provider: ModelProvider,
+):
+    """Each new OpenAI-compatible provider routes to ``_list_openai_compat_models``."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(
+        provider_type=provider,
+        api_base_url=f"https://api.{provider.value}.example/v1",
+    )
+    db.get.return_value = config
+
+    vault = _mock_vault()
+    expected_models = [f"{provider.value}-model-a", f"{provider.value}-model-b"]
+
+    with (
+        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
+        patch.object(
+            ModelConfigService,
+            "_list_openai_compat_models",
+            AsyncMock(return_value=expected_models),
+        ) as list_helper,
+    ):
+        models = await service.list_models_for_config(config.id, db)
+
+    list_helper.assert_awaited_once()
+    assert models == sorted(expected_models)
+
+
+@pytest.mark.asyncio
+async def test_list_models_for_new_openai_compat_provider_failure_degrades_to_empty_list():
+    """Network failure for a new OpenAI-compatible provider returns ``[]`` and logs an error."""
+    service = ModelConfigService()
+    db = _mock_db()
+    config = _make_config(provider_type=ModelProvider.groq, api_base_url="http://bad-host")
+    db.get.return_value = config
+
+    vault = _mock_vault()
+    with (
+        patch("app.services.agents.model_config_service.get_vault", return_value=vault),
+        patch.object(
+            ModelConfigService,
+            "_list_openai_compat_models",
+            AsyncMock(side_effect=Exception("connection refused")),
+        ),
+    ):
+        result = await service.list_models_for_config(config.id, db)
+
+    assert result == []

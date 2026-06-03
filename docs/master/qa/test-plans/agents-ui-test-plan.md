@@ -217,6 +217,41 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
+### 11. Model Configurations — Expanded Provider Dropdown
+
+**What is tested:**
+- Provider-type dropdown in the create/edit dialog lists all 12 providers with human-readable i18n labels; no hard-coded English strings in the component
+- Each of the 12 providers renders a distinct chip colour on the list page; no two providers share a colour; compute coverage is machine-checked
+- Full create → read → update → delete lifecycle for a new-provider config through the UI; parent table refreshes automatically after each dialog close without a manual page reload
+- Edit dialog pre-populates display name, the correct provider in the dropdown, `api_base_url`, `enabled_models` chips, and the API-key placeholder (never the raw value)
+- Provider-type change during edit (e.g. from `gemini` to `mistral`) persists and the chip colour and label update in the list page
+- Delete confirmation dialog is in place; on confirm the row is removed; on cancel it remains
+- Recreate after delete: an admin can create a new config with the same display name, same provider, and a fresh API key confirming true deletion
+- Disable/enable toggle works for each new provider with the same cascade semantics as incumbent providers
+- "Fetch Models" returns a non-empty list for each provider; failure degrades gracefully with the "no models returned" state
+- API-key placeholder semantics: editing a config with a stored credential shows a placeholder; leaving the field unchanged preserves the stored credential; typing a new value replaces it; clearing the field explicitly removes the credential
+- Dialog error pattern (`dialogError` state + `PermissionDeniedAlert`) is in place for all error paths (403, 409, 422, 500, network failure); errors appear inline in the dialog, not as silent failures
+- i18n labels for all 8 new providers are present in `frontend/src/i18n/locales/en.json` under `agents.modelConfigs.providerLabels`; a missing key falls back gracefully to the raw provider key
+
+**Acceptance criteria:**
+- Dropdown lists exactly 12 providers in stable order; every label resolved through i18next `t()`
+- Chip colours are machine-verified unique across all 12 keys; unknown key falls back to the `default` colour
+- Create dialog inserts a row and closes without page reload; parent table updates automatically
+- Edit dialog pre-populates all fields correctly including the placeholder never showing the raw key
+- Provider-type change on update persists and chip colour updates in the list
+- Delete confirm/cancel behaviour works; 409 deletes blocked by referencing AgentType
+- Recreate after delete confirms true deletion
+- Disable/enable toggle works with same semantics as incumbent providers
+- "Fetch Models" returns models or shows the empty state on failure
+- All dialogs follow the project's `dialogError` + `PermissionDeniedAlert` standard
+
+**Test files:**
+- [frontend/src/__tests__/ModelConfigDialog.test.tsx](../../../../frontend/src/__tests__/ModelConfigDialog.test.tsx) — dropdown lists 12 providers, create/edit/delete reload-free, edit pre-population, dialog error pattern, placeholder semantics, recreate after delete
+- [frontend/src/__tests__/ModelConfigListPage.test.tsx](../../../../frontend/src/__tests__/ModelConfigListPage.test.tsx) — chip rendering for all 12 providers, chip-colour-uniqueness machine-check, parent table refresh, delete confirmation, reload-free behaviour
+- [e2e/tests/agent-runtime.spec.ts](../../../../e2e/tests/agent-runtime.spec.ts) — `Model Config CRUD` block (mocked): list page chips, create/delete flows; `Real Backend Integration - Model Configurations` block: live backend round-trip, validates migration applied
+
+---
+
 ## Manual Testing Requirements
 
 | Scenario | Why Manual |
@@ -252,3 +287,4 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | agent-a2a-communication-and-slug-enforcement | Added A2A delegation preview and slug validation coverage (agent type naming, role allowed-target preview, plan/topology delegation rendering) | 2026-05-22 |
 | add-agent-execution-guardrails | Added Agent Type guardrail profile UI coverage (collapsed editor behavior, input-type adaptation, and k-token rendering checks) | 2026-05-25 |
 | ai-assisted-workflow-authoring-for-sop-and-skill | Added Agent Type form Default SOP behavior coverage (label rename, visibility across input types, required-only-for-none validation, and payload preservation) | 2026-05-29 |
+| expand-model-config-providers | Added Model Configurations — Expanded Provider Dropdown coverage (12-provider dropdown, chip colour uniqueness, full CRUD lifecycle, dialog error pattern, i18n labels, reload-free parent table refresh) | 2026-06-03 |

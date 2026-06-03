@@ -32,10 +32,18 @@ interface ModelConfigDialogProps {
 }
 
 const PROVIDERS: { value: ModelProviderType; label: string }[] = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'litellm_proxy', label: 'LiteLLM Proxy' },
-  { value: 'azure_openai', label: 'Azure OpenAI' },
+  { value: 'openai', label: 'agents.modelConfigs.providerLabels.openai' },
+  { value: 'anthropic', label: 'agents.modelConfigs.providerLabels.anthropic' },
+  { value: 'litellm_proxy', label: 'agents.modelConfigs.providerLabels.litellm_proxy' },
+  { value: 'azure_openai', label: 'agents.modelConfigs.providerLabels.azure_openai' },
+  { value: 'gemini', label: 'agents.modelConfigs.providerLabels.gemini' },
+  { value: 'mistral', label: 'agents.modelConfigs.providerLabels.mistral' },
+  { value: 'cohere', label: 'agents.modelConfigs.providerLabels.cohere' },
+  { value: 'groq', label: 'agents.modelConfigs.providerLabels.groq' },
+  { value: 'together', label: 'agents.modelConfigs.providerLabels.together' },
+  { value: 'fireworks', label: 'agents.modelConfigs.providerLabels.fireworks' },
+  { value: 'perplexity', label: 'agents.modelConfigs.providerLabels.perplexity' },
+  { value: 'deepseek', label: 'agents.modelConfigs.providerLabels.deepseek' },
 ]
 
 const API_KEY_PLACEHOLDER = '••••••••••••••••'
@@ -145,7 +153,7 @@ export function ModelConfigDialog({ open, config, onClose, onSaved }: ModelConfi
               onChange={(e) => setProviderType(e.target.value as ModelProviderType)}
             >
               {PROVIDERS.map((p) => (
-                <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
+                <MenuItem key={p.value} value={p.value}>{t(p.label)}</MenuItem>
               ))}
             </Select>
           </FormControl>

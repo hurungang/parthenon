@@ -41,7 +41,6 @@
     "skills": "Skills",
     "sops": "SOPs",
     "agents": "Agents",
-    "aiAgent": "AI Agent",
     "agentTypes": "Agent Management",
     "agentExecutions": "Agent Executions",
     "runtimeControl": "Runtime Control",
@@ -49,7 +48,7 @@
     "agentRoles": "Agent Roles",
     "agentIdentities": "Agent Identities",
     "modelConfigs": "Model Configs",
-    "gateway": "Gateway",
+    "agentTrails": "Agent Trails",
     "schedules": "Schedules",
     "conversations": "Conversations",
     "results": "Results",
@@ -61,7 +60,10 @@
     "settings": "Settings",
     "logout": "Logout",
     "permissions": "Permissions",
-    "systemConfig": "System Config"
+    "systemConfig": "System Config",
+    "groupAgents": "Agents",
+    "groupIntegrations": "Integrations",
+    "groupSystem": "System"
   },
   "auth": {
     "login": "Sign In",
@@ -704,7 +706,21 @@
       "selectEnabledModels": "Select which models agents can use from this provider:",
       "deleteConfirm": "Delete model config \"{{name}}\"? This cannot be undone.",
       "empty": "No model configurations defined. Create one to get started.",
-      "guardrails": "Usage Guardrails"
+      "guardrails": "Usage Guardrails",
+      "providerLabels": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "litellm_proxy": "LiteLLM Proxy",
+        "azure_openai": "Azure OpenAI",
+        "gemini": "Google Gemini",
+        "mistral": "Mistral AI",
+        "cohere": "Cohere",
+        "groq": "Groq",
+        "together": "Together AI",
+        "fireworks": "Fireworks AI",
+        "perplexity": "Perplexity",
+        "deepseek": "DeepSeek"
+      }
     },
     "plan": {
       "previewTitle": "Agent Plan Preview — {{agentTypeName}}",

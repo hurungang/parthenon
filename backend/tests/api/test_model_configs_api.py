@@ -274,3 +274,195 @@ async def test_set_workflow_generation_model_rejects_non_enabled_model():
 
     assert resp.status_code == 422
     assert "not enabled" in resp.json()["detail"].lower()
+
+
+# ── Twelve-provider catalogue coverage (Phase 5.3) ────────────────────────────
+#
+# Per ``implementation-plan.md`` Task 5.3: list / create / get / update /
+# delete endpoints must round-trip the 12 ``provider_type`` string literals;
+# the list-models endpoint must return a non-empty list for every provider.
+
+from app.db.models.agents import ModelProvider  # noqa: E402
+
+ALL_TWELVE_PROVIDERS: list[ModelProvider] = list(ModelProvider)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "provider", ALL_TWELVE_PROVIDERS, ids=[p.value for p in ALL_TWELVE_PROVIDERS]
+)
+async def test_list_models_endpoint_returns_non_empty_for_every_provider(
+    provider: ModelProvider,
+):
+    """GET /agents/model-configs/{id}/models returns >=1 model for every provider."""
+    config_id = uuid.uuid4()
+    provider_models = [f"{provider.value}-model-1", f"{provider.value}-model-2"]
+
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        with patch(
+            "app.api.v1.agents._model_config_service.list_models_for_config",
+            AsyncMock(return_value=provider_models),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get(f"/api/v1/agents/model-configs/{config_id}/models")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 1
+    # The provider key must be reflected in the response payload's first
+    # model id (or any model id) so the round-trip is byte-for-byte.
+    assert any(provider.value in m for m in data)
+
+
+@pytest.mark.asyncio
+async def test_create_model_config_round_trips_every_provider_key():
+    """POST /agents/model-configs accepts each of the 12 provider_type values."""
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    for provider in ALL_TWELVE_PROVIDERS:
+        cfg = MagicMock(
+            id=uuid.uuid4(),
+            display_name=f"{provider.value} Config",
+            provider_type=provider.value,
+            api_base_url=None,
+            encrypted_api_key="enc:present",
+            enabled_models=[],
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        with _bypass_auth(), _mock_permission_allow():
+            with patch(
+                "app.api.v1.agents._model_config_service.create_model_config",
+                AsyncMock(return_value=cfg),
+            ):
+                async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    resp = await client.post(
+                        "/api/v1/agents/model-configs",
+                        json={
+                            "display_name": cfg.display_name,
+                            "provider_type": provider.value,
+                            "api_key": f"sk-{provider.value}",
+                        },
+                    )
+        assert resp.status_code in (200, 201), (
+            f"create failed for {provider.value}: {resp.status_code} {resp.text}"
+        )
+        body = resp.json()
+        assert body["provider_type"] == provider.value
+
+
+@pytest.mark.asyncio
+async def test_list_model_configs_round_trips_every_provider_key():
+    """GET /agents/model-configs returns provider_type byte-for-byte for all 12 keys."""
+    now = datetime.now(timezone.utc)
+    cfgs = [
+        MagicMock(
+            id=uuid.uuid4(),
+            display_name=f"{p.value} cfg",
+            provider_type=p.value,
+            api_base_url=None,
+            encrypted_api_key="enc:present",
+            enabled_models=[],
+            created_at=now,
+            updated_at=now,
+        )
+        for p in ALL_TWELVE_PROVIDERS
+    ]
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        with patch(
+            "app.api.v1.agents._model_config_service.list_model_configs",
+            AsyncMock(return_value=cfgs),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.get("/api/v1/agents/model-configs")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 12
+    returned_keys = {row["provider_type"] for row in body}
+    assert returned_keys == {p.value for p in ALL_TWELVE_PROVIDERS}
+
+
+@pytest.mark.asyncio
+async def test_update_model_config_allows_provider_type_change_between_new_providers():
+    """PUT /agents/model-configs/{id} allows provider_type to change from one new key to another."""
+    config_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    updated_cfg = MagicMock(
+        id=config_id,
+        display_name="Changed",
+        provider_type="mistral",  # changed from gemini
+        api_base_url=None,
+        encrypted_api_key="enc:present",
+        enabled_models=["mistral-large-latest"],
+        created_at=now,
+        updated_at=now,
+    )
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        with patch(
+            "app.api.v1.agents._model_config_service.update_model_config",
+            AsyncMock(return_value=updated_cfg),
+        ):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.put(
+                    f"/api/v1/agents/model-configs/{config_id}",
+                    json={"provider_type": "mistral"},
+                )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider_type"] == "mistral"
+
+
+@pytest.mark.asyncio
+async def test_create_model_config_rejects_empty_display_name():
+    """POST /agents/model-configs returns 422 for an empty display_name."""
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/agents/model-configs",
+                json={
+                    "display_name": "",  # invalid
+                    "provider_type": "openai",
+                },
+            )
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_model_config_rejects_unknown_provider_type():
+    """POST /agents/model-configs returns 422 for a provider_type outside the 12-value enum."""
+    _, db_dep = _db_returning(return_value=MagicMock())
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/agents/model-configs",
+                json={
+                    "display_name": "Unknown",
+                    "provider_type": "future_provider",  # not in the 12-value enum
+                },
+            )
+
+    assert resp.status_code == 422
