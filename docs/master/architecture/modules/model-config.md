@@ -35,7 +35,7 @@ flowchart LR
 
 | Field | Description |
 |---|---|
-| **provider_type** | Provider category (e.g. `openai`, `anthropic`, `litellm_proxy`) |
+| **provider_type** | Provider category — one of twelve supported keys across two dispatch families: **OpenAI-compatible** (`openai`, `azure_openai`, `litellm_proxy`, `mistral`, `groq`, `together`, `fireworks`, `perplexity`, `deepseek`) and **native-API** (`anthropic`, `gemini`, `cohere`). The catalogue is additive: new providers are added in the `ModelProvider` Python enum (`backend/app/db/models/agents.py`), the Postgres `model_provider_enum`, and the runtime dispatcher `PROVIDER_REGISTRY` (`backend/app/services/agents/model_binding.py`). |
 | **api_endpoint** | Provider API URL |
 | **credentials** | API key or auth token, encrypted at rest |
 | **enabled_models** | Array of model IDs available via this provider config (e.g. `["gpt-4o", "gpt-4o-mini"]`) |
@@ -107,7 +107,10 @@ This late binding means swapping a provider or rotating credentials requires upd
 
 ## Supported Backend Types
 
-| Backend | Description |
-|---|---|
-| **Direct provider API** | Calls OpenAI, Anthropic, or similar provider APIs directly using the configured endpoint and credentials |
-| **LiteLLM proxy** | Routes inference through a LiteLLM proxy instance; useful for unified credential management and model aliasing across providers |
+| Backend | Dispatch Family | Supported Providers |
+|---|---|---|
+| **OpenAI-compatible API** | `openai_compat` | `openai`, `azure_openai`, `litellm_proxy`, `mistral`, `groq`, `together`, `fireworks`, `perplexity`, `deepseek` |
+| **Native-API providers** | `native` | `anthropic` (Messages API), `gemini` (generateContent API), `cohere` (/chat API) |
+| **LiteLLM proxy** | `openai_compat` | `litellm_proxy` (routes through a LiteLLM proxy instance; useful for unified credential management and model aliasing) |
+
+The dispatcher in `backend/app/services/agents/model_binding.py` routes incoming calls by lookup against the `PROVIDER_REGISTRY` constant, which maps each provider key to its dispatch-family tag and default API base URL. Adding a new provider requires: (a) a new member in the `ModelProvider` Python enum (`backend/app/db/models/agents.py`), (b) an additive Alembic migration to extend the Postgres `model_provider_enum`, (c) an entry in `PROVIDER_REGISTRY` (`model_binding.py`), (d) a model-lister helper in `model_config_service.py`, (e) an entry in the frontend `PROVIDERS` array (`ModelConfigDialog.tsx`), and (f) an i18n label under `agents.modelConfigs.providerLabels`.

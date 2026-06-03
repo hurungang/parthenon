@@ -58,8 +58,9 @@ The Agent Runtime with Gateway enables organizations to define agent types, mana
 - The system ensures that only agent identities assigned to a role can use that role for agent execution, and provides clear feedback if not
 - The identity management interface shows the status of each agent identity (valid, expired, expiring soon) and allows users to refresh or re-authenticate as needed
 - Agent authentication uses single sign-on, and the system automatically manages token storage and refresh, so agents remain operational without manual intervention
-- Platform admins can create, edit, and delete model configurations, select which models are enabled, and view available models for each provider, all from a central interface
+- Platform admins can create, edit, and delete model configurations, select which models are enabled, and view available models for each provider, all from a central interface — the full twelve-provider catalogue and lifecycle are documented in the [Model Configurations](./model-configurations.md) feature spec
 - Changes to enabled models are immediately reflected in the agent type configuration screens, so users always see up-to-date options
+- The runtime dispatch surface covers all twelve LLM providers in the Model Configurations catalogue, with clear provider attribution (provider key and model ID) in execution logs and error messages so operators can diagnose vendor-specific issues quickly
 - Users can launch agents, provide required input, and track session status asynchronously, with clear feedback and error messages
 - For conversational agents, the UI provides an interactive chat interface for back-and-forth communication
 - All agent actions, session statuses, and results are visible and auditable in the management interface, supporting compliance and traceability

@@ -187,14 +187,14 @@ async function setupAgentNavPage(page: import('@playwright/test').Page) {
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-test.describe('AI Agent nav group', () => {
-  test('shows AI Agent nav group in sidebar', async ({ page }) => {
+test.describe('Agents nav group', () => {
+  test('shows Agents nav group in sidebar', async ({ page }) => {
     await setupAgentNavPage(page)
     await page.goto('/agents')
     await page.waitForLoadState('networkidle')
 
-    // The group header with "AI Agent" text should be visible
-    await expect(page.getByRole('button', { name: /AI Agent/i })).toBeVisible({ timeout: 10000 })
+    // The group header with "Agents" text should be visible
+    await expect(page.getByRole('button', { name: /^Agents$/i })).toBeVisible({ timeout: 10000 })
   })
 
   test('nav group is expanded by default and shows child items', async ({ page }) => {
@@ -223,7 +223,7 @@ test.describe('AI Agent nav group', () => {
     await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 10000 })
 
     // Click the group header to collapse
-    await page.getByRole('button', { name: /AI Agent/i }).click()
+    await page.getByRole('button', { name: /^Agents$/i }).click()
 
     // Child items should be hidden after collapse
     await expect(page.getByRole('button', { name: 'Agent Types' })).not.toBeVisible({
@@ -231,7 +231,7 @@ test.describe('AI Agent nav group', () => {
     })
 
     // Click again to expand
-    await page.getByRole('button', { name: /AI Agent/i }).click()
+    await page.getByRole('button', { name: /^Agents$/i }).click()
 
     // Child items visible again
     await expect(page.getByRole('button', { name: 'Agent Types' })).toBeVisible({ timeout: 5000 })

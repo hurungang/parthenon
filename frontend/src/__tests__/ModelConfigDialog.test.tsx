@@ -448,6 +448,44 @@ describe('ModelConfigDialog', () => {
     })
   })
 
+  it('renders provider dropdown with the default (openai) label and dialog accepts create', async () => {
+    mockGet.mockResolvedValue({ data: [] })
+    mockPost.mockResolvedValue({
+      data: {
+        id: 'cfg-new',
+        display_name: 'New Provider Config',
+        provider_type: 'openai',
+        api_base_url: null,
+        has_credentials: true,
+        enabled_models: [],
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+
+    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    render(
+      <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
+      { wrapper },
+    )
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeDefined())
+
+    // The default provider is openai; its i18n label should be visible in the select
+    await waitFor(() => {
+      expect(screen.getByText('agents.modelConfigs.providerLabels.openai')).toBeDefined()
+    })
+
+    // Fill in required display name and save
+    const nameInput = document.querySelector('input[type="text"]') as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: 'New Provider Config' } })
+    fireEvent.click(screen.getByText('app.save'))
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalled()
+    })
+  })
+
   it('includes new api_key in payload when user changes it from bullets', async () => {
     mockPut.mockResolvedValue({ data: MOCK_EXISTING_CONFIG })
 

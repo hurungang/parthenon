@@ -20,6 +20,7 @@ import OAuthCallback from '../pages/OAuthCallback'
 import { GatewayConfigPage } from '../pages/gateway/GatewayConfigPage'
 import { ScheduleManagerPage } from '../pages/scheduling/ScheduleManagerPage'
 import { ConversationHistoryPage } from '../pages/conversations/ConversationHistoryPage'
+import { AgentTrailsPage } from '../pages/trails/AgentTrailsPage'
 import { ResultRepositoryPage } from '../pages/results/ResultRepositoryPage'
 import { NotificationConfigPage } from '../pages/notifications/NotificationConfigPage'
 import { ChannelListPage } from '../pages/notifications/ChannelListPage'
@@ -111,6 +112,7 @@ function AppRoutes() {
         <Route path="/gateway" element={<GatewayConfigPage />} />
         <Route path="/schedules" element={<ScheduleManagerPage />} />
         <Route path="/conversations" element={<ConversationHistoryPage />} />
+        <Route path="/agent-trails" element={<AgentTrailsPage />} />
         <Route path="/results" element={<ResultRepositoryPage />} />
         <Route path="/notifications" element={<NotificationConfigPage />} />
         <Route path="/admin/notifications/channels" element={<ChannelListPage />} />

@@ -49,7 +49,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentity` | SQLAlchemy model; first-class OIDC identity entity; `realm_name`, `realm_username`, AES-256 encrypted `access_token` and `refresh_token`, `token_expires_at` |
 | `AgentJob` | SQLAlchemy model for asynchronous session tracking; supports both task and conversational modes; includes `conversation_history` JSONB column (table: `agent_jobs`) |
 | `AgentPromptLog` | SQLAlchemy model for prompt capture; written before first LLM call per session; fields: `id`, `session_id` (FK → agent_jobs CASCADE), `system_instruction`, `user_prompt`, `logged_at` (table: `execution_logs`) |
-| `ModelConfig` | SQLAlchemy model for LLM provider configuration; `provider_type` (`openai`, `anthropic`, `litellm_proxy`, `azure_openai`), `display_name`, `api_base_url`, encrypted `api_key`, `enabled_models` (JSONB) |
+| `ModelConfig` | SQLAlchemy model for LLM provider configuration; 12 supported providers across two dispatch families (OpenAI-compatible: `openai`, `azure_openai`, `litellm_proxy`, `mistral`, `groq`, `together`, `fireworks`, `perplexity`, `deepseek`; native-API: `anthropic`, `gemini`, `cohere`); `display_name`, `api_base_url`, encrypted `api_key`, `enabled_models` (JSONB) |
 | `AgentType` | SQLAlchemy model — modified; fields: `identity_id`, `role_id`, `model_id` (string), `system_instruction`, `input_type`, `input_schema`, `output_type`, `output_schema`; removed: `mode`, `sop_id`, `identity_subject`, `system_prompt`, `max_instances`, `llm_provider`, `llm_model`, `llm_api_key`, `model_config_id`, `model_name` |
 | `AgentInstance` | SQLAlchemy model for session handle tracking; unchanged |
 | `AgentPlanStatus` | `str` enum — `pending`, `success`, `failed`; represents the lifecycle of a plan generation attempt |
@@ -238,8 +238,9 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `_load_role_mcp_session_map` | method | `AgentRuntimeExecutor._load_role_mcp_session_map()`; returns `{session_id, auth_type}` per server; used to detect passthrough sessions at execution time | `backend/app/services/agents/runtime_executor.py` |
 | `TaskAgentLoop` | class | LangChain deep agent loop for task-based agents; single result output | `backend/app/services/agents/agent_loop.py` |
 | `ConversationalAgentLoop` | class | LangChain deep agent loop for conversational agents; multi-turn with `conversation_history` state | `backend/app/services/agents/agent_loop.py` |
-| `ModelBindingLayer` | class | Resolves `AgentType.model_id` string to a `ModelConfig`; instantiates correct LangChain/LiteLLM client; sends chat completion requests | `backend/app/services/agents/model_binding.py` |
-| `ModelConfigService` | class | CRUD for `ModelConfig`; encrypts/decrypts credentials; `fetch_available_models(config_id)` | `backend/app/services/agents/model_config_service.py` |
+| `ModelBindingLayer` | class | Resolves `AgentType.model_id` string to a `ModelConfig`; routes 12 providers through `PROVIDER_REGISTRY` dispatch facade (OpenAI-compatible and native-API families); sends chat completion requests via `\_call_openai_compat`, `\_call_anthropic`, `\_call_gemini`, `\_call_cohere` | `backend/app/services/agents/model_binding.py` |
+| `PROVIDER_REGISTRY` | constant | Module-level registry mapping each of 12 provider keys to dispatch-family tag and default API base URL | `backend/app/services/agents/model_binding.py` |
+| `ModelConfigService` | class | CRUD for `ModelConfig`; encrypts/decrypts credentials; `fetch_available_models(config_id)`; 12-provider model listing through `\_list_openai_compat_models`, `\_list_gemini_models`, `\_list_cohere_models`, and existing `\_list_*` helpers | `backend/app/services/agents/model_config_service.py` |
 | `workflow_generation_settings` | module | Stores and retrieves selected workflow generation model identifier used by authoring APIs | `backend/app/services/agents/workflow_generation_settings.py` |
 | `workflow_authoring_service` | module | Shared workflow generation and preview composition service used by Skill and SOP endpoints | `backend/app/services/agents/workflow_authoring_service.py` |
 | `AgentInstanceManager` | class | Session handle management; execution logic removed | `backend/app/services/agents/instance_manager.py` |
@@ -322,7 +323,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentOutputType` | type alias | `'auto' \| 'typed' \| 'markdown'` | `frontend/src/types/index.ts` |
 | `AgentType` | interface | Modified — added `model_id: string`, `plan?: AgentPlan \| null`; removed `model_config_id`, `model_name`, `mode`, `sop_id`, `identity_subject`, `system_prompt`, `max_instances`, `llm_provider`, `llm_model`, `llm_api_key` | `frontend/src/types/index.ts` |
 | `ModelConfig` | interface | `id`, `provider_type`, `display_name`, `api_base_url`, `has_credentials`, `enabled_models: string[]` | `frontend/src/types/index.ts` |
-| `ModelProviderType` | type alias | `'openai' \| 'anthropic' \| 'litellm_proxy' \| 'azure_openai'` | `frontend/src/types/index.ts` |
+| `ModelProviderType` | type alias | `'openai' \| 'anthropic' \| 'litellm_proxy' \| 'azure_openai' \| 'gemini' \| 'mistral' \| 'cohere' \| 'groq' \| 'together' \| 'fireworks' \| 'perplexity' \| 'deepseek'` | `frontend/src/types/index.ts` |
 | `AgentPlanStatus` | type alias | `'pending' \| 'success' \| 'failed'` | `frontend/src/types/index.ts` |
 | `PlanStep` | interface | `order`, `type`, `name`, `description` | `frontend/src/types/index.ts` |
 | `TopologyNode` | interface | `id`, `type`, `label`, `meta` | `frontend/src/types/index.ts` |

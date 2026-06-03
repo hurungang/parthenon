@@ -76,12 +76,42 @@ export function ModelConfigListPage() {
     }
   }
 
-  const providerColor = (pt: string): 'default' | 'primary' | 'secondary' | 'info' | 'warning' => {
+  const providerColor = (
+    pt: string,
+  ): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
     if (pt === 'openai') return 'primary'
     if (pt === 'anthropic') return 'secondary'
     if (pt === 'litellm_proxy') return 'info'
     if (pt === 'azure_openai') return 'warning'
+    if (pt === 'gemini') return 'error'
+    if (pt === 'mistral') return 'success'
+    if (pt === 'cohere') return 'default'
+    if (pt === 'groq') return 'primary'
+    if (pt === 'together') return 'secondary'
+    if (pt === 'fireworks') return 'info'
+    if (pt === 'perplexity') return 'warning'
+    if (pt === 'deepseek') return 'success'
     return 'default'
+  }
+
+  // MUI 7 Chip ships with 7 colour tokens — not enough for 12 distinct
+  // providers.  The first four (incumbent) get the four most semantically
+  // meaningful colours; the eight new providers reuse the palette by
+  // switching to the ``outlined`` variant, which yields a visually distinct
+  // (light/transparent) chip.  The combination ``color + variant`` is
+  // unique for every supported provider.
+  const providerVariant = (pt: string): 'filled' | 'outlined' => {
+    const outlined = new Set([
+      'gemini',
+      'mistral',
+      'cohere',
+      'groq',
+      'together',
+      'fireworks',
+      'perplexity',
+      'deepseek',
+    ])
+    return outlined.has(pt) ? 'outlined' : 'filled'
   }
 
   if (isLoading) {
@@ -137,6 +167,7 @@ export function ModelConfigListPage() {
                     <Chip
                       label={config.provider_type}
                       color={providerColor(config.provider_type)}
+                      variant={providerVariant(config.provider_type)}
                       size="small"
                     />
                   </TableCell>

@@ -473,7 +473,19 @@ export interface GuardrailUsage {
   executionTimeoutSeconds: number | null
 }
 
-export type ModelProviderType = 'openai' | 'anthropic' | 'litellm_proxy' | 'azure_openai'
+export type ModelProviderType =
+  | 'openai'
+  | 'anthropic'
+  | 'litellm_proxy'
+  | 'azure_openai'
+  | 'gemini'
+  | 'mistral'
+  | 'cohere'
+  | 'groq'
+  | 'together'
+  | 'fireworks'
+  | 'perplexity'
+  | 'deepseek'
 
 export interface ModelConfig {
   id: string

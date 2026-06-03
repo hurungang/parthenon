@@ -229,6 +229,74 @@
 - No colon-delimited `server_slug:tool_name` format in any response
 - `AgentPermissionManager.is_allowed()` resolves correctly for `mcp_slug/tool_name` keys
 
+### Model Configurations — Expanded Provider Catalogue
+
+See `docs/changes/expand-model-config-providers/prd.md` AC-1 through AC-30 for the full acceptance criteria. All 12 provider keys (`openai`, `anthropic`, `litellm_proxy`, `azure_openai` plus the eight new below) are covered by the test files listed at the end of this section. For database-migration verification, see the pre-test checklist in `docs/changes/expand-model-config-providers/test-plan.md` and the real-backend E2E assertion that `GET /agents/model-configs` returns a 2xx response only when the migration has been applied.
+
+**Per-provider scenarios — Gemini (`gemini`):**
+- WHEN a Platform Administrator creates a `ModelConfig` with `provider_type = "gemini"` through the REST API, THEN the backend encrypts the API key with the AES-256 vault and persists the row; the `ModelConfigRead` response contains `has_credentials: true` and no raw key or encrypted blob; the new row is returned by the list endpoint with the correct `provider_type`.
+- WHEN an agent invokes a model bound to a Gemini `ModelConfig`, THEN the dispatcher routes the call through the Gemini native REST endpoint, attaches the correct credential header, and normalises the response through the extractor; usage data is extracted or set to `null` when unavailable.
+- WHEN a Gemini API call returns 4xx or 5xx, THEN the error log contains the string `gemini` and the underlying vendor error body; a `ModelBindingError` is raised.
+- WHEN the administrator clicks "Fetch Models" on a Gemini config, THEN the endpoint returns a non-empty, sorted curated list; on network failure, it returns `[]` and logs an error.
+
+**Per-provider scenarios — Mistral (`mistral`):**
+- WHEN a Platform Administrator creates a `ModelConfig` with `provider_type = "mistral"`, THEN the API key is AES-256-encrypted; the row appears in the list with the mistral provider chip; the `has_credentials` flag is the only credential-derived field.
+- WHEN the dispatcher resolves a model id against a Mistral config, THEN the call is dispatched through the OpenAI-compatible call path to Mistral's base URL; the credential is attached as a bearer token.
+- WHEN a Mistral API call fails, THEN the error log contains the string `mistral`.
+- WHEN "Fetch Models" is invoked, THEN the shared OpenAI-compatible listing endpoint returns models from Mistral's `/models` endpoint; on failure, the list is empty.
+
+**Per-provider scenarios — Cohere (`cohere`):**
+- WHEN a `ModelConfig` is created with `provider_type = "cohere"`, THEN the API key is encrypted and the row round-trips through list/get/update/delete correctly; the Cohere-specific credential header is never exposed.
+- WHEN the dispatcher routes a call against a Cohere config, THEN it uses the Cohere native REST endpoint with the vendor-specific credential header; the response text, tool-calls, and usage are extracted from the Cohere response envelope.
+- WHEN a Cohere API call returns a 4xx or 5xx error, THEN the error log includes the string `cohere`.
+- WHEN "Fetch Models" is invoked for a Cohere config, THEN the curated static list is returned; even an empty-credential config returns the curated list.
+
+**Per-provider scenarios — Groq (`groq`):**
+- WHEN a `ModelConfig` with `provider_type = "groq"` is persisted, THEN the encryption, read, update, and delete paths function identically to the OpenAI-compatible family; the Groq base URL is used for all dispatch.
+- WHEN the dispatcher calls Groq, THEN it uses the OpenAI-compatible call path; the bearer token is the decrypted API key.
+- WHEN a Groq API call fails, THEN the error log contains the string `groq`.
+
+**Per-provider scenarios — Together AI (`together`):**
+- WHEN a `ModelConfig` with `provider_type = "together"` is created, THEN all CRUD operations and credential encryption work as expected; the Together base URL is used.
+- WHEN the dispatcher calls Together AI, THEN it dispatches through the OpenAI-compatible path; the bearer token is the decrypted API key.
+- WHEN a Together API call fails, THEN the error log contains the string `together`.
+
+**Per-provider scenarios — Fireworks AI (`fireworks`):**
+- WHEN a `ModelConfig` with `provider_type = "fireworks"` is created, THEN the row round-trips correctly; the Fireworks base URL is the dispatch target.
+- WHEN the dispatcher routes a call against Fireworks, THEN it goes through the OpenAI-compatible path; the credential is a bearer token.
+- WHEN a Fireworks API call fails, THEN the error log contains the string `fireworks`.
+
+**Per-provider scenarios — Perplexity (`perplexity`):**
+- WHEN a `ModelConfig` with `provider_type = "perplexity"` is created, THEN all CRUD and encryption guarantees hold; the Perplexity base URL is used.
+- WHEN the dispatcher calls Perplexity, THEN it uses the OpenAI-compatible call path.
+- WHEN a Perplexity API call fails, THEN the error log contains the string `perplexity`.
+
+**Per-provider scenarios — DeepSeek (`deepseek`):**
+- WHEN a `ModelConfig` with `provider_type = "deepseek"` is created, THEN the row round-trips correctly through all CRUD endpoints; the DeepSeek base URL is the dispatch target.
+- WHEN the dispatcher routes a DeepSeek call, THEN it goes through the OpenAI-compatible path.
+- WHEN a DeepSeek API call fails, THEN the error log contains the string `deepseek`.
+
+#### Cross-provider scenarios
+- WHEN the dispatcher receives a `provider_type` not in the 12-value registry, THEN `ModelBindingError` is raised and the unknown key is logged.
+- WHEN an admin updates a config's `provider_type` from one new provider to another (e.g. `gemini` → `mistral`), THEN the change is persisted and the new provider key is returned by the list endpoint.
+- WHEN the "Fetch Models" call fails for any provider (network error, invalid key), THEN the endpoint returns 200 with `[]`, the log includes the provider key, and the admin is never blocked from saving.
+- WHEN an admin attempts to delete a config whose `enabled_models` includes a model id referenced by an `AgentType`, THEN the delete returns 409 for every provider.
+- WHEN the existing list endpoint returns configs for all 12 provider types, THEN each response entry contains the correct `provider_type` string literal byte-for-byte.
+- WHEN an inference call is made through any of the 12 providers, THEN the OpenTelemetry span and structured log carry the provider key, model id, config display name, and standard latency/status attributes.
+
+#### Database migration verification
+- WHEN `alembic current` is run after the migration, THEN the new revision id (chained from `f4a5b6c7d8e9`) is reported.
+- WHEN the Postgres `model_provider_enum` metadata is queried, THEN exactly 12 values are present in append-only order.
+- WHEN the `(id, provider_type)` of every pre-existing `model_configs` row is snapshotted before and after the migration, THEN the two snapshots are byte-for-byte equal.
+- WHEN the migration is applied a second time, THEN it is a no-op (idempotent).
+
+**Test files for the expanded provider catalogue:**
+- `backend/tests/unit/test_model_config_service.py` — per-provider CRUD lifecycle with AES-256 vault, list-models per provider family, failure-path coverage.
+- `backend/tests/unit/test_model_binding.py` — per-provider resolve and dispatch, extractor widening for Gemini and Cohere, 4xx/5xx log assertion across all 12 providers, unknown-provider rejection, observability attributes.
+- `backend/tests/api/test_model_configs_api.py` — round-trip over the full 12-provider catalogue, provider-type change on update, delete safety guard (409), list-models endpoint per provider, permission rules.
+- `backend/tests/db/test_model_provider_enum_migration.py` — enum row count, column type preservation, type-not-recreated check, pre-existing row preservation, migration idempotency.
+- `e2e/tests/agent-runtime.spec.ts` — `Real Backend Integration - Model Configurations` block (no `page.route()` mocks, validates migration applied) and `Model Config CRUD` block.
+
 ### Real-Time MCP Tool Preview
 - Selecting/deselecting SOPs/Skills in `AgentRoleDialog` triggers debounced (300 ms) re-fetch of preview tool list
 - Preview populates immediately on open when role already has assignments

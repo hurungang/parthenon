@@ -142,4 +142,52 @@
 - `frontend/src/__tests__/LogViewer.test.tsx` — LogViewer mode routing: friendly vs raw mode rendering, prop delegation, toggle always present
 - `e2e/tests/agent-logs.spec.ts` — AgentJobPage LogViewer integration: mode switching, AgentJobPage regression (no old log dialog trigger), partial log on running session
 
+### Model Configurations — Expanded Dispatch Surface
+
+These scenarios cover the engine-level dispatch path exercised by the LangChain observe-reason-act agent loop. See `docs/changes/expand-model-config-providers/prd.md` AC-16 through AC-19 for the runtime dispatch acceptance criteria, and `agent-runtime-test-plan.md` for the per-provider CRUD and unit-level dispatch coverage. The dispatcher resolves a `ModelConfig` from the extended 12-provider registry (`PROVIDER_REGISTRY`) and routes calls to the correct vendor endpoint.
+
+**Per-provider engine dispatch — Gemini (`gemini`):**
+- WHEN the LangChain agent loop invokes an LLM call against a model id bound to a Gemini `ModelConfig`, THEN the dispatcher selects the Gemini native REST caller (`_call_gemini`), attaches the decrypted Gemini API key as the vendor-specific credential header, and returns the parsed response; the agent loop receives the completion text, tool calls, and usage in the normalised Parthenon envelope.
+- WHEN the Gemini call returns a non-2xx response, THEN `ModelBindingError` is raised with the provider key `gemini` in the message; the agent loop transitions the session to `failed` with the error logged.
+
+**Per-provider engine dispatch — Mistral (`mistral`):**
+- WHEN the agent loop calls a model bound to a Mistral config, THEN the dispatcher routes through the OpenAI-compatible family call path to Mistral's base URL; the credential is attached as a bearer token.
+- WHEN the Mistral call fails, THEN the session transitions to `failed`; the error log includes the string `mistral`.
+
+**Per-provider engine dispatch — Cohere (`cohere`):**
+- WHEN the agent loop calls a model bound to a Cohere config, THEN the dispatcher uses the Cohere native REST caller (`_call_cohere`) with the vendor-specific credential header; the response is extracted from the Cohere envelope and normalised.
+- WHEN the Cohere call fails, THEN the session transitions to `failed` with `cohere` in the error log.
+
+**Per-provider engine dispatch — Groq (`groq`):**
+- WHEN the agent loop calls a Groq-bound model, THEN the OpenAI-compatible call path is used with Groq's base URL; the bearer token is the decrypted API key.
+- WHEN the Groq call fails, THEN the session transitions to `failed`; the log includes `groq`.
+
+**Per-provider engine dispatch — Together AI (`together`):**
+- WHEN the agent loop calls a Together-bound model, THEN the dispatcher dispatches through the OpenAI-compatible family to Together's base URL.
+- WHEN the Together call fails, THEN the session transitions to `failed`; the log includes `together`.
+
+**Per-provider engine dispatch — Fireworks AI (`fireworks`):**
+- WHEN the agent loop calls a Fireworks-bound model, THEN the OpenAI-compatible family path is used with Fireworks' base URL.
+- WHEN the Fireworks call fails, THEN the session transitions to `failed`; the log includes `fireworks`.
+
+**Per-provider engine dispatch — Perplexity (`perplexity`):**
+- WHEN the agent loop calls a Perplexity-bound model, THEN the OpenAI-compatible family path is used with Perplexity's base URL.
+- WHEN the Perplexity call fails, THEN the session transitions to `failed`; the log includes `perplexity`.
+
+**Per-provider engine dispatch — DeepSeek (`deepseek`):**
+- WHEN the agent loop calls a DeepSeek-bound model, THEN the OpenAI-compatible family path is used with DeepSeek's base URL.
+- WHEN the DeepSeek call fails, THEN the session transitions to `failed`; the log includes `deepseek`.
+
+#### Cross-provider engine-level scenarios
+- WHEN the agent runtime call site passes a `provider_type` not in the 12-value `PROVIDER_REGISTRY`, THEN `ModelBindingError` is raised before any HTTP call; the session transitions to `failed`; the log contains the unknown key.
+- WHEN the agent loop receives a response from any of the 12 providers, THEN the extractors (`extract_text`, `extract_tool_calls`, `extract_usage`) return the correct shape; usage is `null` for providers that do not report it (preserving the existing `null`-on-unavailable semantics per AC-18).
+- WHEN the agent loop makes an inference call through any of the 12 providers, THEN the OpenTelemetry span carries the provider key, model id, config display name, and standard latency/status attributes (per AC-25).
+- WHEN a `ModelConfig` is disabled (`is_disabled = true`), THEN the dispatcher skips it during model resolution; the session fails with `ModelResolutionError` if no other config enables the requested model id.
+
+**Test files for the expanded dispatch surface:**
+- `backend/tests/unit/test_model_binding.py` — per-provider resolve-and-dispatch, extractor widening, 4xx/5xx log assertion, unknown-provider rejection, observability attribute checks.
+- `backend/tests/unit/test_model_config_service.py` — model resolution against the extended 12-provider catalogue.
+- `backend/tests/unit/test_agent_runtime_executor.py` — LangChain agent loop integration: dispatch, resolution, and error handling.
+- `e2e/tests/agent-runtime.spec.ts` — `Real Backend Integration - Model Configurations` block validates the dispatch path against a live backend.
+
 For agent role, identity, model config, execution log, LangChain execution, token management, and gateway routing coverage, see `agent-runtime-test-plan.md`.

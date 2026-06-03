@@ -75,6 +75,14 @@ class ModelProvider(str, enum.Enum):
     anthropic = "anthropic"
     litellm_proxy = "litellm_proxy"
     azure_openai = "azure_openai"
+    gemini = "gemini"
+    mistral = "mistral"
+    cohere = "cohere"
+    groq = "groq"
+    together = "together"
+    fireworks = "fireworks"
+    perplexity = "perplexity"
+    deepseek = "deepseek"
 
 
 class AgentInstanceStatus(str, enum.Enum):
