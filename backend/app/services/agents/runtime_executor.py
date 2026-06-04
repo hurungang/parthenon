@@ -775,50 +775,98 @@ class AgentRuntimeExecutor:
                 exc,
             )
 
-    async def _load_sop_content(
-        self, primary_sop_id: uuid.UUID, db: AsyncSession
+    async def _load_binding_content(
+        self, agent_type: Any, db: AsyncSession
     ) -> str | None:
-        """Load a SOP and its steps from the database and format as instruction text.
+        """Load bound SOPs and skills for the agent type and format as ordered instruction text.
 
-        Returns a human-readable block that is appended to the system instruction so
-        the LLM knows exactly which steps to follow.  Returns None on any failure.
+        Merges SOP and skill bindings sorted by ``order``, then formats each as
+        context for the system instruction. Returns None when no bindings exist.
         """
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
-        from app.db.models.skills import Sop
+        from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding
+        from app.db.models.skills import Sop, Skill
 
         try:
-            result = await db.execute(
-                select(Sop)
-                .where(Sop.id == primary_sop_id)
-                .options(selectinload(Sop.steps))
+            # Load SOP bindings with their SOP relationships
+            sop_result = await db.execute(
+                select(AgentTypeSopBinding)
+                .where(AgentTypeSopBinding.agent_type_id == agent_type.id)
+                .options(selectinload(AgentTypeSopBinding.sop))
+                .order_by(AgentTypeSopBinding.order)
             )
-            sop = result.scalar_one_or_none()
-            if not sop:
-                logger.warning("SOP %s not found in database", primary_sop_id)
+            sop_bindings = list(sop_result.scalars().all())
+
+            # Load Skill bindings with their Skill relationships
+            skill_result = await db.execute(
+                select(AgentTypeSkillBinding)
+                .where(AgentTypeSkillBinding.agent_type_id == agent_type.id)
+                .options(selectinload(AgentTypeSkillBinding.skill))
+                .order_by(AgentTypeSkillBinding.order)
+            )
+            skill_bindings = list(skill_result.scalars().all())
+
+            if not sop_bindings and not skill_bindings:
                 return None
 
-            lines: list[str] = [f"Follow this SOP to complete the task: {sop.name}"]
-            if sop.description:
-                lines.append(f"\nDescription: {sop.description}")
-            if sop.instructions:
-                lines.append(f"\nInstructions: {sop.instructions}")
+            # Build ordered entries: (order, type_prefix, formatted_text)
+            entries: list[tuple[int, str, str]] = []
 
-            steps = sorted(sop.steps, key=lambda s: s.order)
-            if steps:
-                lines.append("\nSteps:")
-                for step in steps:
-                    step_num = step.order + 1
-                    step_text = f"{step_num}."
-                    if step.name:
-                        step_text += f" {step.name}"
-                    if step.description:
-                        step_text += f": {step.description}"
-                    lines.append(step_text)
+            for binding in sop_bindings:
+                sop = binding.sop
+                if not sop:
+                    continue
+                lines: list[str] = [f"Follow this SOP to complete the task: {sop.name}"]
+                if sop.description:
+                    lines.append(f"Description: {sop.description}")
+                if sop.instructions:
+                    lines.append(f"Instructions: {sop.instructions}")
+                # Load steps
+                sop_full_result = await db.execute(
+                    select(Sop)
+                    .where(Sop.id == sop.id)
+                    .options(selectinload(Sop.steps))
+                )
+                sop_full = sop_full_result.scalar_one_or_none()
+                if sop_full and sop_full.steps:
+                    lines.append("Steps:")
+                    for step in sorted(sop_full.steps, key=lambda s: s.order):
+                        step_text = f"  {step.order + 1}."
+                        if step.name:
+                            step_text += f" {step.name}"
+                        if step.description:
+                            step_text += f": {step.description}"
+                        lines.append(step_text)
+                entries.append((binding.order, "sop", "\n".join(lines)))
 
-            return "\n".join(lines)
+            for binding in skill_bindings:
+                skill = binding.skill
+                if not skill:
+                    continue
+                lines = [f"Use this skill when needed: {skill.name}"]
+                if skill.description:
+                    lines.append(f"Description: {skill.description}")
+                if skill.instructions:
+                    lines.append(f"Instructions: {skill.instructions}")
+                entries.append((binding.order, "skill", "\n".join(lines)))
+
+            # Sort by order, then by type
+            entries.sort(key=lambda e: (e[0], e[1]))
+
+            # Merge into single content block
+            content_parts: list[str] = []
+            for order, typ, text in entries:
+                content_parts.append(f"[Step {order}] ({typ.upper()})\n{text}")
+
+            return "\n\n---\n\n".join(content_parts)
+
         except Exception as exc:
-            logger.warning("Failed to load SOP content for %s: %s", primary_sop_id, exc)
+            logger.warning(
+                "Failed to load binding content for agent_type=%s: %s",
+                agent_type.id,
+                exc,
+            )
             return None
 
     async def _load_mcp_session_context(
@@ -1261,31 +1309,29 @@ class AgentRuntimeExecutor:
             },
         )
 
-        # ── Build system instruction with SOP + MCP context ───────────────────
+        # ── Build system instruction with binding + MCP context ──────────────
         system_instruction: str | None = context.get("system_instruction")
-        sop_content: str | None = context.get("sop_content")
-        if sop_content:
-            sop_name = _extract_sop_name_from_fallback_content(sop_content)
+        binding_content: str | None = context.get("sop_content")
+        if binding_content:
             if _instruction_mentions_any_sop_reference(system_instruction):
                 await data_client.log_execution_event(
                     session_id=session_id,
-                    event_type="sop_fallback_skipped",
-                    message="Skipped SOP fallback append; SOP already explicitly referenced",
+                    event_type="binding_fallback_skipped",
+                    message="Skipped binding content append; SOP already explicitly referenced",
                     data={
-                        "primary_sop_id": context.get("primary_sop_id"),
-                        "sop_name": sop_name,
+                        "agent_type_id": context.get("agent_type_id"),
                     },
                 )
             else:
                 base = system_instruction or ""
-                system_instruction = f"{base}\n\n{sop_content}".strip()
+                system_instruction = f"{base}\n\n{binding_content}".strip()
                 await data_client.log_execution_event(
                     session_id=session_id,
-                    event_type="sop_loaded",
-                    message="SOP content loaded into system instruction",
+                    event_type="binding_content_loaded",
+                    message="Binding content loaded into system instruction",
                     data={
-                        "primary_sop_id": context.get("primary_sop_id"),
-                        "sop_content_preview": sop_content[:300],
+                        "agent_type_id": context.get("agent_type_id"),
+                        "binding_content_preview": binding_content[:300],
                         "total_instruction_length": len(system_instruction),
                     },
                 )
@@ -2619,35 +2665,31 @@ class AgentRuntimeExecutor:
                 input_data=job.input_data,
             )
 
-            # ── Load SOP content and append to system instruction ─────────────
-            if agent_type.primary_sop_id:
-                sop_content = await self._load_sop_content(agent_type.primary_sop_id, db)
-                if sop_content:
-                    sop_name = _extract_sop_name_from_fallback_content(sop_content)
-                    if _instruction_mentions_any_sop_reference(ctx.system_instruction):
-                        await self._log_execution_event(
-                            session_id=job.id,
-                            event_type="sop_fallback_skipped",
-                            message="Skipped SOP fallback append; SOP already explicitly referenced",
-                            data={
-                                "primary_sop_id": str(agent_type.primary_sop_id),
-                                "sop_name": sop_name,
-                            },
-                        )
-                    else:
-                        base = ctx.system_instruction or ""
-                        ctx.system_instruction = f"{base}\n\n{sop_content}".strip()
-                        await self._log_execution_event(
-                            session_id=job.id,
-                            event_type="sop_loaded",
-                            message=f"SOP content loaded into system instruction",
-                            data={
-                                "primary_sop_id": str(agent_type.primary_sop_id),
-                                "sop_content": sop_content,
-                                "sop_content_preview": sop_content[:300],
-                                "total_instruction_length": len(ctx.system_instruction),
-                            },
-                        )
+            # ── Load binding content (bound SOPs+skills) and append to system instruction ──
+            binding_content = await self._load_binding_content(agent_type, db)
+            if binding_content:
+                if _instruction_mentions_any_sop_reference(ctx.system_instruction):
+                    await self._log_execution_event(
+                        session_id=job.id,
+                        event_type="binding_fallback_skipped",
+                        message="Skipped binding content append; SOP already explicitly referenced",
+                        data={
+                            "agent_type_id": str(agent_type.id),
+                        },
+                    )
+                else:
+                    base = ctx.system_instruction or ""
+                    ctx.system_instruction = f"{base}\n\n{binding_content}".strip()
+                    await self._log_execution_event(
+                        session_id=job.id,
+                        event_type="binding_content_loaded",
+                        message="Binding content loaded into system instruction",
+                        data={
+                            "agent_type_id": str(agent_type.id),
+                            "binding_content_preview": binding_content[:300],
+                            "total_instruction_length": len(ctx.system_instruction),
+                        },
+                    )
 
             # ── Load MCP session context and append to system instruction ────
             if agent_type.role_id:
@@ -2749,24 +2791,17 @@ class AgentRuntimeExecutor:
                 output_schema=agent_type.output_schema,
             )
 
-            # ── Load SOP content and append to system instruction ─────────────
-            if agent_type.primary_sop_id:
-                sop_content = await self._load_sop_content(agent_type.primary_sop_id, db)
-                if sop_content:
-                    sop_name = _extract_sop_name_from_fallback_content(sop_content)
-                    if _instruction_mentions_any_sop_reference(ctx.system_instruction):
-                        await self._log_execution_event(
-                            session_id=job.id,
-                            event_type="sop_fallback_skipped",
-                            message="Skipped SOP fallback append; SOP already explicitly referenced",
-                            data={
-                                "primary_sop_id": str(agent_type.primary_sop_id),
-                                "sop_name": sop_name,
-                            },
-                        )
-                    else:
-                        base = ctx.system_instruction or ""
-                        ctx.system_instruction = f"{base}\n\n{sop_content}".strip()
+            # ── Load binding content (bound SOPs+skills) and append to system instruction ──
+            binding_content = await self._load_binding_content(agent_type, db)
+            if binding_content:
+                if _instruction_mentions_any_sop_reference(ctx.system_instruction):
+                    logger.info(
+                        "Skipped binding content append for session %s; SOP already referenced",
+                        job.id,
+                    )
+                else:
+                    base = ctx.system_instruction or ""
+                    ctx.system_instruction = f"{base}\n\n{binding_content}".strip()
 
             # ── Load MCP session context and append to system instruction ────
             if agent_type.role_id:
@@ -3469,34 +3504,35 @@ class AgentRuntimeExecutor:
         """Derive a string user prompt from the structured input_data.
 
         For ``input_type=none``, the prompt is auto-generated from the agent type's
-        ``primary_sop_id``: "Follow the SOP '<name>' to complete the task".
+        first bound SOP: "Follow the SOP '<name>' to complete the task".
         """
         if agent_type.input_type == AgentInputType.none:
-            if not agent_type.primary_sop_id:
-                logger.warning(
-                    "none-input agent_type %s has no primary_sop_id set",
-                    agent_type.id,
-                )
-                return None
             if db:
                 from sqlalchemy import select
+                from sqlalchemy.orm import selectinload
+                from app.db.models.agents import AgentTypeSopBinding
                 from app.db.models.skills import Sop
 
                 try:
-                    row = await db.execute(
-                        select(Sop.name).where(Sop.id == agent_type.primary_sop_id)
+                    # Find first SOP binding
+                    result = await db.execute(
+                        select(AgentTypeSopBinding)
+                        .where(AgentTypeSopBinding.agent_type_id == agent_type.id)
+                        .options(selectinload(AgentTypeSopBinding.sop))
+                        .order_by(AgentTypeSopBinding.order)
+                        .limit(1)
                     )
-                    sop_name = row.scalar_one_or_none()
-                    if sop_name:
-                        return f"Follow the SOP '{sop_name}' to complete the task"
+                    first_binding = result.scalar_one_or_none()
+                    if first_binding and first_binding.sop:
+                        return f"Follow the SOP '{first_binding.sop.name}' to complete the task"
+
                     logger.warning(
-                        "primary_sop_id %s not found for agent_type %s",
-                        agent_type.primary_sop_id,
+                        "none-input agent_type %s has no SOP bindings set",
                         agent_type.id,
                     )
                 except Exception as exc:
                     logger.warning(
-                        "Failed to resolve SOP for none-input agent_type %s: %s",
+                        "Failed to resolve SOP binding for none-input agent_type %s: %s",
                         agent_type.id,
                         exc,
                     )

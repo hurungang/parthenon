@@ -431,6 +431,32 @@ export interface AgentPlan {
   generated_at: string | null
 }
 
+export interface SopBinding {
+  id: string
+  sop_id: string
+  sop_name: string
+  order: number
+  created_at: string
+}
+
+export interface SkillBinding {
+  id: string
+  skill_id: string
+  skill_name: string
+  order: number
+  created_at: string
+}
+
+export interface SopBindingInput {
+  sop_id: string
+  order: number
+}
+
+export interface SkillBindingInput {
+  skill_id: string
+  order: number
+}
+
 export interface AgentType {
   id: string
   name: string
@@ -443,7 +469,8 @@ export interface AgentType {
   input_schema: Record<string, unknown> | null
   output_type: AgentOutputType
   output_schema: Record<string, unknown> | null
-  primary_sop_id: string | null
+  sop_bindings?: SopBinding[]
+  skill_bindings?: SkillBinding[]
   guardrail_max_iterations?: number
   guardrail_max_delegation_depth?: number
   guardrail_max_delegated_steps?: number

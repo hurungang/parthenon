@@ -13,6 +13,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
@@ -30,6 +31,7 @@ import { AssignRolesToIdentityDialog } from './AssignRolesToIdentityDialog'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { ErrorSnackbar } from '../../components/common/ErrorSnackbar'
 import type { AgentIdentity } from '../../types'
+import { usePagination } from '../../hooks/usePagination'
 
 interface ConflictError {
   agentTypeId: string
@@ -63,6 +65,7 @@ export function AgentIdentityListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const pag = usePagination()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
   const [reauthingId, setReauthingId] = useState<string | null>(null)
@@ -92,9 +95,11 @@ export function AgentIdentityListPage() {
   }
 
   const { data: identities, isLoading, error } = useQuery<AgentIdentity[]>({
-    queryKey: ['agents', 'identities'],
+    queryKey: ['agents', 'identities', { limit: pag.limit, offset: pag.offset }],
     queryFn: async () => {
-      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
+      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -343,6 +348,17 @@ export function AgentIdentityListPage() {
           </Table>
         </TableContainer>
       )}
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       <AgentIdentityDialog
         open={dialogOpen}

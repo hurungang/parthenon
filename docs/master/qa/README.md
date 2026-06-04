@@ -15,3 +15,4 @@ This directory contains all master QA documentation for the Parthenon Enterprise
 - [Agent Gateway](test-plans/gateway-test-plan.md)
 - [Communication Hub](test-plans/communication-hub-test-plan.md)
 - [Operations Modules](test-plans/operations-test-plan.md)
+- [Web UI Shell — Sidebar Navigation](test-plans/web-ui-shell-test-plan.md)

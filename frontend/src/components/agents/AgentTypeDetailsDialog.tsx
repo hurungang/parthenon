@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -38,12 +38,14 @@ import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import AgentPlanContent from './AgentPlanContent'
 import TopologyDiagramRenderer from './TopologyDiagramRenderer'
 import { AgentJobLaunchDialog } from '../../pages/agents/AgentJobLaunchDialog'
-import { AgentRoleViewDialog } from './AgentRoleViewDialog'
-import { AgentIdentityViewDialog } from './AgentIdentityViewDialog'
 import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { ConversationSessionsTab } from './ConversationSessionsTab'
 import { ConversationDialog } from './ConversationDialog'
+import { SopEditor } from '../../pages/skills/SopEditor'
+import { SkillEditor } from '../../pages/skills/SkillEditor'
+import { AgentRoleDialog } from '../../pages/agents/AgentRoleDialog'
+import { AgentIdentityViewDialog } from './AgentIdentityViewDialog'
 import apiClient from '../../api/apiClient'
 import { canonicalizeToolName } from '../../utils/toolNaming'
 import type { AgentIdentity, AgentJob, AgentJobStatus, AgentRole, McpTool, Skill, Sop, SopDetail, TopologyNode, TopologyEdge } from '../../types'
@@ -116,6 +118,12 @@ export function AgentTypeDetailsDialog({
   const [executionsDialogOpen, setExecutionsDialogOpen] = useState(false)
   const [executionDetailsDialogOpen, setExecutionDetailsDialogOpen] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [sopViewOpen, setSopViewOpen] = useState(false)
+  const [sopViewSop, setSopViewSop] = useState<SopDetail | null>(null)
+  const [skillViewOpen, setSkillViewOpen] = useState(false)
+  const [skillViewSkill, setSkillViewSkill] = useState<Skill | null>(null)
+  const [agentTypeViewOpen, setAgentTypeViewOpen] = useState(false)
+  const [agentTypeViewId, setAgentTypeViewId] = useState<string | null>(null)
 
   // Reset tab and error when dialog opens
   useEffect(() => {
@@ -221,6 +229,15 @@ export function AgentTypeDetailsDialog({
   })
   const roleSops = (allSops ?? []).filter((s) => currentRole?.sop_ids.includes(s.id))
   const roleSkills = (allSkills ?? []).filter((s) => currentRole?.skill_ids.includes(s.id))
+
+  // When binding lists exist, filter to only show bound SOPs and skills
+  const hasBindings = (agentType?.sop_bindings && agentType.sop_bindings.length > 0) ||
+    (agentType?.skill_bindings && agentType.skill_bindings.length > 0)
+  const boundSopIds = new Set((agentType?.sop_bindings ?? []).map((b) => b.sop_id))
+  const boundSkillIds = new Set((agentType?.skill_bindings ?? []).map((b) => b.skill_id))
+  const displaySops = hasBindings ? roleSops.filter((s) => boundSopIds.has(s.id)) : roleSops
+  const displaySkills = hasBindings ? roleSkills.filter((s) => boundSkillIds.has(s.id)) : roleSkills
+
   const planGeneratedAt = agentType?.plan?.generated_at ? new Date(agentType.plan.generated_at) : null
 
   const latestPreviewDefinitionUpdate = useMemo(() => {
@@ -349,10 +366,10 @@ export function AgentTypeDetailsDialog({
         return skillNodeId
       }
 
-      // Track which skills are reached via SOP steps (to avoid duplicate role→skill edges)
+      // Track which skills are reached via SOP steps (to avoid duplicate role->skill edges)
       const sopSkillIds = new Set<string>()
 
-      roleSops.forEach((sop) => {
+      displaySops.forEach((sop) => {
         const sopNodeId = `sop_${sop.id}`
         nodes.push({ id: sopNodeId, type: 'sop', label: sop.name })
         edges.push({ source: 'role', target: sopNodeId })
@@ -391,7 +408,7 @@ export function AgentTypeDetailsDialog({
       })
 
       // Skills directly on role but not reachable via any SOP step → connect to role
-      roleSkills
+      displaySkills
         .filter((skill) => !sopSkillIds.has(skill.id))
         .forEach((skill) => {
           const skillNodeId = addSkillWithTools(skill)
@@ -400,7 +417,7 @@ export function AgentTypeDetailsDialog({
     }
 
     return { convTopologyNodes: nodes, convTopologyEdges: edges }
-  }, [agentType, isConversation, identityName, roleName, roleSops, roleSkills, sopDetails, allSkills, allMcpTools, allAgentTypes])
+  }, [agentType, isConversation, identityName, roleName, displaySops, displaySkills, sopDetails, allSkills, allMcpTools, allAgentTypes])
 
   const handleClose = () => {
     setDialogError(null)
@@ -418,6 +435,48 @@ export function AgentTypeDetailsDialog({
       onClose()
     }
   }
+
+  const handleNodeClick = useCallback((node: TopologyNode) => {
+    const colonIdx = node.id.indexOf(':')
+    const type = colonIdx >= 0 ? node.id.slice(0, colonIdx) : node.type
+    const entityId = colonIdx >= 0 ? node.id.slice(colonIdx + 1) : node.id
+
+    if (type === 'role') {
+      setRoleViewOpen(true)
+      return
+    }
+    if (type === 'identity') {
+      setIdentityViewOpen(true)
+      return
+    }
+    if (type === 'agent') {
+      return
+    }
+    if (type === 'sop') {
+      const detail = (sopDetails ?? []).find((d) => d.id === entityId)
+      if (detail) {
+        setSopViewSop(detail)
+        setSopViewOpen(true)
+      } else {
+        apiClient.get<SopDetail>(`/sops/${entityId}`).then(({ data }) => {
+          setSopViewSop(data)
+          setSopViewOpen(true)
+        })
+      }
+      return
+    }
+    if (type === 'skill') {
+      apiClient.get<Skill>(`/skills/${entityId}`).then(({ data }) => {
+        setSkillViewSkill(data)
+        setSkillViewOpen(true)
+      })
+      return
+    }
+    if (type === 'agent_type') {
+      setAgentTypeViewId(entityId)
+      setAgentTypeViewOpen(true)
+    }
+  }, [sopDetails])
 
   const handleViewAllExecutions = () => {
     setExecutionsDialogOpen(true)
@@ -669,6 +728,7 @@ export function AgentTypeDetailsDialog({
                       <TopologyDiagramRenderer
                         nodes={convTopologyNodes}
                         edges={convTopologyEdges}
+                        onNodeClick={handleNodeClick}
                       />
 
                       <Divider sx={{ my: 2 }} />
@@ -676,14 +736,18 @@ export function AgentTypeDetailsDialog({
                       <Typography variant="subtitle2" gutterBottom>
                         {t('agents.types.agentSops')}
                       </Typography>
-                      {roleSops.length === 0 ? (
+                      {displaySops.length === 0 ? (
                         <Typography variant="body2" color="text.secondary" mb={2}>
-                          {t('agents.types.noSopsAssigned')}
+                          {hasBindings ? t('agents.types.noSopsBound') : t('agents.types.noSopsAssigned')}
                         </Typography>
                       ) : (
                         <List dense disablePadding sx={{ mb: 2 }}>
-                          {roleSops.map((sop) => (
-                            <ListItem key={sop.id} disableGutters>
+                          {displaySops.map((sop) => (
+                            <ListItem key={sop.id} disableGutters secondaryAction={
+                              boundSopIds.has(sop.id) ? (
+                                <Chip label={t('agents.types.bindings.bound')} size="small" color="primary" variant="outlined" />
+                              ) : null
+                            }>
                               <ListItemText
                                 primary={sop.name}
                                 secondary={sop.description ?? undefined}
@@ -693,7 +757,7 @@ export function AgentTypeDetailsDialog({
                         </List>
                       )}
 
-                      {roleSops.length > 0 && (
+                      {displaySops.length > 0 && (
                         <>
                           <Divider sx={{ my: 1.5 }} />
                           <Typography variant="subtitle2" gutterBottom>
@@ -730,14 +794,18 @@ export function AgentTypeDetailsDialog({
                       <Typography variant="subtitle2" gutterBottom>
                         {t('agents.types.agentSkills')}
                       </Typography>
-                      {roleSkills.length === 0 ? (
+                      {displaySkills.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
-                          {t('agents.types.noSkillsAssigned')}
+                          {hasBindings ? t('agents.types.noSkillsBound') : t('agents.types.noSkillsAssigned')}
                         </Typography>
                       ) : (
                         <List dense disablePadding>
-                          {roleSkills.map((skill) => (
-                            <ListItem key={skill.id} disableGutters>
+                          {displaySkills.map((skill) => (
+                            <ListItem key={skill.id} disableGutters secondaryAction={
+                              boundSkillIds.has(skill.id) ? (
+                                <Chip label={t('agents.types.bindings.bound')} size="small" color="secondary" variant="outlined" />
+                              ) : null
+                            }>
                               <ListItemText
                                 primary={skill.name}
                                 secondary={skill.description ?? undefined}
@@ -751,6 +819,7 @@ export function AgentTypeDetailsDialog({
                     <AgentPlanContent
                       plan={agentType.plan}
                       noPlanMessage={t('agents.types.noPlan')}
+                      onNodeClick={handleNodeClick}
                     />
                   )}
                 </TabPanel>
@@ -875,12 +944,14 @@ export function AgentTypeDetailsDialog({
         />
       )}
 
-      {/* Role view dialog */}
+      {/* Role view dialog — reuse AgentRoleDialog in view mode */}
       {roleViewOpen && (
-        <AgentRoleViewDialog
+        <AgentRoleDialog
           open={true}
-          roleId={agentType?.role_id ?? null}
+          editRole={currentRole ?? null}
+          mode="view"
           onClose={() => setRoleViewOpen(false)}
+          onSaved={async () => {}}
         />
       )}
 
@@ -925,6 +996,41 @@ export function AgentTypeDetailsDialog({
           onClose={() => setConversationDialogOpen(false)}
         />
       )}
+
+      {/* SOP view — reuse SopEditor in view mode */}
+      {sopViewSop && (
+        <SopEditor
+          open={sopViewOpen}
+          sop={sopViewSop}
+          mode="view"
+          onClose={() => setSopViewOpen(false)}
+          onSaved={() => setSopViewOpen(false)}
+        />
+      )}
+
+      {/* Skill view — reuse SkillEditor in view mode */}
+      {skillViewSkill && (
+        <SkillEditor
+          open={skillViewOpen}
+          skill={skillViewSkill}
+          mode="view"
+          onClose={() => setSkillViewOpen(false)}
+          onSaved={() => setSkillViewOpen(false)}
+        />
+      )}
+
+      {/* Delegated Agent Type dialog — reuse AgentTypeDetailsDialog */}
+      {agentTypeViewOpen && (
+        <AgentTypeDetailsDialog
+          open={agentTypeViewOpen}
+          agentTypeId={agentTypeViewId}
+          onClose={() => {
+            setAgentTypeViewOpen(false)
+            setAgentTypeViewId(null)
+          }}
+        />
+      )}
     </>
   )
 }
+

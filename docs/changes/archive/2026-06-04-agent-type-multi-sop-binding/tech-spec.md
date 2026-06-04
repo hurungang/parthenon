@@ -64,15 +64,17 @@ On role change, available lists re-fetch. On save, both arrays are serialized in
 |--------|------|-------------|------|
 | `AgentTypeSopBinding` | model | Join entity AgentType ↔ SOP with order | `backend/app/db/models/agents.py` |
 | `AgentTypeSkillBinding` | model | Join entity AgentType ↔ Skill with order | `backend/app/db/models/agents.py` |
-| `SopBindingCreate` | schema | Pydantic create schema for SOP binding | `backend/app/schemas/` |
-| `SopBindingResponse` | schema | Pydantic response schema for SOP binding | `backend/app/schemas/` |
-| `SkillBindingCreate` | schema | Pydantic create schema for skill binding | `backend/app/schemas/` |
-| `SkillBindingResponse` | schema | Pydantic response schema for skill binding | `backend/app/schemas/` |
-| `AgentTypeService.set_bindings()` | service | Atomically replaces all bindings | `backend/app/services/agent_type_service.py` |
-| `BindingValidationService.validate()` | service | Checks role-access for all bindings | `backend/app/services/binding_validation.py` |
-| `AgentTypeController` | controller | REST endpoints for AgentType CRUD | `backend/app/api/v1/agent_types.py` |
-| `SystemInstructionGenerator` | service | Generates agent system instruction | `backend/app/services/instruction_generator.py` |
-| `PlanGenerationService` | service | Generates agent plan and topology | `backend/app/services/plan_generation.py` |
+| `SopBindingCreate` | schema | Pydantic create schema for SOP binding | `backend/app/schemas/agent_type_bindings.py` |
+| `SopBindingResponse` | schema | Pydantic response schema for SOP binding | `backend/app/schemas/agent_type_bindings.py` |
+| `SkillBindingCreate` | schema | Pydantic create schema for skill binding | `backend/app/schemas/agent_type_bindings.py` |
+| `SkillBindingResponse` | schema | Pydantic response schema for skill binding | `backend/app/schemas/agent_type_bindings.py` |
+| `AgentTypeService.set_bindings()` | service | Atomically replaces all bindings | `backend/app/services/agents/agent_type_service.py` |
+| `validate_bindings()` | service | Checks role-access for all bindings | `backend/app/services/agents/binding_validation.py` |
+| AgentType endpoints | controller | REST endpoints for AgentType CRUD | `backend/app/api/v1/agents.py` |
+| `_build_binding_content()` | helper | Builds SOP+Skill binding content for system instruction | `backend/app/api/v1/internal/agent_data.py` |
+| `_load_binding_content()` | helper | Loads binding content in Agent Runtime | `backend/app/services/agents/runtime_executor.py` |
+| `PlanGenerationService._resolve_graph()` | service | Generates agent plan using binding-filtered graph | `backend/app/services/agents/plan_generation_service.py` |
+| `PlanGenerationService._compute_config_hash()` | service | Config hash includes binding IDs | `backend/app/services/agents/plan_generation_service.py` |
 | `SopSkillBindingsSection` | component | Binding list editor UI | `frontend/src/components/agent-types/SopSkillBindingsSection.tsx` |
 | `BindingPicker` | component | Type + dropdown picker for new binding | `frontend/src/components/agent-types/BindingPicker.tsx` |
 | `useAgentTypeBinding` | hook | State management for bindings | `frontend/src/hooks/useAgentTypeBinding.ts` |

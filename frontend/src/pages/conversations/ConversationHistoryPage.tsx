@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import { usePagination } from '../../hooks/usePagination'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -10,6 +11,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
   Chip,
@@ -94,6 +96,7 @@ export function ConversationHistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const agentTypeIdParam = searchParams.get('agentTypeId')
   const [selectedAgentTypeId, setSelectedAgentTypeId] = useState<string>(agentTypeIdParam ?? '')
+  const pag = usePagination()
 
   // Sync state with URL parameter changes
   useEffect(() => {
@@ -101,9 +104,11 @@ export function ConversationHistoryPage() {
   }, [agentTypeIdParam])
 
   const { data: sessions, isLoading, error } = useQuery<ConversationSession[]>({
-    queryKey: ['conversations'],
+    queryKey: ['conversations', { page: pag.page, rowsPerPage: pag.rowsPerPage }],
     queryFn: async () => {
-      const { data } = await apiClient.get<ConversationSession[]>('/conversations')
+      const { data } = await apiClient.get<ConversationSession[]>('/conversations', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -168,30 +173,42 @@ export function ConversationHistoryPage() {
       {isLoading ? (
         <CircularProgress />
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell />
-                <TableCell>ID</TableCell>
-                <TableCell>{t('conversations.channel')}</TableCell>
-                <TableCell>{t('conversations.turns')}</TableCell>
-                <TableCell>{t('app.status')}</TableCell>
-                <TableCell>{t('app.createdAt')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(filteredSessions ?? []).map((s) => (
-                <SessionRow key={s.id} session={s} />
-              ))}
-              {(filteredSessions ?? []).length === 0 && (
+        <Box>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={6} align="center">{t('app.noData')}</TableCell>
+                  <TableCell />
+                  <TableCell>ID</TableCell>
+                  <TableCell>{t('conversations.channel')}</TableCell>
+                  <TableCell>{t('conversations.turns')}</TableCell>
+                  <TableCell>{t('app.status')}</TableCell>
+                  <TableCell>{t('app.createdAt')}</TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {(filteredSessions ?? []).map((s) => (
+                  <SessionRow key={s.id} session={s} />
+                ))}
+                {(filteredSessions ?? []).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">{t('app.noData')}</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={-1}
+            page={pag.page}
+            onPageChange={pag.onPageChange}
+            rowsPerPage={pag.rowsPerPage}
+            onRowsPerPageChange={pag.onRowsPerPageChange}
+            rowsPerPageOptions={pag.rowsPerPageOptions}
+            labelRowsPerPage={t('app.rowsPerPage')}
+          />
+        </Box>
       )}
     </Box>
   )

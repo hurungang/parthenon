@@ -18,9 +18,13 @@ async def list_tag_definitions(
     db: DbSession,
     scope: Optional[str] = Query(default=None),
     resource_type: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list:
     """List tag definitions; filterable by scope and resource_type. Any authenticated user."""
-    return await TagRegistry().list_definitions(db, scope=scope, resource_type=resource_type)
+    return await TagRegistry().list_definitions(
+        db, scope=scope, resource_type=resource_type, limit=limit, offset=offset
+    )
 
 
 @TagsRouter.post(

@@ -94,6 +94,12 @@
 - Agent Plan Mode — Mocked > Update agent type: PlanPreviewModal opens with updated plan on save
 - Agent Plan Mode — Mocked > Failed plan: modal opens with error message when generation_status is failed
 - Real Backend Integration — Agent Plan Mode > POST /api/v1/agents/types returns plan field in response
+- Agent Type SOP/Skill Bindings — Mocked > binding section renders below the role picker
+- Agent Type SOP/Skill Bindings — Mocked > add binding dialog opens with type selector
+- Agent Type SOP/Skill Bindings — Mocked > remove binding removes entry from list
+- Agent Type SOP/Skill Bindings — Mocked > reorder moves entry up and down
+- Agent Type SOP/Skill Bindings — Mocked > save payload includes sop_bindings and skill_bindings
+- Agent Type SOP/Skill Bindings — Real Backend > POST returns binding fields in response
 - Agent Log Viewer > Summary panel displays identity and role from system instruction
 - Agent Log Viewer > Agent Working Steps section is collapsed by default
 - Agent Log Viewer > Expand working steps section reveals step rows
@@ -101,8 +107,8 @@
 - Agent Log Viewer > Toggle to raw mode shows monospace raw log block
 - Agent Log Viewer > Raw mode copy button is visible
 - Agent Live Logs Stream > uses live stream endpoint for running non-conversation session and shows live-stream hint
-- AI Agent nav group > nav group is expanded by default and shows child items
-- AI Agent nav group > collapses and expands nav group on header click
+- Agents nav group > nav group is expanded by default and shows child items
+- Agents nav group > collapses and expands nav group on header click
 - Agent Executions page > selecting agent type filter refetches sessions
 - Agent Type Details Dialog > dialog Details tab shows agent metadata
 - Agent Type Details Dialog > Plan Preview tab shows plan steps when plan is populated
@@ -214,8 +220,8 @@
 | 68 | Agent Log Viewer — Step Detail | Expanding a tool call step reveals its structured input/output detail block | user-friendly-agent-logs | agent-logs.spec.ts |
 | 69 | Agent Log Viewer — Raw Mode | Toggling "Raw Output" replaces the friendly panels with a full timestamped monospace log | user-friendly-agent-logs | agent-logs.spec.ts |
 | 70 | Agent Log Viewer — Copy Raw | "Copy Raw Log" button is visible in raw mode so users can copy the full log to clipboard | user-friendly-agent-logs | agent-logs.spec.ts |
-| 71 | Navigation menu structure | Sidebar "AI Agent" group is expanded with all child links (Agent Types, Executions, Logs, Roles, Identities) visible | unified-agent-navigation | agent-navigation.spec.ts |
-| 72 | Collapsible nav group toggle | User clicks "AI Agent" header to collapse the group, then clicks again to expand | unified-agent-navigation | agent-navigation.spec.ts |
+| 71 | Navigation menu structure | Sidebar "Agents" group is expanded with all 11 child links (Agent Roles, Agent Identities, Agent Types, Agent Executions, Runtime Control, Agent Logs, Skills, SOPs, Model Configs, Schedules, Results) visible alongside Integrations (5) and System (3) groups | reorg-navigation-menu | agent-navigation.spec.ts |
+| 72 | Collapsible nav group toggle | User clicks "Agents" header to collapse the group, then clicks again to expand | reorg-navigation-menu | agent-navigation.spec.ts |
 | 73 | Agent Executions filter | Selecting an agent type from the dropdown re-fetches sessions with agent_type_id in the request | unified-agent-navigation | agent-navigation.spec.ts |
 | 74 | Agent Type Details Dialog — Details tab | Clicking an agent type row opens dialog showing model ID, system prompt, and other metadata | unified-agent-navigation | agent-navigation.spec.ts |
 | 75 | Agent Type Details Dialog — Plan Preview tab | Switching to Plan Preview tab renders plan step names and topology | unified-agent-navigation | agent-navigation.spec.ts |
@@ -262,3 +268,10 @@
 | 116 | Model Configurations — Expanded 12-Provider Catalogue | Admin opens the Model Configurations page to see provider chips for all 12 supported LLM vendors (including Gemini, Mistral, Cohere, Groq, Together, Fireworks, Perplexity, DeepSeek) each with a unique colour | expand-model-config-providers | agent-runtime.spec.ts |
 | 117 | Model Configurations — Real Backend Confirms Migration | Live backend (no `page.route()` mocks) validates that the Postgres `model_provider_enum` migration was applied — the list endpoint returns configs for all 12 provider types | expand-model-config-providers | agent-runtime.spec.ts |
 | 118 | Model Configurations — Create a New Provider (Gemini) | Admin creates a `ModelConfig` for the Gemini provider through the real backend; the API key is AES-256 encrypted and never returned; the new row appears on the list page without page reload | expand-model-config-providers | agent-runtime.spec.ts |
+| 119 | Agent Type SOP/Skill Bindings — Browse | Binding list section renders below the role picker and shows all SOP/skill entries in order with type badges and order numbers | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
+| 120 | Agent Type SOP/Skill Bindings — Add | User opens the add binding dialog, selects SOP or Skill type, picks an item from the role-filtered dropdown, and saves — binding appears in the list | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
+| 121 | Agent Type SOP/Skill Bindings — Remove | User clicks the remove control on a binding row; the entry disappears from the list before save | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
+| 122 | Agent Type SOP/Skill Bindings — Reorder | User moves a binding up/down using the arrow controls; the order updates immediately in the UI | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
+| 123 | Agent Type SOP/Skill Bindings — Save Payload | User saves the agent type; the PUT payload includes `sop_bindings` and `skill_bindings` arrays matching the current UI state | agent-type-multi-sop-binding | agent-type-bindings-mocked.spec.ts |
+| 124 | Agent Type SOP/Skill Bindings — Real Backend | Real backend POST returns `sop_bindings` and `skill_bindings` in the response, confirming binding persistence round-trip | agent-type-multi-sop-binding | agent-type-bindings.spec.ts |
+| 119 | Sidebar nav group expand/collapse (3-group structure) | User clicks the "Agents" group header to collapse the group (hides child items), then clicks again to re-expand them — exercises the new 3-group structure (Agents: 11, Integrations: 5, System: 3) and the primary expand/collapse interaction | reorg-navigation-menu | agent-navigation.spec.ts |

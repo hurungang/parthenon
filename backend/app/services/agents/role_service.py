@@ -57,7 +57,9 @@ class AgentRoleService:
         logger.info("Created AgentRole %s (%s)", role.id, name)
         return await self.get_role(role.id, db)
 
-    async def list_roles(self, db: AsyncSession) -> list[AgentRole]:
+    async def list_roles(
+        self, db: AsyncSession, limit: int = 1000, offset: int = 0
+    ) -> list[AgentRole]:
         """Return all AgentRoles with their SOP/Skill assignments loaded."""
         result = await db.execute(
             select(AgentRole)
@@ -66,6 +68,8 @@ class AgentRoleService:
                 selectinload(AgentRole.skill_assignments),
             )
             .order_by(AgentRole.name)
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars().all())
 

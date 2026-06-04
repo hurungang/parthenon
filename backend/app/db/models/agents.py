@@ -510,12 +510,6 @@ class AgentType(Base):
     )
     output_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    # Primary SOP for none-input agents — must be set when input_type=none
-    primary_sop_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sops.id", ondelete="SET NULL"),
-        nullable=True,
-    )
 
     # Guardrail policy profile (owned by Control Center and resolved by runtime context)
     guardrail_max_iterations: Mapped[int] = mapped_column(
@@ -608,7 +602,12 @@ class AgentType(Base):
     role: Mapped["AgentRole | None"] = relationship(
         "AgentRole", back_populates="agent_types"
     )
-    primary_sop: Mapped["Sop | None"] = relationship("Sop")
+    sop_bindings: Mapped[list["AgentTypeSopBinding"]] = relationship(
+        "AgentTypeSopBinding", back_populates="agent_type", cascade="all, delete-orphan"
+    )
+    skill_bindings: Mapped[list["AgentTypeSkillBinding"]] = relationship(
+        "AgentTypeSkillBinding", back_populates="agent_type", cascade="all, delete-orphan"
+    )
     instances: Mapped[list["AgentInstance"]] = relationship(
         "AgentInstance", back_populates="agent_type", cascade="all, delete-orphan"
     )
@@ -621,6 +620,77 @@ class AgentType(Base):
 
     def __repr__(self) -> str:
         return f"<AgentType id={self.id} name={self.name}>"
+
+
+# ── AgentType Binding Join Tables ─────────────────────────────────────────────
+
+
+class AgentTypeSopBinding(Base):
+    """Join entity linking an AgentType to a Sop with ordering."""
+
+    __tablename__ = "agent_type_sop_bindings"
+    __table_args__ = (
+        UniqueConstraint("agent_type_id", "sop_id", name="uq_agent_type_sop_binding"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    agent_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sops.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="sop_bindings")
+    sop: Mapped["Sop"] = relationship("Sop")
+
+    def __repr__(self) -> str:
+        return f"<AgentTypeSopBinding agent_type_id={self.agent_type_id} sop_id={self.sop_id}>"
+
+
+class AgentTypeSkillBinding(Base):
+    """Join entity linking an AgentType to a Skill with ordering."""
+
+    __tablename__ = "agent_type_skill_bindings"
+    __table_args__ = (
+        UniqueConstraint("agent_type_id", "skill_id", name="uq_agent_type_skill_binding"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    agent_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    skill_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="skill_bindings")
+    skill: Mapped["Skill"] = relationship("Skill")
+
+    def __repr__(self) -> str:
+        return f"<AgentTypeSkillBinding agent_type_id={self.agent_type_id} skill_id={self.skill_id}>"
 
 
 # ── AgentInstance (legacy — superseded by AgentJob in Phase 5) ───────────────

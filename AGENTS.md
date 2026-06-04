@@ -4,6 +4,12 @@
 
 Before making any code or documentation change, first review `docs/config.yaml` and ensure the change complies with every `top_priority_rules` entry; if any conflict exists, stop and escalate for clarification.
 
+**If the change involves database schema changes (or you're unsure), verify `.change.yaml` for `has_db_changes: true` and apply pending migrations with `alembic upgrade head` before testing.**
+
+## Debugging 500 Errors
+
+If the backend returns 500 errors during testing, the most likely cause is **unapplied database migrations**. Run `python -m alembic current` and compare against the latest file in `backend/alembic/versions/`. If out of date, run `python -m alembic upgrade head` and restart the backend.
+
 ## Running Dev Servers (Windows)
 
 **Do NOT run dev servers directly in the bash tool** — they will block the session or terminate when the tool finishes.

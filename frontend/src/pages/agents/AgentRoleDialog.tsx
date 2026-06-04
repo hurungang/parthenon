@@ -49,6 +49,7 @@ interface McpSessionInfo {
 interface AgentRoleDialogProps {
   open: boolean
   editRole: AgentRole | null
+  mode?: 'create' | 'edit' | 'view'
   onClose: () => void
   onSaved: () => Promise<void>
 }
@@ -58,9 +59,11 @@ interface AgentRoleDialogProps {
  * Includes SOP multi-select, Skill multi-select, real-time MCP tool preview panel,
  * and assigned identities table with Assign/Remove actions.
  */
-export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleDialogProps) {
+export function AgentRoleDialog({ open, editRole, mode: modeProp, onClose, onSaved }: AgentRoleDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const mode = modeProp ?? 'edit'
+  const isViewMode = mode === 'view'
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -245,6 +248,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
   }
 
   const handleSave = async () => {
+    if (isViewMode) return
     try {
       setDialogError(null)
       const body = {
@@ -275,7 +279,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
         fullWidth
       >
         <DialogTitle>
-          {isEditing ? t('agents.roles.editTitle') : t('agents.roles.createTitle')}
+          {isViewMode ? t('agents.roles.viewTitle') : isEditing ? t('agents.roles.editTitle') : t('agents.roles.createTitle')}
         </DialogTitle>
 
         <DialogContent dividers>
@@ -291,6 +295,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
               onChange={(e) => setName(e.target.value)}
               fullWidth
               required
+              disabled={isViewMode}
             />
             <TextField
               label={t('app.description')}
@@ -299,6 +304,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
               fullWidth
               multiline
               rows={2}
+              disabled={isViewMode}
             />
 
             <Divider />
@@ -324,11 +330,12 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                       <FormControlLabel
                         key={sop.id}
                         control={
-                          <Checkbox
-                            size="small"
-                            checked={selectedSopIds.includes(sop.id)}
-                            onChange={() => toggleSop(sop.id)}
-                          />
+                        <Checkbox
+                          size="small"
+                          checked={selectedSopIds.includes(sop.id)}
+                          onChange={() => toggleSop(sop.id)}
+                          disabled={isViewMode}
+                        />
                         }
                         label={sop.name}
                         sx={{ display: 'flex', mx: 0 }}
@@ -358,7 +365,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                       <Tooltip
                         key={skill.id}
                         title={
-                          lockedSkills.has(skill.id)
+                          !isViewMode && lockedSkills.has(skill.id)
                             ? t('agents.roles.skillLockedBySOPTooltip', { defaultValue: 'Required by a selected SOP' })
                             : ''
                         }
@@ -370,7 +377,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                               size="small"
                               checked={selectedSkillIds.includes(skill.id)}
                               onChange={() => toggleSkill(skill.id)}
-                              disabled={lockedSkills.has(skill.id)}
+                              disabled={isViewMode || lockedSkills.has(skill.id)}
                             />
                           }
                           label={skill.name}
@@ -385,18 +392,20 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
 
             <Divider />
 
-            {/* Assigned Identities table (edit mode only) */}
-            {isEditing && (
+            {/* Assigned Identities table (edit/view mode) */}
+            {(isEditing || isViewMode) && (
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                   <Typography variant="subtitle2">{t('agents.roles.assignedIdentities')}</Typography>
-                  <Button
-                    size="small"
-                    startIcon={<PersonAddIcon />}
-                    onClick={() => setAssignDialogOpen(true)}
-                  >
-                    {t('agents.roles.assignIdentities')}
-                  </Button>
+                  {!isViewMode && (
+                    <Button
+                      size="small"
+                      startIcon={<PersonAddIcon />}
+                      onClick={() => setAssignDialogOpen(true)}
+                    >
+                      {t('agents.roles.assignIdentities')}
+                    </Button>
+                  )}
                 </Box>
                 {(assignedIdentities ?? []).length === 0 ? (
                   <Typography variant="body2" color="text.secondary">
@@ -409,7 +418,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                         <TableCell>{t('app.name')}</TableCell>
                         <TableCell>{t('agents.identities.realmUsername')}</TableCell>
                         <TableCell>{t('app.status')}</TableCell>
-                        <TableCell padding="checkbox" />
+                        {!isViewMode && <TableCell padding="checkbox" />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -428,17 +437,19 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                               color={identity.status === 'active' ? 'success' : 'default'}
                             />
                           </TableCell>
-                          <TableCell padding="checkbox">
-                            <Tooltip title={t('agents.roles.removeIdentity')}>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleRemoveIdentity(identity.id)}
-                              >
-                                <PersonRemoveIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
+                          {!isViewMode && (
+                            <TableCell padding="checkbox">
+                              <Tooltip title={t('agents.roles.removeIdentity')}>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleRemoveIdentity(identity.id)}
+                                >
+                                  <PersonRemoveIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -449,18 +460,20 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
 
             <Divider />
 
-            {/* Assigned MCP Sessions table (edit mode only) */}
-            {isEditing && (
+            {/* Assigned MCP Sessions table (edit/view mode) */}
+            {(isEditing || isViewMode) && (
               <Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                   <Typography variant="subtitle2">{t('agents.roles.assignedMcpSessions')}</Typography>
-                  <Button
-                    size="small"
-                    startIcon={<CloudQueueIcon />}
-                    onClick={() => setAssignMcpDialogOpen(true)}
-                  >
-                    {t('agents.roles.assignMcpSessions')}
-                  </Button>
+                  {!isViewMode && (
+                    <Button
+                      size="small"
+                      startIcon={<CloudQueueIcon />}
+                      onClick={() => setAssignMcpDialogOpen(true)}
+                    >
+                      {t('agents.roles.assignMcpSessions')}
+                    </Button>
+                  )}
                 </Box>
                 {(assignedMcpSessions ?? []).length === 0 ? (
                   <Typography variant="body2" color="text.secondary">
@@ -472,7 +485,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                       <TableRow>
                         <TableCell>{t('mcp.sessions.title')}</TableCell>
                         <TableCell>{t('mcp.servers')}</TableCell>
-                        <TableCell padding="checkbox" />
+                        {!isViewMode && <TableCell padding="checkbox" />}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -484,17 +497,19 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
                               {session.server_name} ({session.server_slug})
                             </Typography>
                           </TableCell>
-                          <TableCell padding="checkbox">
-                            <Tooltip title={t('agents.roles.removeMcpSession')}>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleRemoveMcpSession(session.id)}
-                              >
-                                <RemoveCircleOutlineIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
+                          {!isViewMode && (
+                            <TableCell padding="checkbox">
+                              <Tooltip title={t('agents.roles.removeMcpSession')}>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleRemoveMcpSession(session.id)}
+                                >
+                                  <RemoveCircleOutlineIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -510,17 +525,17 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
               <Box
                 display="flex"
                 alignItems="center"
-                sx={{ mb: 1, cursor: isEditing && previewTools.length > 0 ? 'pointer' : 'default', userSelect: 'none' }}
-                onClick={() => isEditing && previewTools.length > 0 && setToolRefOpen((o) => !o)}
+                sx={{ mb: 1, cursor: !isViewMode && isEditing && previewTools.length > 0 ? 'pointer' : 'default', userSelect: 'none' }}
+                onClick={() => !isViewMode && isEditing && previewTools.length > 0 && setToolRefOpen((o) => !o)}
               >
                 <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>{t('agents.roles.mcpToolPreview')}</Typography>
-                {isEditing && previewTools.length > 0 && (
+                {!isViewMode && isEditing && previewTools.length > 0 && (
                   <IconButton size="small" tabIndex={-1}>
                     {toolRefOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                   </IconButton>
                 )}
               </Box>
-              {!isEditing ? (
+              {!isEditing && !isViewMode ? (
                 <Alert severity="info">{t('agents.roles.mcpToolPreviewHint')}</Alert>
               ) : previewLoading ? (
                 <CircularProgress size={20} />
@@ -568,7 +583,7 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 {t('agents.roles.allowedAgentTypePreview')}
               </Typography>
-              {!isEditing ? (
+              {!isEditing && !isViewMode ? (
                 <Alert severity="info">{t('agents.roles.allowedAgentTypePreviewHint')}</Alert>
               ) : previewLoading ? (
                 <CircularProgress size={20} />
@@ -594,10 +609,16 @@ export function AgentRoleDialog({ open, editRole, onClose, onSaved }: AgentRoleD
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => { onClose(); setDialogError(null) }}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={!name.trim()}>
-            {t('app.save')}
-          </Button>
+          {isViewMode ? (
+            <Button onClick={() => { onClose(); setDialogError(null) }}>{t('app.close')}</Button>
+          ) : (
+            <>
+              <Button onClick={() => { onClose(); setDialogError(null) }}>{t('app.cancel')}</Button>
+              <Button variant="contained" onClick={handleSave} disabled={!name.trim()}>
+                {t('app.save')}
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 

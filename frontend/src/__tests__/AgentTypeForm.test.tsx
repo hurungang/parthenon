@@ -377,4 +377,177 @@ describe('AgentTypeForm', () => {
       expect(roleCalls.length).toBeGreaterThanOrEqual(0) // permissive — endpoint varies
     })
   })
+
+  // ── SOP / Skill Bindings Section ─────────────────────────────────────────────
+
+  it('renders bindings section title', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.bindings.title')).toBeDefined()
+    })
+  })
+
+  it('shows empty state when no bindings configured', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.bindings.noBindings')).toBeDefined()
+    })
+  })
+
+  it('renders SOP bindings in the list', async () => {
+    const mockApiClient = (await import('../api/apiClient')).default
+    ;(mockApiClient.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({ data: [{ id: 'sop-1', name: 'Test SOP', description: '' }] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const values = {
+      ...defaultAgentTypeFormValues,
+      sop_bindings: [{ sop_id: 'sop-1', order: 0 }],
+    }
+    render(<AgentTypeForm values={values} onChange={vi.fn()} />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('Test SOP')).toBeDefined()
+    })
+    expect(screen.getByText('agents.types.bindings.typeSop')).toBeDefined()
+  })
+
+  it('renders skill bindings in the list', async () => {
+    const mockApiClient = (await import('../api/apiClient')).default
+    ;(mockApiClient.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/skills') {
+        return Promise.resolve({ data: [{ id: 'skill-1', name: 'Test Skill', description: '' }] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const values = {
+      ...defaultAgentTypeFormValues,
+      skill_bindings: [{ skill_id: 'skill-1', order: 0 }],
+    }
+    render(<AgentTypeForm values={values} onChange={vi.fn()} />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Skill')).toBeDefined()
+    })
+    expect(screen.getByText('agents.types.bindings.typeSkill')).toBeDefined()
+  })
+
+  it('add binding button is disabled when no role selected', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+
+    const { unmount } = render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    let addButton = screen.getByRole('button', { name: /agents\.types\.bindings\.addBinding/ })
+    expect(addButton).toBeDisabled()
+
+    unmount()
+
+    render(
+      <AgentTypeForm
+        values={{ ...defaultAgentTypeFormValues, role_id: 'role-1' }}
+        onChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+    addButton = screen.getByRole('button', { name: /agents\.types\.bindings\.addBinding/ })
+    expect(addButton).not.toBeDisabled()
+  })
+
+  it('remove binding handler fires onChange', async () => {
+    const mockApiClient = (await import('../api/apiClient')).default
+    ;(mockApiClient.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({ data: [{ id: 'sop-1', name: 'SOP One', description: '' }] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const onChange = vi.fn()
+    const values = {
+      ...defaultAgentTypeFormValues,
+      sop_bindings: [{ sop_id: 'sop-1', order: 0 }],
+    }
+    render(<AgentTypeForm values={values} onChange={onChange} />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('SOP One')).toBeDefined()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /agents\.types\.bindings\.remove/ }))
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ sop_bindings: [] }),
+    )
+  })
+
+  it('reorder buttons work', async () => {
+    const mockApiClient = (await import('../api/apiClient')).default
+    ;(mockApiClient.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/sops') {
+        return Promise.resolve({
+          data: [
+            { id: 'sop-1', name: 'SOP One', description: '' },
+            { id: 'sop-2', name: 'SOP Two', description: '' },
+          ],
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const onChange = vi.fn()
+    const values = {
+      ...defaultAgentTypeFormValues,
+      sop_bindings: [
+        { sop_id: 'sop-1', order: 0 },
+        { sop_id: 'sop-2', order: 1 },
+      ],
+    }
+    render(<AgentTypeForm values={values} onChange={onChange} />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('SOP One')).toBeDefined()
+      expect(screen.getByText('SOP Two')).toBeDefined()
+    })
+
+    // Click move-up on the second item (first item's move-up is disabled)
+    const moveUpButtons = screen.getAllByRole('button', { name: /agents\.types\.bindings\.moveUp/ })
+    expect(moveUpButtons.length).toBeGreaterThanOrEqual(2)
+    fireEvent.click(moveUpButtons[1])
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sop_bindings: [
+          expect.objectContaining({ sop_id: 'sop-1', order: 1 }),
+          expect.objectContaining({ sop_id: 'sop-2', order: 0 }),
+        ],
+      }),
+    )
+  })
+
+  it('does NOT render old primary_sop_id field', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    expect(screen.queryByText('agents.types.primarySopId')).toBeNull()
+  })
 })

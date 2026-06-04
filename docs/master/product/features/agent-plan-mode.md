@@ -26,22 +26,21 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - As a Business Analyst, I want to preview the agent's SOPs, skills, and tools in a visual diagram, so that I can understand how the agent will operate.
 - As a Compliance Officer, I want to review the agent's plan and associated SOPs/skills, so that I can approve agents for production use.
 - As a Developer, I want to ensure the agent's plan aligns with integration requirements, so that downstream systems are not impacted by misconfiguration.
-- As an Agent Designer, I want plan generation to include only SOPs explicitly named in agent instruction, so that plan context remains focused and predictable.
-- As an Agent Designer, I want the Default SOP used only when no SOP is named in instruction, so that fallback behavior is transparent and non-conflicting.
+- As an Agent Designer, I want plan generation to include only SOPs and skills from the agent type's curated binding list, so that plan context remains focused and predictable.
+- As an Agent Designer, I want the fallback to all role-assigned SOPs and skills used only when no bindings are defined, so that backward compatibility is transparent.
 
 
 ## 5. Acceptance Criteria
 
-- When a user saves an Agent Type, the system automatically invokes an LLM to generate a clear, step-by-step implementation plan based on the agent's instruction, role SOPs, and skills.
+- When a user saves an Agent Type, the system automatically invokes an LLM to generate a clear, step-by-step implementation plan based on the agent's instruction, role, and curated binding list (SOP and skill bindings).
 - The LLM-generated plan is persisted with the agent type and displayed in a human-readable format, outlining each action the agent will take.
-- A topology diagram visually shows the Agent Role, SOPs, Skills, and Tools that will be used, with clear relationships.
+- A topology diagram visually shows the Agent Role, bound SOPs, bound skills, and their tools, with clear relationships.
 - Users can preview the full plan and diagram in the "Plan Preview" tab of the Agent Type Details dialog before finalizing the agent save.
 - The saved plan is loaded into the agent's execution context during runtime, guiding the agent to follow the pre-approved workflow.
 - Plan preview and execution context support both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
-- The plan and diagram update automatically if the agent's configuration, role, SOPs, or skills change (triggers re-generation on save).
-- Plan generation includes only SOPs explicitly referenced in agent instruction text.
-- When no SOP is explicitly referenced in agent instruction text, plan generation includes the configured Default SOP as fallback.
-- If one or more SOPs are explicitly referenced in agent instruction text, Default SOP content is not included in plan context.
+- The plan and diagram update automatically if the agent's configuration, role, or binding list changes (triggers re-generation on save).
+- Plan generation uses only the Agent Type's explicitly bound SOPs and skills from the ordered binding list.
+- When no bindings are defined, plan generation falls back to all role-assigned SOPs and skills (current behaviour, backward compatible).
 - All UI text is internationalized via i18next.
 - The feature is accessible and usable on both desktop and tablet devices.
 - Error handling: If plan generation fails, users receive a clear, actionable error message and the agent save is not blocked.

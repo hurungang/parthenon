@@ -22,6 +22,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -30,6 +31,7 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import { usePagination } from '../../hooks/usePagination'
 import { useTagDefinitions, useCreateTag, useUpdateTag, useDeleteTag } from '../../hooks/usePermissions'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { TagScope } from '../../types/permissions'
@@ -57,7 +59,11 @@ const emptyForm: TagForm = {
 
 export function TagsPage() {
   const { t } = useTranslation()
-  const { data: tags, isLoading, error } = useTagDefinitions()
+  const pag = usePagination()
+  const { data: tags, isLoading, error } = useTagDefinitions({
+    limit: pag.limit,
+    offset: pag.offset,
+  })
   const createTag = useCreateTag()
   const updateTag = useUpdateTag()
   const deleteTag = useDeleteTag()
@@ -216,6 +222,18 @@ export function TagsPage() {
           </TableBody>
         </Table>
       </TableContainer>
+      {!isLoading && !error && (
+        <TablePagination
+          component="div"
+          count={-1}
+          page={pag.page}
+          onPageChange={pag.onPageChange}
+          rowsPerPage={pag.rowsPerPage}
+          onRowsPerPageChange={pag.onRowsPerPageChange}
+          rowsPerPageOptions={pag.rowsPerPageOptions}
+          labelRowsPerPage={t('app.rowsPerPage')}
+        />
+      )}
 
       {/* Add / Edit dialog */}
       <Dialog open={dialogMode !== null} onClose={() => { setDialogMode(null); setDialogError(null) }} maxWidth="sm" fullWidth>

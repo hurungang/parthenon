@@ -2,7 +2,7 @@
 import uuid
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -102,6 +102,8 @@ async def submit_access_request(
 async def list_my_requests(
     request: Request,
     db: DbSession,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> List[AccessRequestBatchRead]:
     """List the current user's access request batches. Authenticated users."""
     platform_user_id = _get_platform_user_id(request)
@@ -112,6 +114,8 @@ async def list_my_requests(
         select(AccessRequestBatch)
         .where(AccessRequestBatch.user_id == platform_user_id)
         .order_by(AccessRequestBatch.submitted_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     batches = result.scalars().all()
     return [await _load_batch_with_requests(db, b) for b in batches]
@@ -121,6 +125,8 @@ async def list_my_requests(
 async def list_pending_requests(
     request: Request,
     db: DbSession,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> List[AccessRequestRead]:
     """List pending access requests. Users with permission to manage permissions see all; group owners see their groups only."""
     platform_user_id = _get_platform_user_id(request)
@@ -135,6 +141,8 @@ async def list_pending_requests(
             select(AccessRequest)
             .where(AccessRequest.status == AccessRequestStatus.pending)
             .order_by(AccessRequest.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     elif platform_user_id is not None:
         owned_result = await db.execute(
@@ -150,6 +158,8 @@ async def list_pending_requests(
                 AccessRequest.status == AccessRequestStatus.pending,
             )
             .order_by(AccessRequest.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     else:
         raise HTTPException(status_code=403, detail="Not authorized.")

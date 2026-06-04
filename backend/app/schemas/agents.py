@@ -22,6 +22,12 @@ from app.db.models.agents import (
     SessionStopReason,
     ModelProvider,
 )
+from app.schemas.agent_type_bindings import (
+    SkillBindingCreate,
+    SkillBindingResponse,
+    SopBindingCreate,
+    SopBindingResponse,
+)
 from app.db.models.model_guardrail_configuration import (
     ModelGuardrailEnforcementPosture,
     ModelGuardrailPeriod,
@@ -783,7 +789,8 @@ class AgentTypeCreate(BaseModel):
     input_schema: dict[str, Any] | None = None
     output_type: AgentOutputType = AgentOutputType.auto
     output_schema: dict[str, Any] | None = None
-    primary_sop_id: uuid.UUID | None = None
+    sop_bindings: list[SopBindingCreate] = []
+    skill_bindings: list[SkillBindingCreate] = []
     guardrail_max_iterations: int = 10
     guardrail_max_delegation_depth: int = 3
     guardrail_max_delegated_steps: int = 20
@@ -831,7 +838,8 @@ class AgentTypeUpdate(BaseModel):
     input_schema: dict[str, Any] | None = None
     output_type: AgentOutputType | None = None
     output_schema: dict[str, Any] | None = None
-    primary_sop_id: uuid.UUID | None = None
+    sop_bindings: list[SopBindingCreate] | None = None
+    skill_bindings: list[SkillBindingCreate] | None = None
     guardrail_max_iterations: int | None = None
     guardrail_max_delegation_depth: int | None = None
     guardrail_max_delegated_steps: int | None = None
@@ -858,7 +866,8 @@ class AgentTypeRead(BaseModel):
     input_schema: dict[str, Any] | None
     output_type: AgentOutputType
     output_schema: dict[str, Any] | None
-    primary_sop_id: uuid.UUID | None
+    sop_bindings: list[SopBindingResponse] = []
+    skill_bindings: list[SkillBindingResponse] = []
     guardrail_max_iterations: int
     guardrail_max_delegation_depth: int
     guardrail_max_delegated_steps: int
@@ -874,11 +883,13 @@ class AgentTypeRead(BaseModel):
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> "AgentTypeRead":  # type: ignore[override]
-        """Build from ORM object, safely loading the plan relationship only when available."""
+        """Build from ORM object, safely loading relationships only when available."""
         if hasattr(obj, "__tablename__"):  # SQLAlchemy ORM instance
             from sqlalchemy import inspect as sa_inspect
 
             plan: AgentPlanRead | None = None
+            sop_bindings: list[SopBindingResponse] = []
+            skill_bindings: list[SkillBindingResponse] = []
             try:
                 insp = sa_inspect(obj)
                 # Only access the plan relationship if it has already been loaded
@@ -886,8 +897,31 @@ class AgentTypeRead(BaseModel):
                     plan_orm = obj.plan
                     if plan_orm is not None:
                         plan = AgentPlanRead.model_validate(plan_orm)
+                # Extract binding data from loaded relationships
+                if "sop_bindings" not in insp.unloaded:
+                    for b in obj.sop_bindings:
+                        sop_bindings.append(
+                            SopBindingResponse(
+                                id=b.id,
+                                sop_id=b.sop_id,
+                                sop_name=b.sop.name if b.sop else str(b.sop_id),
+                                order=b.order,
+                                created_at=b.created_at,
+                            )
+                        )
+                if "skill_bindings" not in insp.unloaded:
+                    for b in obj.skill_bindings:
+                        skill_bindings.append(
+                            SkillBindingResponse(
+                                id=b.id,
+                                skill_id=b.skill_id,
+                                skill_name=b.skill.name if b.skill else str(b.skill_id),
+                                order=b.order,
+                                created_at=b.created_at,
+                            )
+                        )
             except Exception:
-                pass  # Relationship not loaded or inspect failed — leave plan as None
+                pass  # Relationship not loaded or inspect failed
 
             data = {
                 "id": obj.id,
@@ -902,7 +936,8 @@ class AgentTypeRead(BaseModel):
                 "input_schema": obj.input_schema,
                 "output_type": obj.output_type,
                 "output_schema": obj.output_schema,
-                "primary_sop_id": obj.primary_sop_id,
+                "sop_bindings": sop_bindings,
+                "skill_bindings": skill_bindings,
                 "guardrail_max_iterations": obj.guardrail_max_iterations,
                 "guardrail_max_delegation_depth": obj.guardrail_max_delegation_depth,
                 "guardrail_max_delegated_steps": obj.guardrail_max_delegated_steps,

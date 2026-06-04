@@ -199,7 +199,7 @@ class PlanGenerationService:
         sop_ids = [row[0] for row in sop_rows.fetchall()]
 
         sop_data_list: list[dict[str, Any]] = []
-        sop_skill_ids: dict[str, list[str]] = {}  # sop_id -> [skill_ids from steps]
+        sop_skill_ids: dict[str, list[str]] = {}
         delegated_agent_type_ids: set[str] = set()
 
         if sop_ids:
@@ -226,14 +226,15 @@ class PlanGenerationService:
                         for step in sop_steps
                     ],
                 })
-                # Collect skill IDs referenced in SOP steps
+                # Collect skill IDs and delegated agent IDs from SOP steps
                 for step in sop_steps:
                     if step.step_type == SopStepType.skill_invocation and step.skill_id:
                         sop_skill_ids.setdefault(str(sop.id), []).append(str(step.skill_id))
                     if step.step_type == SopStepType.agent_delegation and step.target_agent_type_id:
                         delegated_agent_type_ids.add(str(step.target_agent_type_id))
 
-        # Filter sop_data_list based on system instruction SOP references
+        # Filter sop_data_list based on bindings and system instruction references
+        sop_scope_narrowed = False
         if sop_data_list:
             system_instruction_lower = (agent_type.system_instruction or "").lower()
             mentioned = [
@@ -241,15 +242,31 @@ class PlanGenerationService:
                 if sop["name"].lower() in system_instruction_lower
             ]
             if mentioned:
-                # System instruction names specific SOPs — use only those
                 sop_data_list = mentioned
-            elif agent_type.primary_sop_id:
-                # No SOPs named — fall back to the configured default SOP
-                primary_id = str(agent_type.primary_sop_id)
-                default_sop = [sop for sop in sop_data_list if sop["id"] == primary_id]
-                if default_sop:
-                    sop_data_list = default_sop
-            # else: no system instruction SOP mentions, no default SOP → keep all role SOPs
+                sop_scope_narrowed = True
+            else:
+                # No SOPs named in system instruction — use bound SOPs if bindings exist
+                bound_sop_ids = await self._get_bound_sop_ids(agent_type, db)
+                if bound_sop_ids:
+                    sop_data_list = [
+                        sop for sop in sop_data_list
+                        if sop["id"] in bound_sop_ids
+                    ]
+                    sop_scope_narrowed = True
+                # else: no bindings either → keep all role SOPs (fallback)
+
+        # Prune sop_skill_ids and delegated_agent_type_ids to only include SOPs that survived filtering
+        filtered_sop_ids = {sop["id"] for sop in sop_data_list}
+        sop_skill_ids = {
+            sid: ids for sid, ids in sop_skill_ids.items()
+            if sid in filtered_sop_ids
+        }
+        delegated_agent_type_ids = {
+            step["target_agent_type_id"]
+            for sop in sop_data_list
+            for step in sop.get("steps", [])
+            if step.get("step_type") == "agent_delegation" and step.get("target_agent_type_id")
+        }
 
         delegated_agents: list[dict[str, Any]] = []
         if delegated_agent_type_ids:
@@ -277,7 +294,12 @@ class PlanGenerationService:
         for ids in sop_skill_ids.values():
             sop_step_skill_ids.update(ids)
 
-        all_skill_ids_str = direct_skill_ids | sop_step_skill_ids
+        # When SOP scope is narrowed (bindings or system instruction), only use skills
+        # from those SOPs — don't pull in unrelated role-assigned skills
+        if sop_scope_narrowed:
+            all_skill_ids_str = sop_step_skill_ids
+        else:
+            all_skill_ids_str = direct_skill_ids | sop_step_skill_ids
         all_skill_ids = [uuid.UUID(sid) for sid in all_skill_ids_str]
 
         skill_data_list: list[dict[str, Any]] = []
@@ -325,6 +347,20 @@ class PlanGenerationService:
                             tool_data["auth_type"] = server_session_map[srv_key]["auth_type"]
                         tool_data_list.append(tool_data)
 
+        # Filter skill_data_list based on bindings
+        bound_skill_ids = await self._get_bound_skill_ids(agent_type, db)
+        if bound_skill_ids:
+            skill_data_list = [
+                skill for skill in skill_data_list
+                if skill["id"] in bound_skill_ids
+            ]
+            # Also prune tools to only those owned by surviving skills
+            surviving_skill_ids = {s["id"] for s in skill_data_list}
+            tool_data_list = [
+                t for t in tool_data_list
+                if t["skill_id"] in surviving_skill_ids
+            ]
+
         return {
             "agent": agent_data,
             "identity": identity_data,
@@ -334,6 +370,32 @@ class PlanGenerationService:
             "tools": tool_data_list,
             "delegated_agents": delegated_agents,
         }
+
+    async def _get_bound_sop_ids(
+        self, agent_type: AgentType, db: AsyncSession
+    ) -> set[str]:
+        """Return the set of SOP IDs that are bound to this agent type."""
+        from app.db.models.agents import AgentTypeSopBinding
+
+        result = await db.execute(
+            select(AgentTypeSopBinding.sop_id).where(
+                AgentTypeSopBinding.agent_type_id == agent_type.id
+            )
+        )
+        return {str(row[0]) for row in result.fetchall()}
+
+    async def _get_bound_skill_ids(
+        self, agent_type: AgentType, db: AsyncSession
+    ) -> set[str]:
+        """Return the set of Skill IDs that are bound to this agent type."""
+        from app.db.models.agents import AgentTypeSkillBinding
+
+        result = await db.execute(
+            select(AgentTypeSkillBinding.skill_id).where(
+                AgentTypeSkillBinding.agent_type_id == agent_type.id
+            )
+        )
+        return {str(row[0]) for row in result.fetchall()}
 
     def _build_prompt(
         self, agent_type: AgentType, graph: dict[str, Any]
@@ -571,9 +633,17 @@ class PlanGenerationService:
     @staticmethod
     def _compute_config_hash(agent_type: AgentType) -> str:
         """Compute a deterministic hash of the agent configuration inputs."""
+        # Collect SOP binding IDs sorted for deterministic hashing
+        sop_binding_ids = sorted(
+            str(b.sop_id) for b in getattr(agent_type, "sop_bindings", [])
+        )
+        skill_binding_ids = sorted(
+            str(b.skill_id) for b in getattr(agent_type, "skill_bindings", [])
+        )
         parts = [
             str(agent_type.role_id or ""),
-            str(agent_type.primary_sop_id or ""),
+            "|".join(sop_binding_ids),
+            "|".join(skill_binding_ids),
             str(agent_type.system_instruction or ""),
         ]
         raw = "|".join(parts)

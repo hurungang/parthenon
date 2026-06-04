@@ -2,7 +2,7 @@
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.api.deps import require_permission
@@ -21,11 +21,15 @@ ScheduleRouter = APIRouter(prefix="/schedules", tags=["Scheduling"])
 async def list_schedules(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SCHEDULING, "read")),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[ScheduledJob]:
     result = await db.execute(
         select(ScheduledJob)
         .where(ScheduledJob.status != JobStatus.deleted)
         .order_by(ScheduledJob.name)
+        .offset(offset)
+        .limit(limit)
     )
     return list(result.scalars().all())
 

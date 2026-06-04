@@ -125,6 +125,8 @@ class AgentSessionService:
         from_date: datetime | None = None,
         to_date: datetime | None = None,
         agent_type_id: uuid.UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[AgentJob]:
         """List AgentJobs triggered by the given user (or all if user_id is None),
         with optional filters for status, date range, and agent type."""
@@ -139,6 +141,7 @@ class AgentSessionService:
             query = query.where(AgentJob.created_at <= to_date)
         if agent_type_id is not None:
             query = query.where(AgentJob.agent_type_id == agent_type_id)
+        query = query.limit(limit).offset(offset)
         result = await db.execute(query)
         return list(result.scalars().all())
 

@@ -18,6 +18,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -29,6 +30,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import { usePagination } from '../../hooks/usePagination'
 import { useRoles, useCreateRole, useDeleteRole } from '../../hooks/usePermissions'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import PolicyEditor from '../../components/permissions/PolicyEditor'
@@ -38,7 +40,8 @@ import type { Role } from '../../types/permissions'
 
 export function RolesPage() {
   const { t } = useTranslation()
-  const { data: roles, isLoading, error } = useRoles()
+  const pag = usePagination({ initialRowsPerPage: 50 })
+  const { data: roles, isLoading, error } = useRoles(pag.page + 1, pag.rowsPerPage)
   const createRole = useCreateRole()
   const deleteRole = useDeleteRole()
 
@@ -158,6 +161,17 @@ export function RolesPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {/* Add Role dialog */}
       <Dialog

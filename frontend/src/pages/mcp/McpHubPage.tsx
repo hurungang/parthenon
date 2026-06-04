@@ -16,6 +16,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tabs,
   TextField,
@@ -27,6 +28,7 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StorageIcon from '@mui/icons-material/Storage'
+import { usePagination } from '../../hooks/usePagination'
 import { useMcpServers, useSyncServer } from '../../hooks/useMcpServers'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { McpSessionManager } from './McpSessionManager'
@@ -42,7 +44,8 @@ const SLUG_PATTERN = /^[a-z0-9-]+$/
  */
 export function McpHubPage() {
   const { t } = useTranslation()
-  const { data: servers, isLoading, error } = useMcpServers()
+  const pag = usePagination()
+  const { data: servers, isLoading, error } = useMcpServers(pag.limit, pag.offset)
   const syncServer = useSyncServer()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'servers' | 'tools'>('servers')
@@ -188,6 +191,18 @@ export function McpHubPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
+          {!isLoading && !error && (
+            <TablePagination
+              component="div"
+              count={-1}
+              page={pag.page}
+              onPageChange={pag.onPageChange}
+              rowsPerPage={pag.rowsPerPage}
+              onRowsPerPageChange={pag.onRowsPerPageChange}
+              rowsPerPageOptions={pag.rowsPerPageOptions}
+              labelRowsPerPage={t('app.rowsPerPage')}
+            />
           )}
         </>
       )}

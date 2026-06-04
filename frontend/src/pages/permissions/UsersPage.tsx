@@ -10,11 +10,13 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
 } from '@mui/material'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
+import { usePagination } from '../../hooks/usePagination'
 import { usePlatformUsers } from '../../hooks/usePermissions'
 import { ManageAccessModal } from '../../components/permissions/ManageAccessModal'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
@@ -22,7 +24,8 @@ import type { PlatformUser } from '../../types/permissions'
 
 export function UsersPage() {
   const { t } = useTranslation()
-  const { data: users, isLoading, error } = usePlatformUsers()
+  const pag = usePagination({ initialRowsPerPage: 20 })
+  const { data: users, isLoading, error } = usePlatformUsers(pag.page + 1, pag.rowsPerPage)
   const [search, setSearch] = useState('')
   const [manageUser, setManageUser] = useState<PlatformUser | null>(null)
 
@@ -84,6 +87,17 @@ export function UsersPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {manageUser && (
         <ManageAccessModal

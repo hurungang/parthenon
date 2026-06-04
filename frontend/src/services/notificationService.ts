@@ -67,8 +67,8 @@ export interface SendNotificationResponse {
 
 // ── Notification channels ──────────────────────────────────────────────────────
 
-export async function listChannels(): Promise<NotificationChannel[]> {
-  const { data } = await apiClient.get<NotificationChannel[]>('/notifications/channels')
+export async function listChannels(params?: { limit?: number; offset?: number }): Promise<NotificationChannel[]> {
+  const { data } = await apiClient.get<NotificationChannel[]>('/notifications/channels', { params })
   return data
 }
 
@@ -110,8 +110,8 @@ export async function testChannel(
 
 // ── Recipient groups ───────────────────────────────────────────────────────────
 
-export async function listRecipientGroups(): Promise<RecipientGroup[]> {
-  const { data } = await apiClient.get<RecipientGroup[]>('/notifications/recipient-groups')
+export async function listRecipientGroups(params?: { limit?: number; offset?: number }): Promise<RecipientGroup[]> {
+  const { data } = await apiClient.get<RecipientGroup[]>('/notifications/recipient-groups', { params })
   return data
 }
 

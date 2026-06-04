@@ -87,10 +87,12 @@ def _enrich_channel_with_values(channel: NotificationChannel) -> dict:
 async def list_channels(
     db: DbSession,
     _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    limit: int = 0,
+    offset: int = 0,
 ):
     """List all notification channels with non-secret property values populated."""
     repo = NotificationRepository(db)
-    channels = await repo.list_channels()
+    channels = await repo.list_channels(limit=limit, offset=offset)
     return [_enrich_channel_with_values(ch) for ch in channels]
 
 
@@ -199,9 +201,11 @@ async def test_channel(
 async def list_recipient_groups(
     db: DbSession,
     _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    limit: int = 0,
+    offset: int = 0,
 ) -> list[RecipientGroup]:
     repo = NotificationRepository(db)
-    return await repo.list_recipient_groups()
+    return await repo.list_recipient_groups(limit=limit, offset=offset)
 
 
 @NotificationRouter.post(

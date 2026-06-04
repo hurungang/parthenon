@@ -12,6 +12,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -22,6 +23,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import { usePagination } from '../../hooks/usePagination'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { SkillEditor } from './SkillEditor'
 import type { Skill } from '../../types'
@@ -37,14 +39,17 @@ import type { Skill } from '../../types'
 export function SkillListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const pag = usePagination()
   const [search, setSearch] = useState('')
   const [editorSkill, setEditorSkill] = useState<Skill | null | undefined>(undefined)
   const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'view'>('create')
 
   const { data: skills, isLoading, error } = useQuery<Skill[]>({
-    queryKey: ['skills'],
+    queryKey: ['skills', pag.limit, pag.offset],
     queryFn: async () => {
-      const { data } = await apiClient.get<Skill[]>('/skills')
+      const { data } = await apiClient.get<Skill[]>('/skills', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -174,6 +179,18 @@ export function SkillListPage() {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+        {!isLoading && !error && (
+          <TablePagination
+            component="div"
+            count={-1}
+            page={pag.page}
+            onPageChange={pag.onPageChange}
+            rowsPerPage={pag.rowsPerPage}
+            onRowsPerPageChange={pag.onRowsPerPageChange}
+            rowsPerPageOptions={pag.rowsPerPageOptions}
+            labelRowsPerPage={t('app.rowsPerPage')}
+          />
         )}
       </Box>
 

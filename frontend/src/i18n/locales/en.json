@@ -6,6 +6,7 @@
     "error": "An error occurred",
     "save": "Save",
     "saving": "Saving…",
+    "add": "Add",
     "cancel": "Cancel",
     "delete": "Delete",
     "edit": "Edit",
@@ -33,7 +34,8 @@
     "copy": "Copy to clipboard",
     "copied": "Copied!",
     "close": "Close",
-    "view": "View"
+    "view": "View",
+    "rowsPerPage": "Rows per page:"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -380,12 +382,29 @@
       "noPlan": "No plan generated yet. Save the agent type to generate a plan.",
       "noDescription": "No description",
       "systemPrompt": "System Prompt",
-      "primarySop": "Primary SOP",
+      "workflowConfig": "Workflow Configuration",
+      "inputOutput": "Input / Output",
       "viewAllExecutions": "View All Executions",
       "agentSops": "Standard Operating Procedures",
       "agentSkills": "Skills",
       "noSopsAssigned": "No SOPs assigned to this agent's role.",
       "noSkillsAssigned": "No Skills assigned to this agent's role.",
+      "noSopsBound": "No SOPs bound to this agent type.",
+      "noSkillsBound": "No Skills bound to this agent type.",
+      "bindings": {
+        "title": "SOP / Skill Bindings",
+        "sectionHint": "Curate which SOPs and skills this agent type uses. Order controls the context priority for AI-generated instructions.",
+        "noBindings": "No bindings configured. Use the button below to add SOP or skill bindings.",
+        "addBinding": "Add Binding",
+        "typeSop": "SOP",
+        "typeSkill": "Skill",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "remove": "Remove",
+        "selectPlaceholder": "Select an item…",
+        "brokenReference": "(deleted)",
+        "bound": "Bound"
+      },
       "guardrails": {
         "title": "Execution Guardrails",
         "sectionHint": "Configure per-agent-type execution boundaries for recursion, delegation, timeout, and token policy.",

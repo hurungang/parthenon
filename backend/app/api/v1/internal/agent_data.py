@@ -156,7 +156,7 @@ class AgentContextResponse(BaseModel):
     input_type: str
     output_type: str
     output_schema: dict | None
-    primary_sop_id: uuid.UUID | None
+    primary_sop_id: uuid.UUID | None  # Deprecated — first bound SOP id, kept for backward compat
     is_active: bool
     identity_role_valid: bool  # False → execution should be refused
 
@@ -541,10 +541,9 @@ async def get_agent_context(
             tool_name_map[sanitized] = canonical_tool_name
             tool_definitions.append(definition)
 
-    # ── SOP content (pre-formatted for system instruction) ───────────────────
+    # ── Binding content (pre-formatted for system instruction) ──────────────
     sop_content: str | None = None
-    if agent_type.primary_sop_id:
-        sop_content = await _build_sop_content(agent_type.primary_sop_id, db)
+    sop_content = await _build_binding_content(agent_type, db)
 
     # ── MCP session context (pre-formatted for system instruction) ───────────
     mcp_session_context: str | None = None
@@ -577,6 +576,26 @@ async def get_agent_context(
                 model_config_id = mc.id
                 break
 
+    # Derive primary_sop_id from first SOP binding for backward compatibility
+    derived_primary_sop_id: uuid.UUID | None = None
+    if sop_content:
+        # Try to extract from bindings
+        try:
+            from sqlalchemy import select as _select
+            from app.db.models.agents import AgentTypeSopBinding
+
+            first_sop_result = await db.execute(
+                _select(AgentTypeSopBinding.sop_id)
+                .where(AgentTypeSopBinding.agent_type_id == agent_type.id)
+                .order_by(AgentTypeSopBinding.order)
+                .limit(1)
+            )
+            first_sop_row = first_sop_result.one_or_none()
+            if first_sop_row:
+                derived_primary_sop_id = first_sop_row[0]
+        except Exception:
+            pass
+
     return AgentContextResponse(
         agent_type_id=agent_type.id,
         system_instruction=agent_type.system_instruction,
@@ -588,7 +607,7 @@ async def get_agent_context(
         input_type=agent_type.input_type.value,
         output_type=agent_type.output_type.value,
         output_schema=agent_type.output_schema,
-        primary_sop_id=agent_type.primary_sop_id,
+        primary_sop_id=derived_primary_sop_id,
         is_active=agent_type.is_active,
         identity_role_valid=identity_role_valid,
         allowed_tools=sorted(allowed_tools),
@@ -1000,44 +1019,97 @@ async def get_mcp_session_for_tool_routing(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-async def _build_sop_content(primary_sop_id: uuid.UUID, db: Any) -> str | None:
-    """Load a SOP and format its steps as instruction text."""
+async def _build_binding_content(agent_type: Any, db: Any) -> str | None:
+    """Load bound SOPs and skills for an agent type and format as ordered instruction text.
+
+    Merges SOP and skill bindings sorted by ``order``, then formats each as
+    context for the system instruction. Returns None when no bindings exist.
+    """
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    from app.db.models.skills import Sop
+    from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding
+    from app.db.models.skills import Sop, Skill
 
     try:
-        result = await db.execute(
-            select(Sop)
-            .where(Sop.id == primary_sop_id)
-            .options(selectinload(Sop.steps))
+        # Load SOP bindings with their SOP relationships
+        sop_result = await db.execute(
+            select(AgentTypeSopBinding)
+            .where(AgentTypeSopBinding.agent_type_id == agent_type.id)
+            .options(selectinload(AgentTypeSopBinding.sop))
+            .order_by(AgentTypeSopBinding.order)
         )
-        sop = result.scalar_one_or_none()
-        if not sop:
+        sop_bindings = list(sop_result.scalars().all())
+
+        # Load Skill bindings with their Skill relationships
+        skill_result = await db.execute(
+            select(AgentTypeSkillBinding)
+            .where(AgentTypeSkillBinding.agent_type_id == agent_type.id)
+            .options(selectinload(AgentTypeSkillBinding.skill))
+            .order_by(AgentTypeSkillBinding.order)
+        )
+        skill_bindings = list(skill_result.scalars().all())
+
+        if not sop_bindings and not skill_bindings:
             return None
 
-        lines: list[str] = [f"Follow this SOP to complete the task: {sop.name}"]
-        if sop.description:
-            lines.append(f"\nDescription: {sop.description}")
-        if sop.instructions:
-            lines.append(f"\nInstructions: {sop.instructions}")
+        # Build ordered entries with type prefix for sorting
+        entries: list[tuple[int, str, str]] = []  # (order, type_prefix, formatted_text)
 
-        steps = sorted(sop.steps, key=lambda s: s.order)
-        if steps:
-            lines.append("\nSteps:")
-            for step in steps:
-                step_num = step.order + 1
-                step_text = f"{step_num}."
-                if step.name:
-                    step_text += f" {step.name}"
-                if step.description:
-                    step_text += f": {step.description}"
-                lines.append(step_text)
+        for binding in sop_bindings:
+            sop = binding.sop
+            if not sop:
+                continue
+            lines: list[str] = [f"Follow this SOP to complete the task: {sop.name}"]
+            if sop.description:
+                lines.append(f"Description: {sop.description}")
+            if sop.instructions:
+                lines.append(f"Instructions: {sop.instructions}")
+            # Load steps
+            sop_with_steps = await db.execute(
+                select(Sop)
+                .where(Sop.id == sop.id)
+                .options(selectinload(Sop.steps))
+            )
+            sop_full = sop_with_steps.scalar_one_or_none()
+            if sop_full and sop_full.steps:
+                lines.append("Steps:")
+                for step in sorted(sop_full.steps, key=lambda s: s.order):
+                    step_text = f"  {step.order + 1}."
+                    if step.name:
+                        step_text += f" {step.name}"
+                    if step.description:
+                        step_text += f": {step.description}"
+                    lines.append(step_text)
+            entries.append((binding.order, "sop", "\n".join(lines)))
 
-        return "\n".join(lines)
+        for binding in skill_bindings:
+            skill = binding.skill
+            if not skill:
+                continue
+            lines = [f"Use this skill when needed: {skill.name}"]
+            if skill.description:
+                lines.append(f"Description: {skill.description}")
+            if skill.instructions:
+                lines.append(f"Instructions: {skill.instructions}")
+            entries.append((binding.order, "skill", "\n".join(lines)))
+
+        # Sort by order, then by type for deterministic ordering
+        entries.sort(key=lambda e: (e[0], e[1]))
+
+        # Merge into single content block
+        content_parts: list[str] = []
+        for order, typ, text in entries:
+            content_parts.append(f"[Step {order}] ({typ.upper()})\n{text}")
+
+        return "\n\n---\n\n".join(content_parts)
+
     except Exception as exc:
-        logger.warning("Failed to build SOP content for %s: %s", primary_sop_id, exc)
+        logger.warning(
+            "Failed to build binding content for agent_type=%s: %s",
+            agent_type.id,
+            exc,
+        )
         return None
 
 

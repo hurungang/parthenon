@@ -17,6 +17,7 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Organizes Skills for assignment to roles and agents
 - Controls which users and agents can access each Skill
 - Supports permission assignment and auditability for all Skills
+- Skills can be bound directly to Agent Types (in addition to SOPs), giving agent designers the flexibility to reference skills at any granularity
 
 ## Key Concepts
 - **Skill**: A reusable, permission-controlled action wrapping one or more tool calls

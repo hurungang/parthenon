@@ -33,6 +33,18 @@ The Foundation Platform provides the core identity, access, and user experience 
 - **IdP Claim Mapping**: The process of binding identity provider attributes (such as group claims) to platform user groups for automatic assignment
 - **User Group Request**: A self-service flow where users can request to join user groups, subject to approval by group owners
 
+## Navigation (Sidebar)
+
+The Parthenon Web UI sidebar is organized into **three intent-aligned groups** plus a standalone **Dashboard** entry:
+
+- **Agents group** (12 items): Agent Roles, Agent Identities, Agent Types, Agent Executions, Runtime Control, Agent Trails (Conversation History, Agent Executions, Results on tabs), Skills, SOPs, Model Configs, Schedules
+- **Integrations group** (3 items): Notification Integration (Channels, Recipient Groups, Delivery Logs on tabs), MCP Hub
+- **System group** (3 items): Observability, Permissions, System Config
+
+The sidebar is 256px wide on desktop. Items use 13px font with 11px font for sub-items, active state uses a subtle grey background (`rgba(0,0,0,0.06)`) with `#2563EB` accent color and full 8px rounded corners. Integrations group is locked open. Group labels are visually distinct (smaller, grey `text.secondary` color).
+
+Sidebar navigation items are gated by user permissions — items the user cannot access are hidden, but their group remains visible if at least one child is permitted.
+
 ## Acceptance Criteria
 - Users and agents authenticate via OIDC and are assigned correct roles
 - Permissions are enforced for all actions in the Web UI
