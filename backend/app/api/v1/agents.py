@@ -23,6 +23,8 @@ from app.db.models.agents import (
     AgentJobStatus,
     AgentRole,
     AgentType,
+    AgentTypeSopBinding,
+    AgentTypeSkillBinding,
     ModelConfig,
 )
 from app.schemas.agents import (
@@ -67,6 +69,9 @@ from app.schemas.agents import (
     WorkflowGenerationModelConfigUpdate,
     WorkflowGenerationModelOption,
 )
+from app.schemas.agent_type_bindings import SopBindingCreate, SkillBindingCreate
+from app.services.agents.agent_type_service import AgentTypeService
+from app.services.agents.binding_validation import validate_bindings
 from app.services.agents.identity_service import (
     AgentIdentityConflictError,
     AgentIdentityNotFoundError,
@@ -126,6 +131,7 @@ _runtime_topology_controller = RuntimeTopologyController()
 _termination_orchestrator = TerminationOrchestrator()
 _lifecycle_handler = GatewayLifecycleHandler()
 _plan_generation_service = PlanGenerationService()
+_agent_type_service = AgentTypeService()
 
 # Wire the permission manager into the role service so it can invalidate the cache
 _role_service._permission_manager = _permission_manager
@@ -148,9 +154,11 @@ RuntimeControlRouter = APIRouter(prefix="/agents/runtime", tags=["Agents"])
 @AgentRoleRouter.get("", response_model=list[AgentRoleRead])
 async def list_agent_roles(
     db: DbSession,
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[AgentRoleRead]:
-    roles = await _role_service.list_roles(db)
+    roles = await _role_service.list_roles(db, limit=limit, offset=offset)
     return [AgentRoleRead.model_validate(r) for r in roles]
 
 
@@ -409,9 +417,11 @@ async def list_available_mcp_sessions_for_role(
 @AgentIdentityRouter.get("", response_model=list[AgentIdentityRead])
 async def list_agent_identities(
     db: DbSession,
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[AgentIdentity]:
-    return await _identity_service.list_identities(db)
+    return await _identity_service.list_identities(db, limit=limit, offset=offset)
 
 
 @AgentIdentityRouter.post("", response_model=AgentIdentityRead, status_code=status.HTTP_201_CREATED)
@@ -630,6 +640,8 @@ async def list_agent_sessions(
     from_date: Optional[str] = Query(None, alias="from_date", description="ISO 8601 datetime lower bound"),
     to_date: Optional[str] = Query(None, alias="to_date", description="ISO 8601 datetime upper bound"),
     agent_type_id: Optional[uuid.UUID] = Query(None, description="Filter by agent type"),
+    limit: int = Query(50, description="Max number of sessions to return"),
+    offset: int = Query(0, description="Number of sessions to skip"),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[AgentJob]:
     """List sessions triggered by the current user with optional filters."""
@@ -651,6 +663,8 @@ async def list_agent_sessions(
     return await _session_service.list_sessions(
         user_id=user_id,
         status=status,
+        limit=limit,
+        offset=offset,
         from_date=from_dt,
         to_date=to_dt,
         agent_type_id=agent_type_id,
@@ -870,10 +884,20 @@ async def agent_session_chat(
 @AgentTypeRouter.get("", response_model=list[AgentTypeRead])
 async def list_agent_types(
     db: DbSession,
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[AgentTypeRead]:
     result = await db.execute(
-        select(AgentType).order_by(AgentType.name).options(selectinload(AgentType.plan))
+        select(AgentType)
+        .order_by(AgentType.name)
+        .options(
+            selectinload(AgentType.plan),
+            selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
+            selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
+        )
+        .offset(offset)
+        .limit(limit)
     )
     agents = list(result.scalars().all())
     return [AgentTypeRead.model_validate(a) for a in agents]
@@ -887,11 +911,26 @@ async def create_agent_type(
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentTypeRead:
     if body.input_type == AgentInputType.none:
-        if not body.primary_sop_id:
+        if not body.sop_bindings:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Agent types with no input must specify a primary_sop_id",
+                detail="Agent types with no input must specify at least one SOP binding",
             )
+
+    # Validate bindings against role permissions
+    if body.sop_bindings or body.skill_bindings:
+        binding_errors = await validate_bindings(
+            db=db,
+            role_id=body.role_id,
+            sop_bindings=body.sop_bindings,
+            skill_bindings=body.skill_bindings,
+        )
+        if binding_errors:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"error": "binding_validation_failed", "messages": binding_errors},
+            )
+
     agent_type = AgentType(
         name=body.name,
         description=body.description,
@@ -903,11 +942,18 @@ async def create_agent_type(
         input_schema=body.input_schema,
         output_type=body.output_type,
         output_schema=body.output_schema,
-        primary_sop_id=body.primary_sop_id,
     )
     db.add(agent_type)
     await db.flush()
     await db.refresh(agent_type)
+
+    # Save bindings
+    await _agent_type_service.set_bindings(
+        db=db,
+        agent_type_id=agent_type.id,
+        sop_bindings=body.sop_bindings,
+        skill_bindings=body.skill_bindings,
+    )
 
     # Recursion/dead-loop validation (may block in strict_block mode)
     claims = get_current_claims(request)
@@ -941,11 +987,15 @@ async def create_agent_type(
     # Generate plan after commit (non-blocking — failures are recorded, not raised)
     await _plan_generation_service.generate_plan(agent_type, db)
 
-    # Reload with plan relationship eagerly loaded so the response includes the plan
+    # Reload with relationships eagerly loaded so the response includes plan and bindings
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
-        .options(selectinload(AgentType.plan))
+        .options(
+            selectinload(AgentType.plan),
+            selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
+            selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
+        )
     )
     agent_type = result.scalar_one()
     return AgentTypeRead.model_validate(agent_type)
@@ -960,7 +1010,11 @@ async def get_agent_type(
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == type_id)
-        .options(selectinload(AgentType.plan))
+        .options(
+            selectinload(AgentType.plan),
+            selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
+            selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
+        )
     )
     agent_type = result.scalar_one_or_none()
     if not agent_type:
@@ -980,25 +1034,81 @@ async def update_agent_type(
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
 
+    # Save raw Pydantic model objects before model_dump converts them to dicts
+    raw_sop_bindings = body.sop_bindings
+    raw_skill_bindings = body.skill_bindings
+
     update_data = body.model_dump(exclude_unset=True)
 
     # Determine effective input_type and role_id after applying the update
     effective_input_type = update_data.get("input_type", agent_type.input_type)
     effective_role_id = update_data.get("role_id", agent_type.role_id)
 
+    # Determine effective sop_bindings after applying the update
+    # Use the raw Pydantic model objects (not dicts) so attribute access works
+    sop_bindings_provided = "sop_bindings" in update_data
+    skill_bindings_provided = "skill_bindings" in update_data
+    effective_sop_bindings = raw_sop_bindings if sop_bindings_provided else None
+    effective_skill_bindings = raw_skill_bindings if skill_bindings_provided else None
+
     if effective_input_type == AgentInputType.none:
-        effective_primary_sop_id = update_data.get("primary_sop_id", agent_type.primary_sop_id)
-        if not effective_primary_sop_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Agent types with no input must specify a primary_sop_id",
+        # Check if bindings are being provided in this update
+        has_sop_bindings_in_update = (
+            effective_sop_bindings is not None and len(effective_sop_bindings) > 0
+        )
+        # If no bindings in update and agent type already has bindings, that's fine
+        # But if no bindings anywhere, reject
+        if not has_sop_bindings_in_update:
+            # Check existing bindings
+            existing_count = await db.execute(
+                select(AgentTypeSopBinding).where(
+                    AgentTypeSopBinding.agent_type_id == agent_type.id
+                )
             )
+            existing_sop_count = len(existing_count.scalars().all())
+            if existing_sop_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Agent types with no input must specify at least one SOP binding",
+                )
+
+    # Validate bindings if they are being updated
+    if effective_sop_bindings is not None or effective_skill_bindings is not None:
+        role_for_validation = effective_role_id or agent_type.role_id
+        binding_errors = await validate_bindings(
+            db=db,
+            role_id=role_for_validation,
+            sop_bindings=effective_sop_bindings or [],
+            skill_bindings=effective_skill_bindings or [],
+        )
+        if binding_errors:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "binding_validation_failed",
+                    "messages": binding_errors,
+                },
+            )
+
+    # Separate binding fields from regular fields to handle binding updates differently
+    update_data.pop("sop_bindings", None)
+    update_data.pop("skill_bindings", None)
 
     for field, value in update_data.items():
         setattr(agent_type, field, value)
 
     await db.flush()
-    await db.refresh(agent_type)
+
+    # Update bindings if provided — use raw Pydantic model objects (not dicts)
+    if sop_bindings_provided or skill_bindings_provided:
+        await _agent_type_service.set_bindings(
+            db=db,
+            agent_type_id=agent_type.id,
+            sop_bindings=raw_sop_bindings or [],
+            skill_bindings=raw_skill_bindings or [],
+        )
+
+    await db.refresh(agent_type, attribute_names=["sop_bindings", "skill_bindings"])
 
     # Recursion/dead-loop validation (may block in strict_block mode)
     claims = get_current_claims(request)
@@ -1032,11 +1142,15 @@ async def update_agent_type(
     # Regenerate plan after update (non-blocking — failures are recorded, not raised)
     await _plan_generation_service.generate_plan(agent_type, db)
 
-    # Reload with plan relationship eagerly loaded so the response includes the plan
+    # Reload with relationships eagerly loaded so the response includes plan and bindings
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
-        .options(selectinload(AgentType.plan))
+        .options(
+            selectinload(AgentType.plan),
+            selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
+            selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
+        )
     )
     agent_type = result.scalar_one()
     return AgentTypeRead.model_validate(agent_type)
@@ -1048,7 +1162,15 @@ async def regenerate_agent_type_plan(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
 ) -> AgentTypeRead:
-    agent_type = await db.get(AgentType, type_id)
+    result = await db.execute(
+        select(AgentType)
+        .where(AgentType.id == type_id)
+        .options(
+            selectinload(AgentType.sop_bindings),
+            selectinload(AgentType.skill_bindings),
+        )
+    )
+    agent_type = result.scalar_one_or_none()
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
 
@@ -1057,7 +1179,11 @@ async def regenerate_agent_type_plan(
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
-        .options(selectinload(AgentType.plan))
+        .options(
+            selectinload(AgentType.plan),
+            selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
+            selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
+        )
     )
     agent_type = result.scalar_one()
     return AgentTypeRead.model_validate(agent_type)
@@ -1073,6 +1199,7 @@ async def delete_agent_type(
     if not agent_type:
         raise HTTPException(status_code=404, detail="Agent type not found")
     await db.delete(agent_type)
+    await db.flush()
 
 
 @AgentTypeRouter.get("/{type_id}/instances", response_model=list[AgentInstanceRead])
@@ -1227,9 +1354,11 @@ async def agent_oauth_callback(
 @ModelConfigRouter.get("", response_model=list[ModelConfigRead])
 async def list_model_configs(
     db: DbSession,
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> list[ModelConfigRead]:
-    configs = await _model_config_service.list_model_configs(db)
+    configs = await _model_config_service.list_model_configs(db, limit=limit, offset=offset)
     return [ModelConfigRead.model_validate(c) for c in configs]
 
 

@@ -4,7 +4,7 @@ import uuid
 import logging
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
@@ -235,9 +235,15 @@ def _require_workflow_model_id() -> str:
 async def list_skills(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[SkillRead]:
     result = await db.execute(
-        select(Skill).options(*_SKILL_LOAD_OPTIONS).order_by(Skill.name)
+        select(Skill)
+        .options(*_SKILL_LOAD_OPTIONS)
+        .order_by(Skill.name)
+        .offset(offset)
+        .limit(limit)
     )
     skills = list(result.scalars().all())
     return [_build_skill_read(s) for s in skills]

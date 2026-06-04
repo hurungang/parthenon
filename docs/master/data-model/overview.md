@@ -392,6 +392,20 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+    AgentTypeSopBinding {
+        uuid id
+        uuid agent_type_id
+        uuid sop_id
+        int order
+        datetime created_at
+    }
+    AgentTypeSkillBinding {
+        uuid id
+        uuid agent_type_id
+        uuid skill_id
+        int order
+        datetime created_at
+    }
     AgentSession {
         uuid id
         uuid agent_type_id
@@ -456,6 +470,10 @@ erDiagram
     AgentType ||--o{ AgentA2ASessionLink : "participates via runtime instances"
     AgentType ||--o| AgentPlan : "has current plan"
     AgentType ||--o{ AgentInstanceCertificate : "issues"
+    AgentType ||--o{ AgentTypeSopBinding : "binds SOPs via"
+    AgentType ||--o{ AgentTypeSkillBinding : "binds skills via"
+    AgentTypeSopBinding }o--|| Sop : "references"
+    AgentTypeSkillBinding }o--|| Skill : "references"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
@@ -697,6 +715,10 @@ erDiagram
     AgentType ||--o{ AgentSession : "executes via"
     AgentA2ASessionLink }o--|| AgentType : "connects requester and receiver types"
     AgentType ||--o{ ResultRecord : "produces"
+    AgentType ||--o{ AgentTypeSopBinding : "curates SOPs via"
+    AgentTypeSopBinding }o--|| Sop : "references"
+    AgentType ||--o{ AgentTypeSkillBinding : "curates skills via"
+    AgentTypeSkillBinding }o--|| Skill : "references"
     ScheduledJob ||--o{ JobExecution : "triggers"
     Role ||--o{ PolicyStatement : "contains"
     PlatformUser }o--o{ Role : "assigned via"

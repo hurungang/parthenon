@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePagination } from '../../hooks/usePagination'
 import {
   Box,
   Chip,
@@ -15,6 +16,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -40,7 +42,8 @@ function SkillChips({ toolId }: { toolId: string }) {
 
 export function McpToolBrowser() {
   const { t } = useTranslation()
-  const { data: tools, isLoading, error } = useAllTools()
+  const pag = usePagination({ initialRowsPerPage: 25 })
+  const { data: tools, isLoading, error } = useAllTools(pag.limit, pag.offset)
   const { data: servers } = useMcpServers()
   const [search, setSearch] = useState('')
   const [serverFilter, setServerFilter] = useState('')
@@ -75,7 +78,7 @@ export function McpToolBrowser() {
         <TextField
           placeholder={t('app.search')}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); pag.resetPage() }}
           size="small"
           sx={{ width: 280 }}
         />
@@ -84,7 +87,7 @@ export function McpToolBrowser() {
           <Select
             value={serverFilter}
             label={t('mcp.tabs.serverFilter')}
-            onChange={(e) => setServerFilter(e.target.value)}
+            onChange={(e) => { setServerFilter(e.target.value); pag.resetPage() }}
           >
             <MenuItem value="">{t('mcp.tabs.allServers')}</MenuItem>
             {(servers ?? []).map((s) => (
@@ -154,6 +157,18 @@ export function McpToolBrowser() {
       {!isLoading && !error && Object.keys(grouped).length === 0 && (
         <Typography color="text.secondary">{t('app.noData')}</Typography>
       )}
+
+      {/* Pagination */}
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {/* Test Tool Dialog */}
       <TestMcpToolDialog

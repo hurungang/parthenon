@@ -2,7 +2,7 @@
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
@@ -45,9 +45,17 @@ def _require_workflow_model_id() -> str:
 async def list_sops(
     db: DbSession,
     _: dict = Depends(require_permission(RT_SKILL, "read")),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[Sop]:
     # Load steps relationship so SopRead can populate required_skill_ids
-    result = await db.execute(select(Sop).options(selectinload(Sop.steps)).order_by(Sop.name))
+    result = await db.execute(
+        select(Sop)
+        .options(selectinload(Sop.steps))
+        .order_by(Sop.name)
+        .offset(offset)
+        .limit(limit)
+    )
     return list(result.scalars().all())
 
 

@@ -17,6 +17,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
@@ -39,6 +40,7 @@ import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetails
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
 import { ConversationDialog } from '../../components/agents/ConversationDialog'
 import type { AgentIdentity, AgentRole, AgentType } from '../../types'
+import { usePagination } from '../../hooks/usePagination'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
 const TOKEN_BUDGET_UNIT = 1000
@@ -68,7 +70,8 @@ export function AgentManagementPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: agentTypes, isLoading, error } = useAgentTypes()
+  const pag = usePagination()
+  const { data: agentTypes, isLoading, error } = useAgentTypes(pag.limit, pag.offset)
   const queryClient = useQueryClient()
 
   // Role and identity name resolution for table columns
@@ -138,7 +141,8 @@ export function AgentManagementPage() {
       input_schema: at.input_schema ? JSON.stringify(at.input_schema, null, 2) : '',
       output_type: at.output_type,
       output_schema: at.output_schema ? JSON.stringify(at.output_schema, null, 2) : '',
-      primary_sop_id: at.primary_sop_id ?? '',
+      sop_bindings: (at.sop_bindings ?? []).map((b) => ({ sop_id: b.sop_id, order: b.order })),
+      skill_bindings: (at.skill_bindings ?? []).map((b) => ({ skill_id: b.skill_id, order: b.order })),
       guardrail_max_iterations: at.guardrail_max_iterations ?? 10,
       guardrail_max_delegation_depth: at.guardrail_max_delegation_depth ?? 3,
       guardrail_max_delegated_steps: at.guardrail_max_delegated_steps ?? 20,
@@ -162,11 +166,6 @@ export function AgentManagementPage() {
         setSaving(false)
         return
       }
-      if (form.input_type === 'none' && !form.primary_sop_id) {
-        setDialogError(new Error(t('agents.types.form.defaultSopRequired')))
-        setSaving(false)
-        return
-      }
       const body = {
         name: form.name,
         description: form.description || null,
@@ -178,7 +177,8 @@ export function AgentManagementPage() {
         input_schema: form.input_schema ? JSON.parse(form.input_schema) : null,
         output_type: form.output_type,
         output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
-        primary_sop_id: form.primary_sop_id || null,
+        sop_bindings: form.sop_bindings,
+        skill_bindings: form.skill_bindings,
         guardrail_max_iterations: form.guardrail_max_iterations,
         guardrail_max_delegation_depth: form.guardrail_max_delegation_depth,
         guardrail_max_delegated_steps: form.guardrail_max_delegated_steps,
@@ -319,6 +319,17 @@ export function AgentManagementPage() {
           </Table>
         </TableContainer>
       )}
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {/* Agent Type Details Dialog */}
       {detailsDialogTypeId !== null && (

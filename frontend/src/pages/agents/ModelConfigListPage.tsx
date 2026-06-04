@@ -11,6 +11,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from '@mui/material'
@@ -26,10 +27,12 @@ import type { ModelConfig } from '../../types'
 import { ModelConfigDialog } from './ModelConfigDialog'
 import { VendorModelGuardrailPanel } from '../../components/agents/VendorModelGuardrailPanel'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { usePagination } from '../../hooks/usePagination'
 
 export function ModelConfigListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const pag = usePagination()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingConfig, setEditingConfig] = useState<ModelConfig | null>(null)
@@ -40,9 +43,11 @@ export function ModelConfigListPage() {
     isLoading,
     error,
   } = useQuery<ModelConfig[]>({
-    queryKey: ['agents', 'model-configs'],
+    queryKey: ['agents', 'model-configs', { limit: pag.limit, offset: pag.offset }],
     queryFn: async () => {
-      const { data } = await apiClient.get<ModelConfig[]>('/agents/model-configs')
+      const { data } = await apiClient.get<ModelConfig[]>('/agents/model-configs', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -216,6 +221,17 @@ export function ModelConfigListPage() {
           </Table>
         </TableContainer>
       )}
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {/* Vendor → model → guardrail hierarchy */}
       <VendorModelGuardrailPanel />

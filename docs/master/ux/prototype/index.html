@@ -7,9 +7,9 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
-  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
-  --sidebar-active-text:#1976D2;
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
   --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
   --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
   --text-primary:#212121;--text-secondary:#757575;
@@ -33,23 +33,32 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
 .sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
 .sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
-.nav-group{margin-top:8px}
-.nav-group-label{padding:10px 16px 4px;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
-.nav-group-label .toggle-icon{transition:transform var(--transition);font-size:12px}
-.nav-group.collapsed .nav-children{display:none}
-.nav-group.collapsed .toggle-icon{transform:rotate(-90deg)}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;position:relative;user-select:none;white-space:nowrap}
-.nav-item:hover{background:var(--bg)}
-.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
-.nav-item.active::before{display:none}
-.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
-.nav-item.sub-item{padding-left:44px;font-size:13px}
-.nav-parent{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition);color:var(--sidebar-text);font-size:13.5px;user-select:none}
-.nav-parent:hover{background:rgba(255,255,255,.07)}
-.nav-parent .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
-.nav-parent .nav-arrow{margin-left:auto;font-size:11px;transition:transform var(--transition)}
+
+/* Standalone top-level item — 13px, subtle grey active, 8px radius */
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+
+/* Collapsible groups */
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
 .nav-parent-group.collapsed .nav-children{display:none}
-.nav-parent-group.collapsed .nav-arrow{transform:rotate(-90deg)}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-parent-group.active .nav-parent-group-label{color:var(--sidebar-active-text)}
+
+/* Locked open group (Integrations) — no toggle */
+.nav-parent-group.locked-open .toggle-icon{display:none}
+.nav-parent-group.locked-open .nav-parent-group-label{cursor:default}
+.nav-parent-group.locked-open .nav-parent-group-label:hover{color:var(--text-secondary)}
+
+/* Sub-items (children) — 11px, grey text, 11px icons */
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
 
 /* ── TOP BAR ── */
 .topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
@@ -488,37 +497,61 @@ strong{font-weight:600}
 <div class="app-shell">
 
 <!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
-<nav class="sidebar">
+<nav class="sidebar" aria-label="Primary navigation">
   <div class="sidebar-logo">
     <h1>⚡ Parthenon</h1>
     <small>Enterprise AI Harness</small>
   </div>
 
-  <div class="nav-item" data-view="dashboard" onclick="nav(this,'dashboard')"><span class="nav-icon">🏠</span>Dashboard</div>
-  <div class="nav-item" data-view="mcp-hub" onclick="nav(this,'mcp-hub')"><span class="nav-icon">🔌</span>MCP Hub</div>
-  <div class="nav-item" data-view="skills" onclick="nav(this,'skills')"><span class="nav-icon">🔧</span>Skills</div>
-  <div class="nav-item" data-view="sops" onclick="nav(this,'sops')"><span class="nav-icon">📋</span>SOPs</div>
-  <div class="nav-item" data-view="model-configs" onclick="nav(this,'model-configs')"><span class="nav-icon">🎛️</span>Model Configs</div>
-  <div class="nav-parent-group" id="nav-ai-agent">
-    <div class="nav-parent" onclick="toggleNavGroup(this)">
-      <span class="nav-icon">🤖</span>AI Agent
-      <span class="nav-arrow">▼</span>
+  <!-- 1. STANDALONE: Dashboard -->
+  <div class="nav-item" data-view="dashboard" data-group="dashboard" onclick="nav(this,'dashboard')">
+    <span class="nav-icon">🏠</span>Dashboard
+  </div>
+
+  <!-- 2. GROUP: Agents (collapsible, expanded by default) -->
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
     </div>
     <div class="nav-children">
-      <div class="nav-item sub-item" data-view="agent-roles" onclick="nav(this,'agent-roles')">Agent Roles</div>
-      <div class="nav-item sub-item" data-view="agent-identities" onclick="nav(this,'agent-identities')">Agent Identities</div>
-      <div class="nav-item sub-item" data-view="agents" onclick="nav(this,'agents')">Agent Types</div>
-      <div class="nav-item sub-item" data-view="agent-executions" onclick="nav(this,'agent-executions')">Agent Executions</div>
-      <div class="nav-item sub-item" data-view="agent-logs" onclick="nav(this,'agent-logs')">Agent Logs</div>
+      <div class="nav-item sub-item" data-view="agent-roles"        data-group="agents" onclick="nav(this,'agent-roles')">      <span class="nav-icon">👤</span>Agent Roles</div>
+      <div class="nav-item sub-item" data-view="agent-identities"   data-group="agents" onclick="nav(this,'agent-identities')">  <span class="nav-icon">🆔</span>Agent Identities</div>
+      <div class="nav-item sub-item" data-view="agents"             data-group="agents" onclick="nav(this,'agents')">            <span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item" data-view="agent-executions"   data-group="agents" onclick="nav(this,'agent-executions')">  <span class="nav-icon">▶️</span>Agent Executions</div>
+      <div class="nav-item sub-item" data-view="runtime-control"    data-group="agents" onclick="nav(this,'runtime-control')">   <span class="nav-icon">🎛️</span>Runtime Control</div>
+      <div class="nav-item sub-item" data-view="agent-trails"       data-group="agents" onclick="nav(this,'agent-trails')">      <span class="nav-icon">📋</span>Agent Trails</div>
+      <div class="nav-item sub-item" data-view="skills"             data-group="agents" onclick="nav(this,'skills')">            <span class="nav-icon">🔧</span>Skills</div>
+      <div class="nav-item sub-item" data-view="sops"               data-group="agents" onclick="nav(this,'sops')">              <span class="nav-icon">📋</span>SOPs</div>
+      <div class="nav-item sub-item" data-view="model-configs"      data-group="agents" onclick="nav(this,'model-configs')">     <span class="nav-icon">⚙️</span>Model Configs</div>
+      <div class="nav-item sub-item" data-view="schedules"          data-group="agents" onclick="nav(this,'schedules')">         <span class="nav-icon">📅</span>Schedules</div>
     </div>
   </div>
-  <div class="nav-item" data-view="gateway" onclick="nav(this,'gateway')"><span class="nav-icon">🚪</span>Gateway</div>
-  <div class="nav-item" data-view="schedules" onclick="nav(this,'schedules')"><span class="nav-icon">📅</span>Schedules</div>
-  <div class="nav-item" data-view="results" onclick="nav(this,'results')"><span class="nav-icon">💾</span>Results</div>
-  <div class="nav-item" data-view="notifications" onclick="nav(this,'notifications')"><span class="nav-icon">🔔</span>Notifications</div>
-  <div class="nav-item" data-view="observability" onclick="nav(this,'observability')"><span class="nav-icon">📊</span>Observability</div>
-  <div class="nav-item" data-view="security-audit" onclick="nav(this,'security-audit')"><span class="nav-icon">🛡️</span>Security Audit</div>
-  <div class="nav-item" data-view="permissions" onclick="nav(this,'permissions')"><span class="nav-icon">🔐</span>Permissions</div>
+
+  <!-- 3. GROUP: Integrations (locked open — no toggle icon, cannot be collapsed) -->
+  <div class="nav-parent-group locked-open" id="nav-integrations" data-group="integrations">
+    <div class="nav-parent-group-label" role="button" tabindex="0">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="mcp-hub"             data-group="integrations" onclick="nav(this,'mcp-hub')">           <span class="nav-icon">🔌</span>MCP Hub</div>
+      <div class="nav-item sub-item" data-view="notifications"       data-group="integrations" onclick="nav(this,'notifications')">     <span class="nav-icon">🔔</span>Notification Integration</div>
+    </div>
+  </div>
+
+  <!-- 4. GROUP: System (collapsible) -->
+  <div class="nav-parent-group" id="nav-system" data-group="system">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="observability" data-group="system" onclick="nav(this,'observability')">  <span class="nav-icon">📊</span>Observability</div>
+      <div class="nav-item sub-item" data-view="permissions"   data-group="system" onclick="nav(this,'permissions')">    <span class="nav-icon">🔐</span>Permissions</div>
+      <div class="nav-item sub-item" data-view="system-config" data-group="system" onclick="nav(this,'system-config')">  <span class="nav-icon">⚙️</span>System Config</div>
+    </div>
+  </div>
 </nav>
 
 <!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
@@ -1385,34 +1418,10 @@ strong{font-weight:600}
   </div>
 </div>
 
-<!-- ═══════════════════════════════ VIEW: AGENTS ═══════════════════════════════ -->
 <!-- ═══════════════════════════════ VIEW: AGENT TYPES ═══════════════════════════════ -->
 <div id="view-agents" class="view">
   <div class="view-header">
     <div><h2>Agent Types</h2><div class="view-desc">Configure, test, and deploy agent types</div></div>
-    <button class="btn btn-primary" onclick="showAgentEditor(null)">+ Create Agent Type</button>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Name</th><th>Model Config</th><th>Default SOP</th><th>Status</th><th>Role</th><th>Identity</th><th>Actions</th></tr></thead>
-      <tbody>
-        <tr onclick="openAgentDetails('pr-reviewer')" style="cursor:pointer;">
-          <td><strong>pr-reviewer</strong></td>
-          <td><span class="chip chip-blue">gpt-4-turbo</span></td>
-          <td><span class="chip chip-gray">github-pr-workflow</span></td>
-          <td><span class="chip chip-green">Active</span></td>
-          <td>Developer</td>
-          <td>GitHub Bot</td>
-          <td class="actions-cell" onclick="event.stopPropagation()">
-            <button class="btn-icon-sm">✏️</button>
-            <button class="btn-icon-sm">▶️</button>
-            <button class="btn-icon-sm">🗑️</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
     <button class="btn btn-primary" onclick="openModal('modal-agent-type')">+ Create Agent Type</button>
   </div>
   <div class="tabs">
@@ -1668,102 +1677,139 @@ Returns: { request_id, status }</div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════ VIEW: NOTIFICATIONS ═══════════════════════════════ -->
+<!-- ═══════════════════════════════ VIEW: NOTIFICATION INTEGRATION ═══════════════════════════════ -->
 <div id="view-notifications" class="view">
   <div class="view-header">
-    <div><h2>Notification Channels</h2><div class="view-desc">Configure delivery channels for agent alerts and reports</div></div>
+    <div><h2>Notification Integration</h2><div class="view-desc">Configure delivery channels, recipient groups, and delivery monitoring</div></div>
     <button class="btn btn-primary" onclick="openModal('modal-notif')">+ Add Channel</button>
   </div>
-  <div class="notif-grid">
-    <div class="notif-card">
-      <div class="notif-card-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">📧</span>
-          <span class="notif-card-title">Email</span>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'notif-channels')">📧 Channels</div>
+    <div class="tab" onclick="switchTab(this,'notif-groups')">👥 Recipient Groups</div>
+    <div class="tab" onclick="switchTab(this,'notif-logs')">📋 Delivery Logs</div>
+  </div>
+
+  <div id="notif-channels" class="tab-panel active">
+    <div class="notif-grid">
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">📧</span>
+            <span class="notif-card-title">Email</span>
+          </div>
+          <span class="chip chip-green">● Active</span>
         </div>
-        <span class="chip chip-green">● Active</span>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>smtp.company.com:587</span></div>
+          <div>MCP Tool: <span>send_email</span></div>
+          <div>Auth: <span>SMTP Credentials</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
       </div>
-      <div class="notif-card-meta">
-        <div>Endpoint: <span>smtp.company.com:587</span></div>
-        <div>MCP Tool: <span>send_email</span></div>
-        <div>Auth: <span>SMTP Credentials</span></div>
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">💬</span>
+            <span class="notif-card-title">Slack</span>
+          </div>
+          <span class="chip chip-green">● Active</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>hooks.slack.com/services/...</span></div>
+          <div>MCP Tool: <span>slack_notify</span></div>
+          <div>Auth: <span>Webhook URL</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
       </div>
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn btn-sm btn-secondary">🔌 Test</button>
-        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+      <div class="notif-card" style="border-color:var(--warning)">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🔷</span>
+            <span class="notif-card-title">Microsoft Teams</span>
+          </div>
+          <span class="chip chip-yellow">⚠ Warning</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>outlook.office.com/webhooks/...</span></div>
+          <div>MCP Tool: <span>teams_notify</span></div>
+          <div style="color:var(--error)">Last test failed — 401 Unauthorized</div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🌐</span>
+            <span class="notif-card-title">Webhook</span>
+          </div>
+          <span class="chip chip-green">● Active</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>https://api.company.com/events</span></div>
+          <div>MCP Tool: <span>webhook_post</span></div>
+          <div>Auth: <span>Bearer Token</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
+      </div>
+      <div class="notif-card">
+        <div class="notif-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🚨</span>
+            <span class="notif-card-title">PagerDuty</span>
+          </div>
+          <span class="chip chip-gray">● Inactive</span>
+        </div>
+        <div class="notif-card-meta">
+          <div>Endpoint: <span>events.pagerduty.com</span></div>
+          <div>MCP Tool: <span>pagerduty_alert</span></div>
+          <div>Auth: <span>Integration Key</span></div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn btn-sm btn-secondary">🔌 Test</button>
+          <button class="btn btn-sm btn-secondary">✏️ Edit</button>
+        </div>
       </div>
     </div>
-    <div class="notif-card">
-      <div class="notif-card-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">💬</span>
-          <span class="notif-card-title">Slack</span>
-        </div>
-        <span class="chip chip-green">● Active</span>
-      </div>
-      <div class="notif-card-meta">
-        <div>Endpoint: <span>hooks.slack.com/services/...</span></div>
-        <div>MCP Tool: <span>slack_notify</span></div>
-        <div>Auth: <span>Webhook URL</span></div>
-      </div>
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn btn-sm btn-secondary">🔌 Test</button>
-        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
-      </div>
+  </div>
+
+  <div id="notif-groups" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:16px">Define recipient groups for routing notifications to the right people.</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Group Name</th><th>Members</th><th>Channels</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Engineering Team</strong></td><td>12 members</td><td><span class="chip chip-blue">Slack</span> <span class="chip chip-blue">Email</span></td><td class="text-secondary">2 weeks ago</td><td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td></tr>
+          <tr><td><strong>Operations</strong></td><td>8 members</td><td><span class="chip chip-blue">PagerDuty</span> <span class="chip chip-blue">Webhook</span></td><td class="text-secondary">1 month ago</td><td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td></tr>
+          <tr><td><strong>Security</strong></td><td>5 members</td><td><span class="chip chip-blue">Teams</span> <span class="chip chip-blue">Email</span></td><td class="text-secondary">3 months ago</td><td class="actions-cell"><button class="btn-icon-sm">✏️</button><button class="btn-icon-sm">🗑️</button></td></tr>
+        </tbody>
+      </table>
     </div>
-    <div class="notif-card" style="border-color:var(--warning)">
-      <div class="notif-card-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">🔷</span>
-          <span class="notif-card-title">Microsoft Teams</span>
-        </div>
-        <span class="chip chip-yellow">⚠ Warning</span>
-      </div>
-      <div class="notif-card-meta">
-        <div>Endpoint: <span>outlook.office.com/webhooks/...</span></div>
-        <div>MCP Tool: <span>teams_notify</span></div>
-        <div style="color:var(--error)">Last test failed — 401 Unauthorized</div>
-      </div>
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn btn-sm btn-secondary">🔌 Test</button>
-        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
-      </div>
-    </div>
-    <div class="notif-card">
-      <div class="notif-card-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">🌐</span>
-          <span class="notif-card-title">Webhook</span>
-        </div>
-        <span class="chip chip-green">● Active</span>
-      </div>
-      <div class="notif-card-meta">
-        <div>Endpoint: <span>https://api.company.com/events</span></div>
-        <div>MCP Tool: <span>webhook_post</span></div>
-        <div>Auth: <span>Bearer Token</span></div>
-      </div>
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn btn-sm btn-secondary">🔌 Test</button>
-        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
-      </div>
-    </div>
-    <div class="notif-card">
-      <div class="notif-card-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">🚨</span>
-          <span class="notif-card-title">PagerDuty</span>
-        </div>
-        <span class="chip chip-gray">● Inactive</span>
-      </div>
-      <div class="notif-card-meta">
-        <div>Endpoint: <span>events.pagerduty.com</span></div>
-        <div>MCP Tool: <span>pagerduty_alert</span></div>
-        <div>Auth: <span>Integration Key</span></div>
-      </div>
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn btn-sm btn-secondary">🔌 Test</button>
-        <button class="btn btn-sm btn-secondary">✏️ Edit</button>
-      </div>
+  </div>
+
+  <div id="notif-logs" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:16px">Monitor recent notification deliveries and identify failures.</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Timestamp</th><th>Channel</th><th>Recipient</th><th>Message</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="text-secondary">Today 14:32:01</td><td><span class="chip chip-blue">Slack</span></td><td>#engineering-alerts</td><td>PR #142 review complete</td><td><span class="chip chip-green">Delivered</span></td></tr>
+          <tr><td class="text-secondary">Today 14:28:15</td><td><span class="chip chip-blue">Email</span></td><td>ops@company.com</td><td>Weekly report ready</td><td><span class="chip chip-green">Delivered</span></td></tr>
+          <tr><td class="text-secondary">Today 14:15:42</td><td><span class="chip chip-yellow">Teams</span></td><td>Security Channel</td><td>Incident alert: API timeout</td><td><span class="chip chip-red">Failed</span></td></tr>
+          <tr><td class="text-secondary">Today 13:55:10</td><td><span class="chip chip-blue">PagerDuty</span></td><td>on-call</td><td>Critical: system degraded</td><td><span class="chip chip-green">Delivered</span></td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -2372,6 +2418,200 @@ Returns: { request_id, status }</div>
         </tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: RUNTIME CONTROL ═══════════════════════════════ -->
+<div id="view-runtime-control" class="view">
+  <div class="view-header">
+    <div><h2>Runtime Control</h2><div class="view-desc">Manage agent instance scaling, health, and runtime lifecycle</div></div>
+    <button class="btn btn-primary" onclick="openModal('modal-agent-type')">+ Deploy Agent Instance</button>
+  </div>
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Total Instances</div>
+      <div class="metric-value">14</div>
+      <div class="metric-delta delta-neutral">Across 5 agent types</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Running</div>
+      <div class="metric-value" style="color:var(--success)">11</div>
+      <div class="metric-delta delta-up">78.6% utilization</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Stopped / Error</div>
+      <div class="metric-value" style="color:var(--error)">3</div>
+      <div class="metric-delta delta-down">Requires attention</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg Uptime</div>
+      <div class="metric-value">47h</div>
+      <div class="metric-delta delta-neutral">Last 7 days</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Active Agent Instances</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table>
+          <thead><tr><th>Instance</th><th>Agent Type</th><th>Status</th><th>Uptime</th><th>CPU</th><th>Memory</th><th>Sessions</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td><span class="font-mono text-sm">inst-a1b2c3</span></td><td>pr-reviewer</td><td><span class="chip chip-green">Running</span></td><td>3h 22m</td><td>23%</td><td>412 MB</td><td>4</td><td class="actions-cell"><button class="btn btn-xs btn-secondary">Restart</button><button class="btn btn-xs btn-danger">Stop</button></td></tr>
+            <tr><td><span class="font-mono text-sm">inst-d4e5f6</span></td><td>data-analyst</td><td><span class="chip chip-green">Running</span></td><td>12h 05m</td><td>41%</td><td>1.2 GB</td><td>8</td><td class="actions-cell"><button class="btn btn-xs btn-secondary">Restart</button><button class="btn btn-xs btn-danger">Stop</button></td></tr>
+            <tr><td><span class="font-mono text-sm">inst-g7h8i9</span></td><td>report-generator</td><td><span class="chip chip-yellow">Degraded</span></td><td>2h 10m</td><td>89%</td><td>1.8 GB</td><td>2</td><td class="actions-cell"><button class="btn btn-xs btn-secondary">Restart</button><button class="btn btn-xs btn-danger">Stop</button></td></tr>
+            <tr><td><span class="font-mono text-sm">inst-j0k1l2</span></td><td>incident-bot</td><td><span class="chip chip-red">Stopped</span></td><td>—</td><td>—</td><td>—</td><td>0</td><td class="actions-cell"><button class="btn btn-xs btn-primary">Start</button><button class="btn btn-xs btn-danger">Terminate</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENT TRAILS ═══════════════════════════════ -->
+<div id="view-agent-trails" class="view">
+  <div class="view-header">
+    <div><h2>Agent Trails</h2><div class="view-desc">Monitor execution history, logs, and conversations across all agent types</div></div>
+    <button class="btn btn-primary" onclick="nav(null,'agent-executions')">View All Executions</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'trail-executions')">▶️ Executions</div>
+    <div class="tab" onclick="switchTab(this,'trail-logs')">📜 Logs</div>
+    <div class="tab" onclick="switchTab(this,'trail-conversations')">💬 Conversations</div>
+  </div>
+
+  <div id="trail-executions" class="tab-panel active">
+    <div class="filter-bar">
+      <div class="search-input" style="max-width:280px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input placeholder="Search execution ID...">
+      </div>
+      <select class="form-control" style="width:180px">
+        <option>All Agent Types</option>
+        <option>pr-reviewer</option><option>data-analyst</option><option>report-generator</option><option>incident-bot</option>
+      </select>
+      <select class="form-control" style="width:150px">
+        <option>All Status</option><option>Running</option><option>Completed</option><option>Failed</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Session ID</th><th>Agent Type</th><th>SOP / Skill</th><th>Status</th><th>Started</th><th>Duration</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td><span class="font-mono text-sm">sess-a3f2c1</span></td><td>pr-reviewer</td><td><span class="chip chip-gray">pr-review-workflow</span></td><td><span class="chip chip-green">Completed</span></td><td>2 min ago</td><td>2.34s</td><td><button class="btn btn-xs btn-secondary">View</button></td></tr>
+          <tr><td><span class="font-mono text-sm">sess-b7e9d4</span></td><td>data-analyst</td><td><span class="chip chip-gray">db-report</span></td><td><span class="chip chip-green">Completed</span></td><td>5 min ago</td><td>0.89s</td><td><button class="btn btn-xs btn-secondary">View</button></td></tr>
+          <tr><td><span class="font-mono text-sm">sess-c1d5f7</span></td><td>report-generator</td><td><span class="chip chip-gray">daily-report-gen</span></td><td><span class="chip chip-blue">Running</span></td><td>8 min ago</td><td>—</td><td><button class="btn btn-xs btn-secondary">View</button></td></tr>
+          <tr><td><span class="font-mono text-sm">sess-d9a2b3</span></td><td>incident-bot</td><td><span class="chip chip-gray">incident-response</span></td><td><span class="chip chip-red">Failed</span></td><td>12 min ago</td><td>1.45s</td><td><button class="btn btn-xs btn-secondary">View</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="trail-logs" class="tab-panel">
+    <div class="filter-bar">
+      <select class="form-control" style="width:130px"><option>ALL Levels</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
+      <select class="form-control" style="width:180px"><option>All Components</option><option>gateway</option><option>agent-executor</option><option>mcp-client</option><option>scheduler</option></select>
+      <input placeholder="🔍 Search logs..." style="flex:1;max-width:300px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);outline:none;font-size:13px">
+    </div>
+    <div class="log-stream" style="max-height:400px">
+      <div class="log-line log-info"><span>[2026-06-04 10:36:12.341]</span> <span class="lvl">[INFO ]</span>  [gateway         ] Agent pr-reviewer initialized session sess-a3f2c1</div>
+      <div class="log-line log-info"><span>[2026-06-04 10:36:12.358]</span> <span class="lvl">[INFO ]</span>  [agent-executor  ] Executing SOP pr-review-workflow step 1/4</div>
+      <div class="log-line log-info"><span>[2026-06-04 10:36:12.421]</span> <span class="lvl">[INFO ]</span>  [mcp-client      ] Calling tool filesystem.read_file</div>
+      <div class="log-line log-warn"><span>[2026-06-04 10:36:13.105]</span> <span class="lvl">[WARN ]</span>  [mcp-client      ] Tool response latency exceeded 500ms threshold</div>
+      <div class="log-line log-info"><span>[2026-06-04 10:36:13.110]</span> <span class="lvl">[INFO ]</span>  [agent-executor  ] Step 1 complete. Advancing to step 2</div>
+      <div class="log-line log-error"><span>[2026-06-04 10:36:14.892]</span> <span class="lvl">[ERROR]</span>  [scheduler       ] Schedule incident-scan failed: no active instances</div>
+    </div>
+  </div>
+
+  <div id="trail-conversations" class="tab-panel">
+    <div class="filter-bar">
+      <select class="form-control" style="width:180px">
+        <option>All Agents</option>
+        <option>data-analyst</option><option>pr-reviewer</option><option>report-generator</option><option>incident-bot</option>
+      </select>
+      <select class="form-control" style="width:150px">
+        <option>All Status</option><option>Active</option><option>Completed</option>
+      </select>
+      <div class="search-input" style="max-width:280px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input placeholder="Search conversations...">
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Date</th><th>Agent</th><th>Summary</th><th>Turns</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr><td><span class="font-mono text-sm">CONV-0042</span></td><td>Today 14:32</td><td>data-analyst</td><td>Analyze Q3 sales data</td><td>6</td><td><span class="chip chip-green">Active</span></td><td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td></tr>
+          <tr><td><span class="font-mono text-sm">CONV-0041</span></td><td>Today 11:15</td><td>pr-reviewer</td><td>Review PR #142 — auth token refactor</td><td>4</td><td><span class="chip chip-blue">Completed</span></td><td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td></tr>
+          <tr><td><span class="font-mono text-sm">CONV-0040</span></td><td>Yesterday</td><td>report-generator</td><td>Weekly performance summary</td><td>3</td><td><span class="chip chip-blue">Completed</span></td><td><button class="btn btn-xs btn-secondary" onclick="openConvDetail()">View</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: SYSTEM CONFIG ═══════════════════════════════ -->
+<div id="view-system-config" class="view">
+  <div class="view-header">
+    <div><h2>System Config</h2><div class="view-desc">Global platform settings, feature flags, and system preferences</div></div>
+    <button class="btn btn-primary" onclick="mcFlashToast('System configuration saved.')">Save Changes</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card">
+      <div class="card-header"><h3>Platform Settings</h3></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Platform Name</label>
+          <input class="form-control" value="Parthenon">
+        </div>
+        <div class="form-group">
+          <label>Default Agent Timeout (seconds)</label>
+          <input class="form-control" type="number" value="300">
+        </div>
+        <div class="form-group">
+          <label>Max Concurrent Executions</label>
+          <input class="form-control" type="number" value="50">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Log Retention (days)</label>
+          <input class="form-control" type="number" value="90">
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Feature Flags</h3></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable Agent Delegation</label>
+        </div>
+        <div class="form-group">
+          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable MCP Passthrough Auth</label>
+        </div>
+        <div class="form-group">
+          <label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Audit Trail</label>
+        </div>
+        <div class="form-group">
+          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable Live Execution Stream</label>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Experimental Providers</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0">
+    <div class="card-header"><h3>Notification Defaults</h3></div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Default Notification Channel</label>
+          <select class="form-control"><option>Email</option><option selected>Slack</option><option>Teams</option><option>Webhook</option></select>
+        </div>
+        <div class="form-group">
+          <label>Alert Severity Threshold</label>
+          <select class="form-control"><option>All</option><option selected>Warning & Error</option><option>Error Only</option></select>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3047,10 +3287,10 @@ const viewTitles = {
   'mcp-hub': 'MCP Hub',
   'skills': 'Skills',
   'sops': 'Standard Operating Procedures',
-  'agents': 'Agents',
+  'agents': 'Agent Types',
   'gateway': 'Gateway',
   'schedules': 'Schedules',
-  'notifications': 'Notification Channels',
+  'notifications': 'Notification Integration',
   'observability': 'Observability',
   'security-audit': 'Service Segregation Security Audit',
   'chat': 'Communication Hub',
@@ -3061,13 +3301,20 @@ const viewTitles = {
   'agent-roles': 'Agent Roles',
   'agent-identities': 'Agent Identities',
   'agent-executions': 'Agent Executions',
-  'agent-logs': 'Agent Logs'
+  'agent-logs': 'Agent Logs',
+  'runtime-control': 'Runtime Control',
+  'agent-trails': 'Agent Trails',
+  'system-config': 'System Config'
 };
 
 
     function toggleNavGroup(el) {
-        const group = el.parentElement;
+        const group = el.closest('.nav-parent-group');
+        if (!group) return;
+        // Locked-open groups cannot be toggled
+        if (group.classList.contains('locked-open')) return;
         group.classList.toggle('collapsed');
+        el.setAttribute('aria-expanded', !group.classList.contains('collapsed'));
     }
     
     function openAgentDetails(agentType) {
@@ -3095,12 +3342,23 @@ const viewTitles = {
   document.querySelectorAll('.nav-item').forEach(function(item) {
     item.classList.remove('active');
   });
+  // Update parent group active state
+  document.querySelectorAll('.nav-parent-group').forEach(function(g) {
+    g.classList.remove('active');
+  });
   if (el && el.classList) {
     el.classList.add('active');
+    // Mark parent group as active
+    const parentGroup = el.closest('.nav-parent-group');
+    if (parentGroup) parentGroup.classList.add('active');
   } else {
     // Find nav item by data-view
     var items = document.querySelectorAll('.nav-item[data-view="' + viewId + '"]');
-    if (items.length) items[0].classList.add('active');
+    if (items.length) {
+      items[0].classList.add('active');
+      const parentGroup = items[0].closest('.nav-parent-group');
+      if (parentGroup) parentGroup.classList.add('active');
+    }
   }
 }
 
@@ -3743,6 +4001,10 @@ function setExecutionLogMode(mode) {
   // Set default nav item as active
   var dashNav = document.querySelector('.nav-item[data-view="dashboard"]');
   if (dashNav) dashNav.classList.add('active');
+  // Ensure locked-open groups are not collapsed
+  document.querySelectorAll('.nav-parent-group.locked-open').forEach(function(g) {
+    g.classList.remove('collapsed');
+  });
 })();
 
 

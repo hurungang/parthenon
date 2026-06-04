@@ -21,6 +21,12 @@ export function extractErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object') {
     const axiosDetail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
     if (typeof axiosDetail === 'string' && axiosDetail) return axiosDetail
+    if (typeof axiosDetail === 'object' && axiosDetail) {
+      const obj = axiosDetail as Record<string, unknown>
+      if (typeof obj.summary === 'string' && obj.summary) return obj.summary
+      if (typeof obj.error === 'string' && obj.error) return obj.error
+      return JSON.stringify(obj)
+    }
     const msg = (error as { message?: unknown })?.message
     if (typeof msg === 'string' && msg) return msg
   }

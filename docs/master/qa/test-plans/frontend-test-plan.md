@@ -55,7 +55,7 @@ Core pages and flows verified to render correctly:
 |------|-----------|
 | Authentication flows | e2e/tests/test-login-flow.spec.ts |
 | Dashboard / app shell | e2e/tests/dashboard.spec.ts |
-| Agent navigation structure, AI Agent nav group | e2e/tests/agent-navigation.spec.ts |
+| Sidebar navigation: 3-group structure (Agents: 11 children, Integrations: 5 children, System: 3 children) + Dashboard standalone | frontend/src/__tests__/AppShell.test.tsx (34 tests), e2e/tests/agent-navigation.spec.ts |
 | Agent Management | e2e/tests/agent-management.spec.ts |
 | Chat | e2e/tests/chat.spec.ts |
 | Conversations | e2e/tests/conversations.spec.ts |
@@ -124,3 +124,4 @@ Core pages and flows verified to render correctly:
 | unified-agent-navigation | Added agent-navigation.spec.ts to General UI Smoke table | 2026-05-10 |
 | passthrough-sessions | Added section 4: Passthrough Session UI (McpSessionManager, TestMcpToolDialog, AssignMcpSessionsToRoleDialog) | 2026-05-12 |
 | service-segregation-security-audit | Added section 5: Service Segregation Security Audit (UI boundary enforcement and deny-path integration checks) | 2026-05-22 |
+| reorg-navigation-menu | Updated sidebar navigation from "AI Agent" group + "Notifications" submenu to 3-group structure (Agents: 11 children, Integrations: 5 children, System: 3 children) + Dashboard standalone. AppShell test suite expanded from 5 to 34 tests covering the new structure. | 2026-06-04 |

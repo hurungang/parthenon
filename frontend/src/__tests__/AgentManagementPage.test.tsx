@@ -43,7 +43,7 @@ vi.mock('../components/agents/ConversationDialog', () => ({
 }))
 
 // Override default form values so input_type starts as 'typed', not 'none'.
-// This bypasses the primarySop validation in handleSave and lets plan preview tests work.
+// This lets plan preview tests work without needing input schema fields.
 vi.mock('../pages/agents/AgentTypeForm', async () => {
   const actual = await vi.importActual<typeof import('../pages/agents/AgentTypeForm')>(
     '../pages/agents/AgentTypeForm',
@@ -288,7 +288,8 @@ describe('AgentManagementPage — post-save navigation', () => {
       input_schema: null,
       output_type: 'markdown',
       output_schema: null,
-      primary_sop_id: null,
+      sop_bindings: [],
+      skill_bindings: [],
       is_active: true,
       created_at: '2026-05-09T12:00:00Z',
       updated_at: '2026-05-09T12:00:00Z',
@@ -336,7 +337,8 @@ describe('AgentManagementPage — post-save navigation', () => {
       input_schema: null,
       output_type: 'markdown',
       output_schema: null,
-      primary_sop_id: null,
+      sop_bindings: [],
+      skill_bindings: [],
       is_active: true,
       created_at: '2026-05-09T12:00:00Z',
       updated_at: '2026-05-09T12:00:00Z',
@@ -545,9 +547,7 @@ describe('AgentManagementPage — Default SOP field available for all input type
     vi.clearAllMocks()
   })
 
-  it('Default SOP dropdown is visible in create dialog for typed-input agent', async () => {
-    // The global AgentTypeForm mock sets input_type to 'typed'.
-    // The Default SOP dropdown should appear for all input types (not just no-input).
+  it('SOP/Skill Bindings section is visible in create dialog for typed-input agent', async () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
 
@@ -557,9 +557,7 @@ describe('AgentManagementPage — Default SOP field available for all input type
       expect(screen.getByRole('dialog')).toBeDefined()
     })
 
-    // agents.types.form.defaultSop is the i18n key rendered by useTranslation mock as-is
-    // Use queryAllByText since MUI renders the label text in both a <label> and a <span>
-    const defaultSopLabels = screen.queryAllByText('agents.types.form.defaultSop')
-    expect(defaultSopLabels.length).toBeGreaterThan(0)
+    // agents.types.bindings.title is the i18n key rendered by useTranslation mock as-is
+    expect(screen.getByText('agents.types.bindings.title')).toBeDefined()
   })
 })

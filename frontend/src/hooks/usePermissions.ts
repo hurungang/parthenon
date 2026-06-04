@@ -25,16 +25,18 @@ export const permissionKeys = {
   groups: ['permissions', 'groups'] as const,
   platformUsers: ['permissions', 'platform-users'] as const,
   platformUser: (id: string) => ['permissions', 'platform-users', id] as const,
-  accessRequestsMy: ['permissions', 'access-requests', 'my'] as const,
-  accessRequestsPending: ['permissions', 'access-requests', 'pending'] as const,
+  accessRequestsMy: (limit?: number, offset?: number) =>
+    ['permissions', 'access-requests', 'my', limit, offset] as const,
+  accessRequestsPending: (limit?: number, offset?: number) =>
+    ['permissions', 'access-requests', 'pending', limit, offset] as const,
   resourceTypes: ['permissions', 'resource-types'] as const,
 }
 
 // ── Tags ───────────────────────────────────────────────────────────────────────
 
-export function useTagDefinitions(filters?: { scope?: string; resource_type?: string }) {
+export function useTagDefinitions(filters?: { scope?: string; resource_type?: string; limit?: number; offset?: number }) {
   return useQuery({
-    queryKey: permissionKeys.tags,
+    queryKey: [...permissionKeys.tags, filters?.limit ?? 0, filters?.offset ?? 0],
     queryFn: () => api.listTagDefinitions(filters),
   })
 }
@@ -68,7 +70,7 @@ export function useDeleteTag() {
 
 export function useRoles(page = 1, pageSize = 50) {
   return useQuery({
-    queryKey: permissionKeys.roles,
+    queryKey: [...permissionKeys.roles, page, pageSize],
     queryFn: () => api.listRoles(page, pageSize),
   })
 }
@@ -168,7 +170,7 @@ export function useCloneRole() {
 
 export function useGroups(page = 1, pageSize = 50) {
   return useQuery({
-    queryKey: permissionKeys.groups,
+    queryKey: [...permissionKeys.groups, page, pageSize],
     queryFn: () => api.listGroups(page, pageSize),
   })
 }
@@ -239,7 +241,7 @@ export function useRemoveGroupRole() {
 
 export function usePlatformUsers(page = 1, pageSize = 20) {
   return useQuery({
-    queryKey: permissionKeys.platformUsers,
+    queryKey: [...permissionKeys.platformUsers, page, pageSize],
     queryFn: () => api.listPlatformUsers(page, pageSize),
   })
 }
@@ -305,17 +307,17 @@ export function useRemoveUserFromGroup() {
 
 // ── Access Requests ────────────────────────────────────────────────────────────
 
-export function useMyAccessRequests() {
+export function useMyAccessRequests(limit?: number, offset?: number) {
   return useQuery({
-    queryKey: permissionKeys.accessRequestsMy,
-    queryFn: () => api.listMyAccessRequests(),
+    queryKey: permissionKeys.accessRequestsMy(limit, offset),
+    queryFn: () => api.listMyAccessRequests(limit, offset),
   })
 }
 
-export function usePendingAccessRequests() {
+export function usePendingAccessRequests(limit?: number, offset?: number) {
   return useQuery({
-    queryKey: permissionKeys.accessRequestsPending,
-    queryFn: () => api.listPendingRequests(),
+    queryKey: permissionKeys.accessRequestsPending(limit, offset),
+    queryFn: () => api.listPendingRequests(limit, offset),
   })
 }
 
@@ -325,7 +327,7 @@ export function useSubmitAccessRequest() {
     mutationFn: ({ groupIds, justification }: { groupIds?: string[]; justification: string }) =>
       api.submitAccessRequest(groupIds ?? [], justification),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: permissionKeys.accessRequestsMy })
+      qc.invalidateQueries({ queryKey: ['permissions', 'access-requests'] })
     },
   })
 }
@@ -336,7 +338,7 @@ export function useApproveAccessRequest() {
     mutationFn: ({ requestId, groupId, reason }: { requestId: string; groupId?: string; reason?: string }) =>
       api.approveAccessRequest(requestId, groupId, reason),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: permissionKeys.accessRequestsPending })
+      qc.invalidateQueries({ queryKey: ['permissions', 'access-requests'] })
     },
   })
 }
@@ -347,7 +349,7 @@ export function useRejectAccessRequest() {
     mutationFn: ({ requestId, reason }: { requestId: string; reason: string }) =>
       api.rejectAccessRequest(requestId, reason),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: permissionKeys.accessRequestsPending })
+      qc.invalidateQueries({ queryKey: ['permissions', 'access-requests'] })
     },
   })
 }

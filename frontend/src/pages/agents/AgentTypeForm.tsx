@@ -1,23 +1,33 @@
+import { useState } from 'react'
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
   Box,
+  Button,
+  Chip,
   Divider,
   FormControl,
   FormHelperText,
+  IconButton,
   InputAdornment,
   InputLabel,
   MenuItem,
   Select,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
+import CloseIcon from '@mui/icons-material/Close'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
-import type { AgentIdentity, AgentInputType, AgentOutputType, AgentRole, ModelConfig, Sop } from '../../types'
+import type { AgentIdentity, AgentInputType, AgentOutputType, AgentRole, ModelConfig, Skill, Sop, SopBindingInput, SkillBindingInput } from '../../types'
 import { JsonSchemaBuilder } from '../../components/JsonSchemaBuilder'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
@@ -33,7 +43,8 @@ export interface AgentTypeFormValues {
   input_schema: string
   output_type: AgentOutputType
   output_schema: string
-  primary_sop_id: string
+  sop_bindings: SopBindingInput[]
+  skill_bindings: SkillBindingInput[]
   guardrail_max_iterations: number
   guardrail_max_delegation_depth: number
   guardrail_max_delegated_steps: number
@@ -56,7 +67,8 @@ export const defaultAgentTypeFormValues: AgentTypeFormValues = {
   input_schema: '',
   output_type: 'auto',
   output_schema: '',
-  primary_sop_id: '',
+  sop_bindings: [],
+  skill_bindings: [],
   guardrail_max_iterations: 10,
   guardrail_max_delegation_depth: 3,
   guardrail_max_delegated_steps: 20,
@@ -134,6 +146,14 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
     },
   })
 
+  const { data: skills } = useQuery<Skill[]>({
+    queryKey: ['skills'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Skill[]>('/skills')
+      return data
+    },
+  })
+
   // Build a flat list of { modelId, label } from all configs' enabled_models
   const flatModels: { modelId: string; label: string }[] = (modelConfigs ?? []).flatMap((mc) =>
     (mc.enabled_models ?? []).map((m) => ({
@@ -144,7 +164,65 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
 
   const selectedRole = (roles ?? []).find((r) => r.id === values.role_id)
   const roleSops = (sops ?? []).filter((s) => (selectedRole?.sop_ids ?? []).includes(s.id))
+  const roleSkills = (skills ?? []).filter((s) => (selectedRole?.skill_ids ?? []).includes(s.id))
   const isConversation = values.input_type === 'conversation'
+
+  // ── Binding management helpers ─────────────────────────────────────────
+  const [showAddBinding, setShowAddBinding] = useState(false)
+  const [addBindingType, setAddBindingType] = useState<'sop' | 'skill'>('sop')
+  const [addBindingId, setAddBindingId] = useState('')
+
+  const boundSopIds = new Set(values.sop_bindings.map((b) => b.sop_id))
+  const boundSkillIds = new Set(values.skill_bindings.map((b) => b.skill_id))
+
+  const handleAddBinding = () => {
+    if (!addBindingId) return
+    if (addBindingType === 'sop') {
+      const maxOrder = values.sop_bindings.reduce((max, b) => Math.max(max, b.order), 0)
+      onChange({
+        ...values,
+        sop_bindings: [...values.sop_bindings, { sop_id: addBindingId, order: maxOrder + 1 }],
+      })
+    } else {
+      const maxOrder = values.skill_bindings.reduce((max, b) => Math.max(max, b.order), 0)
+      onChange({
+        ...values,
+        skill_bindings: [...values.skill_bindings, { skill_id: addBindingId, order: maxOrder + 1 }],
+      })
+    }
+    setAddBindingId('')
+    setShowAddBinding(false)
+  }
+
+  const handleRemoveBinding = (type: 'sop' | 'skill', index: number) => {
+    if (type === 'sop') {
+      const updated = values.sop_bindings.filter((_, i) => i !== index)
+      onChange({ ...values, sop_bindings: updated })
+    } else {
+      const updated = values.skill_bindings.filter((_, i) => i !== index)
+      onChange({ ...values, skill_bindings: updated })
+    }
+  }
+
+  const handleMoveBinding = (type: 'sop' | 'skill', index: number, direction: 'up' | 'down') => {
+    if (type === 'sop') {
+      const list = [...values.sop_bindings]
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= list.length) return
+      const tempOrder = list[index].order
+      list[index] = { ...list[index], order: list[targetIndex].order }
+      list[targetIndex] = { ...list[targetIndex], order: tempOrder }
+      onChange({ ...values, sop_bindings: list })
+    } else {
+      const list = [...values.skill_bindings]
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= list.length) return
+      const tempOrder = list[index].order
+      list[index] = { ...list[index], order: list[targetIndex].order }
+      list[targetIndex] = { ...list[targetIndex], order: tempOrder }
+      onChange({ ...values, skill_bindings: list })
+    }
+  }
 
   const tokenBudgetHelperText = isConversation
     ? t('agents.types.guardrails.tokenBudgetConversationHint', {
@@ -227,6 +305,12 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         </Select>
       </FormControl>
 
+      {/* ── Workflow Configuration ────────────────────────────────────── */}
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="subtitle1" fontWeight={600}>
+        {t('agents.types.workflowConfig')}
+      </Typography>
+
       <TextField
         label={t('agents.types.systemInstruction')}
         value={values.system_instruction}
@@ -235,6 +319,147 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         multiline
         rows={3}
       />
+
+      {/* ── SOP / Skill Bindings Section ──────────────────────────────── */}
+      <Box>
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          {t('agents.types.bindings.title')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mb={1}>
+          {t('agents.types.bindings.sectionHint')}
+        </Typography>
+
+        {values.sop_bindings.length === 0 && values.skill_bindings.length === 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
+            {t('agents.types.bindings.noBindings')}
+          </Typography>
+        )}
+
+        {/* Render sorted merged bindings */}
+        {[...values.sop_bindings.map((b) => ({ ...b, type: 'sop' as const })),
+          ...values.skill_bindings.map((b) => ({ ...b, type: 'skill' as const }))]
+          .sort((a, b) => a.order - b.order)
+          .map((binding) => {
+            const isSop = binding.type === 'sop'
+            const item = isSop
+              ? (sops ?? []).find((s) => s.id === (binding as typeof binding & { sop_id: string }).sop_id)
+              : (skills ?? []).find((s) => s.id === (binding as typeof binding & { skill_id: string }).skill_id)
+            const listIndex = isSop
+              ? values.sop_bindings.findIndex((b) => b.sop_id === (binding as typeof binding & { sop_id: string }).sop_id)
+              : values.skill_bindings.findIndex((b) => b.skill_id === (binding as typeof binding & { skill_id: string }).skill_id)
+            const list = isSop ? values.sop_bindings : values.skill_bindings
+            const isFirst = listIndex === 0
+            const isLast = listIndex === list.length - 1
+            return (
+              <Box key={`${isSop ? 'sop' : 'skill'}-${isSop ? (binding as typeof binding & { sop_id: string }).sop_id : (binding as typeof binding & { skill_id: string }).skill_id}`} display="flex" alignItems="center" gap={1} mb={0.5}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 28 }}>
+                  #{binding.order}
+                </Typography>
+                <Chip
+                  label={isSop ? t('agents.types.bindings.typeSop') : t('agents.types.bindings.typeSkill')}
+                  color={isSop ? 'primary' : 'secondary'}
+                  size="small"
+                  variant="outlined"
+                />
+                <Typography variant="body2" sx={{ flex: 1 }}>
+                  {item?.name ?? t('agents.types.bindings.brokenReference')}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => handleMoveBinding(isSop ? 'sop' : 'skill', listIndex, 'up')}
+                  disabled={isFirst}
+                  aria-label={t('agents.types.bindings.moveUp')}
+                >
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => handleMoveBinding(isSop ? 'sop' : 'skill', listIndex, 'down')}
+                  disabled={isLast}
+                  aria-label={t('agents.types.bindings.moveDown')}
+                >
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => handleRemoveBinding(isSop ? 'sop' : 'skill', listIndex)}
+                  aria-label={t('agents.types.bindings.remove')}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            )
+          })}
+
+        {showAddBinding ? (
+          <Box display="flex" alignItems="center" gap={1} mt={1}>
+            <ToggleButtonGroup
+              value={addBindingType}
+              exclusive
+              onChange={(_, v) => { if (v) { setAddBindingType(v); setAddBindingId('') } }}
+              size="small"
+            >
+              <ToggleButton value="sop">{t('agents.types.bindings.typeSop')}</ToggleButton>
+              <ToggleButton value="skill">{t('agents.types.bindings.typeSkill')}</ToggleButton>
+            </ToggleButtonGroup>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <Select
+                value={addBindingId}
+                displayEmpty
+                onChange={(e) => setAddBindingId(e.target.value)}
+              >
+                <MenuItem value="" disabled>
+                  <em>{t('agents.types.bindings.selectPlaceholder')}</em>
+                </MenuItem>
+                {addBindingType === 'sop'
+                  ? roleSops
+                      .filter((s) => !boundSopIds.has(s.id))
+                      .map((s) => (
+                        <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                      ))
+                  : roleSkills
+                      .filter((s) => !boundSkillIds.has(s.id))
+                      .map((s) => (
+                        <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                      ))
+                }
+              </Select>
+            </FormControl>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={handleAddBinding}
+              disabled={!addBindingId}
+            >
+              {t('app.add')}
+            </Button>
+            <Button
+              size="small"
+              onClick={() => { setShowAddBinding(false); setAddBindingId('') }}
+            >
+              {t('app.cancel')}
+            </Button>
+          </Box>
+        ) : (
+          <Box mt={1}>
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setShowAddBinding(true)}
+              disabled={!values.role_id}
+            >
+              {t('agents.types.bindings.addBinding')}
+            </Button>
+          </Box>
+        )}
+      </Box>
+
+      {/* ── Input / Output ────────────────────────────────────────────── */}
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="subtitle1" fontWeight={600}>
+        {t('agents.types.inputOutput')}
+      </Typography>
 
       <FormControl fullWidth>
         <InputLabel>{t('agents.types.inputType')}</InputLabel>
@@ -251,40 +476,6 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
           <MenuItem value="conversation">{t('agents.types.inputConversation')}</MenuItem>
         </Select>
       </FormControl>
-
-      {values.input_type === 'none' && (
-        <FormControl fullWidth required>
-          <InputLabel>{t('agents.types.form.defaultSop')}</InputLabel>
-          <Select
-            value={values.primary_sop_id}
-            label={t('agents.types.form.defaultSop')}
-            onChange={(e) => set('primary_sop_id', e.target.value)}
-          >
-            <MenuItem value=""><em>{t('agents.types.form.defaultSopPlaceholder')}</em></MenuItem>
-            {roleSops.map((s) => (
-              <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-            ))}
-          </Select>
-          <FormHelperText>{t('agents.types.form.defaultSopHelper')}</FormHelperText>
-        </FormControl>
-      )}
-
-      {values.input_type !== 'none' && (
-        <FormControl fullWidth>
-          <InputLabel>{t('agents.types.form.defaultSop')}</InputLabel>
-          <Select
-            value={values.primary_sop_id}
-            label={t('agents.types.form.defaultSop')}
-            onChange={(e) => set('primary_sop_id', e.target.value)}
-          >
-            <MenuItem value=""><em>{t('agents.types.form.defaultSopPlaceholder')}</em></MenuItem>
-            {roleSops.map((s) => (
-              <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-            ))}
-          </Select>
-          <FormHelperText>{t('agents.types.form.defaultSopHelper')}</FormHelperText>
-        </FormControl>
-      )}
 
       {values.input_type === 'typed' && (
         <JsonSchemaBuilder

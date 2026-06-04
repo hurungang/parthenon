@@ -12,6 +12,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
@@ -21,13 +22,15 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useNotificationChannels } from '../../hooks/useNotificationChannels'
+import { usePagination } from '../../hooks/usePagination'
 import { deleteChannel } from '../../services/notificationService'
 import type { NotificationChannel } from '../../types'
 import { ChannelFormDialog } from './ChannelFormDialog'
 
 export function ChannelListPage() {
   const { t } = useTranslation()
-  const { channels, isLoading, error, refetch } = useNotificationChannels()
+  const pag = usePagination()
+  const { channels, isLoading, error, refetch } = useNotificationChannels(pag.limit, pag.offset)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selected, setSelected] = useState<NotificationChannel | null>(null)
@@ -84,66 +87,78 @@ export function ChannelListPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('notifications.channels.name')}</TableCell>
-                <TableCell>{t('notifications.channels.type')}</TableCell>
-                <TableCell>{t('notifications.channels.status')}</TableCell>
-                <TableCell>{t('notifications.channels.properties')}</TableCell>
-                <TableCell>{t('notifications.channels.created')}</TableCell>
-                <TableCell align="right">{t('app.actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {channels.length === 0 && (
+        <>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      {t('notifications.channels.empty')}
-                    </Typography>
-                  </TableCell>
+                  <TableCell>{t('notifications.channels.name')}</TableCell>
+                  <TableCell>{t('notifications.channels.type')}</TableCell>
+                  <TableCell>{t('notifications.channels.status')}</TableCell>
+                  <TableCell>{t('notifications.channels.properties')}</TableCell>
+                  <TableCell>{t('notifications.channels.created')}</TableCell>
+                  <TableCell align="right">{t('app.actions')}</TableCell>
                 </TableRow>
-              )}
-              {channels.map((ch) => (
-                <TableRow key={ch.id} hover>
-                  <TableCell>{ch.name}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={t(`notifications.channelTypes.${ch.channel_type}`, ch.channel_type)}
-                      size="small"
-                      color={typeColor(ch.channel_type) as 'primary' | 'secondary' | 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={ch.is_active ? t('app.active') : t('app.inactive')}
-                      size="small"
-                      color={ch.is_active ? 'success' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>{ch.properties.length}</TableCell>
-                  <TableCell>
-                    {new Date(ch.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title={t('app.edit')}>
-                      <IconButton size="small" onClick={() => openEdit(ch)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('app.delete')}>
-                      <IconButton size="small" onClick={() => handleDelete(ch.id)} color="error">
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {channels.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        {t('notifications.channels.empty')}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {channels.map((ch) => (
+                  <TableRow key={ch.id} hover>
+                    <TableCell>{ch.name}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={t(`notifications.channelTypes.${ch.channel_type}`, ch.channel_type)}
+                        size="small"
+                        color={typeColor(ch.channel_type) as 'primary' | 'secondary' | 'default'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={ch.is_active ? t('app.active') : t('app.inactive')}
+                        size="small"
+                        color={ch.is_active ? 'success' : 'default'}
+                      />
+                    </TableCell>
+                    <TableCell>{ch.properties.length}</TableCell>
+                    <TableCell>
+                      {new Date(ch.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title={t('app.edit')}>
+                        <IconButton size="small" onClick={() => openEdit(ch)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('app.delete')}>
+                        <IconButton size="small" onClick={() => handleDelete(ch.id)} color="error">
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={-1}
+            page={pag.page}
+            onPageChange={pag.onPageChange}
+            rowsPerPage={pag.rowsPerPage}
+            onRowsPerPageChange={pag.onRowsPerPageChange}
+            rowsPerPageOptions={pag.rowsPerPageOptions}
+            labelRowsPerPage={t('app.rowsPerPage')}
+          />
+        </>
       )}
 
       <ChannelFormDialog

@@ -4,11 +4,14 @@ import type { McpServer, McpSession, McpTool, Skill, SyncResult, ToolPermission 
 
 const MCP_SERVERS_KEY = ['mcp', 'servers']
 
-export function useMcpServers() {
+export function useMcpServers(limit?: number, offset?: number) {
   return useQuery<McpServer[]>({
-    queryKey: MCP_SERVERS_KEY,
+    queryKey: [...MCP_SERVERS_KEY, limit ?? 0, offset ?? 0],
     queryFn: async () => {
-      const { data } = await apiClient.get<McpServer[]>('/mcp/servers')
+      const params: Record<string, number> = {}
+      if (limit !== undefined) params.limit = limit
+      if (offset !== undefined) params.offset = offset
+      const { data } = await apiClient.get<McpServer[]>('/mcp/servers', { params })
       return data
     },
   })
@@ -72,11 +75,14 @@ export function useToolPermissions(toolId: string) {
   })
 }
 
-export function useAllTools() {
+export function useAllTools(limit?: number, offset?: number) {
   return useQuery<McpTool[]>({
-    queryKey: ['mcp', 'tools'],
+    queryKey: ['mcp', 'tools', { limit, offset }],
     queryFn: async () => {
-      const { data } = await apiClient.get<McpTool[]>('/mcp/tools')
+      const params: Record<string, number> = {}
+      if (limit !== undefined) params.limit = limit
+      if (offset !== undefined) params.offset = offset
+      const { data } = await apiClient.get<McpTool[]>('/mcp/tools', { params })
       return data
     },
   })

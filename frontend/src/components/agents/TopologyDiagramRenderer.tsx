@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Box, Chip, ClickAwayListener, FormControlLabel, Switch, Tooltip, Typography } from '@mui/material'
+import { Box, Chip, ClickAwayListener, Tooltip, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { TopologyEdge, TopologyNode } from '../../types'
 
@@ -43,6 +43,7 @@ interface NodeLayout {
 interface Props {
   nodes: TopologyNode[]
   edges: TopologyEdge[]
+  onNodeClick?: (node: TopologyNode) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,28 +122,20 @@ function computeLayout(nodes: TopologyNode[]): { layouts: NodeLayout[]; svgWidth
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges }) => {
+const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges, onNodeClick }) => {
   const { t } = useTranslation()
-  const [showUnusedSkills, setShowUnusedSkills] = useState(false)
   const [clickedNodeId, setClickedNodeId] = useState<string | null>(null)
 
-  const hasUnusedSkills = useMemo(
-    () => nodes.some(n => n.type === 'skill' && n.usage === 'unused'),
-    [nodes],
-  )
-
-  // Filter nodes and edges based on the toggle
+  // Filter out unused skills — they should not appear in the topology
   const visibleNodes = useMemo(() => {
-    if (showUnusedSkills) return nodes
     return nodes.filter(n => !(n.type === 'skill' && n.usage === 'unused'))
-  }, [nodes, showUnusedSkills])
+  }, [nodes])
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes])
 
   const visibleEdges = useMemo(() => {
-    if (showUnusedSkills) return edges
     return edges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
-  }, [edges, showUnusedSkills, visibleNodeIds])
+  }, [edges, visibleNodeIds])
 
   const { layouts, svgWidth, svgHeight } = useMemo(() => computeLayout(visibleNodes), [visibleNodes])
 
@@ -177,23 +170,6 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges }) => {
 
   return (
     <Box sx={{ overflowX: 'auto', mt: 1 }}>
-      {/* Unused skills toggle */}
-      {hasUnusedSkills && (
-        <FormControlLabel
-          control={
-            <Switch
-              size="small"
-              checked={showUnusedSkills}
-              onChange={(e) => setShowUnusedSkills(e.target.checked)}
-            />
-          }
-          label={
-            <Typography variant="caption">{t('agents.plan.showUnusedSkills')}</Typography>
-          }
-          sx={{ mb: 1, ml: 2 }}
-        />
-      )}
-
       <svg
         width={svgWidth + 20}
         height={svgHeight + 20}
@@ -312,8 +288,9 @@ const TopologyDiagramRenderer: React.FC<Props> = ({ nodes, edges }) => {
                     if (isLong) {
                       setClickedNodeId(isClicked ? null : node.id)
                     }
+                    onNodeClick?.(node)
                   }}
-                  style={{ cursor: isLong ? 'pointer' : 'default' }}
+                  style={{ cursor: onNodeClick ? 'pointer' : isLong ? 'pointer' : 'default' }}
                 >
                   <rect
                     width={NODE_WIDTH}

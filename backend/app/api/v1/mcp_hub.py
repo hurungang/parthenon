@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -251,10 +251,16 @@ McpServerRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Servers"])
 async def list_mcp_servers(
     db: DbSession,
     _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list:
-    result = await db.execute(select(McpServer).order_by(McpServer.name))
+    result = await db.execute(
+        select(McpServer).order_by(McpServer.name).offset(offset).limit(limit)
+    )
     db_servers = list(result.scalars().all())
-    return [_system_server_read()] + db_servers
+    if offset == 0:
+        return [_system_server_read()] + db_servers
+    return db_servers
 
 
 @McpServerRouter.post("", response_model=McpServerRead, status_code=status.HTTP_201_CREATED)
@@ -674,6 +680,8 @@ McpToolRouter = APIRouter(prefix="/mcp/tools", tags=["MCP Hub — Tools"])
 async def list_all_tools(
     db: DbSession,
     _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ) -> list[McpToolRead]:
     result = await db.execute(
         select(McpTool)
@@ -700,7 +708,7 @@ async def list_all_tools(
         if tool.id not in seen_ids:
             seen_ids.add(tool.id)
             deduped.append(tool)
-    return deduped
+    return deduped[offset:offset + limit]
 
 
 @McpToolRouter.get("/{tool_id}/skills", response_model=list[SkillRead])

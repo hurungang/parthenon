@@ -265,7 +265,7 @@ async def test_stream_session_logs_emits_entries_and_terminal_marker() -> None:
 
 @pytest.mark.asyncio
 async def test_create_no_input_agent_without_sop_fails():
-    """POST /api/v1/agents/types with input_type=none and no primary_sop_id must return 400."""
+    """POST /api/v1/agents/types with input_type=none and no sop_bindings must return 400."""
     role_id = uuid.uuid4()
 
     mock_session = AsyncMock()
@@ -300,12 +300,12 @@ async def test_create_no_input_agent_without_sop_fails():
     app.dependency_overrides[get_db] = db_override
 
     payload = {
-        "name": "AutoSopAgent",
+        "name": "auto-sop-agent",
         "model_id": "gpt-4o-mini",
         "input_type": "none",
         "output_type": "auto",
         "role_id": str(role_id),
-        # primary_sop_id intentionally omitted
+        # sop_bindings intentionally omitted (defaults to [])
     }
 
     with _bypass_auth(), _mock_permission_allow():
@@ -315,10 +315,10 @@ async def test_create_no_input_agent_without_sop_fails():
             resp = await client.post("/api/v1/agents/types", json=payload)
 
     assert resp.status_code == 400, (
-        f"Expected 400 when creating none-input agent without primary_sop_id, "
+        f"Expected 400 when creating none-input agent without sop_bindings, "
         f"got {resp.status_code}.\nBody: {resp.text}"
     )
     detail = resp.json().get("detail", "")
-    assert "primary_sop_id" in detail, (
-        f"Expected 400 error message to mention 'primary_sop_id'. Got: {detail!r}"
+    assert "SOP binding" in detail, (
+        f"Expected 400 error message to mention 'SOP binding'. Got: {detail!r}"
     )

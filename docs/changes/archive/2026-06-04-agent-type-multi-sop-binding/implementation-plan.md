@@ -7,40 +7,40 @@ Replace the single `primary_sop_id` field on AgentType with ordered lists of SOP
 ## Task Checklist
 
 ### Phase 1 — Database Schema
-- [ ] 1.1 — Add `AgentTypeSopBinding` and `AgentTypeSkillBinding` SQLAlchemy models
-- [ ] 1.2 — Remove `primary_sop_id` column and relationship from `AgentType`
-- [ ] 1.3 — Generate and review Alembic migration, apply it
+- [x] 1.1 — Add `AgentTypeSopBinding` and `AgentTypeSkillBinding` SQLAlchemy models
+- [x] 1.2 — Remove `primary_sop_id` column and relationship from `AgentType`
+- [x] 1.3 — Generate and review Alembic migration, apply it
 
 ### Phase 2 — Backend API Layer
-- [ ] 2.1 — Add Pydantic schemas for binding create/update/response
-- [ ] 2.2 — Add binding CRUD operations to AgentType service layer
-- [ ] 2.3 — Add binding validation (role-access check) to service layer
-- [ ] 2.4 — Update AgentType create/update API endpoints to include bindings
-- [ ] 2.5 — Add migration task for existing `primary_sop_id` values
+- [x] 2.1 — Add Pydantic schemas for binding create/update/response
+- [x] 2.2 — Add binding CRUD operations to AgentType service layer
+- [x] 2.3 — Add binding validation (role-access check) to service layer
+- [x] 2.4 — Update AgentType create/update API endpoints to include bindings
+- [x] 2.5 — Add migration task for existing `primary_sop_id` values
 
 ### Phase 3 — System Instruction Generator
-- [ ] 3.1 — Update generator to read `agent_type_sop_bindings` and `agent_type_skill_bindings`
-- [ ] 3.2 — Merge and sort bindings by order, produce curated context
-- [ ] 3.3 — Fall back to empty context when no bindings are configured
+- [x] 3.1 — Update generator to read `agent_type_sop_bindings` and `agent_type_skill_bindings`
+- [x] 3.2 — Merge and sort bindings by order, produce curated context
+- [x] 3.3 — Fall back to empty context when no bindings are configured
 
 ### Phase 4 — Agent Plan Mode
-- [ ] 4.1 — Update PlanGenerationService to read curated binding list
-- [ ] 4.2 — Update topology diagram generator to show bound SOPs/skills
-- [ ] 4.3 — Update AgentPlan model/API if plan_steps schema changes
+- [x] 4.1 — Update PlanGenerationService to read curated binding list
+- [x] 4.2 — Update topology diagram generator to show bound SOPs/skills
+- [x] 4.3 — Update AgentPlan model/API if plan_steps schema changes
 
 ### Phase 5 — Frontend Agent Type Editor
-- [ ] 5.1 — Add binding list UI section to Agent Type form
-- [ ] 5.2 — Implement Add/Remove/Reorder bindings with type picker (SOP vs Skill)
-- [ ] 5.3 — Implement role-filtered dropdown for binding picker
-- [ ] 5.4 — Add validation feedback (duplicate, inaccessible, broken reference)
-- [ ] 5.5 — Update Plan Preview tab to reflect binding list
-- [ ] 5.6 — Wire UI to updated backend API schema
+- [x] 5.1 — Add binding list UI section to Agent Type form
+- [x] 5.2 — Implement Add/Remove/Reorder bindings with type picker (SOP vs Skill)
+- [x] 5.3 — Implement role-filtered dropdown for binding picker
+- [x] 5.4 — Add validation feedback (duplicate, inaccessible, broken reference)
+- [x] 5.5 — Update Plan Preview tab to reflect binding list
+- [x] 5.6 — Wire UI to updated backend API schema
 
 ### Phase 6 — Integration Testing & Cleanup
-- [ ] 6.1 — Backend integration tests for binding CRUD and validation
-- [ ] 6.2 — Frontend component tests for binding list UI
+- [x] 6.1 — Backend integration tests for binding CRUD and validation
+- [x] 6.2 — Frontend component tests for binding list UI
 - [ ] 6.3 — E2E tests with real backend for binding flow
-- [ ] 6.4 — Remove deprecated code paths for old primary_sop_id
+- [x] 6.4 — Remove deprecated code paths for old primary_sop_id
 
 ## Phase 1 — Database Schema
 
@@ -174,22 +174,21 @@ Remove any code paths that reference `primary_sop_id` directly (outside the data
 
 _Done when_: `git grep primary_sop_id` returns only migration-related references.
 
-## Completion Checklist
-
-- [ ] New join tables `agent_type_sop_bindings` and `agent_type_skill_bindings` exist in schema
-- [ ] `primary_sop_id` column removed from `agent_types`
-- [ ] Alembic migration applied and reversible
-- [ ] Existing agent types with `primary_sop_id` migrated to binding rows
-- [ ] Backend API accepts binding lists in create/update
-- [ ] Backend API returns binding lists in responses
-- [ ] Role-access validation rejects invalid bindings
-- [ ] System instruction generator reads curated binding list
-- [ ] Agent Plan Mode reads curated binding list
-- [ ] Frontend editor shows binding list with add/remove/reorder
-- [ ] Role-filtered dropdown works correctly
-- [ ] Validation states render with clear error messages
-- [ ] Plan Preview tab reflects curated bindings
-- [ ] Backend integration tests pass
-- [ ] Frontend component tests pass
+## Completion Checklist (Phases 1-5 ✅, 6 pending)
+- [x] New join tables `agent_type_sop_bindings` and `agent_type_skill_bindings` exist in schema
+- [x] `primary_sop_id` column removed from `agent_types`
+- [x] Alembic migration applied and reversible
+- [x] Existing agent types with `primary_sop_id` migrated to binding rows
+- [x] Backend API accepts binding lists in create/update
+- [x] Backend API returns binding lists in responses
+- [x] Role-access validation rejects invalid bindings
+- [x] System instruction generator reads curated binding list
+- [x] Agent Plan Mode reads curated binding list
+- [x] Frontend editor shows binding list with add/remove/reorder
+- [x] Role-filtered dropdown works correctly
+- [x] Validation states render with clear error messages
+- [x] Plan Preview tab reflects curated bindings
+- [x] Backend integration tests pass
+- [x] Frontend component tests pass
 - [ ] E2E tests pass with real backend
-- [ ] All old `primary_sop_id` code paths cleaned up
+- [x] All old `primary_sop_id` code paths cleaned up (app code only; test code still has references)

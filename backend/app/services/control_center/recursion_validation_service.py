@@ -209,8 +209,18 @@ class RecursionValidationService:
                 ),
             )
 
-        # Build findings for the detected cycle
-        path_sig = " → ".join(cycle_path)
+        # Resolve UUIDs in the cycle path to human-readable names
+        name_map: dict[str, str] = {}
+        for node in cycle_path:
+            try:
+                uid = uuid.UUID(node)
+                at = await db.get(AgentType, uid)
+                name_map[node] = at.name if at and at.name else node
+            except (ValueError, Exception):
+                name_map[node] = node
+        named_path = [name_map[n] for n in cycle_path]
+        path_sig = " → ".join(named_path)
+
         findings: list[RecursionFinding] = []
         for i, node in enumerate(cycle_path[:-1]):
             next_node = cycle_path[i + 1]
@@ -223,7 +233,8 @@ class RecursionValidationService:
                     involved_sop_step_id=step_id,
                     path_signature=path_sig,
                     recommendation=(
-                        f"Remove the delegation step from agent '{node}' to agent '{next_node}' "
+                        f"Remove the delegation step from agent '{name_map[node]}' "
+                        f"to agent '{name_map[next_node]}' "
                         "to break the cycle, or restructure the SOP delegation graph."
                     ),
                 )
@@ -257,18 +268,43 @@ class RecursionValidationService:
             adjacency.setdefault(node_key, [])
             return
 
-        # Load SOPs assigned to the agent's role
-        from app.db.models.agents import AgentRoleSOP
-
-        role_sop_result = await db.execute(
-            select(AgentRoleSOP).where(AgentRoleSOP.role_id == agent_type.role_id)
+        # Load bound SOPs/skills to determine which SOPs to check
+        from app.db.models.agents import (
+            AgentRoleSOP,
+            AgentTypeSopBinding,
+            AgentTypeSkillBinding,
         )
-        role_sop_rows = role_sop_result.scalars().all()
-        sop_ids = [row.sop_id for row in role_sop_rows]
 
-        # Also include primary SOP
-        if agent_type.primary_sop_id and agent_type.primary_sop_id not in sop_ids:
-            sop_ids.append(agent_type.primary_sop_id)
+        has_sop_bindings = await db.execute(
+            select(AgentTypeSopBinding.id).where(
+                AgentTypeSopBinding.agent_type_id == agent_type.id
+            )
+        )
+        has_skill_bindings = await db.execute(
+            select(AgentTypeSkillBinding.id).where(
+                AgentTypeSkillBinding.agent_type_id == agent_type.id
+            )
+        )
+        has_explicit_bindings = (
+            has_sop_bindings.first() is not None
+            or has_skill_bindings.first() is not None
+        )
+
+        if has_explicit_bindings:
+            # Only use bound SOPs — not the entire role's SOPs
+            binding_result = await db.execute(
+                select(AgentTypeSopBinding.sop_id).where(
+                    AgentTypeSopBinding.agent_type_id == agent_type.id
+                )
+            )
+            sop_ids = [row[0] for row in binding_result.fetchall()]
+        else:
+            # Fallback: use all role-assigned SOPs
+            role_sop_result = await db.execute(
+                select(AgentRoleSOP).where(AgentRoleSOP.role_id == agent_type.role_id)
+            )
+            role_sop_rows = role_sop_result.scalars().all()
+            sop_ids = [row.sop_id for row in role_sop_rows]
 
         adjacency.setdefault(node_key, [])
 

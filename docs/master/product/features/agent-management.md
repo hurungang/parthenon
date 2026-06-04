@@ -3,7 +3,7 @@
 # Agent Management (Unified AI Agent Navigation)
 
 ## Overview
-Agent Management enables organizations to define, configure, and govern AI agent types, their roles, permissions, and operational lifecycles. With the unified "AI Agent" menu, all agent-related modules—including Agent Roles, Agent Identities, Agent Types, Agent Executions, and Agent Logs—are now grouped under a single, intuitive navigation structure. This consolidation improves discoverability, reduces user confusion, and streamlines access to all agent management capabilities. The system supports secure, role-based access control, explicit identity-role assignments, and centralized management of agent identities, model access, and permissions. All agent actions are fully auditable and observable, supporting compliance and operational transparency.
+Agent Management enables organizations to define, configure, and govern AI agent types, their roles, permissions, and operational lifecycles. All agent-related modules—including Agent Roles, Agent Identities, Agent Types, Agent Executions, and Agent Logs—are grouped under the **Agents group** in the sidebar for a single, intuitive navigation structure. This consolidation improves discoverability, reduces user confusion, and streamlines access to all agent management capabilities. The system supports secure, role-based access control, explicit identity-role assignments, and centralized management of agent identities, model access, and permissions. All agent actions are fully auditable and observable, supporting compliance and operational transparency.
 
 ## Who Uses It
 - Platform Administrators: Define agent types, roles, assign permissions, manage agent identities and model access
@@ -13,7 +13,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 
 
 ## What It Does
-- Provides a unified "AI Agent" menu with the following modules in order: Agent Roles, Agent Identities, Agent Types, Agent Executions, Agent Logs
+- Provides the **Agents group** in the sidebar with the following modules in order: Agent Roles, Agent Identities, Agent Types, Agent Executions, Agent Logs
 - Supports creation and management of agent roles, with SOP/Skill permissions
 - Enables explicit, many-to-many assignment of agent identities to roles, managed through the UI
 - Provides guided forms for defining agent types, selecting identities, roles, models, and input/output options
@@ -50,7 +50,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 
 
 ## Key Concepts
-- **AI Agent Menu**: A unified navigation entry grouping all agent-related modules for streamlined access
+- **Agents Group**: A sidebar navigation group containing all agent-related modules for streamlined access
 - **Agent Role**: A permission grouping for SOPs, Skills, and tools, assigned to agent identities
 - **Identity-Role Assignment**: Explicit, many-to-many mapping between agent identities and roles, managed bidirectionally in the UI
 - **Agent Type**: A defined class of agent with specific identity, role, and model configuration
@@ -66,7 +66,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 
 
 ## Acceptance Criteria
-- The "AI Agent" top-level menu exists with the following five modules as child menus, in this order:
+- The **Agents group** exists in the sidebar with the following modules, in this order:
 	1. Agent Roles
 	2. Agent Identities
 	3. Agent Types

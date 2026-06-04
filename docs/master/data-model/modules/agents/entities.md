@@ -85,6 +85,20 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+    AgentTypeSopBinding {
+        uuid id
+        uuid agent_type_id
+        uuid sop_id
+        int order
+        datetime created_at
+    }
+    AgentTypeSkillBinding {
+        uuid id
+        uuid agent_type_id
+        uuid skill_id
+        int order
+        datetime created_at
+    }
     AgentSession {
         uuid id
         uuid agent_type_id
@@ -191,6 +205,10 @@ erDiagram
     AgentSession }o--o| Identity : "triggered by"
     AgentType ||--o| AgentPlan : "has current plan"
     AgentType ||--o{ AgentInstanceCertificate : "issues"
+    AgentType ||--o{ AgentTypeSopBinding : "binds SOPs via"
+    AgentType ||--o{ AgentTypeSkillBinding : "binds skills via"
+    AgentTypeSopBinding }o--|| Sop : "references"
+    AgentTypeSkillBinding }o--|| Skill : "references"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
@@ -206,7 +224,9 @@ erDiagram
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
 | **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role (unique constraint on `role_id + server_id`). |
 | **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
-| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. |
+| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
+| **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
+| **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
 | **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. |
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
@@ -217,6 +237,8 @@ erDiagram
 - `AgentType.slug` is the canonical agent routing identifier and must be unique and normalized.
 - Agent identity runtime identifier (name/slug) must be slug-safe for protocol metadata and routing.
 - Role-to-agent-type allow-list mappings are used to preview and enforce delegation boundaries.
+- Binding order is shared across both SOP and skill binding types — the merged list sorted by `order` defines the curated capability sequence for plan generation and system instruction context.
+- Bound SOPs and skills must be accessible through at least one role assigned to the agent type; validation runs on save and rejects invalid references.
 
 ## Model Guardrail and Runtime Control Entities
 

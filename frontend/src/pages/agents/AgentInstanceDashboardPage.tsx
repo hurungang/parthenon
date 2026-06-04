@@ -14,6 +14,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -29,6 +30,7 @@ import type {
 } from '../../types'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
+import { usePagination } from '../../hooks/usePagination'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
 
 const STATUS_OPTIONS: AgentJobStatus[] = ['queued', 'running', 'completed', 'failed']
@@ -58,6 +60,8 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
 
   const { data: agentTypes } = useAgentTypes()
+
+  const pag = usePagination()
 
   // When a prop is supplied (embedded in dialog), use that; otherwise use local state
   const effectiveAgentTypeId = agentTypeIdProp ?? filterAgentTypeId
@@ -90,6 +94,8 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
   if (fromDate) queryParams.set('from_date', new Date(fromDate).toISOString())
   if (toDate) queryParams.set('to_date', new Date(toDate).toISOString())
   if (effectiveAgentTypeId) queryParams.set('agent_type_id', effectiveAgentTypeId)
+  queryParams.set('limit', String(pag.limit))
+  queryParams.set('offset', String(pag.offset))
 
   const {
     data: sessions,
@@ -97,7 +103,7 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
     error,
     refetch,
   } = useQuery<AgentJob[]>({
-    queryKey: ['agents', 'sessions', 'dashboard', filterStatus, fromDate, toDate, effectiveAgentTypeId],
+    queryKey: ['agents', 'sessions', 'dashboard', filterStatus, fromDate, toDate, effectiveAgentTypeId, pag.page, pag.rowsPerPage],
     queryFn: async () => {
       const qs = queryParams.toString()
       const { data } = await apiClient.get<AgentJob[]>(`/agents/sessions${qs ? `?${qs}` : ''}`)
@@ -201,75 +207,87 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
           <Typography color="text.secondary">{t('agents.sessions.dashboardEmpty')}</Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('agents.sessions.sessionId')}</TableCell>
-                <TableCell>{t('app.status')}</TableCell>
-                <TableCell>{t('agents.sessions.createdAt')}</TableCell>
-                <TableCell>{t('agents.sessions.startedAt')}</TableCell>
-                <TableCell>{t('agents.sessions.completedAt')}</TableCell>
-                {isConversationAgent && <TableCell>{t('conversations.sessions.dashboardColumn')}</TableCell>}
-                <TableCell align="right">{t('app.actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(sessions ?? []).map((session) => (
-                <TableRow key={session.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontFamily="monospace" fontSize={12}>
-                      {session.id.slice(0, 8)}…
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={t(`agents.sessions.status${session.status.replace(/^./, (c: string) => c.toUpperCase())}`)}
-                      color={statusColor(session.status)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {new Date(session.created_at).toLocaleString()}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {session.started_at ? new Date(session.started_at).toLocaleString() : '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {session.completed_at ? new Date(session.completed_at).toLocaleString() : '—'}
-                    </Typography>
-                  </TableCell>
-                  {isConversationAgent && (
+        <Paper>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('agents.sessions.sessionId')}</TableCell>
+                  <TableCell>{t('app.status')}</TableCell>
+                  <TableCell>{t('agents.sessions.createdAt')}</TableCell>
+                  <TableCell>{t('agents.sessions.startedAt')}</TableCell>
+                  <TableCell>{t('agents.sessions.completedAt')}</TableCell>
+                  {isConversationAgent && <TableCell>{t('conversations.sessions.dashboardColumn')}</TableCell>}
+                  <TableCell align="right">{t('app.actions')}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(sessions ?? []).map((session) => (
+                  <TableRow key={session.id} hover>
                     <TableCell>
-                      <Typography variant="body2">
-                        {jobToSessionTitle.has(session.id)
-                          ? (jobToSessionTitle.get(session.id) ?? '—')
-                          : '—'}
+                      <Typography variant="body2" fontFamily="monospace" fontSize={12}>
+                        {session.id.slice(0, 8)}…
                       </Typography>
                     </TableCell>
-                  )}
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      endIcon={<OpenInNewIcon fontSize="small" />}
-                      onClick={() => {
-                        setSelectedSessionId(session.id)
-                        setExecutionDetailsDialogOpen(true)
-                      }}
-                    >
-                      {t('agents.sessions.view')}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                    <TableCell>
+                      <Chip
+                        label={t(`agents.sessions.status${session.status.replace(/^./, (c: string) => c.toUpperCase())}`)}
+                        color={statusColor(session.status)}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {new Date(session.created_at).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {session.started_at ? new Date(session.started_at).toLocaleString() : '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {session.completed_at ? new Date(session.completed_at).toLocaleString() : '—'}
+                      </Typography>
+                    </TableCell>
+                    {isConversationAgent && (
+                      <TableCell>
+                        <Typography variant="body2">
+                          {jobToSessionTitle.has(session.id)
+                            ? (jobToSessionTitle.get(session.id) ?? '—')
+                            : '—'}
+                        </Typography>
+                      </TableCell>
+                    )}
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        endIcon={<OpenInNewIcon fontSize="small" />}
+                        onClick={() => {
+                          setSelectedSessionId(session.id)
+                          setExecutionDetailsDialogOpen(true)
+                        }}
+                      >
+                        {t('agents.sessions.view')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={-1}
+            page={pag.page}
+            onPageChange={pag.onPageChange}
+            rowsPerPage={pag.rowsPerPage}
+            onRowsPerPageChange={pag.onRowsPerPageChange}
+            rowsPerPageOptions={pag.rowsPerPageOptions}
+            labelRowsPerPage={t('app.rowsPerPage')}
+          />
+        </Paper>
       )}
 
       {/* Agent execution details dialog */}

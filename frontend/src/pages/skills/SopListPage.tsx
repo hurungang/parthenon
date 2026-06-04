@@ -12,6 +12,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -22,6 +23,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import { usePagination } from '../../hooks/usePagination'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { SopEditor } from './SopEditor'
 import type { Sop, SopDetail } from '../../types'
@@ -37,6 +39,7 @@ import type { Sop, SopDetail } from '../../types'
 export function SopListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const pag = usePagination()
   const [search, setSearch] = useState('')
   const [editorSop, setEditorSop] = useState<SopDetail | null | undefined>(undefined)
   const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'view'>('create')
@@ -44,9 +47,11 @@ export function SopListPage() {
   const [loadingEditId, setLoadingEditId] = useState<string | null>(null)
 
   const { data: sops, isLoading, error } = useQuery<Sop[]>({
-    queryKey: ['sops'],
+    queryKey: ['sops', pag.limit, pag.offset],
     queryFn: async () => {
-      const { data } = await apiClient.get<Sop[]>('/sops')
+      const { data } = await apiClient.get<Sop[]>('/sops', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -181,6 +186,18 @@ export function SopListPage() {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+        {!isLoading && !error && (
+          <TablePagination
+            component="div"
+            count={-1}
+            page={pag.page}
+            onPageChange={pag.onPageChange}
+            rowsPerPage={pag.rowsPerPage}
+            onRowsPerPageChange={pag.onRowsPerPageChange}
+            rowsPerPageOptions={pag.rowsPerPageOptions}
+            labelRowsPerPage={t('app.rowsPerPage')}
+          />
         )}
       </Box>
 

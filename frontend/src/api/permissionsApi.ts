@@ -27,7 +27,7 @@ import type {
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
 export async function listTagDefinitions(
-  filters?: { scope?: string; resource_type?: string }
+  filters?: { scope?: string; resource_type?: string; limit?: number; offset?: number }
 ): Promise<TagDefinition[]> {
   const response = await apiClient.get<TagDefinition[]>('/user-tags/definitions', { params: filters })
   return response.data
@@ -231,13 +231,19 @@ export async function submitAccessRequest(
   return response.data
 }
 
-export async function listMyAccessRequests(): Promise<AccessRequestBatch[]> {
-  const response = await apiClient.get<AccessRequestBatch[]>('/user-access-requests/my')
+export async function listMyAccessRequests(limit?: number, offset?: number): Promise<AccessRequestBatch[]> {
+  const params: Record<string, number> = {}
+  if (limit !== undefined) params.limit = limit
+  if (offset !== undefined) params.offset = offset
+  const response = await apiClient.get<AccessRequestBatch[]>('/user-access-requests/my', { params })
   return response.data
 }
 
-export async function listPendingRequests(): Promise<AccessRequest[]> {
-  const response = await apiClient.get<AccessRequest[]>('/user-access-requests/pending')
+export async function listPendingRequests(limit?: number, offset?: number): Promise<AccessRequest[]> {
+  const params: Record<string, number> = {}
+  if (limit !== undefined) params.limit = limit
+  if (offset !== undefined) params.offset = offset
+  const response = await apiClient.get<AccessRequest[]>('/user-access-requests/pending', { params })
   return response.data
 }
 

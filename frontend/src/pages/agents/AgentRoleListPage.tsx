@@ -12,6 +12,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tooltip,
   Typography,
@@ -24,6 +25,7 @@ import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { AgentRoleDialog } from './AgentRoleDialog'
 import type { AgentRole } from '../../types'
+import { usePagination } from '../../hooks/usePagination'
 
 /**
  * Agent Role list page — displays all roles with SOP/Skill chips and MCP tool count.
@@ -31,13 +33,16 @@ import type { AgentRole } from '../../types'
 export function AgentRoleListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const pag = usePagination()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editRole, setEditRole] = useState<AgentRole | null>(null)
 
   const { data: roles, isLoading, error } = useQuery<AgentRole[]>({
-    queryKey: ['agents', 'roles'],
+    queryKey: ['agents', 'roles', { limit: pag.limit, offset: pag.offset }],
     queryFn: async () => {
-      const { data } = await apiClient.get<AgentRole[]>('/agents/roles')
+      const { data } = await apiClient.get<AgentRole[]>('/agents/roles', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -165,6 +170,17 @@ export function AgentRoleListPage() {
           </Table>
         </TableContainer>
       )}
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       <AgentRoleDialog
         open={dialogOpen}

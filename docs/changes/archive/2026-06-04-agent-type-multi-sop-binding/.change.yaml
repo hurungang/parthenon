@@ -1,6 +1,6 @@
 name: agent-type-multi-sop-binding
 created_at: 2026-06-03
-status: in-progress
+status: implemented
 scope:
   has_ui_changes: true
   has_architecture_changes: true

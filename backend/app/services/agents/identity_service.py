@@ -109,10 +109,15 @@ class AgentIdentityService:
         logger.info("Created AgentIdentity %s (%s)", identity.id, name)
         return identity
 
-    async def list_identities(self, db: AsyncSession) -> list[AgentIdentity]:
+    async def list_identities(
+        self, db: AsyncSession, limit: int = 1000, offset: int = 0
+    ) -> list[AgentIdentity]:
         """Return all AgentIdentity records ordered by name."""
         result = await db.execute(
-            select(AgentIdentity).order_by(AgentIdentity.name)
+            select(AgentIdentity)
+            .order_by(AgentIdentity.name)
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars().all())
 

@@ -10,7 +10,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import type { AgentPlan } from '../../types'
+import type { AgentPlan, TopologyNode } from '../../types'
 import TopologyDiagramRenderer from './TopologyDiagramRenderer'
 
 function getStepTypeChipColor(
@@ -33,13 +33,14 @@ function getStepTypeChipColor(
 interface AgentPlanContentProps {
   plan: AgentPlan | null | undefined
   noPlanMessage?: string
+  onNodeClick?: (node: TopologyNode) => void
 }
 
 /**
  * Presentational component rendering agent plan steps and topology diagram.
  * Used by both PlanPreviewModal and AgentTypeDetailsDialog.
  */
-const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage }) => {
+const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage, onNodeClick }) => {
   const { t } = useTranslation()
 
   if (!plan) {
@@ -134,6 +135,7 @@ const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage
           <TopologyDiagramRenderer
             nodes={plan.topology_nodes}
             edges={plan.topology_edges}
+            onNodeClick={onNodeClick}
           />
         </>
       )}

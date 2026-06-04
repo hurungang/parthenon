@@ -15,6 +15,7 @@ SOPs represent business workflows composed of orchestrated steps and delegated t
 - Produces clear policy-stop outcomes for governance and incident triage
 - Supports a Default SOP fallback policy for agent execution when no explicit SOP is referenced in agent instruction
 - Applies Default SOP behavior consistently across all supported agent input types
+- Agent Types bind SOPs using the same ordered-list pattern that SOPs use to bind skills, allowing agent designers to curate which SOPs an agent type uses
 
 ## Acceptance Criteria
 - SOP delegation supports business workflows without unbounded recursion

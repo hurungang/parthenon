@@ -91,9 +91,14 @@ class ModelConfigService:
         await db.refresh(config)
         return config
 
-    async def list_model_configs(self, db: AsyncSession) -> list[ModelConfig]:
+    async def list_model_configs(
+        self, db: AsyncSession, limit: int = 1000, offset: int = 0
+    ) -> list[ModelConfig]:
         result = await db.execute(
-            select(ModelConfig).order_by(ModelConfig.display_name)
+            select(ModelConfig)
+            .order_by(ModelConfig.display_name)
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars().all())
 

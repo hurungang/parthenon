@@ -16,6 +16,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -30,6 +31,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
+import { usePagination } from '../../hooks/usePagination'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { ScheduledJob } from '../../types'
 
@@ -39,6 +41,7 @@ import type { ScheduledJob } from '../../types'
 export function ScheduleManagerPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const pag = usePagination()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [form, setForm] = useState({
@@ -50,9 +53,11 @@ export function ScheduleManagerPage() {
   })
 
   const { data: jobs, isLoading, error } = useQuery<ScheduledJob[]>({
-    queryKey: ['schedules'],
+    queryKey: ['schedules', pag.limit, pag.offset],
     queryFn: async () => {
-      const { data } = await apiClient.get<ScheduledJob[]>('/schedules')
+      const { data } = await apiClient.get<ScheduledJob[]>('/schedules', {
+        params: { limit: pag.limit, offset: pag.offset },
+      })
       return data
     },
   })
@@ -153,6 +158,18 @@ export function ScheduleManagerPage() {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+      {!isLoading && !error && (
+        <TablePagination
+          component="div"
+          count={-1}
+          page={pag.page}
+          onPageChange={pag.onPageChange}
+          rowsPerPage={pag.rowsPerPage}
+          onRowsPerPageChange={pag.onRowsPerPageChange}
+          rowsPerPageOptions={pag.rowsPerPageOptions}
+          labelRowsPerPage={t('app.rowsPerPage')}
+        />
       )}
 
       <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>

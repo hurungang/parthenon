@@ -28,6 +28,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tabs,
   TextField,
@@ -41,6 +42,7 @@ import {
   useSubmitAccessRequest,
   useGroups,
 } from '../../hooks/usePermissions'
+import { usePagination } from '../../hooks/usePagination'
 import { AccessRequestStatus } from '../../types/permissions'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { AccessRequest } from '../../types/permissions'
@@ -70,7 +72,8 @@ export function AccessRequestsPage() {
 
 function PendingRequestsTab() {
   const { t } = useTranslation()
-  const { data: requests, isLoading, error } = usePendingAccessRequests()
+  const pag = usePagination()
+  const { data: requests, isLoading, error } = usePendingAccessRequests(pag.limit, pag.offset)
   const { data: groups } = useGroups()
   const approve = useApproveAccessRequest()
   const reject = useRejectAccessRequest()
@@ -175,6 +178,16 @@ function PendingRequestsTab() {
           </TableBody>
         </Table>
       </TableContainer>
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {/* Approve dialog */}
       <Dialog

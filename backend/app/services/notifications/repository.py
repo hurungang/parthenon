@@ -46,12 +46,15 @@ class NotificationRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_channels(self) -> list[NotificationChannel]:
-        result = await self._db.execute(
+    async def list_channels(self, limit: int = 0, offset: int = 0) -> list[NotificationChannel]:
+        query = (
             select(NotificationChannel)
             .order_by(NotificationChannel.name)
             .options(selectinload(NotificationChannel.properties))
         )
+        if limit:
+            query = query.limit(limit).offset(offset)
+        result = await self._db.execute(query)
         return list(result.scalars().all())
 
     async def create_channel(
@@ -165,8 +168,8 @@ class NotificationRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_recipient_groups(self) -> list[RecipientGroup]:
-        result = await self._db.execute(
+    async def list_recipient_groups(self, limit: int = 0, offset: int = 0) -> list[RecipientGroup]:
+        query = (
             select(RecipientGroup)
             .order_by(RecipientGroup.name)
             .options(
@@ -175,6 +178,9 @@ class NotificationRepository:
                 )
             )
         )
+        if limit:
+            query = query.limit(limit).offset(offset)
+        result = await self._db.execute(query)
         return list(result.scalars().all())
 
     async def create_recipient_group(
