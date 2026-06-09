@@ -322,6 +322,11 @@ class RecursionValidationService:
         delegation_steps = step_result.scalars().all()
 
         for step in delegation_steps:
+            # Skip self-delegation edges — an agent should not be treated
+            # as delegating to itself when a shared role SOP happens to
+            # target it.  This avoids false-positive cycle detection.
+            if step.target_agent_type_id == agent_type_id:
+                continue
             target_id_str = str(step.target_agent_type_id)
             if target_id_str not in adjacency[node_key]:
                 adjacency[node_key].append(target_id_str)

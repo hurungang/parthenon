@@ -19,6 +19,7 @@ flowchart LR
     AR -->|Caller: agent_runtime| API
     API --> POL
     API --> CTX
+    API --> IRS[Intervene Request Store]
     API --> TOPO[Runtime Topology Controller]
     API --> TERM[Termination Orchestrator]
     CTX --> CFG

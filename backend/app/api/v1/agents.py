@@ -628,7 +628,7 @@ async def launch_agent_session(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
     session_id = uuid.UUID(result["session_id"])
-    job = await db.get(AgentJob, session_id)
+    job = await _session_service.get_session(session_id, db)
     return job
 
 
@@ -766,9 +766,11 @@ async def stream_session_execution_logs(
 
     Emits NDJSON events in timestamp order:
     - {"type":"log_entry","entry":{...}}
+    - {"type":"human_intervene","request_id":"...","reason":"...","intervention_type":"...","choices":[...]}
     - {"type":"stream_completed","session_id":"...","session_status":"completed|failed"}
     """
     from app.db.models.session_logs import ExecutionLogEntry
+    from app.db.models.intervene import InterveneRequest, InterveneRequestStatus
 
     job = await _session_service.get_session(session_id, db)
     if not job:
@@ -776,6 +778,7 @@ async def stream_session_execution_logs(
 
     async def stream_events():
         sent_ids: set[uuid.UUID] = set()
+        sent_intervene: bool = False
 
         while True:
             result = await db.execute(
@@ -817,6 +820,29 @@ async def stream_session_execution_logs(
                 }
                 yield json.dumps(terminal_payload) + "\n"
                 break
+
+            if current_job.status == AgentJobStatus.waiting_for_human and not sent_intervene:
+                sent_intervene = True
+                stmt = (
+                    select(InterveneRequest)
+                    .where(
+                        InterveneRequest.agent_session_id == session_id,
+                        InterveneRequest.status == InterveneRequestStatus.pending,
+                    )
+                    .limit(1)
+                )
+                intervene_result = await db.execute(stmt)
+                intervene_req = intervene_result.scalar_one_or_none()
+                if intervene_req:
+                    intervene_payload = {
+                        "type": "human_intervene",
+                        "request_id": str(intervene_req.id),
+                        "session_id": str(session_id),
+                        "reason": intervene_req.reason,
+                        "intervention_type": intervene_req.intervention_type.value,
+                        "choices": intervene_req.choices,
+                    }
+                    yield json.dumps(intervene_payload) + "\n"
 
             await asyncio.sleep(poll_ms / 1000)
 

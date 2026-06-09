@@ -172,6 +172,60 @@ class AgentRuntimeClient:
                     f"Agent Runtime call failed: {exc}"
                 ) from exc
 
+    async def resume_session(
+        self,
+        session_id: uuid.UUID,
+        response_value: dict | None = None,
+    ) -> dict[str, Any]:
+        """POST a resume request to Agent Runtime via Communication Hub after human intervention.
+
+        Routes through Communication Hub's
+        ``POST /internal/agent/resume/{session_id}`` endpoint, which
+        forwards to Agent Runtime with mTLS using CH's
+        ``service:communication-hub`` certificate.  The ``response_value``
+        is forwarded verbatim so the executor can inject it as a follow-up
+        context message without needing to re-query the intervene response
+        from the database.
+
+        Args:
+            session_id:     UUID of the session to resume.
+            response_value: Optional dict with the human's response
+                            (e.g. ``{"approval_value": True}``).
+
+        Returns:
+            Response dict with ``session_id`` and ``status``.
+
+        Raises:
+            AgentRuntimeClientError — on any HTTP or network failure.
+        """
+        url = f"{self._communication_hub_url}/internal/agent/resume/{session_id}"
+        body: dict[str, Any] = {}
+        if response_value:
+            body["response_value"] = response_value
+
+        async with self._make_client() as client:
+            try:
+                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp.raise_for_status()
+                data: dict[str, Any] = resp.json()
+                logger.info(
+                    "Resumed session %s via Communication Hub — status=%s",
+                    session_id,
+                    data.get("status"),
+                )
+                return data
+            except httpx.HTTPStatusError as exc:
+                raise AgentRuntimeClientError(
+                    f"Agent Runtime returned {exc.response.status_code}: "
+                    f"{exc.response.text[:200]}"
+                ) from exc
+            except AgentRuntimeClientError:
+                raise
+            except Exception as exc:
+                raise AgentRuntimeClientError(
+                    f"Agent Runtime call failed: {exc}"
+                ) from exc
+
     async def terminate_session(
         self,
         session_id: uuid.UUID,

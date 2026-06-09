@@ -34,7 +34,7 @@ Conversation Management ensures that all interactions—across users, agents, an
 - **Conversation Continuation Policy**: Conversational sessions continue unless non-token guardrails (for example recursion, iteration, delegation boundary, or timeout policies) require termination
 - **Delegation Visibility Cues**: In-conversation progress signals (thinking, delegating, waiting, completion, timeout/failure) that make delegated execution understandable to non-technical users
 - **Folded Delegation Snippets**: Compact delegation progress lines that are collapsed by default and can be expanded on demand without overwhelming chat readability
-- **Turn Types**: Different types of conversation events (user, agent, tool, agent-to-agent)
+- **Turn Types**: Different types of conversation events (user, agent, tool, agent-to-agent, intervene_request, intervene_response)
 - **Audit and Replay**: Reviewing and replaying past conversations
 - **Conversation Traceability**: Ensuring every interaction is logged and accessible
 
@@ -47,7 +47,7 @@ Conversation Management ensures that all interactions—across users, agents, an
 - Users can end or archive sessions to manage their workspace
 - Sessions are user-scoped (users only see their own sessions)
 - Conversations can be searched, audited, and replayed from the UI
-- All turn types are captured and classified
+- All turn types are captured and classified, including intervene request creation (context, type, options) and intervene response (operator, value, timestamp)
 - Conversation history is available for compliance and operational review
 - All access to conversation data is logged
 - Current-session token usage remains visible throughout active conversational sessions

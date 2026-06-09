@@ -104,13 +104,34 @@ erDiagram
         uuid agent_type_id
         uuid triggered_by_user_id
         json input_data
-        enum status
+        enum status "queued | running | waiting_for_human | completed | failed | terminated"
         datetime started_at
         datetime completed_at
         json output_data
         json conversation_history
         string error_message
         datetime created_at
+    }
+    InterveneRequest {
+        uuid id
+        uuid agent_session_id
+        uuid agent_type_id
+        enum intervention_type "approval | choice | text"
+        string reason
+        json choices "required when intervention_type = choice"
+        enum status "pending | responded | cancelled | expired"
+        datetime created_at
+        datetime responded_at "set when status becomes responded, cancelled, or expired"
+        datetime expires_at "optional timeout deadline"
+    }
+    InterveneResponse {
+        uuid id
+        uuid request_id
+        uuid operator_user_id
+        boolean approval_value "populated when intervention_type = approval"
+        string selected_choice "populated when intervention_type = choice"
+        string text_value "populated when intervention_type = text"
+        datetime responded_at
     }
     AgentA2ASessionLink {
         uuid id
@@ -200,6 +221,10 @@ erDiagram
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
+    InterveneRequest }o--|| AgentSession : "originates from"
+    InterveneRequest }o--|| AgentType : "initiated by"
+    InterveneRequest ||--o| InterveneResponse : "resolved by"
+    InterveneResponse }o--|| Identity : "responded by"
     AgentType ||--o{ AgentRoleAllowedType : "listed as"
     AgentType ||--o{ AgentA2ASessionLink : "participates via runtime instances"
     AgentSession }o--o| Identity : "triggered by"
@@ -227,7 +252,9 @@ erDiagram
 | **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
 | **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
 | **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
-| **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. |
+| **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. Status includes `waiting_for_human` when the agent is paused pending operator response to an intervene request. |
+| **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. Each request is scoped to a single agent session and agent type. |
+| **InterveneResponse** | The operator's response to an intervene request. Exactly one response per request. The response field populated depends on the intervention type: `approval_value` (boolean) for approval requests, `selected_choice` (string) for choice requests, `text_value` (string) for text requests. |
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
 | **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
@@ -239,6 +266,10 @@ erDiagram
 - Role-to-agent-type allow-list mappings are used to preview and enforce delegation boundaries.
 - Binding order is shared across both SOP and skill binding types — the merged list sorted by `order` defines the curated capability sequence for plan generation and system instruction context.
 - Bound SOPs and skills must be accessible through at least one role assigned to the agent type; validation runs on save and rejects invalid references.
+- Only sessions in `running` state may transition to `waiting_for_human`.
+- A session in `waiting_for_human` may transition to `running` (resume), `terminated` (operator terminated), or `failed` (system error during resume).
+- Multiple concurrent intervene requests per session are not permitted — a duplicate `human_intervene` call while a `pending` request exists returns the existing request ID.
+- When a session transitions from `waiting_for_human` to `terminated`, all `pending` intervene requests for that session are automatically marked `cancelled`.
 
 ## Model Guardrail and Runtime Control Entities
 

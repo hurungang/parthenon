@@ -35,6 +35,8 @@ class SourceType(str, enum.Enum):
     SOP = "SOP"
     AGENT = "AGENT"
     MANUAL = "MANUAL"
+    INTERVENE_REQUEST_CREATED = "intervene_request_created"
+    INTERVENE_REQUEST_RESPONDED = "intervene_request_responded"
 
 
 class NotificationChannel(Base):

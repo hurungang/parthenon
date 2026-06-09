@@ -272,6 +272,33 @@ class TerminationOrchestrator:
             if runtime_cancelled:
                 reason_text += " (Agent Runtime task cancelled)"
 
+            # Cancel any pending intervene requests for this session
+            # so the Control Center doesn't show orphaned pending requests
+            # for a terminated session.
+            try:
+                from app.services.agents.intervene_service import (
+                    InterveneRequestStore,
+                )
+                intervene_store = InterveneRequestStore()
+                pending_request = await intervene_store._find_pending_for_session(
+                    db, session_id
+                )
+                if pending_request is not None:
+                    await intervene_store.cancel_request(db, pending_request.id)
+                    logger.info(
+                        "Cancelled pending intervene request %s for "
+                        "terminated session %s",
+                        pending_request.id,
+                        session_id,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to cancel pending intervene request for "
+                    "session %s: %s",
+                    session_id,
+                    exc,
+                )
+
             outcome = TerminationCascadeOutcome(
                 termination_request_id=request_id,
                 affected_agent_job_id=session_id,

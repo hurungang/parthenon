@@ -63,6 +63,7 @@ def _make_skill(skill_id=None, instructions=None, tool_ids=None):
     m.created_at = now
     m.updated_at = now
     # instructions_with_tools must be None/str so Pydantic model_validate succeeds
+    m.is_system = False
     m.instructions_with_tools = None
     # Tool bindings — each binding has a proper tool mock with serializable attributes
     bindings = []
@@ -204,7 +205,7 @@ async def test_create_skill_with_instructions_returns_201():
     app.dependency_overrides[get_db] = db_dep
 
     payload = {
-        "name": "Summarise Text",
+        "name": "summarise-text",
         "description": "Summarises documents",
         "instructions": "Always prefix the query with the system prompt.",
         "tool_ids": [],
@@ -228,7 +229,7 @@ async def test_create_skill_without_instructions_accepted():
     app = create_app()
     app.dependency_overrides[get_db] = db_dep
 
-    payload = {"name": "No Instruction Skill", "tool_ids": []}
+    payload = {"name": "no-instruction-skill", "tool_ids": []}
 
     with _bypass_auth(), _mock_permission_allow():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -518,7 +519,7 @@ async def test_post_skill_ignores_instructions_with_tools_in_request():
     app.dependency_overrides[get_db] = db_dep
 
     payload = {
-        "name": "Test Skill",
+        "name": "test-skill",
         "instructions": "My instructions.",
         "instructions_with_tools": "INJECTED — should be ignored",
         "tool_ids": [],
@@ -562,7 +563,7 @@ async def test_list_skills_instructions_with_tools_present_for_each_skill():
 
 @pytest.mark.asyncio
 async def test_skill_seeder_creates_save_result_skill():
-    """SkillSeeder.run() creates save_result skill on a clean database."""
+    """SkillSeeder.run() creates save-result skill on a clean database."""
     from app.services.skill_seeder import SkillSeeder
     from app.db.models.skills import Skill
 
@@ -572,12 +573,13 @@ async def test_skill_seeder_creates_save_result_skill():
     no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
 
     mock_session = AsyncMock()
+    # 4 skills x (1 existence check + 1 tool lookup) = 8 entries
     mock_session.execute = AsyncMock(
         side_effect=[
-            no_skill_result,  # save_result: skill existence check
-            no_tool_result,   # save_result: tool lookup
-            no_skill_result,  # send_notification: skill existence check
-            no_tool_result,   # send_notification: tool lookup
+            no_skill_result, no_tool_result,  # save-result
+            no_skill_result, no_tool_result,  # send-notification
+            no_skill_result, no_tool_result,  # get-recipient-group
+            no_skill_result, no_tool_result,  # human-intervene
         ]
     )
     mock_session.add = MagicMock()
@@ -587,18 +589,18 @@ async def test_skill_seeder_creates_save_result_skill():
     seeder = SkillSeeder()
     summary = await seeder.run(mock_session)
 
-    assert summary["save_result"] == "created"
+    assert summary["save-result"] == "created"
     added_skills = [
         call.args[0]
         for call in mock_session.add.call_args_list
         if isinstance(call.args[0], Skill)
     ]
-    assert any(s.name == "save_result" for s in added_skills)
+    assert any(s.name == "save-result" for s in added_skills)
 
 
 @pytest.mark.asyncio
 async def test_skill_seeder_creates_send_notification_skill():
-    """SkillSeeder.run() creates send_notification skill on a clean database."""
+    """SkillSeeder.run() creates send-notification skill on a clean database."""
     from app.services.skill_seeder import SkillSeeder
     from app.db.models.skills import Skill
 
@@ -608,12 +610,13 @@ async def test_skill_seeder_creates_send_notification_skill():
     no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
 
     mock_session = AsyncMock()
+    # 4 skills x (1 existence check + 1 tool lookup) = 8 entries
     mock_session.execute = AsyncMock(
         side_effect=[
-            no_skill_result,
-            no_tool_result,
-            no_skill_result,
-            no_tool_result,
+            no_skill_result, no_tool_result,  # save-result
+            no_skill_result, no_tool_result,  # send-notification
+            no_skill_result, no_tool_result,  # get-recipient-group
+            no_skill_result, no_tool_result,  # human-intervene
         ]
     )
     mock_session.add = MagicMock()
@@ -623,13 +626,13 @@ async def test_skill_seeder_creates_send_notification_skill():
     seeder = SkillSeeder()
     summary = await seeder.run(mock_session)
 
-    assert summary["send_notification"] == "created"
+    assert summary["send-notification"] == "created"
     added_skills = [
         call.args[0]
         for call in mock_session.add.call_args_list
         if isinstance(call.args[0], Skill)
     ]
-    assert any(s.name == "send_notification" for s in added_skills)
+    assert any(s.name == "send-notification" for s in added_skills)
 
 
 @pytest.mark.asyncio
@@ -637,18 +640,30 @@ async def test_skill_seeder_is_idempotent_when_skills_already_exist():
     """SkillSeeder.run() returns 'exists' for skills already in the database (no duplicates)."""
     from app.services.skill_seeder import SkillSeeder
 
-    existing_save_result = MagicMock()
-    existing_save_result.name = "save_result"
-    existing_send_notification = MagicMock()
-    existing_send_notification.name = "send_notification"
+    existing_save = MagicMock()
+    existing_save.name = "save-result"
+    existing_notif = MagicMock()
+    existing_notif.name = "send-notification"
+    existing_group = MagicMock()
+    existing_group.name = "get-recipient-group"
+    existing_intervene = MagicMock()
+    existing_intervene.name = "human-intervene"
 
-    exists_save = MagicMock()
-    exists_save.scalar_one_or_none = MagicMock(return_value=existing_save_result)
-    exists_notif = MagicMock()
-    exists_notif.scalar_one_or_none = MagicMock(return_value=existing_send_notification)
+    def _exists_skill(name):
+        r = MagicMock()
+        mapping = {"save-result": existing_save, "send-notification": existing_notif,
+                   "get-recipient-group": existing_group, "human-intervene": existing_intervene}
+        r.scalar_one_or_none = MagicMock(return_value=mapping.get(name))
+        return r
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(side_effect=[exists_save, exists_notif])
+    # Each _seed_one calls execute once (existence check) for each of 4 skills
+    mock_session.execute = AsyncMock(side_effect=[
+        _exists_skill("save-result"),
+        _exists_skill("send-notification"),
+        _exists_skill("get-recipient-group"),
+        _exists_skill("human-intervene"),
+    ])
     mock_session.add = MagicMock()
     mock_session.flush = AsyncMock()
     mock_session.rollback = AsyncMock()
@@ -656,14 +671,16 @@ async def test_skill_seeder_is_idempotent_when_skills_already_exist():
     seeder = SkillSeeder()
     summary = await seeder.run(mock_session)
 
-    assert summary["save_result"] == "exists"
-    assert summary["send_notification"] == "exists"
+    assert summary["save-result"] == "exists"
+    assert summary["send-notification"] == "exists"
+    assert summary["get-recipient-group"] == "exists"
+    assert summary["human-intervene"] == "exists"
     mock_session.add.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_skill_seeder_returns_both_default_skill_names():
-    """SkillSeeder.run() summary contains entries for both save_result and send_notification."""
+    """SkillSeeder.run() summary contains entries for all 4 default skills."""
     from app.services.skill_seeder import SkillSeeder
 
     no_skill_result = MagicMock()
@@ -672,8 +689,14 @@ async def test_skill_seeder_returns_both_default_skill_names():
     no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
 
     mock_session = AsyncMock()
+    # 4 skills x (1 existence check + 1 tool lookup) = 8 entries
     mock_session.execute = AsyncMock(
-        side_effect=[no_skill_result, no_tool_result, no_skill_result, no_tool_result]
+        side_effect=[
+            no_skill_result, no_tool_result,  # save-result
+            no_skill_result, no_tool_result,  # send-notification
+            no_skill_result, no_tool_result,  # get-recipient-group
+            no_skill_result, no_tool_result,  # human-intervene
+        ]
     )
     mock_session.add = MagicMock()
     mock_session.flush = AsyncMock()
@@ -682,5 +705,7 @@ async def test_skill_seeder_returns_both_default_skill_names():
     seeder = SkillSeeder()
     summary = await seeder.run(mock_session)
 
-    assert "save_result" in summary
-    assert "send_notification" in summary
+    assert "save-result" in summary
+    assert "send-notification" in summary
+    assert "get-recipient-group" in summary
+    assert "human-intervene" in summary

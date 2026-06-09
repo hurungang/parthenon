@@ -55,6 +55,16 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `POST` | `/api/v1/certificates/issue` | Admin JWT | Issue new agent instance certificate; request includes `agent_type_id` and `instance_id` |
 | `POST` | `/api/v1/certificates/revoke` | Admin JWT | Revoke certificate by serial number; adds CRL entry |
 
+### Intervene Request Endpoints
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/api/v1/intervene/requests` | JWT + intervene:view | List intervene requests (filterable by status, intervention_type, agent_session_id, pagination) |
+| `GET` | `/api/v1/intervene/requests/{id}` | JWT + intervene:view | Get single request with full context including response |
+| `POST` | `/api/v1/intervene/requests/{id}/respond` | JWT + intervene:respond | Submit operator response (approval bool, choice string, or text string) |
+| `POST` | `/api/v1/intervene/requests/{id}/cancel` | JWT + intervene:respond | Cancel a pending request |
+| `GET` | `/api/v1/intervene/metrics` | JWT + intervene:view | Dashboard metrics: pending count, avg response time, resolution rate |
+
 ### Internal Service-to-Service Endpoints
 
 | Method | Path | Auth | Purpose |
@@ -177,8 +187,11 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `bootstrap_service_certificate` | endpoint | Internal bootstrap endpoint for service identity onboarding under bootstrap key policy | `backend/app/api/v1/internal/bootstrap.py` |
 | `save_result_tool` | endpoint | Internal system tool endpoint guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
 | `send_notification_tool` | endpoint | Internal notification system tool endpoint guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
+| `human_intervene_tool` | endpoint | Internal system tool endpoint for `system____human_intervene`; creates `InterveneRequest` record, transitions session to `waiting_for_human`, and emits notification event; guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
 | `get_recipient_group_tool` | endpoint | Internal recipient-group lookup endpoint guarded by required service-certificate dependency | `backend/app/api/v1/internal/system_tools.py` |
 | `proxy_mcp_tool` | endpoint | Internal MCP proxy endpoint for Communication Hub forwarded tool calls | `backend/app/api/v1/internal/mcp_proxy.py` |
+| `InterveneRouter` | router | FastAPI router for `/api/v1/intervene/*` endpoints (list, detail, respond, cancel, metrics) | `backend/app/api/v1/intervene.py` |
+| `InterveneRequestStore` | service | CRUD + metrics for intervene requests; eager loads agent type and Identity for display names; used by both REST API and internal system tool handlers | `backend/app/services/agents/intervene_service.py` |
 | `CommunicationHubClient` | class | Control Center outbound client to Communication Hub with fail-closed certificate requirements outside explicit development opt-in | `backend/app/services/control_center/comm_hub_client.py` |
 | `engine` | SQLAlchemy engine | Control Center-owned database engine and session boundary | `backend/app/db/session.py` |
 | `AsyncSessionLocal` | session factory | Async session factory for all persisted state access in Control Center | `backend/app/db/session.py` |

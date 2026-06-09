@@ -42,7 +42,7 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 
 All tools available to agents — whether built-in platform tools or external MCP server tools — follow the same naming convention: `server____tool_name` (four underscores separate server from tool name).
 
-- **`system`** is the reserved server name for all built-in platform tools (e.g., `system____save_result`, `system____send_notification`, `system____get_recipient_group`)
+- **`system`** is the reserved server name for all built-in platform tools (e.g., `system____save_result`, `system____send_notification`, `system____get_recipient_group`, `system____human_intervene`)
 - **MCP server names** must not contain `____` — this separator is reserved for the naming scheme
 - Agent execution code makes no distinction between system tools and MCP server tools — all tool calls are forwarded uniformly to the Communication Hub for routing
 
@@ -51,6 +51,18 @@ This convention ensures tool names are globally unique across all registered ser
 ## Explicit Result Saving
 
 The agent runtime does **not** automatically save results at the end of execution. If an SOP or agent instruction requires a result to be persisted, the agent must explicitly call the `system____save_result` tool. If no such instruction is given, no result record is created. This design ensures result creation is intentional and traceable to a specific SOP step.
+
+## Human-in-the-Loop Intervention
+
+Agents can pause execution and request human input during the observe-reason-act loop by calling the `system____human_intervene` tool. This supports three intervention types:
+
+- **Approval**: Agent requests a yes/no decision. The tool returns `{"approved": true}` or `{"approved": false}` to the agent.
+- **Choice**: Agent presents a list of selectable options. The tool returns the selected option string.
+- **Text**: Agent prompts for free-form contextual input. The tool returns the operator's text.
+
+When an agent calls `human_intervene`, the session transitions from `running` to `waiting_for_human` state. No further LLM or tool calls are made while waiting. An operator views and responds to the request through the Web UI, and the session automatically resumes with the response value injected as the tool's return value. If the session is terminated while waiting, all pending intervene requests are automatically cancelled.
+
+The `human_intervene` tool follows the same explicit-trigger pattern as `system____save_result` — it is available to all agents by default and must be referenced in SOP or agent instructions to be used.
 
 ## Runtime Control and Termination Governance
 - A **runtime control dashboard** surfaces all currently running agents, their delegated children, and operator-controlled termination actions
@@ -71,7 +83,8 @@ The agent runtime does **not** automatically save results at the end of executio
 - Security administrators can verify and revoke agent instances
 - Platform operators do not manage or distribute identity tokens
 - Compliance officers can verify evidence of both permitted and blocked access outcomes
-- SOP authors control when and what results are saved by including explicit save instructions
+- SOP authors control when and what results are saved by including explicit save instructions, and can instruct agents to request human input using `human_intervene`
+- Operators can review and respond to agent-initiated intervene requests (approval, choice, or text) from the Web UI
 - Tool naming is predictable and consistent across all agent interactions
 - Operations leads can identify cycle, iteration, delegation, timeout, and token-policy outcomes quickly in session summaries
 - Operations leads can see live execution topology and stop problematic execution trees quickly, including all active child delegations

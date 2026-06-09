@@ -14,11 +14,13 @@ from app.api.v1.mcp_hub import (
     SYSTEM_TOOL_SAVE_RESULT_ID,
     SYSTEM_TOOL_SEND_NOTIFICATION_ID,
     SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
+    SYSTEM_TOOL_HUMAN_INTERVENE_ID,
 )
 from app.core.resource_types import RT_SKILL
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
+from app.schemas.skills import SkillCreate, SkillDetailRead, SkillRead, SkillUpdate
 from app.db.models.agents import AgentRoleSkill
 from app.schemas.skills import SkillCreate, SkillDetailRead, SkillRead, SkillUpdate
 from app.schemas.skills import (
@@ -109,6 +111,31 @@ def _get_system_tool_record(tool_id: uuid.UUID) -> _ToolRecord | None:
                     "name": {"type": "string", "description": "Name of the recipient group to retrieve"},
                 },
                 "required": ["name"],
+            },
+        )
+    elif tool_id == SYSTEM_TOOL_HUMAN_INTERVENE_ID:
+        return _ToolRecord(
+            name="system____human_intervene",
+            description="Create a human intervene request. Pauses the agent and requests operator input.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "intervention_type": {
+                        "type": "string",
+                        "enum": ["approval", "choice", "text"],
+                        "description": "Type of intervention required",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for the intervention request",
+                    },
+                    "choices": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Options for choice-type intervention",
+                    },
+                },
+                "required": ["intervention_type", "reason"],
             },
         )
     return None
@@ -318,6 +345,8 @@ async def update_skill(
     skill = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.is_system:
+        raise HTTPException(status_code=403, detail="System skills cannot be modified")
 
     for field, value in body.model_dump(exclude_unset=True, exclude={"tool_ids"}).items():
         setattr(skill, field, value)
@@ -431,6 +460,8 @@ async def delete_skill(
     skill = await db.get(Skill, skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.is_system:
+        raise HTTPException(status_code=403, detail="System skills cannot be deleted")
     await db.delete(skill)
 
 
@@ -459,6 +490,8 @@ async def set_skill_roles(
     skill = await db.get(Skill, skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.is_system:
+        raise HTTPException(status_code=403, detail="System skills cannot be modified")
 
     role_ids: list[uuid.UUID] = [uuid.UUID(str(rid)) for rid in body.get("role_ids", [])]
 

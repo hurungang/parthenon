@@ -133,8 +133,17 @@ async def _execute_session(
     session_id: uuid.UUID,
     data_client: Any,
     semaphore: asyncio.Semaphore | None,
+    response_value: dict | None = None,
 ) -> None:
-    """Run a single session to completion, optionally bounded by the concurrency semaphore."""
+    """Run a single session to completion, optionally bounded by the concurrency semaphore.
+
+    Args:
+        session_id:      UUID of the session to execute.
+        data_client:     Control Center data client for all DB interactions.
+        semaphore:       Optional concurrency limiter.
+        response_value:  When set (resume after human intervention), the executor
+                         injects this as follow-up context so the LLM can continue.
+    """
     from opentelemetry import trace
     tracer = trace.get_tracer(__name__)
 
@@ -146,7 +155,7 @@ async def _execute_session(
             try:
                 from app.services.agents.runtime_executor import AgentRuntimeExecutor
                 executor = AgentRuntimeExecutor(data_client=data_client)
-                await executor.run(session_id, data_client)
+                await executor.run(session_id, data_client, response_value=response_value)
             except asyncio.CancelledError:
                 # Operator-requested termination.  Re-raise so the parent
                 # task wrapper (and asyncio) see the cancellation, but

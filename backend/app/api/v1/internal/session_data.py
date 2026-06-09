@@ -115,12 +115,13 @@ class ClaimQueuedSessionsResponse(BaseModel):
 class SessionStatusUpdateRequest(BaseModel):
     """Request body for PATCH /sessions/{session_id}/status."""
 
-    status: Literal["running", "completed", "failed"]
+    status: Literal["running", "completed", "failed", "waiting_for_human"]
     output_data: dict | None = None
     error_message: str | None = None
     stop_category: str | None = None
     stop_reason: str | None = None
     stop_details: dict | None = None
+    intervene_request_id: str | None = None
 
 
 class SessionStatusUpdateResponse(BaseModel):
@@ -613,14 +614,20 @@ async def update_session_status(
     elif body.status == "failed":
         job.status = AgentJobStatus.failed
         job.completed_at = now
+        if body.output_data is not None:
+            job.output_data = body.output_data
         if body.error_message is not None:
             job.error_message = body.error_message
         if body.stop_category is not None:
-            job.stop_category = SessionStopCategory(body.stop_category)
+            job.stop_category = body.stop_category
         if body.stop_reason is not None:
-            job.stop_reason = SessionStopReason(body.stop_reason)
+            job.stop_reason = body.stop_reason
         if body.stop_details is not None:
             job.stop_details = body.stop_details
+    elif body.status == "waiting_for_human":
+        job.status = AgentJobStatus.waiting_for_human
+        if body.intervene_request_id is not None:
+            job.intervene_request_id = uuid.UUID(body.intervene_request_id)
 
     await db.flush()
     await db.commit()

@@ -105,6 +105,21 @@ def create_app() -> FastAPI:
             },
         )
 
+    # 500 Internal Server Error handler — logs the full traceback to structured logs
+    @app.exception_handler(Exception)
+    async def internal_server_error_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        logger.exception(
+            "Internal server error (500): method=%s path=%s",
+            request.method,
+            request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
+        )
+
     # CORS
     # Browsers reject allow_origins=["*"] + allow_credentials=True.
     # In development, explicitly allow frontend dev and preview servers.
@@ -225,6 +240,12 @@ async def startup_event() -> None:
     await _run_skill_seeder()
     await _initialize_agent_realm()
     await _initialize_certificate_authority()
+    await _start_scheduling_engine()
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    await _stop_scheduling_engine()
 
 
 async def _run_skill_seeder() -> None:
@@ -277,6 +298,33 @@ async def _initialize_certificate_authority() -> None:
             "agent certificate issuance/validation will not work. "
             "Ensure CREDENTIAL_VAULT_KEY is set and the database is reachable."
         )
+
+
+async def _start_scheduling_engine() -> None:
+    """Start the scheduling engine and recover active schedules."""
+    if not settings.scheduler_enabled:
+        logger.info("Scheduler is disabled — skipping scheduling engine startup")
+        return
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.scheduling.scheduler import get_scheduling_engine
+        engine = get_scheduling_engine()
+        engine.start()
+        recovered = await engine.recover_schedules(AsyncSessionLocal)
+        logger.info("Scheduling engine started with %d recovered schedule(s)", recovered)
+    except Exception:
+        logger.exception("Scheduling engine startup failed; application will continue.")
+
+
+async def _stop_scheduling_engine() -> None:
+    """Shutdown the scheduling engine."""
+    from app.services.scheduling.scheduler import get_scheduling_engine
+    try:
+        engine = get_scheduling_engine()
+        engine.shutdown()
+        logger.info("Scheduling engine stopped")
+    except Exception:
+        logger.exception("Scheduling engine shutdown failed.")
 
 
 # SessionDispatcher is now started by the Agent Runtime service (app.agent_runtime.main).

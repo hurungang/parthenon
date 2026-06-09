@@ -7,7 +7,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.db.models.scheduling import ExecutionStatus, JobExecution, JobStatus, ScheduledJob
 
 logger = logging.getLogger(__name__)
@@ -113,47 +112,48 @@ class SchedulingEngine:
     async def _dispatch(
         self, job: ScheduledJob, db: AsyncSession
     ) -> dict[str, Any]:
-        """Dispatch the job to the appropriate target (agent or SOP)."""
+        """Dispatch the job to the appropriate target.
+
+        For agent targets, enqueues a new AgentJob session via the
+        GatewayLifecycleHandler (async launch path) and returns the
+        session_id. The agent runtime executes asynchronously in the
+        background.
+        """
         from app.db.models.scheduling import JobTargetType
 
         if job.target_type == JobTargetType.agent:
-            # Spawn a new agent instance and send the scheduled prompt
             from app.db.models.agents import AgentType
-            from app.services.agents.instance_manager import AgentInstanceManager
             from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler
 
             agent_type = await db.get(AgentType, job.target_id)
             if not agent_type:
                 raise ValueError(f"Agent type {job.target_id} not found")
 
-            manager = AgentInstanceManager()
-            instance = await manager.spawn(job.target_id, "scheduler", db)
-            instance = await manager.activate(instance.id, db)
-
             handler = GatewayLifecycleHandler()
-            prompt = (job.payload or {}).get("prompt", "Execute scheduled task")
-            result = await handler.request(
-                session_handle=instance.session_handle,
-                prompt=prompt,
-                context=job.payload,
+            result = await handler.launch(
+                agent_type_id=job.target_id,
+                input_data=job.payload,
+                user_id=None,
                 db=db,
             )
-            await manager.close(instance.id, db)
             return result
 
-        elif job.target_type == JobTargetType.sop:
-            from app.services.skills.sop_orchestrator import SopOrchestrator
-
-            orchestrator = SopOrchestrator()
-            prompt = (job.payload or {}).get("prompt", "Execute scheduled SOP")
-            return await orchestrator.execute(
-                sop_id=job.target_id,
-                prompt=prompt,
-                context=job.payload,
-                db=db,
-            )
         else:
             raise ValueError(f"Unknown job target type: {job.target_type}")
+
+
+    async def recover_schedules(self, db_factory: Any) -> int:
+        """Load all active jobs from DB and register with APScheduler."""
+        from sqlalchemy import select
+        async with db_factory() as db:
+            result = await db.execute(
+                select(ScheduledJob).where(ScheduledJob.status == JobStatus.active)
+            )
+            jobs = list(result.scalars().all())
+        for job in jobs:
+            await self.add_job(job, db_factory)
+        logger.info("Recovered %d schedule(s) from database", len(jobs))
+        return len(jobs)
 
 
 # Singleton

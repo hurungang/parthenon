@@ -47,6 +47,9 @@ The Agent Runtime with Gateway enables organizations to define agent types, mana
 - As a user, I want to drill into an agent execution to see its input, output, and full conversation history, so that I can understand and audit agent behavior.
 - As a platform admin or auditor, I want to see the full system instruction and user prompt for every agent execution in the logs and UI, so that I have complete traceability of agent actions.
 - As a platform admin, I want the agent runtime to use a modern agent framework, so that skill-based execution and advanced workflow support are available.
+- As a platform operator, I want to view all pending agent-initiated intervene requests in a single list, so that I can triage and respond to the most critical requests first.
+- As a platform operator, I want to respond to intervene requests by approving, selecting an option, or providing free-form text, so that agents can proceed with human guidance.
+- As a business user, I want the inline intervene popup to appear on the execution log page when an agent pauses for input, so that I can respond without navigating away from the live stream.
 
 ## Acceptance Criteria
 
@@ -66,6 +69,10 @@ The Agent Runtime with Gateway enables organizations to define agent types, mana
 - All agent actions, session statuses, and results are visible and auditable in the management interface, supporting compliance and traceability
 - The agent executions dashboard shows all agent executions, allows filtering by status, agent type, and time, and displays key information for monitoring
 - Users can drill into any agent execution to view its full execution history, including input, output, and conversation details, via dialog-based access
+- Operators can view all pending intervene requests filtered by status and type, with a pending count badge in the navigation
+- Operators can respond to intervene requests via type-specific dialogs (approval Yes/No, choice selection, free-form text)
+- When a user is viewing an agent's live execution log stream and the agent triggers an intervene request, a popup appears inline on the log page; after response, the stream resumes automatically
+- A persistent banner reminds users of pending intervene requests if they dismiss the popup without responding
 - Error handling and permission enforcement are consistent and user-friendly across all dialogs and workflows
 - Out-of-scope actions, such as direct database access or bypassing the gateway, are not possible through the UI
 - Execution logs for every agent run include the full system instruction and user prompt, and these are visible in the UI for each agent instance

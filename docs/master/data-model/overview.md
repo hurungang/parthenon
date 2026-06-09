@@ -411,7 +411,7 @@ erDiagram
         uuid agent_type_id
         uuid triggered_by_user_id
         json input_data
-        enum status
+        enum status "queued | running | waiting_for_human | completed | failed | terminated"
         datetime started_at
         datetime completed_at
         json output_data
@@ -607,16 +607,22 @@ erDiagram
     ScheduledJob {
         uuid id
         string name
+        string description
         string cron_expression
-        enum target_type
+        enum target_type "agent"
         uuid target_id
-        enum status
+        json payload
+        enum status "active|paused|deleted"
+        string scheduler_job_id
+        datetime created_at
+        datetime updated_at
     }
     JobExecution {
         uuid id
         uuid job_id
-        enum status
+        enum status "running|success|failure"
         string error
+        json result
         datetime started_at
         datetime finished_at
     }
@@ -669,7 +675,7 @@ erDiagram
         datetime delivered_at
     }
 
-    ScheduledJob ||--o{ JobExecution : "triggers"
+    ScheduledJob ||--o{ JobExecution : "has executions"
     NotificationChannel ||--o{ ChannelProperty : "configured via"
     NotificationChannel ||--o{ GroupChannelMapping : "assigned to"
     RecipientGroup ||--o{ GroupChannelMapping : "delivered via"
@@ -712,14 +718,42 @@ erDiagram
     AgentRole ||--o{ AgentRoleMcpSession : "provides MCP context via"
     AgentRoleMcpSession }o--|| McpSession : "references"
     AgentType }o--|| AgentIdentity : "authenticates as"
+    InterveneRequest {
+        uuid id
+        uuid agent_session_id
+        uuid agent_type_id
+        enum intervention_type "approval | choice | text"
+        string reason
+        json choices
+        enum status "pending | responded | cancelled | expired"
+        datetime created_at
+        datetime responded_at
+    }
+    InterveneResponse {
+        uuid id
+        uuid request_id
+        uuid operator_user_id
+        boolean approval_value
+        string selected_choice
+        string text_value
+        datetime responded_at
+    }
+
+    AgentSession ||--o{ InterveneRequest : "initiates"
+    InterveneRequest ||--o| InterveneResponse : "resolved by"
+    InterveneResponse }o--|| Identity : "responded by"
+
     AgentType ||--o{ AgentSession : "executes via"
     AgentA2ASessionLink }o--|| AgentType : "connects requester and receiver types"
+    AgentType ||--o{ InterveneRequest : "initiates via tools"
+    InterveneRequest ||--o| InterveneResponse : "resolved by"
+    InterveneResponse }o--|| Identity : "responded by"
     AgentType ||--o{ ResultRecord : "produces"
     AgentType ||--o{ AgentTypeSopBinding : "curates SOPs via"
     AgentTypeSopBinding }o--|| Sop : "references"
     AgentType ||--o{ AgentTypeSkillBinding : "curates skills via"
     AgentTypeSkillBinding }o--|| Skill : "references"
-    ScheduledJob ||--o{ JobExecution : "triggers"
+    ScheduledJob ||--o{ JobExecution : "has executions"
     Role ||--o{ PolicyStatement : "contains"
     PlatformUser }o--o{ Role : "assigned via"
     PlatformUser }o--o{ Group : "member of"

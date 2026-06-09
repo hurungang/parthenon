@@ -46,12 +46,14 @@ SYSTEM_SERVER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 SYSTEM_TOOL_SAVE_RESULT_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
 SYSTEM_TOOL_SEND_NOTIFICATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000003")
 SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID = uuid.UUID("00000000-0000-0000-0000-000000000004")
+SYSTEM_TOOL_HUMAN_INTERVENE_ID = uuid.UUID("00000000-0000-0000-0000-000000000005")
 
 # Set of all system tool IDs for validation
 SYSTEM_TOOL_IDS = {
     SYSTEM_TOOL_SAVE_RESULT_ID,
     SYSTEM_TOOL_SEND_NOTIFICATION_ID,
     SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
+    SYSTEM_TOOL_HUMAN_INTERVENE_ID,
 }
 
 def _system_server_read() -> McpServerRead:
@@ -177,6 +179,38 @@ def _system_tool_reads() -> list[McpToolRead]:
             created_at=now,
             updated_at=now,
         ),
+        McpToolRead(
+            id=SYSTEM_TOOL_HUMAN_INTERVENE_ID,
+            server_id=SYSTEM_SERVER_ID,
+            server_slug="system",
+            server_name="System",
+            name="system____human_intervene",
+            original_name="human_intervene",
+            description="Create a human intervene request. Pauses the agent and requests operator input.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "intervention_type": {
+                        "type": "string",
+                        "enum": ["approval", "choice", "text"],
+                        "description": "Type of intervention required",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for the intervention request",
+                    },
+                    "choices": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Options for choice-type intervention",
+                    },
+                },
+                "required": ["intervention_type", "reason"],
+            },
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
     ]
 
 
@@ -222,6 +256,12 @@ async def seed_system_tools(db: "AsyncSession") -> None:
             "system____get_recipient_group",
             "get_recipient_group",
             "Retrieve recipient group information including channels and properties",
+        ),
+        (
+            SYSTEM_TOOL_HUMAN_INTERVENE_ID,
+            "system____human_intervene",
+            "human_intervene",
+            "Create a human intervene request for an agent session",
         ),
     ]
 

@@ -1,15 +1,6 @@
 """API v1 root router — aggregates all domain routers."""
 from fastapi import APIRouter
 
-from app.api.v1.certificates import CertificatesRouter
-from app.api.v1.internal.bootstrap import InternalBootstrapRouter
-from app.api.v1.internal.certificates import InternalCertificatesRouter
-from app.api.v1.internal.authorization import InternalAuthorizationRouter
-from app.api.v1.internal.agent_data import InternalAgentDataRouter
-from app.api.v1.internal.session_data import InternalSessionDataRouter
-from app.api.v1.internal.mcp_proxy import InternalMcpProxyRouter
-from app.api.v1.internal.system_tools import router as InternalSystemToolsRouter
-from app.api.v1.user_access_requests import AccessRequestsRouter
 from app.api.v1.agents import (
     AgentIdentityRouter,
     AgentInstanceRouter,
@@ -22,21 +13,31 @@ from app.api.v1.agents import (
     ModelUsageGuardrailRouter,
     RuntimeControlRouter,
 )
+from app.api.v1.certificates import CertificatesRouter
 from app.api.v1.conversations import ConversationRouter
-from app.api.v1.user_groups import GroupsRouter
 from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
-from app.api.v1.mcp_hub import McpServerRouter, McpSessionRouter, McpOAuthRouter, McpToolRouter
+from app.api.v1.internal.agent_data import InternalAgentDataRouter
+from app.api.v1.internal.authorization import InternalAuthorizationRouter
+from app.api.v1.internal.bootstrap import InternalBootstrapRouter
+from app.api.v1.internal.certificates import InternalCertificatesRouter
+from app.api.v1.internal.mcp_proxy import InternalMcpProxyRouter
+from app.api.v1.internal.session_data import InternalSessionDataRouter
+from app.api.v1.internal.system_tools import router as InternalSystemToolsRouter
+from app.api.v1.intervene import InterveneRouter
+from app.api.v1.mcp_hub import McpOAuthRouter, McpServerRouter, McpSessionRouter, McpToolRouter
 from app.api.v1.notifications import NotificationRouter
 from app.api.v1.platform_users import PlatformUsersRouter
 from app.api.v1.policy import PolicyRouter
 from app.api.v1.results import ResultRouter
-from app.api.v1.user_roles import RolesRouter
 from app.api.v1.scheduling import ScheduleRouter
 from app.api.v1.setup import SetupRouter
 from app.api.v1.skills import SkillRouter
 from app.api.v1.sops import SopRouter
-from app.api.v1.user_tags import TagsRouter
 from app.api.v1.telemetry import TelemetryRouter
+from app.api.v1.user_access_requests import AccessRequestsRouter
+from app.api.v1.user_groups import GroupsRouter
+from app.api.v1.user_roles import RolesRouter
+from app.api.v1.user_tags import TagsRouter
 
 router = APIRouter()
 
@@ -85,6 +86,7 @@ router.include_router(RuntimeControlRouter)
 # Supporting modules
 router.include_router(ScheduleRouter)
 router.include_router(ConversationRouter)
+router.include_router(InterveneRouter)
 router.include_router(ResultRouter)
 router.include_router(NotificationRouter)
 

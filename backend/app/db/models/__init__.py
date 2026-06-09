@@ -16,6 +16,12 @@ from app.db.models.agents import (  # noqa: F401
     AgentTokenStatus,
     AgentType,
 )
+from app.db.models.intervene import (  # noqa: F401
+    InterveneRequest,
+    InterveneRequestStatus,
+    InterveneResponse,
+    InterventionType,
+)
 from app.db.models.agent_security import (  # noqa: F401
     AgentCertificateStatus,
     AgentInstanceCertificate,

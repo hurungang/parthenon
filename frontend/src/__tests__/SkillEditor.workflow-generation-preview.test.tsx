@@ -88,6 +88,7 @@ describe('SkillEditor workflow generation and preview', () => {
           description: 'desc',
           instructions: 'initial workflow',
           is_active: true,
+          is_system: false,
           tool_ids: ['tool-1'],
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-01T00:00:00Z',
@@ -128,6 +129,7 @@ describe('SkillEditor workflow generation and preview', () => {
           description: 'desc',
           instructions: 'initial workflow',
           is_active: true,
+          is_system: false,
           tool_ids: ['tool-1'],
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-01T00:00:00Z',
@@ -217,6 +219,7 @@ describe('SkillEditor workflow generation and preview', () => {
           description: 'desc',
           instructions: 'manual workflow text',
           is_active: true,
+          is_system: false,
           tool_ids: ['tool-1'],
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-01T00:00:00Z',
@@ -224,10 +227,10 @@ describe('SkillEditor workflow generation and preview', () => {
         mode="edit"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />, { wrapper }
+      />
     )
 
-    // Wait for skillDetail to load so its useEffect populates the form first.
+    // Wait for the workflow to update
     await waitFor(() => {
       expect((screen.getByRole('textbox', { name: 'skills.editor.workflow' }) as HTMLInputElement).value).toBe('manual workflow text')
     })

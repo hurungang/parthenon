@@ -47,6 +47,7 @@ class SkillRead(BaseModel):
     name: str
     description: str | None
     is_active: bool
+    is_system: bool = False
     tool_ids: list[uuid.UUID] = []
     instructions_with_tools: str | None = None
     created_at: datetime

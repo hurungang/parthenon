@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Human Intervene Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:#E8F0FE;color:var(--primary);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:#E8F0FE;color:var(--primary);font-weight:500}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.btn-icon{background:none;border:none;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);transition:background var(--transition);position:relative}
+.btn-icon:hover{background:var(--bg)}
+.badge{position:absolute;top:2px;right:2px;background:var(--error);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface);line-height:1;padding:0 3px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px;font-size:12px}.btn-ghost:hover{background:var(--primary-light);border-radius:var(--radius-sm)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text-primary)}.btn-outline:hover{background:var(--bg)}
+.btn-outline.active{background:var(--primary-light);border-color:var(--primary);color:var(--primary);font-weight:600}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F0F7FF}
+tbody tr:nth-child(odd){background:#FDFDFD}
+tbody tr:nth-child(odd):hover{background:#F0F7FF}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr.responded{opacity:0.4;pointer-events:none}
+tbody tr.responded td{text-decoration:line-through;color:var(--text-secondary)}
+.clickable-row{cursor:pointer}
+
+/* ── CHIPS / BADGES ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;gap:4px}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-teal{background:#D1FAE5;color:#065F46}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}.dot-blue{background:var(--primary)}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-bar .filter-label{font-size:12px;font-weight:600;color:var(--text-secondary);margin-right:4px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ── STATS BAR ── */
+.stats-row{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow);flex:1;min-width:160px}
+.stat-icon{width:40px;height:40px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.stat-icon.blue{background:#DBEAFE;color:#1D4ED8}
+.stat-icon.yellow{background:#FEF3C7;color:#92400E}
+.stat-icon.green{background:#DCFCE7;color:#15803D}
+.stat-icon.purple{background:#EDE9FE;color:#6D28D9}
+.stat-info .stat-value{font-size:24px;font-weight:700;line-height:1.2}
+.stat-info .stat-label{font-size:12px;color:var(--text-secondary);font-weight:500}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px);opacity:0;transition:opacity 0.25s ease}
+.modal-overlay.open{display:flex;opacity:1}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;transform:scale(0.95) translateY(8px);transition:transform 0.25s ease}
+.modal-overlay.open .modal{transform:scale(1) translateY(0)}
+.modal-lg{max-width:640px}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600;display:flex;align-items:center;gap:10px}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:20px;line-height:1;transition:background var(--transition);width:32px;height:32px;display:flex;align-items:center;justify-content:center}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+.modal-footer.between{justify-content:space-between}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none;font-size:14px}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control::placeholder{color:#94A3B8}
+textarea.form-control{resize:vertical;min-height:100px;line-height:1.6}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px;display:flex;justify-content:space-between}
+.char-count{font-size:11px;color:var(--text-secondary)}
+
+/* ── CHOICE OPTIONS ── */
+.choice-options{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.choice-option{display:flex;align-items:center;gap:12px;padding:12px 16px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all var(--transition);background:var(--surface)}
+.choice-option:hover{border-color:var(--primary-light);background:#FAFBFF}
+.choice-option.selected{border-color:var(--primary);background:#EFF6FF}
+.choice-option input[type="radio"]{appearance:none;width:18px;height:18px;border:2px solid var(--border);border-radius:50%;flex-shrink:0;position:relative;transition:all var(--transition);cursor:pointer}
+.choice-option input[type="radio"]:checked{border-color:var(--primary)}
+.choice-option input[type="radio"]:checked::after{content:'';position:absolute;width:10px;height:10px;border-radius:50%;background:var(--primary);top:2px;left:2px}
+.choice-option .option-text{font-weight:500;color:var(--text-primary);flex:1}
+.choice-option .option-desc{font-size:12px;color:var(--text-secondary);display:block;margin-top:2px}
+
+/* ── EXECUTION CONTEXT ── */
+.context-strip{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px}
+.context-strip .ctx-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+.context-strip .ctx-item:last-child{margin-bottom:0}
+.context-strip .ctx-label{font-weight:600;color:var(--text-primary);min-width:80px}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:#1E293B;color:#fff;padding:12px 20px;border-radius:var(--radius);box-shadow:var(--shadow-md);font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;pointer-events:auto;animation:toastIn 0.3s ease forwards;min-width:280px;max-width:420px}
+.toast.success{background:#15803D}.toast.error{background:#B91C1C}.toast.info{background:#1E40AF}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-12px)}}
+
+/* ── APPROVAL BUTTONS ── */
+.approval-buttons{display:flex;gap:12px;margin:16px 0 8px}
+.approval-buttons .btn{flex:1;padding:14px 20px;font-size:15px;font-weight:600;justify-content:center;border-radius:var(--radius)}
+.approval-buttons .btn-approve{background:var(--success);color:#fff;box-shadow:var(--shadow)}.approval-buttons .btn-approve:hover{background:#388E3C;box-shadow:var(--shadow-md)}
+.approval-buttons .btn-reject{background:var(--error);color:#fff;box-shadow:var(--shadow)}.approval-buttons .btn-reject:hover{background:#C62828;box-shadow:var(--shadow-md)}
+.approval-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.approval-icon.blue{background:#DBEAFE;color:#1D4ED8}
+.approval-icon.yellow{background:#FEF3C7;color:#92400E}
+.approval-icon.purple{background:#EDE9FE;color:#6D28D9}
+
+/* ── CONFIRMATION ── */
+.confirmation{display:none;text-align:center;padding:24px 12px}
+.confirmation.show{display:block}
+.confirmation .check-circle{width:56px;height:56px;border-radius:50%;background:#DCFCE7;color:#15803D;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px}
+.confirmation h4{font-size:16px;font-weight:600;margin-bottom:6px}
+.confirmation p{font-size:13px;color:var(--text-secondary);line-height:1.5}
+
+/* ── REASON TEXT ── */
+.reason-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
+.reason-box .reason-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#92400E;margin-bottom:4px}
+.reason-box .reason-text{font-size:14px;color:var(--text-primary);line-height:1.6}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:48px 24px;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:40px;margin-bottom:12px}
+
+/* ── RESPONSE STATUS ── */
+.response-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px}
+.response-status.approved{background:#DCFCE7;color:#15803D}
+.response-status.rejected{background:#FEE2E2;color:#B91C1C}
+.response-status.responded{background:#EFF6FF;color:#1D4ED8}
+
+/* ── MISC ── */
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}
+.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w-full{width:100%}
+strong{font-weight:600}
+.divider{height:1px;background:var(--border);margin:12px 0}
+
+/* ── RESPONSIVE ── */
+/* ── EXECUTION LOG STREAMING ── */
+.log-container{background:#0F172A;color:#E2E8F0;border-radius:var(--radius);padding:16px;font-family:'Cascadia Code','Fira Code','JetBrains Mono',monospace;font-size:13px;line-height:1.7;max-height:480px;overflow-y:auto;box-shadow:var(--shadow-md);border:1px solid #1E293B}
+.log-container::-webkit-scrollbar{width:6px}.log-container::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+.log-entry{display:flex;gap:10px;padding:3px 0;align-items:flex-start;opacity:1;transition:opacity 0.3s ease}
+.log-entry.fade{opacity:0.3}
+.log-time{font-size:11px;color:#64748B;white-space:nowrap;min-width:60px;flex-shrink:0}
+.log-level{font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;min-width:44px;text-align:center;flex-shrink:0;text-transform:uppercase}
+.log-level.info{background:#1E40AF;color:#93C5FD}
+.log-level.debug{background:#374151;color:#9CA3AF}
+.log-level.warn{background:#92400E;color:#FDE68A}
+.log-level.tool{background:#065F46;color:#6EE7B7}
+.log-level.intervene{background:#6D28D9;color:#C4B5FD;animation:pulse 1.5s infinite}
+.log-msg{flex:1;word-break:break-word;color:#E2E8F0}
+.log-streaming{display:flex;align-items:center;gap:8px;padding:8px 0 4px;font-size:12px;color:#64748B}
+.stream-dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 1.5s infinite}
+.log-entry.stream-enter{animation:slideIn 0.3s ease forwards}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── PENDING BANNER (on log page) ── */
+.pending-banner{display:flex;align-items:center;gap:12px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;animation:slideIn 0.3s ease}
+.pending-banner-content{flex:1;display:flex;align-items:center;gap:10px;font-size:13px;color:#92400E}
+.pending-banner .btn{padding:6px 14px;font-size:12px;flex-shrink:0}
+
+@media (max-width:820px){
+  .sidebar{display:none}
+  .topbar-title{font-size:15px}
+  .main-content{padding:16px}
+  .stats-row{flex-direction:column}
+  .stat-card{min-width:unset}
+  .modal{max-width:96vw;margin:0 8px}
+  .approval-buttons{flex-direction:column}
+  .modal-lg{max-width:96vw}
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1><span style="color:var(--primary)">⚡</span> Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <div style="padding:8px 14px 2px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Main</div>
+  <div class="nav-item" data-group="main" onclick="switchView('dashboard')">
+    <span class="nav-icon">📊</span>Dashboard
+  </div>
+
+  <div class="nav-parent-group" id="nav-agents">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item active" data-group="agents" onclick="switchView('intervene')">
+        <span class="nav-icon">🛑</span>Human Intervene
+      </div>
+      <div class="nav-item sub-item" data-group="agents" onclick="switchView('executions')">
+        <span class="nav-icon">▶️</span>Agent Executions
+      </div>
+      <div class="nav-item sub-item" data-group="agents" onclick="switchView('sessions')">
+        <span class="nav-icon">💬</span>Sessions
+      </div>
+      <div class="nav-item sub-item" data-group="agents" onclick="switchView('logs')">
+        <span class="nav-icon">📋</span>Execution Logs
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-group="system" onclick="switchView('permissions')">
+        <span class="nav-icon">🔐</span>Permissions
+      </div>
+      <div class="nav-item sub-item" data-group="system" onclick="switchView('audit')">
+        <span class="nav-icon">📁</span>Audit Log
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-title">Human Intervene <span class="text-secondary" style="font-size:13px;font-weight:400">— Agent-Driven Human-in-the-Loop Requests</span></div>
+    <div class="topbar-actions">
+      <button class="btn-icon" title="Notifications" onclick="showNotificationPanel()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="badge" id="notifBadge">3</span>
+      </button>
+      <div class="avatar" title="Sarah Chen — Platform Operator">SC</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- ═══════════ VIEW: INTERVENE DASHBOARD (default) ═══════════ -->
+    <div id="view-intervene" class="view active">
+      <div class="view-header">
+        <div>
+          <h2>Intervene Requests</h2>
+          <div class="view-desc">Review and respond to agent requests for human input. <span id="pendingCountLabel" style="font-weight:600;color:var(--primary)">3 pending</span></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="refreshRequests()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-icon blue">🛑</div>
+          <div class="stat-info">
+            <div class="stat-value" id="statPending">3</div>
+            <div class="stat-label">Pending Requests</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow">⏳</div>
+          <div class="stat-info">
+            <div class="stat-value" id="statAvgWait">2m 14s</div>
+            <div class="stat-label">Avg. Wait Time</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">✅</div>
+          <div class="stat-info">
+            <div class="stat-value" id="statResolved">12</div>
+            <div class="stat-label">Resolved Today</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple">👤</div>
+          <div class="stat-info">
+            <div class="stat-value" id="statResponders">4</div>
+            <div class="stat-label">Available Responders</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <span class="filter-label">Filter:</span>
+        <button class="btn btn-outline btn-sm active" data-filter="all" onclick="setFilter(this,'all')">All</button>
+        <button class="btn btn-outline btn-sm" data-filter="approval" onclick="setFilter(this,'approval')">
+          <span class="chip chip-blue" style="font-size:10px;padding:1px 6px">Approval</span> Approval
+        </button>
+        <button class="btn btn-outline btn-sm" data-filter="choice" onclick="setFilter(this,'choice')">
+          <span class="chip chip-purple" style="font-size:10px;padding:1px 6px">Choice</span> Choice
+        </button>
+        <button class="btn btn-outline btn-sm" data-filter="text" onclick="setFilter(this,'text')">
+          <span class="chip chip-teal" style="font-size:10px;padding:1px 6px">Text</span> Text
+        </button>
+        <div style="flex:1"></div>
+        <span class="text-xs text-secondary" id="filterResultCount">Showing 3 requests</span>
+      </div>
+
+      <!-- Request table -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30px"></th>
+              <th>Agent</th>
+              <th>Execution ID</th>
+              <th>Reason / Prompt</th>
+              <th>Type</th>
+              <th>Received</th>
+              <th>Wait Time</th>
+              <th style="text-align:right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="requestTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+        <div id="emptyState" class="empty-state" style="display:none">
+          <div class="empty-icon">✅</div>
+          <h3 style="font-size:16px;color:var(--text-primary);margin-bottom:4px">All caught up!</h3>
+          <p>No pending intervene requests matching the current filter.</p>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+        <span class="text-xs text-secondary" id="responseHistoryNote">Showing active requests. Responded requests move to history.</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="showHistory()">📋 View Response History</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ VIEW: RESPONSE HISTORY ═══════════ -->
+    <div id="view-history" class="view">
+      <div class="view-header">
+        <div>
+          <h2>Response History</h2>
+          <div class="view-desc">Previously responded intervene requests.</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="switchView('intervene')">← Back to Pending</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Execution ID</th>
+              <th>Type</th>
+              <th>Response</th>
+              <th>Responded By</th>
+              <th>Responded At</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════ PLACEHOLDER VIEWS ═══════════ -->
+    <div id="view-dashboard" class="view"><div class="empty-state" style="padding:80px 24px"><div class="empty-icon">📊</div><h3 style="font-size:18px;color:var(--text-primary);margin-bottom:4px">Dashboard</h3><p>Navigate to <strong>Agents → Human Intervene</strong> to view pending requests.</p></div></div>
+    <div id="view-executions" class="view"><div class="empty-state" style="padding:80px 24px"><div class="empty-icon">▶️</div><h3 style="font-size:18px;color:var(--text-primary);margin-bottom:4px">Agent Executions</h3><p>Full execution management view. <strong>Human Intervene</strong> is available under the Agents menu.</p></div></div>
+    <div id="view-sessions" class="view"><div class="empty-state" style="padding:80px 24px"><div class="empty-icon">💬</div><h3 style="font-size:18px;color:var(--text-primary);margin-bottom:4px">Sessions</h3><p>Active agent conversation sessions.</p></div></div>
+    <!-- ═══════════ VIEW: EXECUTION LOG STREAMING ═══════════ -->
+    <div id="view-logs" class="view">
+      <div class="view-header">
+        <div>
+          <h2>Execution Log Stream</h2>
+          <div class="view-desc">Live streaming logs for <strong id="logAgentName">ContractAnalyzer-v2</strong> · <span style="font-family:monospace" id="logExecId">exec-20260604-8a3f7c</span></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="chip chip-green" id="logStreamStatus">● Live</span>
+          <button class="btn btn-secondary btn-sm" onclick="switchView('intervene')">← All Requests</button>
+        </div>
+      </div>
+
+      <!-- Pending intervene banner (hidden by default) -->
+      <div id="pendingBanner" class="pending-banner" style="display:none">
+        <div class="pending-banner-content">
+          <span class="status-dot dot-yellow" style="width:10px;height:10px;animation:pulse 1.5s infinite"></span>
+          <span><strong>Agent is waiting for your response</strong> — an intervention request is pending for this execution.</span>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="reopenInlineIntervene()">Respond</button>
+        <button class="modal-close" onclick="dismissBanner()" style="position:static;color:var(--text-secondary)">✕</button>
+      </div>
+
+      <!-- Log stream container -->
+      <div class="log-container" id="logContainer">
+        <div class="log-entry log-info">
+          <span class="log-time" id="logStartTime"></span>
+          <span class="log-level info">INFO</span>
+          <span class="log-msg">Agent session started — ContractAnalyzer-v2 (exec-20260604-8a3f7c)</span>
+        </div>
+        <div class="log-entry log-info">
+          <span class="log-time" id="logInitTime"></span>
+          <span class="log-level info">INFO</span>
+          <span class="log-msg">System instruction loaded: "You are a contract analysis assistant..."
+        </div>
+        <div class="log-entry log-info">
+          <span class="log-time" id="logPermTime"></span>
+          <span class="log-level info">INFO</span>
+          <span class="log-msg">Permission evaluation complete — 12 tools authorized</span>
+        </div>
+        <div class="log-entry log-info">
+          <span class="log-time" id="logLLMTime"></span>
+          <span class="log-level info">INFO</span>
+          <span class="log-msg">LLM inference call — model: gpt-4o, tokens: 2,847</span>
+        </div>
+        <div class="log-entry log-debug">
+          <span class="log-time"></span>
+          <span class="log-level debug">DEBUG</span>
+          <span class="log-msg">LangChain → Observe: received user prompt "Review contract CNT-2024-8842"</span>
+        </div>
+        <div class="log-entry log-debug">
+          <span class="log-time"></span>
+          <span class="log-level debug">DEBUG</span>
+          <span class="log-msg">LangChain → Reason: LLM response — 3 tool calls required</span>
+        </div>
+        <div class="log-entry log-tool">
+          <span class="log-time"></span>
+          <span class="log-level tool">TOOL</span>
+          <span class="log-msg">fetch_contract_details("CNT-2024-8842") → success (210ms)</span>
+        </div>
+        <div class="log-entry log-tool">
+          <span class="log-time"></span>
+          <span class="log-level tool">TOOL</span>
+          <span class="log-msg">analyze_payment_terms("CNT-2024-8842") → success (340ms)</span>
+        </div>
+        <div class="log-entry log-tool">
+          <span class="log-time"></span>
+          <span class="log-level tool">TOOL</span>
+          <span class="log-msg">validate_compliance("CNT-2024-8842") → success (510ms): Threshold exceeded</span>
+        </div>
+        <div class="log-entry log-warn">
+          <span class="log-time"></span>
+          <span class="log-level warn">WARN</span>
+          <span class="log-msg">Contract value $82,500 exceeds auto-approval threshold of $50,000</span>
+        </div>
+
+        <!-- The streaming simulation will append new entries here -->
+        <div id="logStreamArea"></div>
+
+        <!-- Streaming indicator -->
+        <div id="streamIndicator" class="log-streaming">
+          <span class="stream-dot"></span>
+          <span>Streaming new log entries...</span>
+        </div>
+      </div>
+    </div>
+    <div id="view-permissions" class="view"><div class="empty-state" style="padding:80px 24px"><div class="empty-icon">🔐</div><h3 style="font-size:18px;color:var(--text-primary);margin-bottom:4px">Permissions</h3><p>Role and permission management.</p></div></div>
+    <div id="view-audit" class="view"><div class="empty-state" style="padding:80px 24px"><div class="empty-icon">📁</div><h3 style="font-size:18px;color:var(--text-primary);margin-bottom:4px">Audit Log</h3><p>Platform audit trail with intervene request history.</p></div></div>
+
+  </div><!-- /.main-content -->
+</div><!-- /.main-wrapper -->
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: APPROVAL RESPONSE -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-approval">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>
+        <span class="approval-icon blue">🛡️</span>
+        Approval Required
+      </h3>
+      <button class="modal-close" onclick="closeModal('modal-approval')">✕</button>
+    </div>
+
+    <!-- Main content -->
+    <div id="approval-main" class="modal-body">
+      <div class="reason-box">
+        <div class="reason-label">🔔 Agent Reason</div>
+        <div class="reason-text" id="approvalReason">The contract value exceeds $50,000 threshold. Please approve or reject this transaction.</div>
+      </div>
+
+      <div class="context-strip">
+        <div class="ctx-item"><span class="ctx-label">Agent:</span> <span id="approvalAgent">ContractAnalyzer-v2</span></div>
+        <div class="ctx-item"><span class="ctx-label">Execution:</span> <span id="approvalExecId" style="font-family:monospace">exec-20260604-8a3f7c</span></div>
+        <div class="ctx-item"><span class="ctx-label">Status:</span> <span class="chip chip-yellow" style="font-size:10px;padding:1px 8px">⏳ Waiting for Human</span></div>
+        <div class="ctx-item"><span class="ctx-label">Created:</span> <span id="approvalTimestamp">2 minutes ago</span></div>
+      </div>
+
+      <div class="context-strip" style="background:#EEF2FF;border-color:#C7D2FE">
+        <div class="ctx-item"><span class="ctx-label" style="min-width:auto;font-weight:600;color:var(--primary)">📋 Execution Context</span></div>
+        <div class="ctx-item" style="margin-top:4px">• Reviewing vendor contract #CNT-2024-8842 for AcmeCorp</div>
+        <div class="ctx-item">• Identified payment terms: Net-60, total value $82,500</div>
+        <div class="ctx-item">• Auto-approval limit: $50,000 — threshold exceeded by $32,500</div>
+        <div class="ctx-item">• Last step: <span style="font-family:monospace;font-size:11px">validate_contract_terms("CNT-2024-8842")</span></div>
+      </div>
+
+      <div class="approval-buttons">
+        <button class="btn btn-approve" onclick="respondApproval(true)">
+          <span style="font-size:18px">✓</span> Approve
+        </button>
+        <button class="btn btn-reject" onclick="respondApproval(false)">
+          <span style="font-size:18px">✕</span> Reject
+        </button>
+      </div>
+      <div class="text-xs text-secondary" style="text-align:center">Your decision will be immediately delivered to the agent and execution will resume.</div>
+    </div>
+
+    <!-- Confirmation -->
+    <div id="approval-confirm" class="modal-body">
+      <div class="confirmation show">
+        <div class="check-circle" id="approvalCheckIcon">✓</div>
+        <h4 id="approvalConfirmTitle">Approved</h4>
+        <p id="approvalConfirmText">Your approval has been delivered to <strong>ContractAnalyzer-v2</strong>. The agent is resuming execution with your decision.</p>
+        <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-secondary)">
+          <span class="mini-spinner"></span>
+          <span>Agent resuming execution...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" id="approval-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-approval')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: CHOICE RESPONSE -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-choice">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>
+        <span class="approval-icon purple">🎯</span>
+        Choice Required
+      </h3>
+      <button class="modal-close" onclick="closeModal('modal-choice')">✕</button>
+    </div>
+
+    <div id="choice-main" class="modal-body">
+      <div class="reason-box" style="background:#EDE9FE;border-color:#C4B5FD">
+        <div class="reason-label" style="color:#6D28D9">❓ Agent Question</div>
+        <div class="reason-text" id="choiceQuestion">Which deployment environment should I use for the staging test?</div>
+      </div>
+
+      <div class="context-strip">
+        <div class="ctx-item"><span class="ctx-label">Agent:</span> <span id="choiceAgent">DeploymentOrch-v3</span></div>
+        <div class="ctx-item"><span class="ctx-label">Execution:</span> <span id="choiceExecId" style="font-family:monospace">exec-20260604-f2b8a1</span></div>
+        <div class="ctx-item"><span class="ctx-label">Status:</span> <span class="chip chip-yellow" style="font-size:10px;padding:1px 8px">⏳ Waiting for Human</span></div>
+      </div>
+
+      <div class="context-strip" style="background:#EEF2FF;border-color:#C7D2FE">
+        <div class="ctx-item"><span class="ctx-label" style="min-width:auto;font-weight:600;color:var(--primary)">📋 Execution Context</span></div>
+        <div class="ctx-item" style="margin-top:4px">• Building release candidate v2.4.1-rc3 for frontend-app</div>
+        <div class="ctx-item">• Unit tests: 142/142 passed</div>
+        <div class="ctx-item">• Integration tests: 38/40 passed (2 flaky tests identified)</div>
+        <div class="ctx-item">• Docker images built and tagged successfully</div>
+        <div class="ctx-item">• Awaiting deployment target decision before proceeding</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Select one option</label>
+      </div>
+      <div class="choice-options" id="choiceOptions">
+        <!-- Populated by JS -->
+      </div>
+
+      <div id="choiceBtnArea" style="margin-top:12px">
+        <button class="btn btn-primary w-full" id="choiceSubmitBtn" disabled onclick="submitChoice()">Submit Selection</button>
+      </div>
+    </div>
+
+    <div id="choice-confirm" class="modal-body">
+      <div class="confirmation show">
+        <div class="check-circle">✓</div>
+        <h4>Choice Submitted</h4>
+        <p id="choiceConfirmText">Your selection has been delivered to <strong>DeploymentOrch-v3</strong>. The agent will proceed with the chosen environment.</p>
+        <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-secondary)">
+          <span class="mini-spinner"></span>
+          <span>Agent resuming execution...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" id="choice-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-choice')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: TEXT RESPONSE -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-text">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>
+        <span class="approval-icon yellow">✏️</span>
+        Information Required
+      </h3>
+      <button class="modal-close" onclick="closeModal('modal-text')">✕</button>
+    </div>
+
+    <div id="text-main" class="modal-body">
+      <div class="reason-box" style="background:#FEF3C7;border-color:#FDE68A">
+        <div class="reason-label" style="color:#92400E">💬 Agent Prompt</div>
+        <div class="reason-text" id="textPrompt">Please provide the customer's preferred delivery date range for order <strong>#ORD-4821</strong>.</div>
+      </div>
+
+      <div class="context-strip">
+        <div class="ctx-item"><span class="ctx-label">Agent:</span> <span id="textAgent">OrderFulfill-v1</span></div>
+        <div class="ctx-item"><span class="ctx-label">Execution:</span> <span id="textExecId" style="font-family:monospace">exec-20260604-c4d9e2</span></div>
+        <div class="ctx-item"><span class="ctx-label">Status:</span> <span class="chip chip-yellow" style="font-size:10px;padding:1px 8px">⏳ Waiting for Human</span></div>
+      </div>
+
+      <div class="context-strip" style="background:#EEF2FF;border-color:#C7D2FE">
+        <div class="ctx-item"><span class="ctx-label" style="min-width:auto;font-weight:600;color:var(--primary)">📋 Execution Context</span></div>
+        <div class="ctx-item" style="margin-top:4px">• Processing order #ORD-4821 for customer: GreenTech Solutions Ltd</div>
+        <div class="ctx-item">• Items: 3x Server Racks (SKU: SR-2400), 2x UPS Units (SKU: UPS-1000)</div>
+        <div class="ctx-item">• Shipping address: 42 Innovation Drive, Portland, OR 97201</div>
+        <div class="ctx-item">• Delivery date is required to schedule carrier and confirm warehouse availability</div>
+      </div>
+
+      <div class="form-group">
+        <label for="textResponse">Your Response</label>
+        <textarea class="form-control" id="textResponse" placeholder="Type your response here..." maxlength="500" oninput="onTextInput(this)"></textarea>
+        <div class="form-hint">
+          <span>Provide the information the agent needs to continue.</span>
+          <span class="char-count"><span id="charCount">0</span>/500</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary w-full" id="textSubmitBtn" disabled onclick="submitText()">Submit Response</button>
+    </div>
+
+    <div id="text-confirm" class="modal-body">
+      <div class="confirmation show">
+        <div class="check-circle">✓</div>
+        <h4>Response Submitted</h4>
+        <p id="textConfirmText">Your response has been delivered to <strong>OrderFulfill-v1</strong>. The agent will continue processing with the information provided.</p>
+        <div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-secondary)">
+          <span class="mini-spinner"></span>
+          <span>Agent resuming execution...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" id="text-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-text')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- TOAST CONTAINER -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- JAVASCRIPT -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+// ── SAMPLE DATA ────────────────────────────────────────────────────────────
+const requests = [
+  {
+    id: 'int-001',
+    agent: 'ContractAnalyzer-v2',
+    execId: 'exec-20260604-8a3f7c',
+    reason: 'The contract value exceeds $50,000 threshold. Please approve or reject this transaction.',
+    type: 'approval',
+    timestamp: new Date(Date.now() - 2 * 60000),
+    context: 'Reviewing vendor contract #CNT-2024-8842 for AcmeCorp. Identified payment terms: Net-60, total value $82,500. Auto-approval limit: $50,000 — threshold exceeded by $32,500.',
+    responded: false,
+    response: null,
+    respondedBy: null,
+    respondedAt: null
+  },
+  {
+    id: 'int-002',
+    agent: 'DeploymentOrch-v3',
+    execId: 'exec-20260604-f2b8a1',
+    reason: 'Which deployment environment should I use for the staging test?',
+    type: 'choice',
+    options: [
+      { value: 'dev', label: 'Development (dev)', desc: 'Isolated dev environment, no production impact. Best for early-stage validation.' },
+      { value: 'staging', label: 'Staging (staging)', desc: 'Pre-production environment with production-like data. Recommended for RC testing.' },
+      { value: 'canary', label: 'Canary (canary-1)', desc: 'Single production node with traffic mirroring. Risk of minor user impact.' },
+      { value: 'production', label: 'Production (prod)', desc: 'Full production fleet. Use only for verified, approved releases.' }
+    ],
+    timestamp: new Date(Date.now() - 5 * 60000),
+    context: 'Building release candidate v2.4.1-rc3 for frontend-app. Unit tests: 142/142 passed. Integration tests: 38/40 passed. Docker images built and tagged.',
+    responded: false,
+    response: null,
+    respondedBy: null,
+    respondedAt: null
+  },
+  {
+    id: 'int-003',
+    agent: 'OrderFulfill-v1',
+    execId: 'exec-20260604-c4d9e2',
+    reason: 'Please provide the customer\'s preferred delivery date range for order #ORD-4821.',
+    type: 'text',
+    timestamp: new Date(Date.now() - 8 * 60000),
+    context: 'Processing order #ORD-4821 for GreenTech Solutions Ltd. Items: 3x Server Racks, 2x UPS Units. Shipping to Portland, OR. Delivery date needed for carrier scheduling.',
+    responded: false,
+    response: null,
+    respondedBy: null,
+    respondedAt: null
+  },
+  {
+    id: 'int-004',
+    agent: 'DataAnalyzer-v1',
+    execId: 'exec-20260604-d5e0f3',
+    reason: 'The anomaly detection model flagged a suspicious transaction. Should I file a SAR (Suspicious Activity Report)?',
+    type: 'approval',
+    timestamp: new Date(Date.now() - 32 * 60000),
+    context: 'Analyzing transaction stream for AML compliance. Flagged: TXN-7721 — $47,200 wire transfer to offshore account. Pattern matches known structuring behavior.',
+    responded: false,
+    response: null,
+    respondedBy: null,
+    respondedAt: null
+  }
+];
+
+const history = [
+  { agent: 'ReportGen-v2', execId: 'exec-20260603-a1b2c3', type: 'approval', response: 'Approved ✓', respondedBy: 'Sarah Chen', respondedAt: '2026-06-03 14:22:10' },
+  { agent: 'ConfigMgr-v1', execId: 'exec-20260603-d4e5f6', type: 'choice', response: 'Staging', respondedBy: 'Mike Torres', respondedAt: '2026-06-03 11:08:35' },
+  { agent: 'TicketBot-v3', execId: 'exec-20260602-g7h8i9', type: 'text', response: 'Route to Tier 2 support per SLA', respondedBy: 'Sarah Chen', respondedAt: '2026-06-02 16:45:00' },
+  { agent: 'ContractAnalyzer-v2', execId: 'exec-20260602-j0k1l2', type: 'approval', response: 'Rejected ✕', respondedBy: 'Alex Harper', respondedAt: '2026-06-02 09:12:22' },
+  { agent: 'DeploymentOrch-v3', execId: 'exec-20260601-m3n4o5', type: 'choice', response: 'Production', respondedBy: 'Priya Patel', respondedAt: '2026-06-01 20:30:15' }
+];
+
+let currentFilter = 'all';
+let selectedChoice = null;
+let currentRequestId = null;
+
+// ── TIME HELPERS ───────────────────────────────────────────────────────────
+function timeAgo(date) {
+  const sec = Math.floor((Date.now() - date) / 1000);
+  if (sec < 60) return sec + 's';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ' + (sec % 60) + 's';
+  const hr = Math.floor(min / 60);
+  return hr + 'h ' + (min % 60) + 'm';
+}
+
+function formatWait(date) {
+  return timeAgo(date);
+}
+
+// ── RENDER TABLE ───────────────────────────────────────────────────────────
+function renderTable(filter) {
+  const tbody = document.getElementById('requestTableBody');
+  const empty = document.getElementById('emptyState');
+  const countLabel = document.getElementById('pendingCountLabel');
+  const statPending = document.getElementById('statPending');
+  const notifBadge = document.getElementById('notifBadge');
+  const resultCount = document.getElementById('filterResultCount');
+
+  let filtered = requests.filter(r => !r.responded);
+  if (filter && filter !== 'all') {
+    filtered = filtered.filter(r => r.type === filter);
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    resultCount.textContent = 'No matching requests';
+    const pending = requests.filter(r => !r.responded).length;
+    countLabel.textContent = pending + ' pending';
+    statPending.textContent = pending;
+    notifBadge.textContent = pending;
+    notifBadge.style.display = pending > 0 ? 'flex' : 'none';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const typeChips = {
+    approval: '<span class="chip chip-blue">🛡️ Approval</span>',
+    choice: '<span class="chip chip-purple">🎯 Choice</span>',
+    text: '<span class="chip chip-teal">✏️ Text</span>'
+  };
+
+  let html = '';
+  filtered.forEach(r => {
+    html += `<tr class="clickable-row" onclick="openRequest('${r.id}')">
+      <td><span class="status-dot dot-yellow"></span></td>
+      <td><strong>${r.agent}</strong></td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-secondary)">${r.execId}</td>
+      <td><div class="truncate" style="max-width:260px">${r.reason}</div></td>
+      <td>${typeChips[r.type] || ''}</td>
+      <td class="text-sm text-secondary">${formatTime(r.timestamp)}</td>
+      <td><span class="chip chip-yellow" style="font-size:10px;padding:1px 8px">⏱ ${formatWait(r.timestamp)}</span></td>
+      <td style="text-align:right">
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openRequest('${r.id}')">Respond</button>
+      </td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = html;
+
+  const pending = requests.filter(r => !r.responded).length;
+  countLabel.textContent = pending + ' pending';
+  statPending.textContent = pending;
+  notifBadge.textContent = pending;
+  notifBadge.style.display = pending > 0 ? 'flex' : 'none';
+  resultCount.textContent = 'Showing ' + filtered.length + ' request' + (filtered.length !== 1 ? 's' : '');
+}
+
+function formatTime(date) {
+  const h = date.getHours().toString().padStart(2,'0');
+  const m = date.getMinutes().toString().padStart(2,'0');
+  return h + ':' + m;
+}
+
+// ── FILTER ─────────────────────────────────────────────────────────────────
+function setFilter(btn, filter) {
+  document.querySelectorAll('.filter-bar .btn-outline').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = filter;
+  renderTable(filter);
+}
+
+// ── NAVIGATION ─────────────────────────────────────────────────────────────
+function switchView(viewId) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + viewId).classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const matching = document.querySelectorAll('[onclick*="' + viewId + '"]');
+  matching.forEach(el => el.classList.add('active'));
+
+  if (viewId === 'history') {
+    renderHistory();
+  }
+}
+
+function toggleNavGroup(el) {
+  const group = el.closest('.nav-parent-group');
+  group.classList.toggle('collapsed');
+  const expanded = !group.classList.contains('collapsed');
+  el.setAttribute('aria-expanded', expanded);
+}
+
+// ── OPEN REQUEST ────────────────────────────────────────────────────────────
+function openRequest(id) {
+  const req = requests.find(r => r.id === id);
+  if (!req || req.responded) return;
+  currentRequestId = id;
+
+  switch (req.type) {
+    case 'approval':
+      openApproval(req);
+      break;
+    case 'choice':
+      openChoice(req);
+      break;
+    case 'text':
+      openText(req);
+      break;
+  }
+}
+
+// ── APPROVAL MODAL ─────────────────────────────────────────────────────────
+function openApproval(req) {
+  document.getElementById('approvalReason').textContent = req.reason;
+  document.getElementById('approvalAgent').textContent = req.agent;
+  document.getElementById('approvalExecId').textContent = req.execId;
+  document.getElementById('approvalTimestamp').textContent = timeAgo(req.timestamp) + ' ago';
+
+  document.getElementById('approval-main').style.display = 'block';
+  document.getElementById('approval-confirm').style.display = 'none';
+  document.getElementById('approval-footer').style.display = 'flex';
+
+  document.getElementById('modal-approval').classList.add('open');
+}
+
+function respondApproval(approved) {
+  const main = document.getElementById('approval-main');
+  const confirm = document.getElementById('approval-confirm');
+  const footer = document.getElementById('approval-footer');
+
+  main.style.display = 'none';
+  confirm.style.display = 'block';
+  footer.style.display = 'none';
+
+  const icon = document.getElementById('approvalCheckIcon');
+  const title = document.getElementById('approvalConfirmTitle');
+  const text = document.getElementById('approvalConfirmText');
+
+  if (approved) {
+    icon.style.background = '#DCFCE7';
+    icon.style.color = '#15803D';
+    icon.textContent = '✓';
+    title.textContent = 'Approved';
+    text.innerHTML = 'Your approval has been delivered to <strong>' + document.getElementById('approvalAgent').textContent + '</strong>. The agent is resuming execution with your decision.';
+  } else {
+    icon.style.background = '#FEE2E2';
+    icon.style.color = '#B91C1C';
+    icon.textContent = '✕';
+    title.textContent = 'Rejected';
+    text.innerHTML = 'Your rejection has been delivered to <strong>' + document.getElementById('approvalAgent').textContent + '</strong>. The agent is resuming execution and will handle the rejection gracefully.';
+  }
+
+  markResponded(currentRequestId, approved ? 'Approved ✓' : 'Rejected ✕');
+
+  setTimeout(() => {
+    closeModal('modal-approval');
+  }, 2500);
+}
+
+// ── CHOICE MODAL ────────────────────────────────────────────────────────────
+function openChoice(req) {
+  document.getElementById('choiceQuestion').textContent = req.reason;
+  document.getElementById('choiceAgent').textContent = req.agent;
+  document.getElementById('choiceExecId').textContent = req.execId;
+
+  const optionsContainer = document.getElementById('choiceOptions');
+  let html = '';
+  req.options.forEach((opt, idx) => {
+    html += `<div class="choice-option" onclick="selectChoice(this, '${opt.value}')">
+      <input type="radio" name="choice" value="${opt.value}" id="choice-${idx}">
+      <div class="option-text">
+        ${opt.label}
+        <span class="option-desc">${opt.desc}</span>
+      </div>
+    </div>`;
+  });
+  optionsContainer.innerHTML = html;
+
+  selectedChoice = null;
+  document.getElementById('choiceSubmitBtn').disabled = true;
+
+  document.getElementById('choice-main').style.display = 'block';
+  document.getElementById('choice-confirm').style.display = 'none';
+  document.getElementById('choice-footer').style.display = 'flex';
+
+  document.getElementById('modal-choice').classList.add('open');
+}
+
+function selectChoice(el, value) {
+  document.querySelectorAll('.choice-option').forEach(o => o.classList.remove('selected'));
+  document.querySelectorAll('.choice-option input').forEach(i => i.checked = false);
+  el.classList.add('selected');
+  el.querySelector('input').checked = true;
+  selectedChoice = value;
+  document.getElementById('choiceSubmitBtn').disabled = false;
+}
+
+function submitChoice() {
+  if (!selectedChoice) return;
+
+  document.getElementById('choice-main').style.display = 'none';
+  document.getElementById('choice-confirm').style.display = 'block';
+  document.getElementById('choice-footer').style.display = 'none';
+
+  const label = document.querySelector('.choice-option.selected .option-text');
+  const choiceLabel = label ? label.childNodes[0].textContent.trim() : selectedChoice;
+  document.getElementById('choiceConfirmText').innerHTML =
+    'Your selection (<strong>' + choiceLabel + '</strong>) has been delivered to <strong>' +
+    document.getElementById('choiceAgent').textContent + '</strong>. The agent will proceed with the chosen environment.';
+
+  markResponded(currentRequestId, choiceLabel);
+
+  setTimeout(() => {
+    closeModal('modal-choice');
+  }, 2500);
+}
+
+// ── TEXT MODAL ─────────────────────────────────────────────────────────────
+function openText(req) {
+  document.getElementById('textPrompt').innerHTML = req.reason;
+  document.getElementById('textAgent').textContent = req.agent;
+  document.getElementById('textExecId').textContent = req.execId;
+
+  const textarea = document.getElementById('textResponse');
+  textarea.value = '';
+  document.getElementById('charCount').textContent = '0';
+  document.getElementById('textSubmitBtn').disabled = true;
+
+  document.getElementById('text-main').style.display = 'block';
+  document.getElementById('text-confirm').style.display = 'none';
+  document.getElementById('text-footer').style.display = 'flex';
+
+  document.getElementById('modal-text').classList.add('open');
+  setTimeout(() => textarea.focus(), 300);
+}
+
+function onTextInput(el) {
+  const len = el.value.length;
+  document.getElementById('charCount').textContent = len;
+  document.getElementById('textSubmitBtn').disabled = len === 0;
+
+  if (len >= 500) {
+    el.style.borderColor = 'var(--error)';
+  } else {
+    el.style.borderColor = '';
+  }
+}
+
+function submitText() {
+  const text = document.getElementById('textResponse').value;
+  if (!text.trim()) return;
+
+  document.getElementById('text-main').style.display = 'none';
+  document.getElementById('text-confirm').style.display = 'block';
+  document.getElementById('text-footer').style.display = 'none';
+
+  const preview = text.length > 80 ? text.substring(0, 80) + '…' : text;
+  document.getElementById('textConfirmText').innerHTML =
+    'Your response has been delivered to <strong>' +
+    document.getElementById('textAgent').textContent + '</strong>. The agent will continue processing with the information provided.';
+
+  markResponded(currentRequestId, text);
+
+  setTimeout(() => {
+    closeModal('modal-text');
+  }, 2500);
+}
+
+// ── MARK RESPONDED ─────────────────────────────────────────────────────────
+function markResponded(id, response) {
+  const req = requests.find(r => r.id === id);
+  if (req) {
+    req.responded = true;
+    req.response = response;
+    req.respondedBy = 'Sarah Chen';
+    req.respondedAt = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    history.unshift({
+      agent: req.agent,
+      execId: req.execId,
+      type: req.type,
+      response: response,
+      respondedBy: 'Sarah Chen',
+      respondedAt: req.respondedAt
+    });
+  }
+  renderTable(currentFilter);
+  showToast(req.respondedBy === 'Sarah Chen' ? 'Response delivered to ' + req.agent : '', 'success');
+}
+
+function showToast(msg, type) {
+  if (!msg) return;
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + (type || 'info');
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+  toast.innerHTML = '<span style="font-weight:700;font-size:16px">' + icon + '</span> ' + msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'toastOut 0.3s ease forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ── CLOSE MODAL ────────────────────────────────────────────────────────────
+function closeModal(id) {
+  const overlay = document.getElementById(id);
+  overlay.classList.remove('open');
+  // Reset state
+  const modal = overlay.querySelector('.modal');
+  // Show main and hide confirm
+  const main = overlay.querySelector('[id$="-main"]');
+  const confirm = overlay.querySelector('[id$="-confirm"]');
+  const footer = overlay.querySelector('.modal-footer');
+  if (main) main.style.display = 'block';
+  if (confirm) confirm.style.display = 'none';
+  if (footer) footer.style.display = 'flex';
+}
+
+// ── HISTORY ────────────────────────────────────────────────────────────────
+function showHistory() {
+  switchView('history');
+  renderHistory();
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('historyTableBody');
+  const typeChips = {
+    approval: '<span class="chip chip-blue" style="font-size:10px;padding:1px 6px">Approval</span>',
+    choice: '<span class="chip chip-purple" style="font-size:10px;padding:1px 6px">Choice</span>',
+    text: '<span class="chip chip-teal" style="font-size:10px;padding:1px 6px">Text</span>'
+  };
+
+  let html = '';
+  history.forEach(h => {
+    const isApproved = h.response === 'Approved ✓';
+    const isRejected = h.response === 'Rejected ✕';
+    let respChip = '<span class="response-status responded">' + h.response + '</span>';
+    if (isApproved) respChip = '<span class="response-status approved">✓ Approved</span>';
+    else if (isRejected) respChip = '<span class="response-status rejected">✕ Rejected</span>';
+
+    html += `<tr>
+      <td><strong>${h.agent}</strong></td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-secondary)">${h.execId}</td>
+      <td>${typeChips[h.type] || ''}</td>
+      <td>${respChip}</td>
+      <td>${h.respondedBy}</td>
+      <td class="text-sm text-secondary">${h.respondedAt}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+// ── REFRESH ────────────────────────────────────────────────────────────────
+function refreshRequests() {
+  renderTable(currentFilter);
+  showToast('Requests refreshed', 'info');
+}
+
+// ── NOTIFICATION PANEL ─────────────────────────────────────────────────────
+function showNotificationPanel() {
+  showToast('🔔 ' + document.getElementById('notifBadge').textContent + ' pending intervene requests require your attention', 'info');
+}
+
+// ── UPDATE WAIT TIMES ──────────────────────────────────────────────────────
+function updateWaitTimes() {
+  renderTable(currentFilter);
+}
+
+// ── EXECUTION LOG STREAMING ──────────────────────────────────────────────────
+let logStreamInterval = null;
+let logStreamPaused = false;
+let logEntries = [
+  { level: 'debug', msg: 'LangChain → Act: executing tool call #1/3' },
+  { level: 'tool', msg: 'extract_entity("CNT-2024-8842", "payment_terms") → Net-60' },
+  { level: 'debug', msg: 'LangChain → Observe: tool result received' },
+  { level: 'debug', msg: 'LangChain → Reason: evaluating threshold condition' },
+  { level: 'warn', msg: 'Threshold check: $82,500 > $50,000 — requires human approval' },
+  { level: 'debug', msg: 'LangChain → Act: calling system____human_intervene tool' },
+  { level: 'intervene', msg: '🛑 HUMAN INTERVENE — Agent paused. Reason: "The contract value exceeds $50,000 threshold."' }
+];
+let logEntryIndex = 0;
+let interveneTriggered = false;
+let bannerDismissed = false;
+
+function startLogStream() {
+  const streamArea = document.getElementById('logStreamArea');
+  const indicator = document.getElementById('streamIndicator');
+  const startTime = new Date();
+  logEntryIndex = 0;
+  logStreamPaused = false;
+  interveneTriggered = false;
+  bannerDismissed = false;
+  document.getElementById('pendingBanner').style.display = 'none';
+  streamArea.innerHTML = '';
+
+  logStreamInterval = setInterval(() => {
+    if (logStreamPaused) return;
+    if (logEntryIndex >= logEntries.length) {
+      // All entries streamed — stop
+      clearInterval(logStreamInterval);
+      indicator.innerHTML = '<span style="color:#64748B">⏸ Stream paused — awaiting human response</span>';
+      return;
+    }
+
+    const entry = logEntries[logEntryIndex];
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+
+    const div = document.createElement('div');
+    div.className = 'log-entry stream-enter';
+    div.innerHTML = '<span class="log-time">' + timeStr + '</span><span class="log-level ' + entry.level + '">' + entry.level.toUpperCase() + '</span><span class="log-msg">' + entry.msg + '</span>';
+    streamArea.appendChild(div);
+
+    // Scroll to bottom
+    const container = document.getElementById('logContainer');
+    container.scrollTop = container.scrollHeight;
+
+    logEntryIndex++;
+
+    // When the intervene entry appears, trigger the popup
+    if (entry.level === 'intervene' && !interveneTriggered) {
+      interveneTriggered = true;
+      logStreamPaused = true;
+      // Auto-open the approval modal after a short delay
+      setTimeout(() => {
+        // Find the matching request
+        const req = requests.find(r => r.id === 'int-001');
+        if (req && !req.responded) {
+          currentRequestId = req.id;
+          openApproval(req);
+          // After modal closes via response, resume stream
+        }
+      }, 800);
+    }
+  }, 900);
+}
+
+function resumeLogStream() {
+  if (!logStreamPaused) return;
+  logStreamPaused = false;
+  document.getElementById('pendingBanner').style.display = 'none';
+  document.getElementById('streamIndicator').innerHTML = '<span class="stream-dot"></span><span>Streaming new log entries...</span>';
+
+  // Continue from where we left off (the intervene entry was the last)
+  // Add resume entries
+  const streamArea = document.getElementById('logStreamArea');
+  const continueEntries = [
+    { level: 'debug', msg: 'LangChain → Observe: human response received' },
+    { level: 'info', msg: 'Human response: APPROVED — agent resuming execution' },
+    { level: 'debug', msg: 'LangChain → Act: executing remaining tool calls' },
+    { level: 'tool', msg: 'generate_approval_document("CNT-2024-8842") → success (280ms)' },
+    { level: 'tool', msg: 'save_result("contract_approval_result") → persisted' },
+    { level: 'info', msg: 'Agent session completed — result saved to Result Store' },
+    { level: 'info', msg: 'Session status: completed (total time: 2m 48s)' }
+  ];
+
+  let ci = 0;
+  const resumeInterval = setInterval(() => {
+    if (ci >= continueEntries.length) {
+      clearInterval(resumeInterval);
+      document.getElementById('streamIndicator').innerHTML = '<span style="color:#22C55E">✅ Execution complete — all log entries delivered.</span>';
+      return;
+    }
+    const entry = continueEntries[ci];
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+    const div = document.createElement('div');
+    div.className = 'log-entry stream-enter';
+    div.innerHTML = '<span class="log-time">' + timeStr + '</span><span class="log-level ' + entry.level + '">' + entry.level.toUpperCase() + '</span><span class="log-msg">' + entry.msg + '</span>';
+    streamArea.appendChild(div);
+    document.getElementById('logContainer').scrollTop = document.getElementById('logContainer').scrollHeight;
+    ci++;
+  }, 1200);
+}
+
+// Hook into existing respond functions to resume stream
+const _origMarkResponded = markResponded;
+markResponded = function(id, response) {
+  _origMarkResponded(id, response);
+  // If we're on the log page and stream was paused, resume
+  if (logStreamPaused && interveneTriggered) {
+    setTimeout(resumeLogStream, 600);
+  }
+};
+
+function reopenInlineIntervene() {
+  const req = requests.find(r => r.id === 'int-001');
+  if (req && !req.responded) {
+    currentRequestId = req.id;
+    openApproval(req);
+  }
+}
+
+function dismissBanner() {
+  bannerDismissed = true;
+  document.getElementById('pendingBanner').style.display = 'none';
+}
+
+// ── OVERRIDE closeModal to handle log stream resume on dismiss without response ──
+const _origCloseModal = closeModal;
+closeModal = function(id) {
+  _origCloseModal(id);
+  // If user dismissed intervene popup on log page without responding, show banner
+  if (logStreamPaused && interveneTriggered && !bannerDismissed) {
+    // Check if the request was not responded
+    const req = requests.find(r => r.id === currentRequestId);
+    if (req && !req.responded) {
+      document.getElementById('pendingBanner').style.display = 'flex';
+    }
+  }
+};
+
+// ── OVERRIDE switchView to manage log stream lifecycle ──
+const _origSwitchView = switchView;
+switchView = function(viewId) {
+  // Stop stream when navigating away from logs
+  if (viewId !== 'logs' && logStreamInterval) {
+    clearInterval(logStreamInterval);
+    logStreamInterval = null;
+    document.getElementById('streamIndicator').innerHTML = '<span style="color:#64748B">⏸ Stream stopped</span>';
+  }
+  _origSwitchView(viewId);
+
+  // Start stream when navigating to logs
+  if (viewId === 'logs') {
+    document.querySelector('.topbar-title').innerHTML = 'Execution Log Stream <span class="text-secondary" style="font-size:13px;font-weight:400">— Live streaming with inline intervene</span>';
+    setTimeout(startLogStream, 300);
+  } else if (viewId === 'intervene') {
+    document.querySelector('.topbar-title').innerHTML = 'Human Intervene <span class="text-secondary" style="font-size:13px;font-weight:400">— Agent-Driven Human-in-the-Loop Requests</span>';
+  }
+};
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  renderTable('all');
+  // Set initial log timestamps
+  const now = new Date();
+  document.getElementById('logStartTime').textContent = new Date(now - 45000).toLocaleTimeString('en-US', { hour12: false });
+  document.getElementById('logInitTime').textContent = new Date(now - 38000).toLocaleTimeString('en-US', { hour12: false });
+  document.getElementById('logPermTime').textContent = new Date(now - 32000).toLocaleTimeString('en-US', { hour12: false });
+  document.getElementById('logLLMTime').textContent = new Date(now - 25000).toLocaleTimeString('en-US', { hour12: false });
+  // Update wait times every 10 seconds
+  setInterval(updateWaitTimes, 10000);
+});
+
+// ── KEYBOARD: ESC TO CLOSE MODALS ─────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(overlay => {
+      closeModal(overlay.id);
+    });
+  }
+});
+</script>
+<style>
+.mini-spinner{width:16px;height:16px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,80%,100%{opacity:.2}40%{opacity:.85}}
+</style>
+</body>
+</html>

@@ -109,6 +109,13 @@ async def terminate_session(
         session_id,
         task.get_name(),
     )
+
+    # TODO: When a waiting_for_human session is terminated, cancel all
+    # pending intervene requests via InterveneRequestStore.cancel_request().
+    # The Control Center holds the authoritative session status, so the CC
+    # side should invoke cancel_request when it transitions the job out of
+    # waiting_for_human state.
+
     return TerminateResponse(
         session_id=session_id,
         cancelled=True,

@@ -491,6 +491,66 @@ strong{font-weight:600}
 /* Topology */
 .topology-container{width: 100%; min-height: 400px; display: flex; align-items: center; justify-content: center; background: #FAFAFA; border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden;}
 
+/* ── SCHEDULES — REACT-JS-CRON STYLE ── */
+.react-js-cron{border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:#FAFBFC}
+.cron-shortcuts{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.shortcut-btn{padding:5px 14px;border:1px solid #d9d9d9;border-radius:20px;font-size:12px;background:var(--surface);color:var(--text-primary);cursor:pointer;transition:all var(--transition);font-weight:500}
+.shortcut-btn:hover{border-color:var(--primary);color:var(--primary)}
+.shortcut-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+.cron-antd-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.cron-antd-group{display:flex;flex-direction:column;gap:4px;min-width:110px}
+.cron-antd-group label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.cron-antd-select{height:32px;padding:4px 24px 4px 11px;border:1px solid #d9d9d9;border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:13px;outline:none;cursor:pointer;transition:border-color var(--transition),box-shadow var(--transition);appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%2364748B' stroke-width='1.5' stroke-linecap='round'%3E%3C/path%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;min-width:90px}
+.cron-antd-select:hover{border-color:#4096ff}
+.cron-antd-select:focus{border-color:#4096ff;box-shadow:0 0 0 2px rgba(24,144,255,.2)}
+.cron-human-desc{font-size:13px;color:var(--text-secondary);padding:6px 0 2px}
+.cron-human-desc strong{color:var(--text-primary)}
+.dow-btn{width:30px;height:30px;border-radius:50%;border:1px solid #d9d9d9;background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition)}
+.dow-btn:hover{border-color:var(--primary);color:var(--primary)}
+.dow-btn.selected{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* Execution history */
+.exec-status-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.exec-running{background:#DBEAFE;color:#1D4ED8}
+.exec-running::before{content:'';width:6px;height:6px;border-radius:50%;background:#1D4ED8;animation:schedPulse 1.2s infinite;margin-right:4px}
+.exec-success{background:#DCFCE7;color:#15803D}
+.exec-success::before{content:'✓';font-weight:700;margin-right:4px}
+.exec-failure{background:#FEE2E2;color:#B91C1C}
+.exec-failure::before{content:'✗';font-weight:700;margin-right:4px}
+@keyframes schedPulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.session-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid currentColor;background:transparent}
+.session-completed{color:#15803D;border-color:#4ADE80}
+.session-failed{color:#B91C1C;border-color:#F87171}
+.session-running{color:#1D4ED8;border-color:#60A5FA}
+.session-terminated{color:#6B7280;border-color:#9CA3AF}
+/* Payload editor */
+.payload-section{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#FAFBFC}
+.payload-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.payload-row input{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;outline:none;transition:border-color var(--transition)}
+.payload-row input:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+.payload-row .key-input{flex:0 0 170px}
+.payload-row .remove-btn{background:none;border:none;color:var(--error);cursor:pointer;font-size:18px;padding:4px 6px;border-radius:4px;line-height:1;transition:background var(--transition)}.payload-row .remove-btn:hover{background:#FFEBEE}
+.add-payload-btn{background:none;border:1px dashed var(--border);color:var(--text-secondary);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;margin-top:4px;transition:all var(--transition);width:100%}
+.add-payload-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+/* Execution detail */
+.detail-section{border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;background:#FAFBFC}
+.detail-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #F0F0F0}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:var(--text-secondary);font-weight:500}
+.detail-value{color:var(--text-primary);font-weight:600;text-align:right;max-width:60%;word-break:break-all}
+.detail-value.mono{font-family:'Courier New',monospace;font-size:12px}
+/* Schedule pagination */
+.sched-pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 16px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border)}
+.sched-pagination button{padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);cursor:pointer;font-size:12px;transition:all var(--transition)}
+.sched-pagination button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.sched-pagination button:disabled{opacity:0.4;cursor:default}
+/* Toast */
+.sched-toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.sched-toast{padding:12px 20px;border-radius:var(--radius);background:#323232;color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:schedToastIn 0.3s ease;display:flex;align-items:center;gap:8px;max-width:480px}
+.sched-toast.sched-success{background:#2E7D32}
+.sched-toast.sched-error{background:#C62828}
+.sched-toast.sched-info{background:#1565C0}
+@keyframes schedToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
 </style>
 </head>
 <body>
@@ -1605,75 +1665,32 @@ Returns: { request_id, status }</div>
 <!-- ═══════════════════════════════ VIEW: SCHEDULES ═══════════════════════════════ -->
 <div id="view-schedules" class="view">
   <div class="view-header">
-    <div><h2>Schedules</h2><div class="view-desc">Cron-based automation triggers for prompts and SOPs</div></div>
-    <button class="btn btn-primary" onclick="openModal('modal-schedule')">+ Create Schedule</button>
+    <div>
+      <h2>Schedules</h2>
+      <div class="view-desc">Create and manage cron-based schedules for automated agent execution</div>
+    </div>
+    <button class="btn btn-primary" onclick="schedOpenCreate()">+ Create Schedule</button>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>Type</th><th>Cron Expression</th><th>Next Run</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>
+      <thead>
         <tr>
-          <td><strong>daily-standup-report</strong></td>
-          <td><span class="chip chip-green">sop</span></td>
-          <td><span class="font-mono text-sm">0 8 * * 1-5</span></td>
-          <td class="text-secondary">Tomorrow 08:00</td>
-          <td><span class="chip chip-green">● Active</span></td>
-          <td class="actions-cell">
-            <button class="btn-icon-sm" title="Edit">✏️</button>
-            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
-            <button class="btn-icon-sm">🗑️</button>
-          </td>
+          <th>Name</th>
+          <th>Cron Expression</th>
+          <th>Target Type</th>
+          <th>Status</th>
+          <th>Actions</th>
         </tr>
-        <tr>
-          <td><strong>weekly-audit</strong></td>
-          <td><span class="chip chip-green">sop</span></td>
-          <td><span class="font-mono text-sm">0 9 * * 1</span></td>
-          <td class="text-secondary">Mon 09:00</td>
-          <td><span class="chip chip-green">● Active</span></td>
-          <td class="actions-cell">
-            <button class="btn-icon-sm">✏️</button>
-            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
-            <button class="btn-icon-sm">🗑️</button>
-          </td>
-        </tr>
-        <tr>
-          <td><strong>hourly-health-check</strong></td>
-          <td><span class="chip chip-blue">prompt</span></td>
-          <td><span class="font-mono text-sm">0 * * * *</span></td>
-          <td class="text-secondary">In 47 min</td>
-          <td><span class="chip chip-green">● Active</span></td>
-          <td class="actions-cell">
-            <button class="btn-icon-sm">✏️</button>
-            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
-            <button class="btn-icon-sm">🗑️</button>
-          </td>
-        </tr>
-        <tr>
-          <td><strong>monthly-summary</strong></td>
-          <td><span class="chip chip-green">sop</span></td>
-          <td><span class="font-mono text-sm">0 10 1 * *</span></td>
-          <td class="text-secondary">1st of month</td>
-          <td><span class="chip chip-yellow">⏸ Paused</span></td>
-          <td class="actions-cell">
-            <button class="btn-icon-sm">✏️</button>
-            <button class="btn btn-xs btn-success">▶ Resume</button>
-            <button class="btn-icon-sm">🗑️</button>
-          </td>
-        </tr>
-        <tr>
-          <td><strong>incident-scan</strong></td>
-          <td><span class="chip chip-blue">prompt</span></td>
-          <td><span class="font-mono text-sm">*/15 * * * *</span></td>
-          <td class="text-secondary">In 12 min</td>
-          <td><span class="chip chip-green">● Active</span></td>
-          <td class="actions-cell">
-            <button class="btn-icon-sm">✏️</button>
-            <button class="btn btn-xs btn-secondary">⏸ Pause</button>
-            <button class="btn-icon-sm">🗑️</button>
-          </td>
-        </tr>
+      </thead>
+      <tbody id="sched-table-body">
+        <!-- Populated by JS -->
       </tbody>
     </table>
+    <div class="sched-pagination">
+      <span id="sched-pagination-info">1–5 of 5</span>
+      <button disabled id="sched-prev-btn" onclick="schedPrevPage()">‹</button>
+      <button id="sched-next-btn" onclick="schedNextPage()">›</button>
+    </div>
   </div>
 </div>
 
@@ -2982,59 +2999,195 @@ Returns: { request_id, status }</div>
 </div>
 
 <!-- Create Schedule Modal -->
-<div id="modal-schedule" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-schedule')">
-  <div class="modal">
+<!-- ═══════════════════════════════ SCHEDULE CREATE/EDIT DIALOG ═══════════════════════════════ -->
+<div id="modal-schedule" class="modal-overlay" onclick="schedCloseDialog(event)">
+  <div class="modal modal-lg">
     <div class="modal-header">
-      <h3>Create Schedule</h3>
-      <button class="modal-close" onclick="closeModal('modal-schedule')">✕</button>
+      <h3 id="sched-dialog-title">Create Schedule</h3>
+      <button class="modal-close" onclick="schedCloseDialog()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Name</label>
-          <input class="form-control" placeholder="e.g. daily-report">
-        </div>
-        <div class="form-group">
-          <label>Type</label>
-          <select class="form-control" id="sched-type-select" onchange="toggleSchedFields()">
-            <option>prompt</option><option>sop</option>
-          </select>
-        </div>
-      </div>
+      <!-- Name -->
       <div class="form-group">
-        <label>Cron Expression</label>
-        <input class="form-control" placeholder="0 8 * * *">
-        <div class="form-hint">e.g. 0 8 * * * (daily at 8am), */15 * * * * (every 15 min)</div>
+        <label>Name <span style="color:var(--error)">*</span></label>
+        <input class="form-control" id="sched-input-name" placeholder="e.g., Daily Summary Report">
       </div>
-      <div id="sched-prompt-field">
-        <div class="form-group">
-          <label>Prompt Text</label>
-          <textarea class="form-control" rows="3" placeholder="Enter the prompt to run on schedule..."></textarea>
-        </div>
-      </div>
-      <div id="sched-sop-field" style="display:none">
-        <div class="form-group">
-          <label>SOP</label>
-          <select class="form-control">
-            <option>pr-review-workflow</option><option>daily-report-gen</option>
-            <option>incident-response</option><option>data-pipeline-audit</option>
-          </select>
-        </div>
-      </div>
+
+      <!-- Description -->
       <div class="form-group">
-        <label class="toggle">
-          <input type="checkbox" checked>
-          <span class="toggle-slider"></span>
-          <span>Enabled</span>
-        </label>
+        <label>Description</label>
+        <input class="form-control" id="sched-input-desc" placeholder="Optional description">
+      </div>
+
+      <!-- Cron Editor (react-js-cron style) -->
+      <div class="form-group">
+        <label>Cron Expression <span style="color:var(--error)">*</span></label>
+        <div class="react-js-cron">
+          <!-- Text Input -->
+          <input class="form-control font-mono" id="sched-cron-text" value="0 * * * *" style="margin-bottom:10px;font-size:13px" oninput="schedOnCronText(this.value)">
+
+          <!-- Human-readable description -->
+          <div class="cron-human-desc" id="sched-cron-desc">⏰ <strong>Every hour</strong> — Next run: <span id="sched-cron-next">Today, 16:00 UTC</span></div>
+
+          <!-- Shortcuts -->
+          <div class="cron-shortcuts" style="margin-top:10px">
+            <button class="shortcut-btn active" data-cron="0 * * * *" onclick="schedSelectShortcut(this)">Every hour</button>
+            <button class="shortcut-btn" data-cron="0 8 * * *" onclick="schedSelectShortcut(this)">Every day</button>
+            <button class="shortcut-btn" data-cron="0 8 * * 1" onclick="schedSelectShortcut(this)">Every week</button>
+            <button class="shortcut-btn" data-cron="0 8 1 * *" onclick="schedSelectShortcut(this)">Every month</button>
+            <button class="shortcut-btn" data-cron="0 0 1 1 *" onclick="schedSelectShortcut(this)">Every year</button>
+            <button class="shortcut-btn" data-cron="" onclick="schedSelectShortcut(this)">Custom</button>
+          </div>
+
+          <!-- antd-style dropdown selects -->
+          <div class="cron-antd-row">
+            <div class="cron-antd-group">
+              <label>Minute</label>
+              <select class="cron-antd-select" id="sched-cron-minute" onchange="schedOnCronSelect()">
+                <option value="*">Every</option>
+                <option value="0" selected>0</option><option value="5">5</option><option value="10">10</option>
+                <option value="15">15</option><option value="20">20</option><option value="25">25</option>
+                <option value="30">30</option><option value="35">35</option><option value="40">40</option>
+                <option value="45">45</option><option value="50">50</option><option value="55">55</option>
+              </select>
+            </div>
+            <div class="cron-antd-group">
+              <label>Hour</label>
+              <select class="cron-antd-select" id="sched-cron-hour" onchange="schedOnCronSelect()">
+                <option value="*">Every</option>
+                <option value="0">12 AM</option><option value="1">1 AM</option><option value="2">2 AM</option>
+                <option value="3">3 AM</option><option value="4">4 AM</option><option value="5">5 AM</option>
+                <option value="6">6 AM</option><option value="7">7 AM</option><option value="8">8 AM</option>
+                <option value="9">9 AM</option><option value="10">10 AM</option><option value="11">11 AM</option>
+                <option value="12">12 PM</option><option value="13">1 PM</option><option value="14">2 PM</option>
+                <option value="15">3 PM</option><option value="16">4 PM</option><option value="17">5 PM</option>
+                <option value="18">6 PM</option><option value="19">7 PM</option><option value="20">8 PM</option>
+                <option value="21">9 PM</option><option value="22">10 PM</option><option value="23">11 PM</option>
+              </select>
+            </div>
+            <div class="cron-antd-group">
+              <label>Day of Week</label>
+              <div style="display:flex;gap:3px;align-items:center;padding-top:2px">
+                <button class="dow-btn sched-dow" data-day="0" onclick="schedToggleDow(this)">S</button>
+                <button class="dow-btn sched-dow selected" data-day="1" onclick="schedToggleDow(this)">M</button>
+                <button class="dow-btn sched-dow selected" data-day="2" onclick="schedToggleDow(this)">T</button>
+                <button class="dow-btn sched-dow selected" data-day="3" onclick="schedToggleDow(this)">W</button>
+                <button class="dow-btn sched-dow selected" data-day="4" onclick="schedToggleDow(this)">T</button>
+                <button class="dow-btn sched-dow selected" data-day="5" onclick="schedToggleDow(this)">F</button>
+                <button class="dow-btn sched-dow" data-day="6" onclick="schedToggleDow(this)">S</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Target type - Agent only -->
+      <div class="form-group">
+        <label>Agent Type <span style="color:var(--error)">*</span></label>
+        <select class="form-control" id="sched-input-target">
+          <option value="">— Select an Agent Type —</option>
+          <option value="abc-123">Data Analyst Agent</option>
+          <option value="def-456">Report Generator Agent</option>
+          <option value="ghi-789">Health Monitor Agent</option>
+          <option value="jkl-012">PR Reviewer Agent</option>
+          <option value="mno-345">File Manager Agent</option>
+        </select>
+      </div>
+
+      <!-- Input Parameters (PayloadEditor style) -->
+      <div class="form-group">
+        <label>Input Parameters</label>
+        <div class="payload-section">
+          <div class="form-hint" style="margin-top:0;margin-bottom:10px">
+            Key-value pairs passed as the execution payload to the agent.
+          </div>
+          <div id="sched-payload-rows">
+            <div class="payload-row">
+              <input class="key-input" placeholder="Key" value="report_type">
+              <input placeholder="Value" value="daily_summary">
+              <button class="remove-btn" onclick="schedRemovePayload(this)">×</button>
+            </div>
+            <div class="payload-row">
+              <input class="key-input" placeholder="Key" value="format">
+              <input placeholder="Value" value="markdown">
+              <button class="remove-btn" onclick="schedRemovePayload(this)">×</button>
+            </div>
+          </div>
+          <button class="add-payload-btn" onclick="schedAddPayload()">+ Add parameter</button>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-schedule')">Cancel</button>
-      <button class="btn btn-primary">Create Schedule</button>
+      <button class="btn btn-secondary" onclick="schedCloseDialog()">Cancel</button>
+      <button class="btn btn-primary" id="sched-save-btn" onclick="schedSave()">Create Schedule</button>
     </div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════ EXECUTION HISTORY DIALOG ═══════════════════════════════ -->
+<div id="sched-history-dialog" class="modal-overlay" onclick="schedCloseHistory(event)">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="sched-history-title">Execution History</h3>
+      <button class="modal-close" onclick="schedCloseHistory()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 24px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <label style="font-size:13px;font-weight:500;">Schedule:</label>
+        <span id="sched-history-name" style="font-weight:600;font-size:14px">—</span>
+        <label style="font-size:13px;font-weight:500;margin-left:8px">Status:</label>
+        <select id="sched-history-filter" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;outline:none" onchange="schedRenderHistory()">
+          <option value="all">All</option>
+          <option value="success">Success</option>
+          <option value="failure">Failure</option>
+          <option value="running">Running</option>
+        </select>
+      </div>
+      <div class="table-wrap" style="box-shadow:none;border-radius:var(--radius-sm)">
+        <table>
+          <thead>
+            <tr>
+              <th>Started At</th>
+              <th>Finished At</th>
+              <th>Status</th>
+              <th>Agent Session</th>
+              <th>Details</th>
+              <th style="text-align:center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sched-history-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="sched-pagination" id="sched-history-pagination" style="padding:8px 0 0;border-top:none">
+        <span id="sched-history-info">0 of 0</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="schedCloseHistory()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ AGENT EXECUTION DETAILS DIALOG ═══════════════════════════════ -->
+<div id="sched-exec-detail-dialog" class="modal-overlay" onclick="schedCloseExecDetail(event)">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Agent Execution Details</h3>
+      <button class="modal-close" onclick="schedCloseExecDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="sched-exec-detail-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="schedCloseExecDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SCHEDULE TOAST CONTAINER ═══════════════════════════════ -->
+<div class="sched-toast-container" id="sched-toast-container"></div>
 
 <!-- Add Notification Channel Modal -->
 <div id="modal-notif" class="modal-overlay" onclick="closeModalIfOverlay(event,'modal-notif')">
@@ -3687,12 +3840,410 @@ function toggleAgentOutputTypeFields() {
   document.getElementById('agent-output-schema-field').style.display = (inputType !== 'conversation' && outputType === 'typed') ? 'block' : 'none';
 }
 
-// ═══════════════════════════════ SCHEDULE MODAL ═══════════════════════════════
-function toggleSchedFields() {
-  var type = document.getElementById('sched-type-select').value;
-  document.getElementById('sched-prompt-field').style.display = (type === 'prompt') ? 'block' : 'none';
-  document.getElementById('sched-sop-field').style.display = (type === 'sop') ? 'block' : 'none';
+// ═══════════════════════════════ SCHEDULES ═══════════════════════════════
+/* ── DATA ── */
+const SCHED_AGENTS = [
+  { id: 'abc-123', name: 'Data Analyst Agent', input_type: 'typed' },
+  { id: 'def-456', name: 'Report Generator Agent', input_type: 'none' },
+  { id: 'ghi-789', name: 'Health Monitor Agent', input_type: 'typed' },
+  { id: 'jkl-012', name: 'PR Reviewer Agent', input_type: 'conversation' },
+  { id: 'mno-345', name: 'File Manager Agent', input_type: 'none' },
+];
+
+let schedData = [
+  { id: 'sch-001', name: 'Daily Summary Report', description: 'Generates a daily summary report every weekday morning', cron_expression: '0 8 * * 1-5', target_id: 'abc-123', target_name: 'Data Analyst Agent', status: 'active', input_params: { report_type: 'daily_summary', format: 'markdown' }, created_at: '2026-05-01' },
+  { id: 'sch-002', name: 'Hourly Health Check', description: 'Runs a health check on all systems every hour', cron_expression: '0 * * * *', target_id: 'ghi-789', target_name: 'Health Monitor Agent', status: 'active', input_params: { check_level: 'full', notify_on_failure: 'true' }, created_at: '2026-04-15' },
+  { id: 'sch-003', name: 'Weekly Data Sync', description: 'Weekly database synchronization', cron_expression: '0 2 * * 1', target_id: 'def-456', target_name: 'Report Generator Agent', status: 'paused', input_params: { sync_mode: 'full' }, created_at: '2026-05-20' },
+  { id: 'sch-004', name: 'System Metrics Collector', description: 'Collects system metrics every 5 minutes', cron_expression: '*/5 * * * *', target_id: 'ghi-789', target_name: 'Health Monitor Agent', status: 'active', input_params: { metrics: 'cpu,memory,disk' }, created_at: '2026-06-01' },
+  { id: 'sch-005', name: 'PR Review Scan', description: 'Scans open PRs for review readiness', cron_expression: '0 9 * * 1-5', target_id: 'jkl-012', target_name: 'PR Reviewer Agent', status: 'active', input_params: { scan_type: 'readiness', max_prs: '10' }, created_at: '2026-06-05' },
+];
+
+let schedExecHistory = [
+  { id: 'exec-001', schedule_id: 'sch-001', schedule_name: 'Daily Summary Report', started_at: '2026-06-08 08:00:01 UTC', finished_at: '2026-06-08 08:00:12 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-aa1', status: 'completed' } },
+  { id: 'exec-002', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 15:00:00 UTC', finished_at: '2026-06-08 15:00:05 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-bb2', status: 'completed' } },
+  { id: 'exec-003', schedule_id: 'sch-001', schedule_name: 'Daily Summary Report', started_at: '2026-06-07 08:00:01 UTC', finished_at: '2026-06-07 08:00:15 UTC', status: 'failure', error_message: 'Agent instance spawn failed: no available instances', agent_session: { id: 'sess-cc3', status: 'failed' } },
+  { id: 'exec-004', schedule_id: 'sch-004', schedule_name: 'System Metrics Collector', started_at: '2026-06-08 15:55:00 UTC', finished_at: '2026-06-08 15:55:02 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-dd4', status: 'completed' } },
+  { id: 'exec-005', schedule_id: 'sch-004', schedule_name: 'System Metrics Collector', started_at: '2026-06-08 15:50:00 UTC', finished_at: '2026-06-08 15:50:02 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-ee5', status: 'completed' } },
+  { id: 'exec-006', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 14:00:00 UTC', finished_at: '2026-06-08 14:00:08 UTC', status: 'failure', error_message: 'Timeout: execution exceeded 30s limit', agent_session: { id: 'sess-ff6', status: 'terminated' } },
+  { id: 'exec-007', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 13:00:00 UTC', finished_at: '2026-06-08 13:00:04 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-gg7', status: 'completed' } },
+  { id: 'exec-008', schedule_id: 'sch-003', schedule_name: 'Weekly Data Sync', started_at: '2026-06-01 02:00:00 UTC', finished_at: '2026-06-01 02:01:15 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-hh8', status: 'completed' } },
+  { id: 'exec-009', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 16:00:00 UTC', finished_at: null, status: 'running', error_message: null, agent_session: { id: 'sess-ii9', status: 'running' } },
+  { id: 'exec-010', schedule_id: 'sch-005', schedule_name: 'PR Review Scan', started_at: '2026-06-08 09:00:00 UTC', finished_at: '2026-06-08 09:00:18 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-jj0', status: 'completed' } },
+];
+
+let schedPage = 0;
+let schedEditingId = null;
+let schedNextId = 6;
+let schedSelectedCron = '0 * * * *';
+let schedHistoryFilterId = null;
+
+/* ── FORMAT HELPERS ── */
+function schedFormatCron(cron) {
+  const map = {
+    '0 * * * *': 'Every hour', '0 8 * * *': 'Daily at 8:00 AM',
+    '0 8 * * 1-5': 'Weekdays at 8:00 AM', '0 8 * * 1': 'Weekly Monday 8:00 AM',
+    '0 2 * * 1': 'Weekly Monday 2:00 AM', '*/5 * * * *': 'Every 5 minutes',
+    '0 9 * * 1-5': 'Weekdays at 9:00 AM', '0 0 1 1 *': 'Yearly', '0 8 1 * *': 'Monthly on 1st',
+  };
+  return map[cron] || cron;
 }
+
+/* ── LIST ── */
+function schedRender() {
+  const tbody = document.getElementById('sched-table-body');
+  if (!tbody) return;
+  const start = schedPage * 5;
+  const end = start + 5;
+  const items = schedData.slice(start, end);
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-secondary)">No schedules found. Click "Create Schedule" to get started.</td></tr>';
+    document.getElementById('sched-pagination-info').textContent = '0 of 0';
+    return;
+  }
+  tbody.innerHTML = items.map(s => {
+    const isActive = s.status === 'active';
+    const pauseIcon = isActive ? '⏸' : '▶';
+    const pauseTitle = isActive ? 'Pause' : 'Resume';
+    const statusChip = isActive ? '<span class="chip chip-green">● Active</span>' : '<span class="chip chip-yellow">⏸ Paused</span>';
+    return '<tr>' +
+      '<td><strong>' + s.name + '</strong><div class="text-xs text-secondary">' + (s.description || '') + '</div></td>' +
+      '<td><span class="font-mono text-sm">' + s.cron_expression + '</span><br><span class="text-xs text-secondary">' + schedFormatCron(s.cron_expression) + '</span></td>' +
+      '<td><span class="chip chip-blue">' + (s.target_name || s.target_id) + '</span></td>' +
+      '<td>' + statusChip + '</td>' +
+      '<td class="actions-cell">' +
+        '<button class="btn-icon-sm" title="Execution history" onclick="schedShowHistory(\'' + s.id + '\')">📋</button>' +
+        '<button class="btn-icon-sm" title="Edit" onclick="schedOpenEdit(\'' + s.id + '\')">✏️</button>' +
+        '<button class="btn-icon-sm" title="' + pauseTitle + '" onclick="schedTogglePause(\'' + s.id + '\')">' + pauseIcon + '</button>' +
+        '<button class="btn-icon-sm" title="Delete" onclick="schedDelete(\'' + s.id + '\')" style="color:var(--error)">🗑</button>' +
+      '</td></tr>';
+  }).join('');
+  const total = schedData.length;
+  const totalPages = Math.ceil(total / 5) || 1;
+  document.getElementById('sched-pagination-info').textContent = (start + 1) + '–' + Math.min(end, total) + ' of ' + total;
+  document.getElementById('sched-prev-btn').disabled = schedPage === 0;
+  document.getElementById('sched-next-btn').disabled = schedPage >= totalPages - 1;
+}
+
+function schedPrevPage() { if (schedPage > 0) { schedPage--; schedRender(); } }
+function schedNextPage() {
+  const totalPages = Math.ceil(schedData.length / 5);
+  if (schedPage < totalPages - 1) { schedPage++; schedRender(); }
+}
+
+/* ── ACTIONS ── */
+function schedTogglePause(id) {
+  const s = schedData.find(x => x.id === id);
+  if (!s) return;
+  const wasActive = s.status === 'active';
+  s.status = wasActive ? 'paused' : 'active';
+  schedToast(wasActive ? '"' + s.name + '" paused' : '"' + s.name + '" resumed', 'info');
+  schedRender();
+}
+
+function schedDelete(id) {
+  const s = schedData.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm('Delete schedule "' + s.name + '"? This action cannot be undone.')) return;
+  schedData = schedData.filter(x => x.id !== id);
+  schedExecHistory = schedExecHistory.filter(x => x.schedule_id !== id);
+  schedToast('"' + s.name + '" deleted', 'success');
+  schedRender();
+}
+
+/* ── CREATE/EDIT DIALOG ── */
+function schedOpenCreate() {
+  schedEditingId = null;
+  document.getElementById('sched-dialog-title').textContent = 'Create Schedule';
+  document.getElementById('sched-save-btn').textContent = 'Create Schedule';
+  document.getElementById('sched-input-name').value = '';
+  document.getElementById('sched-input-desc').value = '';
+  document.getElementById('sched-input-target').value = '';
+  schedSelectedCron = '0 * * * *';
+  schedSyncCron(schedSelectedCron);
+  document.getElementById('sched-payload-rows').innerHTML =
+    '<div class="payload-row"><input class="key-input" placeholder="Key" value="report_type"><input placeholder="Value" value="daily_summary"><button class="remove-btn" onclick="schedRemovePayload(this)">×</button></div>' +
+    '<div class="payload-row"><input class="key-input" placeholder="Key" value="format"><input placeholder="Value" value="markdown"><button class="remove-btn" onclick="schedRemovePayload(this)">×</button></div>';
+  document.getElementById('modal-schedule').classList.add('open');
+}
+
+function schedOpenEdit(id) {
+  const s = schedData.find(x => x.id === id);
+  if (!s) return;
+  schedEditingId = id;
+  document.getElementById('sched-dialog-title').textContent = 'Edit Schedule';
+  document.getElementById('sched-save-btn').textContent = 'Save Changes';
+  document.getElementById('sched-input-name').value = s.name;
+  document.getElementById('sched-input-desc').value = s.description || '';
+  document.getElementById('sched-input-target').value = s.target_id;
+  schedSelectedCron = s.cron_expression;
+  schedSyncCron(schedSelectedCron);
+  const params = s.input_params || {};
+  const keys = Object.keys(params);
+  document.getElementById('sched-payload-rows').innerHTML = keys.length > 0
+    ? keys.map(k => '<div class="payload-row"><input class="key-input" placeholder="Key" value="' + k + '"><input placeholder="Value" value="' + params[k] + '"><button class="remove-btn" onclick="schedRemovePayload(this)">×</button></div>').join('')
+    : '<div class="payload-row"><input class="key-input" placeholder="Key"><input placeholder="Value"><button class="remove-btn" onclick="schedRemovePayload(this)">×</button></div>';
+  document.getElementById('modal-schedule').classList.add('open');
+}
+
+function schedCloseDialog(e) {
+  if (e && e.target !== e.currentTarget) return;
+  var modal = document.getElementById('modal-schedule');
+  if (modal) modal.classList.remove('open');
+  schedEditingId = null;
+}
+
+/* ── CRON EDITOR ── */
+function schedSyncCron(cron) {
+  var textEl = document.getElementById('sched-cron-text');
+  if (textEl) textEl.value = cron;
+  var parts = cron.split(' ');
+  var minute = parts[0], hour = parts[1], dow = parts[4] || '*';
+  var minEl = document.getElementById('sched-cron-minute');
+  var hourEl = document.getElementById('sched-cron-hour');
+  if (minEl) minEl.value = (minute === '*' || minute.startsWith('*/')) ? '*' : (isNaN(parseInt(minute)) ? '*' : parseInt(minute));
+  if (hourEl) hourEl.value = (hour === '*' || hour.startsWith('*/')) ? '*' : (isNaN(parseInt(hour)) ? '*' : parseInt(hour));
+  var selectedDays = dow === '*' ? [1,2,3,4,5] : dow.split(',').map(Number);
+  document.querySelectorAll('.sched-dow').forEach(function(b) {
+    b.classList.toggle('selected', selectedDays.indexOf(parseInt(b.dataset.day)) !== -1);
+  });
+  schedUpdateShortcuts(cron);
+  schedUpdateDesc(cron);
+}
+
+function schedOnCronText(val) {
+  schedSelectedCron = val.trim() || '0 * * * *';
+  schedSyncCron(schedSelectedCron);
+}
+
+function schedOnCronSelect() {
+  var minute = document.getElementById('sched-cron-minute').value;
+  var hour = document.getElementById('sched-cron-hour').value;
+  var selected = Array.from(document.querySelectorAll('.sched-dow.selected')).map(function(b) { return parseInt(b.dataset.day); });
+  var cronMin = minute === '*' ? '*' : minute;
+  var cronHour = hour === '*' ? '*' : hour;
+  var cronDow = (selected.length > 0 && selected.length < 7) ? selected.join(',') : '*';
+  schedSelectedCron = cronMin + ' ' + cronHour + ' * * ' + cronDow;
+  var textEl = document.getElementById('sched-cron-text');
+  if (textEl) textEl.value = schedSelectedCron;
+  schedUpdateShortcuts(schedSelectedCron);
+  schedUpdateDesc(schedSelectedCron);
+}
+
+function schedSelectShortcut(btn) {
+  document.querySelectorAll('.shortcut-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  var cron = btn.dataset.cron;
+  if (cron) { schedSelectedCron = cron; schedSyncCron(cron); }
+}
+
+function schedUpdateShortcuts(cron) {
+  document.querySelectorAll('.shortcut-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.cron === cron);
+  });
+}
+
+function schedToggleDow(btn) {
+  btn.classList.toggle('selected');
+  schedOnCronSelect();
+}
+
+function schedUpdateDesc(cron) {
+  var desc = schedFormatCron(cron);
+  var next = schedEstimateNext(cron);
+  var el = document.getElementById('sched-cron-desc');
+  if (el) el.innerHTML = '⏰ <strong>' + desc + '</strong> — Next run: <span id="sched-cron-next">' + next + '</span>';
+}
+
+function schedEstimateNext(cron) {
+  var parts = cron.split(' ');
+  var minute = parts[0], hour = parts[1];
+  var now = new Date();
+  var h = hour === '*' ? now.getUTCHours() : parseInt(hour);
+  var m = minute === '*' ? 0 : parseInt(minute);
+  if (isNaN(h)) h = now.getUTCHours();
+  if (isNaN(m)) m = 0;
+  if (minute === '*' || minute.startsWith('*/')) { m = Math.ceil(now.getUTCMinutes() / 5) * 5; if (m >= 60) { m = 0; h = (h + 1) % 24; } }
+  var next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m, 0));
+  if (next <= now) next = new Date(next.getTime() + 24 * 60 * 60 * 1000);
+  var dowParts = parts[4];
+  if (dowParts && dowParts !== '*') {
+    var allowed = dowParts.split(',').map(Number);
+    var attempts = 0;
+    while (attempts < 14 && allowed.indexOf((next.getUTCDay() === 0 ? 6 : next.getUTCDay() - 1)) === -1) {
+      next = new Date(next.getTime() + 24 * 60 * 60 * 1000);
+      attempts++;
+    }
+  }
+  return next.toUTCString().replace(' GMT', ' UTC');
+}
+
+/* ── PAYLOAD EDITOR ── */
+function schedAddPayload() {
+  var container = document.getElementById('sched-payload-rows');
+  var row = document.createElement('div');
+  row.className = 'payload-row';
+  row.innerHTML = '<input class="key-input" placeholder="Key"><input placeholder="Value"><button class="remove-btn" onclick="schedRemovePayload(this)">×</button>';
+  container.appendChild(row);
+}
+
+function schedRemovePayload(btn) {
+  var row = btn.closest('.payload-row');
+  if (document.querySelectorAll('.payload-row').length > 1) {
+    row.remove();
+  } else {
+    schedToast('At least one parameter is required', 'error');
+  }
+}
+
+function schedGetPayload() {
+  var params = {};
+  document.querySelectorAll('#sched-payload-rows .payload-row').forEach(function(row) {
+    var key = row.querySelector('.key-input').value.trim();
+    var val = row.querySelector('input:not(.key-input)').value.trim();
+    if (key) params[key] = val;
+  });
+  return params;
+}
+
+/* ── SAVE ── */
+function schedSave() {
+  var name = document.getElementById('sched-input-name').value.trim();
+  var description = document.getElementById('sched-input-desc').value.trim();
+  var targetId = document.getElementById('sched-input-target').value;
+  var targetName = '';
+  for (var i = 0; i < SCHED_AGENTS.length; i++) {
+    if (SCHED_AGENTS[i].id === targetId) { targetName = SCHED_AGENTS[i].name; break; }
+  }
+  var params = schedGetPayload();
+  if (!name) { schedToast('Please enter a schedule name', 'error'); document.getElementById('sched-input-name').focus(); return; }
+  if (!targetId) { schedToast('Please select an agent type', 'error'); return; }
+  if (schedEditingId) {
+    var s = schedData.find(function(x) { return x.id === schedEditingId; });
+    if (s) {
+      s.name = name; s.description = description; s.cron_expression = schedSelectedCron;
+      s.target_id = targetId; s.target_name = targetName; s.input_params = params;
+      schedToast('Schedule "' + name + '" updated', 'success');
+    }
+  } else {
+    var newId = 'sch-' + String(schedNextId++).padStart(3, '0');
+    schedData.unshift({ id: newId, name: name, description: description, cron_expression: schedSelectedCron, target_id: targetId, target_name: targetName, status: 'active', input_params: params, created_at: new Date().toISOString().split('T')[0] });
+    schedToast('Schedule "' + name + '" created', 'success');
+  }
+  schedCloseDialog();
+  schedRender();
+}
+
+/* ── EXECUTION HISTORY ── */
+function schedShowHistory(scheduleId) {
+  schedHistoryFilterId = scheduleId;
+  var s = schedData.find(function(x) { return x.id === scheduleId; });
+  document.getElementById('sched-history-name').textContent = s ? s.name : '—';
+  document.getElementById('sched-history-title').textContent = 'Execution History — ' + (s ? s.name : '');
+  document.getElementById('sched-history-filter').value = 'all';
+  schedRenderHistory();
+  document.getElementById('sched-history-dialog').classList.add('open');
+}
+
+function schedCloseHistory(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('sched-history-dialog').classList.remove('open');
+  schedHistoryFilterId = null;
+}
+
+function schedRenderHistory() {
+  var tbody = document.getElementById('sched-history-body');
+  if (!tbody) return;
+  var filter = document.getElementById('sched-history-filter').value;
+  var items = schedExecHistory.filter(function(e) { return e.schedule_id === schedHistoryFilterId; });
+  if (filter !== 'all') items = items.filter(function(e) { return e.status === filter; });
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary)">No execution history found.</td></tr>';
+    document.getElementById('sched-history-info').textContent = '0 of 0';
+    return;
+  }
+  tbody.innerHTML = items.map(function(e) {
+    var badge = '';
+    if (e.status === 'success') badge = '<span class="exec-status-badge exec-success">Success</span>';
+    else if (e.status === 'failure') badge = '<span class="exec-status-badge exec-failure">Failure</span>';
+    else badge = '<span class="exec-status-badge exec-running">Running</span>';
+    var sessionHtml = e.agent_session
+      ? '<span class="session-chip session-' + e.agent_session.status + '">' + e.agent_session.status + '</span>'
+      : '<span class="text-secondary text-sm">—</span>';
+    var errHtml = e.error_message
+      ? '<span style="color:var(--error);font-size:12px">' + e.error_message + '</span>'
+      : '<span class="text-secondary text-sm">—</span>';
+    var openBtn = e.agent_session
+      ? '<button class="btn-icon-sm" title="View agent result" onclick="schedShowExecDetail(\'' + e.agent_session.id + '\')" style="color:var(--primary)">↗</button>'
+      : '';
+    return '<tr>' +
+      '<td class="text-sm">' + (e.started_at || '—') + '</td>' +
+      '<td class="text-sm">' + (e.finished_at || '—') + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td>' + sessionHtml + '</td>' +
+      '<td>' + errHtml + '</td>' +
+      '<td style="text-align:center">' + openBtn + '</td></tr>';
+  }).join('');
+  document.getElementById('sched-history-info').textContent = items.length + ' execution(s)';
+}
+
+/* ── EXECUTION DETAIL ── */
+function schedShowExecDetail(sessionId) {
+  var exec = null;
+  for (var i = 0; i < schedExecHistory.length; i++) {
+    if (schedExecHistory[i].agent_session && schedExecHistory[i].agent_session.id === sessionId) {
+      exec = schedExecHistory[i]; break;
+    }
+  }
+  var session = exec ? exec.agent_session : { id: sessionId, status: 'unknown' };
+  document.getElementById('sched-exec-detail-body').innerHTML =
+    '<div class="detail-section">' +
+      '<div class="detail-row"><span class="detail-label">Session ID</span><span class="detail-value mono">' + session.id + '</span></div>' +
+      '<div class="detail-row"><span class="detail-label">Status</span><span class="detail-value"><span class="chip chip-' + (session.status === 'completed' ? 'green' : (session.status === 'failed' || session.status === 'terminated' ? 'red' : 'blue')) + '">' + session.status + '</span></span></div>' +
+      (exec ? '<div class="detail-row"><span class="detail-label">Schedule</span><span class="detail-value">' + exec.schedule_name + '</span></div>' : '') +
+      (exec ? '<div class="detail-row"><span class="detail-label">Started</span><span class="detail-value mono">' + exec.started_at + '</span></div>' : '') +
+      (exec ? '<div class="detail-row"><span class="detail-label">Finished</span><span class="detail-value mono">' + (exec.finished_at || '—') + '</span></div>' : '') +
+      (exec ? '<div class="detail-row"><span class="detail-label">Error</span><span class="detail-value" style="color:' + (exec.error_message ? 'var(--error)' : 'var(--success)') + '">' + (exec.error_message || 'None') + '</span></div>' : '') +
+    '</div>' +
+    '<div class="detail-section">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:10px">Execution Logs</div>' +
+      '<div style="background:#FAFBFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:\'Courier New\',monospace;font-size:11px;line-height:1.8;color:var(--text-secondary);max-height:200px;overflow-y:auto">' +
+        '<div>[' + (exec ? exec.started_at : '...') + '] Session started: ' + session.id + '</div>' +
+        '<div>[2026-06-08 08:00:02] Target agent resolved</div>' +
+        '<div>[2026-06-08 08:00:03] Instance allocated: inst-' + session.id + '</div>' +
+        '<div>[2026-06-08 08:00:05] Input parameters validated</div>' +
+        (exec && exec.status === 'success' ? '<div>[' + (exec.finished_at || '...') + '] Execution completed successfully</div>' : '') +
+        (exec && exec.status === 'failure' ? '<div style="color:var(--error)">[' + (exec.finished_at || '...') + '] Execution failed: ' + exec.error_message + '</div>' : '') +
+        (exec && exec.status === 'running' ? '<div>[2026-06-08 ...] Execution in progress...</div>' : '') +
+      '</div>' +
+    '</div>';
+  document.getElementById('sched-exec-detail-dialog').classList.add('open');
+}
+
+function schedCloseExecDetail(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('sched-exec-detail-dialog').classList.remove('open');
+}
+
+/* ── TOAST ── */
+function schedToast(message, type) {
+  var container = document.getElementById('sched-toast-container');
+  if (!container) return;
+  var toast = document.createElement('div');
+  toast.className = 'sched-toast sched-' + (type || 'info');
+  var icons = { success: '✓', error: '✕', info: 'ℹ' };
+  toast.innerHTML = '<span>' + (icons[type] || 'ℹ') + '</span> ' + message;
+  container.appendChild(toast);
+  setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3000);
+}
+
+/* ── SCHEDULE KEYBOARD & BACKDROP ── */
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (document.getElementById('sched-exec-detail-dialog').classList.contains('open')) schedCloseExecDetail();
+    else if (document.getElementById('sched-history-dialog').classList.contains('open')) schedCloseHistory();
+    else if (document.getElementById('modal-schedule').classList.contains('open')) schedCloseDialog();
+  }
+});
 
 // ═══════════════════════════════ CHAT ═══════════════════════════════
 var dvChatTimers = [];
@@ -4005,6 +4556,8 @@ function setExecutionLogMode(mode) {
   document.querySelectorAll('.nav-parent-group.locked-open').forEach(function(g) {
     g.classList.remove('collapsed');
   });
+  // Render schedules table
+  schedRender();
 })();
 
 

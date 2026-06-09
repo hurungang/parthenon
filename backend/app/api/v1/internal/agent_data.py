@@ -28,86 +28,9 @@ from app.db.models.agents import AgentType
 from app.db.models.mcp_hub import McpSessionAuthType
 from app.db.session import DbSession
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name, is_system_tool
+from app.services.agents.system_tool_registry import SystemToolRegistry
 
 logger = logging.getLogger(__name__)
-
-# ── System tool schemas (OpenAI function-calling format) ──────────────────────
-# These are always available to agents regardless of role permissions.
-
-_SYSTEM_TOOLS = {
-    "system____save_result",
-    "system____send_notification",
-    "system____get_recipient_group",
-}
-
-_SYSTEM_TOOL_SCHEMAS: dict[str, dict] = {
-    "save_result": {
-        "type": "function",
-        "function": {
-            "name": "save_result",
-            "description": "Save the final result of agent execution to be retrieved later",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "content": {"type": "string", "description": "The result content to save"},
-                    "title": {"type": "string", "description": "Optional title for the result"},
-                },
-                "required": ["content"],
-            },
-        },
-    },
-    "send_notification": {
-        "type": "function",
-        "function": {
-            "name": "send_notification",
-            "description": "Send a notification to a recipient group via configured channels",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "group_slug": {
-                        "type": "string",
-                        "description": "Slug of the recipient group",
-                    },
-                    "channel": {
-                        "type": "string",
-                        "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
-                    },
-                    "subject": {
-                        "type": "string",
-                        "description": "Notification subject / title",
-                    },
-                    "body": {
-                        "type": "string",
-                        "description": "Notification body content",
-                    },
-                    "priority": {
-                        "type": "string",
-                        "enum": ["low", "normal", "high"],
-                        "description": "Notification priority level",
-                    },
-                },
-                "required": ["group_slug", "body"],
-            },
-        },
-    },
-    "get_recipient_group": {
-        "type": "function",
-        "function": {
-            "name": "get_recipient_group",
-            "description": "Get information about a notification recipient group",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "group_slug": {
-                        "type": "string",
-                        "description": "Slug of the recipient group to query",
-                    },
-                },
-                "required": ["group_slug"],
-            },
-        },
-    },
-}
 
 InternalAgentDataRouter = APIRouter(
     prefix="/internal/data",
@@ -463,7 +386,9 @@ async def get_agent_context(
                 agent_input_type,
                 agent_input_schema,
             ) in delegation_rows.fetchall():
-                if agent_type_name:
+                # Skip self-delegation — avoid an agent appearing in its own
+                # allowed delegation targets (avoids false cycle detection).
+                if agent_type_name and agent_type_name != agent_type.name:
                     allowed_agent_types.add(agent_type_name)
                     delegated_agent_type_metadata[agent_type_name] = {
                         "description": agent_type_description,
@@ -502,6 +427,9 @@ async def get_agent_context(
             )
         )
         for tool in mcp_rows.scalars().all():
+            # Skip system tools — they are added via _SYSTEM_TOOL_SCHEMAS below
+            if is_system_tool(tool.name):
+                continue
             canonical_tool_name = _canonicalize_tool_identifier(tool.name)
             sanitized = canonical_tool_name.replace("____", "__")
             tool_name_map[sanitized] = canonical_tool_name
@@ -524,8 +452,10 @@ async def get_agent_context(
             continue
         if server != "system":
             continue
-        if bare_tool in _SYSTEM_TOOL_SCHEMAS:
-            tool_definitions.append(_SYSTEM_TOOL_SCHEMAS[bare_tool])
+        if bare_tool in SystemToolRegistry.get_names():
+            schema = SystemToolRegistry.get_schema(bare_tool)
+            if schema is not None:
+                tool_definitions.append(schema)
 
     if allowed_agent_types:
         for target_slug in sorted(allowed_agent_types):

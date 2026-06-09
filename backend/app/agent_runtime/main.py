@@ -89,6 +89,10 @@ def create_app() -> FastAPI:
     from app.agent_runtime.api.conversation import conversation_router
     app.include_router(conversation_router)
 
+    # Phase 3.5 — resume endpoint for human intervene (Control Center → Agent Runtime)
+    from app.agent_runtime.api.intervene import resume_router
+    app.include_router(resume_router)
+
     return app
 
 

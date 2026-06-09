@@ -38,14 +38,14 @@ export function AgentTrailsPage() {
       </Typography>
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tab} onChange={handleTabChange} aria-label={t('nav.agentTrails')}>
-          <Tab label={t('nav.agentLogs')} id="trails-tab-0" />
-          <Tab label={t('nav.agentExecutions')} id="trails-tab-1" />
-          <Tab label={t('nav.results')} id="trails-tab-2" />
+          <Tab label={t('nav.agentExecutions')} id="trails-tab-0" />
+          <Tab label={t('nav.results')} id="trails-tab-1" />
+          <Tab label={t('nav.agentLogs')} id="trails-tab-2" />
         </Tabs>
       </Box>
-      <TabPanel value={tab} index={0}><ConversationHistoryPage /></TabPanel>
-      <TabPanel value={tab} index={1}><AgentInstanceDashboardPage /></TabPanel>
-      <TabPanel value={tab} index={2}><ResultRepositoryPage /></TabPanel>
+      <TabPanel value={tab} index={0}><AgentInstanceDashboardPage /></TabPanel>
+      <TabPanel value={tab} index={1}><ResultRepositoryPage /></TabPanel>
+      <TabPanel value={tab} index={2}><ConversationHistoryPage /></TabPanel>
     </Box>
   )
 }

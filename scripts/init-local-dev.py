@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_settings
+from app.core.yaml_config import load_identity_yaml
 from app.db.models.platform_user import PlatformUser
 from app.db.models.identity import Role
 from app.db.models.user_role import UserRole
@@ -221,8 +222,10 @@ class LocalDevInitializer:
         logger.info("Step 5: Ensuring agent realm OIDC clients exist...")
         
         # Agent realm client must match what identity_service._agent_realm_client_id() returns
-        # which is settings.jwt_audience (defaults to "parthenon")
-        agent_client_id = "parthenon"
+        # which reads audience from config/identity.yaml
+        yaml_cfg = load_identity_yaml()
+        agent_client_id = yaml_cfg.audience or "parthenon"
+        print(f"  Using agent client ID '{agent_client_id}' from identity.yaml")
         
         agent_client_exists = await self.kc_client.client_exists(
             self.admin_token,

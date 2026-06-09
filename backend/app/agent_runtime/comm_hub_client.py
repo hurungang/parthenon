@@ -3,7 +3,6 @@
 Calls Communication Hub tool routing endpoint with mTLS authentication.
 Replaces direct McpProxyEngine usage in runtime_executor.
 """
-import json
 import logging
 from typing import Any
 
@@ -234,6 +233,86 @@ class CommHubToolClient:
             ) from exc
         except Exception as exc:
             raise CommHubToolClientError(f"A2A delegation error: {exc}") from exc
+
+    async def call_human_intervene(
+        self,
+        session_id: str,
+        intervention_type: str,
+        reason: str,
+        choices: list[str] | None = None,
+        prompt: str | None = None,
+    ) -> dict[str, Any]:
+        """Request human intervention through Communication Hub.
+
+        Forwards a ``human_intervene`` system tool call to Communication Hub,
+        which routes it to Control Center for persist and returns a request_id.
+
+        Args:
+            session_id: Agent session ID.
+            intervention_type: Type of intervention (approval, choice, text).
+            reason: Explanation of why human input is needed.
+            choices: Available options when type is ``choice``.
+            prompt: Descriptive prompt when type is ``text``.
+
+        Returns:
+            Dict with ``request_id`` and ``status``.
+
+        Raises:
+            CommHubToolClientError: If the call fails.
+        """
+        endpoint = f"{self._comm_hub_url}/internal/tools/call"
+
+        tool_args: dict[str, Any] = {
+            "intervention_type": intervention_type,
+            "reason": reason,
+        }
+        if choices is not None:
+            tool_args["choices"] = choices
+        if prompt is not None:
+            tool_args["prompt"] = prompt
+
+        payload = {
+            "tool_name": "human_intervene",
+            "tool_args": tool_args,
+            "session_id": session_id,
+            "agent_type_id": "",
+        }
+
+        try:
+            client_kwargs: dict[str, Any] = {
+                "timeout": 60.0,
+                "verify": get_ssl_context(),
+            }
+            headers: dict[str, str] = {}
+
+            if self._cert_path and self._key_path:
+                if self._comm_hub_url.startswith("https://"):
+                    client_kwargs["cert"] = (self._cert_path, self._key_path)
+                else:
+                    from pathlib import Path
+
+                    cert_content = Path(self._cert_path).read_text()
+                    headers["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                response = await client.post(endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                result_data = response.json()
+
+                if result_data.get("error"):
+                    error_msg = result_data["error"]
+                    logger.error("Human intervene call failed: %s", error_msg)
+                    raise CommHubToolClientError(error_msg)
+
+                return result_data.get("result", {})
+
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:500] if exc.response else "Unknown error"
+            raise CommHubToolClientError(
+                f"Human intervene call failed: HTTP {exc.response.status_code if exc.response else 'unknown'} - {detail}"
+            ) from exc
+        except Exception as exc:
+            raise CommHubToolClientError(f"Human intervene error: {exc}") from exc
 
     async def wait_for_a2a_response(
         self,

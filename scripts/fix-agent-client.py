@@ -1,15 +1,21 @@
-#!/usr/bin/env python3
-"""Fix agent realm client mismatch by creating 'parthenon' client."""
+# Fix agent realm client mismatch by creating client matching config/identity.yaml.
 import asyncio
 import sys
 sys.path.insert(0, 'backend')
 
+from app.core.yaml_config import load_identity_yaml
 from app.services.identity.keycloak_admin_client import KeycloakAdminClient
 
 
 async def fix_agent_client():
-    """Create the correct 'parthenon' client in agent realm."""
+    """Create the correct OAuth client in agent realm, matching identity.yaml."""
     kc_client = KeycloakAdminClient("http://localhost:8082")
+    
+    # Determine client ID from identity.yaml (must match what _agent_realm_client_id() returns)
+    yaml_cfg = load_identity_yaml()
+    agent_client_id = yaml_cfg.audience or "parthenon"
+    print(f"Using agent client ID '{agent_client_id}' from identity.yaml")
+    print()
     
     # Get admin token
     print("Authenticating with Keycloak...")
@@ -17,18 +23,18 @@ async def fix_agent_client():
     print("✓ Authenticated")
     print()
     
-    # Check if 'parthenon' client already exists
-    print("Checking for 'parthenon' client in ai_agents realm...")
-    exists = await kc_client.client_exists(admin_token, "ai_agents", "parthenon")
+    # Check if agent client already exists
+    print(f"Checking for '{agent_client_id}' client in ai_agents realm...")
+    exists = await kc_client.client_exists(admin_token, "ai_agents", agent_client_id)
     
     if exists:
-        print("✓ Client 'parthenon' already exists")
+        print(f"✓ Client '{agent_client_id}' already exists")
     else:
-        print("Creating 'parthenon' client in ai_agents realm...")
+        print(f"Creating '{agent_client_id}' client in ai_agents realm...")
         await kc_client.create_oidc_client(
             admin_token,
             "ai_agents",
-            "parthenon",
+            agent_client_id,
             redirect_uris=[
                 "http://localhost:8000/api/v1/agents/oauth/callback",
                 "http://localhost:5173/agents/identities/oauth/callback",
@@ -37,15 +43,14 @@ async def fix_agent_client():
             ],
             public_client=True
         )
-        print("✓ Created client 'parthenon' in agent realm")
+        print(f"✓ Created client '{agent_client_id}' in agent realm")
     
     print()
     print("=" * 70)
-    print("✓ Agent realm client fixed!")
+    print(f"✓ Agent realm client '{agent_client_id}' verified!")
     print("=" * 70)
     print()
-    print("The agent realm now has the 'parthenon' client that the backend expects.")
-    print("Note: The old 'parthenon-api' client still exists but won't interfere.")
+    print(f"The agent realm has the '{agent_client_id}' client that the backend expects.")
     print()
 
 

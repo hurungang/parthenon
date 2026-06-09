@@ -150,14 +150,51 @@ async def list_executions(
     job_id: uuid.UUID,
     db: DbSession,
     _: dict = Depends(require_permission(RT_SCHEDULING, "read")),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[JobExecution]:
     job = await db.get(ScheduledJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Scheduled job not found")
-    result = await db.execute(
+    stmt = (
         select(JobExecution)
         .where(JobExecution.job_id == job_id)
         .order_by(JobExecution.started_at.desc())
-        .limit(100)
+        .offset(offset)
+        .limit(limit)
     )
-    return list(result.scalars().all())
+    result = await db.execute(stmt)
+    executions = list(result.scalars().all())
+
+    # Enrich with linked AgentJob session data when available
+    from app.db.models.agents import AgentJob
+    session_ids = [
+        uuid.UUID(exec.result["session_id"])
+        for exec in executions
+        if exec.result and isinstance(exec.result, dict) and "session_id" in exec.result
+    ]
+    if session_ids:
+        from sqlalchemy import select as sa_select
+        from sqlalchemy.orm import joinedload
+        agent_stmt = (
+            sa_select(AgentJob)
+            .options(joinedload(AgentJob.agent_type))
+            .where(AgentJob.id.in_(session_ids))
+        )
+        agent_result = await db.execute(agent_stmt)
+        sessions = {s.id: s for s in agent_result.unique().scalars().all()}
+        for exec in executions:
+            if exec.result and isinstance(exec.result, dict) and "session_id" in exec.result:
+                sid = uuid.UUID(exec.result["session_id"])
+                session = sessions.get(sid)
+                if session:
+                    exec.agent_session = dict(
+                        id=session.id,
+                        status=session.status,
+                        output_data=session.output_data,
+                        error_message=session.error_message,
+                        started_at=session.started_at,
+                        completed_at=session.completed_at,
+                        agent_type_name=session.agent_type.name if session.agent_type else None,
+                    )
+    return executions

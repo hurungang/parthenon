@@ -48,6 +48,7 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/system-tools/save-result"),
     ("POST", "/api/v1/internal/system-tools/send-notification"),
     ("POST", "/api/v1/internal/system-tools/get-recipient-group"),
+    ("POST", "/api/v1/internal/system-tools/human-intervene"),
     ("POST", "/api/v1/internal/mcp/proxy-tool"),
 }
 

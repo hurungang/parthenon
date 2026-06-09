@@ -166,7 +166,7 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `AgentTrailsPage` | component | Tabbed view consolidating conversation history, agent executions, and results at `/agent-trails` | `frontend/src/pages/trails/AgentTrailsPage.tsx` |
+| `AgentTrailsPage` | component | Tabbed view consolidating agent executions (tab 0), results (tab 1), and conversation history (tab 2) at `/agent-trails` | `frontend/src/pages/trails/AgentTrailsPage.tsx` |
 | `NotificationConfigPage` | component | Tabbed view consolidating notification channels, groups, and logs at `/notifications` | `frontend/src/pages/notifications/NotificationConfigPage.tsx` |
 
 ### API Client & Permission Error Infrastructure

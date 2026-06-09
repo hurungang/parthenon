@@ -18,6 +18,7 @@ Observability provides real-time insight into the health, performance, and activ
 - **Surfaces observe-only guardrail limit alerts as user-visible operational signals** in execution logs distinct from standard execution failures
 - **Surfaces disabled-model and disabled-vendor block events** in execution logs and operational dashboards
 - **Surfaces operator-initiated termination outcomes** as a distinct `terminated` state distinct from `failed` (genuine agent or runtime error)
+- **Surfaces human intervene request lifecycle events** including `intervene_request_created`, `intervene_request_responded`, `intervene_request_expired`, and `intervene_request_cancelled`
 
 ## Key Concepts
 - **OTEL Instrumentation**: Embedding observability hooks in all components
@@ -37,6 +38,8 @@ Observability provides real-time insight into the health, performance, and activ
 - **Observe-only guardrail limit alerts are surfaced as user-visible operational signals in execution logs**
 - **Operator-initiated termination outcomes are surfaced as a distinct operational signal distinct from `failed`**
 - **Disabled-model and disabled-vendor block events are surfaced in execution logs and operational dashboards**
+- **Human intervene lifecycle events (created, responded, expired, cancelled) are emitted as OTEL spans and visible in the admin dashboard**
+- **Metrics for pending intervention count, average response time, and intervention resolution rate are exposed via the observability pipeline**
 
 ## Out of Scope
 - (none additional)

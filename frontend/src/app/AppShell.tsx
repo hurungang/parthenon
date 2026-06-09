@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   AppBar,
+  Badge,
   Box,
   Collapse,
   CssBaseline,
@@ -37,8 +38,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import TimelineIcon from '@mui/icons-material/Timeline'
 import NotificationsIcon from '@mui/icons-material/Notifications'
+import PanToolIcon from '@mui/icons-material/PanTool'
 import { useAuthStore } from '../stores/authStore'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
+import apiClient from '../api/apiClient'
+import type { InterveneMetrics } from '../types'
 
 const DRAWER_WIDTH = 256
 
@@ -107,6 +111,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.modelConfigs', path: '/agents/model-configs', icon: <TuneIcon /> },
       { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
       { labelKey: 'nav.agentTrails', path: '/agent-trails', icon: <TimelineIcon /> },
+      { labelKey: 'nav.humanIntervene', path: '/agents/intervene', icon: <PanToolIcon /> },
     ],
   },
   {
@@ -209,6 +214,21 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] =
     useState<Record<string, boolean>>(DEFAULT_EXPANDED_GROUPS)
+  const [interveneMetrics, setInterveneMetrics] = useState<InterveneMetrics | null>(null)
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const { data } = await apiClient.get<InterveneMetrics>('/intervene/metrics')
+        setInterveneMetrics(data)
+      } catch {
+        // Metrics are best-effort
+      }
+    }
+    void fetchMetrics()
+    const interval = setInterval(fetchMetrics, 15_000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen)
 
@@ -284,7 +304,15 @@ export function AppShell() {
                         onClick={() => { navigate(child.path); setMobileOpen(false) }}
                         sx={childItemButtonSx}
                       >
-                        <ListItemIcon sx={childIconSx}>{child.icon}</ListItemIcon>
+                        <ListItemIcon sx={childIconSx}>
+                          {child.path === '/agents/intervene' && (interveneMetrics?.pending_count ?? 0) > 0 ? (
+                            <Badge badgeContent={interveneMetrics!.pending_count} color="error" overlap="circular">
+                              {child.icon}
+                            </Badge>
+                          ) : (
+                            child.icon
+                          )}
+                        </ListItemIcon>
                         <ListItemText
                           primary={t(child.labelKey)}
                           primaryTypographyProps={{

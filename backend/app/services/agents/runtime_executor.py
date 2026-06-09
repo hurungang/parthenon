@@ -45,10 +45,16 @@ from app.services.agents.guardrails import (
 )
 from app.services.agents.runtime_loader import AgentRuntimeLoader
 from app.services.agents.session_service import AgentSessionService
-from app.services.agents.tool_naming import build_tool_name, parse_tool_name, is_system_tool
+from app.services.agents.tool_naming import build_tool_name, parse_tool_name, is_system_tool, _LEGACY_SYSTEM_TOOL_NAMES
+from app.services.agents.system_tool_registry import SystemToolRegistry
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
+
+
+class HumanInterveneRequired(Exception):
+    """Raised from the task loop when the agent calls human_intervene,
+    signalling that execution should be paused rather than completed."""
 
 try:
     import langchain  # noqa: F401
@@ -126,12 +132,8 @@ def _canonicalize_tool_name_for_log(
     if "____" in tool_name:
         return tool_name
 
-    if tool_name in {"save_result", "send_notification", "get_recipient_group"}:
+    if tool_name in SystemToolRegistry.get_names():
         return build_tool_name("system", tool_name)
-
-    if tool_name.startswith("system/"):
-        bare = tool_name[len("system/"):]
-        return build_tool_name("system", bare)
 
     if tool_name.startswith("system__"):
         bare = tool_name[len("system__"):]
@@ -356,28 +358,49 @@ _SEND_NOTIFICATION_TOOL_DEF: dict[str, Any] = {
     },
 }
 
-# get_recipient_group system tool definition
-_GET_RECIPIENT_GROUP_TOOL_DEF: dict[str, Any] = {
+# human_intervene system tool definition
+_HUMAN_INTERVENE_TOOL_DEF: dict[str, Any] = {
     "type": "function",
     "function": {
-        "name": "get_recipient_group",
+        "name": "human_intervene",
         "description": (
-            "Retrieve information about a recipient group, including which channels "
-            "are configured and their recipient properties. Use this before sending "
-            "notifications to verify the group exists and understand its delivery setup."
+            "Request human intervention during agent execution. "
+            "Call this when you need approval, a choice between options, or text input from a human operator. "
+            "Execution will suspend until the human responds."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "group_slug": {
+                "reason": {
                     "type": "string",
-                    "description": "Slug of the recipient group to retrieve.",
+                    "description": "Explanation of why human input is needed",
+                },
+                "intervention_type": {
+                    "type": "string",
+                    "enum": ["approval", "choice", "text"],
+                    "description": "Type of intervention needed",
+                },
+                "choices": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Available options when intervention_type is 'choice'",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Descriptive prompt when intervention_type is 'text'",
                 },
             },
-            "required": ["group_slug"],
+            "required": ["reason", "intervention_type"],
         },
     },
-}
+    }
+
+
+# System tool schemas — all tool definitions are now centralised in
+# ``SystemToolRegistry``.  Use ``SystemToolRegistry.get_all_schemas()``
+# or ``SystemToolRegistry.get_schema(name)`` wherever needed.
+
+
 
 class AgentRuntimeExecutor:
     """
@@ -459,6 +482,7 @@ class AgentRuntimeExecutor:
             adjacency = {
                 str(agent_type_slug): [
                     str(target) for target in (context.get("allowed_agent_types") or [])
+                    if str(target) != str(agent_type_slug)
                 ]
             }
 
@@ -968,24 +992,21 @@ class AgentRuntimeExecutor:
         from app.db.models.mcp_hub import McpTool
 
         system_tool_defs: dict[str, dict[str, Any]] = {
-            "save_result": _SAVE_RESULT_TOOL_DEF,
-            "send_notification": _SEND_NOTIFICATION_TOOL_DEF,
-            "get_recipient_group": _GET_RECIPIENT_GROUP_TOOL_DEF,
+            name: SystemToolRegistry.get_schema(name)
+            for name in SystemToolRegistry.get_names()
         }
 
         explicit_system_tools: set[str] = set()
         for t in allowed_tools:
-            if is_system_tool(t):
-                try:
-                    _, bare_tool = parse_tool_name(t)
-                    explicit_system_tools.add(bare_tool)
-                except ValueError:
-                    if t.startswith("system/"):
-                        explicit_system_tools.add(t[len("system/"):])
-                    elif t.startswith("system__"):
-                        explicit_system_tools.add(t[len("system__"):])
-                    elif t.startswith("system_"):
-                        explicit_system_tools.add(t[len("system_"):])
+            if SystemToolRegistry.is_system_tool(t):
+                parsed = SystemToolRegistry.parse_name(t)
+                if parsed is not None:
+                    explicit_system_tools.add(parsed[1])
+                else:
+                    for prefix in ("system/", "system__", "system_"):
+                        if t.startswith(prefix):
+                            explicit_system_tools.add(t[len(prefix):])
+                            break
                     else:
                         explicit_system_tools.add(t)
 
@@ -1095,11 +1116,20 @@ class AgentRuntimeExecutor:
 
     # ── Public Entry Point ─────────────────────────────────────────────────────
 
-    async def run(self, session_id: uuid.UUID, data_client: "ControlCenterDataClient") -> None:
-        """Entry point called by the /execute trigger endpoint. Executes the session end-to-end.
+    async def run(
+        self,
+        session_id: uuid.UUID,
+        data_client: "ControlCenterDataClient",
+        response_value: dict | None = None,
+    ) -> None:
+        """Entry point called by the /execute or /internal/resume endpoint.
 
         The session is already in ``running`` state when this is called — the
-        /execute endpoint transitions it before launching this coroutine.
+        caller transitions it before launching this coroutine.  When
+        ``response_value`` is set (resume after human intervention), the executor
+        injects it as follow-up context so the LLM can continue without re-requesting
+        human input.
+
         All session state, agent context, and logging flow through the Control Center
         data API via ``data_client``.  No direct database access.
         """
@@ -1127,7 +1157,9 @@ class AgentRuntimeExecutor:
                     context=context,
                     data_client=data_client,
                 )
-                output_data = await self._run_task_loop_ar(job_data, context, data_client)
+                output_data = await self._run_task_loop_ar(
+                    job_data, context, data_client, response_value=response_value,
+                )
                 await data_client.mark_session_completed(session_id, output_data)
                 span.set_attribute("status", "completed")
 
@@ -1137,6 +1169,9 @@ class AgentRuntimeExecutor:
                     message="Session completed successfully",
                     data={"output_keys": list(output_data.keys()) if output_data else []},
                 )
+            except HumanInterveneRequired:
+                logger.info("Session %s paused for human intervention", session_id)
+                span.set_attribute("status", "waiting_for_human")
             except GuardrailStop as exc:
                 logger.warning("Session %s guardrail stop: %s", session_id, exc.reason)
                 await data_client.log_execution_event(
@@ -1251,8 +1286,13 @@ class AgentRuntimeExecutor:
         job_data: dict[str, Any],
         context: dict[str, Any],
         data_client: "ControlCenterDataClient",
+        response_value: dict | None = None,
     ) -> dict[str, Any]:
         """Execute a task agent using pre-fetched context from Control Center.
+
+        When ``response_value`` is set (resume after human intervention), the
+        human's response is injected as a follow-up message so the LLM can
+        continue without re-requesting input.
 
         No database access — all data comes from ``context`` (the CC agent context API
         response) and all logging flows through ``data_client``.
@@ -1369,11 +1409,7 @@ class AgentRuntimeExecutor:
                 )
 
         # ── Build tool definitions from context ───────────────────────────────
-        tool_definitions: list[dict[str, Any]] = context.get("tool_definitions") or [
-            _SAVE_RESULT_TOOL_DEF,
-            _SEND_NOTIFICATION_TOOL_DEF,
-            _GET_RECIPIENT_GROUP_TOOL_DEF,
-        ]
+        tool_definitions: list[dict[str, Any]] = context.get("tool_definitions") or list(SystemToolRegistry.get_all_schemas())
         tool_name_map: dict[str, str] = context.get("tool_name_map") or {}
         role_mcp_sessions: dict[str, dict[str, str]] = context.get("role_mcp_sessions") or {}
         allowed_agent_types: set[str] = set(context.get("allowed_agent_types") or [])
@@ -1487,6 +1523,24 @@ class AgentRuntimeExecutor:
         messages: list[dict[str, Any]] = []
         if user_prompt:
             messages.append({"role": "user", "content": user_prompt})
+
+        # ── Inject human response for resumed sessions ────────────────────────
+        if response_value:
+            formatted = json.dumps(response_value)
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"The human operator has provided the following response to your "
+                    f"intervention request: {formatted}. "
+                    f"Continue with your task using this input."
+                ),
+            })
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="human_response_injected",
+                message="Human intervention response injected for resumed session",
+                data={"response_value": response_value},
+            )
 
         output_data: dict[str, Any] = {}
         max_iterations = max(1, guardrail_state.max_iterations)
@@ -1734,8 +1788,12 @@ class AgentRuntimeExecutor:
                     data_client=data_client,
                 )
 
-                if original_name == "save_result":
-                    # AR path: result is shipped to CC via data_client
+                bare_tool_name: str | None = None
+                parsed = SystemToolRegistry.parse_name(original_name)
+                if parsed is not None:
+                    bare_tool_name = parsed[1]
+
+                if bare_tool_name == "save_result":
                     output_data = {
                         "result": args.get("content", ""),
                         "title": args.get("title", ""),
@@ -1757,10 +1815,29 @@ class AgentRuntimeExecutor:
                         "content": str(tool_result),
                         "tool_call_id": call_id,
                     })
-                elif original_name in ("send_notification", "get_recipient_group"):
+                elif bare_tool_name == "human_intervene":
+                    intervention_type = args.get("intervention_type")
+                    reason = args.get("reason", "")
+                    choices = args.get("choices")
+                    prompt = args.get("prompt")
+
+                    intervene_result = await comm_hub_client.call_human_intervene(
+                        session_id=str(session_id),
+                        intervention_type=intervention_type,
+                        reason=reason,
+                        choices=choices,
+                        prompt=prompt,
+                    )
+                    request_id = intervene_result.get("request_id")
+
+                    await data_client.mark_session_waiting_for_human(session_id, request_id)
+
+                    tool_result = {"request_id": request_id, "status": "pending"}
+                    raise HumanInterveneRequired()
+                elif bare_tool_name in ("send_notification", "get_recipient_group"):
                     # System tools now route through Communication Hub
                     tool_result = await self._execute_mcp_tool_ar(
-                        tool_name=original_name,
+                        tool_name=bare_tool_name,
                         tool_args=args,
                         role_mcp_sessions=role_mcp_sessions,
                         agent_type_id=agent_type_id,

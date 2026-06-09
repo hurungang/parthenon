@@ -24,7 +24,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 
 | Component | Description |
 |-----------|-------------|
-| `AgentSessionService` | Enqueues sessions (`INSERT` with `status = queued`), manages state transitions (`queued → running → completed / failed`), persists results; tracks `conversation_history` for conversational agents |
+| `AgentSessionService` | Enqueues sessions (`INSERT` with `status = queued`), manages state transitions (`queued → running → waiting_for_human → completed / failed`), persists results; tracks `conversation_history` for conversational agents; joins `AgentType` and `Identity` to populate `agent_type_name` and `triggered_by_user_name` on session reads |
 | `SessionDispatcher` | Background worker; polls `queued` sessions using `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor`; manages concurrency |
 | `AgentRuntimeExecutor` | Orchestrates agent execution using the LangChain deep agent observe-reason-act loop; validates that the agent identity is assigned to the agent role via `agent_role_identities` before execution; raises `PermissionDeniedError` if not; captures `ExecutionLogEntry` (system instruction + user prompt) before first LLM call; loads MCP session context from role's assigned sessions and injects pre-configured parameters into the system instruction; detects passthrough sessions and retrieves the executing agent's identity JWT via `_get_agent_identity_jwt()`; persists result via `save_result` |
 | `TaskAgentLoop` | LangChain deep agent loop for task-based agents; observe-reason-act context producing a single structured or markdown result | 
@@ -56,7 +56,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentPlan` | SQLAlchemy model; persists the latest generated plan for an agent type; stores `plan_steps` and `topology` as JSON, `generation_status`, `generation_error`, `agent_config_hash`; unique FK → `agent_types` with CASCADE delete |
 | `AgentIdentityType` | `str` enum — `realm_user` |
 | `AgentIdentityStatus` | `str` enum — `active`, `suspended`, `deprovisioned` |
-| `AgentJobStatus` | `str` enum — `queued`, `running`, `completed`, `failed` |
+| `AgentJobStatus` | `str` enum — `queued`, `running`, `waiting_for_human`, `completed`, `failed` |
 | `AgentInputType` | `str` enum — `none`, `typed`, `conversation` |
 | `AgentOutputType` | `str` enum — `auto`, `typed`, `markdown` |
 
@@ -158,6 +158,16 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `GET` | `/api/v1/agents/model-configs/workflow-generation` | Returns selected workflow generation model and available model options |
 | `PUT` | `/api/v1/agents/model-configs/workflow-generation` | Updates selected workflow generation model after validation against available options |
 
+### Intervene Requests
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/v1/intervene/requests` | List intervene requests (filterable by status, intervention_type, agent_session_id, pagination) |
+| `GET` | `/api/v1/intervene/requests/{id}` | Get single request with full context including response |
+| `POST` | `/api/v1/intervene/requests/{id}/respond` | Submit operator response (approval bool, choice string, or text string) |
+| `POST` | `/api/v1/intervene/requests/{id}/cancel` | Cancel a pending request |
+| `GET` | `/api/v1/intervene/metrics` | Dashboard metrics: pending count, avg response time, resolution rate |
+
 ---
 
 ## Code Reference Map
@@ -173,8 +183,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentity` | model | First-class OIDC identity entity; `realm_name`, `realm_username`, encrypted `access_token`, encrypted `refresh_token`, `token_expires_at` | `backend/app/db/models/agents.py` |
 | `AgentIdentityType` | str enum | `realm_user` | `backend/app/db/models/agents.py` |
 | `AgentIdentityStatus` | str enum | `active`, `suspended`, `deprovisioned` | `backend/app/db/models/agents.py` |
-| `AgentJob` | model | Async session tracking; `conversation_history` JSONB for conversational agents (table: `agent_jobs`) | `backend/app/db/models/agents.py` |
-| `AgentJobStatus` | str enum | `queued`, `running`, `completed`, `failed` | `backend/app/db/models/agents.py` |
+| `AgentJob` | model | Async session tracking; `conversation_history` JSONB for conversational agents; status includes `waiting_for_human` (table: `agent_jobs`) | `backend/app/db/models/agents.py` |
+| `AgentJobStatus` | str enum | `queued`, `running`, `waiting_for_human`, `completed`, `failed` | `backend/app/db/models/agents.py` |
 | `AgentPromptLog` | model | Prompt capture before first LLM call; `session_id` FK → agent_jobs CASCADE; `system_instruction`, `user_prompt`, `logged_at` (table: `execution_logs`) | `backend/app/db/models/agents.py` |
 | `ExecutionLogEntry` | model | Structured execution log entry model used for guardrail decision and counter audit events | `backend/app/db/models/session_logs.py` |
 | `ModelConfig` | model | LLM provider config; `provider_type`, `display_name`, `api_base_url`, encrypted `api_key`, `enabled_models` JSONB | `backend/app/db/models/agents.py` |
@@ -186,6 +196,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentInstance` | model | Session handle tracking; lifecycle status and timing metadata; unchanged | `backend/app/db/models/agents.py` |
 | `AgentPlanStatus` | str enum | `pending \| success \| failed` | `backend/app/db/models/agents.py` |
 | `AgentPlan` | model | Persists generated plan and topology for an agent type; `plan_steps` and `topology` JSON, `generation_status`, `generation_error`, `agent_config_hash`; unique FK → `agent_types` with CASCADE delete | `backend/app/db/models/agents.py` |
+| `InterveneRequestStatus` | str enum | `pending`, `responded`, `cancelled`, `expired` | `backend/app/db/models/intervene.py` |
+| `InterventionType` | str enum | `approval`, `choice`, `text` | `backend/app/db/models/intervene.py` |
+| `InterveneRequest` | model | Agent-initiated human intervention request; FK to `agent_jobs` and `agent_types`; tracks lifecycle status | `backend/app/db/models/intervene.py` |
+| `InterveneResponse` | model | Operator response to an intervene request; 1:1 FK to `intervene_requests`; FK to `identities` | `backend/app/db/models/intervene.py` |
 
 ### Backend Schemas (`backend/app/schemas/agents.py`)
 
@@ -201,8 +215,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentityRead` | Pydantic model | Includes `token_expires_at`; never exposes raw token values | `backend/app/schemas/agents.py` |
 | `AgentIdentityOAuthAuthorizeResponse` | Pydantic model | `{authorization_url: str}` returned by the authorize endpoint | `backend/app/schemas/agents.py` |
 | `AgentJobCreate` | Pydantic model | Input for enqueuing a session (API path: `/agents/sessions`) | `backend/app/schemas/agents.py` |
-| `AgentJobStatusRead` | Pydantic model | Subset fields for status polling; filter params: `status`, `since` | `backend/app/schemas/agents.py` |
-| `AgentJobRead` | Pydantic model | Full fields including `output_data`, `conversation_history: list[dict]` | `backend/app/schemas/agents.py` |
+| `AgentJobStatusRead` | Pydantic model | Subset fields for status polling; filter params: `status`, `since`; includes `agent_type_name`, `triggered_by_user_name` | `backend/app/schemas/agents.py` |
+| `AgentJobRead` | Pydantic model | Full fields including `output_data`, `conversation_history: list[dict]`; includes `agent_type_name`, `triggered_by_user_name` | `backend/app/schemas/agents.py` |
 | `ExecutionLogRead` | Pydantic model | `id`, `session_id`, `system_instruction`, `user_prompt`, `logged_at` | `backend/app/schemas/agents.py` |
 | `ExecutionLogEntryRead` | Pydantic model | `id`, `session_id`, `timestamp`, `log_level`, `event_type`, `message`, `data: dict` — individual execution event entry | `backend/app/schemas/agents.py` |
 | `ModelConfigCreate` | Pydantic model | `provider_type`, `display_name`, `api_base_url`, `api_key`, `enabled_models: list[str]` | `backend/app/schemas/agents.py` |
@@ -221,6 +235,16 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `TopologyNodeRead` | Pydantic model | Topology node: `id`, `type`, `label`, `meta` | `backend/app/schemas/agents.py` |
 | `TopologyEdgeRead` | Pydantic model | Topology edge: `source`, `target`, `label` | `backend/app/schemas/agents.py` |
 | `AgentPlanRead` | Pydantic model | Full plan record with embedded `plan_steps`, `topology_nodes`, `topology_edges`, `generation_status`, `generation_error`, `agent_config_hash` | `backend/app/schemas/agents.py` |
+
+### Backend Schemas (`backend/app/schemas/intervene.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `InterveneRequestCreate` | schema | Pydantic model for request creation: `agent_session_id`, `agent_type_id`, `intervention_type`, `reason`, `choices` (optional) | `backend/app/schemas/intervene.py` |
+| `InterveneRequestRead` | schema | Pydantic model for request response output; includes `agent_name`, `triggered_by_user_name`, `operator_user_name` when resolved | `backend/app/schemas/intervene.py` |
+| `InterveneResponseSubmit` | schema | Pydantic model for operator response input: `approval_value`, `selected_choice`, or `text_value` depending on type | `backend/app/schemas/intervene.py` |
+| `InterveneResponseRead` | schema | Pydantic model for response output; includes `operator_user_name` | `backend/app/schemas/intervene.py` |
+| `InterveneMetrics` | schema | Pydantic model for dashboard metrics: `pending_count`, `avg_response_time_seconds`, `resolution_rate` | `backend/app/schemas/intervene.py` |
 
 ### Backend Services
 
@@ -256,6 +280,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `TopologyBuilderService` | class | Converts binding-filtered role→SOP→Skill→Tool graph to `nodes`/`edges` topology dict; deterministic node IDs for stable rendering; only bound entries appear when SOP scope is narrowed | `backend/app/services/agents/topology_builder_service.py` |
 | `BindingValidationService` | class | Validates SOP/skill binding entries against role-granted permissions; rejects references outside the role's assigned SOPs/skills with per-entry error messages; prevents duplicate references; invoked on agent type create and update | `backend/app/services/agents/binding_validation_service.py` |
 | `AgentRuntimeLoader` | class | Loads saved plan from `agent_plans` on session init; injects plan into system context for execution guidance; graceful degradation when no plan exists | `backend/app/services/agents/runtime_loader.py` |
+| `InterveneRequestStore` | service | CRUD + metrics for intervene requests; `list_requests()` eager loads `agent_session.agent_type` and Identity for user names; `get_request()` and `submit_response()` populate agent/operator display names on read schemas; `get_metrics()` returns pending count, avg response time, resolution rate | `backend/app/services/agents/intervene_service.py` |
 | `SopAgentExecutor` | class | **Superseded** — retained in codebase but not invoked by job-queue flow; execution handled by `AgentRuntimeExecutor` | `backend/app/services/agents/sop_executor.py` |
 | `SkillfulAgentExecutor` | class | **Superseded** — retained in codebase but not invoked by job-queue flow; execution handled by `AgentRuntimeExecutor` | `backend/app/services/agents/skillful_executor.py` |
 | `AgentGraphState` | class | **Superseded** — old LangGraph TypedDict; file retained but not imported; replaced by `TaskAgentLoop`/`ConversationalAgentLoop` | `backend/app/services/agents/agent_state.py` |
@@ -308,13 +333,20 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentOAuthCallbackPage` | component | Loaded in OAuth popup; exchanges code via backend callback; postMessages result to opener; calls `window.close()` | `frontend/src/pages/agents/AgentOAuthCallbackPage.tsx` |
 | `AgentTypeForm` | component | Modified — fields: `identity_id`, `role_id`, `model_id` (string dropdown across all configs), `system_instruction`, `input_type`/`output_type` (+schemas); includes SOP/Skill binding list section with add/remove/reorder controls; binding picker filtered by role-accessible items; removed `model_config_id`, `model_name`, `llm_*`, `primary_sop_id`; validates identity is assigned to selected role; validates binding entries are role-accessible | `frontend/src/pages/agents/AgentTypeForm.tsx` |
 | `AgentJobLaunchDialog` | component | Dynamic input form per `input_type`; POSTs to `/agents/sessions`; shows returned session ID | `frontend/src/pages/agents/AgentJobLaunchDialog.tsx` |
-| `AgentJobPage` | component | Session metadata, status chip, 3 s polling (task agents), WebSocket chat UI (conversational agents), result panel; fetches `ExecutionLogEntry[]` inline and passes to `LogViewer`; optional `sessionId` prop for embedded dialog usage; conditionally hides back button when embedded | `frontend/src/pages/agents/AgentJobPage.tsx` |
+| `AgentJobPage` | component | Session metadata, status chip, 3 s polling (task agents), WebSocket chat UI (conversational agents), result panel; fetches `ExecutionLogEntry[]` inline and passes to `LogViewer`; optional `sessionId` prop for embedded dialog usage; conditionally hides back button when embedded; shows agent name + triggered-by user in session metadata grid | `frontend/src/pages/agents/AgentJobPage.tsx` |
 | `SessionExecutionLogsDialog` | component | Retained but no longer opened from `AgentJobPage`; "View Execution Logs" button removed from the job page | `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` |
 | `AgentManagementPage` | component | Agent types table; row click opens `AgentTypeDetailsDialog` (via `detailsDialogTypeId` state); inline instances sub-table removed; added "Role" and "Identity" columns resolved via `useAgentRoles()`/`useAgentIdentities()` name lookup maps; submits binding lists (sop_bindings, skill_bindings) with save payload; `AgentTypeDetailsDialog` invalidates `['agents','types']` query on close; Launch (▶) action per row retained; plan preview opens `PlanPreviewModal` after save | `frontend/src/pages/agents/AgentManagementPage.tsx` |
-| `AgentInstanceDashboardPage` | component | Renamed to "Agent Executions"; route `/agents/executions` (redirect from `/agents/instances`); optional `agentTypeId` prop for dialog embedding; agent type filter dropdown via `useAgentTypes()`; View button opens `AgentExecutionDetailsDialog` instead of navigating away; status, date range, and agent type filter controls | `frontend/src/pages/agents/AgentInstanceDashboardPage.tsx` |
+| `AgentInstanceDashboardPage` | component | Renamed to "Agent Executions"; route `/agents/executions` (redirect from `/agents/instances`); optional `agentTypeId` prop for dialog embedding; agent type filter dropdown via `useAgentTypes()`; View button opens `AgentExecutionDetailsDialog` instead of navigating away; status, date range, and agent type filter controls; columns include Agent Type and Triggered By (populated via `agent_type_name`, `triggered_by_user_name`) | `frontend/src/pages/agents/AgentInstanceDashboardPage.tsx` |
 | `ModelConfigListPage` | component | Table view; display_name, provider_type, credential status chip, Edit/Delete; workflow generation model section loads and saves `/agents/model-configs/workflow-generation` | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
 | `ModelConfigDialog` | component | Create/edit; provider_type select, display_name, api_base_url, api_key (masked), enabled_models chip multi-select via "List Models" | `frontend/src/pages/agents/ModelConfigDialog.tsx` |
 | `ModelConfigListPage.handleSaveWorkflowModel` | function | Persists selected workflow generation model while preserving existing selection when save is invoked without change | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
+
+### Frontend Intervene Pages
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `IntervenePage` | component | Pending and history intervene request tables; agent name + triggered-by user columns; auto-opens `AgentExecutionDetailsDialog` after response submission | `frontend/src/pages/agents/IntervenePage.tsx` |
+| `InterveneResponseDialog` | component | Type-specific response dialog (approval Yes/No, choice selection, text input); follows Dialog Error Handling Standard | `frontend/src/components/agents/InterveneResponseDialog.tsx` |
 
 ### Frontend Types (`frontend/src/types/index.ts`)
 
@@ -324,8 +356,13 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentity` | interface | `id`, `name`, `identity_type`, `realm_name`, `realm_username`, `auth_provider`, `status`, `token_expires_at` | `frontend/src/types/index.ts` |
 | `AgentIdentityType` | type alias | `'realm_user'` | `frontend/src/types/index.ts` |
 | `AgentIdentityStatus` | type alias | `'active' \| 'suspended' \| 'deprovisioned'` | `frontend/src/types/index.ts` |
-| `AgentJob` | interface | `id`, `agent_type_id`, `input_data`, `status`, `output_data`, `error_message`, `conversation_history` | `frontend/src/types/index.ts` |
-| `AgentJobStatus` | type alias | `'queued' \| 'running' \| 'completed' \| 'failed'` | `frontend/src/types/index.ts` |
+| `AgentJob` | interface | `id`, `agent_type_id`, `input_data`, `status`, `output_data`, `error_message`, `conversation_history`; includes `agent_type_name`, `triggered_by_user_name` | `frontend/src/types/index.ts` |
+| `InterveneRequestStatus` | type alias | `'pending' \| 'responded' \| 'cancelled' \| 'expired'` | `frontend/src/types/index.ts` |
+| `InterventionType` | type alias | `'approval' \| 'choice' \| 'text'` | `frontend/src/types/index.ts` |
+| `InterveneRequest` | interface | `id`, `agent_session_id`, `agent_type_id`, `intervention_type`, `reason`, `choices?`, `status`, `created_at`, `responded_at?`; includes `agent_name`, `triggered_by_user_name` | `frontend/src/types/index.ts` |
+| `InterveneResponse` | interface | `id`, `request_id`, `operator_user_id`, `approval_value?`, `selected_choice?`, `text_value?`, `responded_at`; includes `operator_user_name` | `frontend/src/types/index.ts` |
+| `InterveneMetrics` | interface | `pending_count`, `avg_response_time_seconds`, `resolution_rate` | `frontend/src/types/index.ts` |
+| `AgentJobStatus` | type alias | `'queued' \| 'running' \| 'waiting_for_human' \| 'completed' \| 'failed'` | `frontend/src/types/index.ts` |
 | `AgentInputType` | type alias | `'none' \| 'typed' \| 'conversation'` | `frontend/src/types/index.ts` |
 | `AgentOutputType` | type alias | `'auto' \| 'typed' \| 'markdown'` | `frontend/src/types/index.ts` |
 | `AgentType` | interface | Modified — added `model_id: string`, `sop_bindings: AgentTypeSopBinding[]`, `skill_bindings: AgentTypeSkillBinding[]`, `plan?: AgentPlan \| null`; removed `model_config_id`, `model_name`, `mode`, `sop_id`, `identity_subject`, `system_prompt`, `max_instances`, `llm_provider`, `llm_model`, `llm_api_key` | `frontend/src/types/index.ts` |
@@ -359,7 +396,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `AgentTypeDetailsDialog` | component | Three-tab dialog (Details, Plan Preview, Execution Logs) for an agent type; fetches via `useAgentType(id)`; Details tab has clickable role/identity names opening `AgentRoleViewDialog`/`AgentIdentityViewDialog`; Execution Logs tab shows last 10 sessions with "View" opening `AgentExecutionDetailsDialog`; "Run Agent" opens `AgentJobLaunchDialog`; follows Dialog Error Handling Standard | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
 | `AgentExecutionsDialog` | component | Dialog wrapper for `AgentInstanceDashboardPage`; allows viewing the full execution list in dialog context without navigating away; pre-filtered by `agentTypeId` | `frontend/src/components/agents/AgentExecutionsDialog.tsx` |
-| `AgentExecutionDetailsDialog` | component | Dialog wrapper for `AgentJobPage`; shows full session details and logs in dialog context; opened from the Execution Logs tab View button or post-launch | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
+| `AgentExecutionDetailsDialog` | component | Dialog wrapper for `AgentJobPage`; shows full session details and logs in dialog context; three dynamic conditional tabs — Execution (0), Result (1), Conversation History (2); each tab only appears when corresponding data exists; tab bar hidden if only one tab qualifies; fetches conversation history on open; auto-opens after intervene response submission | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
 | `AgentPlanContent` | component | Presentational component for plan steps and topology diagram; includes `agent_delegation` step rendering in ordered plan previews; extracted from `PlanPreviewModal`; receives `plan: AgentPlan \| null \| undefined`; reused by both `PlanPreviewModal` and the Plan Preview tab of `AgentTypeDetailsDialog` | `frontend/src/components/agents/AgentPlanContent.tsx` |
 | `AgentRoleViewDialog` | component | Read-only view dialog for a single agent role; two-column detail grid; Edit and Close actions; opened from clickable role name in `AgentTypeDetailsDialog` Details tab | `frontend/src/components/agents/AgentRoleViewDialog.tsx` |
 | `AgentIdentityViewDialog` | component | Read-only view dialog for a single agent identity; two-column detail grid; Edit and Close actions; opened from clickable identity name in `AgentTypeDetailsDialog` Details tab | `frontend/src/components/agents/AgentIdentityViewDialog.tsx` |
@@ -404,6 +441,11 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agents.identities.viewTitle` | i18n key | Title for `AgentIdentityViewDialog` | `frontend/src/i18n/locales/en.json` |
 | `agents.sessions.detailsTitle` | i18n key | Title for `AgentExecutionDetailsDialog` | `frontend/src/i18n/locales/en.json` |
 | `agents.sessions.dashboardTitle` | i18n key | Updated dashboard title — "Agent Executions" (was "Agent Instances") | `frontend/src/i18n/locales/en.json` |
+| `agents.intervene.*` | translation namespace | All intervene UI strings: request list, response dialog (approval/choice/text), history, metrics | `frontend/src/i18n/locales/en.json` |
+| `triggeredBy` | i18n key | "Triggered by" label in execution listings | `frontend/src/i18n/locales/en.json` |
+| `noHistory` | i18n key | "No history" empty state for conversation history | `frontend/src/i18n/locales/en.json` |
+| `loading` | i18n key | "Loading" generic loading state | `frontend/src/i18n/locales/en.json` |
+| `noData` | i18n key | "No data" generic empty state | `frontend/src/i18n/locales/en.json` |
 
 ### Tests
 
@@ -423,6 +465,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentTypeForm.test` | frontend component test | 32 tests: binding list renders, add/remove/reorder bindings, role-filtered picker, validation states, save payload includes bindings | `frontend/src/__tests__/AgentTypeForm.test.tsx` |
 | `agent-type-bindings-mocked.spec` | E2E test | 8 mocked E2E tests: binding section renders, add binding dialog, remove/reorder, save payload capture | `e2e/tests/agent-type-bindings-mocked.spec.ts` |
 | `agent-type-bindings.spec` | E2E test | 1 real-backend integration test: POST returns binding fields; skips gracefully when backend unavailable | `e2e/tests/agent-type-bindings.spec.ts` |
+| `test_intervene_service` | test suite | Backend unit tests for `InterveneRequestStore`: CRUD, status transitions, duplicate prevention, metrics aggregation, expiry logic | `backend/tests/services/test_intervene_service.py` |
+| `test_intervene_api` | test suite | Backend integration tests for intervene endpoints: request lifecycle, state machine, authorization, constraint validation | `backend/tests/api/v1/test_intervene.py` |
 
 ## Runtime Control & Model Guardrail Hierarchy
 

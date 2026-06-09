@@ -1,7 +1,9 @@
 """SkillSeeder — idempotent initializer for default platform skills.
 
-Creates the `save_result`, `send_notification`, and `get_recipient_group` skills
-on application startup or via the `seed-skills` CLI command if they do not already exist.
+Creates the `save-result`, `send-notification`, `get-recipient-group`, and
+`human-intervene` skills on application startup or via the `seed-skills` CLI
+command if they do not already exist.  System skills are marked ``is_system``
+and cannot be edited or deleted through the API.
 """
 from __future__ import annotations
 
@@ -18,18 +20,17 @@ logger = logging.getLogger(__name__)
 # Default skill definitions — name is the idempotency key
 _DEFAULT_SKILLS: list[dict] = [
     {
-        "name": "save_result",
+        "name": "save-result",
         "description": "Persists structured agent outputs to the Result Repository.",
         "instructions": (
             "Use this skill to store the final structured output of an agent run "
             "into the Result Repository. Provide the result payload as the first argument. "
             "Results are immutable after saving."
         ),
-        # Tool names that should be bound (matched by McpTool.name or McpTool.original_name)
         "tool_names": ["save_result"],
     },
     {
-        "name": "send_notification",
+        "name": "send-notification",
         "description": "Dispatches notifications through configured channel integrations.",
         "instructions": (
             "Use this skill to dispatch a notification through one of the configured "
@@ -39,7 +40,7 @@ _DEFAULT_SKILLS: list[dict] = [
         "tool_names": ["send_notification"],
     },
     {
-        "name": "get_recipient_group",
+        "name": "get-recipient-group",
         "description": "Retrieves information about notification recipient groups.",
         "instructions": (
             "Use this skill to retrieve details about a notification recipient group, "
@@ -47,6 +48,17 @@ _DEFAULT_SKILLS: list[dict] = [
             "Call this before sending notifications to verify the group exists."
         ),
         "tool_names": ["get_recipient_group"],
+    },
+    {
+        "name": "human-intervene",
+        "description": "Creates a human-in-the-loop intervention request for operator approval, choice selection, or text input.",
+        "instructions": (
+            "Use this skill when the agent needs human input to proceed. "
+            "Specify the intervention type (approval, choice, or text), the reason "
+            "for the intervention, and optional choices for choice-type interventions. "
+            "The agent will pause execution until an operator responds."
+        ),
+        "tool_names": ["human_intervene"],
     },
 ]
 
@@ -79,15 +91,20 @@ class SkillSeeder:
         result = await session.execute(select(Skill).where(Skill.name == name))
         existing = result.scalar_one_or_none()
         if existing is not None:
-            logger.info("SkillSeeder: skill '%s' already exists — skipping.", name)
+            if not existing.is_system:
+                existing.is_system = True
+                logger.info("SkillSeeder: fixed is_system=True for existing skill '%s'.", name)
+            else:
+                logger.info("SkillSeeder: skill '%s' already exists — skipping.", name)
             return "exists"
 
-        # Create the skill
+        # Create the skill (system skills are read-only)
         skill = Skill(
             name=name,
             description=skill_def.get("description"),
             instructions=skill_def.get("instructions"),
             is_active=True,
+            is_system=True,
         )
         session.add(skill)
         await session.flush()  # populate skill.id
