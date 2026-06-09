@@ -17,6 +17,7 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 - **Agent Gateway** — Lifecycle protocol, HTTP and MCP transports
 - **Control Center** — Governance management for agent policies, guardrail profiles, and operational oversight
 - **Communication Hub** — Message broker, WebSocket, session context, and agent-to-agent routing
+- **Human-in-the-Loop Intervention** — Agents can pause execution and request human input (approval, choice, or free-form text) via the `system____human_intervene` tool; operators respond through the UI and execution resumes automatically
 - **Schedule Management** — Cron scheduling, job management, and execution history
 - **Conversation Management** — Conversation persistence, all turn types, audit, and replay
 - **Result Management** — save_result MCP tool, result repository, and UI access

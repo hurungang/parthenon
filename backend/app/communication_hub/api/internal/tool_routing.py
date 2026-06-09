@@ -187,6 +187,7 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
         "save_result": f"{cc_base}/api/v1/internal/system-tools/save-result",
         "send_notification": f"{cc_base}/api/v1/internal/system-tools/send-notification",
         "get_recipient_group": f"{cc_base}/api/v1/internal/system-tools/get-recipient-group",
+        "human_intervene": f"{cc_base}/api/v1/internal/system-tools/human-intervene",
     }
 
     endpoint = endpoint_map.get(bare_name)

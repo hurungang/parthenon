@@ -18,8 +18,11 @@ flowchart LR
     CFG -->|Selected generation model| CH
     CH -->|Route workflow request| AR
     CH -->|Route terminate request| AR
+    CH -->|Route resume signal| AR
     AR -->|Tool and delegation routing| CH
     AR -->|Thinking and delegation status events| CH
+    AR -->|Intervene tool call and suspend| CH
+    CH -->|Intervene response relay| CC
     AR -->|Request governed context| CH
     CH --> CC
     CC --> CTX

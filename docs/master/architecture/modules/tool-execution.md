@@ -63,6 +63,16 @@ sequenceDiagram
     CH-->>U: Display response
 ```
 
+## System Tools — Suspend-on-Call Pattern
+
+Most system tools (e.g., `system____save_result`, `system____send_notification`) execute synchronously and return a result to the agent's loop. The `system____human_intervene` tool follows a different pattern:
+
+1. **Suspend-on-call** — When the agent calls `human_intervene`, execution suspends immediately. No result is returned at call time.
+2. **Out-of-band response** — An operator responds through the Web UI. The response is persisted to the `InterveneResponse` table.
+3. **Resume with result** — The Agent Runtime restores the suspended execution and injects the operator's response as the tool's return value.
+
+This suspend-on-call vs return-on-response difference is unique to `human_intervene` among system tools. The tool call still flows through the standard Communication Hub routing chain, but the response arrives asynchronously through a separate resume signal rather than inline in the tool execution path.
+
 ## Execution Chain
 
 ### Skill Engine

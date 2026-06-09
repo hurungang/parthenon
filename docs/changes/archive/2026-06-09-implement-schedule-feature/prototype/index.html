@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Schedules</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+  --antd-border:#d9d9d9;--antd-primary:#4096ff;--antd-shadow:0 0 0 2px rgba(24,144,255,.2);
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary)}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.btn-icon{background:none;border:none;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);transition:background var(--transition);position:relative}
+.btn-icon:hover{background:var(--bg)}
+.badge{position:absolute;top:2px;right:2px;background:var(--error);color:#fff;font-size:10px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── VIEW ── */
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px;font-size:13px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px;font-size:12px}.btn-ghost:hover{background:var(--primary-light);border-radius:var(--radius-sm)}
+
+/* ── TABLE ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody tr:nth-child(odd){background:#FDFDFD}
+tbody tr:nth-child(odd):hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;gap:4px}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-outlined{background:transparent;border:1px solid currentColor}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition),box-shadow var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control::placeholder{color:#94A3B8}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:flex-start;justify-content:center;backdrop-filter:blur(2px);padding-top:40px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;margin-bottom:40px}
+.modal-lg{max-width:760px}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition)}
+.modal-close:hover{background:var(--bg)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);background:#323232;color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn 0.3s ease;display:flex;align-items:center;gap:8px;max-width:480px}
+.toast-success{background:#2E7D32}
+.toast-error{background:#C62828}
+.toast-info{background:#1565C0}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── REACT-JS-CRON STYLE EDITOR ── */
+.react-js-cron{border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:#FAFBFC}
+.cron-shortcuts{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.shortcut-btn{padding:5px 14px;border:1px solid var(--antd-border);border-radius:20px;font-size:12px;background:var(--surface);color:var(--text-primary);cursor:pointer;transition:all var(--transition);font-weight:500}
+.shortcut-btn:hover{border-color:var(--primary);color:var(--primary)}
+.shortcut-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+
+.cron-antd-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.cron-antd-group{display:flex;flex-direction:column;gap:4px;min-width:110px}
+.cron-antd-group label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.cron-antd-select{height:32px;padding:4px 24px 4px 11px;border:1px solid var(--antd-border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:13px;outline:none;cursor:pointer;transition:border-color var(--transition),box-shadow var(--transition);appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%2364748B' stroke-width='1.5' stroke-linecap='round'%3E%3C/path%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;min-width:90px}
+.cron-antd-select:hover{border-color:var(--antd-primary)}
+.cron-antd-select:focus{border-color:var(--antd-primary);box-shadow:var(--antd-shadow)}
+.cron-human-desc{font-size:13px;color:var(--text-secondary);padding:6px 0 2px}
+.cron-human-desc strong{color:var(--text-primary)}
+
+/* ── EXECUTION HISTORY SPECIFIC ── */
+.exec-status-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.exec-running{background:#DBEAFE;color:#1D4ED8}
+.exec-running::before{content:'';width:6px;height:6px;border-radius:50%;background:#1D4ED8;animation:pulse 1.2s infinite}
+.exec-success{background:#DCFCE7;color:#15803D}
+.exec-success::before{content:'✓';font-weight:700;margin-right:2px}
+.exec-failure{background:#FEE2E2;color:#B91C1C}
+.exec-failure::before{content:'✗';font-weight:700;margin-right:2px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ── AGENT SESSION CHIP ── */
+.session-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid currentColor;background:transparent}
+.session-completed{color:#15803D;border-color:#4ADE80}
+.session-failed{color:#B91C1C;border-color:#F87171}
+.session-running{color:#1D4ED8;border-color:#60A5FA}
+.session-waiting{color:#92400E;border-color:#FBBF24}
+.session-terminated{color:#6B7280;border-color:#9CA3AF}
+
+/* ── PAGINATION ── */
+.pagination-wrap{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 16px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border)}
+.pagination-wrap button{padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);cursor:pointer;font-size:12px;transition:all var(--transition)}
+.pagination-wrap button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.pagination-wrap button:disabled{opacity:0.4;cursor:default}
+
+/* ── MISC ── */
+.font-mono{font-family:'Courier New',monospace}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.empty-state{text-align:center;padding:48px 24px;color:var(--text-secondary)}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}.w-full{width:100%}
+
+/* ── PAYLOAD EDITOR ── */
+.payload-section{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#FAFBFC}
+.payload-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.payload-row input{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;outline:none;transition:border-color var(--transition)}
+.payload-row input:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+.payload-row .key-input{flex:0 0 170px}
+.payload-row .remove-btn{background:none;border:none;color:var(--error);cursor:pointer;font-size:18px;padding:4px 6px;border-radius:4px;line-height:1;transition:background var(--transition)}.payload-row .remove-btn:hover{background:#FFEBEE}
+.add-payload-btn{background:none;border:1px dashed var(--border);color:var(--text-secondary);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;margin-top:4px;transition:all var(--transition);width:100%}
+.add-payload-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+
+/* ── EXECUTION DETAIL MODAL ── */
+.detail-section{border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;background:#FAFBFC}
+.detail-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #F0F0F0}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:var(--text-secondary);font-weight:500}
+.detail-value{color:var(--text-primary);font-weight:600;text-align:right;max-width:60%;word-break:break-all}
+.detail-value.mono{font-family:'Courier New',monospace;font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+<!-- ═══════ SIDEBAR ═══════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+  <div class="nav-item" onclick="setActiveNav(this)"><span class="nav-icon">🏠</span>Dashboard</div>
+  <div class="nav-parent-group" id="nav-agents">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>🤖 Agents</span><span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">👤</span>Agent Roles</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🆔</span>Agent Identities</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item"><span class="nav-icon">▶️</span>Agent Executions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🎛️</span>Runtime Control</div>
+      <div class="nav-item sub-item"><span class="nav-icon">📋</span>Agent Trails</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔧</span>Skills</div>
+      <div class="nav-item sub-item"><span class="nav-icon">📋</span>SOPs</div>
+      <div class="nav-item sub-item"><span class="nav-icon">⚙️</span>Model Configs</div>
+      <div class="nav-item sub-item active"><span class="nav-icon">📅</span>Schedules</div>
+    </div>
+  </div>
+  <div class="nav-parent-group locked-open" id="nav-integrations">
+    <div class="nav-parent-group-label" role="button" tabindex="0">
+      <span>🌐 Integrations</span><span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">🔌</span>MCP Hub</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔔</span>Notification Integration</div>
+    </div>
+  </div>
+  <div class="nav-parent-group" id="nav-system">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>⚙️ System</span><span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">📊</span>Observability</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔐</span>Permissions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">⚙️</span>System Config</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════ MAIN WRAPPER ═══════ -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title">Schedules</div>
+    <div class="topbar-actions">
+      <button class="btn-icon" title="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="badge">3</span>
+      </button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+    <!-- ═══════ SCHEDULES VIEW ═══════ -->
+    <div class="view-header">
+      <div>
+        <h2>Schedules</h2>
+        <div class="view-desc">Create and manage cron-based schedules for automated agent execution</div>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateDialog()">+ Create Schedule</button>
+    </div>
+
+    <!-- Schedule Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Cron Expression</th>
+            <th>Target Type</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="schedule-table-body">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+      <div class="pagination-wrap">
+        <span id="pagination-info">1–5 of 5</span>
+        <button disabled id="prev-page-btn" onclick="prevPage()">‹</button>
+        <button id="next-page-btn" onclick="nextPage()">›</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════ CREATE/EDIT SCHEDULE DIALOG ═══════ -->
+<div class="modal-overlay" id="schedule-dialog">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="schedule-dialog-title">Create Schedule</h3>
+      <button class="modal-close" onclick="closeScheduleDialog()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Name -->
+      <div class="form-group">
+        <label>Name <span style="color:var(--error)">*</span></label>
+        <input class="form-control" id="input-name" placeholder="e.g., Daily Summary Report" oninput="onFormChange()">
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label>Description</label>
+        <input class="form-control" id="input-desc" placeholder="Optional description" oninput="onFormChange()">
+      </div>
+
+      <!-- Cron Editor (react-js-cron style) -->
+      <div class="form-group">
+        <label>Cron Expression <span style="color:var(--error)">*</span></label>
+        <div class="react-js-cron">
+          <!-- Text Input -->
+          <input class="form-control font-mono" id="input-cron-text" value="0 * * * *" style="margin-bottom:10px;font-size:13px" oninput="onCronTextInput(this.value)">
+
+          <!-- Human-readable description -->
+          <div class="cron-human-desc" id="cron-human-desc">⏰ <strong>Every hour</strong> — Next run: <span id="cron-next-run">Today, 16:00 UTC</span></div>
+
+          <!-- Shortcuts -->
+          <div class="cron-shortcuts" style="margin-top:10px">
+            <button class="shortcut-btn active" data-cron="0 * * * *" onclick="selectShortcut(this)">Every hour</button>
+            <button class="shortcut-btn" data-cron="0 8 * * *" onclick="selectShortcut(this)">Every day</button>
+            <button class="shortcut-btn" data-cron="0 8 * * 1" onclick="selectShortcut(this)">Every week</button>
+            <button class="shortcut-btn" data-cron="0 8 1 * *" onclick="selectShortcut(this)">Every month</button>
+            <button class="shortcut-btn" data-cron="0 0 1 1 *" onclick="selectShortcut(this)">Every year</button>
+            <button class="shortcut-btn" data-cron="" onclick="selectShortcut(this)">Custom</button>
+          </div>
+
+          <!-- antd-style dropdown selects -->
+          <div class="cron-antd-row">
+            <div class="cron-antd-group">
+              <label>Minute</label>
+              <select class="cron-antd-select" id="cron-minute" onchange="onCronSelectChange()">
+                <option value="*">Every</option>
+                <option value="0" selected>0</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+                <option value="30">30</option>
+                <option value="35">35</option>
+                <option value="40">40</option>
+                <option value="45">45</option>
+                <option value="50">50</option>
+                <option value="55">55</option>
+              </select>
+            </div>
+            <div class="cron-antd-group">
+              <label>Hour</label>
+              <select class="cron-antd-select" id="cron-hour" onchange="onCronSelectChange()">
+                <option value="*">Every</option>
+                <option value="0">12 AM</option>
+                <option value="1">1 AM</option>
+                <option value="2">2 AM</option>
+                <option value="3">3 AM</option>
+                <option value="4">4 AM</option>
+                <option value="5">5 AM</option>
+                <option value="6">6 AM</option>
+                <option value="7">7 AM</option>
+                <option value="8">8 AM</option>
+                <option value="9">9 AM</option>
+                <option value="10">10 AM</option>
+                <option value="11">11 AM</option>
+                <option value="12">12 PM</option>
+                <option value="13">1 PM</option>
+                <option value="14">2 PM</option>
+                <option value="15">3 PM</option>
+                <option value="16">4 PM</option>
+                <option value="17">5 PM</option>
+                <option value="18">6 PM</option>
+                <option value="19">7 PM</option>
+                <option value="20">8 PM</option>
+                <option value="21">9 PM</option>
+                <option value="22">10 PM</option>
+                <option value="23">11 PM</option>
+              </select>
+            </div>
+            <div class="cron-antd-group">
+              <label>Day of Week</label>
+              <div style="display:flex;gap:3px;align-items:center;padding-top:2px">
+                <button class="dow-btn" data-day="0" onclick="toggleDow(this)">S</button>
+                <button class="dow-btn selected" data-day="1" onclick="toggleDow(this)">M</button>
+                <button class="dow-btn selected" data-day="2" onclick="toggleDow(this)">T</button>
+                <button class="dow-btn selected" data-day="3" onclick="toggleDow(this)">W</button>
+                <button class="dow-btn selected" data-day="4" onclick="toggleDow(this)">T</button>
+                <button class="dow-btn selected" data-day="5" onclick="toggleDow(this)">F</button>
+                <button class="dow-btn" data-day="6" onclick="toggleDow(this)">S</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Target type - Agent only (no SOP) -->
+      <div class="form-group">
+        <label>Agent Type <span style="color:var(--error)">*</span></label>
+        <select class="form-control" id="input-target" onchange="onTargetChange()">
+          <option value="">— Select an Agent Type —</option>
+          <option value="abc-123">Data Analyst Agent</option>
+          <option value="def-456">Report Generator Agent</option>
+          <option value="ghi-789">Health Monitor Agent</option>
+          <option value="jkl-012">PR Reviewer Agent</option>
+          <option value="mno-345">File Manager Agent</option>
+        </select>
+      </div>
+
+      <!-- Input Parameters (PayloadEditor style) -->
+      <div class="form-group">
+        <label>Input Parameters</label>
+        <div class="payload-section">
+          <div class="form-hint" style="margin-top:0;margin-bottom:10px">
+            Key-value pairs passed as the execution payload to the agent.
+          </div>
+          <div id="payload-rows">
+            <div class="payload-row">
+              <input class="key-input" placeholder="Key" value="report_type">
+              <input placeholder="Value" value="daily_summary">
+              <button class="remove-btn" onclick="removePayloadRow(this)">×</button>
+            </div>
+            <div class="payload-row">
+              <input class="key-input" placeholder="Key" value="format">
+              <input placeholder="Value" value="markdown">
+              <button class="remove-btn" onclick="removePayloadRow(this)">×</button>
+            </div>
+          </div>
+          <button class="add-payload-btn" onclick="addPayloadRow()">+ Add parameter</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeScheduleDialog()">Cancel</button>
+      <button class="btn btn-primary" id="save-schedule-btn" onclick="saveSchedule()">Create Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ EXECUTION HISTORY DIALOG ═══════ -->
+<div class="modal-overlay" id="history-dialog">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="history-dialog-title">Execution History</h3>
+      <button class="modal-close" onclick="closeHistoryDialog()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 24px">
+      <!-- Filter bar -->
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <label style="font-size:13px;font-weight:500;">Schedule:</label>
+        <span id="history-schedule-name" style="font-weight:600;font-size:14px">—</span>
+        <label style="font-size:13px;font-weight:500;margin-left:8px">Status:</label>
+        <select id="history-status-filter" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;outline:none" onchange="renderHistoryTable()">
+          <option value="all">All</option>
+          <option value="success">Success</option>
+          <option value="failure">Failure</option>
+          <option value="running">Running</option>
+        </select>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap" style="box-shadow:none;border-radius:var(--radius-sm)">
+        <table>
+          <thead>
+            <tr>
+              <th>Started At</th>
+              <th>Finished At</th>
+              <th>Status</th>
+              <th>Agent Session</th>
+              <th>Details</th>
+              <th style="text-align:center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination-wrap" id="history-pagination" style="padding:8px 0 0;border-top:none">
+        <span id="history-pagination-info">0 of 0</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeHistoryDialog()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ AGENT EXECUTION DETAILS DIALOG ═══════ -->
+<div class="modal-overlay" id="execution-detail-dialog">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Agent Execution Details</h3>
+      <button class="modal-close" onclick="closeExecutionDetailDialog()">✕</button>
+    </div>
+    <div class="modal-body" id="execution-detail-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeExecutionDetailDialog()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TOAST CONTAINER ═══════ -->
+<div class="toast-container" id="toast-container"></div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   DATA
+   ═══════════════════════════════════════════════════════════════════ */
+
+const MOCK_AGENTS = [
+  { id: 'abc-123', name: 'Data Analyst Agent', input_type: 'typed', input_schema: { type: 'object', properties: { report_type: { type: 'string' }, format: { type: 'string' } } } },
+  { id: 'def-456', name: 'Report Generator Agent', input_type: 'none' },
+  { id: 'ghi-789', name: 'Health Monitor Agent', input_type: 'typed' },
+  { id: 'jkl-012', name: 'PR Reviewer Agent', input_type: 'conversation' },
+  { id: 'mno-345', name: 'File Manager Agent', input_type: 'none' },
+];
+
+let schedules = [
+  { id: 'sch-001', name: 'Daily Summary Report', description: 'Generates a daily summary report every weekday morning', cron_expression: '0 8 * * 1-5', target_type: 'agent', target_id: 'abc-123', target_name: 'Data Analyst Agent', status: 'active', input_params: { report_type: 'daily_summary', format: 'markdown' }, created_at: '2026-05-01' },
+  { id: 'sch-002', name: 'Hourly Health Check', description: 'Runs a health check on all systems every hour', cron_expression: '0 * * * *', target_type: 'agent', target_id: 'ghi-789', target_name: 'Health Monitor Agent', status: 'active', input_params: { check_level: 'full', notify_on_failure: 'true' }, created_at: '2026-04-15' },
+  { id: 'sch-003', name: 'Weekly Data Sync', description: 'Weekly database synchronization', cron_expression: '0 2 * * 1', target_type: 'agent', target_id: 'def-456', target_name: 'Report Generator Agent', status: 'paused', input_params: { sync_mode: 'full' }, created_at: '2026-05-20' },
+  { id: 'sch-004', name: 'System Metrics Collector', description: 'Collects system metrics every 5 minutes', cron_expression: '*/5 * * * *', target_type: 'agent', target_id: 'ghi-789', target_name: 'Health Monitor Agent', status: 'active', input_params: { metrics: 'cpu,memory,disk' }, created_at: '2026-06-01' },
+  { id: 'sch-005', name: 'PR Review Scan', description: 'Scans open PRs for review readiness', cron_expression: '0 9 * * 1-5', target_type: 'agent', target_id: 'jkl-012', target_name: 'PR Reviewer Agent', status: 'active', input_params: { scan_type: 'readiness', max_prs: '10' }, created_at: '2026-06-05' },
+];
+
+let executionHistory = [
+  { id: 'exec-001', schedule_id: 'sch-001', schedule_name: 'Daily Summary Report', started_at: '2026-06-08 08:00:01 UTC', finished_at: '2026-06-08 08:00:12 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-aa1', status: 'completed' } },
+  { id: 'exec-002', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 15:00:00 UTC', finished_at: '2026-06-08 15:00:05 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-bb2', status: 'completed' } },
+  { id: 'exec-003', schedule_id: 'sch-001', schedule_name: 'Daily Summary Report', started_at: '2026-06-07 08:00:01 UTC', finished_at: '2026-06-07 08:00:15 UTC', status: 'failure', error_message: 'Agent instance spawn failed: no available instances', agent_session: { id: 'sess-cc3', status: 'failed' } },
+  { id: 'exec-004', schedule_id: 'sch-004', schedule_name: 'System Metrics Collector', started_at: '2026-06-08 15:55:00 UTC', finished_at: '2026-06-08 15:55:02 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-dd4', status: 'completed' } },
+  { id: 'exec-005', schedule_id: 'sch-004', schedule_name: 'System Metrics Collector', started_at: '2026-06-08 15:50:00 UTC', finished_at: '2026-06-08 15:50:02 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-ee5', status: 'completed' } },
+  { id: 'exec-006', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 14:00:00 UTC', finished_at: '2026-06-08 14:00:08 UTC', status: 'failure', error_message: 'Timeout: execution exceeded 30s limit', agent_session: { id: 'sess-ff6', status: 'terminated' } },
+  { id: 'exec-007', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 13:00:00 UTC', finished_at: '2026-06-08 13:00:04 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-gg7', status: 'completed' } },
+  { id: 'exec-008', schedule_id: 'sch-003', schedule_name: 'Weekly Data Sync', started_at: '2026-06-01 02:00:00 UTC', finished_at: '2026-06-01 02:01:15 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-hh8', status: 'completed' } },
+  { id: 'exec-009', schedule_id: 'sch-002', schedule_name: 'Hourly Health Check', started_at: '2026-06-08 16:00:00 UTC', finished_at: null, status: 'running', error_message: null, agent_session: { id: 'sess-ii9', status: 'running' } },
+  { id: 'exec-010', schedule_id: 'sch-005', schedule_name: 'PR Review Scan', started_at: '2026-06-08 09:00:00 UTC', finished_at: '2026-06-08 09:00:18 UTC', status: 'success', error_message: null, agent_session: { id: 'sess-jj0', status: 'completed' } },
+];
+
+let currentPage = 0;
+let editingId = null;
+let nextId = 6;
+let selectedCron = '0 * * * *';
+let historyFilterScheduleId = null;
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+function toggleNavGroup(el) {
+  const group = el.closest('.nav-parent-group');
+  group.classList.toggle('collapsed');
+  el.setAttribute('aria-expanded', !group.classList.contains('collapsed'));
+}
+function setActiveNav(el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCHEDULE LIST
+   ═══════════════════════════════════════════════════════════════════ */
+function formatCron(cron) {
+  const map = {
+    '0 * * * *': 'Every hour',
+    '0 8 * * *': 'Daily at 8:00 AM',
+    '0 8 * * 1-5': 'Weekdays at 8:00 AM',
+    '0 8 * * 1': 'Weekly Monday 8:00 AM',
+    '0 2 * * 1': 'Weekly Monday 2:00 AM',
+    '*/5 * * * *': 'Every 5 minutes',
+    '0 9 * * 1-5': 'Weekdays at 9:00 AM',
+    '0 0 1 1 *': 'Yearly',
+    '0 8 1 * *': 'Monthly on 1st',
+  };
+  return map[cron] || cron;
+}
+
+function getStatusChip(status) {
+  if (status === 'active') return '<span class="chip chip-green">● Active</span>';
+  return '<span class="chip chip-yellow">⏸ Paused</span>';
+}
+
+function renderSchedules() {
+  const tbody = document.getElementById('schedule-table-body');
+  const start = currentPage * 5;
+  const end = start + 5;
+  const pageItems = schedules.slice(start, end);
+
+  if (pageItems.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-secondary)">No schedules found. Click "Create Schedule" to get started.</td></tr>`;
+    document.getElementById('pagination-info').textContent = '0 of 0';
+    return;
+  }
+
+  tbody.innerHTML = pageItems.map(s => {
+    const isActive = s.status === 'active';
+    const pauseIcon = isActive ? '⏸' : '▶';
+    const pauseTitle = isActive ? 'Pause' : 'Resume';
+    return `<tr>
+      <td>
+        <strong>${s.name}</strong>
+        <div class="text-xs text-secondary">${s.description || ''}</div>
+      </td>
+      <td><span class="font-mono text-sm">${s.cron_expression}</span><br><span class="text-xs text-secondary">${formatCron(s.cron_expression)}</span></td>
+      <td><span class="chip chip-blue">${s.target_name || s.target_id}</span></td>
+      <td>${getStatusChip(s.status)}</td>
+      <td class="actions-cell">
+        <button class="btn-icon-xs" title="View execution history" onclick="showHistoryFor('${s.id}')">📋</button>
+        <button class="btn-icon-xs" title="Edit schedule" onclick="openEditDialog('${s.id}')">✏️</button>
+        <button class="btn-icon-xs" title="${pauseTitle}" onclick="togglePauseResume('${s.id}')">${pauseIcon}</button>
+        <button class="btn-icon-xs" title="Delete" onclick="deleteSchedule('${s.id}')" style="color:var(--error)">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const total = schedules.length;
+  const totalPages = Math.ceil(total / 5) || 1;
+  document.getElementById('pagination-info').textContent = `${start + 1}–${Math.min(end, total)} of ${total}`;
+  document.getElementById('prev-page-btn').disabled = currentPage === 0;
+  document.getElementById('next-page-btn').disabled = currentPage >= totalPages - 1;
+}
+
+function prevPage() { if (currentPage > 0) { currentPage--; renderSchedules(); } }
+function nextPage() {
+  const totalPages = Math.ceil(schedules.length / 5);
+  if (currentPage < totalPages - 1) { currentPage++; renderSchedules(); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCHEDULE ACTIONS
+   ═══════════════════════════════════════════════════════════════════ */
+function togglePauseResume(id) {
+  const s = schedules.find(x => x.id === id);
+  if (!s) return;
+  const wasActive = s.status === 'active';
+  s.status = wasActive ? 'paused' : 'active';
+  showToast(wasActive ? `"${s.name}" paused` : `"${s.name}" resumed`, 'info');
+  renderSchedules();
+}
+
+function deleteSchedule(id) {
+  const s = schedules.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(`Delete schedule "${s.name}"? This action cannot be undone.`)) return;
+  schedules = schedules.filter(x => x.id !== id);
+  executionHistory = executionHistory.filter(x => x.schedule_id !== id);
+  showToast(`"${s.name}" deleted`, 'success');
+  renderSchedules();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CREATE/EDIT DIALOG
+   ═══════════════════════════════════════════════════════════════════ */
+function openCreateDialog() {
+  editingId = null;
+  document.getElementById('schedule-dialog-title').textContent = 'Create Schedule';
+  document.getElementById('save-schedule-btn').textContent = 'Create Schedule';
+  document.getElementById('input-name').value = '';
+  document.getElementById('input-desc').value = '';
+  document.getElementById('input-target').value = '';
+  selectedCron = '0 * * * *';
+  syncCronUI(selectedCron);
+  document.getElementById('payload-rows').innerHTML = `
+    <div class="payload-row">
+      <input class="key-input" placeholder="Key" value="report_type">
+      <input placeholder="Value" value="daily_summary">
+      <button class="remove-btn" onclick="removePayloadRow(this)">×</button>
+    </div>
+    <div class="payload-row">
+      <input class="key-input" placeholder="Key" value="format">
+      <input placeholder="Value" value="markdown">
+      <button class="remove-btn" onclick="removePayloadRow(this)">×</button>
+    </div>`;
+  document.getElementById('schedule-dialog').classList.add('open');
+}
+
+function openEditDialog(id) {
+  const s = schedules.find(x => x.id === id);
+  if (!s) return;
+  editingId = id;
+  document.getElementById('schedule-dialog-title').textContent = 'Edit Schedule';
+  document.getElementById('save-schedule-btn').textContent = 'Save Changes';
+  document.getElementById('input-name').value = s.name;
+  document.getElementById('input-desc').value = s.description || '';
+  document.getElementById('input-target').value = s.target_id;
+  selectedCron = s.cron_expression;
+  syncCronUI(selectedCron);
+  // Set payload rows from input_params
+  const params = s.input_params || {};
+  const keys = Object.keys(params);
+  if (keys.length > 0) {
+    document.getElementById('payload-rows').innerHTML = keys.map(k =>
+      `<div class="payload-row">
+        <input class="key-input" placeholder="Key" value="${k}">
+        <input placeholder="Value" value="${params[k]}">
+        <button class="remove-btn" onclick="removePayloadRow(this)">×</button>
+      </div>`
+    ).join('');
+  } else {
+    document.getElementById('payload-rows').innerHTML = `
+      <div class="payload-row">
+        <input class="key-input" placeholder="Key">
+        <input placeholder="Value">
+        <button class="remove-btn" onclick="removePayloadRow(this)">×</button>
+      </div>`;
+  }
+  document.getElementById('schedule-dialog').classList.add('open');
+}
+
+function closeScheduleDialog() {
+  document.getElementById('schedule-dialog').classList.remove('open');
+  editingId = null;
+}
+
+function onFormChange() {}
+
+/* ── Cron Editor (react-js-cron style) ── */
+function syncCronUI(cron) {
+  document.getElementById('input-cron-text').value = cron;
+  const parts = cron.split(' ');
+  const minute = parts[0];
+  const hour = parts[1];
+  const dow = parts[4] || '*';
+
+  // Minute select
+  if (minute === '*' || minute.startsWith('*/')) {
+    document.getElementById('cron-minute').value = '*';
+  } else {
+    const m = parseInt(minute);
+    document.getElementById('cron-minute').value = isNaN(m) ? '*' : m;
+  }
+
+  // Hour select
+  if (hour === '*' || hour.startsWith('*/')) {
+    document.getElementById('cron-hour').value = '*';
+  } else {
+    const h = parseInt(hour);
+    document.getElementById('cron-hour').value = isNaN(h) ? '*' : h;
+  }
+
+  // DOW buttons
+  const selectedDays = dow === '*' ? [1,2,3,4,5] : dow.split(',').map(Number);
+  document.querySelectorAll('.dow-btn').forEach(b => {
+    const day = parseInt(b.dataset.day);
+    b.classList.toggle('selected', selectedDays.includes(day));
+  });
+
+  // Shortcut buttons
+  updateShortcuts(cron);
+  updateCronDescription(cron);
+}
+
+function onCronTextInput(val) {
+  selectedCron = val.trim() || '0 * * * *';
+  syncCronUI(selectedCron);
+}
+
+function onCronSelectChange() {
+  const minute = document.getElementById('cron-minute').value;
+  const hour = document.getElementById('cron-hour').value;
+  const selectedDow = Array.from(document.querySelectorAll('.dow-btn.selected')).map(b => parseInt(b.dataset.day));
+  const cronMin = minute === '*' ? '*' : minute;
+  const cronHour = hour === '*' ? '*' : hour;
+  const cronDow = (selectedDow.length > 0 && selectedDow.length < 7) ? selectedDow.join(',') : '*';
+  selectedCron = `${cronMin} ${cronHour} * * ${cronDow}`;
+  document.getElementById('input-cron-text').value = selectedCron;
+  updateShortcuts(selectedCron);
+  updateCronDescription(selectedCron);
+}
+
+function selectShortcut(btn) {
+  document.querySelectorAll('.shortcut-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cron = btn.dataset.cron;
+  if (cron) {
+    selectedCron = cron;
+    syncCronUI(cron);
+  }
+}
+
+function updateShortcuts(cron) {
+  document.querySelectorAll('.shortcut-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cron === cron);
+  });
+}
+
+function toggleDow(btn) {
+  btn.classList.toggle('selected');
+  onCronSelectChange();
+}
+
+function updateCronDescription(cron) {
+  const desc = formatCron(cron);
+  const nextRun = estimateNextRun(cron);
+  document.getElementById('cron-human-desc').innerHTML = `⏰ <strong>${desc}</strong> — Next run: <span id="cron-next-run">${nextRun}</span>`;
+  document.getElementById('cron-next-run').textContent = nextRun;
+}
+
+function estimateNextRun(cron) {
+  const parts = cron.split(' ');
+  const minute = parts[0];
+  const hour = parts[1];
+  const now = new Date();
+  let h = hour === '*' ? now.getUTCHours() : parseInt(hour);
+  let m = minute === '*' ? 0 : parseInt(minute);
+  if (isNaN(h)) h = now.getUTCHours();
+  if (isNaN(m)) m = 0;
+  if (minute === '*' || minute.startsWith('*/')) { m = Math.ceil(now.getUTCMinutes() / 5) * 5; if (m >= 60) { m = 0; h = (h + 1) % 24; } }
+  let next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m, 0));
+  if (next <= now) next = new Date(next.getTime() + 24 * 60 * 60 * 1000);
+  const dowParts = parts[4];
+  if (dowParts && dowParts !== '*') {
+    const allowed = dowParts.split(',').map(Number);
+    const map = [0,1,2,3,4,5,6].reduce((a,_,i) => { a[i===0?6:i-1] = i; return a; }, {});
+    let attempts = 0;
+    while (attempts < 14 && !allowed.includes(next.getUTCDay() === 0 ? 6 : next.getUTCDay() - 1)) {
+      next = new Date(next.getTime() + 24 * 60 * 60 * 1000);
+      attempts++;
+    }
+  }
+  return next.toUTCString().replace(' GMT', ' UTC');
+}
+
+/* ── Payload Editor ── */
+function addPayloadRow() {
+  const container = document.getElementById('payload-rows');
+  const row = document.createElement('div');
+  row.className = 'payload-row';
+  row.innerHTML = '<input class="key-input" placeholder="Key"><input placeholder="Value"><button class="remove-btn" onclick="removePayloadRow(this)">×</button>';
+  container.appendChild(row);
+}
+
+function removePayloadRow(btn) {
+  const row = btn.closest('.payload-row');
+  if (document.querySelectorAll('.payload-row').length > 1) {
+    row.remove();
+  } else {
+    showToast('At least one parameter is required', 'error');
+  }
+}
+
+function getPayloadValues() {
+  const rows = document.querySelectorAll('.payload-row');
+  const params = {};
+  rows.forEach(row => {
+    const key = row.querySelector('.key-input').value.trim();
+    const val = row.querySelector('input:not(.key-input)').value.trim();
+    if (key) params[key] = val;
+  });
+  return params;
+}
+
+/* ── Save ── */
+function saveSchedule() {
+  const name = document.getElementById('input-name').value.trim();
+  const description = document.getElementById('input-desc').value.trim();
+  const targetId = document.getElementById('input-target').value;
+  const targetName = MOCK_AGENTS.find(a => a.id === targetId)?.name || '';
+  const params = getPayloadValues();
+
+  if (!name) { showToast('Please enter a schedule name', 'error'); document.getElementById('input-name').focus(); return; }
+  if (!targetId) { showToast('Please select an agent type', 'error'); return; }
+
+  if (editingId) {
+    const s = schedules.find(x => x.id === editingId);
+    if (s) {
+      s.name = name;
+      s.description = description;
+      s.cron_expression = selectedCron;
+      s.target_id = targetId;
+      s.target_name = targetName;
+      s.input_params = params;
+      showToast(`Schedule "${name}" updated`, 'success');
+    }
+  } else {
+    const newSchedule = {
+      id: `sch-${String(nextId++).padStart(3, '0')}`,
+      name,
+      description,
+      cron_expression: selectedCron,
+      target_type: 'agent',
+      target_id: targetId,
+      target_name: targetName,
+      status: 'active',
+      input_params: params,
+      created_at: new Date().toISOString().split('T')[0],
+    };
+    schedules.unshift(newSchedule);
+    showToast(`Schedule "${name}" created`, 'success');
+  }
+  closeScheduleDialog();
+  renderSchedules();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXECUTION HISTORY DIALOG
+   ═══════════════════════════════════════════════════════════════════ */
+function showHistoryFor(scheduleId) {
+  historyFilterScheduleId = scheduleId;
+  const s = schedules.find(x => x.id === scheduleId);
+  document.getElementById('history-schedule-name').textContent = s ? s.name : '—';
+  document.getElementById('history-dialog-title').textContent = `Execution History — ${s ? s.name : ''}`;
+  document.getElementById('history-status-filter').value = 'all';
+  renderHistoryTable();
+  document.getElementById('history-dialog').classList.add('open');
+}
+
+function closeHistoryDialog() {
+  document.getElementById('history-dialog').classList.remove('open');
+  historyFilterScheduleId = null;
+}
+
+function renderHistoryTable() {
+  const tbody = document.getElementById('history-table-body');
+  const statusFilter = document.getElementById('history-status-filter').value;
+
+  let items = executionHistory.filter(e => e.schedule_id === historyFilterScheduleId);
+  if (statusFilter !== 'all') items = items.filter(e => e.status === statusFilter);
+
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary)">No execution history found.</td></tr>`;
+    document.getElementById('history-pagination-info').textContent = '0 of 0';
+    return;
+  }
+
+  tbody.innerHTML = items.map(e => {
+    let statusBadge = '';
+    if (e.status === 'success') statusBadge = '<span class="exec-status-badge exec-success">Success</span>';
+    else if (e.status === 'failure') statusBadge = '<span class="exec-status-badge exec-failure">Failure</span>';
+    else statusBadge = '<span class="exec-status-badge exec-running">Running</span>';
+
+    const sessionHtml = e.agent_session
+      ? `<span class="session-chip session-${e.agent_session.status}">${e.agent_session.status}</span>`
+      : '<span class="text-secondary text-sm">—</span>';
+
+    const errorHtml = e.error_message
+      ? `<span style="color:var(--error);font-size:12px">${e.error_message}</span>`
+      : '<span class="text-secondary text-sm">—</span>';
+
+    const openBtn = e.agent_session
+      ? `<button class="btn-icon-xs" title="View agent result" onclick="showExecutionDetail('${e.agent_session.id}')" style="color:var(--primary)">↗</button>`
+      : '';
+
+    return `<tr>
+      <td class="text-sm">${e.started_at || '—'}</td>
+      <td class="text-sm">${e.finished_at || '—'}</td>
+      <td>${statusBadge}</td>
+      <td>${sessionHtml}</td>
+      <td>${errorHtml}</td>
+      <td style="text-align:center">${openBtn}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('history-pagination-info').textContent = `${items.length} execution(s)`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AGENT EXECUTION DETAIL DIALOG
+   ═══════════════════════════════════════════════════════════════════ */
+function showExecutionDetail(sessionId) {
+  // Find the execution with this session
+  const exec = executionHistory.find(e => e.agent_session && e.agent_session.id === sessionId);
+  const session = exec ? exec.agent_session : { id: sessionId, status: 'unknown' };
+
+  document.getElementById('execution-detail-body').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-row"><span class="detail-label">Session ID</span><span class="detail-value mono">${session.id}</span></div>
+      <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value"><span class="chip chip-${session.status === 'completed' ? 'green' : session.status === 'failed' || session.status === 'terminated' ? 'red' : 'blue'}">${session.status}</span></span></div>
+      ${exec ? `
+      <div class="detail-row"><span class="detail-label">Schedule</span><span class="detail-value">${exec.schedule_name}</span></div>
+      <div class="detail-row"><span class="detail-label">Started</span><span class="detail-value mono">${exec.started_at}</span></div>
+      <div class="detail-row"><span class="detail-label">Finished</span><span class="detail-value mono">${exec.finished_at || '—'}</span></div>
+      <div class="detail-row"><span class="detail-label">Error</span><span class="detail-value" style="color:${exec.error_message ? 'var(--error)' : 'var(--success)'}">${exec.error_message || 'None'}</span></div>
+      ` : ''}
+    </div>
+    <div class="detail-section">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">Execution Logs</div>
+      <div style="background:#FAFBFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:'Courier New',monospace;font-size:11px;line-height:1.8;color:var(--text-secondary);max-height:200px;overflow-y:auto">
+        <div>[${exec ? exec.started_at : '...'}] Session started: ${session.id}</div>
+        <div>[2026-06-08 08:00:02] Target agent resolved</div>
+        <div>[2026-06-08 08:00:03] Instance allocated: inst-${session.id}</div>
+        <div>[2026-06-08 08:00:05] Input parameters validated</div>
+        ${exec && exec.status === 'success' ? `<div>[${exec.finished_at || '...'}] Execution completed successfully</div>` : ''}
+        ${exec && exec.status === 'failure' ? `<div style="color:var(--error)">[${exec.finished_at || '...'}] Execution failed: ${exec.error_message}</div>` : ''}
+        ${exec && exec.status === 'running' ? `<div>[2026-06-08 ...] Execution in progress...</div>` : ''}
+      </div>
+    </div>
+  `;
+  document.getElementById('execution-detail-dialog').classList.add('open');
+}
+
+function closeExecutionDetailDialog() {
+  document.getElementById('execution-detail-dialog').classList.remove('open');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+function showToast(message, type) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type || 'info'}`;
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+  toast.innerHTML = `<span>${icons[type] || 'ℹ'}</span> ${message}`;
+  container.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════════ */
+// Close dialogs on backdrop click
+document.getElementById('schedule-dialog').addEventListener('click', function(e) {
+  if (e.target === this) closeScheduleDialog();
+});
+document.getElementById('history-dialog').addEventListener('click', function(e) {
+  if (e.target === this) closeHistoryDialog();
+});
+document.getElementById('execution-detail-dialog').addEventListener('click', function(e) {
+  if (e.target === this) closeExecutionDetailDialog();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (document.getElementById('execution-detail-dialog').classList.contains('open')) closeExecutionDetailDialog();
+    else if (document.getElementById('history-dialog').classList.contains('open')) closeHistoryDialog();
+    else if (document.getElementById('schedule-dialog').classList.contains('open')) closeScheduleDialog();
+  }
+});
+
+// Initial render
+renderSchedules();
+</script>
+</body>
+</html>

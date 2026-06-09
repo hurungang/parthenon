@@ -91,7 +91,8 @@ export function buildGeneratedToolSectionFromSelection(
 export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: SkillEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const isViewMode = mode === 'view'
+  const isSystemSkill = skill?.is_system ?? false
+  const isViewMode = mode === 'view' || isSystemSkill
 
   const [form, setForm] = useState({ name: '', description: '', instructions: '' })
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([])
@@ -370,6 +371,11 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
       </DialogTitle>
       <DialogContent dividers>
         {editorError != null && <PermissionDeniedAlert error={editorError} fallbackMessage={t('app.error')} />}
+        {isSystemSkill && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'info.main', color: 'info.contrastText', borderRadius: 1 }}>
+            <Typography variant="body2">{t('skills.systemSkillReadonly')}</Typography>
+          </Box>
+        )}
 
         <Stack spacing={2} sx={{ mt: 1 }}>
         {/* Basic Info */}

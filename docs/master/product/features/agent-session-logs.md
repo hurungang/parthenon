@@ -32,6 +32,8 @@ For active non-conversation runs, execution progress is visible live so users an
 - As a compliance owner, I want **observe-only guardrail limit events shown in execution logs** so that policy risks are visible even when runs are not automatically blocked
 - As a compliance owner, I want **attempts to use a disabled model or a model under a disabled vendor to be clearly logged and blocked** so that policy violations are auditable
 - As an operations lead, I want **operator-initiated termination recorded as a distinct outcome** so that I can distinguish it from genuine agent or runtime failures
+- As an operator, I want the live log stream to pause and show an intervene popup when a session is waiting for human input, so that I can review and respond without leaving the execution log page
+- As an operator, I want the log stream to resume automatically after I respond to an intervene request, so that I can continue monitoring execution without manual refresh
 
 
 ## Acceptance Criteria
@@ -52,6 +54,10 @@ For active non-conversation runs, execution progress is visible live so users an
 - **Observe-only guardrail limit alerts appear as user-visible operational signals distinct from standard execution failures**
 - **Disabled-model and disabled-vendor block events appear in execution logs as user-visible operational signals distinct from standard execution failures**
 - **Operator-initiated termination is recorded as a distinct `terminated` outcome, visually distinct from `failed` (genuine agent or runtime error)**
+- **When an agent session transitions to `waiting_for_human`, the live log stream pauses and displays an inline intervene popup showing intervention type and context**
+- **The intervene popup allows the operator to respond (approve/reject, choose an option, or enter text) directly from the execution log view**
+- **After the operator responds, the log stream resumes automatically and the response is recorded in the timeline**
+- **A persistent banner at the top of the execution log indicates the session is waiting for human input when the popup is dismissed or the operator navigates away**
 
 
 ## Out of Scope

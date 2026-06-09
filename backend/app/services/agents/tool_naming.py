@@ -17,16 +17,16 @@ tool_name_map on the way back.
 """
 from __future__ import annotations
 
+from app.services.agents.system_tool_registry import SystemToolRegistry
+
 #: Four-underscore separator between server slug and tool name.
 TOOL_SEPARATOR = "____"
 
 #: Server slugs that are reserved and cannot be used for custom MCP servers.
 RESERVED_SERVER_NAMES: frozenset[str] = frozenset({"system"})
 
-#: Bare names of the built-in system tools (legacy / canonical short names).
-_LEGACY_SYSTEM_TOOL_NAMES: frozenset[str] = frozenset(
-    {"save_result", "send_notification", "get_recipient_group"}
-)
+#: Bare names of the built-in system tools — sourced from the registry.
+_LEGACY_SYSTEM_TOOL_NAMES: frozenset[str] = SystemToolRegistry.get_names()
 
 
 def build_tool_name(server: str, tool: str) -> str:
@@ -88,7 +88,7 @@ def parse_tool_name(name: str) -> tuple[str, str]:
         return server, tool
 
     # Legacy bare-name fallback — treat as built-in system tool.
-    if name in _LEGACY_SYSTEM_TOOL_NAMES:
+    if SystemToolRegistry.is_system_tool(name):
         return "system", name
 
     raise ValueError(
@@ -100,12 +100,8 @@ def parse_tool_name(name: str) -> tuple[str, str]:
 def is_system_tool(name: str) -> bool:
     """Return ``True`` if *name* refers to a built-in system tool.
 
-    Accepts all naming formats for backward compatibility:
-
-    - Canonical ``system____*`` (preferred)
-    - Legacy bare names ``save_result``, ``send_notification``, ``get_recipient_group``
-    - Old ``system/save_result`` display format
-    - Old OpenAI-sanitised ``system_save_result`` format
+    Delegates to :class:`SystemToolRegistry` which acts as the single
+    source of truth for all registered system tools.
 
     Args:
         name: Tool name in any supported format.
@@ -113,17 +109,7 @@ def is_system_tool(name: str) -> bool:
     Returns:
         ``True`` if the tool is a system tool; ``False`` otherwise.
     """
-    if name.startswith("system" + TOOL_SEPARATOR):
-        return True
-    if name in _LEGACY_SYSTEM_TOOL_NAMES:
-        return True
-    # Old slash-separated display format
-    if name.startswith("system/"):
-        return name[len("system/"):] in _LEGACY_SYSTEM_TOOL_NAMES
-    # Old single-underscore sanitised format (system_save_result)
-    if name.startswith("system_"):
-        return name[len("system_"):] in _LEGACY_SYSTEM_TOOL_NAMES
-    return False
+    return SystemToolRegistry.is_system_tool(name)
 
 
 def get_server_name(name: str) -> str:

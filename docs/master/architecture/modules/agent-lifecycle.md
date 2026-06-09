@@ -78,9 +78,25 @@ The Agent Runtime drives the LangChain deep agent executor. In each loop iterati
 
 The loop continues until the LLM produces a final answer or a session limit is reached.
 
+### 5a. Human-in-the-Loop Intervention — Suspend and Resume
+
+During the observe-reason-act loop, an agent may call the `system____human_intervene` system tool to pause execution and request human input. When this occurs:
+
+1. The Agent Runtime serialises the current execution context (messages, iteration count, tool results) and signals suspension to the Communication Hub.
+2. The Communication Hub routes the tool call to Control Center for persistence.
+3. Control Center persists the `InterveneRequest` record with `status=pending` and emits an `intervene_request_created` notification event.
+4. The agent session transitions to `waiting_for_human` state — no further LLM or tool calls are made.
+5. An operator (or business user viewing the live execution log stream) views the request through the Web UI and submits a response (approval Yes/No, choice selection, or free-form text).
+6. The response flows: Web UI → Communication Hub → Control Center, where the `InterveneResponse` is persisted and the request status becomes `responded`.
+7. Control Center signals resume through the Communication Hub to the Agent Runtime.
+8. The Agent Runtime restores the execution context and injects the response value as the `human_intervene` tool's return value.
+9. The observe-reason-act loop resumes with the human input available to the agent.
+
+This suspend/resume cycle also applies to the inline intervene popup on the execution log streaming page — when a user is viewing live logs and the agent triggers an intervene request, a popup appears directly on the log page. After the user responds, the popup closes and the stream resumes automatically.
+
 ### 6. Result Persistence and Completion
 
-The structured result, full conversation history, and complete execution log are persisted to the Result Store. The Agent Session Queue marks the session as complete. The Agent Instance Dashboard surfaces session status, filtering by state (running / completed / failed / cancelled) and time range. See [Agent Instance Dashboard](../agent-instance-dashboard.md) and [Execution Logs](../execution-logs.md).
+The structured result, full conversation history, and complete execution log are persisted to the Result Store. The Agent Session Queue marks the session as complete. The Agent Instance Dashboard surfaces session status, filtering by state (running / waiting_for_human / completed / failed / cancelled) and time range. See [Agent Instance Dashboard](../agent-instance-dashboard.md) and [Execution Logs](../execution-logs.md).
 
 ## Conversational Session Lifecycle
 

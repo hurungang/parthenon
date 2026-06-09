@@ -10,7 +10,8 @@ from fastapi import WebSocket
 from opentelemetry import trace
 from sqlalchemy import select
 
-from app.db.models.agents import AgentJob, AgentJobStatus
+from app.db.models.agents import AgentJob, AgentJobStatus, AgentType
+from app.db.models.identity import Identity
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -114,8 +115,32 @@ class AgentSessionService:
     async def get_session(
         self, session_id: uuid.UUID, db: AsyncSession
     ) -> AgentJob | None:
-        """Fetch an AgentJob by ID. Returns None if not found."""
-        return await db.get(AgentJob, session_id)
+        """Fetch an AgentJob by ID with agent_type eagerly loaded. Returns None if not found."""
+        from sqlalchemy.orm import joinedload
+
+        stmt = (
+            select(AgentJob)
+            .options(joinedload(AgentJob.agent_type))
+            .where(AgentJob.id == session_id)
+        )
+        result = await db.execute(stmt)
+        job = result.unique().scalar_one_or_none()
+        if job:
+            await self._populate_agent_job_names(job, db)
+        return job
+
+    async def _populate_agent_job_names(
+        self, job: AgentJob, db: AsyncSession
+    ) -> None:
+        """Set agent_type_name and triggered_by_user_name on a single AgentJob."""
+        job.agent_type_name = job.agent_type.name if job.agent_type else None
+        if job.triggered_by_user_id:
+            identity_stmt = select(Identity).where(Identity.id == job.triggered_by_user_id)
+            identity_result = await db.execute(identity_stmt)
+            identity = identity_result.scalar_one_or_none()
+            job.triggered_by_user_name = identity.display_name if identity else None
+        else:
+            job.triggered_by_user_name = None
 
     async def list_sessions(
         self,
@@ -130,7 +155,15 @@ class AgentSessionService:
     ) -> list[AgentJob]:
         """List AgentJobs triggered by the given user (or all if user_id is None),
         with optional filters for status, date range, and agent type."""
-        query = select(AgentJob).order_by(AgentJob.created_at.desc())
+        from sqlalchemy.orm import joinedload
+
+        query = (
+            select(AgentJob)
+            .options(
+                joinedload(AgentJob.agent_type),
+            )
+            .order_by(AgentJob.created_at.desc())
+        )
         if user_id is not None:
             query = query.where(AgentJob.triggered_by_user_id == user_id)
         if status is not None:
@@ -143,7 +176,22 @@ class AgentSessionService:
             query = query.where(AgentJob.agent_type_id == agent_type_id)
         query = query.limit(limit).offset(offset)
         result = await db.execute(query)
-        return list(result.scalars().all())
+        jobs = list(result.unique().scalars().all())
+
+        # Populate agent_type_name and triggered_by_user_name
+        user_ids = {job.triggered_by_user_id for job in jobs if job.triggered_by_user_id}
+        identity_map = {}
+        if user_ids:
+            identity_stmt = select(Identity).where(Identity.id.in_(user_ids))
+            identity_result = await db.execute(identity_stmt)
+            identity_map = {ident.id: ident.display_name for ident in identity_result.scalars().all()}
+        for job in jobs:
+            job.agent_type_name = job.agent_type.name if job.agent_type else None
+            job.triggered_by_user_name = (
+                identity_map.get(job.triggered_by_user_id) if job.triggered_by_user_id else None
+            )
+
+        return jobs
 
     async def handle_chat_websocket(
         self,

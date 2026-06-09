@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, StringConstraints
 from typing import Annotated
 
+from app.db.models.agents import AgentJobStatus
 from app.db.models.scheduling import ExecutionStatus, JobStatus, JobTargetType
 
 
@@ -41,6 +42,18 @@ class ScheduledJobRead(BaseModel):
     updated_at: datetime
 
 
+class LinkedAgentSession(BaseModel):
+    """Summary of the linked agent execution session."""
+
+    id: uuid.UUID
+    status: AgentJobStatus
+    output_data: dict[str, Any] | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    agent_type_name: str | None = None
+
+
 class JobExecutionRead(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -51,3 +64,4 @@ class JobExecutionRead(BaseModel):
     result: dict[str, Any] | None
     started_at: datetime
     finished_at: datetime | None
+    agent_session: LinkedAgentSession | None = None

@@ -16,6 +16,7 @@ import { AgentOAuthCallbackPage } from '../pages/agents/AgentOAuthCallbackPage'
 import { ModelConfigListPage } from '../pages/agents/ModelConfigListPage'
 import { AgentInstanceDashboardPage } from '../pages/agents/AgentInstanceDashboardPage'
 import { RuntimeControlDashboardPage } from '../pages/agents/RuntimeControlDashboardPage'
+import { IntervenePage } from '../pages/agents/IntervenePage'
 import OAuthCallback from '../pages/OAuthCallback'
 import { GatewayConfigPage } from '../pages/gateway/GatewayConfigPage'
 import { ScheduleManagerPage } from '../pages/scheduling/ScheduleManagerPage'
@@ -109,6 +110,7 @@ function AppRoutes() {
         <Route path="/agents/executions" element={<AgentInstanceDashboardPage />} />
         <Route path="/agents/runtime-control" element={<RuntimeControlDashboardPage />} />
         <Route path="/agents/instances" element={<Navigate to="/agents/executions" replace />} />
+        <Route path="/agents/intervene" element={<IntervenePage />} />
         <Route path="/gateway" element={<GatewayConfigPage />} />
         <Route path="/schedules" element={<ScheduleManagerPage />} />
         <Route path="/conversations" element={<ConversationHistoryPage />} />

@@ -10,7 +10,7 @@ Security guarantees enforced by this middleware (task 4.2):
 - Requests without ``X-Client-Certificate`` header → **401 Unauthorized**
 - Certificates with invalid CA signature → **401 Unauthorized**
 - Certificates that have expired → **401 Unauthorized**
-- Certificates not issued to ``service:control-center`` → **401 Unauthorized**
+- Certificates not issued to ``service:communication-hub`` → **401 Unauthorized**
 - Revoked certificates (checked via Control Center revocation API) → **401**
 - ``/health``, ``/docs``, ``/redoc``, ``/openapi.json`` are exempt (liveness
   probes and Swagger UI must not require mTLS).

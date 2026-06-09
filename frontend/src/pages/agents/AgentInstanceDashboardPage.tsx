@@ -33,13 +33,14 @@ import { useAgentTypes } from '../../hooks/useAgentTypes'
 import { usePagination } from '../../hooks/usePagination'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
 
-const STATUS_OPTIONS: AgentJobStatus[] = ['queued', 'running', 'completed', 'failed']
+const STATUS_OPTIONS: AgentJobStatus[] = ['queued', 'running', 'waiting_for_human', 'completed', 'failed']
 
 function statusColor(
   status: AgentJobStatus,
 ): 'default' | 'warning' | 'info' | 'success' | 'error' {
   if (status === 'queued') return 'default'
   if (status === 'running') return 'info'
+  if (status === 'waiting_for_human') return 'warning'
   if (status === 'completed') return 'success'
   if (status === 'failed') return 'error'
   return 'warning'
@@ -210,25 +211,37 @@ export function AgentInstanceDashboardPage({ agentTypeId: agentTypeIdProp }: Age
         <Paper>
           <TableContainer>
             <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('agents.sessions.sessionId')}</TableCell>
-                  <TableCell>{t('app.status')}</TableCell>
-                  <TableCell>{t('agents.sessions.createdAt')}</TableCell>
-                  <TableCell>{t('agents.sessions.startedAt')}</TableCell>
-                  <TableCell>{t('agents.sessions.completedAt')}</TableCell>
-                  {isConversationAgent && <TableCell>{t('conversations.sessions.dashboardColumn')}</TableCell>}
-                  <TableCell align="right">{t('app.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(sessions ?? []).map((session) => (
-                  <TableRow key={session.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontFamily="monospace" fontSize={12}>
-                        {session.id.slice(0, 8)}…
-                      </Typography>
-                    </TableCell>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t('agents.sessions.sessionId')}</TableCell>
+                      <TableCell>{t('agents.agentType')}</TableCell>
+                      <TableCell>{t('agents.sessions.triggeredBy')}</TableCell>
+                      <TableCell>{t('app.status')}</TableCell>
+                      <TableCell>{t('agents.sessions.createdAt')}</TableCell>
+                      <TableCell>{t('agents.sessions.startedAt')}</TableCell>
+                      <TableCell>{t('agents.sessions.completedAt')}</TableCell>
+                      {isConversationAgent && <TableCell>{t('conversations.sessions.dashboardColumn')}</TableCell>}
+                      <TableCell align="right">{t('app.actions')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(sessions ?? []).map((session) => (
+                      <TableRow key={session.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontFamily="monospace" fontSize={12}>
+                            {session.id.slice(0, 8)}…
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {session.agent_type_name ?? session.agent_type_id.slice(0, 8) + '…'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {session.triggered_by_user_name ?? '—'}
+                          </Typography>
+                        </TableCell>
                     <TableCell>
                       <Chip
                         label={t(`agents.sessions.status${session.status.replace(/^./, (c: string) => c.toUpperCase())}`)}

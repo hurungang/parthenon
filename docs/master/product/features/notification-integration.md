@@ -60,6 +60,15 @@ Every channel delivery attempt is recorded as an immutable log entry with:
 
 Partial failures (one channel fails, others succeed) are recorded individually — a group notification never silently drops a channel.
 
+## Intervene Request Notifications
+
+When an agent calls `system____human_intervene`, two new notification trigger types are emitted:
+
+- **`intervene_request_created`** — Fired when a new intervene request is persisted; notification body includes the agent name, request reason, and execution link
+- **`intervene_request_responded`** — Fired when an operator responds to a pending request; notification body includes the response value and operator name
+
+These triggers follow the same dispatch pattern as existing notification types and can be routed through any configured channel (email, Slack, Teams, webhook).
+
 ## Acceptance Criteria
 - Admin can create, edit, and delete notification channels for all four channel types
 - Admin can configure channel-specific credentials (encrypted at rest); credentials are never exposed in API responses

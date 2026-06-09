@@ -29,7 +29,7 @@ The Communication Hub provides centralized, reliable message routing between the
 
 The Communication Hub acts as the **central router for all tool calls** made by agents during execution. Every tool call — whether targeting a built-in platform tool or an external MCP server tool — is forwarded by the Agent Runtime to the Communication Hub, which resolves the appropriate handler using the unified `server____tool` naming convention.
 
-- Built-in system tools (prefixed `system____`) are handled directly by the Communication Hub's internal system tool handlers
+- Built-in system tools (prefixed `system____`) are handled directly by the Communication Hub's internal system tool handlers. `system____human_intervene` tool calls are routed to Control Center for persistence and then relayed back to Agent Runtime as a suspend signal.
 - MCP server tools (prefixed with the server name) are forwarded to the MCP Hub for proxying to the registered external server
 - The Agent Runtime contains no routing logic — all routing decisions are made by the Communication Hub
 
@@ -41,6 +41,7 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - When passthrough session is configured, agent identity is automatically forwarded to the MCP server
 - UI clearly distinguishes passthrough session type from traditional session selection
 - Real-time messaging is available via WebSocket
+- The Communication Hub relays intervene response control messages from Web UI to Control Center and resume signals from Control Center to Agent Runtime
 - Agent-to-agent communication is supported and auditable
 - Guardrail stop outcomes are visible in communication-related operational views for fast incident classification
 - All message flows are accessible for monitoring and troubleshooting

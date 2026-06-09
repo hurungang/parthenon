@@ -20,7 +20,11 @@ import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { LogViewer } from '../../components/executions/LogViewer'
-import type { AgentJob, AgentJobStatus, ExecutionLogEntry } from '../../types'
+import { InterveneRequestList } from '../../components/agents/InterveneRequestList'
+import { InterveneResponseDialog } from '../../components/agents/InterveneResponseDialog'
+import * as interveneApi from '../../api/interveneApi'
+import type { AgentJob, AgentJobStatus, ExecutionLogEntry, InterveneRequest } from '../../types'
+
 
 const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed']
 const POLL_INTERVAL_MS = 3_000
@@ -49,6 +53,7 @@ function mergeLogEntries(
 function statusColor(status: AgentJobStatus): 'default' | 'warning' | 'info' | 'success' | 'error' {
   if (status === 'queued') return 'default'
   if (status === 'running') return 'info'
+  if (status === 'waiting_for_human') return 'warning'
   if (status === 'completed') return 'success'
   if (status === 'failed') return 'error'
   if (status === 'terminated') return 'warning'
@@ -85,10 +90,15 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
   const [fetchError, setFetchError] = useState<unknown>(null)
   const [chatInput, setChatInput] = useState('')
   const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
+  const [interveneRequests, setInterveneRequests] = useState<InterveneRequest[]>([])
+  const [interveneLoading, setInterveneLoading] = useState(false)
+  const [autoDialogOpen, setAutoDialogOpen] = useState(false)
+  const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const logRefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasRefetchedLogsRef = useRef(false)
+  const autoDialogShownRef = useRef<string | null>(null)
 
   // Execution logs (system instruction + user prompt) via dedicated hook
   const { logs: execLogs, loading: execLogsLoading, refetch: refetchExecLogs } = useExecutionLogs(id ?? null)
@@ -110,6 +120,8 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
     entries: streamedLogEntries,
     connectionState: logStreamState,
     isFallback: isLogStreamFallback,
+    humanInterveneEvent,
+    clearHumanInterveneEvent,
   } = useSessionExecutionLogStream({
     sessionId: id ?? null,
     enabled: shouldStreamLogs,
@@ -148,17 +160,54 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
     }
   }, [id])
 
+  const fetchInterveneRequests = useCallback(async () => {
+    if (!id) return
+    try {
+      setInterveneLoading(true)
+      const requests = await interveneApi.getInterveneRequests({ agent_session_id: id })
+      setInterveneRequests(requests)
+    } catch {
+      // Intervene requests are best-effort
+    } finally {
+      setInterveneLoading(false)
+    }
+  }, [id])
+
+  const handleSubmitResponse = useCallback(
+    async (requestId: string, value: {
+      approval_value?: boolean
+      selected_choice?: string
+      text_value?: string
+    }) => {
+      await interveneApi.submitInterveneResponse(requestId, {
+        request_id: requestId,
+        ...value,
+      })
+      await fetchInterveneRequests()
+    },
+    [fetchInterveneRequests],
+  )
+
+  const handleCancelRequest = useCallback(
+    async (requestId: string) => {
+      await interveneApi.cancelInterveneRequest(requestId)
+      await fetchInterveneRequests()
+    },
+    [fetchInterveneRequests],
+  )
+
   useEffect(() => {
     // Reset refetch flag when session ID changes
     hasRefetchedLogsRef.current = false
     
     void fetchSession()
     void fetchLogEntries()
+    void fetchInterveneRequests()
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
       if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
     }
-  }, [fetchSession, fetchLogEntries])
+  }, [fetchSession, fetchLogEntries, fetchInterveneRequests])
 
   useEffect(() => {
     if (!streamedLogEntries.length) {
@@ -195,6 +244,73 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
       if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
     }
   }, [session, refetchExecLogs, fetchLogEntries])
+
+  // Auto-popup intervene dialog when stream emits a human_intervene event
+  useEffect(() => {
+    if (!humanInterveneEvent) return
+
+    const event = humanInterveneEvent
+    // Fetch full request details and show dialog
+    const showDialog = async () => {
+      try {
+        const request = await interveneApi.getInterveneRequest(event.request_id)
+        if (request && request.status === 'pending') {
+          autoDialogShownRef.current = request.id
+          setAutoDialogRequest(request)
+          setAutoDialogOpen(true)
+        }
+      } catch {
+        // Best-effort
+      } finally {
+        clearHumanInterveneEvent()
+      }
+    }
+    void showDialog()
+  }, [humanInterveneEvent, clearHumanInterveneEvent])
+
+  // Polling fallback: when session status becomes waiting_for_human, auto-fetch
+  // and show dialog if not already shown via stream event.
+  useEffect(() => {
+    if (!session || session.status !== 'waiting_for_human') return
+
+    const fetchAndShow = async () => {
+      try {
+        const requests = await interveneApi.getInterveneRequests({
+          agent_session_id: id,
+          status: 'pending',
+        })
+        if (requests.length > 0) {
+          const req = requests[0]
+          if (autoDialogShownRef.current !== req.id) {
+            autoDialogShownRef.current = req.id
+            setAutoDialogRequest(req)
+            setAutoDialogOpen(true)
+          }
+        }
+      } catch {
+        // Best-effort
+      }
+    }
+    void fetchAndShow()
+  }, [session?.status, id])
+
+  // Auto-close the dialog after successful submission
+  const handleAutoDialogClose = useCallback(() => {
+    setAutoDialogOpen(false)
+    setAutoDialogRequest(null)
+  }, [])
+
+  const handleAutoDialogSubmit = useCallback(
+    async (requestId: string, value: {
+      approval_value?: boolean
+      selected_choice?: string
+      text_value?: string
+    }) => {
+      await handleSubmitResponse(requestId, value)
+      handleAutoDialogClose()
+    },
+    [handleSubmitResponse, handleAutoDialogClose],
+  )
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -267,6 +383,22 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
         <Divider sx={{ mb: 2 }} />
 
         <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(200px, 1fr))" gap={2}>
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {t('agents.agentType')}
+            </Typography>
+            <Typography variant="body2">
+              {session.agent_type_name ?? session.agent_type_id.slice(0, 8) + '…'}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {t('agents.sessions.triggeredBy')}
+            </Typography>
+            <Typography variant="body2">
+              {session.triggered_by_user_name ?? '—'}
+            </Typography>
+          </Box>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
               {t('agents.sessions.createdAt')}
@@ -435,6 +567,29 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
           )}
         </Paper>
       )}
+
+      {/* Intervention Requests */}
+      {interveneRequests.length > 0 && !isConversational && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6" mb={2}>
+            {t('intervene.title', 'Intervention Requests')}
+          </Typography>
+          <InterveneRequestList
+            requests={interveneRequests}
+            isLoading={interveneLoading}
+            onSubmitResponse={handleSubmitResponse}
+            onCancelRequest={handleCancelRequest}
+          />
+        </Paper>
+      )}
+
+      {/* Auto-popup intervention dialog (triggered by stream event or session status) */}
+      <InterveneResponseDialog
+        open={autoDialogOpen}
+        request={autoDialogRequest}
+        onClose={handleAutoDialogClose}
+        onSubmit={handleAutoDialogSubmit}
+      />
 
       {/* Conversation History (read-only, for completed conversational sessions) */}
       {session.conversation_history && session.conversation_history.length > 0 && isTerminal && (

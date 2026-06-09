@@ -59,13 +59,20 @@ class AgentOutputType(str, enum.Enum):
 
 
 class AgentJobStatus(str, enum.Enum):
-    """Lifecycle status of an agent job."""
+    """Lifecycle status of an agent job.
+
+    Allowed transitions:
+      queued -> running
+      running -> completed | failed | terminated | waiting_for_human
+      waiting_for_human -> running | terminated | failed
+    """
 
     queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
     terminated = "terminated"
+    waiting_for_human = "waiting_for_human"
 
 
 class ModelProvider(str, enum.Enum):
@@ -797,6 +804,9 @@ class AgentJob(Base):
 
     # Relationships
     agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="jobs")
+    intervene_requests: Mapped[list["InterveneRequest"]] = relationship(
+        "InterveneRequest", back_populates="agent_session", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<AgentJob id={self.id} type_id={self.agent_type_id} status={self.status}>"

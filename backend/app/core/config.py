@@ -232,6 +232,7 @@ class Settings(BaseSettings):
 
     # Scheduling
     scheduler_enabled: bool = True
+    scheduler_check_interval_seconds: int = 60
 
     # Rate limiting
     gateway_rate_limit_per_minute: int = 60

@@ -56,6 +56,12 @@ _AGENT_EXECUTE_PATH = "/internal/agent/execute"
 # ``/internal/agent/terminate/{session_id}`` directly from CC.
 _AGENT_TERMINATE_PATH_PREFIX = "/internal/agent/terminate/"
 
+# Agent resume path - called by Control Center after human intervention.
+# Mirrors the execute/terminate exemption — Control Center (as CA authority)
+# routes through CH, but CH still exempts the path from cert validation
+# since CC may fall back to direct calls.
+_AGENT_RESUME_PATH_PREFIX = "/internal/agent/resume/"
+
 # The only service whose certificate is accepted on control plane paths
 _EXPECTED_SERVICE_NAME = "control-center"
 
@@ -144,6 +150,17 @@ class ControlPlaneMiddleware(BaseHTTPMiddleware):
         # the CA itself and does not carry a service certificate) and
         # forwards to Agent Runtime.
         if request.url.path.startswith(_AGENT_TERMINATE_PATH_PREFIX):
+            logger.debug(
+                "CH control plane: allowing %s %s from Control Center (CA authority)",
+                request.method,
+                request.url.path,
+            )
+            return await call_next(request)
+
+        # Agent resume endpoint — called by Control Center after human
+        # intervention.  Exempt from cert validation for the same reason as
+        # execute and terminate (CC is the CA authority).
+        if request.url.path.startswith(_AGENT_RESUME_PATH_PREFIX):
             logger.debug(
                 "CH control plane: allowing %s %s from Control Center (CA authority)",
                 request.method,

@@ -109,6 +109,7 @@ export interface Skill {
   instructions?: string | null
   instructions_with_tools?: string | null
   is_active: boolean
+  is_system: boolean
   tool_ids: string[]
   created_at: string
   updated_at: string
@@ -213,6 +214,7 @@ export type AgentJobStatus =
   | 'completed'
   | 'failed'
   | 'terminated'
+  | 'waiting_for_human'
 export type AgentInputType = 'none' | 'typed' | 'conversation'
 export type AgentOutputType = 'auto' | 'typed' | 'markdown'
 
@@ -255,6 +257,8 @@ export interface AgentJob {
   stop_reason?: string | null
   stop_details?: Record<string, unknown> | null
   created_at: string
+  agent_type_name?: string
+  triggered_by_user_name?: string
 }
 
 export interface RuntimeTopologyNode {
@@ -558,7 +562,7 @@ export interface AgentInstance {
 // ── Scheduling ─────────────────────────────────────────────────────────────────
 
 export type JobStatus = 'active' | 'paused' | 'deleted'
-export type JobTargetType = 'agent' | 'sop'
+export type JobTargetType = 'agent'
 export type ExecutionStatus = 'success' | 'failure' | 'running'
 
 export interface ScheduledJob {
@@ -575,6 +579,16 @@ export interface ScheduledJob {
   updated_at: string
 }
 
+export interface LinkedAgentSession {
+  id: string
+  status: AgentJobStatus
+  output_data: Record<string, unknown> | null
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
+  agent_type_name: string | null
+}
+
 export interface JobExecution {
   id: string
   job_id: string
@@ -583,6 +597,7 @@ export interface JobExecution {
   result: Record<string, unknown> | null
   started_at: string
   finished_at: string | null
+  agent_session: LinkedAgentSession | null
 }
 
 // ── Conversations ──────────────────────────────────────────────────────────────
@@ -826,4 +841,42 @@ export interface StructuredLog {
 export interface LogPresenterOptions {
   /** Actual session status from AgentJob — overrides inferred status from logs */
   sessionStatus?: AgentJobStatus
+}
+
+// ── Intervene ─────────────────────────────────────────────────────────────────
+
+export type InterveneRequestStatus = 'pending' | 'responded' | 'cancelled' | 'expired'
+export type InterventionType = 'approval' | 'choice' | 'text'
+
+export interface InterveneRequest {
+  id: string
+  agent_session_id: string
+  agent_type_id: string
+  intervention_type: InterventionType
+  reason: string
+  choices?: string[]
+  status: InterveneRequestStatus
+  created_at: string
+  responded_at?: string
+  expires_at?: string
+  response?: InterveneResponse
+  agent_name?: string
+  triggered_by_user_name?: string
+}
+
+export interface InterveneResponse {
+  id: string
+  request_id: string
+  operator_user_id: string
+  approval_value?: boolean
+  selected_choice?: string
+  text_value?: string
+  responded_at: string
+  operator_user_name?: string
+}
+
+export interface InterveneMetrics {
+  pending_count: number
+  avg_response_time_seconds: number
+  resolution_rate: number
 }

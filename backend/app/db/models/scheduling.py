@@ -19,10 +19,9 @@ class JobStatus(str, enum.Enum):
 
 
 class JobTargetType(str, enum.Enum):
-    """What the scheduled job triggers."""
+    """What the scheduled job triggers — agent only."""
 
     agent = "agent"
-    sop = "sop"
 
 
 class ExecutionStatus(str, enum.Enum):

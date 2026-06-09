@@ -5,8 +5,14 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -43,6 +49,8 @@ export function SkillListPage() {
   const [search, setSearch] = useState('')
   const [editorSkill, setEditorSkill] = useState<Skill | null | undefined>(undefined)
   const [editorMode, setEditorMode] = useState<'create' | 'edit' | 'view'>('create')
+  const [deleteTarget, setDeleteTarget] = useState<Skill | null>(null)
+  const [showSystem, setShowSystem] = useState(false)
 
   const { data: skills, isLoading, error } = useQuery<Skill[]>({
     queryKey: ['skills', pag.limit, pag.offset],
@@ -56,16 +64,16 @@ export function SkillListPage() {
 
   const filteredSkills = (skills ?? []).filter(
     (s) =>
-      !search ||
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.description ?? '').toLowerCase().includes(search.toLowerCase()),
+      (showSystem || !s.is_system) &&
+      (!search ||
+        s.name.toLowerCase().includes(search.toLowerCase()) ||
+        (s.description ?? '').toLowerCase().includes(search.toLowerCase())),
   )
 
   const handleDelete = async (id: string) => {
-    if (confirm(t('app.confirm'))) {
-      await apiClient.delete(`/skills/${id}`)
-      await queryClient.invalidateQueries({ queryKey: ['skills'] })
-    }
+    await apiClient.delete(`/skills/${id}`)
+    setDeleteTarget(null)
+    await queryClient.invalidateQueries({ queryKey: ['skills'] })
   }
 
   return (
@@ -88,13 +96,19 @@ export function SkillListPage() {
           </Button>
         </Box>
 
-        <TextField
-          placeholder={t('app.search')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          size="small"
-          sx={{ mb: 2, width: 320 }}
-        />
+        <Box display="flex" alignItems="center" gap={2} mb={2}>
+          <TextField
+            placeholder={t('app.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            size="small"
+            sx={{ width: 320 }}
+          />
+          <FormControlLabel
+            control={<Switch size="small" checked={showSystem} onChange={(e) => setShowSystem(e.target.checked)} />}
+            label={t('skills.showSystem')}
+          />
+        </Box>
 
         {isLoading && <CircularProgress />}
         {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
@@ -121,9 +135,14 @@ export function SkillListPage() {
                     }
                   >
                     <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {skill.name}
-                      </Typography>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Typography variant="body2" fontWeight={500}>
+                          {skill.name}
+                        </Typography>
+                        {skill.is_system && (
+                          <Chip label={t('skills.systemChip')} size="small" color="info" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                        )}
+                      </Box>
                       {skill.description && (
                         <Typography variant="caption" color="text.secondary">
                           {skill.description}
@@ -148,24 +167,28 @@ export function SkillListPage() {
                       <IconButton
                         size="small"
                         onClick={() => {
-                          setEditorMode('edit')
-                          setEditorSkill(skill)
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
                           setEditorMode('view')
                           setEditorSkill(skill)
                         }}
                       >
                         <VisibilityIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(skill.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                      {!skill.is_system && (
+                        <>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setEditorMode('edit')
+                              setEditorSkill(skill)
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => setDeleteTarget(skill)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -201,6 +224,23 @@ export function SkillListPage() {
         onClose={() => setEditorSkill(undefined)}
         onSaved={() => setEditorSkill(undefined)}
       />
+
+      <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)}>
+        <DialogTitle>{t('skills.deleteTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography>{t('skills.deleteConfirm', { name: deleteTarget?.name })}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>{t('app.cancel')}</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
+          >
+            {t('app.delete')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

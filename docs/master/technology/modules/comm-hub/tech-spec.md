@@ -19,7 +19,7 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `AgentRouter` | Service class that routes inter-agent messages from a source agent instance to a target instance's pub/sub channel via `MessageBroker`; enables agent-to-agent communication |
 | `SessionContextManager` | Service class that stores and retrieves active session state — including participants, turn count, and current status — in Redis with a configurable TTL; context is flushed to PostgreSQL when the session closes |
 | `CertificateAuthorizationMiddleware` | Starlette middleware intercepting all agent tool call requests; extracts the client certificate from the TLS handshake, validates it with the Control Center, and fetches the authorised identity token; tool execution proceeds with the Control Center-provided token; returns `403 Forbidden` with reason on any validation or authorisation failure; all decisions written to `certificate_validation_log` |
-| `NameResolver` | Routes all tool calls from Agent Runtime to the correct handler using the unified `server____tool` naming convention. `system____*` calls are dispatched to internal system tool handlers (e.g., Notification Service); `<server>____*` calls are forwarded to the MCP Hub for external server proxying. No tool-type branching exists in Agent Runtime code — all routing decisions are made here. |
+| `NameResolver` | Routes all tool calls from Agent Runtime to the correct handler using the unified `server____tool` naming convention. `system____*` calls are dispatched to internal system tool handlers (e.g., Notification Service, Human Intervene persistence); `<server>____*` calls are forwarded to the MCP Hub for external server proxying. No tool-type branching exists in Agent Runtime code — all routing decisions are made here. |
 
 ### Frontend
 
@@ -35,6 +35,7 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | Protocol | Path | Purpose |
 |----------|------|---------|
 | `WebSocket` | `/ws/sessions/{session_id}` | Bidirectional real-time messaging for user ↔ agent chat |
+| `POST` | `/internal/agent/resume/{session_id}` | Resume a suspended agent session after an intervene response; forwards resume signal from Control Center to Agent Runtime |
 
 ---
 
@@ -61,10 +62,11 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `ControlCenterDataClient` | class | Pulls session, permission, and conversation data from Control Center; no direct DB access in Communication Hub | `backend/app/communication_hub/data_client.py` |
 | `check_revocation_status` | method | Uses Control Center revocation endpoint contract `revoked/{serial_number}` and fail-closed behavior by default | `backend/app/communication_hub/data_client.py` |
 | `route_tool_call` | endpoint | Internal tool routing endpoint that dispatches runtime tool calls to system-tools or MCP proxy pathways | `backend/app/communication_hub/api/internal/tool_routing.py` |
-| `_route_to_system_tool` | function | Forwards `system____*` calls to Control Center system-tools internal endpoints with service-certificate authentication | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `_route_to_system_tool` | function | Forwards `system____*` calls to Control Center system-tools internal endpoints with service-certificate authentication; `system____human_intervene` calls are routed to Control Center for persistence and suspend signal relay | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `_route_to_mcp_tool` | function | Forwards `<server>____*` calls to Control Center MCP proxy internal endpoint | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `_build_control_center_auth` | function | Builds authenticated CH->CC internal call transport for tool routing and policy checks | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `trigger_agent_execution` | endpoint | Triggers Agent Runtime execution for queued or conversation work units and preserves guardrail stop metadata in forwarded payloads | `backend/app/communication_hub/api/internal/agent_execute.py` |
+| `resume_agent_session` | endpoint | `POST /internal/agent/resume/{session_id}` — Forwards resume signal from Control Center to Agent Runtime with the operator's response value; restores suspended session | `backend/app/communication_hub/api/internal/resume.py` |
 | `request_a2a` | endpoint | Creates agent-to-agent delegation requests through Control Center orchestration APIs while preserving delegated guardrail outcome metadata | `backend/app/communication_hub/api/a2a.py` |
 | `disconnect_a2a` | endpoint | Closes linked A2A sessions and updates orchestration state via Control Center | `backend/app/communication_hub/api/a2a.py` |
 | `ChatPage` | component | Real-time user-to-agent chat interface backed by WebSocket connection | `frontend/src/pages/chat/ChatPage.tsx` |

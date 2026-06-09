@@ -294,3 +294,70 @@ async def test_request_termination_skips_already_completed_sessions():
     assert len(captured_outcomes) == 1
     assert captured_outcomes[0].termination_outcome == TerminationOutcome.already_completed
     assert request.request_status == TerminationRequestStatus.completed
+
+
+@pytest.mark.asyncio
+async def test_termination_cancels_pending_intervene_requests():
+    """When a session in waiting_for_human state is terminated, any
+    pending intervene request for that session must be cancelled
+    automatically.  The operator's intent to stop the session
+    implies consent to abandon the pending intervention.
+    """
+    job = _make_running_job()
+    job.status = AgentJobStatus.waiting_for_human
+
+    pending_request = SimpleNamespace(
+        id=uuid.uuid4(),
+        agent_session_id=job.id,
+        status="pending",
+    )
+
+    db = AsyncMock()
+    db.get = AsyncMock(return_value=job)
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+
+    orchestrator = TerminationOrchestrator()
+
+    async def _fake_terminate_session(*, session_id, reason=None):
+        return {"session_id": str(session_id), "cancelled": True}
+
+    intervene_cancel_called = False
+
+    async def _fake_cancel_request(db, request_id):
+        nonlocal intervene_cancel_called
+        intervene_cancel_called = True
+        pending_request.status = "cancelled"
+        return pending_request
+
+    with (
+        patch(
+            "app.services.control_center.termination_orchestrator"
+            "._agent_runtime_client.terminate_session",
+            AsyncMock(side_effect=_fake_terminate_session),
+        ),
+        patch(
+            "app.services.agents.intervene_service.InterveneRequestStore"
+            "._find_pending_for_session",
+            AsyncMock(return_value=pending_request),
+        ),
+        patch(
+            "app.services.agents.intervene_service.InterveneRequestStore"
+            ".cancel_request",
+            AsyncMock(side_effect=_fake_cancel_request),
+        ),
+    ):
+        await orchestrator.request_termination(
+            target_session_id=job.id,
+            requested_by_user_id=uuid.uuid4(),
+            scope=TerminationScope.node_only,
+            operator_reason="Test",
+            db=db,
+        )
+
+    # DB transition still happened
+    assert job.status == AgentJobStatus.terminated
+    # Intervene request was cancelled
+    assert intervene_cancel_called, "cancel_request was not called"
+    assert pending_request.status == "cancelled"

@@ -4,6 +4,7 @@ Provides MCP-like JSON-RPC endpoints for system tools:
 - save_result: Save agent execution result
 - send_notification: Send notification via recipient group  
 - get_recipient_group: Get recipient group information
+- human_intervene: Create a human intervene request for an agent session
 
 All endpoints require mTLS certificate authentication.
 These are called by Communication Hub when routing system tool calls.
@@ -293,4 +294,111 @@ async def get_recipient_group_tool(
         logger.exception("Failed to get recipient group")
         raise HTTPException(
             status_code=500, detail=f"Failed to get recipient group: {exc}"
+        )
+
+
+@router.post("/human-intervene", response_model=SystemToolResponse)
+async def human_intervene_tool(
+    body: SystemToolRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Create a human intervene request for an agent session.
+
+    Called by Communication Hub when routing a ``human_intervene`` system tool
+    call from Agent Runtime.  Persists an ``InterveneRequest`` and returns the
+    ``request_id`` so the hub can relay it back to the waiting agent.
+
+    Args:
+        body: Tool request with session ID and arguments containing
+            ``intervention_type``, ``reason``, optional ``choices`` and ``prompt``.
+        db: Database session.
+
+    Returns:
+        SystemToolResponse with ``request_id`` and ``status``.
+
+    Raises:
+        HTTPException: 404 if session not found, 409 if request already pending.
+    """
+    logger.info("System tool: human_intervene for session %s", body.session_id)
+
+    try:
+        session_id = uuid.UUID(body.session_id)
+        intervention_type_str = body.tool_args.get("intervention_type")
+        reason = body.tool_args.get("reason", "")
+        choices = body.tool_args.get("choices")
+
+        if not intervention_type_str:
+            raise HTTPException(
+                status_code=400, detail="intervention_type is required"
+            )
+
+        from app.db.models.agents import AgentJob
+        from app.db.models.intervene import InterventionType
+        from app.services.agents.intervene_service import InterveneRequestStore
+
+        result = await db.execute(
+            select(AgentJob).where(AgentJob.id == session_id)
+        )
+        job = result.scalar_one_or_none()
+        if not job:
+            raise HTTPException(
+                status_code=404, detail=f"Session {session_id} not found"
+            )
+
+        itype = InterventionType(intervention_type_str)
+        store = InterveneRequestStore()
+        request = await store.create_request(
+            db=db,
+            agent_session_id=session_id,
+            agent_type_id=job.agent_type_id,
+            intervention_type=itype,
+            reason=reason,
+            choices=choices,
+        )
+
+        await db.commit()
+
+        logger.info(
+            "Created intervene request %s for session %s",
+            request.id,
+            session_id,
+        )
+
+        # Attempt to dispatch a notification for the new intervene request.
+        # This is best-effort — if no recipient group is configured for
+        # intervene notifications, the call fails gracefully with a warning.
+        try:
+            from app.db.models.notifications import SourceType
+            from app.services.notifications.notification_service import (
+                NotificationService,
+            )
+            nsvc = NotificationService(db)
+            await nsvc.send_to_group(
+                group_slug="intervene-notifications",
+                body=f"Human intervention required: {request.reason}",
+                subject=f"Intervene Request ({request.intervention_type.value})",
+                source_type=SourceType.INTERVENE_REQUEST_CREATED,
+                source_id=request.id,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to dispatch notification for intervene request %s "
+                "(no recipient group 'intervene-notifications' configured?)",
+                request.id,
+            )
+
+        return SystemToolResponse(
+            result={"request_id": str(request.id), "status": "pending"}
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409, detail=str(exc)
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to create intervene request")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create intervene request: {exc}"
         )

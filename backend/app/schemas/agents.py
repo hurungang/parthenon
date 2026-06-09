@@ -379,6 +379,8 @@ class AgentJobStatusRead(BaseModel):
     completed_at: datetime | None
     error_message: str | None
     created_at: datetime
+    agent_type_name: str | None = None
+    triggered_by_user_name: str | None = None
 
 
 class AgentJobRead(BaseModel):
@@ -398,6 +400,8 @@ class AgentJobRead(BaseModel):
     error_message: str | None
     conversation_history: list[dict[str, Any]] | None = None
     created_at: datetime
+    agent_type_name: str | None = None
+    triggered_by_user_name: str | None = None
 
 
 # ── A2A (Agent-to-Agent) Communication Schemas ────────────────────────────────

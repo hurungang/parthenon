@@ -2,7 +2,7 @@
 
 ## Mandatory Pre-Change Check
 
-Before making any code or documentation change, first review `docs/config.yaml` and ensure the change complies with every `top_priority_rules` entry; if any conflict exists, stop and escalate for clarification.
+Before making any code or documentation change, first review `docs/config.yaml` to understand the highlevel folder structure, and ensure the change complies with every `top_priority_rules` entry; if any conflict exists, stop and escalate for clarification.
 
 **If the change involves database schema changes (or you're unsure), verify `.change.yaml` for `has_db_changes: true` and apply pending migrations with `alembic upgrade head` before testing.**
 
@@ -10,26 +10,39 @@ Before making any code or documentation change, first review `docs/config.yaml` 
 
 If the backend returns 500 errors during testing, the most likely cause is **unapplied database migrations**. Run `python -m alembic current` and compare against the latest file in `backend/alembic/versions/`. If out of date, run `python -m alembic upgrade head` and restart the backend.
 
-## Running Dev Servers (Windows)
+## Managing Dev Servers (Windows)
 
-**Do NOT run dev servers directly in the bash tool** — they will block the session or terminate when the tool finishes.
+**Do NOT run dev servers directly in the bash tool.** Always use `parthenon.ps1` (project root) to manage the stack — it handles startup order, health checks, and certificate bootstrapping correctly.
 
-**Always use `Start-Process` to launch servers** so they persist in their own window independent of the agent:
-
-```powershell
-# Backend
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d c:\...\backend && python -m uvicorn app.main:app --reload --port 8000"
-
-# Frontend
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d c:\...\frontend && npm run dev"
-```
-
-Verify the server is up with a quick HTTP check after starting:
+### Common Commands
 
 ```powershell
-Start-Sleep 8
-Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing | Select-Object StatusCode
+# Start all backend services (CC first, then AR, then CH)
+.\parthenon.ps1 start -Services backend
+
+# Start/restart everything (including infra)
+.\parthenon.ps1 restart
+
+# Start a single service (useful after code changes to that service only)
+.\parthenon.ps1 restart -Services control-center -Force
+
+# Force restart without prompts
+.\parthenon.ps1 restart -Services backend -Force
+
+# Check service status
+.\parthenon.ps1 status
+
+# View logs
+.\parthenon.ps1 logs -Services control-center
+.\parthenon.ps1 logs -Services agent-runtime -Lines 100
+.\parthenon.ps1 logs -Services communication-hub -Follow
 ```
+
+### Important
+
+- **Always restart `backend` services** after code changes to ensure certificates are bootstrapped correctly (uvicorn `--reload` can restart CH/AR during CC downtime, leaving them without certs).
+- **Start order matters**: CH and AR need CC running first for certificate bootstrap. `parthenon.ps1` enforces: infra → control-center → agent-runtime → communication-hub → frontend.
+- If CH or AR logs show "no certificate manager available", run `.\parthenon.ps1 restart -Services communication-hub,agent-runtime -Force` to rebootstrap.
 
 ## Port Conflicts
 
@@ -123,6 +136,15 @@ $j.testResults | Where-Object { $_.status -eq 'failed' } | ForEach-Object {
     $_.assertionResults | Where-Object { $_.status -eq 'failed' } | ForEach-Object { Write-Host "  x $($_.fullName)" }
 }
 ```
+
+## Backend Logs
+
+Backend logs are located at `backend/logs/`. Key log files:
+- `control-center.log` — main backend (CC API) logs
+- `agent-runtime.log` — agent runtime execution logs
+- `communication-hub.log` — Communication Hub logs
+
+These are rotated with numeric suffixes (.1, .2, etc.). Always check the most recent file (no suffix) for current issues.
 
 ## Temporary Files
 

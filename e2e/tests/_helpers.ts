@@ -12,32 +12,43 @@ export const FAKE_TOKEN = `${_header}.${_payload}.fake-sig`
 /**
  * Full standard setup for protected-page tests:
  * 1. Register health + telemetry mocks
- * 2. Navigate directly to /login (always public, no redirect dance)
- * 3. Inject the fake JWT into localStorage via page.evaluate (guaranteed timing)
+ * 2. Register a catch-all abort rule for non-localhost origins
+ * 3. Inject the fake JWT via addInitScript (runs before any page JS)
  *
- * Tests MUST call page.goto('/their-route') AFTER this returns.
+ * Tests call page.goto('/their-route') AFTER this returns.
+ * Test-specific route mocks must be registered BEFORE page.goto().
  */
 export async function standardSetup(page: Page) {
+  // IMPORTANT: Use full-url patterns (http://localhost:8000/api/v1/...) instead of
+  // glob patterns (**/api/v1/...), because Playwright's ** globs do NOT match
+  // requests to a different port on the same host (localhost:8000 vs localhost:5173).
   await mockHealth(page)
   await mockTelemetry(page)
-  // Registered AFTER catch-all so it takes priority over the abort rule
   await mockIdentityStatus(page)
 
-  // Navigate to /login — it's always a public route, no redirect complexity
-  await page.goto('/login')
-  await page.waitForLoadState('load')
-
-  // Set the fake token — localStorage persists across in-page navigations
-  await page.evaluate((token) => {
+  // Inject token before any page JS runs — this persists across all navigations
+  await page.addInitScript((token) => {
     localStorage.setItem('access_token', token)
   }, FAKE_TOKEN)
 }
 
 /**
+ * Registers a catch-all route for the API backend to prevent real API calls.
+ * Must be called AFTER test-specific route mocks so they take priority.
+ * Routes are checked in reverse registration order.
+ */
+export async function mockApiCatchAll(page: Page) {
+  await page.route('http://localhost:8000/api/v1/**', (route) => {
+    route.fulfill({ status: 200, body: JSON.stringify({}) })
+  })
+}
+
+/**
  * Mocks the standard API health endpoint.
+ * Uses explicit localhost:8000 URL to ensure cross-origin matching works.
  */
 export async function mockHealth(page: Page) {
-  await page.route('**/api/v1/health', (route) =>
+  await page.route('http://localhost:8000/api/v1/health', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok' }) })
   )
 }
@@ -49,7 +60,7 @@ export async function mockHealth(page: Page) {
  */
 export async function mockTelemetry(page: Page) {
   // Mock the telemetry config endpoint
-  await page.route('**/api/v1/telemetry/config', (route) =>
+  await page.route('http://localhost:8000/api/v1/telemetry/config', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -68,16 +79,14 @@ export async function mockTelemetry(page: Page) {
   )
   
   // Abort any cross-origin requests that aren't the app itself (e.g. CDN, external APIs)
-  // Use (?!localhost) to allow all localhost ports (5173 dev, 4173 preview, 8000 backend, 4318 OTEL)
   await page.route(/^https?:\/\/(?!localhost)/, (route) => route.abort())
 }
 
 /**
  * Mocks the identity-status endpoint so the app doesn't redirect to setup wizard.
- * Must be registered AFTER mockTelemetry's catch-all abort to take priority.
  */
 export async function mockIdentityStatus(page: Page) {
-  await page.route('**/api/v1/setup/identity-status', (route) =>
+  await page.route('http://localhost:8000/api/v1/setup/identity-status', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

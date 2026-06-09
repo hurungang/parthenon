@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_CONFIG } from '../api/API_CONFIG'
 import type { AgentJobStatus, ExecutionLogEntry } from '../types'
 
@@ -28,7 +28,16 @@ interface StreamCompletedEvent {
   session_status: AgentJobStatus | 'failed'
 }
 
-type StreamEvent = StreamLogEntryEvent | StreamCompletedEvent
+export interface HumanInterveneEvent {
+  type: 'human_intervene'
+  request_id: string
+  session_id: string
+  reason: string
+  intervention_type: string
+  choices?: string[]
+}
+
+type StreamEvent = StreamLogEntryEvent | StreamCompletedEvent | HumanInterveneEvent
 
 function isTerminalStatus(status: AgentJobStatus | undefined): boolean {
   return status === 'completed' || status === 'failed' || status === 'terminated'
@@ -53,12 +62,14 @@ export function useSessionExecutionLogStream({
 }: UseSessionExecutionLogStreamOptions) {
   const [entries, setEntries] = useState<ExecutionLogEntry[]>([])
   const [connectionState, setConnectionState] = useState<ExecutionLogStreamConnectionState>('idle')
+  const [humanInterveneEvent, setHumanInterveneEvent] = useState<HumanInterveneEvent | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setEntries([])
+    setHumanInterveneEvent(null)
   }, [sessionId])
 
   useEffect(() => {
@@ -139,6 +150,11 @@ export function useSessionExecutionLogStream({
               continue
             }
 
+            if (event.type === 'human_intervene') {
+              setHumanInterveneEvent(event)
+              continue
+            }
+
             if (event.type === 'stream_completed') {
               setConnectionState('idle')
               return
@@ -176,9 +192,15 @@ export function useSessionExecutionLogStream({
     }
   }, [enabled, reconnectAttempts, reconnectDelayMs, sessionId, sessionStatus])
 
+  const clearHumanInterveneEvent = useCallback(() => {
+    setHumanInterveneEvent(null)
+  }, [])
+
   return {
     entries,
     connectionState,
     isFallback: connectionState === 'fallback',
+    humanInterveneEvent,
+    clearHumanInterveneEvent,
   }
 }
