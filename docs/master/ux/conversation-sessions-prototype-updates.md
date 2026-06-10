@@ -13,22 +13,18 @@ The following UI components need to be added to the UX prototype to reflect the 
 **Visibility Rule**: Show Sessions tab ONLY when `agent_type.input_type === 'conversation'`
 
 **Tab Content**:
-```
-Sessions Tab
-├── Header
-│   ├── "Conversation Sessions" title
-│   └── "Start New Conversation" button (primary action)
-├── Session List Table
-│   ├── Columns: Title | Status | Last Active | Actions
-│   ├── Title: Auto-generated session title (or "Untitled" placeholder)
-│   ├── Status: Chip component (Active / Closed / Archived)
-│   ├── Last Active: Relative timestamp (e.g., "2 hours ago")
-│   └── Actions: Resume button | End icon button | Archive icon button
-└── Empty State (when no sessions exist)
-    ├── Icon: conversation bubble
-    ├── Message: "No conversation sessions yet"
-    └── CTA: "Start New Conversation" button
-```
+
+- **Header**: "Conversation Sessions" title and "Start New Conversation" button (primary action)
+- **Session List Table**:
+  - Columns: Title, Status, Last Active, Actions
+  - Title: Auto-generated session title (or "Untitled" placeholder)
+  - Status: Chip component (Active, Closed, Archived)
+  - Last Active: Relative timestamp (e.g., "2 hours ago")
+  - Actions: Resume button, End icon button, Archive icon button
+- **Empty State** (when no sessions exist):
+  - Icon: conversation bubble
+  - Message: "No conversation sessions yet"
+  - CTA: "Start New Conversation" button
 
 **Interactions**:
 - Click "Start New Conversation" → Opens ChatPage with new session
@@ -53,17 +49,13 @@ Sessions Tab
 **Location**: Real-time chat interface (`/agents/:agentTypeId/chat/:sessionId`)
 
 **New Header Component**:
-```
-Chat Page Header
-├── Back button (navigate to Agent Management)
-├── Session Title (live-updated via WebSocket)
-│   ├── Initial state: "Untitled" or loading skeleton
-│   └── After title_update event: Display generated title
-├── Session Status badge (Active / Closed / Archived)
-└── Actions menu
-    ├── End Session
-    └── Archive Session
-```
+
+- Back button (navigate to Agent Management)
+- Session Title (live-updated via WebSocket):
+  - Initial state: "Untitled" or loading skeleton
+  - After title_update event: Display generated title
+- Session Status badge (Active, Closed, Archived)
+- Actions menu: End Session, Archive Session
 
 **WebSocket Behavior**:
 - Title starts as "Untitled" or null

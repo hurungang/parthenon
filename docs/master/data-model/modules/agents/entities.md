@@ -247,7 +247,7 @@ erDiagram
 | **AgentRoleIdentity** | Many-to-many join table explicitly assigning an AgentIdentity to an AgentRole. An identity can only be used for a role if a record exists here. Tracks when and by whom the assignment was made. |
 | **AgentRoleSOP** | Join table linking an AgentRole to a Sop. Granting an SOP implicitly includes all Skills it depends on and all MCP tools those Skills require. |
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
-| **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role (unique constraint on `role_id + server_id`). |
+| **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role. |
 | **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
 | **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
 | **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
@@ -379,7 +379,7 @@ erDiagram
 
 | Entity | Description |
 |--------|-------------|
-| **ModelGuardrailConfiguration** | A single guardrail scoped to one period (hour, day, week, or month) for one model. Unique constraint on `(model_id, model_name, period)`. `enforcement_posture` is `terminate` (default) or `observe-only`; `is_active` allows per-guardrail enable/disable independent of the other periods. |
+| **ModelGuardrailConfiguration** | A single guardrail scoped to one period (hour, day, week, or month) for one model. At most one guardrail per model per period. `enforcement_posture` is `terminate` (default) or `observe-only`; `is_active` allows per-guardrail enable/disable independent of the other periods. |
 | **ModelAvailability** | Per-model availability state. `is_disabled=True` blocks execution; `disabled_reason` is `vendor_disabled` (cascade from vendor-level disable) or `model_disabled` (manual). |
 | **ModelUsagePosture** | Current usage posture against a guardrail limit. `posture_state` is `within_limit`, `approaching_limit`, or `breached`. When `breached` and the guardrail's `enforcement_posture` is `terminate`, the agent execution is blocked. |
 | **AgentInstance** | A logical agent instance shown in the Agent Instance Dashboard. `instance_id` is the canonical identifier used for `AgentInstanceCertificate` lookup. `status` is one of `created`, `active`, `closed`, `error`. |
@@ -393,6 +393,6 @@ erDiagram
 **Business rules:**
 - A model can have one to four `ModelGuardrailConfiguration` records, one per period. There is no forced four-period entry.
 - `ModelAvailability.disabled_reason = vendor_disabled` indicates a cascade from vendor-level disable; the per-model `ModelGuardrailConfiguration` records remain visible to show the cascade source.
-- `AgentJob.status` accepts `terminated` as a distinct value from `failed`. The new value is added in migration `f4a5b6c7d8e9`.
+- `AgentJob.status` accepts `terminated` as a distinct value from `failed`, enabling operators to distinguish operator-initiated stops from execution errors.
 - `ExecutionEventCategory` accepts `model_disabled`, `vendor_disabled`, and `guardrail_breached` as user-visible event categories for execution logs. These are distinct from standard execution failures.
 - `SopRecursionValidationCheck` runs at every agent create, update, and run; `result = fail` blocks the action.

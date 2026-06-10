@@ -42,18 +42,21 @@ erDiagram
 - **Soft-delete**: Scheduled jobs are never hard-deleted. The `deleted` status hides them from active lists while preserving execution history.
 - **Immutable execution history**: `JobExecution` records are append-only. Once created, they are never modified — status and results are set at completion and remain stable.
 - **UTC only**: All schedule expressions (`cron_expression`) and timestamps are in UTC.
-- **target_type is agent only**: The `target_type` enum currently supports only `agent`. The `sop` value was removed via migration `94b463ce35c0`.
+- **target_type is agent only**: The `target_type` currently supports only `agent`. SOP-based scheduling was removed.
 - **CASCADE delete**: Deleting a `ScheduledJob` cascades to all its `JobExecution` records.
 - **APScheduler correlation**: `scheduler_job_id` links the database record to an APScheduler job for runtime lifecycle operations (pause, resume, remove).
 
 ## Status Transitions
 
-```
-ScheduledJob status:
-  active ↔ paused   (via pause/resume API)
-  active → deleted  (soft delete, irreversible)
+```mermaid
+stateDiagram-v2
+    [*] --> active : Create schedule
+    active --> paused : Pause
+    paused --> active : Resume
+    active --> deleted : Soft delete
+    deleted --> [*]
 
-JobExecution status:
-  running → success
-  running → failure
+    [*] --> running : Job triggered
+    running --> success : Completion
+    running --> failure : Error
 ```

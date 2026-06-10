@@ -8,6 +8,8 @@ Implements a triple-discovery pattern for MCP server OAuth configuration:
 Supports Dynamic Client Registration (DCR, RFC 7591) when no client_id is found.
 """
 
+import base64
+import hashlib
 import json
 import logging
 import os
@@ -24,6 +26,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.mcp_oauth import OAuthDiscoveryResult
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_sse(text: str) -> dict:
+    """Parse a Server-Sent Events (SSE) response, extracting JSON from data: lines."""
+    data_parts: list[str] = []
+    for line in text.split("\n"):
+        if line.startswith("data: "):
+            data_parts.append(line[6:])
+        elif line.startswith("data:"):
+            data_parts.append(line[5:])
+    if not data_parts:
+        raise ValueError("SSE response contained no data lines")
+    return json.loads("".join(data_parts))
 
 # Load corporate CA from OS certificate store via truststore (Windows cert manager)
 try:
@@ -133,11 +148,16 @@ async def discover_oauth_config(mcp_base_url: str, redirect_uri: str) -> OAuthDi
         ValueError: When none of the discovery methods succeed.
     """
     base = mcp_base_url.rstrip("/")
+    # Build candidate base URLs: root origin first, then the full base_url.
+    # Well-known & metadata endpoints may live at either location.
+    from urllib.parse import urlparse
+    parsed = urlparse(base)
+    root = f"{parsed.scheme}://{parsed.netloc}"
+    candidates = [root]
+    if base != root:
+        candidates.append(base)
+
     # Method 1 probes the MCP protocol endpoint to trigger a 401 + WWW-Authenticate.
-    # Convention: base_url stores the server root (e.g. https://mcp.supabase.com);
-    # the MCP protocol path is /mcp. Guard against base_url values that already
-    # include /mcp to avoid double-appending.
-    mcp_endpoint = base if base.endswith("/mcp") else f"{base}/mcp"
 
     # Check if SSL verification should be disabled (for dev/testing)
     # WARNING: Never disable SSL verification in production!
@@ -152,78 +172,80 @@ async def discover_oauth_config(mcp_base_url: str, redirect_uri: str) -> OAuthDi
     async with httpx.AsyncClient(timeout=10.0, verify=ssl_verify) as client:
         # ── Method 1: WWW-Authenticate header ─────────────────────────────────
         try:
-            logger.debug("OAuth discovery method 1: WWW-Authenticate at %s", mcp_endpoint)
-            response = await client.get(mcp_endpoint)
+            logger.debug("OAuth discovery method 1: WWW-Authenticate at %s", base)
+            response = await client.get(base)
             if response.status_code == 401:
                 www_auth = response.headers.get("WWW-Authenticate", "")
                 logger.debug("WWW-Authenticate header: %s", www_auth)
                 if www_auth:
                     result = await _parse_www_authenticate(www_auth, redirect_uri, client)
                     if result:
-                        logger.info("OAuth discovered via WWW-Authenticate")
+                        logger.info("OAuth discovered via WWW-Authenticate at %s", base)
                         return result
         except httpx.ConnectError as exc:
-            error_msg = f"WWW-Authenticate: Connection error - {exc}"
+            error_msg = f"WWW-Authenticate ({base}): Connection error - {exc}"
             logger.warning(error_msg)
             errors.append(error_msg)
         except Exception as exc:
-            error_msg = f"WWW-Authenticate: {type(exc).__name__} - {exc}"
+            error_msg = f"WWW-Authenticate ({base}): {type(exc).__name__} - {exc}"
             logger.debug(error_msg)
             errors.append(error_msg)
 
         # ── Method 2: /.well-known/oauth-authorization-server ─────────────────
-        well_known_url = f"{base}/.well-known/oauth-authorization-server"
-        try:
-            logger.debug("OAuth discovery method 2: %s", well_known_url)
-            response = await client.get(well_known_url)
-            if response.status_code == 200:
-                data = response.json()
-                logger.info("OAuth discovered via well-known endpoint")
-                scopes = data.get("scopes_supported")
-                scope_str: str | None = (
-                    " ".join(scopes) if isinstance(scopes, list) else scopes
-                ) or data.get("scope")
-                return OAuthDiscoveryResult(
-                    authorization_url=data.get("authorization_endpoint", ""),
-                    token_url=data.get("token_endpoint", ""),
-                    client_id=data.get("client_id", ""),
-                    scope=scope_str,
-                    redirect_uri=redirect_uri,
-                    registration_endpoint=data.get("registration_endpoint"),
-                )
-        except httpx.ConnectError as exc:
-            error_msg = f"Well-known: Connection error - {exc}"
-            logger.warning(error_msg)
-            errors.append(error_msg)
-        except Exception as exc:
-            error_msg = f"Well-known: {type(exc).__name__} - {exc}"
-            logger.debug(error_msg)
-            errors.append(error_msg)
+        for candidate in candidates:
+            well_known_url = f"{candidate}/.well-known/oauth-authorization-server"
+            try:
+                logger.debug("OAuth discovery method 2: %s", well_known_url)
+                response = await client.get(well_known_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info("OAuth discovered via well-known endpoint at %s", well_known_url)
+                    scopes = data.get("scopes_supported")
+                    scope_str: str | None = (
+                        " ".join(scopes) if isinstance(scopes, list) else scopes
+                    ) or data.get("scope")
+                    return OAuthDiscoveryResult(
+                        authorization_url=data.get("authorization_endpoint", ""),
+                        token_url=data.get("token_endpoint", ""),
+                        client_id=data.get("client_id", ""),
+                        scope=scope_str,
+                        redirect_uri=redirect_uri,
+                        registration_endpoint=data.get("registration_endpoint"),
+                    )
+            except httpx.ConnectError as exc:
+                error_msg = f"Well-known ({candidate}): Connection error - {exc}"
+                logger.warning(error_msg)
+                errors.append(error_msg)
+            except Exception as exc:
+                error_msg = f"Well-known ({candidate}): {type(exc).__name__} - {exc}"
+                logger.debug(error_msg)
+                errors.append(error_msg)
 
         # ── Method 3: /oauth/metadata ──────────────────────────────────────────
-        oauth_meta_url = f"{base}/oauth/metadata"
-        try:
-            logger.debug("OAuth discovery method 3: %s", oauth_meta_url)
-            response = await client.get(oauth_meta_url)
-            if response.status_code == 200:
-                data = response.json()
-                logger.info("OAuth discovered via MCP metadata endpoint")
-                return OAuthDiscoveryResult(
-                    authorization_url=data.get("authorization_url", ""),
-                    token_url=data.get("token_url", ""),
-                    client_id=data.get("client_id", ""),
-                    scope=data.get("scope"),
-                    redirect_uri=redirect_uri,
-                    registration_endpoint=data.get("registration_endpoint"),
-                )
-        except httpx.ConnectError as exc:
-            error_msg = f"MCP metadata: Connection error - {exc}"
-            logger.warning(error_msg)
-            errors.append(error_msg)
-        except Exception as exc:
-            error_msg = f"MCP metadata: {type(exc).__name__} - {exc}"
-            logger.debug(error_msg)
-            errors.append(error_msg)
+        for candidate in candidates:
+            oauth_meta_url = f"{candidate}/oauth/metadata"
+            try:
+                logger.debug("OAuth discovery method 3: %s", oauth_meta_url)
+                response = await client.get(oauth_meta_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info("OAuth discovered via MCP metadata endpoint at %s", oauth_meta_url)
+                    return OAuthDiscoveryResult(
+                        authorization_url=data.get("authorization_url", ""),
+                        token_url=data.get("token_url", ""),
+                        client_id=data.get("client_id", ""),
+                        scope=data.get("scope"),
+                        redirect_uri=redirect_uri,
+                        registration_endpoint=data.get("registration_endpoint"),
+                    )
+            except httpx.ConnectError as exc:
+                error_msg = f"MCP metadata ({candidate}): Connection error - {exc}"
+                logger.warning(error_msg)
+                errors.append(error_msg)
+            except Exception as exc:
+                error_msg = f"MCP metadata ({candidate}): {type(exc).__name__} - {exc}"
+                logger.debug(error_msg)
+                errors.append(error_msg)
 
     # All methods failed - provide detailed error message
     error_details = "; ".join(errors) if errors else "All discovery methods returned no OAuth config"
@@ -366,7 +388,7 @@ async def register_dynamic_client(
         )
         logger.debug("DCR response status: %s", response.status_code)
 
-        if response.status_code == 201:
+        if response.is_success:
             data = response.json()
             client_id: str | None = data.get("client_id")
             if not client_id:
@@ -488,12 +510,20 @@ async def initiate_oauth_flow(
 
     # ── Store state and build authorization URL ────────────────────────────────
     state = secrets.token_urlsafe(32)
+
+    # Generate PKCE code_verifier and code_challenge (RFC 7636)
+    code_verifier = secrets.token_urlsafe(32)[:43]  # 43 chars is typical
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode("ascii")).digest()
+    ).rstrip(b"=").decode("ascii")
+
     mcp_oauth_states[state] = {
         "server_id": str(server_id),
         "client_id": discovery_result.client_id,
         "client_secret": discovery_result.client_secret,
         "token_url": discovery_result.token_url,
         "redirect_uri": redirect_uri,
+        "code_verifier": code_verifier,
         "session_name": session_name,
         "session_description": session_description,
         "expires_at": (
@@ -506,6 +536,8 @@ async def initiate_oauth_flow(
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     if discovery_result.scope:
         params["scope"] = discovery_result.scope
@@ -567,16 +599,22 @@ async def _initialize_mcp_session(base_url: str, access_token: str) -> str:
             
             response.raise_for_status()
             
-            result = response.json()
-            logger.debug("MCP initialize response: %s", result)
+            # Handle SSE (text/event-stream) responses
+            ct = response.headers.get("content-type", "")
+            if "text/event-stream" in ct:
+                data = _parse_sse(response.text)
+            else:
+                data = response.json()
+            
+            logger.debug("MCP initialize response: %s", data)
             
             # Extract session ID from response headers (Supabase MCP pattern)
             mcp_session_id = response.headers.get("Mcp-Session-Id")
             
             if not mcp_session_id:
                 # Try to extract from response body if not in headers
-                if isinstance(result, dict):
-                    mcp_session_id = result.get("sessionId") or result.get("session_id")
+                if isinstance(data, dict):
+                    mcp_session_id = data.get("sessionId") or data.get("session_id")
             
             if not mcp_session_id:
                 logger.warning("MCP server did not return session ID, using generated UUID")
@@ -657,6 +695,7 @@ async def handle_oauth_callback(
     client_secret: str | None = state_data.get("client_secret")
     token_url: str = state_data["token_url"]
     redirect_uri: str = state_data["redirect_uri"]
+    code_verifier: str | None = state_data.get("code_verifier")
 
     # ── 2. Exchange code for tokens ────────────────────────────────────────────
     token_data: dict[str, str] = {
@@ -667,6 +706,8 @@ async def handle_oauth_callback(
     }
     if client_secret:
         token_data["client_secret"] = client_secret
+    if code_verifier:
+        token_data["code_verifier"] = code_verifier
 
     # Use truststore for corporate cert handling
     verify_ssl = os.getenv("MCP_OAUTH_VERIFY_SSL", "true").lower() != "false"

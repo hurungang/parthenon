@@ -4,63 +4,61 @@
 
 When an LLM response includes a tool-call request, the Agent Engine delegates execution through a three-layer chain: **Skill Engine → MCP Hub → External MCP Server**. This separation keeps agent logic decoupled from tool implementation and allows tools to be registered, versioned, and secured independently.
 
-## Tool Execution Sequence
+## Single-Tool Execution
 
 ```mermaid
 sequenceDiagram
-    participant U as Web UI
-    participant CH as Communication Hub
     participant AE as Agent Engine
-    participant LLM as LLM Provider
+    participant SE as Skill Engine
+    participant MCP as MCP Hub
+    participant CS as Credential Store
+    participant EXT as MCP Server
+
+    AE->>SE: Execute skill (role check)
+    SE->>MCP: Invoke tool
+    alt Standard session
+        MCP->>CS: Decrypt named session credentials
+        CS-->>MCP: Session credentials
+        MCP->>EXT: Tool call (stored credentials)
+    else Passthrough session
+        Note over MCP,EXT: Forward agent JWT as Bearer token
+        MCP->>EXT: Tool call (Authorization: Bearer agent JWT)
+    end
+    EXT-->>MCP: Tool result
+    MCP-->>SE: Result
+    SE-->>AE: Skill output
+```
+
+## SOP Orchestration Sequence
+
+```mermaid
+sequenceDiagram
+    participant AE as Agent Engine
     participant SE as Skill Engine
     participant SOPORCH as SOP Orchestrator
     participant MCP as MCP Hub
     participant CS as Credential Store
-    participant IdP as Keycloak Agent Realm
     participant EXT as MCP Server
 
-    U->>CH: Send message
-    CH->>AE: Route to agent instance
-    AE->>LLM: Prompt with conversation context
-    LLM-->>AE: Response with tool-call request
-    AE->>SE: Execute skill (role check)
-    alt Single-tool skill
-        SE->>MCP: Invoke tool
-        alt Standard session
-            MCP->>CS: Decrypt named session credentials
+    AE->>SE: Execute SOP skill
+    SE->>SOPORCH: Execute ordered steps
+    loop Each step
+        alt Skill-invocation step
+            SOPORCH->>SE: Invoke skill step
+            SE->>MCP: Invoke tool
+            MCP->>CS: Decrypt session credentials
             CS-->>MCP: Session credentials
-            MCP->>EXT: Tool call (stored credentials)
-        else Passthrough session
-            MCP->>IdP: Retrieve agent JWT
-            IdP-->>MCP: Agent JWT
-            MCP->>EXT: Tool call (Authorization: Bearer agent JWT)
+            MCP->>EXT: Tool call
+            EXT-->>MCP: Tool result
+            MCP-->>SE: Result
+            SE-->>SOPORCH: Step result
+        else Agent-delegation step
+            SOPORCH->>AE: Delegate to sub-agent
+            AE-->>SOPORCH: Delegation result
         end
-        EXT-->>MCP: Tool result
-        MCP-->>SE: Result
-    else SOP skill
-        SE->>SOPORCH: Execute ordered steps
-        loop Each step
-            alt Skill-invocation step
-                SOPORCH->>SE: Invoke skill step
-                SE->>MCP: Invoke tool
-                MCP->>CS: Decrypt named session credentials
-                CS-->>MCP: Session credentials
-                MCP->>EXT: Tool call
-                EXT-->>MCP: Tool result
-                MCP-->>SE: Result
-                SE-->>SOPORCH: Step result
-            else Agent-delegation step
-                SOPORCH->>AE: Delegate to sub-agent
-                AE-->>SOPORCH: Delegation result
-            end
-        end
-        SOPORCH-->>SE: SOP result
     end
+    SOPORCH-->>SE: SOP result
     SE-->>AE: Skill output
-    AE->>LLM: Prompt with tool result
-    LLM-->>AE: Final response
-    AE-->>CH: Agent reply
-    CH-->>U: Display response
 ```
 
 ## System Tools — Suspend-on-Call Pattern

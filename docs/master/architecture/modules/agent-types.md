@@ -6,12 +6,10 @@ flowchart TB
     BME[SOP/Skill Binding Manager]
     CFG[System Configuration]
     AR[Agent Runtime]
-    PGS[PlanGenerationService]
-    RIB[RuntimeInstructionBuilder]
-    BVS[BindingValidationService]
-    RR[RoleResolver]
-    ASB[(agent_type_sop_bindings)]
-    AKB[(agent_type_skill_bindings)]
+    PGS[Plan Generation Service]
+    BVS[Binding Validation]
+    RR[Role Resolver]
+    DB_Bindings[(SOP & Skill Bindings)]
     CH[Communication Hub]
     CC[Control Center]
 
@@ -21,18 +19,12 @@ flowchart TB
     CH --> BVS
     BVS --> RR
     BVS -->|validated| CC
-    CC --> ASB
-    CC --> AKB
+    CC --> DB_Bindings
     CC -->|config with curated bindings| CH
     CH --> AR
     AR --> PGS
-    AR --> RIB
-    PGS --> ASB
-    PGS --> AKB
-    RIB --> ASB
-    RIB --> AKB
+    PGS --> DB_Bindings
     PGS -->|no bindings| CC
-    RIB -->|no bindings| CC
 ```
 
 ```mermaid

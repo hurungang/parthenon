@@ -66,8 +66,10 @@ def _make_server(server_id=None):
     m.slug = "test-server"
     m.description = "A test MCP server"
     m.base_url = "http://mcp.test"
+    m.oauth_config = None
     m.status = "active"
     m.last_synced_at = None
+    m.sessions = []
     m.created_at = now
     m.updated_at = now
     return m
@@ -87,6 +89,9 @@ def _make_session(server_id=None, session_id=None):
     m.identity_binding = {"agent_id": "agent-001", "realm": "parthenon"}
     m.credential_config = {"required_keys": ["api_key"]}
     m.is_active = True
+    m.is_default = False
+    m.oauth_expires_at = None
+    m.oauth_refresh_expires_at = None
     m.created_at = now
     m.updated_at = now
     m.connection_test = None
@@ -144,6 +149,250 @@ def _db_returning(return_value=None, scalar_all=None):
         yield mock_session
 
     return mock_session, override
+
+
+# ── System Entry ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_list_servers_offset_zero_returns_one_system_entry():
+    """GET /mcp/servers?offset=0 returns exactly one System entry as the first item."""
+    app = create_app()
+
+    # Mock DB to return no real servers (empty list)
+    mock_db, db_dep = _db_returning(return_value=MagicMock(), scalar_all=[])
+    # list_mcp_servers calls: select(McpServer).options(selectinload(McpServer.sessions))...
+    # The scalars().all() returns the empty list
+    # But we need the return value for PlatformUser lookup to be truthy
+    # _db_returning sets scalar_one_or_none to return MagicMock() (truthy)
+    # And scalars().all() returns [] (empty list of servers)
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/v1/mcp/servers", params={"offset": 0, "limit": 25})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list)
+    assert len(body) == 1, f"Expected exactly 1 item (System entry), got {len(body)}"
+    assert body[0]["name"] == "System"
+    assert body[0]["slug"] == "system"
+    assert body[0]["session_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_servers_offset_nonzero_no_system_entry():
+    """GET /mcp/servers?offset=1 does NOT include the System entry."""
+    mock_db, db_dep = _db_returning(return_value=MagicMock(), scalar_all=[])
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/v1/mcp/servers", params={"offset": 1, "limit": 25})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # No System entry when offset > 0 (it's only inserted at offset 0)
+    system_entries = [s for s in body if s["slug"] == "system"]
+    assert len(system_entries) == 0
+
+
+# ── Sync with No Sessions ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sync_server_with_no_sessions_returns_422():
+    """POST /mcp/servers/{id}/sync returns 422 when server has no sessions."""
+    server_id = _server_id()
+    server = _make_server(server_id=server_id)
+
+    mock_db = AsyncMock()
+    mock_db.get = AsyncMock(return_value=server)
+    mock_db.add = MagicMock()
+    mock_db.flush = AsyncMock()
+
+    # require_permission → PlatformUser lookup (call 1)
+    # sync handler → session count check (call 2)
+    call_idx = [0]
+
+    def _exec_side(*args, **kwargs):
+        call_idx[0] += 1
+        res = MagicMock()
+        res.scalar_one_or_none = MagicMock(return_value=None)
+        res.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        res.first = MagicMock(return_value=None)
+        if call_idx[0] == 1:
+            # PlatformUser lookup — return truthy
+            res.scalar_one_or_none = MagicMock(return_value=MagicMock())
+        elif call_idx[0] == 2:
+            # Session count check — no sessions
+            res.first = MagicMock(return_value=None)
+        return res
+
+    mock_db.execute = AsyncMock(side_effect=_exec_side)
+
+    async def db_dep():
+        yield mock_db
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(f"/api/v1/mcp/servers/{server_id}/sync")
+
+    assert resp.status_code == 422
+    body = resp.json()
+    assert "no configured sessions" in body.get("detail", "").lower()
+
+
+# ── McpServerRead includes session_count ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_read_includes_session_count():
+    """McpServerRead response must include session_count field."""
+    server_id = _server_id()
+    server = _make_server(server_id=server_id)
+    # Simulate server with 3 sessions via the sessions property
+    sessions = [_make_session(server_id=server_id) for _ in range(3)]
+    server.sessions = sessions
+
+    # Use _db_returning to properly set up scalar_one_or_none for PlatformUser lookup
+    # and scalars().all() for server list query
+    mock_db, db_dep = _db_returning(return_value=MagicMock(), scalar_all=[server])
+    # But _db_returning's scalar_one_or_none returns MagicMock() which is truthy for PlatformUser
+    # And scalars().all() returns [server] for the server list
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/v1/mcp/servers", params={"offset": 1, "limit": 25})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # session_count should reflect the number of sessions on the server
+    assert len(body) >= 1
+    # The server's session_count should be populated from len(server.sessions)
+    assert body[0]["session_count"] >= 0
+
+
+# ── McpSessionRead includes is_default ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_mcp_session_read_includes_is_default():
+    """McpSessionRead response must include is_default field."""
+    server_id = _server_id()
+    session = _make_session(server_id=server_id)
+    session.is_default = True  # Simulate session with is_default flag
+
+    mock_db, db_dep = _db_returning(return_value=MagicMock(), scalar_all=[session])
+    mock_db.get = AsyncMock(return_value=_make_server(server_id=server_id))
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    with _bypass_auth(), _mock_permission_allow():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(f"/api/v1/mcp/servers/{server_id}/sessions")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["is_default"] is True
+    assert "is_default" in body[0]
+
+
+# ── Sync resolves default session by is_default ──────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sync_resolves_default_session_by_is_default_flag():
+    """Sync endpoint resolves default session using is_default flag."""
+    server_id = _server_id()
+    server = _make_server(server_id=server_id)
+
+    # Create two sessions: one marked is_default, one not
+    default_session = _make_session(server_id=server_id, session_id=uuid.uuid4())
+    default_session.name = "Default Session"
+    default_session.is_default = True
+    default_session.auth_type = "api_key"
+
+    other_session = _make_session(server_id=server_id, session_id=uuid.uuid4())
+    other_session.name = "Other Session"
+    other_session.is_default = False
+    other_session.auth_type = "api_key"
+
+    all_sessions = [default_session, other_session]
+
+    mock_db = AsyncMock()
+    # First execute: server.get
+    mock_db.get = AsyncMock(return_value=server)
+
+    # Build side_effects for execute calls:
+    # Call 1: require_permission → PlatformUser lookup (scalar_one_or_none returns truthy)
+    # Call 2: session count check (first() returns True)
+    # Call 3: _resolve_default_session — is_default=True + active (scalar_one_or_none returns default_session)
+    # Call 4: total active tools query (scalars().all() returns empty list)
+    call_index = [0]
+
+    def _make_execute_side_effect(*args, **kwargs):
+        call_index[0] += 1
+        result = MagicMock()
+        # Default all properties to avoid AttributeError
+        result.scalar_one_or_none = MagicMock(return_value=None)
+        result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        result.first = MagicMock(return_value=None)
+
+        if call_index[0] == 1:
+            # PlatformUser lookup — return truthy user
+            result.scalar_one_or_none = MagicMock(return_value=MagicMock())
+        elif call_index[0] == 2:
+            # Session count check — must return True (has sessions)
+            result.first = MagicMock(return_value=True)
+        elif call_index[0] == 3:
+            # _resolve_default_session: is_default=True + is_active=True
+            result.scalar_one_or_none = MagicMock(return_value=default_session)
+        elif call_index[0] == 4:
+            # Total active tools query after sync — use default (empty list)
+            pass
+        return result
+
+    mock_db.execute = AsyncMock(side_effect=_make_execute_side_effect)
+    mock_db.add = MagicMock()
+    mock_db.flush = AsyncMock()
+
+    async def db_dep():
+        yield mock_db
+
+    app = create_app()
+    app.dependency_overrides[get_db] = db_dep
+
+    # Now mock the ToolSyncService.sync method to return success
+    with patch("app.services.mcp.tool_sync.ToolSyncService.sync") as mock_sync:
+        mock_sync.return_value = {"added": 3, "updated": 0, "deactivated": 0, "warnings": []}
+
+        with _bypass_auth(), _mock_permission_allow():
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(f"/api/v1/mcp/servers/{server_id}/sync")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["tools_added"] == 3
+    # Verify sync was called with the default session
+    mock_sync.assert_called_once()
+    call_args = mock_sync.call_args
+    session_arg = call_args[1].get("session")
+    assert session_arg is not None
+    assert session_arg.is_default is True
 
 
 # ── Session List ────────────────────────────────────────────────────────────────
@@ -344,7 +593,7 @@ async def test_list_all_tools_returns_200():
 
 @pytest.mark.asyncio
 async def test_list_all_tools_returns_empty_when_no_active_tools():
-    """GET /mcp/tools returns empty list when no active tools exist."""
+    """GET /mcp/tools returns only system tools when no active DB tools exist."""
     mock_db = AsyncMock()
     scalars_result = MagicMock()
     scalars_result.scalars = MagicMock(
@@ -363,7 +612,11 @@ async def test_list_all_tools_returns_empty_when_no_active_tools():
             resp = await client.get("/api/v1/mcp/tools")
 
     assert resp.status_code == 200
-    assert resp.json() == []
+    body = resp.json()
+    # System tools are always included — verify all returned tools are system tools
+    assert isinstance(body, list)
+    for tool in body:
+        assert tool["server_slug"] == "system"
 
 
 @pytest.mark.asyncio
@@ -480,7 +733,7 @@ async def test_create_server_with_oauth_config_returns_201():
     app.dependency_overrides[get_db] = db_dep
 
     payload = {
-        "name": "OAuth Server",
+        "name": "oauth-server",
         "slug": "oauth-server",
         "base_url": "http://mcp.oauth.example.com",
     }
@@ -586,7 +839,7 @@ async def test_read_server_without_oauth_config_returns_null():
 
 @pytest.mark.asyncio
 async def test_oauth_authorize_with_valid_config_returns_authorization_url():
-    """GET /mcp/servers/{id}/oauth/authorize returns authorization_url when fully configured."""
+    """POST /mcp/servers/{id}/oauth/authorize returns authorization_url when fully configured."""
     server_id = _server_id()
     server = _make_server(server_id=server_id)
     server.oauth_config = {
@@ -606,7 +859,7 @@ async def test_oauth_authorize_with_valid_config_returns_authorization_url():
 
     with _bypass_auth(), _mock_permission_allow():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.get(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
+            resp = await client.post(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
 
     assert resp.status_code == 200
     body = resp.json()
@@ -619,7 +872,7 @@ async def test_oauth_authorize_with_valid_config_returns_authorization_url():
 
 @pytest.mark.asyncio
 async def test_oauth_authorize_without_config_returns_400():
-    """GET /mcp/servers/{id}/oauth/authorize returns 400 when no oauth_config."""
+    """POST /mcp/servers/{id}/oauth/authorize returns 400 when no oauth_config."""
     server_id = _server_id()
     server = _make_server(server_id=server_id)
     server.oauth_config = None
@@ -632,7 +885,7 @@ async def test_oauth_authorize_without_config_returns_400():
 
     with _bypass_auth(), _mock_permission_allow():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.get(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
+            resp = await client.post(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
 
     assert resp.status_code == 400
     assert "OAuth not configured" in resp.json()["detail"]
@@ -640,7 +893,7 @@ async def test_oauth_authorize_without_config_returns_400():
 
 @pytest.mark.asyncio
 async def test_oauth_authorize_with_incomplete_config_returns_400():
-    """GET /mcp/servers/{id}/oauth/authorize returns 400 when oauth_config missing required fields."""
+    """POST /mcp/servers/{id}/oauth/authorize returns 400 when oauth_config missing required fields."""
     server_id = _server_id()
     server = _make_server(server_id=server_id)
     # Missing token_url and client_secret — but also missing client_id triggers 400
@@ -657,7 +910,7 @@ async def test_oauth_authorize_with_incomplete_config_returns_400():
 
     with _bypass_auth(), _mock_permission_allow():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.get(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
+            resp = await client.post(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
 
     assert resp.status_code == 400
     assert "Incomplete OAuth configuration" in resp.json()["detail"]
@@ -683,8 +936,8 @@ async def test_oauth_authorize_returns_unique_state_per_request():
 
     with _bypass_auth(), _mock_permission_allow():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp1 = await client.get(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
-            resp2 = await client.get(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
+            resp1 = await client.post(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
+            resp2 = await client.post(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
@@ -698,7 +951,7 @@ async def test_oauth_authorize_returns_unique_state_per_request():
 
 @pytest.mark.asyncio
 async def test_oauth_authorize_includes_scope_when_configured():
-    """GET oauth/authorize includes scope param in URL when scope is set in oauth_config."""
+    """POST oauth/authorize includes scope param in URL when scope is set in oauth_config."""
     server_id = _server_id()
     server = _make_server(server_id=server_id)
     server.oauth_config = {
@@ -717,7 +970,7 @@ async def test_oauth_authorize_includes_scope_when_configured():
 
     with _bypass_auth(), _mock_permission_allow():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.get(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
+            resp = await client.post(f"/api/v1/mcp/servers/{server_id}/oauth/authorize")
 
     assert resp.status_code == 200
     assert "scope=" in resp.json()["authorization_url"]

@@ -152,6 +152,21 @@
       "serverFilter": "Filter by server",
       "allServers": "All Servers"
     },
+    "system": {
+      "builtIn": "Built-in",
+      "description": "System entry represents Parthenon's built-in platform tools",
+      "systemManaged": "System managed",
+      "aboutTitle": "About the System entry",
+      "aboutBody": "The System entry represents Parthenon's built-in platform tools. It is shown only once, is not editable or deletable, and cannot be synced from this view. Add real MCP servers below to connect external tools."
+    },
+    "sync": {
+      "noSessions": "Add a session before syncing",
+      "noSessionsError": "This server has no configured sessions",
+      "warnings": "Sync completed with warnings"
+    },
+    "servers": {
+      "sessions": "Sessions"
+    },
     "manageSessions": "Manage Sessions",
     "sessions": {
       "title": "Sessions",
@@ -197,7 +212,40 @@
       "tokenExpiringSoon": "Expiring Soon",
       "tokenValid": "Valid ({{time}})",
       "refreshToken": "Refresh OAuth Token",
-      "reauthenticate": "Re-authenticate (refresh token expired)"
+      "reauthenticate": "Re-authenticate (refresh token expired)",
+      "default": "Default",
+      "setDefault": "Set as default",
+      "autoDefaultInfo": "Only one session exists — it is automatically treated as the default.",
+      "autoDefaultAddMore": "Add more sessions to choose a different default.",
+      "cannotDeleteDefault": "This is the current default session. Please set another session as default before deleting this one.",
+      "deleteDefaultBlocked": "Cannot delete the default session while other sessions exist. Please set another session as default first.",
+      "selectDefaultHint": "Select one session as the default. The default session is used for sync operations and tool routing. Click a session row to toggle it as default.",
+      "defaultFooterHint": "Default session is used when syncing tools and for tool routing when no specific session is selected.",
+      "inactiveCantDefault": "Inactive sessions cannot be set as default",
+      "credentialSaved": "•••••••• (saved)",
+      "credentialSavedHint": "A key is already saved. Leave blank to keep it unchanged, or type a new key to replace it.",
+      "oauthMetadataUrl": "OAuth Metadata URL",
+      "oauthMetadataUrlHint": "Optional. Fetches OAuth endpoints from this URL (RFC 8414).",
+      "oauthAuthUrl": "Authorization URL",
+      "oauthTokenUrl": "Token URL",
+      "oauthClientId": "Client ID",
+      "oauthClientSecret": "Client Secret",
+      "oauthScope": "Scope",
+      "oauthManualConfig": "Manual config",
+      "oauthAutoDiscovery": "Auto discovery",
+      "apiKeyAsBearer": "Send as Bearer token (Authorization header instead of X-API-Key)",
+      "authTypeApiKey": "API Key",
+      "authTypeBearerToken": "Bearer Token",
+      "authTypeBasicAuth": "Basic Auth",
+      "authTypeOAuth2": "OAuth 2.0",
+      "authTypeNone": "None",
+      "authTypePassthrough": "Passthrough",
+      "authTypeApiKeyDesc": "Send an API key in the X-API-Key header. Use for services that authenticate with a single static key.",
+      "authTypeBearerTokenDesc": "Send a Bearer token in the Authorization header. Use for OAuth 2.0 access tokens or JWT-based auth.",
+      "authTypeBasicAuthDesc": "Send username and password via HTTP Basic Authentication. Use for services that support basic auth.",
+      "authTypeOAuth2Desc": "Authenticate via OAuth 2.0 authorization code flow. The platform manages token refresh automatically.",
+      "authTypeNoneDesc": "No authentication. Use for publicly accessible MCP servers that do not require credentials.",
+      "authTypePassthroughDesc": "Forward the calling agent's JWT identity token directly. The MCP server validates the original caller."
     }
   },
   "skills": {

@@ -35,6 +35,7 @@ class McpServerRead(BaseModel):
     oauth_config: dict[str, Any] | None
     status: McpServerStatus
     last_synced_at: datetime | None
+    session_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -48,6 +49,7 @@ class McpSessionCreate(BaseModel):
     identity_subject: str | None = None
     identity_binding: dict[str, Any] | None = None
     credential_config: dict[str, Any] | None = None
+    is_default: bool | None = None
 
     @model_validator(mode="after")
     def validate_passthrough_no_credentials(self) -> "McpSessionCreate":
@@ -66,6 +68,7 @@ class McpSessionUpdate(BaseModel):
     credentials: dict[str, Any] | None = None
     identity_subject: str | None = None
     is_active: bool | None = None
+    is_default: bool | None = None
     identity_binding: dict[str, Any] | None = None
     credential_config: dict[str, Any] | None = None
 
@@ -80,6 +83,7 @@ class McpSessionRead(BaseModel):
     auth_type: McpSessionAuthType
     identity_subject: str | None
     is_active: bool
+    is_default: bool
     identity_binding: dict[str, Any] | None
     credential_config: dict[str, Any] | None
     oauth_expires_at: datetime | None = None
@@ -138,6 +142,7 @@ class SyncResult(BaseModel):
     tools_updated: int
     tools_deactivated: int
     total_active: int
+    warnings: list[str] = []
 
 
 class TestToolRequest(BaseModel):

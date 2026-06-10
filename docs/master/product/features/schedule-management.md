@@ -30,7 +30,7 @@ Schedule Management enables platform administrators to automate recurring Agent 
 
 ## Acceptance Criteria
 
-- Administrator can create a schedule with: name, description, cron expression (via visual `react-js-cron` editor with preset shortcuts), target agent type, and input parameters matching the agent's input schema
+- Administrator can create a schedule with: name, description, cron expression (via visual cron editor with preset shortcuts), target agent type, and input parameters matching the agent's input schema
 - Created schedule immediately appears in the schedule list and executes at the defined cron time
 - Administrator can edit an existing schedule — edit form pre-populates with current values, changes persist on save, and the schedule list refreshes automatically
 - Administrator can pause a schedule (stops execution, status changes to paused) and resume it (status returns to active, execution resumes)
@@ -55,8 +55,8 @@ Schedule Management enables platform administrators to automate recurring Agent 
 ## Dependencies & Constraints
 
 - Scheduler runs inside the Control Center service only — the only service with database access
-- Scheduler interval is configurable via the existing Pydantic Settings system (`SCHEDULER_CHECK_INTERVAL_SECONDS`, defaults to 60 seconds)
-- Visual cron editor uses the `react-js-cron` library on the frontend with English locale
-- All schedule UI text uses i18n `t()` function calls with translations in locale files — no hardcoded strings
-- Active schedules are persisted in the database and recovered on restart via the `scheduled_jobs` table
+- Scheduler check interval is configurable through the existing configuration system
+- Visual cron editor is provided on the frontend for defining recurrence patterns
+- All schedule UI text uses i18n function calls with translations in locale files — no hardcoded strings
+- Active schedules are persisted in the database and recovered automatically on restart
 - Execution history references agent sessions to enable drill-down; agent session data is managed by the Agent Runtime service

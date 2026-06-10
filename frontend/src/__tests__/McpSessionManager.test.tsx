@@ -24,6 +24,7 @@ const mockSessions = [
     identity_binding: { agent_id: 'agent-001', realm: 'parthenon' },
     credential_config: { required_keys: ['api_key'] },
     is_active: true,
+    is_default: false,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
@@ -384,6 +385,7 @@ describe('McpSessionManager — Passthrough auth type (Task 8.6)', () => {
       identity_binding: null,
       credential_config: null,
       is_active: true,
+      is_default: false,
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -417,6 +419,7 @@ describe('McpSessionManager — conditional OAuth action buttons', () => {
         oauth_expires_at: '2099-01-01T00:00:00Z',
         oauth_refresh_expires_at: '2099-06-01T00:00:00Z',
         is_active: true,
+        is_default: false,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
       },
@@ -432,6 +435,7 @@ describe('McpSessionManager — conditional OAuth action buttons', () => {
         oauth_expires_at: null,
         oauth_refresh_expires_at: null,
         is_active: true,
+        is_default: false,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
       },
@@ -463,6 +467,7 @@ describe('McpSessionManager — conditional OAuth action buttons', () => {
       oauth_expires_at: '2099-01-01T00:00:00Z',
       oauth_refresh_expires_at: '2099-06-01T00:00:00Z',  // valid — far future
       is_active: true,
+      is_default: false,
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -487,6 +492,7 @@ describe('McpSessionManager — conditional OAuth action buttons', () => {
       oauth_expires_at: '2020-01-01T00:00:00Z',
       oauth_refresh_expires_at: '2020-01-01T00:00:00Z',  // expired — in the past
       is_active: true,
+      is_default: false,
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-01T00:00:00Z',
     }
@@ -498,6 +504,210 @@ describe('McpSessionManager — conditional OAuth action buttons', () => {
     expect(container.querySelector('.MuiIconButton-colorSuccess')).toBeNull()
     // At least one error-colored button (reauth) must exist
     expect(container.querySelector('.MuiIconButton-colorError')).not.toBeNull()
+  })
+})
+
+describe('McpSessionManager — Default session display', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders Default chip next to a session marked is_default=true', async () => {
+    const defaultSession = {
+      id: 'sess-default',
+      server_id: 'srv-1',
+      name: 'Default Session',
+      description: null,
+      auth_type: 'api_key',
+      identity_subject: null,
+      identity_binding: null,
+      credential_config: null,
+      is_active: true,
+      is_default: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValue({ data: [defaultSession] })
+
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Default Session')).not.toBeNull()
+    })
+
+    // The Default chip should be visible
+    const defaultChip = screen.queryByText('mcp.sessions.default')
+    expect(defaultChip).not.toBeNull()
+  })
+
+  it('shows radio-button indicator for each session', async () => {
+    const sessions = [
+      {
+        id: 'sess-a',
+        server_id: 'srv-1',
+        name: 'Session A',
+        description: null,
+        auth_type: 'api_key',
+        identity_subject: null,
+        identity_binding: null,
+        credential_config: null,
+        is_active: true,
+        is_default: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'sess-b',
+        server_id: 'srv-1',
+        name: 'Session B',
+        description: null,
+        auth_type: 'bearer_token',
+        identity_subject: null,
+        identity_binding: null,
+        credential_config: null,
+        is_active: true,
+        is_default: false,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    mockApiClient.get.mockResolvedValue({ data: sessions })
+
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    const { container } = render(<McpSessionManager serverId="srv-1" />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Session A')).not.toBeNull()
+    })
+
+    // Radio buttons should be present (one per session row)
+    const radios = container.querySelectorAll('input[type="radio"]')
+    expect(radios.length).toBe(2)
+  })
+
+  it('shows auto-default info alert when only one session exists (isAutoDefault)', async () => {
+    // With isAutoDefault (only 1 session), the info alert should show
+    const singleSession = {
+      id: 'sess-solo',
+      server_id: 'srv-1',
+      name: 'Solo Session',
+      description: null,
+      auth_type: 'api_key',
+      identity_subject: null,
+      identity_binding: null,
+      credential_config: null,
+      is_active: true,
+      is_default: false, // Even if false, auto-default kicks in
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValue({ data: [singleSession] })
+
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Solo Session')).not.toBeNull()
+    })
+
+    // Auto-default info alert should be present
+    const autoDefaultAlert = screen.queryByText('mcp.sessions.autoDefaultInfo')
+    expect(autoDefaultAlert).not.toBeNull()
+  })
+
+  it('shows Default chip for sole session even when is_default=false (auto-default logic)', async () => {
+    // When there's only 1 session, isAutoDefault=true, so the chip shows anyway
+    const soleSession = {
+      id: 'sess-alone',
+      server_id: 'srv-1',
+      name: 'Alone Session',
+      description: null,
+      auth_type: 'api_key',
+      identity_subject: null,
+      identity_binding: null,
+      credential_config: null,
+      is_active: true,
+      is_default: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+    mockApiClient.get.mockResolvedValue({ data: [soleSession] })
+
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Alone Session')).not.toBeNull()
+    })
+
+    // Even though is_default=false, the auto-default logic makes it show as default
+    const defaultChip = screen.queryByText('mcp.sessions.default')
+    expect(defaultChip).not.toBeNull()
+  })
+})
+
+describe('McpSessionManager — Default session deletion blocking', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows blocking delete prompt when deleting default with siblings', async () => {
+    const sessions = [
+      {
+        id: 'sess-d1',
+        server_id: 'srv-1',
+        name: 'Default Session',
+        description: null,
+        auth_type: 'api_key',
+        identity_subject: null,
+        identity_binding: null,
+        credential_config: null,
+        is_active: true,
+        is_default: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'sess-d2',
+        server_id: 'srv-1',
+        name: 'Other Session',
+        description: null,
+        auth_type: 'bearer_token',
+        identity_subject: null,
+        identity_binding: null,
+        credential_config: null,
+        is_active: true,
+        is_default: false,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    mockApiClient.get.mockResolvedValue({ data: sessions })
+
+    const { McpSessionManager } = await import('../pages/mcp/McpSessionManager')
+    render(<McpSessionManager serverId="srv-1" />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Default Session')).not.toBeNull()
+      expect(screen.queryByText('Other Session')).not.toBeNull()
+    })
+
+    // Find the delete button for the default session and click it
+    const deleteButtons = screen.queryAllByRole('button').filter((btn) =>
+      btn.querySelector('[data-testid="DeleteIcon"]')
+    )
+    // Click the first delete button (for the default session)
+    // The delete handler should show blocking error without API call
+    if (deleteButtons.length > 0) {
+      fireEvent.click(deleteButtons[0])
+    }
+
+    // The blocking error message should appear
+    await waitFor(() => {
+      const deleteBlocked = screen.queryByText('mcp.sessions.deleteDefaultBlocked')
+      expect(deleteBlocked).not.toBeNull()
+    })
   })
 })
 

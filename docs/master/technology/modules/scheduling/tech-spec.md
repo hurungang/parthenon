@@ -65,34 +65,34 @@ The scheduling module provides cron-based trigger capabilities for the platform,
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `SchedulingEngine` | class | APScheduler wrapper that manages cron jobs via the PostgreSQL job store; dispatches triggered jobs to `GatewayLifecycleHandler.launch()` for agent execution | `backend/app/services/scheduling/scheduler.py` |
-| `SchedulingEngine.start()` | method | Start APScheduler background scheduler | `backend/app/services/scheduling/scheduler.py:25` |
-| `SchedulingEngine.shutdown()` | method | Shutdown APScheduler | `backend/app/services/scheduling/scheduler.py:32` |
-| `SchedulingEngine.add_job()` | method | Register cron job with APScheduler | `backend/app/services/scheduling/scheduler.py:39` |
-| `SchedulingEngine._execute_job()` | method | Execute job: load from DB, create `JobExecution` record, dispatch, record result | `backend/app/services/scheduling/scheduler.py:84` |
-| `SchedulingEngine._dispatch()` | method | Route to `GatewayLifecycleHandler.launch()` for agent-target jobs | `backend/app/services/scheduling/scheduler.py:112` |
-| `SchedulingEngine.recover_schedules()` | method | Load active jobs from DB and re-register with APScheduler on restart | `backend/app/services/scheduling/scheduler.py:145` |
-| `get_scheduling_engine()` | function | Singleton accessor for `SchedulingEngine` | `backend/app/services/scheduling/scheduler.py:163` |
-| `ScheduleRouter` | router | FastAPI `APIRouter` with CRUD, pause, resume, and execution-history endpoints for scheduled jobs | `backend/app/api/v1/scheduling.py:17` |
-| `ScheduledJob` | model | SQLAlchemy model for a cron-based schedule record (expression, target, payload, state) | `backend/app/db/models/scheduling.py:35` |
-| `JobExecution` | model | SQLAlchemy model for a single execution run of a scheduled job | `backend/app/db/models/scheduling.py:76` |
-| `ScheduledJobCreate` | schema | Pydantic create schema | `backend/app/schemas/scheduling.py:13` |
-| `ScheduledJobUpdate` | schema | Pydantic update schema | `backend/app/schemas/scheduling.py:22` |
-| `ScheduledJobRead` | schema | Pydantic response schema | `backend/app/schemas/scheduling.py:29` |
-| `LinkedAgentSession` | schema | Pydantic schema for the linked agent execution session summary | `backend/app/schemas/scheduling.py:45` |
-| `JobExecutionRead` | schema | Pydantic response schema; includes optional `agent_session` field of type `LinkedAgentSession` | `backend/app/schemas/scheduling.py:57` |
-| `Settings.scheduler_enabled` | field | Master scheduler enable/disable toggle | `backend/app/core/config.py:234` |
-| `Settings.scheduler_check_interval_seconds` | field | Scheduler check interval in seconds (default 60) | `backend/app/core/config.py:235` |
-| `_start_scheduling_engine()` | function | Start scheduler + recover schedules on application startup | `backend/app/main.py:303` |
-| `_stop_scheduling_engine()` | function | Shutdown scheduler on application shutdown | `backend/app/main.py:319` |
-| `startup_event` | handler | Application startup event handler; calls `_start_scheduling_engine` after CA init | `backend/app/main.py:231` |
-| `shutdown_event` | handler | Application shutdown event handler; calls `_stop_scheduling_engine` | `backend/app/main.py:247` |
-| `CommunicationHubClient.trigger_execution` | method | POSTs an agent execution trigger to the Communication Hub service (`/internal/agent/execute`) | `backend/app/services/control_center/comm_hub_client.py:182` |
+| `SchedulingEngine` | class | APScheduler wrapper that manages cron jobs via the PostgreSQL job store; dispatches triggered jobs for agent execution | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine.start()` | method | Start background scheduler | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine.shutdown()` | method | Shutdown scheduler | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine.add_job()` | method | Register cron job with scheduler | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine._execute_job()` | method | Execute job: load from DB, create execution record, dispatch, record result | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine._dispatch()` | method | Route to gateway lifecycle handler for agent-target jobs | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine.recover_schedules()` | method | Load active jobs from DB and re-register with scheduler on restart | `backend/app/services/scheduling/scheduler.py` |
+| `get_scheduling_engine()` | function | Singleton accessor for `SchedulingEngine` | `backend/app/services/scheduling/scheduler.py` |
+| `ScheduleRouter` | router | FastAPI `APIRouter` with CRUD, pause, resume, and execution-history endpoints for scheduled jobs | `backend/app/api/v1/scheduling.py` |
+| `ScheduledJob` | model | SQLAlchemy model for a cron-based schedule record (expression, target, payload, state) | `backend/app/db/models/scheduling.py` |
+| `JobExecution` | model | SQLAlchemy model for a single execution run of a scheduled job | `backend/app/db/models/scheduling.py` |
+| `ScheduledJobCreate` | schema | Pydantic create schema | `backend/app/schemas/scheduling.py` |
+| `ScheduledJobUpdate` | schema | Pydantic update schema | `backend/app/schemas/scheduling.py` |
+| `ScheduledJobRead` | schema | Pydantic response schema | `backend/app/schemas/scheduling.py` |
+| `LinkedAgentSession` | schema | Pydantic schema for the linked agent execution session summary | `backend/app/schemas/scheduling.py` |
+| `JobExecutionRead` | schema | Pydantic response schema; includes optional `agent_session` field | `backend/app/schemas/scheduling.py` |
+| `Settings.scheduler_enabled` | field | Master scheduler enable/disable toggle | `backend/app/core/config.py` |
+| `Settings.scheduler_check_interval_seconds` | field | Scheduler check interval in seconds (default 60) | `backend/app/core/config.py` |
+| `_start_scheduling_engine()` | function | Start scheduler + recover schedules on application startup | `backend/app/main.py` |
+| `_stop_scheduling_engine()` | function | Shutdown scheduler on application shutdown | `backend/app/main.py` |
+| `startup_event` | handler | Application startup event handler; calls scheduling engine start | `backend/app/main.py` |
+| `shutdown_event` | handler | Application shutdown event handler; calls scheduling engine stop | `backend/app/main.py` |
+| `CommunicationHubClient.trigger_execution` | method | POSTs an agent execution trigger to the Communication Hub service | `backend/app/services/control_center/comm_hub_client.py` |
 | `ScheduleManagerPage` | component | Schedule management page with cron job list, create/edit form, pause/resume/delete, and execution history | `frontend/src/pages/scheduling/ScheduleManagerPage.tsx` |
-| `CronEditor` | component | Cron expression editor wrapping `react-js-cron` (antd-based) with a raw text field and `cronstrue` human-readable description | `frontend/src/components/scheduling/CronEditor.tsx` |
+| `CronEditor` | component | Cron expression editor with raw text field and human-readable description | `frontend/src/components/scheduling/CronEditor.tsx` |
 | `PayloadEditor` | component | Key-value payload editor for schedule input parameters | `frontend/src/components/scheduling/PayloadEditor.tsx` |
-| `ExecutionHistory` | component | Execution history dialog with pagination; shows linked `agent_session` with a "View Agent Result" `OpenInNew` icon button | `frontend/src/components/scheduling/ExecutionHistory.tsx` |
-| `JobTargetType` | type | TypeScript union type; only `'agent'` value (SOP targeting removed) | `frontend/src/types/index.ts:565` |
-| `ScheduledJob` | type | TypeScript interface for scheduled job data | `frontend/src/types/index.ts:568` |
-| `LinkedAgentSession` | type | TypeScript interface for linked agent session summary | `frontend/src/types/index.ts:582` |
-| `JobExecution` | type | TypeScript interface for job execution data; includes `agent_session` field of type `LinkedAgentSession` | `frontend/src/types/index.ts:592` |
+| `ExecutionHistory` | component | Execution history dialog with pagination; "View Agent Result" button for linked sessions | `frontend/src/components/scheduling/ExecutionHistory.tsx` |
+| `JobTargetType` | type | TypeScript union type; only `'agent'` value (SOP targeting removed) | `frontend/src/types/index.ts` |
+| `ScheduledJob` | type | TypeScript interface for scheduled job data | `frontend/src/types/index.ts` |
+| `LinkedAgentSession` | type | TypeScript interface for linked agent session summary | `frontend/src/types/index.ts` |
+| `JobExecution` | type | TypeScript interface for job execution data; includes `agent_session` field | `frontend/src/types/index.ts` |

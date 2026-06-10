@@ -56,6 +56,63 @@ SYSTEM_TOOL_IDS = {
     SYSTEM_TOOL_HUMAN_INTERVENE_ID,
 }
 
+
+async def _resolve_default_session(server_id: uuid.UUID, db: AsyncSession) -> McpSession:
+    """Resolve the default session for a server using is_default flag.
+
+    Resolution order:
+    1. is_default=True AND is_active=True
+    2. Sole active session (auto-fallback)
+    3. Error if multiple active and no default
+    4. Error if no active sessions at all
+    """
+    # Priority 1: explicitly marked default + active
+    result = await db.execute(
+        select(McpSession).where(
+            McpSession.server_id == server_id,
+            McpSession.is_default == True,  # noqa: E712
+            McpSession.is_active == True,  # noqa: E712
+        )
+    )
+    default_session = result.scalar_one_or_none()
+    if default_session:
+        return default_session
+
+    # Priority 2: sole active session auto-fallback
+    result = await db.execute(
+        select(McpSession).where(
+            McpSession.server_id == server_id,
+            McpSession.is_active == True,  # noqa: E712
+        )
+    )
+    active_sessions = result.scalars().all()
+
+    if len(active_sessions) == 1:
+        return active_sessions[0]
+
+    if len(active_sessions) == 0:
+        raise HTTPException(status_code=422, detail="No active sessions found.")
+
+    raise HTTPException(
+        status_code=422,
+        detail="No default session configured. Please designate a default session.",
+    )
+
+
+async def _clear_other_defaults(server_id: uuid.UUID, exclude_session_id: uuid.UUID, db: AsyncSession) -> None:
+    """Clear is_default on all other sessions for the same server (at-most-one-default enforcement)."""
+    from sqlalchemy import update
+    await db.execute(
+        update(McpSession)
+        .where(
+            McpSession.server_id == server_id,
+            McpSession.id != exclude_session_id,
+            McpSession.is_default == True,  # noqa: E712
+        )
+        .values(is_default=False)
+    )
+    await db.flush()
+
 def _system_server_read() -> McpServerRead:
     """Return a virtual McpServerRead for built-in system tools."""
     now = datetime.now(timezone.utc)
@@ -68,6 +125,7 @@ def _system_server_read() -> McpServerRead:
         oauth_config=None,
         status=McpServerStatus.active,
         last_synced_at=None,
+        session_count=0,
         created_at=now,
         updated_at=now,
     )
@@ -295,12 +353,24 @@ async def list_mcp_servers(
     offset: int = Query(default=0, ge=0),
 ) -> list:
     result = await db.execute(
-        select(McpServer).order_by(McpServer.name).offset(offset).limit(limit)
+        select(McpServer)
+        .options(selectinload(McpServer.sessions))
+        .order_by(McpServer.name)
+        .offset(offset)
+        .limit(limit)
     )
-    db_servers = list(result.scalars().all())
+    db_servers_raw = list(result.scalars().all())
+    # Filter out the DB-seeded System server — only the virtual entry appears
+    db_servers: list[McpServer] = [s for s in db_servers_raw if s.id != SYSTEM_SERVER_ID]
+    # Build schema objects with session_count populated from eager-loaded relationship
+    server_reads: list[McpServerRead] = []
+    for server in db_servers:
+        s_read = McpServerRead.model_validate(server)
+        s_read.session_count = len(server.sessions)
+        server_reads.append(s_read)
     if offset == 0:
-        return [_system_server_read()] + db_servers
-    return db_servers
+        server_reads.insert(0, _system_server_read())
+    return server_reads
 
 
 @McpServerRouter.post("", response_model=McpServerRead, status_code=status.HTTP_201_CREATED)
@@ -378,27 +448,35 @@ async def sync_mcp_server(
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    # Find the first active session for authentication (default session)
-    from app.db.models.mcp_hub import McpSession
-    session_result = await db.execute(
-        select(McpSession).where(
-            McpSession.server_id == server_id,
-            McpSession.is_active == True  # noqa: E712
-        ).order_by(McpSession.created_at.asc()).limit(1)
+    # Gate: require at least one session for sync
+    session_count_result = await db.execute(
+        select(McpSession).where(McpSession.server_id == server_id)
     )
-    default_session = session_result.scalar_one_or_none()
-    if default_session:
-        logger.info("Sync: using session %s (auth_type=%s, has_creds=%s) for server %s",
-                    default_session.name, default_session.auth_type,
-                    default_session.encrypted_credentials is not None, server_id)
-    else:
-        logger.info("Sync: no active session found for server %s, syncing without credentials", server_id)
+    has_sessions = session_count_result.first() is not None
+    if not has_sessions:
+        raise HTTPException(
+            status_code=422,
+            detail="This server has no configured sessions. Add a session before syncing.",
+        )
+
+    # Resolve default session by is_default flag (with sole-active fallback)
+    default_session = await _resolve_default_session(server_id, db)
+    logger.info(
+        "Sync: resolved default session %s (auth_type=%s, has_creds=%s) for server %s",
+        default_session.name,
+        default_session.auth_type,
+        default_session.encrypted_credentials is not None,
+        server_id,
+    )
 
     sync_service = ToolSyncService()
     try:
         counts = await sync_service.sync(server, db, session=default_session)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+    # Extract warnings from sync result
+    warnings_list: list[str] = counts.get("warnings", [])
 
     # Count total active tools
     total_result = await db.execute(
@@ -412,6 +490,7 @@ async def sync_mcp_server(
         tools_updated=counts["updated"],
         tools_deactivated=counts["deactivated"],
         total_active=total_active,
+        warnings=warnings_list,
     )
 
 
@@ -432,7 +511,7 @@ async def list_server_tools(
     return list(result.scalars().all())
 
 
-@McpServerRouter.get("/{server_id}/oauth/authorize")
+@McpServerRouter.post("/{server_id}/oauth/authorize")
 async def get_oauth_authorization_url(
     server_id: uuid.UUID,
     db: DbSession,
@@ -478,26 +557,33 @@ async def get_oauth_authorization_url(
             )
             logger.info("Using manual OAuth configuration")
 
-    # When no manual config provided, validate server's oauth_config before attempting discovery
+    # When no manual config provided, try auto-discovery
     if manual_config is None:
         server = await db.get(McpServer, server_id)
         if not server:
             raise HTTPException(status_code=404, detail="MCP server not found")
-        if not server.oauth_config:
-            raise HTTPException(
-                status_code=400,
-                detail="OAuth not configured for this server. "
-                "Please configure the server's oauth_config or provide manual OAuth parameters.",
-            )
-        oauth_cfg = server.oauth_config
-        auth_url = oauth_cfg.get("authorization_url")
-        client_id = oauth_cfg.get("client_id")
-        if auth_url and not client_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Incomplete OAuth configuration: client_id is required. "
-                "Please provide a complete oauth_config or use manual configuration.",
-            )
+        if server.oauth_config:
+            oauth_cfg = server.oauth_config
+            auth_url = oauth_cfg.get("authorization_url")
+            client_id = oauth_cfg.get("client_id")
+            if auth_url and not client_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Incomplete OAuth configuration: client_id is required. "
+                    "Please provide a complete oauth_config or use manual configuration.",
+                )
+        else:
+            # Priority 4: Auto-discovery from server's base_url
+            from app.services.mcp_oauth_service import discover_oauth_config
+            try:
+                manual_config = await discover_oauth_config(server.base_url, redirect_uri)
+                logger.info("OAuth config auto-discovered for server %s", server_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"OAuth not configured for this server and auto-discovery failed: {exc}. "
+                    "Please provide manual OAuth parameters or configure the server's oauth_config.",
+                )
     
     # Pass session metadata to OAuth flow
     session_name = body.session_name if body else None
@@ -539,17 +625,28 @@ async def create_mcp_session(
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
+    # Count existing sessions to determine if this is the first
+    existing_count_result = await db.execute(
+        select(McpSession).where(McpSession.server_id == server_id)
+    )
+    existing_count = len(existing_count_result.scalars().all())
+    is_first_session = existing_count == 0
+
     # Passthrough sessions: skip credential encryption, skip connection test, activate immediately
     if body.auth_type == McpSessionAuthType.passthrough:
-        session_data = body.model_dump(exclude={"credentials"})
+        session_data = body.model_dump(exclude={"credentials", "is_default"})
         session = McpSession(
             server_id=server_id,
             encrypted_credentials=None,
             is_active=True,
+            is_default=is_first_session or (body.is_default is True),
             **session_data,
         )
         db.add(session)
         await db.flush()
+        # Enforce at-most-one-default: clear other sessions if this one is default
+        if session.is_default:
+            await _clear_other_defaults(server_id, session.id, db)
         await db.refresh(session)
         return {
             **McpSessionRead.model_validate(session).model_dump(),
@@ -562,25 +659,24 @@ async def create_mcp_session(
         vault = get_vault()
         encrypted_creds = vault.encrypt(json.dumps(body.credentials))
 
-    session_data = body.model_dump(exclude={"credentials"})
+    session_data = body.model_dump(exclude={"credentials", "is_default"})
     session = McpSession(
         server_id=server_id,
         encrypted_credentials=encrypted_creds,
-        is_active=False,  # Start as inactive, will activate after connection test
+        is_active=True,  # Sessions are active by default
+        is_default=is_first_session or (body.is_default is True),
         **session_data,
     )
     db.add(session)
     await db.flush()
+    # Enforce at-most-one-default: clear other sessions if this one is default
+    if session.is_default:
+        await _clear_other_defaults(server_id, session.id, db)
     await db.refresh(session)
     
-    # Test connection
+    # Test connection (informational only — does not affect is_active)
     logger.info("Testing connection for new session %s", session.id)
     test_result = await test_mcp_session_connection(server, session)
-    
-    # Update is_active based on test result
-    session.is_active = test_result.success
-    await db.flush()
-    await db.refresh(session)
     
     logger.info(
         "Session %s connection test %s: %s",
@@ -616,15 +712,24 @@ async def update_mcp_session(
     if not session:
         raise HTTPException(status_code=404, detail="MCP session not found")
 
-    update_data = body.model_dump(exclude_unset=True, exclude={"credentials"})
+    update_data = body.model_dump(exclude_unset=True, exclude={"credentials", "is_default"})
     for field, value in update_data.items():
         setattr(session, field, value)
+
+    # Handle is_default enforcement separately
+    if body.is_default is not None:
+        session.is_default = body.is_default
 
     if body.credentials is not None:
         vault = get_vault()
         session.encrypted_credentials = vault.encrypt(json.dumps(body.credentials))
 
     await db.flush()
+
+    # Enforce at-most-one-default: clear other sessions if this one is default
+    if session.is_default:
+        await _clear_other_defaults(server_id, session_id, db)
+
     await db.refresh(session)
     return session
 
@@ -647,6 +752,22 @@ async def delete_mcp_session(
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="MCP session not found")
+
+    # If session is the default and other sessions exist, block deletion
+    if session.is_default:
+        other_count_result = await db.execute(
+            select(McpSession).where(
+                McpSession.server_id == server_id,
+                McpSession.id != session_id,
+            )
+        )
+        other_sessions = other_count_result.scalars().all()
+        if len(other_sessions) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail="The default session cannot be deleted while other sessions exist. Please designate another session as default first.",
+            )
+
     await db.delete(session)
 
 
@@ -862,23 +983,27 @@ async def test_mcp_tool(
                 detail=f"Session belongs to a different server. Tool server: {tool.server_id}, Session server: {session.server_id}",
             )
     else:
-        # No session_id provided — look up the first active session for this server
-        from sqlalchemy import select as _select
-        result = await db.execute(
-            _select(McpSession).where(
-                McpSession.server_id == tool.server_id,
-                McpSession.is_active == True,  # noqa: E712
-            ).limit(1)
-        )
-        session = result.scalar_one_or_none()
-        if not session:
-            raise HTTPException(status_code=404, detail="No active session found for this tool's server")
-        # Non-passthrough sessions require an explicit session_id
-        if session.auth_type != McpSessionAuthType.passthrough:
-            raise HTTPException(
-                status_code=400,
-                detail="session_id is required for non-passthrough sessions",
+        # No session_id provided — resolve the default session for this server
+        try:
+            session = await _resolve_default_session(tool.server_id, db)
+        except HTTPException:
+            # If no default is configured, fall back to passthrough auto-selection
+            from sqlalchemy import select as _select
+            result = await db.execute(
+                _select(McpSession).where(
+                    McpSession.server_id == tool.server_id,
+                    McpSession.is_active == True,  # noqa: E712
+                ).limit(1)
             )
+            session = result.scalar_one_or_none()
+            if not session:
+                raise HTTPException(status_code=404, detail="No active session found for this tool's server")
+            # Only auto-use if passthrough
+            if session.auth_type != McpSessionAuthType.passthrough:
+                raise HTTPException(
+                    status_code=400,
+                    detail="session_id is required for non-passthrough sessions when no default is configured",
+                )
 
     is_passthrough = session.auth_type == McpSessionAuthType.passthrough
 

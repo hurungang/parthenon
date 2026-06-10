@@ -3,6 +3,20 @@
 ## Overview
 Agent execution in Parthenon is governed by a secure, auditable, and policy-driven process with explicit service segregation. Agent Runtime is restricted to approved execution responsibilities, while sensitive identity handling and data-access governance remain centralized in the Control Center. Agents never receive or store identity tokens. Runtime access to internal business operations is controlled through a dedicated allowlist for runtime-essential paths, with deny-by-default behavior for all other internal control paths. This reduces privilege overlap and strengthens boundary assurance.
 
+## Business Goals
+- Provide a secure, auditable execution environment for AI agents in enterprise settings
+- Enforce explicit service segregation between runtime execution and identity/credential management
+- Prevent recursive or unbounded agent delegation through guardrail policies
+- Give operators visibility into running agent topology and the ability to terminate execution trees
+- Support human-in-the-loop intervention for decisions requiring operator judgment
+
+## User Stories
+- As a **platform operator**, I want to see all running agents and their delegation chains in a topology view so that I can understand execution relationships at a glance.
+- As a **security administrator**, I want agent identities and credentials to never be accessible to agent runtime code so that credential exposure risk is eliminated.
+- As an **SOP author**, I want agents to be able to pause and request human input during execution so that critical decisions can be reviewed before proceeding.
+- As an **operations lead**, I want to identify cycle, iteration, delegation, timeout, and token-policy outcomes quickly in session summaries so that I can triage incidents efficiently.
+- As an **operator**, I want to terminate an entire execution tree (parent and all delegated children) from a single action so that I can stop problematic runs immediately.
+
 ## Key Principles
 - Agent runtime instances are authenticated using unique certificates
 - Identity tokens are never distributed to agent runtimes
@@ -40,13 +54,7 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 
 ## Unified Tool Naming Convention
 
-All tools available to agents — whether built-in platform tools or external MCP server tools — follow the same naming convention: `server____tool_name` (four underscores separate server from tool name).
-
-- **`system`** is the reserved server name for all built-in platform tools (e.g., `system____save_result`, `system____send_notification`, `system____get_recipient_group`, `system____human_intervene`)
-- **MCP server names** must not contain `____` — this separator is reserved for the naming scheme
-- Agent execution code makes no distinction between system tools and MCP server tools — all tool calls are forwarded uniformly to the Communication Hub for routing
-
-This convention ensures tool names are globally unique across all registered servers and routing is deterministic.
+All tools available to agents — whether built-in platform tools or external MCP server tools — use a consistent naming scheme that separates the server namespace from the tool name. This convention ensures tool names are globally unique and routing is deterministic.
 
 ## Explicit Result Saving
 

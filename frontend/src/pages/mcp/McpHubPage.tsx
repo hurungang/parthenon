@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -28,6 +29,7 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StorageIcon from '@mui/icons-material/Storage'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { usePagination } from '../../hooks/usePagination'
 import { useMcpServers, useSyncServer } from '../../hooks/useMcpServers'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
@@ -38,6 +40,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { McpServer } from '../../types'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
+const SYSTEM_SERVER_ID = '00000000-0000-0000-0000-000000000001'
 
 /**
  * MCP Hub management page — Servers tab and Tool Repository tab.
@@ -54,6 +57,7 @@ export function McpHubPage() {
   const [editServer, setEditServer] = useState<McpServer | null>(null)
   const [form, setForm] = useState({ name: '', slug: '', base_url: '', description: '' })
   const [sessionServerId, setSessionServerId] = useState<string | null>(null)
+  const [syncWarnings, setSyncWarnings] = useState<string | null>(null)
   const invalidName = !!form.name && !SLUG_PATTERN.test(form.name)
   const invalidSlug = !!form.slug && !SLUG_PATTERN.test(form.slug)
 
@@ -101,6 +105,8 @@ export function McpHubPage() {
     }
   }
 
+  const isSystemServer = (server: McpServer) => server.id === SYSTEM_SERVER_ID
+
   const statusColor = (status: string) => {
     if (status === 'active') return 'success'
     if (status === 'error') return 'error'
@@ -128,6 +134,20 @@ export function McpHubPage() {
           {isLoading && <CircularProgress />}
           {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
+          {/* System entry contextual info banner */}
+          <Box sx={{
+            display: 'flex', alignItems: 'flex-start', gap: 1.5,
+            p: 1.5, borderRadius: 2, mb: 2.5,
+            bgcolor: 'rgba(255,123,114,0.06)',
+            border: '1px solid rgba(255,123,114,0.15)',
+          }}>
+            <InfoOutlinedIcon fontSize="small" sx={{ color: 'text.secondary', mt: 0.2 }} />
+            <Box>
+              <Typography variant="subtitle2" fontWeight={600}>{t('mcp.system.aboutTitle')}</Typography>
+              <Typography variant="body2" color="text.secondary">{t('mcp.system.aboutBody')}</Typography>
+            </Box>
+          </Box>
+
           {!isLoading && !error && (
             <TableContainer component={Paper}>
               <Table>
@@ -137,16 +157,28 @@ export function McpHubPage() {
                     <TableCell>{t('mcp.slug')}</TableCell>
                     <TableCell>{t('mcp.baseUrl')}</TableCell>
                     <TableCell>{t('app.status')}</TableCell>
+                    <TableCell>{t('mcp.servers.sessions')}</TableCell>
                     <TableCell>{t('mcp.lastSynced')}</TableCell>
                     <TableCell>{t('app.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(servers ?? []).map((server) => (
+                  {(servers ?? []).map((server) => {
+                    const isSystem = isSystemServer(server)
+                    return (
                     <TableRow key={server.id}>
-                      <TableCell>{server.name}</TableCell>
-                      <TableCell><code>{server.slug}</code></TableCell>
-                      <TableCell>{server.base_url}</TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body2" fontWeight={500}>{server.name}</Typography>
+                          {isSystem && (
+                            <Chip label={t('mcp.system.builtIn')} color="error" size="small" variant="outlined" />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <code>{server.slug}</code>
+                      </TableCell>
+                      <TableCell>{isSystem ? '' : server.base_url}</TableCell>
                       <TableCell>
                         <Chip
                           label={server.status}
@@ -155,43 +187,94 @@ export function McpHubPage() {
                         />
                       </TableCell>
                       <TableCell>
+                        {isSystem ? '—' : (server.session_count ?? 0)}
+                      </TableCell>
+                      <TableCell>
                         {server.last_synced_at
                           ? new Date(server.last_synced_at).toLocaleString()
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        <Tooltip title={t('mcp.sessions.title')}>
-                          <IconButton size="small" onClick={() => setSessionServerId(server.id)}>
-                            <StorageIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={t('mcp.syncNow')}>
-                          <IconButton
-                            size="small"
-                            onClick={() => syncServer.mutate(server.id)}
-                            disabled={syncServer.isPending && syncServer.variables === server.id}
-                          >
-                            <SyncIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <IconButton size="small" onClick={() => handleOpenEdit(server)}>
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton size="small" onClick={() => handleDelete(server.id)}>
-                          <DeleteIcon />
-                        </IconButton>
+                        {/* Session management button */}
+                        {!isSystem && (
+                          <Tooltip title={t('mcp.manageSessions')}>
+                            <IconButton size="small" onClick={() => setSessionServerId(server.id)}>
+                              <StorageIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {/* Sync button */}
+                        {isSystem ? (
+                          <Tooltip title={t('mcp.system.systemManaged')}>
+                            <span>
+                              <IconButton size="small" disabled>
+                                <SyncIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : (server.session_count ?? 0) === 0 ? (
+                          <Tooltip title={t('mcp.sync.noSessions')}>
+                            <span>
+                              <IconButton size="small" disabled>
+                                <SyncIcon />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title={t('mcp.syncNow')}>
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setSyncWarnings(null)
+                                syncServer.mutate(server.id, {
+                                  onSuccess: (result) => {
+                                    if (result.warnings && result.warnings.length > 0) {
+                                      setSyncWarnings(result.warnings.join('; '))
+                                    }
+                                  },
+                                })
+                              }}
+                              disabled={syncServer.isPending && syncServer.variables === server.id}
+                            >
+                              <SyncIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {/* Edit/Delete — disabled for System */}
+                        {isSystem ? (
+                          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                            {t('mcp.system.systemManaged')}
+                          </Typography>
+                        ) : (
+                          <>
+                            <IconButton size="small" onClick={() => handleOpenEdit(server)}>
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton size="small" onClick={() => handleDelete(server.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                   {(servers ?? []).length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">{t('app.noData')}</TableCell>
+                      <TableCell colSpan={7} align="center">{t('app.noData')}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
           )}
+
+          {/* Sync warnings display */}
+          {syncWarnings && (
+            <Alert severity="warning" sx={{ mt: 2 }} onClose={() => setSyncWarnings(null)}>
+              {t('mcp.sync.warnings')}: {syncWarnings}
+            </Alert>
+          )}
+
           {!isLoading && !error && (
             <TablePagination
               component="div"

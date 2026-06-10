@@ -11,10 +11,7 @@ flowchart LR
     CH[Communication Hub]
     ORCH[Session Orchestrator]
     PV[Guardrail Pre-Execution Validator]
-    WDG[Workflow Draft Generator]
-    WPC[Workflow Preview Composer]
-    PGS[PlanGenerationService]
-    RIB[RuntimeInstructionBuilder]
+    PG[Plan Generation Service]
     SOP{SOP names in system instruction?}
     DSOP[Default SOP fallback]
     RM[Runtime Guardrail Monitor]
@@ -27,12 +24,8 @@ flowchart LR
 
     CH --> ORCH
     ORCH --> PV
-    ORCH --> WDG
-    ORCH --> WPC
-    WDG --> PGS
-    WPC --> RIB
-    PGS --> SOP
-    RIB --> SOP
+    ORCH --> PG
+    PG --> SOP
     SOP -->|No| DSOP
     SOP -->|Yes| RM
     DSOP --> RM

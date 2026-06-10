@@ -41,7 +41,7 @@ The Parthenon Web UI sidebar is organized into **three intent-aligned groups** p
 - **Integrations group** (3 items): Notification Integration (Channels, Recipient Groups, Delivery Logs on tabs), MCP Hub
 - **System group** (3 items): Observability, Permissions, System Config
 
-The sidebar is 256px wide on desktop. Items use 13px font with 11px font for sub-items, active state uses a subtle grey background (`rgba(0,0,0,0.06)`) with `#2563EB` accent color and full 8px rounded corners. Integrations group is locked open. Group labels are visually distinct (smaller, grey `text.secondary` color).
+The sidebar provides a consistent width on desktop. Items use readable font sizing with distinctive styling for sub-items. The active state uses a subtle background with an accent colour and rounded corners. The Integrations group is locked open. Group labels are visually distinct (smaller, secondary colour).
 
 Sidebar navigation items are gated by user permissions — items the user cannot access are hidden, but their group remains visible if at least one child is permitted.
 
