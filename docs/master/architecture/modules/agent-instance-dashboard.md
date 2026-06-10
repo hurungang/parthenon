@@ -22,19 +22,13 @@ flowchart LR
 
     subgraph API[Platform API]
         SQ[Session Query Endpoints]
-        RT[Runtime Topology Endpoints]
-        TR[Terminate Endpoints]
-        AR_RT[Agent Runtime Topology Source]
-        AR_TR[Agent Runtime Terminate Source]
+        Topo[Runtime Topology & Terminate]
     end
 
     subgraph Data[Data Store]
-        AS[AgentSession]
-        Conv[Conversation History]
+        AS[AgentSession & Conversation History]
         EL[Execution Logs]
-        MG[Model Guardrail Configuration]
-        MU[Model Usage Posture]
-        AI[AgentInstance]
+        GRD[Guardrails & Usage Posture]
     end
 
     User --> AID
@@ -43,18 +37,13 @@ flowchart LR
     AID --> Detail
     Detail -->|fetch input, output, steps| SQ
     SQ --> AS
-    SQ --> Conv
     SQ --> EL
     EL -->|raw log| LogViewer
 
-    RCD -->|topology query| RT
-    RCD -->|terminate selected node| TR
-    RT --> AS
-    RT --> AI
-    RT --> Conv
-    RT --> MG
-    RT --> MU
-    TR -->|forward through Communication Hub| AR_TR
+    RCD -->|topology query| Topo
+    RCD -->|terminate selected node| Topo
+    Topo --> AS
+    Topo --> GRD
 ```
 
 ## Dashboard Features
@@ -81,42 +70,15 @@ The Sessions tab is visible **only** for agent types with `input_type = 'convers
 
 ### Runtime Control Dashboard
 
-The Runtime Control Dashboard is a read-only operator view of currently running agents and their delegation topology. It surfaces three node kinds — agent runs (`AgentJob`), conversation sessions (`ConversationSession`), and agent instances (`AgentInstance`) — with status filtering through a tickable legend.
-
-```mermaid
-flowchart LR
-    Operator[Authorized Operator]
-    subgraph Dashboard[Runtime Control Dashboard]
-        Legend[Filter Legend]
-        Topology[Topology Diagram]
-        Actions[Node Actions: Terminate or End Session]
-    end
-    subgraph Sources[Sources]
-        AJ[AgentJob status]
-        CS[ConversationSession status]
-        AI[AgentInstance status]
-        MG[Model Guardrail Configuration]
-        MU[Model Usage Posture]
-    end
-    Operator --> Legend
-    Legend --> Topology
-    Topology --> Actions
-    Topology --> AJ
-    Topology --> CS
-    Topology --> AI
-    Topology --> MG
-    Topology --> MU
-    Actions -->|terminate live agent| AR[Agent Runtime via CH]
-    Actions -->|end sleep conversation| CS
-```
+The dashboard hosts the [Runtime Control Dashboard](runtime-control-dashboard.md), which provides a read-only operator view of currently running agents, their delegation topology, configured model-usage guardrails, and current usage posture. It supports operator-controlled termination actions for authorized users, with cascade termination of delegated children.
 
 Key behaviors:
 
 - **Topology view** shows active agents, their delegated children, conversation sessions, and agent instances
-- **Filter legend** lets operators toggle visibility of any combination of status + node kind via tickable checkboxes
-- **Status color** is rendered as a dot in the top-right corner of each box, with shape varying by node kind
-- **Node actions** — for live agents, **Terminate**; for sleep conversations (no live agent), **End session** (closes the conversation session)
+- **Filter legend** lets operators toggle visibility of any combination of status + node kind
 - **Cascade termination** — terminating a parent execution stops all active delegated child executions
+
+For full architecture details, see the [Runtime Control Dashboard](runtime-control-dashboard.md) document.
 
 ### Instance Detail View
 
@@ -139,5 +101,5 @@ The Runtime Control Dashboard reads the **runtime topology** from a Control Cent
 - [Runtime Control Dashboard](runtime-control-dashboard.md) — operator surface for live execution state and termination
 - [Execution Logs](execution-logs.md) — execution log view, status colors, and terminated/failed distinction
 - [Model Config](model-config.md) — vendor → model → guardrail hierarchy
-- [Agent Runtime](../services/agent-runtime.md) — agent execution and termination
-- [Communication Hub](../services/communication-hub.md) — control-plane routing for termination
+- [Agent Runtime](agent-runtime/architecture.md) — agent execution and termination
+- [Communication Hub](communication-hub/architecture.md) — control-plane routing for termination

@@ -22,6 +22,31 @@ from app.services.agents.tool_naming import build_tool_name
 logger = logging.getLogger(__name__)
 
 
+def _parse_sse_response(text: str, url: str) -> dict[str, Any]:
+    """Parse a Server-Sent Events (SSE) response from an MCP server.
+    
+    Extracts JSON payloads from `data:` lines, joining multi-line data blocks.
+    Used when the MCP server returns Content-Type: text/event-stream.
+    """
+    lines = text.split("\n")
+    data_parts: list[str] = []
+    for line in lines:
+        if line.startswith("data: "):
+            data_parts.append(line[6:])  # Strip "data: " prefix
+        elif line.startswith("data:"):
+            data_parts.append(line[5:])  # Strip "data:" prefix
+    
+    if not data_parts:
+        raise RuntimeError(f"SSE response from {url} contained no data lines")
+    
+    joined = "".join(data_parts)
+    try:
+        return json.loads(joined)
+    except json.JSONDecodeError as exc:
+        logger.error("Failed to parse SSE data from %s: %s (data: %.500s)", url, exc, joined)
+        raise RuntimeError(f"Invalid JSON in SSE data from {url}") from exc
+
+
 class ToolSyncService:
     """
     Fetches the tool list from a registered MCP server's HTTP endpoint
@@ -45,7 +70,7 @@ class ToolSyncService:
         Returns:
             Session ID from response headers, or None if not provided
         """
-        mcp_url = f"{base_url.rstrip('/')}/mcp"
+        mcp_url = base_url.rstrip('/')
         init_payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -94,7 +119,8 @@ class ToolSyncService:
 
     async def sync(self, server: McpServer, db: AsyncSession, session: McpSession | None = None) -> dict[str, int]:
         """
-        Sync tools from the MCP server. Returns counts of added/updated/deactivated tools.
+        Sync tools from the MCP server. Returns counts of added/updated/deactivated tools
+        plus a warnings list for non-fatal issues (e.g. initialize handshake failure).
 
         Uses MCP protocol: JSON-RPC 2.0 POST to {base_url}/mcp with method "tools/list".
         
@@ -102,7 +128,11 @@ class ToolSyncService:
             server: The MCP server to sync from
             db: Database session
             session: Optional session with credentials for authentication
+        
+        Returns:
+            dict with keys: added, updated, deactivated, warnings
         """
+        warnings: list[str] = []
         # Proactive OAuth token refresh (check if token is about to expire)
         if session and session.auth_type == McpSessionAuthType.oauth2 and session.oauth_expires_at:
             from app.services.mcp.oauth_refresh import OAuthRefreshService
@@ -142,7 +172,10 @@ class ToolSyncService:
                 elif session.auth_type == McpSessionAuthType.api_key:
                     api_key = creds.get("api_key")
                     if api_key:
-                        headers["X-API-Key"] = api_key
+                        if creds.get("as_bearer"):
+                            headers["Authorization"] = f"Bearer {api_key}"
+                        else:
+                            headers["X-API-Key"] = api_key
                 elif session.auth_type == McpSessionAuthType.oauth2:
                     access_token = creds.get("access_token")
                     if access_token:
@@ -168,6 +201,8 @@ class ToolSyncService:
         if not mcp_session_id:
             logger.debug("No cached MCP session for server %s, initializing...", server_id_str)
             mcp_session_id = await self._initialize_mcp_session(server_id_str, server.base_url, headers)
+            if not mcp_session_id:
+                warnings.append(f"MCP session initialization failed for server {server.name}. Proceeding without session tracking.")
         
         # Add Mcp-Session-Id header if we have a session ID
         if mcp_session_id:
@@ -178,7 +213,20 @@ class ToolSyncService:
             async with httpx.AsyncClient(timeout=30.0, verify=_ssl_context or True) as client:
                 response = await client.post(mcp_url, json=jsonrpc_payload, headers=headers)
                 response.raise_for_status()
-                data = response.json()
+                # Some MCP servers return empty or non-JSON responses; log and fail gracefully
+                if not response.content:
+                    logger.error("Empty response body from %s (status %s, headers: %s)", mcp_url, response.status_code, dict(response.headers))
+                    raise RuntimeError(f"Empty response from MCP server: {mcp_url}")
+                # Handle SSE (text/event-stream) responses from MCP servers
+                ct = response.headers.get("content-type", "")
+                if "text/event-stream" in ct:
+                    data = _parse_sse_response(response.text, mcp_url)
+                else:
+                    try:
+                        data = response.json()
+                    except Exception as json_exc:
+                        logger.error("Failed to parse JSON response from %s: %s (body: %.500s)", mcp_url, json_exc, response.text)
+                        raise RuntimeError(f"Invalid JSON response from MCP server: {mcp_url}") from json_exc
         except httpx.HTTPStatusError as exc:
             # Log the full error response for debugging
             error_detail = exc.response.text
@@ -340,4 +388,4 @@ class ToolSyncService:
             "Synced tools for server %s: +%d updated=%d deactivated=%d",
             server.slug, added, updated, deactivated,
         )
-        return {"added": added, "updated": updated, "deactivated": deactivated}
+        return {"added": added, "updated": updated, "deactivated": deactivated, "warnings": warnings}

@@ -165,7 +165,13 @@ class McpProxyEngine:
         session_id: str | None,
         db: AsyncSession,
     ) -> McpSession:
-        """Resolve the MCP session to use for a tool call."""
+        """Resolve the MCP session to use for a tool call.
+
+        Resolution order when no session_id provided:
+        1. is_default=True AND is_active=True
+        2. Sole active session (auto-fallback)
+        3. Error if multiple active and no default
+        """
         from sqlalchemy.orm import selectinload
 
         if session_id:
@@ -176,15 +182,30 @@ class McpProxyEngine:
                     McpSession.is_active == True,  # noqa: E712
                 )
             )
+            session = result.scalar_one_or_none()
         else:
+            # Priority 1: explicitly marked default + active
             result = await db.execute(
                 select(McpSession).where(
                     McpSession.server_id == server_id,
+                    McpSession.is_default == True,  # noqa: E712
                     McpSession.is_active == True,  # noqa: E712
-                ).limit(1)
+                )
             )
+            session = result.scalar_one_or_none()
 
-        session = result.scalar_one_or_none()
+            if not session:
+                # Priority 2: sole active session auto-fallback
+                result = await db.execute(
+                    select(McpSession).where(
+                        McpSession.server_id == server_id,
+                        McpSession.is_active == True,  # noqa: E712
+                    )
+                )
+                active_sessions = result.scalars().all()
+                if len(active_sessions) == 1:
+                    session = active_sessions[0]
+
         if not session:
             raise McpProxyError(f"No active session found for server {server_id}")
         return session
@@ -221,8 +242,12 @@ class McpProxyEngine:
         # Build auth header based on auth type — never log credential values
         if session.auth_type == McpSessionAuthType.api_key:
             api_key = creds.get("api_key", "")
-            headers["X-API-Key"] = api_key
-            logger.debug("Using API key authentication for session %s", session.id)
+            if creds.get("as_bearer"):
+                headers["Authorization"] = f"Bearer {api_key}"
+                logger.debug("Using API key as Bearer token for session %s", session.id)
+            else:
+                headers["X-API-Key"] = api_key
+                logger.debug("Using API key authentication for session %s", session.id)
         elif session.auth_type == McpSessionAuthType.bearer_token:
             token = creds.get("token", "")
             headers["Authorization"] = f"Bearer {token}"

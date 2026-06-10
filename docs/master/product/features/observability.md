@@ -42,7 +42,9 @@ Observability provides real-time insight into the health, performance, and activ
 - **Metrics for pending intervention count, average response time, and intervention resolution rate are exposed via the observability pipeline**
 
 ## Out of Scope
-- (none additional)
+- Custom dashboard or visualization UI beyond what the OTEL Collector exports natively
+- Real-time alerting rules — alerting is configured in external monitoring systems consuming OTEL data
+- Historical telemetry data retention policies — governed by the external observability backend
 
 ## Dependencies & Constraints
 - Depends on a vendor and model catalogue that the hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth

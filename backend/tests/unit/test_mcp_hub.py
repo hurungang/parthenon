@@ -355,3 +355,138 @@ async def test_toolsyncservice_gracefully_handles_vault_decrypt_failure():
 
     # Sync still completes, just without auth headers
     assert "Authorization" not in captured_headers
+
+
+# ── Sync Resilience ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sync_resilience_initialize_fails_but_tools_list_succeeds():
+    """Sync succeeds with warnings when _initialize_mcp_session returns None (simulating failure) but tools/list works."""
+    from app.services.mcp.tool_sync import ToolSyncService
+    from app.db.models.mcp_hub import McpServerStatus
+
+    mock_server = MagicMock()
+    mock_server.id = uuid.uuid4()
+    mock_server.slug = "resilient-server"
+    mock_server.base_url = "http://mcp-server"
+    mock_server.name = "ResilientServer"
+    mock_server.status = McpServerStatus.active
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=MagicMock(return_value=None)),  # tool lookup
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),  # deactivation query
+        ]
+    )
+
+    service = ToolSyncService()
+    # Clear any cached session from other tests
+    service._session_cache.clear()
+
+    jsonrpc_response = {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "toolA", "description": "A tool"}]}}
+
+    with patch.object(service, "_initialize_mcp_session") as mock_init:
+        # _initialize_mcp_session returns None (the real method does this when it catches exceptions internally)
+        mock_init.return_value = None
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_response = MagicMock()
+            mock_response.json.return_value = jsonrpc_response
+            mock_response.raise_for_status = MagicMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+
+            result = await service.sync(mock_server, mock_db)
+
+    # Sync succeeds despite initialize failure
+    assert result["added"] == 1
+    assert result["deactivated"] == 0
+    # A warning should be captured about the initialization failure
+    assert len(result.get("warnings", [])) >= 1
+    assert any("MCP session initialization failed" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_sync_fatal_failure_when_both_initialize_and_tools_list_fail():
+    """Sync raises RuntimeError when both initialize returns None and tools/list fails."""
+    from app.services.mcp.tool_sync import ToolSyncService
+    from app.db.models.mcp_hub import McpServerStatus
+
+    mock_server = MagicMock()
+    mock_server.id = uuid.uuid4()
+    mock_server.slug = "fatal-server"
+    mock_server.base_url = "http://dead-server"
+    mock_server.name = "FatalServer"
+    mock_server.status = McpServerStatus.active
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=MagicMock(return_value=None)),  # tool lookup
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),  # deactivation
+        ]
+    )
+
+    service = ToolSyncService()
+    service._session_cache.clear()
+
+    with patch.object(service, "_initialize_mcp_session") as mock_init:
+        mock_init.return_value = None  # simulate initialize returning None
+        import httpx
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            # tools/list also fails with ConnectError (not HTTPStatusError, so no retry)
+            mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+
+            with pytest.raises(RuntimeError, match="Failed to fetch tools"):
+                await service.sync(mock_server, mock_db)
+
+    # Server status should be set to error
+    assert mock_server.status == McpServerStatus.error
+
+
+@pytest.mark.asyncio
+async def test_sync_updates_last_synced_at_on_success():
+    """Sync updates last_synced_at timestamp on successful sync."""
+    from app.services.mcp.tool_sync import ToolSyncService
+    from app.db.models.mcp_hub import McpServerStatus
+
+    mock_server = MagicMock()
+    mock_server.id = uuid.uuid4()
+    mock_server.slug = "timestamp-server"
+    mock_server.base_url = "http://mcp-server"
+    mock_server.name = "TimestampServer"
+    mock_server.status = McpServerStatus.active
+    mock_server.last_synced_at = None
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=MagicMock(return_value=None)),  # tool lookup
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),  # deactivation query
+        ]
+    )
+
+    service = ToolSyncService()
+    service._session_cache.clear()
+
+    jsonrpc_response = {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "toolB", "description": "B tool"}]}}
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_response = MagicMock()
+        mock_response.json.return_value = jsonrpc_response
+        mock_response.raise_for_status = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        await service.sync(mock_server, mock_db)
+
+    # last_synced_at should be updated
+    assert mock_server.last_synced_at is not None

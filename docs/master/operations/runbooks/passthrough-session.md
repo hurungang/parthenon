@@ -57,61 +57,22 @@
 
 **Symptom:** Sessions referencing deleted MCP servers; monitoring query returns non-zero rows
 
-1. Run the orphan detection query:
-   ```sql
-   SELECT ms.id, ms.name, ms.server_id
-   FROM mcp_session ms
-   LEFT JOIN mcp_server server ON ms.server_id = server.id
-   WHERE ms.auth_type = 'passthrough'
-     AND server.id IS NULL;
-   ```
+1. Run the orphan detection query: Query the `mcp_session` table joined with `mcp_server` where `auth_type = 'passthrough'` and `server.id IS NULL` to identify orphaned sessions referencing deleted servers.
 2. Review the results and confirm the server deletions were intentional.
-3. Delete orphaned sessions after review:
-   ```sql
-   DELETE FROM mcp_session
-   WHERE id IN (
-       SELECT ms.id
-       FROM mcp_session ms
-       LEFT JOIN mcp_server server ON ms.server_id = server.id
-       WHERE ms.auth_type = 'passthrough'
-         AND server.id IS NULL
-   );
-   ```
+3. Delete orphaned sessions after review: Delete from `mcp_session` where the session's server no longer exists.
 
 ---
 
 ## Debugging Tools
 
 **Decode a JWT to inspect claims:**
-```powershell
-.\decode-jwt.ps1 -Token "eyJhbGc..."
-# Verify: sub (agent UUID), email, iss (Keycloak issuer URL), exp (not in the past)
-```
+Use the `decode-jwt.ps1` script with the token to verify claims: sub (agent UUID), email, iss (Keycloak issuer URL), exp (not in the past).
 
 **Test passthrough tool call manually:**
-```powershell
-$token = "Bearer eyJhbGc..."
-$body = @{
-    tool_name    = "helloWorld"
-    server_slug  = "demo"
-    session_id   = $null
-    agent_subject = "agent-uuid"
-    arguments    = @{}
-} | ConvertTo-Json
-
-Invoke-WebRequest -Uri "http://localhost:8000/api/v1/communication-hub/test-tool" `
-    -Method POST `
-    -Headers @{ "Authorization" = $token } `
-    -Body $body `
-    -ContentType "application/json"
-```
+Send a POST request to `/api/v1/communication-hub/test-tool` with a valid Bearer token, setting `tool_name`, `server_slug`, `agent_subject`, and `arguments` fields. The `agent_subject` must be the UUID of the agent identity whose JWT should be forwarded.
 
 **Enable debug logging for MCP proxy:**
-```python
-# backend/app/core/logging.py — temporary change for diagnostics only
-import logging
-logging.getLogger("app.core.mcp_proxy").setLevel(logging.DEBUG)
-```
+Temporarily set the `app.core.mcp_proxy` logger to DEBUG level in the logging configuration to trace auth header construction and passthrough JWT forwarding decisions.
 
 ---
 

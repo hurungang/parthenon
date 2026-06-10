@@ -398,7 +398,7 @@ At least one E2E test suite must run against the real backend stack with **no `p
 | Backend unit — `InterveneRequestStore` service | [backend/tests/services/test_intervene_service.py](../../../backend/tests/services/test_intervene_service.py) |
 | Backend integration — Intervene API endpoints | [backend/tests/api/v1/test_intervene.py](../../../backend/tests/api/v1/test_intervene.py) |
 | Backend integration — Schema migration verification | [backend/tests/api/v1/test_intervene.py](../../../backend/tests/api/v1/test_intervene.py) |
-| Frontend component — Response dialogs (approval, choice, text) | [frontend/src/__tests__/components/test_InterveneResponseDialog.tsx](../../../frontend/src/__tests__/components/test_InterveneResponseDialog.tsx) |
-| Frontend component — Request list | [frontend/src/__tests__/components/test_InterveneRequestList.tsx](../../../frontend/src/__tests__/components/test_InterveneRequestList.tsx) |
+| Frontend component — Response dialogs (approval, choice, text) | [frontend/src/__tests__/InterveneResponseDialog.test.tsx](../../../frontend/src/__tests__/InterveneResponseDialog.test.tsx) |
+| Frontend component — Request list | [frontend/src/__tests__/InterveneRequestList.test.tsx](../../../frontend/src/__tests__/InterveneRequestList.test.tsx) |
 | E2E — Full human-in-the-loop flows | [e2e/tests/intervene.spec.ts](../../../e2e/tests/intervene.spec.ts) |
 | E2E — Real backend integration (no mocks) | [e2e/tests/intervene.spec.ts](../../../e2e/tests/intervene.spec.ts) (as `describe` block within the same file or a separate suite) |

@@ -4,7 +4,7 @@
 
 An agent progresses through a well-defined lifecycle: an admin **defines** an agent type (with a role, model reference, and identity), the platform **provisions** its identity in the `ai_agents` realm, and callers **launch** sessions asynchronously through the Agent Session Queue. The Agent Runtime (powered by the **LangChain deep agent** framework) executes each session via an observe → reason → act loop, coordinating permission evaluation, model resolution, skill execution, and execution log capture.
 
-## Asynchronous Session Lifecycle
+## Session Definition, Enqueue, and Dispatch
 
 ```mermaid
 sequenceDiagram
@@ -16,9 +16,6 @@ sequenceDiagram
     participant APM as Permission Manager
     participant MCS as Model Config Service
     participant ELS as Execution Log Store
-    participant LLM as LLM Provider
-    participant SE as Skill Engine
-    participant RS as Result Store
 
     Admin->>API: Define agent type (role + model_id + identity)
     API->>IdP: Provision agent user identity
@@ -33,6 +30,19 @@ sequenceDiagram
     AR->>MCS: Resolve provider for model_id
     MCS-->>AR: Provider endpoint and credentials
     AR->>ELS: Write system instruction and user prompt
+```
+
+## Execution Loop and Completion
+
+```mermaid
+sequenceDiagram
+    participant AR as Agent Runtime
+    participant LLM as LLM Provider
+    participant SE as Skill Engine
+    participant ELS as Execution Log Store
+    participant RS as Result Store
+    participant AJQ as Agent Session Queue
+
     loop LangChain observe-reason-act loop
         AR->>LLM: Inference call
         LLM-->>AR: Response or tool calls

@@ -42,7 +42,9 @@ This feature strengthens cross-agent collaboration by enabling reliable agent-to
 - **Recursive delegation risk is validated during agent create, update, and run flows; invalid configurations and dead-loop risks are blocked before execution**
 
 ## Out of Scope
-- (none additional)
+- Dynamic slug allocation — slugs are assigned at registration and are immutable for the server's lifetime
+- Multi-tenant MCP server sharing across independent platform instances
+- A2A communication across separate Parthenon deployments
 
 ## Dependencies & Constraints
 - Recursion validation depends on a stable SOP and delegation step graph; configuration changes that would create cycles must be rejected at create/update and again at run initiation

@@ -25,28 +25,18 @@ flowchart LR
     subgraph AR[Agent Runtime]
         AR_TR[Agent Terminate]
     end
-    subgraph Data[Data Store]
-        AJ[AgentJob]
-        CS[ConversationSession]
-        AI[AgentInstance]
-        MG[Model Guardrail Configuration]
-        MU[Model Usage Posture]
-    end
+
     Operator --> Legend
     Legend --> Topology
     Topology --> Actions
     Topology --> RT
-    RT --> AJ
-    RT --> CS
-    RT --> AI
-    RT --> MG
-    RT --> MU
     Actions -->|terminate live agent| TR
     TR --> CH_TR
     CH_TR --> AR_TR
     Actions -->|end sleep conversation| ES
-    ES --> CS
 ```
+
+The topology endpoint merges data from: `AgentJob` (live agent runs), `ConversationSession` (conversation sessions), `AgentInstance` (agent instances), `Model Guardrail Configuration`, and `Model Usage Posture`.
 
 ## Topology View
 

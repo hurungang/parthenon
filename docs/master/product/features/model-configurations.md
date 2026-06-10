@@ -46,23 +46,47 @@ Administrators can create, read, update, and delete Model Configurations through
 
 ## Credential Security
 
-- API keys are encrypted at rest with AES-256-GCM via the platform's credential vault. The raw key is never persisted in plain text.
-- Credential-derived fields in API responses are limited to a single `has_credentials: true/false` flag. The encrypted blob is never returned.
-- The Agent Runtime receives a decrypted key at call time through the Control Center data-client. The runtime never holds raw API keys at rest, consistent with the top-priority architecture rule that agents cannot hold sensitive credentials.
+- API keys are encrypted at rest. The raw key is never persisted in plain text.
+- Credential-derived fields in API responses are limited to a credential-presence indicator only. The encrypted blob is never returned.
+- The Agent Runtime receives a decrypted key at call time through the Control Center. The runtime never holds raw API keys at rest, consistent with the top-priority architecture rule that agents cannot hold sensitive credentials.
 
 ## Fetch Models
 
 Each provider configuration has a "Fetch Models" capability that returns the available model identifiers for that vendor:
 
-- **Live listing** (OpenAI-compatible family): the endpoint queries the vendor's `/models` API and returns the current model catalogue.
-- **Curated static list** (Gemini, Cohere): the endpoint returns a curated list of well-known flagship models maintained alongside the dispatcher code. The list is reviewed at release time.
-- **Failure degradation**: if the vendor's listing endpoint is unreachable or the API key is invalid, the endpoint returns an empty list and logs the error. The administrator is never blocked from saving the configuration because the model list is unavailable.
+- **Live listing**: For providers that support it, the endpoint queries the vendor's model API and returns the current model catalogue.
+- **Curated static list**: For providers without a dynamic model API, the endpoint returns a curated list of well-known flagship models reviewed at release time.
+- **Failure degradation**: If the vendor's listing endpoint is unreachable or the API key is invalid, the endpoint returns an empty list and logs the error. The administrator is never blocked from saving the configuration because the model list is unavailable.
 
 ## Runtime Resolution
 
-1. An Agent Type carries a `model_id` string (e.g. `"gemini-2.5-pro"`).
-2. The Model Binding Layer scans all `ModelConfig` records to find the one whose `enabled_models` list contains that `model_id`.
-3. The matched configuration's endpoint and decrypted credential are returned to the Agent Runtime.
-4. The runtime dispatches the call to the correct vendor through the provider-registry facade, which routes by dispatch family (OpenAI-compatible or native-API).
+- An Agent Type carries a `model_id` string (e.g. `"gemini-2.5-pro"`).
+- At runtime, the platform resolves which Model Configuration provides that model and returns the matched endpoint and credentials to the Agent Runtime.
+- The runtime dispatches the call to the correct vendor based on the provider family.
 
-This late-binding architecture means swapping a provider or rotating a credential requires updating only the `ModelConfig` record — no agent type changes are needed.
+This late-binding architecture means swapping a provider or rotating a credential requires updating only the Model Configuration — no agent type changes are needed.
+
+## Business Goals
+- Centralize LLM provider metadata so that agent types can reference models by ID alone
+- Securely manage API keys with encryption at rest and runtime-only decryption
+- Enable credential rotation and provider changes without modifying agent type definitions
+- Support a growing catalogue of providers through coordinated platform releases
+
+## User Stories
+- As an **administrator**, I want to manage all LLM provider configurations in one place so that I can rotate credentials and add providers without changing agent definitions.
+- As an **agent designer**, I want to reference models by a simple ID string so that I don't need to know provider-specific endpoints or credentials.
+- As a **security administrator**, I want API keys encrypted at rest and never exposed in API responses so that credential exposure risk is minimized.
+- As a **platform operator**, I want to see which models are available for each provider so that I can confirm the platform has access to required LLM capabilities.
+
+## Acceptance Criteria
+- Administrators can create, read, update, and delete model configurations
+- API keys are encrypted before storage and never returned in read responses
+- A configuration can only be deleted if no agent type references its models
+- Agent types reference models by ID alone; the correct provider is resolved at runtime
+- The Fetch Models capability returns available model IDs or fails gracefully
+- Disabling a vendor cascades to block all models under that vendor
+
+## Out of Scope
+- Dynamic/provider-initiated registration of new LLM providers at runtime
+- Model performance benchmarking or cost optimization
+- Prompt engineering or system instruction authoring — configured on Agent Types, not Model Configurations

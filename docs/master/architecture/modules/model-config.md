@@ -35,7 +35,7 @@ flowchart LR
 
 | Field | Description |
 |---|---|
-| **provider_type** | Provider category — one of twelve supported keys across two dispatch families: **OpenAI-compatible** (`openai`, `azure_openai`, `litellm_proxy`, `mistral`, `groq`, `together`, `fireworks`, `perplexity`, `deepseek`) and **native-API** (`anthropic`, `gemini`, `cohere`). The catalogue is additive: new providers are added in the `ModelProvider` Python enum (`backend/app/db/models/agents.py`), the Postgres `model_provider_enum`, and the runtime dispatcher `PROVIDER_REGISTRY` (`backend/app/services/agents/model_binding.py`). |
+| **provider_type** | Provider category — one of twelve supported keys across two dispatch families: **OpenAI-compatible** (`openai`, `azure_openai`, `litellm_proxy`, `mistral`, `groq`, `together`, `fireworks`, `perplexity`, `deepseek`) and **native-API** (`anthropic`, `gemini`, `cohere`). New providers are added through the platform's provider registry during coordinated releases. |
 | **api_endpoint** | Provider API URL |
 | **credentials** | API key or auth token, encrypted at rest |
 | **enabled_models** | Array of model IDs available via this provider config (e.g. `["gpt-4o", "gpt-4o-mini"]`) |
@@ -61,7 +61,7 @@ The previous flat per-model configuration has been replaced with a three-level h
 | `enforcement_posture` | `terminate` (default) or `observe-only` |
 | `is_active` | Per-guardrail enable flag |
 
-Unique constraint: `(model_id, model_name, period)` — one `ModelConfig` row can host multiple model names, and each model name has at most one guardrail per period.
+Each model name has at most one guardrail per period.
 
 ### ModelAvailability
 
@@ -113,4 +113,4 @@ This late binding means swapping a provider or rotating credentials requires upd
 | **Native-API providers** | `native` | `anthropic` (Messages API), `gemini` (generateContent API), `cohere` (/chat API) |
 | **LiteLLM proxy** | `openai_compat` | `litellm_proxy` (routes through a LiteLLM proxy instance; useful for unified credential management and model aliasing) |
 
-The dispatcher in `backend/app/services/agents/model_binding.py` routes incoming calls by lookup against the `PROVIDER_REGISTRY` constant, which maps each provider key to its dispatch-family tag and default API base URL. Adding a new provider requires: (a) a new member in the `ModelProvider` Python enum (`backend/app/db/models/agents.py`), (b) an additive Alembic migration to extend the Postgres `model_provider_enum`, (c) an entry in `PROVIDER_REGISTRY` (`model_binding.py`), (d) a model-lister helper in `model_config_service.py`, (e) an entry in the frontend `PROVIDERS` array (`ModelConfigDialog.tsx`), and (f) an i18n label under `agents.modelConfigs.providerLabels`.
+The dispatcher routes incoming calls by lookup against the provider registry, which maps each provider key to its dispatch-family tag and default API base URL. Adding a new provider is an engineering-led release activity that registers the provider in the platform's provider registry, model lister, and admin UI — no dynamic registration at runtime.

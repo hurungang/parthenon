@@ -51,6 +51,7 @@ export interface McpServer {
   base_url: string
   status: McpServerStatus
   last_synced_at: string | null
+  session_count: number
   created_at: string
   updated_at: string
 }
@@ -63,6 +64,7 @@ export interface McpSession {
   auth_type: McpSessionAuthType
   identity_subject: string | null
   is_active: boolean
+  is_default: boolean
   identity_binding: Record<string, unknown> | null
   credential_config: Record<string, unknown> | null
   oauth_expires_at: string | null
@@ -96,6 +98,7 @@ export interface SyncResult {
   tools_updated: number
   tools_deactivated: number
   total_active: number
+  warnings: string[]
 }
 
 // ── Skills & SOPs ──────────────────────────────────────────────────────────────

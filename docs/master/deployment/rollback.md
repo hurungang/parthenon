@@ -136,11 +136,9 @@ Deploy the previous `platform-api` image. Remove all `AGENT_RUNTIME_*`, `AGENT_S
 
 ### Step R4 — Database Rollback (conditional)
 
-Run only if migration `df2225d787c5` must be reversed.
+Run only if migration `df2225d787c5` must be reversed:
 
-```bash
-alembic downgrade -1
-```
+Run `alembic downgrade -1` to revert the last migration.
 
 > **Warning — data loss:** This will drop the `agent_role`, `agent_role_sop`, `agent_role_skill`, `agent_identity`, and `agent_session` tables and revert `agent_type` column changes. Any data entered via the new agent admin UI will be permanently lost. Confirm with the team before executing.
 
@@ -148,11 +146,9 @@ alembic downgrade -1
 
 ### Step R5 — Flush Permission Cache
 
-Remove all Agent Permission Manager cache keys from Redis to prevent stale data from affecting a subsequent redeployment attempt.
+Remove all Agent Permission Manager cache keys from Redis to prevent stale data from affecting a subsequent redeployment attempt:
 
-```bash
-redis-cli --scan --pattern 'agentperm:*' | xargs redis-cli del
-```
+Use `redis-cli --scan --pattern 'agentperm:*'` to list matching keys, then delete each key. Confirm afterwards that no keys matching `agentperm:*` exist in Redis.
 
 **Completion condition:** No keys matching `agentperm:*` exist in Redis.
 

@@ -3,19 +3,26 @@
 ## Overview
 SOPs represent business workflows composed of orchestrated steps and delegated tasks. Guardrail policies ensure delegation remains bounded and free of recursive loops so SOP execution is predictable, controllable, and suitable for enterprise operations.
 
-## Who Uses It
-- Enterprise Administrators: Define and govern SOP workflows
-- AI Operations Leads: Monitor SOP outcomes and policy-enforced stops
-- Business Process Owners: Depend on reliable automated process execution
+## Business Goals
+- Enable repeatable, governed business process automation across agent workflows
+- Enforce bounded delegation behavior to prevent runaway agent execution chains
+- Provide clear visibility into SOP outcomes for governance and incident triage
+- Support a Default SOP fallback for agents without explicitly assigned SOPs
+
+## User Stories
+- As an **enterprise administrator**, I want to define SOP workflows that orchestrate multiple agent steps so that complex business processes can be automated reliably.
+- As an **AI operations lead**, I want to see policy-enforced stop outcomes for SOP executions so that I can distinguish governance stops from functional failures.
+- As a **business process owner**, I want SOP delegation to detect and block cyclic delegation chains so that execution never enters an infinite loop.
+- As an **agent designer**, I want to bind specific SOPs to agent types so that each agent type has a curated set of approved workflows.
 
 ## What It Does
 - Supports multi-step workflow orchestration for repeatable business processes
 - Supports delegated execution across agents while enforcing bounded delegation behavior
 - Detects and blocks direct and indirect cyclic delegation chains
 - Produces clear policy-stop outcomes for governance and incident triage
-- Supports a Default SOP fallback policy for agent execution when no explicit SOP is referenced in agent instruction
+- Supports a Default SOP fallback policy for agent execution when no explicit SOP is referenced
 - Applies Default SOP behavior consistently across all supported agent input types
-- Agent Types bind SOPs using the same ordered-list pattern that SOPs use to bind skills, allowing agent designers to curate which SOPs an agent type uses
+- Agent Types bind SOPs using an ordered-list pattern, allowing agent designers to curate which SOPs an agent type uses
 
 ## Acceptance Criteria
 - SOP delegation supports business workflows without unbounded recursion
