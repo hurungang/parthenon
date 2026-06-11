@@ -1,6 +1,7 @@
 name: fix-mcp-hub-sync-and-sessions
 created_at: 2026-06-09
-status: implemented
+status: master-updated
+master_updated_at: 2026-06-10
 scope:
   has_ui_changes: true
   has_architecture_changes: false

@@ -17,6 +17,9 @@
 - Gateway Configuration > gateway page shows agent type names
 - MCP Hub > MCP Hub shows server names from API
 - MCP Hub > MCP Hub has a register/add server button
+- MCP Hub — System Entry > MCP server table shows one System entry with Built-in chip
+- MCP Hub — System Entry > server with zero sessions shows sync button disabled with tooltip
+- Real Backend Integration - MCP Default Session > POST /mcp/servers/{id}/sync returns 422 when no sessions exist
 - MCP Session CRUD with new fields > MCP session API response includes identity_binding and credential_config
 - Notification Configuration > notification page shows channel names from API
 - Notification Channel Management > create channel updates list without page reload
@@ -280,3 +283,6 @@
 | 127 | Schedule Resume | User clicks resume button on a paused schedule; resume API is called and schedule transitions to `active` | implement-schedule-feature | scheduling.spec.ts |
 | 128 | Schedule Delete | User clicks delete button on a schedule, confirms dialog; delete API is called and schedule removed from list | implement-schedule-feature | scheduling.spec.ts |
 | 129 | Schedule Edit | User clicks edit button on a schedule; dialog pre-fills with existing data; user modifies name and saves; PUT request submitted with updated data | implement-schedule-feature | scheduling.spec.ts |
+| 130 | System Entry — Deduplication | Admin opens MCP Hub and sees exactly one "System" entry with a "Built-in" chip — visually distinct from user-registered servers | fix-mcp-hub-sync-and-sessions | mcp-hub.spec.ts |
+| 131 | Sync Visibility — Session Gate | Admin sees sync button disabled with tooltip for servers with zero sessions, guiding them to create a session first | fix-mcp-hub-sync-and-sessions | mcp-hub.spec.ts |
+| 132 | Sync — Real Backend 422 Guard | Admin creates a server via API, attempts sync without sessions, and receives HTTP 422 with "no configured sessions" detail | fix-mcp-hub-sync-and-sessions | mcp-hub.spec.ts |

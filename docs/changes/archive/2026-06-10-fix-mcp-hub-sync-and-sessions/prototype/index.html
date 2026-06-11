@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — MCP Hub (Sync &amp; Sessions Fix)</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#5B8DEF;--primary-dark:#4A7DE0;--primary-light:rgba(91,141,239,0.15);
+  --sidebar-bg:#0D1117;--sidebar-text:#8B949E;--sidebar-active-bg:rgba(91,141,239,0.12);
+  --sidebar-hover-bg:rgba(255,255,255,0.04);--sidebar-active-text:#5B8DEF;
+  --surface:#161B22;--bg:#0D1117;--border:#30363D;
+  --success:#3FB950;--warning:#D29922;--error:#F85149;--info:#58A6FF;
+  --text-primary:#E6EDF3;--text-secondary:#8B949E;
+  --shadow:0 1px 0 0 rgba(0,0,0,0.6),0 3px 8px rgba(0,0,0,0.4);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.5);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:60px;
+  --transition:0.18s ease;
+}
+html,body{height:100%;font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+.sidebar-logo{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:10px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;user-select:none;cursor:default}
+.nav-parent-group.locked-open .nav-parent-group-label{cursor:default}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:17px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.view-header h2{font-size:22px;font-weight:600;color:var(--text-primary)}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.2px}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:#1C2333}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 10px;font-size:11px}
+.btn-icon-sm{background:none;border:none;padding:5px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:all var(--transition);font-size:15px}
+.btn-icon-sm:hover{background:rgba(255,255,255,0.06);color:var(--text-primary)}
+.btn-icon-sm:disabled{opacity:0.35;cursor:not-allowed;pointer-events:auto}
+.btn-icon-sm.star-active{color:#A371F7}
+
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:24px;gap:0}
+.tab{padding:10px 20px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);white-space:nowrap;font-size:14px}
+.tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+.tab:hover:not(.active){color:var(--text-primary)}
+
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#121820}
+thead th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid #21262D;transition:background var(--transition)}
+tbody tr:hover{background:rgba(255,255,255,0.02)}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:12px 16px;vertical-align:middle;font-size:13px}
+.actions-cell{display:flex;align-items:center;gap:6px;white-space:nowrap}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-green{background:rgba(63,185,80,0.15);color:#3FB950}
+.chip-red{background:rgba(248,81,73,0.15);color:#F85149}
+.chip-yellow{background:rgba(210,153,34,0.15);color:#D29922}
+.chip-purple{background:rgba(163,113,247,0.15);color:#A371F7}
+.chip-gray{background:rgba(139,148,158,0.12);color:#8B949E}
+.chip-blue{background:rgba(88,166,255,0.15);color:#58A6FF}
+.chip-system{background:rgba(255,123,114,0.12);color:#FF7B72;border:1px solid rgba(255,123,114,0.3)}
+.chip-default{background:rgba(163,113,247,0.15);color:#A371F7;font-size:10px;padding:2px 7px}
+.chip-active{background:rgba(63,185,80,0.15);color:#3FB950}
+.chip-inactive{background:rgba(139,148,158,0.12);color:#8B949E}
+
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success);box-shadow:0 0 4px var(--success)}
+.dot-red{background:var(--error);box-shadow:0 0 4px var(--error)}
+.dot-yellow{background:var(--warning);box-shadow:0 0 4px var(--warning)}
+
+.font-mono{font-family:'Cascadia Code','Fira Code','Consolas',monospace}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+
+.tooltip-wrap{position:relative;display:inline-flex}
+.tooltip-wrap .tooltip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#252B36;color:var(--text-primary);font-size:12px;padding:6px 12px;border-radius:var(--radius-sm);white-space:nowrap;z-index:500;border:1px solid var(--border);box-shadow:var(--shadow-md);pointer-events:none;line-height:1.4}
+.tooltip-wrap:hover .tooltip{display:block}
+.tooltip-wrap .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#252B36}
+.info-icon-wrap{position:relative;display:inline-flex}
+.info-icon-wrap .info-tip{display:none;position:absolute;bottom:calc(100% + 6px);right:0;background:#252B36;color:var(--text-primary);font-size:11px;padding:6px 10px;border-radius:var(--radius-sm);white-space:normal;width:200px;z-index:500;border:1px solid var(--border);box-shadow:var(--shadow-md);pointer-events:none;line-height:1.4}
+.info-icon-wrap:hover .info-tip{display:block}
+.info-icon{width:16px;height:16px;border-radius:50%;background:rgba(139,148,158,0.2);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;cursor:help;flex-shrink:0}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(1,4,9,0.7);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border)}
+.modal-lg{max-width:680px}
+.modal-header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:16px;font-weight:600;color:var(--text-primary)}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition);display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:rgba(255,255,255,0.06);color:var(--text-primary)}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:5px;text-transform:uppercase;letter-spacing:.3px}
+.form-control{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text-primary);transition:border-color var(--transition);outline:none;font-size:13px}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+.form-control::placeholder{color:#484F58}
+textarea.form-control{resize:vertical;min-height:60px}
+select.form-control{appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%238B949E' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-row{display:flex;gap:16px}
+.form-row>.form-group{flex:1}
+.form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.form-error.visible{display:block}
+
+.toggle{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:32px;height:18px;background:#30363D;border-radius:9px;transition:background var(--transition);position:relative;flex-shrink:0}
+.toggle-slider::after{content:'';position:absolute;width:12px;height:12px;background:#8B949E;border-radius:50%;top:3px;left:3px;transition:all var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle input:checked+.toggle-slider{background:rgba(63,185,80,0.4)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(14px);background:var(--success)}
+.toggle input:disabled+.toggle-slider{opacity:0.4;cursor:not-allowed}
+.toggle input:disabled+.toggle-slider::after{background:#484F58}
+
+.session-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #21262D;cursor:pointer;transition:background var(--transition)}
+.session-row:last-child{border-bottom:none}
+.session-row:hover{background:rgba(255,255,255,0.015);margin:0 -24px;padding:10px 24px}
+.session-name{font-weight:500;font-size:13px;color:var(--text-primary)}
+.session-detail{font-size:11px;color:var(--text-secondary)}
+.session-info{flex:1}
+
+.radio-default{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;cursor:pointer;transition:all var(--transition);position:relative;background:transparent}
+.radio-default.checked{border-color:var(--primary);background:var(--primary)}
+.radio-default.checked::after{content:'';position:absolute;width:6px;height:6px;border-radius:50%;background:#fff;top:4px;left:4px}
+.radio-default.auto{border-color:rgba(163,113,247,0.6);background:transparent}
+.radio-default.auto::after{content:'';position:absolute;width:4px;height:4px;border-radius:50%;background:#A371F7;top:5px;left:5px}
+
+.alert-info{background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.2);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:#58A6FF;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.alert-warning{background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.2);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:#D29922;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.alert-success{background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.2);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:#3FB950;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+
+.empty-sessions{text-align:center;padding:32px 24px;color:var(--text-secondary)}
+.empty-sessions .empty-icon{font-size:32px;margin-bottom:8px;opacity:0.5}
+
+.sync-success{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.25);color:#3FB950;font-size:12px;font-weight:500}
+
+.system-intro{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:var(--radius);background:rgba(255,123,114,0.06);border:1px solid rgba(255,123,114,0.15);margin-bottom:18px}
+.system-intro .si-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.system-intro .si-body{flex:1}
+.system-intro h4{font-size:13px;color:var(--text-primary);margin-bottom:3px}
+.system-intro p{font-size:12px;color:var(--text-secondary);line-height:1.5}
+
+.collapsible-header{display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 0;color:var(--text-secondary);font-size:12px;font-weight:500;user-select:none}
+.collapsible-header .collapse-arrow{transition:transform var(--transition);font-size:10px;display:inline-block}
+.collapsible-header.open .collapse-arrow{transform:rotate(90deg)}
+.collapsible-content{display:none;margin-top:0}
+.collapsible-content.open{display:block}
+.collapsible-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;background:rgba(255,255,255,0.01)}
+
+.credential-saved{display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px dashed var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-size:12px;margin-bottom:8px}
+.credential-saved .placeholder-dots{letter-spacing:3px;color:var(--text-secondary);font-family:monospace}
+
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:10px 18px;border-radius:var(--radius);background:#252B36;color:var(--text-primary);font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn 0.25s ease;display:flex;align-items:center;gap:8px;max-width:420px;border:1px solid var(--border)}
+.toast-success{background:#1A3320;border-color:#3FB950;color:#3FB950}
+.toast-error{background:#3D1C1C;border-color:#F85149;color:#F85149}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.auth-row{display:flex;align-items:flex-end;gap:8px}
+.auth-row .form-group{flex:1;margin-bottom:0}
+
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mb-2{margin-bottom:8px}.mb-3{margin-bottom:12px}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- SIDEBAR -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+  <div class="nav-item"><span class="nav-icon">🏠</span>Dashboard</div>
+  <div class="nav-parent-group">
+    <div class="nav-parent-group-label"><span>🤖 Agents</span></div>
+  </div>
+  <div class="nav-parent-group locked-open">
+    <div class="nav-parent-group-label"><span>🌐 Integrations</span></div>
+    <div class="nav-children">
+      <div class="nav-item sub-item active"><span class="nav-icon">🔌</span>MCP Hub</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔔</span>Notification Integration</div>
+    </div>
+  </div>
+  <div class="nav-parent-group">
+    <div class="nav-parent-group-label"><span>⚙️ System</span></div>
+  </div>
+</nav>
+
+<!-- MAIN WRAPPER -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title">MCP Hub</div>
+    <div class="topbar-actions">
+      <div class="avatar" title="Admin">AH</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="view-header">
+      <div><h2>MCP Hub</h2><div class="view-desc">Manage Model Context Protocol servers, sessions, and synced tools</div></div>
+      <button class="btn btn-primary" onclick="openServerForm()">+ Register Server</button>
+    </div>
+
+    <!-- System entry contextual notice -->
+    <div class="system-intro">
+      <span class="si-icon">💡</span>
+      <div class="si-body">
+        <h4>About the System entry</h4>
+        <p>The <strong>System</strong> entry represents Parthenon's built-in platform tools. It is shown only once, is not editable or deletable, and cannot be synced from this view. Add real MCP servers below to connect external tools.</p>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <div class="tab active" id="tab-servers" onclick="switchTab('servers')">🔌 Servers</div>
+      <div class="tab" id="tab-tools" onclick="switchTab('tools')">🛠️ Tool Repository</div>
+    </div>
+
+    <!-- SERVERS TAB -->
+    <div id="panel-servers">
+      <div class="table-wrap">
+        <table id="servers-table">
+          <thead>
+            <tr>
+              <th>Server</th>
+              <th>Slug</th>
+              <th>URL</th>
+              <th>Status</th>
+              <th>Sessions</th>
+              <th>Last Sync</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <!-- SYSTEM ENTRY (special, built-in) — slug is "system" -->
+            <tr id="row-system" data-server="system" data-type="system">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <strong style="color:var(--text-primary)">System</strong>
+                  <span class="chip chip-system">⚡ Built-in</span>
+                </div>
+              </td>
+              <td><span class="font-mono text-sm">system</span></td>
+              <td><span class="text-secondary text-xs">—</span></td>
+              <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+              <td><span class="text-secondary">—</span></td>
+              <td><span class="text-secondary">—</span></td>
+              <td class="actions-cell">
+                <span class="text-secondary text-xs" style="opacity:0.6">System managed</span>
+              </td>
+            </tr>
+
+            <!-- GitHub MCP — 0 sessions, sync disabled -->
+            <tr id="row-github-mcp" data-server="github-mcp" data-type="user" data-sessions="0" data-status="active">
+              <td><strong style="color:var(--text-primary)">GitHub MCP</strong></td>
+              <td><span class="font-mono text-sm">github-mcp</span></td>
+              <td><span class="font-mono text-sm text-secondary">https://mcp.github.example.com</span></td>
+              <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+              <td><span class="chip chip-gray">0 sessions</span></td>
+              <td><span class="text-secondary">Never</span></td>
+              <td class="actions-cell">
+                <div class="tooltip-wrap" id="wrap-sync-github">
+                  <button class="btn btn-xs btn-secondary" disabled style="opacity:0.4">🔄 Sync</button>
+                  <span class="tooltip">This server has no configured sessions. Add a session before syncing.</span>
+                </div>
+                <button class="btn-icon-sm" onclick="openSessions('github-mcp')" title="Manage sessions">⚙️</button>
+              </td>
+            </tr>
+
+            <!-- Supabase MCP — 2 sessions, error status, sync enabled for retry -->
+            <tr id="row-supabase-mcp" data-server="supabase-mcp" data-type="user" data-sessions="2" data-status="error">
+              <td><strong style="color:var(--text-primary)">Supabase MCP</strong></td>
+              <td><span class="font-mono text-sm">supabase-mcp</span></td>
+              <td><span class="font-mono text-sm text-secondary">https://mcp.supabase.example.com</span></td>
+              <td><span class="chip chip-red"><span class="status-dot dot-red"></span> Error</span></td>
+              <td><span>2 sessions</span></td>
+              <td>
+                <span class="text-secondary">2 min ago</span>
+                <div class="text-xs" style="color:var(--error);margin-top:2px">initialize handshake timed out</div>
+              </td>
+              <td class="actions-cell">
+                <button class="btn btn-xs btn-secondary" onclick="retrySync('supabase-mcp')">🔄 Retry Sync</button>
+                <button class="btn-icon-sm" onclick="openSessions('supabase-mcp')" title="Manage sessions">⚙️</button>
+              </td>
+            </tr>
+
+            <!-- Logfire MCP — 2 sessions, one default, active -->
+            <tr id="row-logfire-mcp" data-server="logfire-mcp" data-type="user" data-sessions="2" data-status="active">
+              <td><strong style="color:var(--text-primary)">Logfire MCP</strong></td>
+              <td><span class="font-mono text-sm">logfire-mcp</span></td>
+              <td><span class="font-mono text-sm text-secondary">https://mcp.logfire.example.com</span></td>
+              <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+              <td><span>2 sessions</span></td>
+              <td>
+                <span class="text-secondary">30 sec ago</span>
+                <div class="text-xs" style="color:var(--success);margin-top:2px">14 tools discovered</div>
+              </td>
+              <td class="actions-cell">
+                <button class="btn btn-xs btn-secondary" onclick="runSync('logfire-mcp')">🔄 Sync</button>
+                <button class="btn-icon-sm" onclick="openSessions('logfire-mcp')" title="Manage sessions">⚙️</button>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Sync warnings display -->
+      <div id="sync-warnings" class="alert-warning" style="display:none;margin-top:16px"></div>
+    </div>
+
+    <!-- TOOLS TAB (placeholder) -->
+    <div id="panel-tools" style="display:none">
+      <div class="table-wrap" style="padding:40px;text-align:center;color:var(--text-secondary)">
+        <div style="font-size:28px;margin-bottom:8px">🛠️</div>
+        <div>Tool repository is unchanged by this change set.</div>
+        <div class="text-xs mt-2">Sync a server to discover its tools here.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ============ SESSION MANAGER MODAL ============ -->
+<div class="modal-overlay" id="modal-sessions">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="sessions-modal-title">Manage Sessions</h3>
+      <button class="modal-close" onclick="closeModal('modal-sessions')">✕</button>
+    </div>
+    <div class="modal-body" id="sessions-modal-body"></div>
+    <div class="modal-footer">
+      <span style="flex:1;font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px">
+        <span style="color:#A371F7">★</span> Default session is used when syncing tools and for tool routing when no specific session is selected.
+      </span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-sessions')">Close</button>
+      <button class="btn btn-primary" id="btn-add-session">+ Add Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SESSION FORM DIALOG (Add/Edit) ============ -->
+<div class="modal-overlay" id="modal-session-form">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="session-form-title">Add Session</h3>
+      <button class="modal-close" onclick="closeSessionForm()">✕</button>
+    </div>
+    <div class="modal-body" id="session-form-body"></div>
+    <div class="modal-footer">
+      <span id="session-form-error" class="form-error" style="flex:1;text-align:left"></span>
+      <button class="btn btn-secondary" onclick="closeSessionForm()">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-session">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REGISTER SERVER DIALOG ============ -->
+<div class="modal-overlay" id="modal-server-form">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="server-form-title">Register MCP Server</h3>
+      <button class="modal-close" onclick="closeModal('modal-server-form')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="server-form-error" class="form-error mb-3"></div>
+      <div class="form-group">
+        <label>Server Name</label>
+        <input class="form-control" id="svr-name" placeholder="e.g. github-mcp">
+        <div class="form-hint">Lowercase letters, numbers, hyphens only</div>
+      </div>
+      <div class="form-group">
+        <label>Slug</label>
+        <input class="form-control" id="svr-slug" placeholder="e.g. github-mcp" disabled>
+        <div class="form-hint">Auto-generated from name. Cannot be changed after creation.</div>
+      </div>
+      <div class="form-group">
+        <label>Base URL</label>
+        <input class="form-control" id="svr-url" placeholder="https://mcp.example.com">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea class="form-control" id="svr-desc" rows="2" placeholder="Optional description..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-server-form')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-server">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ─── DATA STORE ───
+var currentServer = '';
+var supabaseRetrying = false;
+var editingSessionId = null;
+var editingServerId = null;
+
+var servers = {
+  'github-mcp': {
+    name: 'GitHub MCP', slug: 'github-mcp', base_url: 'https://mcp.github.example.com',
+    status: 'active', sessions: []
+  },
+  'supabase-mcp': {
+    name: 'Supabase MCP', slug: 'supabase-mcp', base_url: 'https://mcp.supabase.example.com',
+    status: 'error',
+    sessions: [
+      { id: 's1', name: 'Production DB', auth_type: 'api_key', is_active: true, is_default: false, description: 'Production database access' },
+      { id: 's2', name: 'Staging DB', auth_type: 'api_key', is_active: true, is_default: false, description: '' }
+    ]
+  },
+  'logfire-mcp': {
+    name: 'Logfire MCP', slug: 'logfire-mcp', base_url: 'https://mcp.logfire.example.com',
+    status: 'active',
+    sessions: [
+      { id: 's3', name: 'Prod Monitoring', auth_type: 'bearer_token', is_active: true, is_default: true, description: 'Production monitoring access' },
+      { id: 's4', name: 'Dev Observability', auth_type: 'bearer_token', is_active: true, is_default: false, description: '' }
+    ]
+  }
+};
+
+var AUTH_TYPES = ['api_key', 'bearer_token', 'basic_auth', 'oauth2', 'none', 'passthrough'];
+var AUTH_LABELS = {
+  api_key: 'API Key', bearer_token: 'Bearer Token', basic_auth: 'Basic Auth',
+  oauth2: 'OAuth 2.0', none: 'No Auth', passthrough: 'Passthrough'
+};
+var AUTH_DESCS = {
+  api_key: 'Authenticate using an API key sent as a header.',
+  bearer_token: 'Authenticate using a static Bearer token.',
+  basic_auth: 'Authenticate using HTTP Basic Authentication (username + password).',
+  oauth2: 'Authenticate using OAuth 2.0 authorization code flow with automatic token refresh.',
+  none: 'No authentication is required for this MCP server.',
+  passthrough: 'Credentials are forwarded from the calling agent identity. No server-side credentials are stored.'
+};
+
+var defaultSessionForm = {
+  auth_type: 'api_key',
+  is_active: true,
+  api_key_value: '',
+  api_key_as_bearer: false,
+  bearer_token_value: '',
+  basic_auth_username: '',
+  basic_auth_password: '',
+  oauth2_authenticated: false,
+  oauth_metadata_url: '',
+  oauth_authorization_url: '',
+  oauth_token_url: '',
+  oauth_client_id: '',
+  oauth_client_secret: '',
+  oauth_scope: ''
+};
+
+// ─── TAB SWITCHING ───
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('panel-servers').style.display = tab === 'servers' ? '' : 'none';
+  document.getElementById('panel-tools').style.display = tab === 'tools' ? '' : 'none';
+}
+
+// ─── SERVER FORM ───
+function openServerForm(editId) {
+  editingServerId = editId || null;
+  var title = document.getElementById('server-form-title');
+  if (editId) {
+    var svr = Object.values(servers).find(function(s){ return s.slug === editId });
+    title.textContent = 'Edit MCP Server';
+    document.getElementById('svr-name').value = svr ? svr.name : '';
+    document.getElementById('svr-slug').value = svr ? svr.slug : '';
+    document.getElementById('svr-url').value = svr ? svr.base_url : '';
+    document.getElementById('svr-desc').value = '';
+  } else {
+    title.textContent = 'Register MCP Server';
+    document.getElementById('svr-name').value = '';
+    document.getElementById('svr-slug').value = '';
+    document.getElementById('svr-url').value = '';
+    document.getElementById('svr-desc').value = '';
+  }
+  document.getElementById('server-form-error').textContent = '';
+  document.getElementById('server-form-error').classList.remove('visible');
+  document.getElementById('modal-server-form').classList.add('open');
+}
+
+// ─── SESSION MANAGER MODAL ───
+function openSessions(serverSlug) {
+  currentServer = serverSlug;
+  var srv = servers[serverSlug];
+  document.getElementById('sessions-modal-title').textContent = 'Sessions — ' + srv.name;
+  renderSessionsList(srv);
+  document.getElementById('btn-add-session').onclick = function() { openSessionForm(null); };
+  document.getElementById('modal-sessions').classList.add('open');
+}
+
+function renderSessionsList(srv) {
+  var body = document.getElementById('sessions-modal-body');
+  var sessions = srv.sessions;
+  var sessionCount = sessions.length;
+  var isAutoDefault = sessionCount === 1;
+
+  if (sessionCount === 0) {
+    body.innerHTML = '<div class="empty-sessions">' +
+      '<div class="empty-icon">📭</div>' +
+      '<div style="font-weight:600;color:var(--text-primary);margin-bottom:4px">No sessions configured</div>' +
+      '<div class="text-xs">Add at least one session to enable syncing and tool routing for this server.</div>' +
+      '</div>';
+    return;
+  }
+
+  var html = '';
+
+  // Delete error (if any)
+  html += '<div id="session-delete-error" class="form-error mb-2"></div>';
+
+  // Auto-default info alert for sole session
+  if (isAutoDefault) {
+    html += '<div class="alert-info">' +
+      '<span>💡</span>' +
+      '<span>Only one session exists — it is automatically treated as the default. Add more sessions to choose a different default.</span>' +
+      '</div>';
+  } else {
+    html += '<div class="alert-info">' +
+      '<span>⭐</span>' +
+      '<span>Select one session as the default. The default session is used for sync operations and tool routing.</span>' +
+      '</div>';
+  }
+
+  // Sessions table with radio + star
+  html += '<div class="table-wrap" style="margin-bottom:0"><table><thead><tr>' +
+    '<th style="width:40px"></th><th>Name</th><th>Auth Type</th><th>Token Status</th><th>Status</th><th>Actions</th>' +
+    '</tr></thead><tbody>';
+
+  sessions.forEach(function(sess) {
+    var isDefault = sess.is_default || isAutoDefault;
+    var radioDisabled = isAutoDefault || !sess.is_active;
+    var radioClass = isDefault ? (isAutoDefault ? 'auto' : 'checked') : '';
+    var starDisabled = !sess.is_active || isDefault;
+
+    html += '<tr>' +
+      // Radio column
+      '<td><div class="radio-default ' + radioClass + '" ' +
+        (radioDisabled ? 'style="cursor:default"' : 'onclick="setDefault(\'' + currentServer + '\',\'' + sess.id + '\')"') +
+        '></div></td>' +
+      // Name + default chip
+      '<td><div class="flex items-center gap-2">' +
+        '<span style="font-weight:500">' + sess.name + '</span>' +
+        (isDefault ? '<span class="chip chip-default">Default</span>' : '') +
+        '</div>' +
+        (sess.description ? '<div class="text-xs text-secondary">' + sess.description + '</div>' : '') +
+      '</td>' +
+      // Auth type
+      '<td>' + AUTH_LABELS[sess.auth_type] +
+        (sess.auth_type === 'passthrough' ? ' <span class="chip chip-blue" style="font-size:10px">passthrough</span>' : '') +
+      '</td>' +
+      // Token status (OAuth2 only)
+      '<td>' + (sess.auth_type === 'oauth2' ? '<span class="chip chip-green">Valid (23h)</span>' : '<span class="text-secondary">—</span>') + '</td>' +
+      // Status chip
+      '<td>' + (sess.is_active ? '<span class="chip chip-active">Active</span>' : '<span class="chip chip-inactive">Inactive</span>') + '</td>' +
+      // Actions: star + edit + delete
+      '<td class="actions-cell">' +
+        '<button class="btn-icon-sm ' + (isDefault ? 'star-active' : '') + '" ' +
+          'onclick="setDefault(\'' + currentServer + '\',\'' + sess.id + '\')" ' +
+          'title="' + (sess.is_default ? 'Current default' : 'Set as default') + '" ' +
+          (starDisabled ? 'disabled' : '') + '>★</button>' +
+        '<button class="btn-icon-sm" onclick="openSessionForm(\'' + sess.id + '\')" title="Edit session">✏️</button>' +
+        '<div class="tooltip-wrap">' +
+          '<button class="btn-icon-sm" onclick="deleteSession(\'' + sess.id + '\')" title="Delete session"' +
+            (isDefault && sessionCount > 1 ? ' disabled style="opacity:0.4"' : '') +
+            '>🗑️</button>' +
+          (isDefault && sessionCount > 1 ? '<span class="tooltip">Cannot delete the default session. Select another default first.</span>' : '') +
+        '</div>' +
+      '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
+
+// ─── DEFAULT SESSION LOGIC ───
+function setDefault(serverSlug, sessionId) {
+  var srv = servers[serverSlug];
+  if (srv.sessions.length <= 1) return;
+  var session = srv.sessions.find(function(s){ return s.id === sessionId });
+  if (!session || !session.is_active) {
+    toast('Cannot set inactive session as default.', 'error');
+    return;
+  }
+  if (session.is_default) return;
+  srv.sessions.forEach(function(s){ s.is_default = (s.id === sessionId); });
+  renderSessionsList(srv);
+  toast('★ ' + session.name + ' set as default session for ' + srv.name, 'success');
+}
+
+function deleteSession(sessionId) {
+  var srv = servers[currentServer];
+  var session = srv.sessions.find(function(s){ return s.id === sessionId });
+  if (!session) return;
+
+  // Block deletion of default session when other sessions exist
+  if (session.is_default && srv.sessions.length > 1) {
+    document.getElementById('session-delete-error').textContent = 'The default session cannot be deleted while other sessions exist. Please designate another session as default first.';
+    document.getElementById('session-delete-error').classList.add('visible');
+    return;
+  }
+
+  srv.sessions = srv.sessions.filter(function(s){ return s.id !== sessionId });
+  updateServerRow(currentServer);
+  renderSessionsList(srv);
+  toast('Session "' + session.name + '" deleted.', '');
+}
+
+// ─── SESSION FORM DIALOG (Add / Edit) ───
+function openSessionForm(sessionId) {
+  editingSessionId = sessionId || null;
+  var form = null;
+  var srv = servers[currentServer];
+
+  if (sessionId) {
+    // Edit existing session
+    var existing = srv.sessions.find(function(s){ return s.id === sessionId });
+    if (!existing) return;
+    document.getElementById('session-form-title').textContent = 'Edit Session';
+    form = {
+      name: existing.name,
+      description: existing.description || '',
+      auth_type: existing.auth_type,
+      is_active: existing.is_active,
+      api_key_value: existing.auth_type === 'api_key' ? '__saved__' : '',
+      api_key_as_bearer: false,
+      bearer_token_value: existing.auth_type === 'bearer_token' ? '__saved__' : '',
+      basic_auth_username: existing.auth_type === 'basic_auth' ? '__saved__' : '',
+      basic_auth_password: existing.auth_type === 'basic_auth' ? '__saved__' : '',
+      oauth2_authenticated: false,
+      oauth_metadata_url: '',
+      oauth_authorization_url: '',
+      oauth_token_url: '',
+      oauth_client_id: '',
+      oauth_client_secret: '',
+      oauth_scope: ''
+    };
+  } else {
+    // Create new session
+    document.getElementById('session-form-title').textContent = 'Add Session';
+    form = JSON.parse(JSON.stringify(defaultSessionForm));
+  }
+
+  document.getElementById('session-form-error').textContent = '';
+  document.getElementById('session-form-error').classList.remove('visible');
+  renderSessionForm(srv, form);
+  document.getElementById('btn-save-session').onclick = function(){ saveSession(); };
+  document.getElementById('modal-session-form').classList.add('open');
+}
+
+function renderSessionForm(srv, form) {
+  var body = document.getElementById('session-form-body');
+  var html = '';
+
+  // Name
+  html += '<div class="form-group"><label>Name <span style="color:var(--error)">*</span></label>' +
+    '<input class="form-control" id="sf-name" value="' + esc(form.name) + '" placeholder="Session name">' +
+    '</div>';
+
+  // Description
+  html += '<div class="form-group"><label>Description</label>' +
+    '<textarea class="form-control" id="sf-desc" rows="2" placeholder="Optional description...">' + esc(form.description) + '</textarea>' +
+    '</div>';
+
+  // Auth type dropdown with info icon
+  html += '<div class="auth-row">' +
+    '<div class="form-group">' +
+    '<label>Auth Type</label>' +
+    '<select class="form-control" id="sf-auth-type" onchange="onAuthTypeChange()">';
+  AUTH_TYPES.forEach(function(at){
+    html += '<option value="' + at + '"' + (form.auth_type === at ? ' selected' : '') + '>' + AUTH_LABELS[at] + '</option>';
+  });
+  html += '</select></div>' +
+    '<div class="info-icon-wrap" style="padding-bottom:8px">' +
+    '<span class="info-icon" id="sf-auth-info">?</span>' +
+    '<span class="info-tip" id="sf-auth-tip">' + AUTH_DESCS[form.auth_type] + '</span>' +
+    '</div></div>';
+
+  // is_active toggle
+  html += '<div class="form-group mt-2">' +
+    '<label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">' +
+    '<input type="checkbox" id="sf-is-active" ' + (form.is_active ? 'checked' : '') + ' onchange="updateActiveLabel()">' +
+    '<span class="toggle-slider"></span>' +
+    '<span id="sf-active-label" style="font-size:13px;color:var(--text-primary);text-transform:none;letter-spacing:normal;font-weight:400">' +
+    (form.is_active ? 'Active' : 'Inactive') + '</span>' +
+    '</label>' +
+    '</div>';
+
+  html += '<div class="divider" style="height:1px;background:var(--border);margin:16px 0"></div>';
+
+  // Credential fields by auth type
+  var at = form.auth_type;
+
+  if (at === 'api_key') {
+    html += renderApiKeyFields(form);
+  } else if (at === 'bearer_token') {
+    html += renderBearerTokenFields(form);
+  } else if (at === 'basic_auth') {
+    html += renderBasicAuthFields(form);
+  } else if (at === 'oauth2') {
+    html += renderOAuth2Fields(form);
+  } else if (at === 'none') {
+    html += '<div class="alert-info"><span>🔓</span><span>No authentication is required for this MCP server.</span></div>';
+  } else if (at === 'passthrough') {
+    html += '<div class="alert-info"><span>🔗</span><span>Credentials are forwarded from the calling agent identity. No server-side credentials are stored on this session.</span></div>';
+  }
+
+  // Save button callback
+  html += '<div id="sf-credential-fields">';
+  body.innerHTML = html;
+
+  // Store form state globally for save
+  window._sfForm = form;
+}
+
+function esc(str) { return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderApiKeyFields(form) {
+  var isSaved = form.api_key_value === '__saved__';
+  var html = '';
+  if (isSaved) {
+    html += '<div class="credential-saved">' +
+      '<span>🔒</span><span class="placeholder-dots">●●●●●●●●</span>' +
+      '<span class="text-xs">API key is stored securely</span>' +
+      '</div>';
+    html += '<div class="form-group"><label>API Key</label>' +
+      '<input class="form-control" type="password" id="sf-api-key" value="" placeholder="Leave blank to keep current key">' +
+      '<div class="form-hint">Enter a new value to update; leave blank to keep the current key.</div></div>';
+  } else {
+    html += '<div class="form-group"><label>API Key</label>' +
+      '<input class="form-control" type="password" id="sf-api-key" value="' + esc(form.api_key_value) + '" placeholder="sk-...">' +
+      '<div class="form-hint">The API key will be sent as <code>X-API-Key</code> header by default.</div></div>';
+  }
+  html += '<div class="form-group">' +
+    '<label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">' +
+    '<input type="checkbox" id="sf-api-as-bearer" ' + (form.api_key_as_bearer ? 'checked' : '') + '>' +
+    '<span class="toggle-slider"></span>' +
+    '<span style="font-size:13px;color:var(--text-primary);text-transform:none;letter-spacing:normal;font-weight:400">Send as Bearer token</span>' +
+    '</label>' +
+    '<div class="form-hint">When enabled, the API key will be sent as <code>Authorization: Bearer &lt;key&gt;</code> instead of <code>X-API-Key</code>.</div>' +
+    '</div>';
+  return html;
+}
+
+function renderBearerTokenFields(form) {
+  var isSaved = form.bearer_token_value === '__saved__';
+  var html = '';
+  if (isSaved) {
+    html += '<div class="credential-saved">' +
+      '<span>🔒</span><span class="placeholder-dots">●●●●●●●●●●●●</span>' +
+      '<span class="text-xs">Bearer token is stored securely</span>' +
+      '</div>';
+    html += '<div class="form-group"><label>Bearer Token</label>' +
+      '<input class="form-control" type="password" id="sf-bearer-token" value="" placeholder="Leave blank to keep current token">' +
+      '<div class="form-hint">Enter a new value to update; leave blank to keep the current token.</div></div>';
+  } else {
+    html += '<div class="form-group"><label>Bearer Token</label>' +
+      '<input class="form-control" type="password" id="sf-bearer-token" value="' + esc(form.bearer_token_value) + '" placeholder="Enter Bearer token...">' +
+      '<div class="form-hint">The token will be sent as <code>Authorization: Bearer &lt;token&gt;</code> header.</div></div>';
+  }
+  return html;
+}
+
+function renderBasicAuthFields(form) {
+  var isSaved = form.basic_auth_username === '__saved__';
+  var html = '';
+  if (isSaved) {
+    html += '<div class="credential-saved">' +
+      '<span>🔒</span><span class="placeholder-dots">●●●●●●●●</span>' +
+      '<span class="text-xs">Credentials are stored securely</span>' +
+      '</div>';
+    html += '<div class="form-group"><label>Username</label>' +
+      '<input class="form-control" id="sf-basic-user" value="" placeholder="Leave blank to keep current">' +
+      '</div>';
+    html += '<div class="form-group"><label>Password</label>' +
+      '<input class="form-control" type="password" id="sf-basic-pass" value="" placeholder="Leave blank to keep current">' +
+      '<div class="form-hint">Enter new values to update; leave blank to keep current credentials.</div></div>';
+  } else {
+    html += '<div class="form-group"><label>Username</label>' +
+      '<input class="form-control" id="sf-basic-user" value="' + esc(form.basic_auth_username) + '" placeholder="Username">' +
+      '</div>';
+    html += '<div class="form-group"><label>Password</label>' +
+      '<input class="form-control" type="password" id="sf-basic-pass" value="' + esc(form.basic_auth_password) + '" placeholder="Password">' +
+      '<div class="form-hint">Credentials are sent as HTTP Basic Auth header.</div></div>';
+  }
+  return html;
+}
+
+function renderOAuth2Fields(form) {
+  var html = '';
+  html += '<div class="alert-info"><span>🔐</span><span>Click the button below to authenticate with the OAuth 2.0 provider. A popup window will guide you through the authorization flow.</span></div>';
+
+  // Authenticate button
+  html += '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:14px" onclick="simulateOAuth()">' +
+    '🔑 Authenticate with OAuth 2.0</button>';
+
+  // Auto-discovery toggle
+  var autoDiscovery = typeof window._sfAutoDiscovery === 'undefined' ? true : window._sfAutoDiscovery;
+  html += '<div class="form-group">' +
+    '<label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">' +
+    '<input type="checkbox" id="sf-oauth-auto" ' + (autoDiscovery ? 'checked' : '') + ' onchange="toggleOAuthManual()">' +
+    '<span class="toggle-slider"></span>' +
+    '<span style="font-size:13px;color:var(--text-primary);text-transform:none;letter-spacing:normal;font-weight:400">Auto-discovery</span>' +
+    '</label>' +
+    '<div class="form-hint">When enabled, OAuth 2.0 endpoints are automatically discovered from the server\'s metadata URL. Disable to configure endpoints manually.</div>' +
+    '</div>';
+
+  // Collapsible manual config
+  html += '<div id="oauth-manual-config" class="collapsible-content' + (autoDiscovery ? '' : ' open') + '">';
+  html += '<div class="collapsible-card">';
+  html += '<div class="form-group"><label>Metadata URL</label><input class="form-control" id="sf-oauth-metadata" value="' + esc(form.oauth_metadata_url) + '" placeholder="https://..."><div class="form-hint">OAuth 2.0 server metadata discovery endpoint.</div></div>';
+  html += '<div class="form-group"><label>Authorization URL</label><input class="form-control" id="sf-oauth-auth-url" value="' + esc(form.oauth_authorization_url) + '" placeholder="https://..."></div>';
+  html += '<div class="form-group"><label>Token URL</label><input class="form-control" id="sf-oauth-token-url" value="' + esc(form.oauth_token_url) + '" placeholder="https://..."></div>';
+  html += '<div class="form-row">' +
+    '<div class="form-group"><label>Client ID</label><input class="form-control" id="sf-oauth-client-id" value="' + esc(form.oauth_client_id) + '" placeholder="client_id"></div>' +
+    '<div class="form-group"><label>Client Secret</label><input class="form-control" type="password" id="sf-oauth-client-secret" value="' + esc(form.oauth_client_secret) + '" placeholder="client_secret"></div>' +
+    '</div>';
+  html += '<div class="form-group"><label>Scope</label><input class="form-control" id="sf-oauth-scope" value="' + esc(form.oauth_scope) + '" placeholder="openid profile"></div>';
+  html += '</div></div>';
+
+  html += '<div class="text-xs text-secondary mt-2">Note: OAuth 2.0 sessions automatically refresh tokens before expiry. You can also trigger a manual refresh from the sessions list.</div>';
+  return html;
+}
+
+function onAuthTypeChange() {
+  var sel = document.getElementById('sf-auth-type');
+  if (!sel) return;
+  var newType = sel.value;
+  var tip = document.getElementById('sf-auth-tip');
+  if (tip) tip.textContent = AUTH_DESCS[newType];
+
+  // Rebuild credential section
+  var form = window._sfForm || JSON.parse(JSON.stringify(defaultSessionForm));
+  form.auth_type = newType;
+  window._sfForm = form;
+  refreshCredentialSection(form);
+}
+
+function refreshCredentialSection(form) {
+  var at = form.auth_type;
+  var wrap = document.getElementById('sf-credential-fields');
+  if (!wrap) return;
+  if (at === 'api_key') {
+    wrap.innerHTML = renderApiKeyFields(form);
+  } else if (at === 'bearer_token') {
+    wrap.innerHTML = renderBearerTokenFields(form);
+  } else if (at === 'basic_auth') {
+    wrap.innerHTML = renderBasicAuthFields(form);
+  } else if (at === 'oauth2') {
+    wrap.innerHTML = renderOAuth2Fields(form);
+  } else if (at === 'none') {
+    wrap.innerHTML = '<div class="alert-info"><span>🔓</span><span>No authentication is required for this MCP server.</span></div>';
+  } else if (at === 'passthrough') {
+    wrap.innerHTML = '<div class="alert-info"><span>🔗</span><span>Credentials are forwarded from the calling agent identity. No server-side credentials are stored on this session.</span></div>';
+  }
+}
+
+function toggleOAuthManual() {
+  var cb = document.getElementById('sf-oauth-auto');
+  window._sfAutoDiscovery = cb ? cb.checked : true;
+  var panel = document.getElementById('oauth-manual-config');
+  if (panel) {
+    panel.classList.toggle('open', !cb.checked);
+  }
+}
+
+function updateActiveLabel() {
+  var cb = document.getElementById('sf-is-active');
+  var label = document.getElementById('sf-active-label');
+  if (label) label.textContent = cb && cb.checked ? 'Active' : 'Inactive';
+}
+
+function simulateOAuth() {
+  toast('🔄 OAuth 2.0 popup flow would open here. Session would be created upon successful authorization.', 'success');
+}
+
+function getSessionFormData() {
+  var isEdit = !!editingSessionId;
+  var f = {
+    name: (document.getElementById('sf-name') || {}).value || '',
+    description: (document.getElementById('sf-desc') || {}).value || '',
+    auth_type: (document.getElementById('sf-auth-type') || {}).value || 'api_key',
+    is_active: (document.getElementById('sf-is-active') || {}).checked || false
+  };
+
+  // For edit, if credential fields show __saved__, leave unchanged
+  if (f.auth_type === 'api_key') {
+    f.api_key_value = (document.getElementById('sf-api-key') || {}).value || '';
+    f.api_key_as_bearer = (document.getElementById('sf-api-as-bearer') || {}).checked || false;
+    if (isEdit && !f.api_key_value) f.api_key_value = '__saved__';
+  }
+  if (f.auth_type === 'bearer_token') {
+    f.bearer_token_value = (document.getElementById('sf-bearer-token') || {}).value || '';
+    if (isEdit && !f.bearer_token_value) f.bearer_token_value = '__saved__';
+  }
+  if (f.auth_type === 'basic_auth') {
+    f.basic_auth_username = (document.getElementById('sf-basic-user') || {}).value || '';
+    f.basic_auth_password = (document.getElementById('sf-basic-pass') || {}).value || '';
+    if (isEdit && !f.basic_auth_username) f.basic_auth_username = '__saved__';
+  }
+  if (f.auth_type === 'oauth2') {
+    f.oauth_metadata_url = (document.getElementById('sf-oauth-metadata') || {}).value || '';
+    f.oauth_authorization_url = (document.getElementById('sf-oauth-auth-url') || {}).value || '';
+    f.oauth_token_url = (document.getElementById('sf-oauth-token-url') || {}).value || '';
+    f.oauth_client_id = (document.getElementById('sf-oauth-client-id') || {}).value || '';
+    f.oauth_client_secret = (document.getElementById('sf-oauth-client-secret') || {}).value || '';
+    f.oauth_scope = (document.getElementById('sf-oauth-scope') || {}).value || '';
+  }
+  return f;
+}
+
+function saveSession() {
+  var f = getSessionFormData();
+  if (!f.name.trim()) {
+    document.getElementById('session-form-error').textContent = 'Name is required.';
+    document.getElementById('session-form-error').classList.add('visible');
+    return;
+  }
+
+  var srv = servers[currentServer];
+  if (editingSessionId) {
+    // Update existing
+    var sess = srv.sessions.find(function(s){ return s.id === editingSessionId });
+    if (sess) {
+      sess.name = f.name;
+      sess.description = f.description;
+      sess.auth_type = f.auth_type;
+      sess.is_active = f.is_active;
+    }
+  } else {
+    // Create new
+    var wasEmpty = srv.sessions.length === 0;
+    var newId = 's' + Date.now();
+    srv.sessions.push({
+      id: newId, name: f.name, description: f.description,
+      auth_type: f.auth_type, is_active: f.is_active,
+      is_default: wasEmpty // auto-default for first session
+    });
+    if (wasEmpty) {
+      toast('Session added. Default automatically set — sync is now available.', 'success');
+    } else {
+      toast('Session "' + f.name + '" added.', '');
+    }
+  }
+
+  updateServerRow(currentServer);
+  renderSessionsList(srv);
+  closeSessionForm();
+}
+
+function closeSessionForm() {
+  editingSessionId = null;
+  window._sfForm = null;
+  window._sfAutoDiscovery = true;
+  document.getElementById('modal-session-form').classList.remove('open');
+}
+
+// ─── UPDATE SERVER ROW ───
+function updateServerRow(serverSlug) {
+  var srv = servers[serverSlug];
+  var row = document.getElementById('row-' + serverSlug);
+  if (!row) return;
+  row.setAttribute('data-sessions', srv.sessions.length);
+  var sessionCell = row.querySelectorAll('td')[4];
+  if (sessionCell) {
+    sessionCell.innerHTML = srv.sessions.length === 0
+      ? '<span class="chip chip-gray">0 sessions</span>'
+      : '<span>' + srv.sessions.length + ' sessions</span>';
+  }
+
+  // Update sync button state
+  var syncWrap = document.getElementById('wrap-sync-' + serverSlug);
+  if (!syncWrap) {
+    // Find the actions cell and look for the sync button
+    var actionsCell = row.querySelector('.actions-cell');
+    if (!actionsCell) return;
+    var btns = actionsCell.querySelectorAll('button');
+    btns.forEach(function(btn){
+      if (btn.textContent.indexOf('Sync') >= 0) {
+        if (srv.sessions.length === 0) {
+          btn.disabled = true;
+          btn.style.opacity = '0.4';
+        } else {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+        }
+      }
+    });
+  }
+}
+
+// ─── SYNC ───
+function runSync(serverSlug) {
+  var srv = servers[serverSlug];
+  if (srv.sessions.length === 0) {
+    toast('Cannot sync: no sessions configured. Add a session first.', 'error');
+    return;
+  }
+  var lastSyncCell = document.querySelector('#row-' + serverSlug + ' td:nth-child(6)');
+  if (lastSyncCell) {
+    lastSyncCell.innerHTML = '<span style="color:var(--info)">Syncing...</span>';
+  }
+  setTimeout(function() {
+    if (lastSyncCell) {
+      lastSyncCell.innerHTML = '<span class="text-secondary">Just now</span><div class="text-xs" style="color:var(--success);margin-top:2px">14 tools discovered</div>';
+    }
+    var statusCell = document.querySelector('#row-' + serverSlug + ' td:nth-child(4)');
+    if (statusCell) {
+      statusCell.innerHTML = '<span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span>';
+    }
+    toast('Sync complete — 14 tools discovered from ' + srv.name, 'success');
+  }, 1200);
+}
+
+function retrySync(serverSlug) {
+  var srv = servers[serverSlug];
+  if (srv.sessions.length === 0) return;
+  if (supabaseRetrying) return;
+  supabaseRetrying = true;
+  var btn = document.querySelector('#row-supabase-mcp .actions-cell button');
+  if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; }
+  var lastSyncCell = document.querySelector('#row-supabase-mcp td:nth-child(6)');
+  if (lastSyncCell) {
+    lastSyncCell.innerHTML = '<span style="color:var(--info)">Retrying sync...</span>';
+  }
+  setTimeout(function() {
+    supabaseRetrying = false;
+    if (btn) { btn.textContent = '🔄 Retry Sync'; btn.disabled = false; }
+    if (lastSyncCell) {
+      lastSyncCell.innerHTML = '<span class="text-secondary">Just now</span><div class="text-xs" style="color:var(--success);margin-top:2px">8 tools discovered</div>';
+    }
+    var row = document.getElementById('row-supabase-mcp');
+    var statusCell = row.querySelectorAll('td')[3];
+    if (statusCell) {
+      statusCell.innerHTML = '<span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span>';
+    }
+    row.setAttribute('data-status', 'active');
+    servers['supabase-mcp'].status = 'active';
+    toast('Retry successful! 8 tools discovered from Supabase MCP. Server is now active.', 'success');
+  }, 2000);
+}
+
+// ─── MODALS ───
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// ─── TOAST ───
+function toast(msg, type) {
+  var container = document.getElementById('toast-container');
+  var t = document.createElement('div');
+  t.className = 'toast' + (type === 'success' ? ' toast-success' : (type === 'error' ? ' toast-error' : ''));
+  t.textContent = msg;
+  container.appendChild(t);
+  setTimeout(function() {
+    t.style.opacity = '0';
+    t.style.transition = 'opacity 0.3s';
+    setTimeout(function() { t.remove(); }, 300);
+  }, 3000);
+}
+
+// ─── OVERLAY CLICK TO CLOSE ───
+document.addEventListener('click', function(e) {
+  ['modal-sessions', 'modal-session-form', 'modal-server-form'].forEach(function(id){
+    var overlay = document.getElementById(id);
+    if (e.target === overlay && overlay.classList.contains('open')) {
+      if (id === 'modal-session-form') closeSessionForm();
+      else closeModal(id);
+    }
+  });
+});
+</script>
+</body>
+</html>
