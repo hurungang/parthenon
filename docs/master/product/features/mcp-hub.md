@@ -14,6 +14,8 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - Synchronizes available tools from each server into a central repository
 - Supports multiple named sessions per server, each with identity and credential binding
 - **Supports "passthrough" session type:** Admins can designate an MCP server as passthrough, enabling direct agent identity propagation (no explicit session selection required)
+- Supports designating a default session per server for predictable tool routing
+- Automatically treats a server's sole session as the default, requiring no manual action
 - Maps sessions or passthrough configuration to agent identities or roles for secure tool access
 
 
@@ -21,7 +23,8 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 ## Key Concepts
 - **MCP Server**: An external tool hub registered with Parthenon
 - **Tool Sync**: Importing and updating available tools from MCP servers
-- **Session Management**: Creating and managing named sessions with identity bindings, or configuring passthrough session type for compatible servers
+- **Session Management**: Creating and managing named sessions with identity bindings, or configuring passthrough session type for compatible servers. Supports designating one session per server as the default for predictable tool routing and sync behavior.
+- **Default Session**: The session used for sync and tool calls when no specific session is specified. Each MCP server has exactly one default session — explicitly set by the admin, or automatically assigned when only one session exists.
 - **Passthrough Session**: A session type where agent identity is automatically forwarded to the MCP server, eliminating manual session selection
 - **Credential Binding**: Associating credentials with sessions for secure access (not required for passthrough)
 - **Session-to-Role Mapping**: Assigning sessions or passthrough configuration to specific agent roles or identities
@@ -30,9 +33,14 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 
 ## Acceptance Criteria
 - Admins can register MCP servers and view their status
+- The MCP server list shows exactly one System entry, visually distinct from user-registered servers
 - Admins can configure an MCP server to use a passthrough session type (no explicit session selection required)
 - All available tools are synchronized and listed in the platform
+- Sync succeeds when tools/list works, even if the initialize handshake has warnings
+- The sync action is only available when at least one session is configured for the server
 - Sessions can be created, named, and bound to identities or roles, or passthrough can be enabled for compatible servers
+- Admins can designate a default session; sole sessions are automatically the default
+- The default session is visibly indicated and used for sync and tool calls
 - Credentials are securely managed and auditable (where applicable)
 - Tool usage is tracked per session or passthrough configuration and accessible for audit
 - When passthrough is enabled, agent identity is automatically forwarded to the MCP server

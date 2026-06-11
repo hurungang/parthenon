@@ -214,6 +214,7 @@ erDiagram
         json identity_binding
         json credential_config
         boolean is_active
+        boolean is_default
         datetime created_at
         datetime updated_at
     }
@@ -238,6 +239,7 @@ erDiagram
 **Business rules:**
 - `passthrough` sessions forward the executing agent's identity to the MCP server at call time; no credentials are stored or required.
 - `slug` is the canonical routing namespace for MCP tools and must be globally unique.
+- At most one `McpSession` per `McpServer` may be marked `is_default = true`; a sole session is automatically treated as default.
 
 **Source**: `backend/app/db/models/mcp_hub.py`
 

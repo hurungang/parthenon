@@ -424,6 +424,12 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 .empty-state{text-align:center;padding:48px 24px;color:var(--text-secondary)}
 .empty-state .empty-icon{font-size:40px;margin-bottom:12px}
 .divider{height:1px;background:var(--border);margin:16px 0}
+
+/* Tooltip on hover */
+.tooltip-wrap{position:relative;display:inline-flex}
+.tooltip-wrap:hover .tooltip{display:block!important}
+.tooltip-wrap .tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;padding:5px 10px;border-radius:4px;white-space:nowrap;z-index:500;pointer-events:none}
+.tooltip-wrap .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1E293B}
 .text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
 .font-mono{font-family:'Courier New',monospace}
 .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1062,9 +1068,19 @@ strong{font-weight:600}
 <!-- ═══════════════════════════════ VIEW: MCP HUB ═══════════════════════════════ -->
 <div id="view-mcp-hub" class="view">
   <div class="view-header">
-    <div><h2>MCP Hub</h2><div class="view-desc">Integrated view of Model Context Protocol servers and tools</div></div>
-    <button class="btn btn-primary" onclick="openModal('modal-mcp-server')">+ Register Server</button>
+    <div><h2>MCP Hub</h2><div class="view-desc">Manage Model Context Protocol servers, sessions, and synced tools</div></div>
+    <button class="btn btn-primary" onclick="mcpOpenServerForm()">+ Register Server</button>
   </div>
+
+  <!-- System entry contextual notice -->
+  <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:var(--radius);background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.12);margin-bottom:18px">
+    <span style="font-size:18px;flex-shrink:0">💡</span>
+    <div>
+      <strong style="font-size:13px;color:var(--text-primary)">About the System entry</strong>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:2px">The <strong>System</strong> entry represents Parthenon's built-in platform tools. It is shown only once, is not editable or deletable, and cannot be synced from this view.</p>
+    </div>
+  </div>
+
   <div class="tabs">
     <div class="tab active" onclick="switchTab(this,'mcp-servers-panel')">🔌 Servers</div>
     <div class="tab" onclick="switchTab(this,'mcp-tools-panel')">🛠️ Tool Repository</div>
@@ -1073,48 +1089,77 @@ strong{font-weight:600}
   <div id="mcp-servers-panel" class="tab-panel active">
     <!-- Server List -->
     <div class="table-wrap">
-      <table>
+      <table id="mcp-servers-table">
         <thead><tr>
-          <th>Slug</th><th>Name</th><th>URL</th><th>Auth Type</th><th>Status</th><th>Last Sync</th><th>Actions</th>
+          <th>Server</th><th>Slug</th><th>URL</th><th>Status</th><th>Sessions</th><th>Last Sync</th><th>Actions</th>
         </tr></thead>
         <tbody>
-          <tr>
-            <td><span class="font-mono text-sm">filesystem</span></td>
+          <!-- SYSTEM ENTRY (built-in, slug "system") -->
+          <tr id="mcp-row-system" data-type="system">
+            <td>
+              <span style="display:flex;align-items:center;gap:8px">
+                <strong>System</strong>
+                <span class="chip chip-red" style="background:#FEE2E2;color:#B91C1C;border:1px solid #FECACA">⚡ Built-in</span>
+              </span>
+            </td>
+            <td><span class="font-mono text-sm">system</span></td>
+            <td><span class="text-secondary text-xs">—</span></td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span class="text-secondary">—</span></td>
+            <td><span class="text-secondary">—</span></td>
+            <td class="actions-cell">
+              <span class="text-secondary text-xs" style="opacity:0.7">System managed</span>
+            </td>
+          </tr>
+
+          <!-- filesystem — 3 sessions, active -->
+          <tr id="mcp-row-filesystem" data-server="filesystem" data-sessions="3">
             <td><strong>File System Tools</strong></td>
+            <td><span class="font-mono text-sm">filesystem</span></td>
             <td><span class="font-mono text-sm text-secondary">http://mcp-fs:8000</span></td>
-            <td><span class="chip chip-gray">API Key</span></td>
-            <td><span class="chip chip-green">● Active</span></td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span>3 sessions</span></td>
             <td class="text-secondary">2 min ago</td>
             <td class="actions-cell">
-              <button class="btn btn-xs btn-secondary" title="Sync">🔄 Sync</button>
-              <button class="btn btn-xs btn-secondary" onclick="openModal('modal-sessions')" title="Sessions">Sessions</button>
-              <button class="btn-icon-sm">🗑️</button>
+              <button class="btn btn-xs btn-secondary" onclick="mcpSync('filesystem')" title="Sync tools from server">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="mcpOpenSessions('filesystem')" title="Manage sessions">⚙️ Sessions</button>
+              <button class="btn-icon-sm" title="Edit server">✏️</button>
             </td>
           </tr>
-          <tr>
-            <td><span class="font-mono text-sm">github</span></td>
+
+          <!-- github — 0 sessions, sync disabled -->
+          <tr id="mcp-row-github" data-server="github" data-sessions="0">
             <td><strong>GitHub Integration</strong></td>
+            <td><span class="font-mono text-sm">github</span></td>
             <td><span class="font-mono text-sm text-secondary">http://mcp-github:8001</span></td>
-            <td><span class="chip chip-blue">OAuth2</span></td>
-            <td><span class="chip chip-green">● Active</span></td>
-            <td class="text-secondary">5 min ago</td>
+            <td><span class="chip chip-green"><span class="status-dot dot-green"></span> Active</span></td>
+            <td><span class="chip chip-gray">0 sessions</span></td>
+            <td class="text-secondary">Never</td>
             <td class="actions-cell">
-              <button class="btn btn-xs btn-secondary">🔄 Sync</button>
-              <button class="btn btn-xs btn-secondary" onclick="openSessions('github')">Sessions</button>
-              <button class="btn-icon-sm">🗑️</button>
+              <span class="tooltip-wrap" style="display:inline-flex">
+                <button class="btn btn-xs btn-secondary" disabled style="opacity:0.4">🔄 Sync</button>
+                <span class="tooltip" style="position:absolute;bottom:calc(100%+6px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;padding:5px 10px;border-radius:4px;white-space:nowrap;z-index:500;display:none">Add a session before syncing</span>
+              </span>
+              <button class="btn btn-xs btn-secondary" onclick="mcpOpenSessions('github')">⚙️ Sessions</button>
+              <button class="btn-icon-sm">✏️</button>
             </td>
           </tr>
-          <tr>
-            <td><span class="font-mono text-sm">slack-tools</span></td>
+
+          <!-- slack-tools — 2 sessions, warning, sync enabled -->
+          <tr id="mcp-row-slack-tools" data-server="slack-tools" data-sessions="2">
             <td><strong>Slack Notifications</strong></td>
+            <td><span class="font-mono text-sm">slack-tools</span></td>
             <td><span class="font-mono text-sm text-secondary">http://mcp-slack:8002</span></td>
-            <td><span class="chip chip-gray">Bearer Token</span></td>
-            <td><span class="chip chip-yellow">⚠ Warning</span></td>
-            <td class="text-secondary">1 hour ago</td>
+            <td><span class="chip chip-yellow"><span class="status-dot dot-yellow"></span> Warning</span></td>
+            <td><span>2 sessions</span></td>
+            <td>
+              <span class="text-secondary">1 hour ago</span>
+              <div class="text-xs" style="color:var(--warning);margin-top:2px">initialize handshake issues — 6 tools</div>
+            </td>
             <td class="actions-cell">
-              <button class="btn btn-xs btn-secondary">🔄 Sync</button>
-              <button class="btn btn-xs btn-secondary" onclick="openSessions('slack-tools')">Sessions</button>
-              <button class="btn-icon-sm">🗑️</button>
+              <button class="btn btn-xs btn-secondary" onclick="mcpSync('slack-tools')">🔄 Sync</button>
+              <button class="btn btn-xs btn-secondary" onclick="mcpOpenSessions('slack-tools')">⚙️ Sessions</button>
+              <button class="btn-icon-sm">✏️</button>
             </td>
           </tr>
         </tbody>
@@ -3555,25 +3600,313 @@ function closeModalIfOverlay(event, modalId) {
   if (event.target === event.currentTarget) closeModal(modalId);
 }
 
-// ═══════════════════════════════ SESSIONS DRAWER ═══════════════════════════════
-function openSessions(serverSlug) {
-  document.getElementById('drawer-sessions-title').textContent = 'Sessions — ' + serverSlug;
-  document.getElementById('drawer-overlay').classList.add('open');
-  document.getElementById('drawer-sessions').classList.add('open');
-  document.getElementById('add-session-form').style.display = 'none';
+// ═══════════════════════════════ MCP HUB ═══════════════════════════════
+var MCP_SESSIONS = {
+  'filesystem': [
+    { id:'fs1', name:'Production File Access', auth_type:'api_key', is_active:true, is_default:true, description:'Production environment file tools' },
+    { id:'fs2', name:'Staging File Access', auth_type:'api_key', is_active:true, is_default:false, description:'' },
+    { id:'fs3', name:'Passthrough Agent', auth_type:'passthrough', is_active:true, is_default:false, description:'Forward agent identity JWT' }
+  ],
+  'github': [],
+  'slack-tools': [
+    { id:'sl1', name:'Slack Webhook', auth_type:'bearer_token', is_active:true, is_default:true, description:'' },
+    { id:'sl2', name:'Slack OAuth', auth_type:'oauth2', is_active:true, is_default:false, description:'OAuth-based Slack access' }
+  ]
+};
+var MCP_AUTH_LABELS = { api_key:'API Key', bearer_token:'Bearer Token', basic_auth:'Basic Auth', oauth2:'OAuth 2.0', none:'No Auth', passthrough:'Passthrough' };
+var MCP_AUTH_DESCS = {
+  api_key:'Authenticate using an API key sent as a header.',
+  bearer_token:'Authenticate using a static Bearer token.',
+  basic_auth:'Authenticate using HTTP Basic Authentication (username + password).',
+  oauth2:'Authenticate using OAuth 2.0 authorization code flow with automatic token refresh.',
+  none:'No authentication is required for this MCP server.',
+  passthrough:'Credentials are forwarded from the calling agent identity. No server-side credentials are stored.'
+};
+var mcpCurrentServer = '';
+var mcpEditingSessionId = null;
+
+function mcpOpenSessions(slug) {
+  mcpCurrentServer = slug;
+  var sessions = MCP_SESSIONS[slug] || [];
+  document.getElementById('modal-sessions-title').textContent = 'Sessions — ' + slug;
+  mcpRenderSessionsList(sessions);
+  document.getElementById('btn-add-session-modal').onclick = function(){ mcpOpenSessionForm(null); };
+  openModal('modal-sessions');
 }
 
-function closeSessions() {
-  document.getElementById('drawer-overlay').classList.remove('open');
-  document.getElementById('drawer-sessions').classList.remove('open');
+function mcpRenderSessionsList(sessions) {
+  var body = document.getElementById('modal-sessions-body');
+  var n = sessions.length;
+  var autoDefault = n === 1;
+
+  if (n === 0) {
+    body.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div style="font-weight:600;color:var(--text-primary)">No sessions configured</div><div style="font-size:12px;color:var(--text-secondary)">Add at least one session to enable syncing.</div></div>';
+    return;
+  }
+
+  var h = '<div id="session-delete-error-msg" style="font-size:11px;color:var(--error);display:none;margin-bottom:8px"></div>';
+
+  if (autoDefault) {
+    h += '<div class="alert alert-info" style="margin-bottom:12px"><span style="margin-right:6px">💡</span>Only one session exists — it is automatically treated as the default. Add more sessions to choose a different default.</div>';
+  } else {
+    h += '<div class="alert alert-info" style="margin-bottom:12px"><span style="margin-right:6px">★</span>Select one session as the default. The default session is used for sync operations and tool routing.</div>';
+  }
+
+  h += '<div class="table-wrap"><table><thead><tr>' +
+    '<th style="width:36px"></th><th>Name</th><th>Auth Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+
+  sessions.forEach(function(s){
+    var isD = s.is_default || autoDefault;
+    var radioCls = '';
+    if (isD) radioCls = autoDefault ? 'style="border-color:#C4B5FD;background:transparent" title="Auto-default (sole session)"' : 'style="border-color:#2563EB;background:#2563EB" title="Current default"';
+    h += '<tr>' +
+      '<td><div style="width:18px;height:18px;border-radius:50%;border:2px solid ' + (isD ? (autoDefault ? '#C4B5FD' : '#2563EB') : '#E0E0E0') + ';flex-shrink:0;cursor:' + (autoDefault || !s.is_active ? 'default' : 'pointer') + ';position:relative;display:inline-block;' + (isD && !autoDefault ? 'background:#2563EB' : '') + '" ' +
+        (autoDefault || !s.is_active ? '' : 'onclick="mcpSetDefault(\'' + s.id + '\')"') + '>' +
+        (isD ? '<span style="position:absolute;width:6px;height:6px;border-radius:50%;background:#fff;top:4px;left:4px"></span>' : '') +
+        '</div></td>' +
+      '<td><span style="font-weight:500">' + s.name + '</span>' +
+        (isD ? ' <span class="chip chip-purple" style="font-size:9px;padding:1px 6px">Default</span>' : '') +
+        (s.description ? '<div style="font-size:11px;color:var(--text-secondary)">' + s.description + '</div>' : '') + '</td>' +
+      '<td>' + MCP_AUTH_LABELS[s.auth_type] + (s.auth_type === 'passthrough' ? ' <span class="chip chip-blue" style="font-size:10px">passthrough</span>' : '') + '</td>' +
+      '<td>' + (s.is_active ? '<span class="chip chip-green">Active</span>' : '<span class="chip chip-gray">Inactive</span>') + '</td>' +
+      '<td class="actions-cell">' +
+        '<button class="btn-icon-sm" ' + (s.is_default || !s.is_active ? 'disabled' : '') + ' style="' + (s.is_default ? 'color:#6D28D9' : '') + '" onclick="mcpSetDefault(\'' + s.id + '\')" title="' + (s.is_default ? 'Current default' : 'Set as default') + '">★</button>' +
+        '<button class="btn-icon-sm" onclick="mcpOpenSessionForm(\'' + s.id + '\')" title="Edit">✏️</button>' +
+        (isD && n > 1
+          ? '<span class="tooltip-wrap" style="display:inline-flex"><button class="btn-icon-sm" disabled style="opacity:0.35" title="Cannot delete default">🗑️</button><span class="tooltip" style="position:absolute;bottom:calc(100%+6px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;padding:5px 10px;border-radius:4px;white-space:nowrap;z-index:500;display:none">Cannot delete the default. Select another first.</span></span>'
+          : '<button class="btn-icon-sm" onclick="mcpDeleteSession(\'' + s.id + '\')" title="Delete">🗑️</button>') +
+      '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  body.innerHTML = h;
 }
 
-function showAddSession() {
-  document.getElementById('add-session-form').style.display = 'block';
+function mcpSetDefault(sessionId) {
+  var sessions = MCP_SESSIONS[mcpCurrentServer];
+  if (sessions.length <= 1) return;
+  var s = sessions.find(function(x){ return x.id === sessionId });
+  if (!s || !s.is_active) return;
+  if (s.is_default) return;
+  sessions.forEach(function(x){ x.is_default = (x.id === sessionId); });
+  mcpRenderSessionsList(sessions);
+  mcpUpdateServerRow(mcpCurrentServer);
+  // mini toast
+  var container = document.getElementById('toast-container') || document.body;
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;background:#F0FDF4;color:#166534;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:3000;animation:toastIn 0.25s ease';
+  t.textContent = '★ ' + s.name + ' set as default for ' + mcpCurrentServer;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){ t.remove(); },300); },2500);
 }
-function hideAddSession() {
-  document.getElementById('add-session-form').style.display = 'none';
+
+function mcpDeleteSession(sessionId) {
+  var sessions = MCP_SESSIONS[mcpCurrentServer];
+  var s = sessions.find(function(x){ return x.id === sessionId });
+  if (!s) return;
+  if (s.is_default && sessions.length > 1) {
+    document.getElementById('session-delete-error-msg').textContent = 'Cannot delete the default session while other sessions exist. Designate another as default first.';
+    document.getElementById('session-delete-error-msg').style.display = 'block';
+    return;
+  }
+  MCP_SESSIONS[mcpCurrentServer] = sessions.filter(function(x){ return x.id !== sessionId });
+  mcpUpdateServerRow(mcpCurrentServer);
+  mcpRenderSessionsList(MCP_SESSIONS[mcpCurrentServer]);
 }
+
+function mcpUpdateServerRow(slug) {
+  var sessions = MCP_SESSIONS[slug] || [];
+  var row = document.getElementById('mcp-row-' + slug);
+  if (!row) return;
+  row.setAttribute('data-sessions', sessions.length);
+  var tds = row.querySelectorAll('td');
+  if (tds[4]) {
+    tds[4].innerHTML = sessions.length === 0
+      ? '<span class="chip chip-gray">0 sessions</span>'
+      : '<span>' + sessions.length + ' sessions</span>';
+  }
+}
+
+function mcpSync(slug) {
+  var sessions = MCP_SESSIONS[slug] || [];
+  if (sessions.length === 0) {
+    var t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;background:#FEF3C7;color:#92400E;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:3000;animation:toastIn 0.25s ease';
+    t.textContent = 'Cannot sync: no sessions configured. Add a session first.';
+    document.body.appendChild(t);
+    setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){ t.remove(); },300); },2500);
+    return;
+  }
+  var cell = document.querySelector('#mcp-row-' + slug + ' td:nth-child(6)');
+  if (cell) cell.innerHTML = '<span style="color:var(--primary)">Syncing...</span>';
+  setTimeout(function(){
+    if (cell) {
+      cell.innerHTML = '<span class="text-secondary">Just now</span><div class="text-xs" style="color:var(--success);margin-top:2px">8 tools discovered</div>';
+    }
+    var t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;background:#F0FDF4;color:#166534;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:3000;animation:toastIn 0.25s ease';
+    t.textContent = 'Sync complete — 8 tools discovered from ' + slug;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){ t.remove(); },300); },2500);
+  }, 1000);
+}
+
+// ─── SESSION FORM ───
+var mcpFormAutoDiscovery = true;
+
+function mcpOpenSessionForm(sessionId) {
+  mcpEditingSessionId = sessionId || null;
+  var sessions = MCP_SESSIONS[mcpCurrentServer];
+  document.getElementById('session-form-error').style.display = 'none';
+
+  if (sessionId) {
+    var existing = sessions.find(function(s){ return s.id === sessionId });
+    document.getElementById('modal-session-form-title').textContent = 'Edit Session';
+    mcpRenderSessionForm({
+      name: existing ? existing.name : '',
+      description: existing ? (existing.description || '') : '',
+      auth_type: existing ? existing.auth_type : 'api_key',
+      is_active: existing ? existing.is_active : true,
+      is_saved: !!sessionId
+    });
+  } else {
+    document.getElementById('modal-session-form-title').textContent = 'Add Session';
+    mcpRenderSessionForm({
+      name: '', description: '', auth_type: 'api_key', is_active: true, is_saved: false
+    });
+  }
+  document.getElementById('btn-save-session-form').onclick = mcpSaveSession;
+  openModal('modal-session-form');
+}
+
+function mcpRenderSessionForm(f) {
+  var body = document.getElementById('modal-session-form-body');
+  var h = '';
+  h += '<div class="form-group"><label>Name <span style="color:var(--error)">*</span></label><input class="form-control" id="sf-name" value="' + escHtml(f.name) + '" placeholder="Session name"></div>';
+  h += '<div class="form-group"><label>Description</label><textarea class="form-control" id="sf-desc" rows="2" placeholder="Optional...">' + escHtml(f.description) + '</textarea></div>';
+
+  // Auth type + info
+  var authOpts = ['api_key','bearer_token','basic_auth','oauth2','none','passthrough'];
+  h += '<div style="display:flex;align-items:flex-end;gap:8px"><div class="form-group" style="flex:1"><label>Auth Type</label>' +
+    '<select class="form-control" id="sf-auth-type" onchange="mcpOnAuthChange()">';
+  authOpts.forEach(function(at){
+    h += '<option value="' + at + '"' + (f.auth_type === at ? ' selected' : '') + '>' + MCP_AUTH_LABELS[at] + '</option>';
+  });
+  h += '</select></div>' +
+    '<div style="padding-bottom:8px;position:relative"><span style="width:18px;height:18px;border-radius:50%;background:var(--bg);border:1px solid var(--border);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:help" id="sf-auth-info-icon">?</span>' +
+    '<span style="display:none;position:absolute;bottom:calc(100%+4px);right:0;background:#fff;color:var(--text-primary);font-size:11px;padding:6px 10px;border-radius:4px;border:1px solid var(--border);width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:500;line-height:1.4" id="sf-auth-tip">' + MCP_AUTH_DESCS[f.auth_type] + '</span></div></div>';
+
+  // is_active toggle
+  h += '<div class="form-group mt-3"><label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">' +
+    '<input type="checkbox" id="sf-is-active" ' + (f.is_active ? 'checked' : '') + ' onchange="var l=document.getElementById(\'sf-active-lbl\');if(l)l.textContent=this.checked?\'Active\':\'Inactive\'">' +
+    '<span class="toggle-slider"></span><span id="sf-active-lbl" style="font-size:13px;text-transform:none;letter-spacing:0;font-weight:400">' + (f.is_active ? 'Active' : 'Inactive') + '</span></label></div>';
+
+  h += '<div style="height:1px;background:var(--border);margin:16px 0"></div>';
+
+  // Credential fields
+  h += '<div id="sf-creds">' + mcpRenderCredFields(f) + '</div>';
+  body.innerHTML = h;
+
+  // info icon hover
+  var icon = document.getElementById('sf-auth-info-icon');
+  var tip = document.getElementById('sf-auth-tip');
+  if (icon && tip) {
+    icon.onmouseenter = function(){ tip.style.display = 'block'; };
+    icon.onmouseleave = function(){ tip.style.display = 'none'; };
+  }
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function mcpRenderCredFields(f) {
+  var at = f.auth_type;
+  if (at === 'api_key') {
+    var h = f.is_saved
+      ? '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px dashed var(--border);border-radius:4px;color:var(--text-secondary);font-size:12px;margin-bottom:12px"><span>🔒</span><span style="letter-spacing:3px;font-family:monospace">●●●●●●●●</span><span>API key is stored securely</span></div>' +
+        '<div class="form-group"><label>API Key</label><input class="form-control" type="password" id="sf-api-key" value="" placeholder="Leave blank to keep current key"><div class="form-hint">Enter a new value to update; leave blank to keep the current key.</div></div>'
+      : '<div class="form-group"><label>API Key</label><input class="form-control" type="password" id="sf-api-key" value="" placeholder="sk-..."><div class="form-hint">The API key will be sent as <code>X-API-Key</code> header by default.</div></div>';
+    h += '<div class="form-group"><label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="sf-api-as-bearer"><span class="toggle-slider"></span><span style="font-size:13px;text-transform:none;letter-spacing:0;font-weight:400">Send as Bearer token</span></label><div class="form-hint">When enabled, the API key will be sent as <code>Authorization: Bearer &lt;key&gt;</code> instead of <code>X-API-Key</code>.</div></div>';
+    return h;
+  }
+  if (at === 'bearer_token') {
+    return f.is_saved
+      ? '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px dashed var(--border);border-radius:4px;color:var(--text-secondary);font-size:12px;margin-bottom:12px"><span>🔒</span><span style="letter-spacing:3px;font-family:monospace">●●●●●●●●●●●●</span><span>Bearer token is stored securely</span></div>' +
+        '<div class="form-group"><label>Bearer Token</label><input class="form-control" type="password" id="sf-bearer-token" value="" placeholder="Leave blank to keep current token"><div class="form-hint">Enter a new value to update; leave blank to keep the current token.</div></div>'
+      : '<div class="form-group"><label>Bearer Token</label><input class="form-control" type="password" id="sf-bearer-token" value="" placeholder="Enter Bearer token..."><div class="form-hint">The token will be sent as <code>Authorization: Bearer &lt;token&gt;</code> header.</div></div>';
+  }
+  if (at === 'basic_auth') {
+    return f.is_saved
+      ? '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px dashed var(--border);border-radius:4px;color:var(--text-secondary);font-size:12px;margin-bottom:12px"><span>🔒</span><span style="letter-spacing:3px;font-family:monospace">●●●●●●●●</span><span>Credentials are stored securely</span></div>' +
+        '<div class="form-group"><label>Username</label><input class="form-control" id="sf-basic-user" value="" placeholder="Leave blank to keep current"></div>' +
+        '<div class="form-group"><label>Password</label><input class="form-control" type="password" id="sf-basic-pass" value="" placeholder="Leave blank to keep current"><div class="form-hint">Enter new values to update; leave blank to keep current credentials.</div></div>'
+      : '<div class="form-group"><label>Username</label><input class="form-control" id="sf-basic-user" value="" placeholder="Username"></div>' +
+        '<div class="form-group"><label>Password</label><input class="form-control" type="password" id="sf-basic-pass" value="" placeholder="Password"><div class="form-hint">Credentials are sent as HTTP Basic Auth header.</div></div>';
+  }
+  if (at === 'oauth2') {
+    var h = '<div class="alert alert-info" style="margin-bottom:12px"><div>🔐 Click the button below to authenticate with the OAuth 2.0 provider. A popup window will guide you through the authorization flow.</div></div>';
+    h += '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:14px" onclick="alert(\'OAuth 2.0 popup flow would open here.\')">🔑 Authenticate with OAuth 2.0</button>';
+    h += '<div class="form-group"><label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="sf-oauth-auto" checked onchange="mcpToggleOAuthManual()"><span class="toggle-slider"></span><span style="font-size:13px;text-transform:none;letter-spacing:0;font-weight:400">Auto-discovery</span></label><div class="form-hint">When enabled, OAuth 2.0 endpoints are automatically discovered from the server\'s metadata URL.</div></div>';
+    h += '<div id="sf-oauth-manual" style="display:none;border:1px solid var(--border);border-radius:6px;padding:14px;background:#FAFBFC;margin-bottom:12px">';
+    h += '<div class="form-group"><label>Metadata URL</label><input class="form-control" id="sf-oauth-metadata" placeholder="https://..."><div class="form-hint">OAuth 2.0 server metadata discovery endpoint.</div></div>';
+    h += '<div class="form-group"><label>Authorization URL</label><input class="form-control" id="sf-oauth-auth-url" placeholder="https://..."></div>';
+    h += '<div class="form-group"><label>Token URL</label><input class="form-control" id="sf-oauth-token-url" placeholder="https://..."></div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="form-group"><label>Client ID</label><input class="form-control" id="sf-oauth-client-id" placeholder="client_id"></div><div class="form-group"><label>Client Secret</label><input class="form-control" type="password" id="sf-oauth-secret" placeholder="client_secret"></div></div>';
+    h += '<div class="form-group"><label>Scope</label><input class="form-control" id="sf-oauth-scope" placeholder="openid profile"></div></div>';
+    h += '<div style="font-size:11px;color:var(--text-secondary)">Note: OAuth 2.0 sessions automatically refresh tokens before expiry.</div>';
+    return h;
+  }
+  if (at === 'none') return '<div class="alert alert-info"><div>🔓 No authentication is required for this MCP server.</div></div>';
+  if (at === 'passthrough') return '<div class="alert alert-info"><div>🔗 Credentials are forwarded from the calling agent identity. No server-side credentials are stored.</div></div>';
+  return '';
+}
+
+function mcpOnAuthChange() {
+  var sel = document.getElementById('sf-auth-type');
+  var tip = document.getElementById('sf-auth-tip');
+  if (tip) tip.textContent = MCP_AUTH_DESCS[sel.value];
+  var creds = document.getElementById('sf-creds');
+  if (creds) creds.innerHTML = mcpRenderCredFields({ auth_type: sel.value, is_saved: !!mcpEditingSessionId });
+}
+
+function mcpToggleOAuthManual() {
+  var cb = document.getElementById('sf-oauth-auto');
+  var panel = document.getElementById('sf-oauth-manual');
+  if (panel) panel.style.display = cb && !cb.checked ? 'block' : 'none';
+}
+
+function mcpSaveSession() {
+  var name = (document.getElementById('sf-name')||{}).value || '';
+  if (!name.trim()) {
+    document.getElementById('session-form-error').textContent = 'Name is required.';
+    document.getElementById('session-form-error').style.display = 'block';
+    return;
+  }
+  var sessions = MCP_SESSIONS[mcpCurrentServer];
+  var wasEmpty = sessions.length === 0;
+  if (mcpEditingSessionId) {
+    var s = sessions.find(function(x){ return x.id === mcpEditingSessionId });
+    if (s) {
+      s.name = name;
+      s.description = (document.getElementById('sf-desc')||{}).value || '';
+      s.auth_type = (document.getElementById('sf-auth-type')||{}).value;
+      s.is_active = (document.getElementById('sf-is-active')||{}).checked;
+    }
+  } else {
+    sessions.push({
+      id: 's' + Date.now(),
+      name: name,
+      description: (document.getElementById('sf-desc')||{}).value || '',
+      auth_type: (document.getElementById('sf-auth-type')||{}).value,
+      is_active: (document.getElementById('sf-is-active')||{}).checked,
+      is_default: wasEmpty
+    });
+  }
+  mcpUpdateServerRow(mcpCurrentServer);
+  mcpRenderSessionsList(sessions);
+  closeModal('modal-session-form');
+  mcpEditingSessionId = null;
+}
+
+function mcpOpenServerForm() { openModal('modal-mcp-server-form'); }
 
 // ═══════════════════════════════ CONVERSATION DETAIL ═══════════════════════════════
 function openConvDetail() {
@@ -5081,79 +5414,64 @@ function setExecutionLogMode(mode) {
     const modal = document.getElementById('planModal');
     modal.classList.add('open');
   }
-
-function openModal(id) { 
-  const el = document.getElementById(id);
-  if(el) el.classList.add('open'); 
-}
-function closeModal(id) { 
-  const el = document.getElementById(id);
-  if(el) el.classList.remove('open'); 
-}
-function toggleCredentials(val) {
-  if (val === 'passthrough') {
-    document.getElementById('session-credentials-container').style.display = 'none';
-    document.getElementById('passthrough-info').style.display = 'block';
-  } else {
-    document.getElementById('session-credentials-container').style.display = 'block';
-    document.getElementById('passthrough-info').style.display = 'none';
-  }
-}
 </script>
 
 <!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
-<!-- SESSIONS MODAL -->
-<div id="modal-sessions" class="modal-overlay">
+<!-- SESSIONS MODAL (MCP Hub) -->
+<div id="modal-sessions" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-sessions')">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <h3>MCP Sessions: filesystem</h3>
+      <h3 id="modal-sessions-title">Sessions</h3>
       <button class="modal-close" onclick="closeModal('modal-sessions')">×</button>
     </div>
-    <div class="modal-body" id="sessions-list-view">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-        <button class="btn btn-primary" onclick="document.getElementById('sessions-list-view').style.display='none';document.getElementById('sessions-create-view').style.display='block';">+ Create Session</button>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Auth Type</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>Agent Identity Passthrough</td>
-              <td><span class="chip chip-purple">passthrough</span></td>
-              <td><span class="chip chip-green">Active</span></td>
-              <td class="actions-cell"><button class="btn-icon-sm">🗑️</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="modal-body" id="modal-sessions-body">
+      <!-- Populated by JS -->
     </div>
-    <div class="modal-body" id="sessions-create-view" style="display:none">
-      <div class="form-group">
-        <label>Name</label>
-        <input class="form-control" value="Passthrough Session">
-      </div>
-      <div class="form-group">
-        <label>Auth Type</label>
-        <select class="form-control" id="session-auth-type" onchange="toggleCredentials(this.value)">
-          <option value="api_key">API Key</option>
-          <option value="bearer_token">Bearer Token</option>
-          <option value="basic_auth">Basic Auth</option>
-          <option value="passthrough" selected>Passthrough</option>
-        </select>
-      </div>
-      <div id="session-credentials-container" style="display:none">
-        <div class="form-group">
-          <label>API Key</label>
-          <input class="form-control" type="password">
-        </div>
-      </div>
-      <div id="passthrough-info" class="alert alert-info" style="display:block">
-        <div>Provides direct forwarding of the executing agent's JWT to the MCP server. No credentials required.</div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px">
-        <button class="btn btn-secondary" onclick="document.getElementById('sessions-create-view').style.display='none';document.getElementById('sessions-list-view').style.display='block';">Cancel</button>
-        <button class="btn btn-primary" onclick="document.getElementById('sessions-create-view').style.display='none';document.getElementById('sessions-list-view').style.display='block';">Save</button>
-      </div>
+    <div class="modal-footer">
+      <span style="flex:1;font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px">
+        <span style="color:#6D28D9">★</span> Default session is used for sync and tool routing when no specific session is selected.
+      </span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-sessions')">Close</button>
+      <button class="btn btn-primary" id="btn-add-session-modal">+ Add Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION FORM MODAL (MCP Hub - Add/Edit) -->
+<div id="modal-session-form" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-session-form')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="modal-session-form-title">Add Session</h3>
+      <button class="modal-close" onclick="closeModal('modal-session-form')">×</button>
+    </div>
+    <div class="modal-body" id="modal-session-form-body">
+      <!-- Populated by JS -->
+    </div>
+    <div class="modal-footer">
+      <span id="session-form-error" style="flex:1;font-size:11px;color:var(--error);display:none;text-align:left"></span>
+      <button class="btn btn-secondary" onclick="closeModal('modal-session-form')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-session-form">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER SERVER MODAL (MCP Hub) -->
+<div id="modal-mcp-server-form" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-mcp-server-form')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-mcp-server-title">Register MCP Server</h3>
+      <button class="modal-close" onclick="closeModal('modal-mcp-server-form')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="server-form-error-msg" style="font-size:11px;color:var(--error);display:none;margin-bottom:12px"></div>
+      <div class="form-group"><label>Server Name <span style="color:var(--error)">*</span></label><input class="form-control" id="svr-name-inp" placeholder="e.g. github-mcp"><div class="form-hint">Lowercase letters, numbers, hyphens only</div></div>
+      <div class="form-group"><label>Slug</label><input class="form-control" id="svr-slug-inp" placeholder="e.g. github-mcp" disabled><div class="form-hint">Auto-generated from name. Cannot be changed after creation.</div></div>
+      <div class="form-group"><label>Base URL</label><input class="form-control" id="svr-url-inp" placeholder="https://mcp.example.com"></div>
+      <div class="form-group"><label>Description</label><textarea class="form-control" id="svr-desc-inp" rows="2" placeholder="Optional description..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mcp-server-form')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-server-form">Save</button>
     </div>
   </div>
 </div>
