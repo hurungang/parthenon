@@ -29,10 +29,12 @@ def _keycloak_reachable() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _keycloak_reachable(),
-    reason=f"Keycloak not reachable at {_KEYCLOAK_URL} — skipping integration tests",
-)
+def _require_keycloak(func):
+    """Decorator to skip individual tests when Keycloak is not reachable."""
+    return pytest.mark.skipif(
+        not _keycloak_reachable(),
+        reason="Requires Keycloak",
+    )(func)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ async def _obtain_agent_jwt() -> str:
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 
+@_require_keycloak
 async def test_obtain_agent_jwt_from_keycloak():
     """AC-1: Client credentials grant returns a non-empty JWT."""
     token = await _obtain_agent_jwt()
@@ -66,6 +69,7 @@ async def test_obtain_agent_jwt_from_keycloak():
     assert len(token.split(".")) == 3
 
 
+@_require_keycloak
 async def test_tools_call_with_real_jwt_returns_agent_sub():
     """AC-3: End-to-end — real JWT → tools/call → agent_sub present in response.
 
@@ -105,6 +109,7 @@ async def test_tools_call_with_real_jwt_returns_agent_sub():
     assert result["agent_sub"] is not None
 
 
+@_require_keycloak
 async def test_tools_call_without_jwt_returns_401():
     """Scenario 3.8: tools/call with no auth → 401 even with real Keycloak running."""
     from unittest.mock import AsyncMock, patch
@@ -131,6 +136,7 @@ async def test_tools_call_without_jwt_returns_401():
     assert response.status_code == 401
 
 
+@_require_keycloak
 async def test_verify_agent_jwt_validates_real_token():
     """AC-1 + AC-3: verify_agent_jwt accepts a real Keycloak-signed JWT."""
     from app.auth import verify_agent_jwt
@@ -140,3 +146,128 @@ async def test_verify_agent_jwt_validates_real_token():
     assert isinstance(claims, dict)
     assert "iss" in claims
     assert _KEYCLOAK_REALM in claims["iss"]
+
+
+# ── Dual-identity flow (mocked identities) ────────────────────────────────────
+
+
+async def test_hello_agent_tool_with_role_returns_greeting():
+    """Integration: helloAgent with mcp_role demo_agent → greeting."""
+    from unittest.mock import AsyncMock, patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    agent_identity = {"sub": "agent-int", "mcp_role": "demo_agent", "iss": "http://kc/ai"}
+
+    with patch("app.main.register_with_hub", new=AsyncMock()):
+        with patch("app.routes.mcp.get_agent_identity", new=AsyncMock(return_value=agent_identity)):
+            app = create_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post(
+                    "/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "helloAgent"},
+                    },
+                    headers={"Authorization": "Bearer fake.jwt"},
+                )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["message"] == "Hello Agent!"
+    assert result["agent_sub"] == "agent-int"
+
+
+async def test_hello_agent_tool_without_role_returns_access_denied():
+    """Integration: helloAgent without mcp_role → access-denied (HTTP 200)."""
+    from unittest.mock import AsyncMock, patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    agent_identity = {"sub": "agent-int", "mcp_role": "other"}
+
+    with patch("app.main.register_with_hub", new=AsyncMock()):
+        with patch("app.routes.mcp.get_agent_identity", new=AsyncMock(return_value=agent_identity)):
+            app = create_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post(
+                    "/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "helloAgent"},
+                    },
+                    headers={"Authorization": "Bearer fake.jwt"},
+                )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["access_denied"] is True
+
+
+async def test_hello_user_tool_with_role_returns_greeting():
+    """Integration: helloUser with mcp_role demo_user → greeting."""
+    from unittest.mock import AsyncMock, patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    user_identity = {"sub": "user-int", "mcp_role": "demo_user", "iss": "http://kc/users"}
+
+    with patch("app.main.register_with_hub", new=AsyncMock()):
+        with patch("app.routes.mcp.get_user_identity", new=AsyncMock(return_value=user_identity)):
+            app = create_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post(
+                    "/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "helloUser"},
+                    },
+                    headers={"X-User-Identity": "Bearer fake.user.jwt"},
+                )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["message"] == "Hello User!"
+    assert result["user_sub"] == "user-int"
+
+
+async def test_hello_user_tool_without_role_returns_access_denied():
+    """Integration: helloUser without mcp_role → access-denied (HTTP 200)."""
+    from unittest.mock import AsyncMock, patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    user_identity = {"sub": "user-int", "mcp_role": "wrong"}
+
+    with patch("app.main.register_with_hub", new=AsyncMock()):
+        with patch("app.routes.mcp.get_user_identity", new=AsyncMock(return_value=user_identity)):
+            app = create_app()
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post(
+                    "/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "helloUser"},
+                    },
+                    headers={"X-User-Identity": "Bearer fake.user.jwt"},
+                )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["access_denied"] is True

@@ -65,8 +65,22 @@ Changes involving certificate issuance, validation, or revocation require:
 - Backend: `backend/tests/`
 - Frontend: `frontend/src/__tests__/`
 - E2E: `e2e/tests/`
+- MCP Demo App (standalone): `mcp-demo-app/tests/` — unit and integration tests for the demo MCP server; uses its own pytest configuration with mocked Keycloak identities
 
 Refer to individual test plans for module-specific coverage and test file references.
+
+## Dual-Identity Tool Security Testing
+
+The MCP Demo App (`mcp-demo-app`) demonstrates per-tool dual-identity role gating:
+- **Agent identity** (via `Authorization: Bearer` header) — validated against the agent Keycloak realm
+- **User identity** (via `X-User-Identity` header) — validated against a separate user Keycloak realm or same realm (fallback)
+
+Security assertions for dual-identity features:
+- **Cross-realm rejection**: User JWT signed by agent realm's key must be rejected (and vice versa)
+- **Identity isolation**: helloAgent tool must ignore user identity headers; helloUser must ignore agent identity headers — no cross-contamination between identity chains
+- **Access-denied as success**: Tool access-denied responses must return HTTP 200 with `access_denied: true` in the JSON-RPC body, never HTTP 403/401 — prevents information leakage through HTTP status codes
+- **No unnecessary validation**: User-only tools must not validate agent JWTs (and vice versa) — a missing agent JWT must not block a user-tool call when user JWT is present
+- **Single-realm fallback**: When user realm is unconfigured, app must validate user JWT against agent realm and still enforce role gating
 
 ## Service Segregation Security Requirements
 

@@ -30,6 +30,10 @@
 .PARAMETER Force
     Force recreation of .env file even if it exists
 
+.PARAMETER UserRealm
+    Optional user realm for dual-realm setup. When provided, verifies the realm
+    exists and writes KEYCLOAK_USER_REALM / KEYCLOAK_USER_CLIENT_ID to .env.
+
 .EXAMPLE
     .\init.ps1
 
@@ -38,6 +42,9 @@
 
 .EXAMPLE
     .\init.ps1 -Force
+
+.EXAMPLE
+    .\init.ps1 -UserRealm "parthenon"
 #>
 
 [CmdletBinding()]
@@ -47,6 +54,7 @@ param(
     [string]$AdminUser = "admin",
     [string]$AdminPassword = "admin",
     [string]$HubApiToken = "",
+    [string]$UserRealm = "",
     [switch]$Force
 )
 
@@ -72,7 +80,7 @@ try {
 }
 
 # ── Step 2: Verify realm exists ──────────────────────────────────────────────
-Write-Host "[2/6] Verifying realm '$Realm'..." -ForegroundColor Yellow
+Write-Host "[2/6] Verifying agent realm '$Realm'..." -ForegroundColor Yellow
 try {
     $realmCheck = Invoke-RestMethod -Uri "$KeycloakUrl/realms/$Realm" -ErrorAction Stop
     Write-Host "      ✅ Realm '$Realm' exists" -ForegroundColor Green
@@ -80,6 +88,19 @@ try {
     Write-Host "      ❌ Realm '$Realm' not found" -ForegroundColor Red
     Write-Host "      💡 Create the ai_agents realm in Keycloak admin console first" -ForegroundColor Gray
     exit 1
+}
+
+# ── Step 2b: Verify user realm (if -UserRealm provided) ────────────────────
+if ($UserRealm) {
+    Write-Host "[2b] Verifying user realm '$UserRealm'..." -ForegroundColor Yellow
+    try {
+        $userRealmCheck = Invoke-RestMethod -Uri "$KeycloakUrl/realms/$UserRealm" -ErrorAction Stop
+        Write-Host "      ✅ User realm '$UserRealm' exists" -ForegroundColor Green
+    } catch {
+        Write-Host "      ❌ User realm '$UserRealm' not found" -ForegroundColor Red
+        Write-Host "      💡 Create the '$UserRealm' realm in Keycloak admin console first" -ForegroundColor Gray
+        exit 1
+    }
 }
 
 # ── Step 3: Authenticate as admin ────────────────────────────────────────────
@@ -179,6 +200,95 @@ try {
     exit 1
 }
 
+# ── Step 5b: Create realm roles ───────────────────────────────────────────
+Write-Host "[5b] Creating realm roles..." -ForegroundColor Yellow
+
+# Create demo_agent role in agent realm (idempotent)
+try {
+    $agentRoles = Invoke-RestMethod -Uri "$KeycloakUrl/admin/realms/$Realm/roles/demo_agent" `
+        -Headers $headers `
+        -ErrorAction SilentlyContinue
+    Write-Host "      ✅ Role 'demo_agent' already exists in realm '$Realm'" -ForegroundColor Green
+} catch {
+    Write-Host "      ⚙️  Creating role 'demo_agent' in realm '$Realm'..." -ForegroundColor Cyan
+    try {
+        $roleBody = @{ name = "demo_agent"; description = "Required mcp_role claim for helloAgent tool" } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$KeycloakUrl/admin/realms/$Realm/roles" `
+            -Method POST `
+            -Headers $headers `
+            -Body $roleBody `
+            -ErrorAction Stop | Out-Null
+        Write-Host "      ✅ Role 'demo_agent' created in realm '$Realm'" -ForegroundColor Green
+    } catch {
+        Write-Host "      ⚠️  Could not create role 'demo_agent': $_" -ForegroundColor Yellow
+    }
+}
+
+# ── Step 5c: Ensure client exists in user realm (if -UserRealm provided) ──
+if ($UserRealm) {
+    Write-Host "[5c] Ensuring mcp-demo-app client in user realm '$UserRealm'..." -ForegroundColor Yellow
+    try {
+        $userClients = Invoke-RestMethod -Uri "$KeycloakUrl/admin/realms/$UserRealm/clients?clientId=mcp-demo-app" `
+            -Headers $headers `
+            -ErrorAction Stop
+
+        if ($userClients.Count -gt 0) {
+            Write-Host "      ✅ Client 'mcp-demo-app' already exists in realm '$UserRealm'" -ForegroundColor Green
+        } else {
+            Write-Host "      ⚙️  Creating client 'mcp-demo-app' in realm '$UserRealm'..." -ForegroundColor Cyan
+            $userClientConfig = @{
+                clientId = "mcp-demo-app"
+                name = "MCP Demo App"
+                description = "Demo MCP server for user identity validation"
+                enabled = $true
+                serviceAccountsEnabled = $true
+                clientAuthenticatorType = "client-secret"
+                standardFlowEnabled = $false
+                directAccessGrantsEnabled = $false
+                publicClient = $false
+                protocol = "openid-connect"
+                attributes = @{
+                    "client.secret.creation.time" = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
+                }
+            } | ConvertTo-Json -Depth 10
+            Invoke-RestMethod -Uri "$KeycloakUrl/admin/realms/$UserRealm/clients" `
+                -Method POST `
+                -Headers $headers `
+                -Body $userClientConfig `
+                -ErrorAction Stop | Out-Null
+            Write-Host "      ✅ Client 'mcp-demo-app' created in realm '$UserRealm'" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "      ⚠️  Could not verify/create client in user realm: $_" -ForegroundColor Yellow
+        Write-Host "      💡 The demo app only needs JWKS access (public endpoint) — a client may not be required" -ForegroundColor Gray
+    }
+}
+
+# Create demo_user role in user realm (if -UserRealm provided)
+if ($UserRealm) {
+    try {
+        $userRoles = Invoke-RestMethod -Uri "$KeycloakUrl/admin/realms/$UserRealm/roles/demo_user" `
+            -Headers $headers `
+            -ErrorAction SilentlyContinue
+        Write-Host "      ✅ Role 'demo_user' already exists in realm '$UserRealm'" -ForegroundColor Green
+    } catch {
+        Write-Host "      ⚙️  Creating role 'demo_user' in realm '$UserRealm'..." -ForegroundColor Cyan
+        try {
+            $roleBody = @{ name = "demo_user"; description = "Required mcp_role claim for helloUser tool" } | ConvertTo-Json
+            Invoke-RestMethod -Uri "$KeycloakUrl/admin/realms/$UserRealm/roles" `
+                -Method POST `
+                -Headers $headers `
+                -Body $roleBody `
+                -ErrorAction Stop | Out-Null
+            Write-Host "      ✅ Role 'demo_user' created in realm '$UserRealm'" -ForegroundColor Green
+        } catch {
+            Write-Host "      ⚠️  Could not create role 'demo_user': $_" -ForegroundColor Yellow
+        }
+    }
+} else {
+    Write-Host "      ℹ️  No user realm specified — create 'demo_user' role manually if needed" -ForegroundColor Gray
+}
+
 # ── Step 6: Update .env file ─────────────────────────────────────────────────
 Write-Host "[6/6] Updating configuration..." -ForegroundColor Yellow
 
@@ -223,6 +333,25 @@ KEYCLOAK_CLIENT_ID=mcp-demo-app
 
 # Client secret for the above client (keep secret, do not commit)
 KEYCLOAK_CLIENT_SECRET=$clientSecret
+"@
+    if ($UserRealm) {
+        $envContent += @"
+
+# ── Keycloak User Realm ────────────────────────────────────────────────────
+# User realm for dual-identity validation (set by init.ps1 -UserRealm)
+KEYCLOAK_USER_REALM=$UserRealm
+KEYCLOAK_USER_CLIENT_ID=mcp-demo-app
+"@
+    } else {
+        $envContent += @"
+
+# ── Keycloak User Realm (optional) ─────────────────────────────────────────
+# Uncomment and set for dual-identity validation:
+# KEYCLOAK_USER_REALM=
+# KEYCLOAK_USER_CLIENT_ID=mcp-demo-app
+"@
+    }
+    $envContent += @"
 
 # ── Parthenon MCP Hub ──────────────────────────────────────────────────────
 # Base URL of the Parthenon backend (no trailing slash)

@@ -103,16 +103,17 @@ async def test_tools_list_returns_200(client):
     assert response.status_code == 200
 
 
-async def test_tools_list_returns_one_tool(client):
-    """Scenario 3.7 + AC-6: exactly one tool in manifest."""
+async def test_tools_list_returns_three_tools(client):
+    """tools/list returns exactly three tool descriptors."""
     body = (
         await client.post(
             "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
         )
     ).json()
     tools = body["result"]["tools"]
-    assert len(tools) == 1
-    assert tools[0]["name"] == "helloWorld"
+    assert len(tools) == 3
+    names = {t["name"] for t in tools}
+    assert names == {"helloWorld", "helloAgent", "helloUser"}
 
 
 async def test_tools_list_no_auth_required(client):
@@ -236,6 +237,151 @@ async def test_tools_call_unknown_tool_returns_rpc_error(client):
     assert response.status_code == 200
     body = response.json()
     assert body["error"]["code"] == -32601
+
+
+# ── tools/call — helloAgent ───────────────────────────────────────────────────
+
+
+async def test_hello_agent_tool_with_role_returns_greeting(client):
+    """helloAgent with mcp_role demo_agent → greeting response (HTTP 200)."""
+    agent_identity = {"sub": "agent-1", "mcp_role": "demo_agent", "iss": "http://kc/ai"}
+    with patch(
+        "app.routes.mcp.get_agent_identity",
+        new=AsyncMock(return_value=agent_identity),
+    ):
+        response = await client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "helloAgent"},
+            },
+            headers={"Authorization": "Bearer fake.jwt.token"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["message"] == "Hello Agent!"
+    assert result["agent_sub"] == "agent-1"
+
+
+async def test_hello_agent_tool_without_role_returns_access_denied(client):
+    """helloAgent without mcp_role → access-denied (HTTP 200)."""
+    agent_identity = {"sub": "agent-1", "mcp_role": "other_role"}
+    with patch(
+        "app.routes.mcp.get_agent_identity",
+        new=AsyncMock(return_value=agent_identity),
+    ):
+        response = await client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "helloAgent"},
+            },
+            headers={"Authorization": "Bearer fake.jwt.token"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["access_denied"] is True
+    assert "demo_agent" in result["reason"]
+
+
+# ── tools/call — helloUser ────────────────────────────────────────────────────
+
+
+async def test_hello_user_tool_with_role_returns_greeting(client):
+    """helloUser with mcp_role demo_user → greeting response (HTTP 200)."""
+    user_identity = {"sub": "user-1", "mcp_role": "demo_user", "iss": "http://kc/users"}
+    with patch(
+        "app.routes.mcp.get_user_identity",
+        new=AsyncMock(return_value=user_identity),
+    ):
+        response = await client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "helloUser"},
+            },
+            headers={"X-User-Identity": "Bearer fake.user.jwt"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["message"] == "Hello User!"
+    assert result["user_sub"] == "user-1"
+
+
+async def test_hello_user_tool_without_role_returns_access_denied(client):
+    """helloUser without mcp_role → access-denied (HTTP 200)."""
+    user_identity = {"sub": "user-1", "mcp_role": "wrong_role"}
+    with patch(
+        "app.routes.mcp.get_user_identity",
+        new=AsyncMock(return_value=user_identity),
+    ):
+        response = await client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "helloUser"},
+            },
+            headers={"X-User-Identity": "Bearer fake.user.jwt"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["access_denied"] is True
+    assert "demo_user" in result["reason"]
+
+
+async def test_hello_user_tool_without_header_returns_401(client):
+    """helloUser without X-User-Identity header → 401."""
+    with patch(
+        "app.routes.mcp.get_user_identity",
+        new=AsyncMock(side_effect=HTTPException(status_code=401, detail="Missing or malformed X-User-Identity header")),
+    ):
+        response = await client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "helloUser"},
+            },
+        )
+
+    assert response.status_code == 401
+
+
+async def test_hello_world_still_uses_agent_identity(client):
+    """helloWorld continues to use agent identity (no regression)."""
+    agent_identity = {"sub": "agent-legacy", "iss": "http://kc/ai"}
+    with patch(
+        "app.routes.mcp.get_agent_identity",
+        new=AsyncMock(return_value=agent_identity),
+    ):
+        response = await client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "helloWorld"},
+            },
+            headers={"Authorization": "Bearer fake.jwt.token"},
+        )
+
+    assert response.status_code == 200
+    result = response.json()["result"]["result"]
+    assert result["message"] == "Hello from MCP Demo App!"
+    assert result["agent_sub"] == "agent-legacy"
 
 
 # ── Unknown method ────────────────────────────────────────────────────────────

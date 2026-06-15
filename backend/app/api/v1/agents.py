@@ -411,6 +411,23 @@ async def list_available_mcp_sessions_for_role(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+@AgentRoleRouter.get("/{role_id}/mcp-session-coverage")
+async def get_mcp_session_coverage(
+    role_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> dict:
+    """Check whether all MCP servers required by a role's skills have sessions assigned.
+    
+    Returns { covered: bool, missing_servers: [{slug, name}] }.
+    When covered is false, the agent will fail at runtime with 502 errors.
+    """
+    try:
+        return await _role_service.validate_mcp_session_coverage(role_id=role_id, db=db)
+    except AgentRoleNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 # ── Agent Identity Endpoints ───────────────────────────────────────────────────
 
 

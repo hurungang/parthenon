@@ -9,11 +9,15 @@ class AppSettings(BaseSettings):
         extra="ignore",
     )
 
-    # Keycloak
+    # Keycloak — agent realm
     KEYCLOAK_URL: str
     KEYCLOAK_REALM: str = "ai_agents"
     KEYCLOAK_CLIENT_ID: str
     KEYCLOAK_CLIENT_SECRET: str
+
+    # Keycloak — user realm (optional; falls back to agent realm when unset)
+    KEYCLOAK_USER_REALM: str = ""
+    KEYCLOAK_USER_CLIENT_ID: str = ""
 
     # Parthenon MCP Hub
     HUB_BASE_URL: str

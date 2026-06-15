@@ -26,6 +26,21 @@ settings = get_settings()
 
 router = APIRouter(prefix="/internal/tools", tags=["Internal - Tool Routing"])
 
+# Session-level cache of user JWTs for dual-identity tool calls
+# Keyed by session_id, populated by WebSocket chat on user auth
+_user_jwt_by_session: dict[str, str] = {}
+
+
+def cache_user_jwt(session_id: str, user_jwt: str) -> None:
+    """Store user JWT for a conversation session (called by WebSocket on auth)."""
+    _user_jwt_by_session[session_id] = user_jwt
+    logger.debug("Cached user JWT for session %s", session_id[:8])
+
+
+def get_user_jwt(session_id: str) -> str | None:
+    """Retrieve cached user JWT for a conversation session."""
+    return _user_jwt_by_session.get(session_id)
+
 
 def _allow_insecure_internal_fallback() -> bool:
     """Return True only for explicit development-mode insecure fallback opt-in."""
@@ -78,6 +93,7 @@ class ToolCallRequest(BaseModel):
     tool_args: dict[str, Any]
     session_id: str
     agent_type_id: str
+    user_jwt: str | None = None  # User identity JWT for dual-identity passthrough
 
 
 class ToolCallResponse(BaseModel):
@@ -111,6 +127,11 @@ async def route_tool_call(
     Raises:
         HTTPException: 401 if certificate invalid, 403 if permission denied, 502 if tool call fails
     """
+    # Auto-populate user_jwt from session cache if not already provided
+    if not body.user_jwt and body.session_id:
+        body.user_jwt = get_user_jwt(body.session_id)
+        if body.user_jwt:
+            logger.debug("Populated user_jwt from session cache for session %s", body.session_id[:8])
     route_type = "system" if _is_system_tool(body.tool_name) else "mcp"
     logger.info(
         "Tool call request: tool=%s, session=%s, route_type=%s",
@@ -326,6 +347,7 @@ async def _route_to_mcp_tool(body: ToolCallRequest, request: Request) -> ToolCal
         "tool_args": body.tool_args,
         "agent_type_id": body.agent_type_id,
         "agent_session_id": body.session_id,
+        "user_jwt": body.user_jwt,
     }
 
     try:

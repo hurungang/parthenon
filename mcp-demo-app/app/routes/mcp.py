@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from app.auth import get_agent_identity
+from app.auth import get_agent_identity, get_user_identity
 from app.config import settings
 from app.tools import TOOL_MANIFEST, tool_registry
 
@@ -54,13 +54,37 @@ async def mcp_endpoint(request: Request) -> JSONResponse:
 
     if method == "tools/call":
         tool_name: str = params.get("name", "")
+        logger.info("MCP tools/call: tool=%s", tool_name)
         handler = tool_registry.get(tool_name)
         if handler is None:
+            logger.warning("MCP tools/call: unknown tool=%s", tool_name)
             return JSONResponse(_error(request_id, -32601, f"Unknown tool: {tool_name}"))
 
-        # Validate the agent identity for tool calls
-        agent_identity = await get_agent_identity(request)
-        tool_result = handler(agent_identity)
+        # Extract identity based on which tool is being called
+        if tool_name == "helloUser":
+            logger.info("MCP tools/call: extracting USER identity from X-User-Identity header")
+            identity = await get_user_identity(request)
+        else:
+            logger.info("MCP tools/call: extracting AGENT identity from Authorization header")
+            identity = await get_agent_identity(request)
+
+        logger.info(
+            "MCP tools/call: tool=%s identity_sub=%s identity_realm=%s mcp_role=%s",
+            tool_name,
+            identity.get("sub"),
+            identity.get("iss"),
+            identity.get("mcp_role"),
+        )
+
+        tool_result = handler(identity)
+        if isinstance(tool_result, dict) and tool_result.get("access_denied"):
+            logger.warning(
+                "MCP tools/call ACCESS DENIED: tool=%s reason=%s",
+                tool_name, tool_result.get("reason"),
+            )
+        else:
+            logger.info("MCP tools/call SUCCESS: tool=%s", tool_name)
+
         return JSONResponse(
             _ok(
                 request_id,

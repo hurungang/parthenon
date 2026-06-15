@@ -373,6 +373,55 @@ class KeycloakAdminClient:
             )
         logger.info("User %r created in realm %r", username, realm_name)
 
+        # Assign realm roles if requested
+        if roles:
+            await self._assign_realm_roles(token, realm_name, username, roles)
+
+    async def _assign_realm_roles(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        username: str,
+        roles: list[str],
+    ) -> None:
+        """Assign realm-level roles to a user."""
+        # Get user ID
+        user_id = await self.get_user_by_username(token, realm_name, username)
+        if not user_id:
+            logger.warning("Cannot assign roles: user %r not found in realm %r", username, realm_name)
+            return
+
+        # Get available realm roles
+        url = f"{self._base_url}/admin/realms/{realm_name}/roles"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            resp = await _request_with_retry(
+                client, "GET", url,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if resp.status_code != 200:
+            logger.warning("Failed to fetch realm roles: HTTP %s", resp.status_code)
+            return
+
+        all_roles = resp.json()
+        role_reprs = [r for r in all_roles if r.get("name") in roles]
+
+        if not role_reprs:
+            logger.warning("Requested roles %s not found in realm %r", roles, realm_name)
+            return
+
+        # Assign roles to user
+        assign_url = f"{self._base_url}/admin/realms/{realm_name}/users/{user_id}/role-mappings/realm"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            resp = await _request_with_retry(
+                client, "POST", assign_url,
+                json=role_reprs,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if resp.status_code == 204:
+            logger.info("Assigned roles %s to user %r in realm %r", roles, username, realm_name)
+        else:
+            logger.warning("Failed to assign roles: HTTP %s — %s", resp.status_code, resp.text[:200])
+
     async def get_user_by_username(
         self,
         token: AdminToken,

@@ -326,3 +326,5 @@ Variables required exclusively by the `mcp-demo-app` service. No existing Parthe
 | `APP_URL` | Externally reachable base URL of the demo app that the Hub will use to proxy tool calls (e.g., `http://mcp-demo-app:9000`) | |
 | `APP_SLUG` | Unique slug used when registering with the MCP Hub. Must be set to `demo`. | |
 | `APP_PORT` | Port the FastAPI application listens on. Defaults to `9000`. | |
+| `KEYCLOAK_USER_REALM` | Keycloak realm that issues user identities. When empty (default), the app operates in **single-realm mode**: `verify_user_jwt` falls back to `KEYCLOAK_REALM` for issuer validation. When set to a realm name (e.g., `parthenon`), the app operates in **dual-realm mode**: `verify_user_jwt` uses this realm for issuer validation and a separate `user_keycloak_client` fetches JWKS from the user realm independently. | |
+| `KEYCLOAK_USER_CLIENT_ID` | Client ID registered in the user realm for the demo app. When empty (default), falls back to `KEYCLOAK_CLIENT_ID`. Only needed in dual-realm mode when the user realm uses a different client than the agent realm. | |

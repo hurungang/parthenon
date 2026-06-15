@@ -6,7 +6,7 @@ Parthenon supports file-based configuration as an alternative (or complement) to
 
 ## Services With No Configuration Files
 
-**`mcp-demo-app`** — The MCP Demo App has no configuration files. All configuration is supplied exclusively via environment variables. See [environment-variables.md](environment-variables.md) for the full variable reference.
+**`mcp-demo-app`** — The MCP Demo App reads all configuration from environment variables. A template file at `mcp-demo-app/.env.example` documents all supported variables with defaults and commentary. The `.env.example` file includes the optional `KEYCLOAK_USER_REALM` and `KEYCLOAK_USER_CLIENT_ID` variables for dual-realm mode. See [environment-variables.md](environment-variables.md) for the full variable reference.
 
 ---
 
