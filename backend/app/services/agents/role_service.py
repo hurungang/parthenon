@@ -117,6 +117,15 @@ class AgentRoleService:
         await db.flush()
         await db.refresh(role, ["sop_assignments", "skill_assignments"])
 
+        # Validate MCP session coverage after assignment changes
+        coverage = await self.validate_mcp_session_coverage(role_id, db)
+        if not coverage["covered"]:
+            missing_names = [f"{s['name']} ({s['slug']})" for s in coverage["missing_servers"]]
+            logger.warning(
+                "AgentRole %s has no MCP sessions for servers: %s. Agent execution will fail.",
+                role_id, ", ".join(missing_names),
+            )
+
         # Invalidate permission cache for this role
         if self._permission_manager is not None:
             self._permission_manager.invalidate(role_id)
@@ -439,6 +448,85 @@ class AgentRoleService:
         return sessions
 
     # ── Internal helpers ───────────────────────────────────────────────────────
+
+    async def validate_mcp_session_coverage(
+        self,
+        role_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> dict[str, Any]:
+        """Check whether all MCP servers required by a role's skills have sessions assigned.
+        
+        Returns a dict with 'covered' (bool) and 'missing_servers' (list of {slug, name}).
+        """
+        from app.db.models.mcp_hub import McpTool, McpServer
+        from app.db.models.skills import Skill, SkillToolBinding, Sop, SopStep
+
+        # Collect MCP tool names used by the role (same logic as get_available_mcp_sessions)
+        skill_result = await db.execute(
+            select(Skill.id)
+            .join(AgentRoleSkill, AgentRoleSkill.skill_id == Skill.id)
+            .where(AgentRoleSkill.role_id == role_id)
+        )
+        skill_ids = [row[0] for row in skill_result.all()]
+
+        sop_skill_result = await db.execute(
+            select(SopStep.skill_id)
+            .join(Sop, Sop.id == SopStep.sop_id)
+            .join(AgentRoleSOP, AgentRoleSOP.sop_id == Sop.id)
+            .where(
+                AgentRoleSOP.role_id == role_id,
+                SopStep.skill_id.is_not(None),
+            )
+        )
+        skill_ids.extend([row[0] for row in sop_skill_result.all()])
+
+        if not skill_ids:
+            return {"covered": True, "missing_servers": []}
+
+        tool_result = await db.execute(
+            select(McpTool.name)
+            .join(SkillToolBinding, SkillToolBinding.tool_id == McpTool.id)
+            .where(SkillToolBinding.skill_id.in_(skill_ids))
+            .distinct()
+        )
+        tool_names = [row[0] for row in tool_result.all()]
+
+        if not tool_names:
+            return {"covered": True, "missing_servers": []}
+
+        # Extract required server slugs from tool names
+        required_slugs: set[str] = set()
+        for name in tool_names:
+            try:
+                server_slug, _ = parse_tool_name(name)
+                if server_slug != "system":
+                    required_slugs.add(server_slug)
+            except ValueError:
+                if "/" in name:
+                    required_slugs.add(name.split("/", 1)[0])
+
+        if not required_slugs:
+            return {"covered": True, "missing_servers": []}
+
+        # Get servers that already have sessions assigned
+        assigned_result = await db.execute(
+            select(McpServer.slug)
+            .join(AgentRoleMcpSession, AgentRoleMcpSession.server_id == McpServer.id)
+            .where(AgentRoleMcpSession.role_id == role_id)
+        )
+        assigned_slugs = {row[0] for row in assigned_result.all()}
+
+        missing = required_slugs - assigned_slugs
+        if not missing:
+            return {"covered": True, "missing_servers": []}
+
+        # Get server names for missing slugs
+        server_result = await db.execute(
+            select(McpServer.slug, McpServer.name).where(McpServer.slug.in_(list(missing)))
+        )
+        missing_servers = [{"slug": slug, "name": name} for slug, name in server_result.all()]
+
+        return {"covered": False, "missing_servers": missing_servers}
 
     async def _set_assignments(
         self,

@@ -23,7 +23,7 @@ This section contains per-module technology specifications for every backend, fr
 | [results](modules/results/tech-spec.md) | Structured agent and SOP result persistence; `save_result` MCP tool registration and result query endpoints |
 | [notifications](modules/notifications/tech-spec.md) | Outbound notification dispatcher for email, Slack, Teams, and webhook channels; channel-as-MCP-tool registration and event history |
 | [observability](modules/observability/tech-spec.md) | OTEL telemetry initialisation for backend and frontend; OTEL Collector pipeline configuration; Helm chart for production Kubernetes deployment |
-| [mcp-demo-app](modules/mcp-demo-app/tech-spec.md) | Standalone Python FastAPI MCP server demonstrating end-to-end agent identity propagation; authenticates with Keycloak agent realm, registers with the MCP Hub under the `demo` slug, and validates forwarded agent JWTs on every tool call |
+| [mcp-demo-app](modules/mcp-demo-app/tech-spec.md) | Standalone Python FastAPI MCP server demonstrating end-to-end dual-identity propagation; exposes three tools (`helloWorld`, `helloAgent`, `helloUser`) that validate agent and user JWTs against separate Keycloak realms and enforce `mcp_role`-based access control; registers with the MCP Hub under the `demo` slug; supported by backend pipeline changes in the Communication Hub, Control Center, and frontend WebSocket layer |
 
 ---
 

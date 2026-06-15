@@ -21,23 +21,28 @@ class KeycloakClient:
     _TOKEN_BUFFER_SECS = 30
     _JWKS_TTL_SECS = 600  # 10 minutes
 
-    def __init__(self) -> None:
+    def __init__(self, realm_name: str | None = None) -> None:
+        self._realm_name: str | None = realm_name
         self._access_token: str | None = None
         self._token_expires_at: float = 0.0
         self._jwks: dict[str, Any] | None = None
         self._jwks_fetched_at: float = 0.0
 
     @property
+    def _realm(self) -> str:
+        return self._realm_name or settings.KEYCLOAK_REALM
+
+    @property
     def _token_url(self) -> str:
         return (
-            f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+            f"{settings.KEYCLOAK_URL}/realms/{self._realm}"
             "/protocol/openid-connect/token"
         )
 
     @property
     def _jwks_url(self) -> str:
         return (
-            f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+            f"{settings.KEYCLOAK_URL}/realms/{self._realm}"
             "/protocol/openid-connect/certs"
         )
 
@@ -86,6 +91,10 @@ class KeycloakClient:
 # Module-level singleton — initialised in lifespan
 keycloak_client: KeycloakClient = KeycloakClient()
 
+# Second module-level singleton for user realm JWKS (independent cache)
+_user_realm = settings.KEYCLOAK_USER_REALM or settings.KEYCLOAK_REALM
+user_keycloak_client: KeycloakClient = KeycloakClient(realm_name=_user_realm)
+
 # ── JWT validation ───────────────────────────────────────────────────────────
 
 
@@ -119,6 +128,59 @@ async def get_agent_identity(request: Request) -> dict[str, Any]:
     """FastAPI dependency: extract and validate the Bearer token from the request."""
     auth_header: str = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
+        logger.warning("Agent identity: missing or malformed Authorization header")
         raise HTTPException(status_code=401, detail="Missing or malformed Authorization header")
     token = auth_header[len("Bearer "):]
-    return await verify_agent_jwt(token)
+    claims = await verify_agent_jwt(token)
+    logger.info(
+        "Agent identity validated: sub=%s realm=%s mcp_role=%s",
+        claims.get("sub"), claims.get("iss"), claims.get("mcp_role"),
+    )
+    return claims
+
+
+# ── User identity validation (dual-realm) ──────────────────────────────────────
+
+
+async def verify_user_jwt(token: str) -> dict[str, Any]:
+    """Validate a forwarded user JWT using the user realm's Keycloak JWKS.
+
+    Returns the decoded claims dict on success.
+    Raises HTTPException(401) on any validation failure.
+
+    Falls back to the agent realm when KEYCLOAK_USER_REALM is not configured.
+    """
+    user_realm = settings.KEYCLOAK_USER_REALM or settings.KEYCLOAK_REALM
+    expected_issuer = f"{settings.KEYCLOAK_URL}/realms/{user_realm}"
+    try:
+        jwks = await user_keycloak_client.get_jwks()
+        claims: dict[str, Any] = jwt.decode(
+            token,
+            jwks,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+        )
+        if claims.get("iss") != expected_issuer:
+            raise JWTError(f"Unexpected issuer: {claims.get('iss')}")
+        return claims
+    except JWTError as exc:
+        logger.warning("User JWT validation failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired user token") from exc
+    except Exception as exc:
+        logger.error("Unexpected error during user JWT validation: %s", exc)
+        raise HTTPException(status_code=401, detail="User token validation error") from exc
+
+
+async def get_user_identity(request: Request) -> dict[str, Any]:
+    """FastAPI dependency: extract and validate the user JWT from X-User-Identity header."""
+    user_header: str = request.headers.get("X-User-Identity", "")
+    if not user_header.startswith("Bearer "):
+        logger.warning("User identity: missing or malformed X-User-Identity header")
+        raise HTTPException(status_code=401, detail="Missing or malformed X-User-Identity header")
+    token = user_header[len("Bearer "):]
+    claims = await verify_user_jwt(token)
+    logger.info(
+        "User identity validated: sub=%s realm=%s mcp_role=%s",
+        claims.get("sub"), claims.get("iss"), claims.get("mcp_role"),
+    )
+    return claims

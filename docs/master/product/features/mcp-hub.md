@@ -28,7 +28,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - **Passthrough Session**: A session type where agent identity is automatically forwarded to the MCP server, eliminating manual session selection
 - **Credential Binding**: Associating credentials with sessions for secure access (not required for passthrough)
 - **Session-to-Role Mapping**: Assigning sessions or passthrough configuration to specific agent roles or identities
-- **Agent Identity Validation**: All MCP apps must support agent identities as first-class OIDC principals. The MCP Demo App serves as a reference implementation and validation artifact for this requirement.
+- **Agent Identity Validation**: All MCP apps must support agent identities as first-class OIDC principals. The MCP Demo App serves as a reference implementation and validation artifact, now validating both dual-identity propagation (agent and user identities forwarded independently by the Communication Hub) and per-identity `mcp_role` claim-based tool access control.
 
 
 ## Acceptance Criteria
@@ -46,7 +46,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - When passthrough is enabled, agent identity is automatically forwarded to the MCP server
 - UI clearly distinguishes passthrough session type from traditional session selection
 - No regression in existing session-based workflows
-- MCP Demo App is available as a reference for validating agent identity authentication, passthrough, and tool registration flows
+- MCP Demo App is available as a reference for validating dual-identity propagation (both agent and user identities), passthrough session type, per-identity `mcp_role` claim-based tool access control, and tool registration flows
 
 ## Out of Scope
 - Changes to underlying authentication protocols or OIDC/OAuth2 flows

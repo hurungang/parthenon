@@ -140,6 +140,11 @@
 - Runtime Control Dashboard > returns recursion_validation_failed contract for run preflight dead-loop checks
 - Runtime Control Dashboard > renders vendor → model → guardrail hierarchy in the runtime control panel
 - Runtime Control Dashboard > vendor disable cascades the cascade-source badge to all child models
+- test_hello_agent_tool_with_role_returns_greeting
+- test_hello_agent_tool_without_role_returns_access_denied
+- test_hello_user_tool_with_role_returns_greeting
+- test_hello_user_tool_without_role_returns_access_denied
+- test_tools_call_with_real_jwt_returns_agent_sub
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -286,3 +291,8 @@
 | 130 | System Entry — Deduplication | Admin opens MCP Hub and sees exactly one "System" entry with a "Built-in" chip — visually distinct from user-registered servers | fix-mcp-hub-sync-and-sessions | mcp-hub.spec.ts |
 | 131 | Sync Visibility — Session Gate | Admin sees sync button disabled with tooltip for servers with zero sessions, guiding them to create a session first | fix-mcp-hub-sync-and-sessions | mcp-hub.spec.ts |
 | 132 | Sync — Real Backend 422 Guard | Admin creates a server via API, attempts sync without sessions, and receives HTTP 422 with "no configured sessions" detail | fix-mcp-hub-sync-and-sessions | mcp-hub.spec.ts |
+| 133 | MCP Dual-Identity — helloAgent authorized | Agent with `mcp_role: demo_agent` calls helloAgent and receives greeting with agent claims (sub, realm, role) | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
+| 134 | MCP Dual-Identity — helloAgent access-denied | Agent without required `demo_agent` role gets JSON-RPC success response with `access_denied: true` (HTTP 200, not 403) | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
+| 135 | MCP Dual-Identity — helloUser authorized | User identity via `X-User-Identity` header with `mcp_role: demo_user` gets greeting with user claims — demonstrates dual-identity chain | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
+| 136 | MCP Dual-Identity — helloUser access-denied | User without required `demo_user` role gets access-denied — proves per-tool role gating works independently from agent identity | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
+| 137 | MCP Dual-Identity — helloWorld regression | Existing helloWorld tool unchanged: still surfaces agent identity, no role gating, works with real Keycloak JWT | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |

@@ -75,6 +75,7 @@ custom:
 #   uvicorn: ERROR         — silence uvicorn access logs
 log_levels:
   root: "INFO"
+  app.api.deps: "DEBUG"
   # app.services: "DEBUG"
   # uvicorn.access: "WARNING"
 

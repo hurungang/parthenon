@@ -170,16 +170,10 @@ function toDelegationSnippetLine(status: ChatStatus): DelegationSnippetLine | nu
     }
   }
 
-  if (status.kind === 'using_tool' && status.toolName) {
-    return {
-      id: crypto.randomUUID(),
-      kind: 'using_tool',
-      agentType: null,
-      toolName: status.toolName,
-      logTitle: null,
-      timestamp: status.timestamp,
-    }
-  }
+  // Note: 'using_tool' snippets are intentionally NOT added to the delegation
+  // cycle panel — they represent regular MCP/system tool execution, not agent
+  // delegation.  The standalone status line (statusUsingTool) handles them
+  // separately in ConversationDialog.
 
   return null
 }

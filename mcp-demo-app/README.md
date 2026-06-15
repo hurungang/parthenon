@@ -1,6 +1,6 @@
 # MCP Demo App
 
-A standalone Python FastAPI service that authenticates with the Keycloak `ai_agents` realm, exposes a single `helloWorld` MCP tool, and self-registers with the Parthenon MCP Hub under the slug `demo`. Its primary purpose is to **validate the end-to-end agent identity propagation pattern**: a Keycloak-issued agent JWT flows from the Hub proxy into this service, is validated against the Keycloak JWKS, and the agent's identity is surfaced in the tool response.
+A standalone Python FastAPI service that authenticates with the Keycloak `ai_agents` realm, exposes three MCP tools (`helloWorld`, `helloAgent`, `helloUser`), and self-registers with the Parthenon MCP Hub under the slug `demo`. Its primary purpose is to **validate the end-to-end dual-identity propagation pattern**: agent and user identity JWTs forwarded by the Communication Hub are independently validated against their respective Keycloak realms, and per-identity `mcp_role`-based access control is enforced at the tool level.
 
 External contributions to this demo app are covered by the repository CLA
 process. See [../CLA.md](../CLA.md) and [../CONTRIBUTING.md](../CONTRIBUTING.md).
@@ -87,6 +87,8 @@ Copy `.env.example` to `.env` and fill in the values.
 | `KEYCLOAK_REALM` | `ai_agents` | Keycloak realm that issues agent identities |
 | `KEYCLOAK_CLIENT_ID` | _(required)_ | Client ID registered in `ai_agents` realm for this app |
 | `KEYCLOAK_CLIENT_SECRET` | _(required)_ | Client secret for `KEYCLOAK_CLIENT_ID` |
+| `KEYCLOAK_USER_REALM` | _(empty)_ | Keycloak realm that issues user identities. Falls back to `KEYCLOAK_REALM` when unset (single-realm mode). |
+| `KEYCLOAK_USER_CLIENT_ID` | _(empty)_ | Client ID in the user realm for this app. Not required when `KEYCLOAK_USER_REALM` is empty. |
 | `HUB_BASE_URL` | _(required)_ | Parthenon backend base URL, e.g. `http://localhost:8000` |
 | `HUB_API_TOKEN` | _(required)_ | Bearer token used when calling Hub registration APIs |
 | `APP_BASE_URL` | _(required)_ | Publicly reachable URL of this service (used when registering with Hub) |
@@ -114,6 +116,7 @@ Idempotent initialization script that sets up the Keycloak client and configurat
 | `-AdminUser` | `admin` | Keycloak admin username |
 | `-AdminPassword` | `admin` | Keycloak admin password |
 | `-HubApiToken` | _(prompts)_ | Hub API token to write to .env |
+| `-UserRealm` | _(empty)_ | User realm for dual-realm setup |
 | `-Force` | _(switch)_ | Force recreation of .env even if it exists |
 
 **Examples:**
@@ -129,16 +132,21 @@ Idempotent initialization script that sets up the Keycloak client and configurat
 
 # Different admin credentials
 .\init.ps1 -AdminUser "myadmin" -AdminPassword "mypassword"
+
+# Dual-realm setup with user realm
+.\init.ps1 -UserRealm "parthenon"
 ```
 
 **What it does:**
 1. ✅ Checks Keycloak connectivity and realm existence
-2. ✅ Authenticates as Keycloak admin
-3. ✅ Checks if `mcp-demo-app` client exists
-4. ✅ Creates client if needed (idempotent)
-5. ✅ Retrieves client secret
-6. ✅ Creates/updates `.env` file with credentials
-7. ✅ Preserves existing `HUB_API_TOKEN` if present (unless `-Force` used)
+2. ✅ Verifies user realm if `-UserRealm` is provided
+3. ✅ Authenticates as Keycloak admin
+4. ✅ Checks if `mcp-demo-app` client exists
+5. ✅ Creates client if needed (idempotent)
+6. ✅ Retrieves client secret
+7. ✅ Creates realm roles `demo_agent` (agent realm) and `demo_user` (user realm) if needed
+8. ✅ Creates/updates `.env` file with credentials
+9. ✅ Preserves existing `HUB_API_TOKEN` if present (unless `-Force` used)
 
 ### `setup-keycloak.ps1` - Legacy Setup Script
 
@@ -179,7 +187,7 @@ uvicorn app.main:app --reload --port 7001
 On startup the app will:
 1. Obtain its own access token from Keycloak (client credentials grant).
 2. Register itself with the Parthenon Hub (`POST /api/v1/mcp/servers`).
-3. Trigger a tool sync (`POST /api/v1/mcp/servers/{id}/sync`) so the Hub discovers `helloWorld`.
+3. Trigger a tool sync (`POST /api/v1/mcp/servers/{id}/sync`) so the Hub discovers all three tools (`helloWorld`, `helloAgent`, `helloUser`).
 
 ---
 
@@ -226,7 +234,11 @@ MCP JSON-RPC 2.0 endpoint. Three methods are supported:
 {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
 ```
 
-#### `tools/call` — requires `Authorization: Bearer <agent_jwt>`
+Returns three tools: `helloWorld`, `helloAgent`, and `helloUser`.
+
+#### `tools/call` — `helloWorld` (agent identity, no role gating)
+
+Requires `Authorization: Bearer <agent_jwt>` header.
 
 ```json
 {
@@ -237,21 +249,89 @@ MCP JSON-RPC 2.0 endpoint. Three methods are supported:
 }
 ```
 
-Example response:
+#### `tools/call` — `helloAgent` (agent identity, requires `mcp_role: demo_agent`)
+
+Requires `Authorization: Bearer <agent_jwt>` header. Returns an access-denied result when the agent's `mcp_role` claim is not `demo_agent`.
+
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 3,
+  "id": 4,
+  "method": "tools/call",
+  "params": {"name": "helloAgent", "arguments": {}}
+}
+```
+
+Example success response:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
   "result": {
     "content": [{"type": "text", "text": "..."}],
     "result": {
-      "message": "Hello from MCP Demo App!",
+      "message": "Hello Agent!",
       "agent_sub": "service-account-my-agent",
+      "agent_realm": "http://keycloak:8082/realms/ai_agents",
+      "agent_mcp_role": "demo_agent",
       "agent_claims": { ... }
     }
   }
 }
 ```
+
+Example access-denied response (HTTP 200):
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [{"type": "text", "text": "..."}],
+    "result": {
+      "access_denied": true,
+      "reason": "Agent identity lacks required mcp_role: demo_agent"
+    }
+  }
+}
+```
+
+#### `tools/call` — `helloUser` (user identity, requires `mcp_role: demo_user`)
+
+Requires `X-User-Identity: Bearer <user_jwt>` header (does **not** require `Authorization`). Returns an access-denied result when the user's `mcp_role` claim is not `demo_user`.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {"name": "helloUser", "arguments": {}}
+}
+```
+
+Example success response:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "content": [{"type": "text", "text": "..."}],
+    "result": {
+      "message": "Hello User!",
+      "user_sub": "user-abc-123",
+      "user_realm": "http://keycloak:8082/realms/parthenon",
+      "user_mcp_role": "demo_user",
+      "user_claims": { ... }
+    }
+  }
+}
+```
+
+#### Identity Headers
+
+| Header | Identity | Required For |
+|--------|----------|-------------|
+| `Authorization: Bearer <token>` | Agent identity JWT | `helloWorld`, `helloAgent` |
+| `X-User-Identity: Bearer <token>` | User identity JWT | `helloUser` |
 
 ---
 
@@ -277,7 +357,42 @@ This causes the Hub to call `POST {APP_BASE_URL}/mcp` with `{"method": "tools/li
 
 ---
 
-## Verifying Agent Identity
+## Dual-Identity Setup
+
+The MCP Demo App supports two identity validation modes:
+
+| Mode | Description |
+|------|-------------|
+| **Single-realm** (default) | `KEYCLOAK_USER_REALM` is left empty. Both agent and user tokens are validated against the same Keycloak realm (`KEYCLOAK_REALM`). |
+| **Dual-realm** | `KEYCLOAK_USER_REALM` is set to a separate realm (e.g. `parthenon`). Agent tokens are validated against `KEYCLOAK_REALM`, user tokens against `KEYCLOAK_USER_REALM`. |
+
+### Configuring Dual-Realm Mode
+
+1. Ensure both realms exist in Keycloak (e.g. `ai_agents` for agents, `parthenon` for users).
+2. Run the init script with the user realm:
+   ```powershell
+   .\init.ps1 -UserRealm "parthenon"
+   ```
+   This verifies both realms exist, writes `KEYCLOAK_USER_REALM` to `.env`, and creates realm roles `demo_agent` (in `ai_agents`) and `demo_user` (in `parthenon`).
+3. Or manually add to `.env`:
+   ```
+   KEYCLOAK_USER_REALM=parthenon
+   KEYCLOAK_USER_CLIENT_ID=mcp-demo-app
+   ```
+
+### Assigning mcp_role Claims
+
+The `helloAgent` tool requires the agent to have the `demo_agent` realm role, and `helloUser` requires the user to have the `demo_user` realm role. These roles must be assigned in Keycloak:
+
+1. In the agent realm, assign the `demo_agent` realm role to the agent's client or user.
+2. In the user realm, assign the `demo_user` realm role to the user.
+3. If using client credentials, the service account must be granted the realm role.
+
+Without these role assignments, the tools will return an access-denied result (HTTP 200 with `access_denied: true`).
+
+## Verifying Tool Behavior
+
+### `helloWorld` (agent identity, no role gating)
 
 1. Obtain an agent JWT from Keycloak `ai_agents` realm:
 
@@ -297,7 +412,53 @@ curl -s -X POST http://localhost:7001/mcp \
   | jq .result.result.agent_sub
 ```
 
-The printed value should match the `sub` claim in the JWT — confirming end-to-end agent identity propagation.
+### `helloAgent` (agent identity, requires `demo_agent` role)
+
+1. Ensure the agent has the `demo_agent` realm role assigned in Keycloak.
+2. Obtain an agent JWT (same as above).
+3. Call `helloAgent`:
+
+```bash
+curl -s -X POST http://localhost:7001/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <agent_jwt>" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"helloAgent","arguments":{}}}' \
+  | jq .
+```
+
+The response will include `agent_sub`, `agent_realm`, `agent_mcp_role`, and `agent_claims` on success, or `access_denied: true` if the role is missing.
+
+### `helloUser` (user identity, requires `demo_user` role)
+
+1. Ensure the user has the `demo_user` realm role assigned in Keycloak.
+2. Obtain a user JWT from the user realm (or use a client credentials grant with the role assigned to the service account):
+
+```bash
+# Obtain user token (e.g. from parthenon realm)
+USER_TOKEN=$(curl -s -X POST http://localhost:8082/realms/parthenon/protocol/openid-connect/token \
+  -d "grant_type=client_credentials&client_id=<user-client>&client_secret=<secret>" \
+  | jq -r .access_token)
+
+# Obtain agent token (needed even when not used for helloUser — the Hub forwards it)
+AGENT_TOKEN=$(curl -s -X POST http://localhost:8082/realms/ai_agents/protocol/openid-connect/token \
+  -d "grant_type=client_credentials&client_id=<agent-client>&client_secret=<secret>" \
+  | jq -r .access_token)
+```
+
+3. Call `helloUser` with the user identity in `X-User-Identity` header:
+
+```bash
+curl -s -X POST http://localhost:7001/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -H "X-User-Identity: Bearer $USER_TOKEN" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"helloUser","arguments":{}}}' \
+  | jq .
+```
+
+The response will include `user_sub`, `user_realm`, `user_mcp_role`, and `user_claims` on success, or `access_denied: true` if the role is missing.
+
+> **Note:** The `X-User-Identity` header is the mechanism by which the Communication Hub forwards the user identity JWT to MCP servers. The `Authorization` header carries the agent identity. For `helloUser`, only the `X-User-Identity` header is inspected — the `Authorization` header is not required (though it is present when called through the Hub).
 
 ---
 

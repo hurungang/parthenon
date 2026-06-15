@@ -168,7 +168,18 @@ def require_permission(module: str, action: str) -> Callable:
 
         claims: dict[str, Any] = getattr(request.state, "identity", {})
         sub: str | None = claims.get("sub")
+        realm_roles = claims.get("realm_access", {}).get("roles", [])
+        client_roles: list[str] = []
+        resource_access = claims.get("resource_access", {})
+        for client_id, access in (resource_access or {}).items():
+            if isinstance(access, dict):
+                client_roles.extend(access.get("roles", []))
+        logger.debug(
+            "require_permission check: module=%s action=%s sub=%s realm_roles=%s client_roles=%s",
+            module, action, sub, realm_roles, client_roles,
+        )
         if not sub:
+            logger.warning("require_permission: No identity claims found in request.state.identity")
             raise HTTPException(status_code=403, detail="No identity claims found.")
 
         result = await db.execute(
@@ -176,10 +187,19 @@ def require_permission(module: str, action: str) -> Callable:
         )
         user = result.scalar_one_or_none()
         if user is None:
+            logger.warning(
+                "require_permission: PlatformUser not found for sub=%s — user must re-authenticate",
+                sub,
+            )
             raise HTTPException(
                 status_code=403,
                 detail="User not found in platform. Please re-authenticate.",
             )
+
+        logger.debug(
+            "require_permission: PlatformUser found — id=%s sub=%s",
+            user.id, user.sub,
+        )
 
         auth = await PermissionEngine().authorize(
             db=db,
@@ -190,6 +210,10 @@ def require_permission(module: str, action: str) -> Callable:
             resource_tags={},
         )
         if not auth.allowed:
+            logger.warning(
+                "require_permission DENIED: user_id=%s module=%s action=%s reason=%s",
+                user.id, module, action, auth.reason,
+            )
             raise HTTPException(
                 status_code=403,
                 detail=PermissionDeniedDetail(
@@ -201,6 +225,10 @@ def require_permission(module: str, action: str) -> Callable:
                     ),
                 ).model_dump(),
             )
+        logger.debug(
+            "require_permission ALLOWED: user_id=%s module=%s action=%s",
+            user.id, module, action,
+        )
 
         return claims
 

@@ -1,13 +1,14 @@
-"""Unit tests for KeycloakClient, verify_agent_jwt, and get_agent_identity.
+"""Unit tests for KeycloakClient, verify_agent_jwt, verify_user_jwt,
+get_agent_identity, and get_user_identity.
 
 Uses a static RSA key pair to generate test JWTs without a live Keycloak
-instance. Covers all auth scenarios from the test plan (sections 3.3 & 3.4).
+instance.
 """
 from __future__ import annotations
 
 import time
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from cryptography.hazmat.backends import default_backend
@@ -362,3 +363,172 @@ async def test_get_agent_identity_valid_bearer(rsa_private_key, jwks):
         claims = await get_agent_identity(request)
 
     assert claims["sub"] == "agent-123"
+
+
+# ── verify_user_jwt ───────────────────────────────────────────────────────────
+
+_TEST_USER_ISSUER = "http://keycloak:8082/realms/parthenon"
+
+
+def _make_user_token(rsa_private_key, *, sub="user-456", issuer=_TEST_USER_ISSUER, expired=False, extra_claims=None):
+    return _make_token(rsa_private_key, sub=sub, issuer=issuer, expired=expired, extra_claims=extra_claims)
+
+
+async def test_verify_user_jwt_valid_token_returns_claims(rsa_private_key, jwks):
+    """Valid user JWT against correct issuer → decoded claims returned."""
+    token = _make_user_token(rsa_private_key)
+
+    with (
+        patch("app.auth.settings") as mock_settings,
+        patch("app.auth.user_keycloak_client") as mock_client,
+    ):
+        mock_settings.KEYCLOAK_URL = "http://keycloak:8082"
+        mock_settings.KEYCLOAK_USER_REALM = "parthenon"
+        mock_settings.KEYCLOAK_REALM = "ai_agents"
+        mock_client.get_jwks = AsyncMock(return_value=jwks)
+
+        from app.auth import verify_user_jwt
+
+        claims = await verify_user_jwt(token)
+
+    assert claims["sub"] == "user-456"
+    assert claims["iss"] == _TEST_USER_ISSUER
+
+
+async def test_verify_user_jwt_expired_token_raises_401(rsa_private_key, jwks):
+    """Expired user JWT → 401."""
+    token = _make_user_token(rsa_private_key, expired=True)
+
+    with (
+        patch("app.auth.settings") as mock_settings,
+        patch("app.auth.user_keycloak_client") as mock_client,
+    ):
+        mock_settings.KEYCLOAK_URL = "http://keycloak:8082"
+        mock_settings.KEYCLOAK_USER_REALM = "parthenon"
+        mock_settings.KEYCLOAK_REALM = "ai_agents"
+        mock_client.get_jwks = AsyncMock(return_value=jwks)
+
+        from app.auth import verify_user_jwt
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_user_jwt(token)
+
+    assert exc_info.value.status_code == 401
+
+
+async def test_verify_user_jwt_wrong_issuer_raises_401(rsa_private_key, jwks):
+    """User JWT with mismatched issuer → 401."""
+    token = _make_user_token(rsa_private_key, issuer="http://evil.example.com/realms/hack")
+
+    with (
+        patch("app.auth.settings") as mock_settings,
+        patch("app.auth.user_keycloak_client") as mock_client,
+    ):
+        mock_settings.KEYCLOAK_URL = "http://keycloak:8082"
+        mock_settings.KEYCLOAK_USER_REALM = "parthenon"
+        mock_settings.KEYCLOAK_REALM = "ai_agents"
+        mock_client.get_jwks = AsyncMock(return_value=jwks)
+
+        from app.auth import verify_user_jwt
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_user_jwt(token)
+
+    assert exc_info.value.status_code == 401
+
+
+async def test_verify_user_jwt_invalid_signature_raises_401(rsa_private_key, jwks):
+    """User JWT with tampered signature → 401."""
+    token = _make_user_token(rsa_private_key)
+    parts = token.split(".")
+    parts[2] = parts[2][:-4] + "XXXX"
+    bad_token = ".".join(parts)
+
+    with (
+        patch("app.auth.settings") as mock_settings,
+        patch("app.auth.user_keycloak_client") as mock_client,
+    ):
+        mock_settings.KEYCLOAK_URL = "http://keycloak:8082"
+        mock_settings.KEYCLOAK_USER_REALM = "parthenon"
+        mock_settings.KEYCLOAK_REALM = "ai_agents"
+        mock_client.get_jwks = AsyncMock(return_value=jwks)
+
+        from app.auth import verify_user_jwt
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_user_jwt(bad_token)
+
+    assert exc_info.value.status_code == 401
+
+
+async def test_verify_user_jwt_falls_back_to_agent_realm_when_user_realm_unset(rsa_private_key, jwks):
+    """When KEYCLOAK_USER_REALM is empty, falls back to agent realm issuer."""
+    token = _make_token(rsa_private_key)  # agent-realm token
+
+    with (
+        patch("app.auth.settings") as mock_settings,
+        patch("app.auth.user_keycloak_client") as mock_client,
+    ):
+        mock_settings.KEYCLOAK_URL = "http://keycloak:8082"
+        mock_settings.KEYCLOAK_USER_REALM = ""
+        mock_settings.KEYCLOAK_REALM = "ai_agents"
+        mock_client.get_jwks = AsyncMock(return_value=jwks)
+
+        from app.auth import verify_user_jwt
+
+        claims = await verify_user_jwt(token)
+
+    assert claims["sub"] == "agent-123"
+    assert _TEST_ISSUER in claims["iss"]
+
+
+# ── get_user_identity ─────────────────────────────────────────────────────────
+
+
+async def test_get_user_identity_valid_header(rsa_private_key, jwks):
+    """Valid X-User-Identity Bearer token → decoded claims returned."""
+    token = _make_user_token(rsa_private_key)
+
+    with (
+        patch("app.auth.settings") as mock_settings,
+        patch("app.auth.user_keycloak_client") as mock_client,
+    ):
+        mock_settings.KEYCLOAK_URL = "http://keycloak:8082"
+        mock_settings.KEYCLOAK_USER_REALM = "parthenon"
+        mock_settings.KEYCLOAK_REALM = "ai_agents"
+        mock_client.get_jwks = AsyncMock(return_value=jwks)
+
+        request = MagicMock()
+        request.headers.get.return_value = f"Bearer {token}"
+
+        from app.auth import get_user_identity
+
+        claims = await get_user_identity(request)
+
+    assert claims["sub"] == "user-456"
+
+
+async def test_get_user_identity_missing_header():
+    """No X-User-Identity header → 401."""
+    from app.auth import get_user_identity
+
+    request = MagicMock()
+    request.headers.get.return_value = ""
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_user_identity(request)
+
+    assert exc_info.value.status_code == 401
+
+
+async def test_get_user_identity_malformed_header():
+    """X-User-Identity without 'Bearer ' prefix → 401."""
+    from app.auth import get_user_identity
+
+    request = MagicMock()
+    request.headers.get.return_value = "Basic abc123"
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_user_identity(request)
+
+    assert exc_info.value.status_code == 401

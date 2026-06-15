@@ -8,6 +8,8 @@ from typing import Any, Awaitable, Callable
 import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
+from app.communication_hub.api.internal.tool_routing import cache_user_jwt
+
 from app.core.config import get_settings
 from app.core.oidc_client import OIDCError, get_oidc_client
 from app.core.ssl_context import get_ssl_context
@@ -81,6 +83,13 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
 
     await websocket.accept()
     subject = claims.get("sub", "unknown")
+
+    # Cache the raw user JWT for dual-identity MCP tool calls
+    user_jwt = websocket.query_params.get("token")
+    if user_jwt:
+        cache_user_jwt(session_id, user_jwt)
+        logger.debug("Cached user JWT for session %s", session_id[:8])
+
     logger.info(
         "WebSocket connected: session=%s subject=%s",
         session_id,

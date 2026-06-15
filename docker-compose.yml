@@ -43,6 +43,7 @@ services:
     ports:
       - "8082:8080"
     volumes:
+      - parthenon-keycloak-data:/opt/keycloak/data
       - ./infra/keycloak/realm-import:/opt/keycloak/data/import
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo '' >&3 && exit 0 || exit 1"]
@@ -333,6 +334,7 @@ volumes:
   redis_data:
   prometheus_data:
   loki_data:
+  parthenon-keycloak-data:
 
 networks:
   parthenon:

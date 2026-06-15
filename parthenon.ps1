@@ -395,7 +395,7 @@ $Script:ServiceConfig = @{
         StartCommand = {
             Write-Host "Starting frontend dev server..." -ForegroundColor Cyan
             $frontendPath = Join-Path $Script:ProjectRoot "frontend"
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", "cd /d $frontendPath && npm run dev"
+            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-Command", "Set-Location '$frontendPath'; npm run dev"
             
             # Wait for frontend to be ready
             Write-Host "  Waiting for frontend to be ready (max 30s)..." -ForegroundColor Cyan

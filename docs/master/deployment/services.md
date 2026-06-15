@@ -21,7 +21,7 @@ This inventory applies to both deployment targets:
 | OTEL Collector | `otel-collector` | Receives OTLP telemetry (traces, metrics, logs) from all services; fans out to Prometheus, Jaeger, and Loki backends |
 | PostgreSQL | `postgres` | Primary relational data store — accessed only by Control Center |
 | Redis | `redis` | In-memory data store for Control Center cache/pubsub, Communication Hub session context, and Agent Session Queue |
-| MCP Demo App | `parthenon-mcp-demo-app` | Standalone MCP server demonstrating end-to-end agent identity propagation; authenticates with the `ai_agents` realm; registers with the MCP Hub under slug `demo`; exposes the `helloWorld` tool |
+| MCP Demo App | `parthenon-mcp-demo-app` | Standalone MCP server demonstrating end-to-end dual-identity propagation. Authenticates with the `ai_agents` realm (agent identities) and optionally the `parthenon` realm (user identities) when `KEYCLOAK_USER_REALM` is configured. Registers with the MCP Hub under slug `demo`. Exposes three tools: `helloWorld` (no role gating), `helloAgent` (requires agent `mcp_role: demo_agent`), and `helloUser` (requires user `mcp_role: demo_user`). Requires either a single realm (backward-compatible) or two realms for full dual-identity validation coverage. Keycloak data is persisted via a Docker volume to survive container restarts. |
 
 ---
 

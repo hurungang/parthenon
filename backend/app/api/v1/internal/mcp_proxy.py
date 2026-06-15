@@ -41,6 +41,7 @@ class McpProxyRequest(BaseModel):
     agent_type_id: str  # Agent type ID to resolve role and MCP session
     agent_session_id: str | None = None  # Agent session ID (for logging only)
     agent_jwt: str | None = None  # Optional JWT for passthrough sessions
+    user_jwt: str | None = None  # Optional user identity JWT for dual-identity passthrough
 
 
 class McpProxyResponse(BaseModel):
@@ -198,6 +199,7 @@ async def proxy_mcp_tool(
             db=db,
             session_id=str(mcp_session.id),  # Use resolved MCP session ID
             agent_jwt=agent_jwt,
+            user_jwt=body.user_jwt,
         )
         logger.info("MCP proxy completed: tool=%s mcp_session=%s", body.tool_name, mcp_session.id)
         return McpProxyResponse(result=tool_result)

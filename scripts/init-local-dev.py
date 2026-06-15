@@ -12,10 +12,17 @@ Idempotent setup script that ensures:
 Safe to run multiple times - will skip steps that are already complete.
 """
 import asyncio
+import io
 import logging
 import os
 import sys
 from pathlib import Path
+
+# Fix Unicode print on Windows terminals
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Add backend to path
 backend_dir = Path(__file__).parent.parent / "backend"
@@ -91,7 +98,10 @@ class LocalDevInitializer:
             
             # Step 5: Ensure agent realm clients exist
             await self._ensure_agent_clients()
-            
+
+            # Step 5b: Ensure test agent identities exist
+            await self._ensure_test_agent_identities()
+
             # Step 6: Ensure admin user exists in Keycloak
             admin_user_id = await self._ensure_admin_user_in_keycloak()
             
@@ -249,7 +259,375 @@ class LocalDevInitializer:
                 ]
             )
             print(f"  ✓ Created agent client '{agent_client_id}' in agent realm")
-    
+
+        # Always ensure offline_access scope is enabled for agent OAuth
+        await self._enable_offline_access_scope(self.AGENT_REALM_NAME, agent_client_id)
+
+        # Add mcp_role claim mapper to agent client
+        await self._add_mcp_role_claim_mapper(self.AGENT_REALM_NAME, agent_client_id)
+
+        # Also add mcp_role claim mapper to user realm client
+        await self._add_mcp_role_claim_mapper(self.REALM_NAME, "parthenon-api")
+        await self._add_mcp_role_claim_mapper(self.REALM_NAME, "parthenon-api-ui")
+
+    async def _add_mcp_role_claim_mapper(self, realm_name: str, client_id: str):
+        """Register mcp_role attribute in user profile and add claim mapper."""
+        import httpx
+
+        base = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}"
+        h = {"Authorization": f"Bearer {self.admin_token.access_token}"}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # ── Step 1: Register mcp_role in user profile ──
+            resp = await client.get(f"{base}/users/profile", headers=h)
+            profile = resp.json() if resp.status_code == 200 else {"attributes": []}
+            existing_attrs = {a.get("name") for a in profile.get("attributes", [])}
+            if "mcp_role" not in existing_attrs:
+                profile.setdefault("attributes", []).append({
+                    "name": "mcp_role",
+                    "displayName": "MCP Role",
+                    "permissions": {"view": ["admin", "user"], "edit": ["admin"]},
+                    "multivalued": False,
+                    "validations": {},
+                    "annotations": {},
+                    "group": None,
+                })
+                resp = await client.put(f"{base}/users/profile", headers={**h, "Content-Type": "application/json"}, json=profile)
+                if resp.status_code in (200, 204):
+                    print(f"  ✓ Registered mcp_role attribute in user profile for '{realm_name}'")
+
+            # ── Step 2: Get client UUID ──
+            resp = await client.get(f"{base}/clients", params={"clientId": client_id}, headers=h)
+            clients = resp.json() if resp.status_code == 200 else []
+            if not clients:
+                return
+            client_uuid = clients[0]["id"]
+
+            # ── Step 3: Add claim mapper ──
+            resp = await client.get(f"{base}/clients/{client_uuid}/protocol-mappers/models", headers=h)
+            mappers = resp.json() if resp.status_code == 200 else []
+            if any(m.get("name") == "mcp_role" for m in mappers):
+                print(f"  ✓ mcp_role claim mapper already exists on '{client_id}' in '{realm_name}'")
+                return
+
+            mapper = {
+                "name": "mcp_role",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-usermodel-attribute-mapper",
+                "config": {
+                    "claim.name": "mcp_role",
+                    "user.attribute": "mcp_role",
+                    "access.token.claim": "true",
+                    "id.token.claim": "true",
+                    "userinfo.token.claim": "true",
+                    "jsonType.label": "String",
+                },
+            }
+            resp = await client.post(
+                f"{base}/clients/{client_uuid}/protocol-mappers/models",
+                headers=h, json=mapper,
+            )
+            if resp.status_code in (201, 204):
+                print(f"  ✓ Added mcp_role claim mapper to '{client_id}' in '{realm_name}'")
+
+    async def _enable_offline_access_scope(self, realm_name: str, client_id: str):
+        """Enable offline_access for a client so OAuth flow can get refresh tokens."""
+        import httpx
+
+        base = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}"
+        h = {"Authorization": f"Bearer {self.admin_token.access_token}"}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Get client UUID
+            resp = await client.get(f"{base}/clients", params={"clientId": client_id}, headers=h)
+            clients = resp.json() if resp.status_code == 200 else []
+            if not clients:
+                print(f"  ⚠ Could not find client '{client_id}' in realm '{realm_name}'")
+                return
+            client_uuid = clients[0]["id"]
+
+            # Find offline_access scope ID
+            resp = await client.get(f"{base}/client-scopes", headers=h)
+            scopes = resp.json() if resp.status_code == 200 else []
+            offline_scope = next((s for s in scopes if s.get("name") == "offline_access"), None)
+            if not offline_scope:
+                print(f"  ⚠ 'offline_access' scope not found in realm '{realm_name}'")
+                return
+
+            # Assign as optional client scope
+            resp = await client.put(
+                f"{base}/clients/{client_uuid}/optional-client-scopes/{offline_scope['id']}",
+                headers=h,
+            )
+            if resp.status_code in (204, 200):
+                print(f"  ✓ Enabled offline_access for client '{client_id}' in realm '{realm_name}'")
+            else:
+                print(f"  ⚠ Could not enable offline_access: HTTP {resp.status_code}")
+
+    async def _ensure_test_agent_identities(self):
+        """Create test agent identities in the ai_agents realm with demo_agent role."""
+        logger.info("Step 5b: Ensuring test agent identities...")
+
+        from app.db.models.agents import AgentIdentity, AgentIdentityType, AgentIdentityStatus
+
+        # Ensure realm roles exist
+        await self._ensure_realm_role(self.AGENT_REALM_NAME, "demo_agent", "Required mcp_role for helloAgent MCP tool")
+        await self._ensure_realm_role(self.REALM_NAME, "demo_user", "Required mcp_role for helloUser MCP tool")
+
+        # test_agent: has demo_agent role → helloAgent succeeds
+        # test_agent_2: NO demo_agent role → helloAgent access-denied
+        # admin: has demo_user role → helloUser succeeds
+        # testuser: NO demo_user role → helloUser access-denied
+        TEST_AGENTS = [
+            {"username": "test_agent", "password": "test_agent", "roles": ["demo_agent"], "mcp_role": "demo_agent"},
+            {"username": "test_agent_2", "password": "test_agent_2", "roles": [], "mcp_role": None},
+        ]
+        USER_REALM_USERS = [
+            {"username": "testuser", "password": "testuser", "roles": [], "mcp_role": None},
+        ]
+
+        # ── Agent identities (ai_agents realm) ──
+        for agent in TEST_AGENTS:
+            username = agent["username"]
+            try:
+                await self.kc_client.create_user(
+                    self.admin_token,
+                    self.AGENT_REALM_NAME,
+                    username,
+                    agent["password"],
+                    roles=agent["roles"],
+                )
+                await self._reset_user_password(self.AGENT_REALM_NAME, username, agent["password"])
+
+                # Set mcp_role user attribute
+                if agent.get("mcp_role"):
+                    await self._set_user_attribute(self.AGENT_REALM_NAME, username, "mcp_role", agent["mcp_role"])
+                else:
+                    await self._remove_user_attribute(self.AGENT_REALM_NAME, username, "mcp_role")
+            except KeycloakAdminError as e:
+                print(f"  ⚠ Failed to create Keycloak user '{username}': {e.detail}")
+                continue
+
+            # Ensure correct role assignments (remove unwanted roles)
+            await self._sync_user_roles(self.AGENT_REALM_NAME, username, agent["roles"] + ["offline_access"])
+
+            # Create AgentIdentity record in DB
+            engine = create_async_engine(str(self.settings.database_url))
+            async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with async_session() as db:
+                result = await db.execute(
+                    select(AgentIdentity).where(AgentIdentity.name == f"{username}@ai_agents")
+                )
+                existing = result.scalar_one_or_none()
+                if existing:
+                    print(f"  ✓ Agent identity '{username}@ai_agents' exists (demo_agent={'demo_agent' in agent['roles']})")
+                    # Clear tokens if they were issued by a previous Keycloak instance
+                    if existing.access_token and existing.token_expires_at:
+                        from datetime import datetime as dt, timezone as tz
+                        if existing.token_expires_at < dt.now(tz.utc):
+                            existing.access_token = None
+                            existing.refresh_token = None
+                            existing.encrypted_refresh_token = None
+                            existing.token_status = None
+                            existing.token_expires_at = None
+                else:
+                    identity = AgentIdentity(
+                        name=f"{username}@ai_agents",
+                        identity_type=AgentIdentityType.realm_user,
+                        realm_name=self.AGENT_REALM_NAME,
+                        realm_username=username,
+                        status=AgentIdentityStatus.active,
+                    )
+                    db.add(identity)
+                    await db.commit()
+                    print(f"  ✓ Created agent identity '{username}@ai_agents'")
+            await engine.dispose()
+
+        # ── User realm identities (parthenon realm) ──
+        for user_info in USER_REALM_USERS:
+            username = user_info["username"]
+            try:
+                await self.kc_client.create_user(
+                    self.admin_token,
+                    self.REALM_NAME,
+                    username,
+                    user_info["password"],
+                    roles=user_info["roles"],
+                )
+                await self._reset_user_password(self.REALM_NAME, username, user_info["password"])
+
+                if user_info.get("mcp_role"):
+                    await self._set_user_attribute(self.REALM_NAME, username, "mcp_role", user_info["mcp_role"])
+                else:
+                    await self._remove_user_attribute(self.REALM_NAME, username, "mcp_role")
+            except KeycloakAdminError as e:
+                print(f"  ⚠ Failed to create user '{username}' in {self.REALM_NAME}: {e.detail}")
+                continue
+
+            await self._sync_user_roles(self.REALM_NAME, username, user_info["roles"])
+            print(f"  ✓ Test user '{username}' in realm '{self.REALM_NAME}' (demo_user=False)")
+
+        # ── Admin gets demo_user role (additive, preserves admin/user roles) ──
+        await self._sync_user_roles(self.REALM_NAME, "admin", ["admin", "demo_user", "offline_access"])
+        await self._set_user_attribute(self.REALM_NAME, "admin", "mcp_role", "demo_user")
+        print(f"  ✓ Admin user has admin + demo_user roles + mcp_role=demo_user in realm '{self.REALM_NAME}'")
+
+    async def _ensure_realm_role(self, realm_name: str, role_name: str, description: str):
+        """Ensure a realm-level role exists (idempotent)."""
+        import httpx
+
+        url = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}/roles/{role_name}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {self.admin_token.access_token}"},
+            )
+        if resp.status_code == 200:
+            return  # Already exists
+
+        create_url = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}/roles"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                create_url,
+                json={"name": role_name, "description": description},
+                headers={"Authorization": f"Bearer {self.admin_token.access_token}"},
+            )
+        if resp.status_code == 201:
+            print(f"  ✓ Created realm role '{role_name}' in realm '{realm_name}'")
+        elif resp.status_code == 409:
+            print(f"  ✓ Realm role '{role_name}' already exists in '{realm_name}'")
+        else:
+            print(f"  ⚠ Could not create role '{role_name}': HTTP {resp.status_code}")
+
+    async def _reset_user_password(self, realm_name: str, username: str, password: str):
+        """Reset a user's password via Keycloak admin API."""
+        import httpx
+
+        user_id = await self.kc_client.get_user_by_username(self.admin_token, realm_name, username)
+        if not user_id:
+            return
+
+        url = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}/users/{user_id}/reset-password"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.put(
+                url,
+                json={"type": "password", "value": password, "temporary": False},
+                headers={"Authorization": f"Bearer {self.admin_token.access_token}"},
+            )
+        if resp.status_code == 204:
+            logger.info("Password reset for user %r in realm %r", username, realm_name)
+
+    async def _sync_user_roles(self, realm_name: str, username: str, desired_roles: list[str]):
+        """Ensure a user has desired realm roles (additive only — never removes existing roles)."""
+        import httpx
+
+        user_id = await self.kc_client.get_user_by_username(self.admin_token, realm_name, username)
+        if not user_id:
+            return
+
+        base = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            h = {"Authorization": f"Bearer {self.admin_token.access_token}"}
+
+            # Get currently assigned realm roles
+            resp = await client.get(f"{base}/users/{user_id}/role-mappings/realm", headers=h)
+            current_roles = resp.json() if resp.status_code == 200 else []
+            current_names = {r.get("name") for r in current_roles if isinstance(r, dict)}
+
+            # Add missing roles (never remove)
+            to_add = set(desired_roles) - current_names
+            if to_add:
+                resp = await client.get(f"{base}/roles", headers=h)
+                all_roles = resp.json() if resp.status_code == 200 else []
+                role_reprs = [r for r in all_roles if r.get("name") in to_add]
+                if role_reprs:
+                    resp = await client.post(f"{base}/users/{user_id}/role-mappings/realm",
+                        headers=h, json=role_reprs)
+                    if resp.status_code == 204:
+                        logger.info("Assigned roles %s to %r in %r", list(to_add), username, realm_name)
+
+    async def _set_user_attribute(self, realm_name: str, username: str, attr_name: str, attr_value: str):
+        """Set a single-valued user attribute via Keycloak admin API.
+        
+        Uses GET-then-PUT to preserve existing user fields."""
+        import httpx
+
+        user_id = await self.kc_client.get_user_by_username(self.admin_token, realm_name, username)
+        if not user_id:
+            return
+
+        url = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}/users/{user_id}"
+        h = {"Authorization": f"Bearer {self.admin_token.access_token}"}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # GET current user to preserve all fields
+            resp = await client.get(url, headers=h)
+            if resp.status_code != 200:
+                return
+            user_data = resp.json()
+
+            # Skip if attribute already has the correct value
+            current = user_data.get("attributes", {}).get(attr_name)
+            if current == [attr_value]:
+                return  # Already set — skip to avoid invalidating Keycloak sessions
+
+            # Restore fields that may have been wiped by a prior faulty update
+            if not user_data.get("email"):
+                user_data["email"] = f"{username}@test.local"
+            if not user_data.get("firstName"):
+                user_data["firstName"] = "Test"
+            if not user_data.get("lastName"):
+                user_data["lastName"] = "User"
+
+            # Merge attributes
+            attrs = dict(user_data.get("attributes", {}))
+            attrs[attr_name] = [attr_value]
+            user_data["attributes"] = attrs
+
+            # PUT back with merged attributes
+            resp = await client.put(url, headers={**h, "Content-Type": "application/json"}, json=user_data)
+            if resp.status_code == 204:
+                logger.debug("Set attribute %s=%s on user %r in %r", attr_name, attr_value, username, realm_name)
+
+    async def _remove_user_attribute(self, realm_name: str, username: str, attr_name: str):
+        """Remove a user attribute via Keycloak admin API.
+        
+        Uses GET-then-PUT to preserve existing user fields."""
+        import httpx
+
+        user_id = await self.kc_client.get_user_by_username(self.admin_token, realm_name, username)
+        if not user_id:
+            return
+
+        url = f"{self.KEYCLOAK_BASE_URL}/admin/realms/{realm_name}/users/{user_id}"
+        h = {"Authorization": f"Bearer {self.admin_token.access_token}"}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=h)
+            if resp.status_code != 200:
+                return
+            user_data = resp.json()
+
+            # Skip if attribute is already absent
+            if attr_name not in user_data.get("attributes", {}):
+                return  # Already absent — skip to avoid invalidating Keycloak sessions
+
+            # Restore fields that may have been wiped
+            if not user_data.get("email"):
+                user_data["email"] = f"{username}@test.local"
+            if not user_data.get("firstName"):
+                user_data["firstName"] = "Test"
+            if not user_data.get("lastName"):
+                user_data["lastName"] = "User"
+
+            attrs = dict(user_data.get("attributes", {}))
+            attrs.pop(attr_name, None)
+            user_data["attributes"] = attrs
+
+            resp = await client.put(url, headers={**h, "Content-Type": "application/json"}, json=user_data)
+            if resp.status_code == 204:
+                logger.debug("Removed attribute %s from user %r in %r", attr_name, username, realm_name)
+
     async def _ensure_admin_user_in_keycloak(self) -> str:
         """Ensure admin user exists in Keycloak and return their UUID.
         
@@ -374,9 +752,15 @@ class LocalDevInitializer:
                 result = await db.execute(
                     select(PlatformUser).where(PlatformUser.email == self.ADMIN_EMAIL)
                 )
-                old_admin = result.scalar_one_or_none()
-                
-                if old_admin:
+                old_admins = result.scalars().all()
+
+                if old_admins:
+                    # Keep the first, remove duplicates, update sub
+                    old_admin = old_admins[0]
+                    if len(old_admins) > 1:
+                        print(f"  ⚠ Found {len(old_admins)} admin users with same email, consolidating...")
+                        for dup in old_admins[1:]:
+                            await db.delete(dup)
                     print(f"  ⚠ Found existing admin user with different sub (old: {old_admin.sub}, new: {keycloak_user_id})")
                     print(f"    Updating sub to match current Keycloak user...")
                     old_admin.sub = keycloak_user_id
