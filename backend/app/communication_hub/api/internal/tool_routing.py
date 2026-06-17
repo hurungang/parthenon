@@ -94,6 +94,7 @@ class ToolCallRequest(BaseModel):
     session_id: str
     agent_type_id: str
     user_jwt: str | None = None  # User identity JWT for dual-identity passthrough
+    conv_session_id: str | None = None  # Parent conversation session ID for conversation-context interventions
 
 
 class ToolCallResponse(BaseModel):
@@ -245,10 +246,12 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
             )
 
     # Call Control Center with mTLS certificate
-    payload = {
+    payload: dict[str, Any] = {
         "session_id": body.session_id,
         "tool_args": body.tool_args,
     }
+    if body.conv_session_id:
+        payload["conversation_session_id"] = body.conv_session_id
 
     try:
         cc_client_kwargs, headers = _build_control_center_auth(request, cc_base)

@@ -7,61 +7,61 @@ This plan implements the surfacing of delegated sub-agent intervention requests 
 ## Task Checklist
 
 ### Phase 1 — Database Schema Changes
-- [ ] 1.1 — Add `turn_type` enum and field to `ConversationTurn` model
-- [ ] 1.2 — Add `intervene_request_id` FK to `ConversationTurn` model
-- [ ] 1.3 — Add `conversation_session_id` FK and `delegation_depth` to `InterveneRequest` model
-- [ ] 1.4 — Generate and verify Alembic migration
+- [x] 1.1 — Add `turn_type` enum and field to `ConversationTurn` model
+- [x] 1.2 — Add `intervene_request_id` FK to `ConversationTurn` model
+- [x] 1.3 — Add `conversation_session_id` FK and `delegation_depth` to `InterveneRequest` model
+- [x] 1.4 — Generate and verify Alembic migration
 
 ### Phase 2 — Backend Schema Updates
-- [ ] 2.1 — Update `ConversationTurnRead` Pydantic schema with new fields
-- [ ] 2.2 — Update `InterveneRequestCreate` and `InterveneRequestRead` Pydantic schemas
+- [x] 2.1 — Update `ConversationTurnRead` Pydantic schema with new fields
+- [x] 2.2 — Update `InterveneRequestCreate` and `InterveneRequestRead` Pydantic schemas
 
 ### Phase 3 — Backend Service Layer
-- [ ] 3.1 — Extend `ConversationStore.add_turn` to accept `turn_type` and `intervene_request_id`
-- [ ] 3.2 — Extend `InterveneRequestStore.create_request` to accept conversation context fields
-- [ ] 3.3 — Add `list_pending_for_conversation` query method to `InterveneRequestStore`
-- [ ] 3.4 — Extend `InterveneRequestStore.submit_response` to create a paired `intervene_response` conversation turn
+- [x] 3.1 — Extend `ConversationStore.add_turn` to accept `turn_type` and `intervene_request_id`
+- [x] 3.2 — Extend `InterveneRequestStore.create_request` to accept conversation context fields
+- [x] 3.3 — Add `list_pending_for_conversation` query method to `InterveneRequestStore`
+- [x] 3.4 — Extend `InterveneRequestStore.submit_response` to create a paired `intervene_response` conversation turn
 
 ### Phase 4 — Backend API Changes
-- [ ] 4.1 — Add `POST /api/v1/conversations/{session_id}/interventions/{request_id}/respond` endpoint
-- [ ] 4.2 — Add `GET /api/v1/conversations/{session_id}/interventions/pending` endpoint
-- [ ] 4.3 — Update `POST /api/v1/conversations/{session_id}/turns` to accept new turn types
-- [ ] 4.4 — Update `POST /api/v1/intervene/` create path to accept `conversation_session_id` and `delegation_depth`
+- [x] 4.1 — Add `POST /api/v1/conversations/{session_id}/interventions/{request_id}/respond` endpoint
+- [x] 4.2 — Add `GET /api/v1/conversations/{session_id}/interventions/pending` endpoint
+- [x] 4.3 — Update `POST /api/v1/conversations/{session_id}/turns` to accept new turn types
+- [x] 4.4 — Update `POST /api/v1/intervene/` create path to accept `conversation_session_id` and `delegation_depth`
 
 ### Phase 5 — Communication Hub Intervention Routing
-- [ ] 5.1 — Implement Intervention Router module in Communication Hub
-- [ ] 5.2 — Implement Intervention Queue (per-conversation-session FIFO)
-- [ ] 5.3 — Add WebSocket message types: `intervene_request`, `intervene_response`, `intervene_cancel`, `intervene_status`
-- [ ] 5.4 — Route delegated intervention signals to parent conversation WebSocket clients
-- [ ] 5.5 — Block chat messages when intervention is pending per session
+- [x] 5.1 — Implement Intervention Router module in Communication Hub
+- [x] 5.2 — Implement Intervention Queue (per-conversation-session FIFO)
+- [x] 5.3 — Add WebSocket message types: `intervene_request`, `intervene_response`, `intervene_cancel`, `intervene_status`
+- [x] 5.4 — Route delegated intervention signals to parent conversation WebSocket clients
+- [x] 5.5 — Block chat messages when intervention is pending per session
 
 ### Phase 6 — Frontend Type Definitions
-- [ ] 6.1 — Add `TurnType` union to TypeScript types and update `ConversationTurn` interface
-- [ ] 6.2 — Update `InterveneRequest` interface with new fields
-- [ ] 6.3 — Add intervention WebSocket message type interfaces
+- [x] 6.1 — Add `TurnType` union to TypeScript types and update `ConversationTurn` interface
+- [x] 6.2 — Update `InterveneRequest` interface with new fields
+- [x] 6.3 — Add intervention WebSocket message type interfaces
 
 ### Phase 7 — Frontend Hooks and State
-- [ ] 7.1 — Extend `useChatSession` to handle intervention WebSocket message types
-- [ ] 7.2 — Create `useConversationIntervention` hook for intervention state management
-- [ ] 7.3 — Add intervention reconnect logic to `useChatSession`
+- [x] 7.1 — Extend `useChatSession` to handle intervention WebSocket message types
+- [x] 7.2 — Create `useConversationIntervention` hook for intervention state management
+- [x] 7.3 — Add intervention reconnect logic to `useChatSession`
 
 ### Phase 8 — Frontend UI Components
-- [ ] 8.1 — Build `InlineInterventionDialog` component (approval/choice/text variants)
-- [ ] 8.2 — Build `InterventionPendingIndicator` component (chat flow status)
-- [ ] 8.3 — Integrate intervention components into `ConversationDialog`
-- [ ] 8.4 — Implement input blocking during pending interventions
+- [x] 8.1 — Build `InlineInterventionDialog` component (approval/choice/text variants)
+- [x] 8.2 — Build `InterventionPendingIndicator` component (chat flow status)
+- [x] 8.3 — Integrate intervention components into `ConversationDialog`
+- [x] 8.4 — Implement input blocking during pending interventions
 
 ### Phase 9 — Dashboard Integration
-- [ ] 9.1 — Update `IntervenePage` to display conversational intervention requests
-- [ ] 9.2 — Update runtime dashboard to surface in-conversation intervention requests
+- [x] 9.1 — Update `IntervenePage` to display conversational intervention requests
+- [x] 9.2 — Update runtime dashboard to surface in-conversation intervention requests
 
 ### Phase 10 — Testing
-- [ ] 10.1 — Write unit tests for model/schema changes
-- [ ] 10.2 — Write service layer unit tests for new intervention routing logic
-- [ ] 10.3 — Write API integration tests for new and changed endpoints
-- [ ] 10.4 — Write frontend unit tests for intervevension components
-- [ ] 10.5 — Write frontend hook tests for intervention state management
-- [ ] 10.6 — Write E2E tests for full conversational intervention flow
+- [x] 10.1 — Write unit tests for model/schema changes
+- [x] 10.2 — Write service layer unit tests for new intervention routing logic
+- [x] 10.3 — Write API integration tests for new and changed endpoints
+- [x] 10.4 — Write frontend unit tests for intervention components
+- [x] 10.5 — Write frontend hook tests for intervention state management
+- [x] 10.6 — Write E2E tests for full conversational intervention flow
 
 ---
 
@@ -567,18 +567,18 @@ Use the project's existing E2E testing framework and patterns. Ensure tests veri
 
 ## Completion Checklist
 
-- [ ] All 10 phases have all tasks marked complete
-- [ ] Database migration applied and verified
-- [ ] Backend API tests pass (existing + new)
-- [ ] Frontend component tests pass
-- [ ] Frontend hook tests pass
-- [ ] E2E tests pass
-- [ ] Non-conversational intervention flow verified (no regression)
-- [ ] Service segregation rules verified (AR no DB access, no identity token exposure)
-- [ ] Certificate-based auth boundaries verified intact
-- [ ] All user-facing text uses i18n `t()` function
+- [x] All 10 phases have all tasks marked complete
+- [x] Database migration applied and verified
+- [x] Backend API tests pass (existing + new)
+- [x] Frontend component tests pass
+- [x] Frontend hook tests pass
+- [x] E2E tests pass
+- [x] Non-conversational intervention flow verified (no regression)
+- [x] Service segregation rules verified (AR no DB access, no identity token exposure)
+- [x] Certificate-based auth boundaries verified intact
+- [x] All user-facing text uses i18n `t()` function
 - [ ] Code review completed per project conventions
-- [ ] Alembic migration includes reversible downgrade
+- [x] Alembic migration includes reversible downgrade
 - [ ] Master architecture docs updated per `architecture.md` section 5 instructions
 - [ ] Master data model docs updated per `data-model.md` section 6 instructions
 - [ ] Master product docs updated per `spec-change.md` spec update instructions

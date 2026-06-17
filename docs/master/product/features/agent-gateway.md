@@ -20,6 +20,7 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - Provides real-time updates for conversational agents and asynchronous result delivery for task agents
 - Ensures all lifecycle events, system instructions, and user prompts are tracked and accessible
 - Filters available tools and actions based on agent role permissions
+- Routes delegated intervention requests from Agent Runtime back to parent conversational sessions via the Communication Hub, preserving service segregation and certificate-based authentication boundaries
 
 
 ## Key Concepts
@@ -39,6 +40,7 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - All interactions, system instructions, and user prompts are auditable and accessible from the UI
 - Real-time updates are provided for conversational agents; asynchronous result delivery for task agents
+- Delegated intervention requests are routed from sub-agent sessions to the parent conversation session without requiring direct database access from Agent Runtime, preserving service segregation
 
 ## Out of Scope
 - Direct database access or bypassing the gateway for agent execution

@@ -554,18 +554,26 @@ erDiagram
 erDiagram
     ConversationSession {
         uuid id
-        uuid agent_instance_id
-        string initiator_subject
+        uuid agent_type_id
+        uuid triggered_by_user_id
+        uuid agent_job_id
+        string title
         string channel
         enum status
         int turn_count
+        datetime created_at
+        datetime updated_at
+        datetime closed_at
     }
     ConversationTurn {
         uuid id
         uuid session_id
         enum role
+        enum turn_type
         string content
         int token_count
+        uuid intervene_request_id
+        datetime created_at
     }
     ToolCallRecord {
         uuid id
@@ -573,24 +581,70 @@ erDiagram
         string tool_name
         json tool_input
         json tool_output
+        string error
         int duration_ms
+        datetime created_at
+    }
+    InterveneRequest {
+        uuid id
+        uuid agent_session_id
+        uuid agent_type_id
+        uuid conversation_session_id
+        enum intervention_type
+        string reason
+        json choices
+        enum status
+        int delegation_depth
+        datetime created_at
+        datetime responded_at
+        datetime expires_at
+    }
+    InterveneResponse {
+        uuid id
+        uuid request_id
+        uuid operator_user_id
+        boolean approval_value
+        string selected_choice
+        string text_value
+        datetime responded_at
+    }
+    AgentJob {
+        uuid id
+        uuid agent_type_id
+        uuid parent_job_id
+        uuid root_job_id
+        int delegation_depth
+        enum status
+        datetime created_at
+    }
+    Identity {
+        uuid id
+        string subject
+        string display_name
     }
     AgentA2ASessionLink {
         uuid id
         string requester_instance_id
         string receiver_instance_id
         string session_link_id
+        boolean receiver_is_dynamic
         enum status
         datetime created_at
         datetime disconnected_at
     }
 
-    ConversationSession ||--o{ ConversationTurn : "has"
-    ConversationTurn ||--o{ ToolCallRecord : "references"
+    ConversationSession ||--o{ ConversationTurn : "contains"
+    ConversationTurn ||--o{ ToolCallRecord : "invokes"
+    ConversationTurn }o--o| InterveneRequest : "references"
+    InterveneRequest }o--|| ConversationSession : "surfaced in"
+    InterveneRequest }o--|| AgentJob : "originates from"
+    InterveneRequest ||--o| InterveneResponse : "resolved by"
+    InterveneResponse }o--|| Identity : "responded by"
+    ConversationSession }o--o| AgentJob : "backed by"
     AgentA2ASessionLink ||--o| ConversationSession : "links delegated execution context"
 ```
 
-**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/agents.py`
+**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/intervene.py`, `backend/app/db/models/agents.py`
 
 ---
 
@@ -720,16 +774,24 @@ erDiagram
     AgentRole ||--o{ AgentRoleMcpSession : "provides MCP context via"
     AgentRoleMcpSession }o--|| McpSession : "references"
     AgentType }o--|| AgentIdentity : "authenticates as"
+    ConversationSession {
+        uuid id
+        uuid agent_type_id
+        enum status
+    }
     InterveneRequest {
         uuid id
         uuid agent_session_id
         uuid agent_type_id
+        uuid conversation_session_id
         enum intervention_type "approval | choice | text"
         string reason
         json choices
         enum status "pending | responded | cancelled | expired"
+        int delegation_depth
         datetime created_at
         datetime responded_at
+        datetime expires_at
     }
     InterveneResponse {
         uuid id
@@ -742,6 +804,7 @@ erDiagram
     }
 
     AgentSession ||--o{ InterveneRequest : "initiates"
+    InterveneRequest }o--|| ConversationSession : "surfaced in"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
 

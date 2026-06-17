@@ -25,7 +25,7 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 - **AI-Assisted Drafting**: Generating a first workflow draft that users can edit
 - **Workflow Preview**: Reviewing the final formatted SOP content before release
 - **Step Sequencing**: Defining the order and logic of steps within an SOP
-- **Agent Delegation**: Assigning SOP steps to different agents for execution
+- **Agent Delegation**: Assigning SOP steps to different agents for execution. Delegation-based human intervention gates (via `human_intervene`) now work reliably inside conversational sessions — when a delegated sub-agent requests human input, the intervention is surfaced in the parent conversation UI
 - **Delegation Cycle Prevention**: Blocking recursive delegation patterns that would create runaway execution loops
 - **Delegation Boundaries**: Governing maximum delegation depth and delegated-step counts for predictable execution
 - **SOP Auditability**: Tracking and reviewing SOP definitions and runs
@@ -43,4 +43,6 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 - Cyclic delegation chains, including indirect recursion, are blocked with clear user-visible policy outcomes
 - Delegation depth and delegated-step boundaries are enforced as part of execution governance
 - All SOP executions are logged and auditable
+- SOPs with delegated human intervention steps surface intervention requests in the parent conversation UI when executed conversationally
+- Delegation-based intervention gates work reliably at any delegation depth within conversational agent sessions
 - SOPs are discoverable and manageable from the UI

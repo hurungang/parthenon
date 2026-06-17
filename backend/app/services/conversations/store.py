@@ -13,6 +13,7 @@ from app.db.models.conversations import (
     ConversationTurn,
     ToolCallRecord,
     TurnRole,
+    TurnType,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ class ConversationStore:
         content: str,
         db: AsyncSession,
         token_count: int | None = None,
+        turn_type: TurnType = TurnType.message,
+        intervene_request_id: Any | None = None,
     ) -> ConversationTurn:
         """Append a turn to an existing session."""
         turn = ConversationTurn(
@@ -57,6 +60,8 @@ class ConversationStore:
             role=role,
             content=content,
             token_count=token_count,
+            turn_type=turn_type,
+            intervene_request_id=intervene_request_id,
         )
         db.add(turn)
         await db.flush()

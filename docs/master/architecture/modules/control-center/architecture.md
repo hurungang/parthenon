@@ -20,6 +20,7 @@ flowchart LR
     API --> POL
     API --> CTX
     API --> IRS[Intervene Request Store]
+    API --> CIT[Conversation Intervention Turns]
     API --> TOPO[Runtime Topology Controller]
     API --> TERM[Termination Orchestrator]
     CTX --> CFG
@@ -57,3 +58,8 @@ flowchart TB
     DECIDE --> REPLY
     AUTH -->|Scope mismatch| LOG
 ```
+
+## Conversation Intervention Persistence
+
+- **Conversation Intervention Turns**: Extension of `ConversationTurn` persistence to support `intervene_request` and `intervene_response` turn types. Stores intervention type (approval/choice/text), prompt text, available options, operator identity, response value, and timestamp. Turns are persisted in chronological order within the conversation stream for audit traceability.
+- **Intervene Request Store**: Extended to accept and persist conversation context fields (`conversation_session_id`, `delegation_depth`) on `InterveneRequest`. Automatically creates paired `intervene_response` conversation turns when responses are submitted to conversation-scoped requests. Non-conversational flow (no `conversation_session_id`) is unchanged.

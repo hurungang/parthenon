@@ -50,6 +50,7 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/system-tools/get-recipient-group"),
     ("POST", "/api/v1/internal/system-tools/human-intervene"),
     ("POST", "/api/v1/internal/mcp/proxy-tool"),
+    ("POST", "/api/v1/internal/data/intervene/respond"),
 }
 
 _INTERNAL_ALLOWLISTS: dict[str, set[tuple[str, str]]] = {

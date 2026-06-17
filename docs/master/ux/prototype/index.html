@@ -557,6 +557,71 @@ strong{font-weight:600}
 .sched-toast.sched-info{background:#1565C0}
 @keyframes schedToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
+/* ── INTERVENTION DIALOG (inline in conversation) ── */
+.intervene-dialog-card{border:2px solid var(--warning);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);background:var(--surface);max-width:520px;animation:interveneSlideIn 0.3s ease}
+@keyframes interveneSlideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.intervene-dialog-header{background:#FFF8E1;padding:14px 18px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid #FFE0B2}
+.intervene-dialog-icon{width:36px;height:36px;border-radius:50%;background:var(--warning);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.intervene-dialog-info{flex:1}
+.intervene-dialog-info h4{font-size:14px;font-weight:600;color:#92400E;margin-bottom:2px}
+.intervene-dialog-info .iv-meta{font-size:12px;color:#A16207;line-height:1.4}
+.intervene-dialog-info .iv-type-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.iv-type-approval{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+.iv-type-choice{background:#DBEAFE;color:#1D4ED8;border:1px solid #BFDBFE}
+.iv-type-text{background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0}
+.intervene-dialog-body{padding:18px}
+.intervene-dialog-body .iv-reason{font-size:13.5px;color:var(--text-primary);margin-bottom:16px;line-height:1.5}
+.iv-approval-btns{display:flex;gap:10px}
+.iv-approval-btns .btn{flex:1;justify-content:center;padding:12px}
+.iv-btn-approve{background:var(--success)!important;color:#fff!important;font-weight:600;font-size:14px;border:none!important}
+.iv-btn-deny{background:var(--surface)!important;color:var(--error)!important;border:2px solid var(--error)!important;font-weight:600;font-size:14px}
+.iv-choices{display:flex;flex-direction:column;gap:8px}
+.iv-choice-opt{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all var(--transition);font-size:13.5px;font-weight:500}
+.iv-choice-opt:hover{border-color:var(--primary);background:var(--primary-light)}
+.iv-choice-opt.sel{border-color:var(--primary);background:var(--primary-light);color:var(--primary);font-weight:600}
+.iv-choice-opt .iv-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;position:relative}
+.iv-choice-opt.sel .iv-radio{border-color:var(--primary)}
+.iv-choice-opt.sel .iv-radio::after{content:'';position:absolute;width:8px;height:8px;border-radius:50%;background:var(--primary);top:3px;left:3px}
+.iv-text-input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius);outline:none;font-size:13.5px;resize:vertical;min-height:80px;transition:border-color var(--transition)}
+.iv-text-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.intervene-dialog-dismiss{display:flex;justify-content:flex-end;padding:0 18px 14px}
+.intervene-dialog-dismiss .btn-ghost{background:none;border:none;color:var(--text-secondary);font-size:12px;padding:6px 12px;border-radius:var(--radius-sm);transition:all var(--transition)}
+.intervene-dialog-dismiss .btn-ghost:hover{background:#F5F5F5;color:var(--error)}
+.iv-loading-bar{height:3px;background:#FFE0B2;overflow:hidden}.iv-loading-bar .iv-lb-inner{height:100%;width:0;background:var(--warning);animation:ivLbAnim 2s ease-in-out infinite}
+@keyframes ivLbAnim{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+
+/* ── INTERVENTION PENDING INDICATOR ── */
+.iv-pending{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#FFF8E1;border:1px solid #FFE0B2;border-radius:var(--radius)}
+.iv-pending .iv-spinner{width:18px;height:18px;border:3px solid #FFE0B2;border-top-color:var(--warning);border-radius:50%;animation:ivSpin 0.9s linear infinite;flex-shrink:0}
+@keyframes ivSpin{to{transform:rotate(360deg)}}
+.iv-pending .iv-msg{font-size:13px;font-weight:600;color:#92400E}
+
+/* ── TURN: intervene_request / intervene_response ── */
+.timeline-item.intervene-turn::before{background:var(--warning)}
+.role-intervene{color:var(--warning)}
+.timeline-intervene{font-family:monospace;font-size:12px;background:#FFF8E1;border:1px solid #FDE68A;padding:6px 10px;border-radius:4px;color:#92400E}
+.timeline-item.intervene-response-turn::before{background:#7C3AED}
+.role-intervene-resp{color:#7C3AED}
+.timeline-intervene-resp{background:#EDE9FE;border:1px solid #DDD6FE;padding:6px 10px;border-radius:4px;color:#4C1D95;font-size:12px}
+
+/* ── INTERVENTION RESPONSE MESSAGE (demo) ── */
+.iv-resp-msg{display:flex;gap:8px;max-width:85%;align-self:flex-end;flex-direction:row-reverse}
+.iv-resp-bubble{padding:8px 12px;background:#EDE9FE;color:#4C1D95;border-radius:12px 12px 2px 12px;font-size:11.5px;border:1px solid #DDD6FE;line-height:1.4}
+.iv-resp-bubble .iv-resp-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;opacity:.7;margin-bottom:3px}
+
+/* ── CONVERSATION DEMO (compact) ── */
+.conv-demo-shell{display:flex;height:500px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.conv-demo-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;background:#FAFBFC}
+.conv-demo-msgs::-webkit-scrollbar{width:4px}.conv-demo-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.conv-demo-input-area{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;background:var(--surface)}
+.conv-demo-input-area input{flex:1;border:1px solid var(--border);border-radius:24px;padding:8px 16px;outline:none;font-size:13px}
+.conv-demo-input-area input:focus{border-color:var(--primary)}
+.conv-demo-input-area input:disabled{background:#F5F5F5;color:#9CA3AF;cursor:not-allowed}
+.conv-demo-meta{width:260px;flex-shrink:0;background:#FAFAFA;border-left:1px solid var(--border);padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+
+/* ── CHAT INPUT BLOCKED STATE ── */
+.chat-input-blocked{background:#FFF8E1;border:1px solid #FFE0B2;border-radius:24px;padding:8px 18px;font-size:12px;color:#92400E;display:flex;align-items:center;gap:8px;flex:1}
+
 </style>
 </head>
 <body>
@@ -591,6 +656,8 @@ strong{font-weight:600}
       <div class="nav-item sub-item" data-view="sops"               data-group="agents" onclick="nav(this,'sops')">              <span class="nav-icon">📋</span>SOPs</div>
       <div class="nav-item sub-item" data-view="model-configs"      data-group="agents" onclick="nav(this,'model-configs')">     <span class="nav-icon">⚙️</span>Model Configs</div>
       <div class="nav-item sub-item" data-view="schedules"          data-group="agents" onclick="nav(this,'schedules')">         <span class="nav-icon">📅</span>Schedules</div>
+      <div class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" onclick="nav(this,'conversational-intervention')"><span class="nav-icon">💬</span>Conversational Intervention</div>
+      <div class="nav-item sub-item" data-view="intervene-requests" data-group="agents" onclick="nav(this,'intervene-requests')"><span class="nav-icon">🛑</span>Intervene Requests</div>
     </div>
   </div>
 
@@ -3275,6 +3342,121 @@ Returns: { request_id, status }</div>
   </div>
 </div>
 
+<!-- ═══════════════════════════════ VIEW: CONVERSATIONAL AGENT INTERVENTION ═══════════════════════════════ -->
+<div id="view-conversational-intervention" class="view">
+  <div class="view-header">
+    <div><h2>Conversational Agent Intervention</h2><div class="view-desc">Live demo: inline intervention dialog surfaced during agent delegation in a conversation</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="ciReset()">↺ Reset Demo</button>
+    </div>
+  </div>
+
+  <div class="conv-demo-shell" id="ciShell">
+    <!-- Messages area -->
+    <div class="conv-demo-msgs" id="ciMessages">
+      <div style="text-align:center;padding:60px 20px;color:var(--text-secondary);font-size:13px">
+        <div style="font-size:36px;margin-bottom:8px">💬</div>
+        <div>Click a demo step below to see the conversation flow</div>
+      </div>
+    </div>
+    <!-- Meta panel -->
+    <div class="conv-demo-meta">
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Demo Steps</div>
+        <div style="display:flex;flex-direction:column;gap:4px" id="ciStepButtons"></div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Chat Status</div>
+        <span class="chip chip-green" id="ciStatusChip">connected</span>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Intervention Queue</div>
+        <div style="font-size:12px;color:var(--text-secondary)" id="ciQueueStatus">Empty</div>
+      </div>
+    </div>
+  </div>
+  <!-- Input area (outside shell to match real layout) -->
+  <div style="margin-top:0;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;background:var(--surface)">
+    <div class="conv-demo-input-area" id="ciInputArea" style="border-top:none">
+      <input type="text" id="ciInput" placeholder="Type your message..." disabled>
+      <button class="btn btn-primary btn-sm" id="ciSendBtn" disabled>Send</button>
+    </div>
+    <div class="chat-input-blocked" id="ciInputBlocked" style="display:none">
+      <span>⚠</span><span>Waiting for your intervention response...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: INTERVENE REQUESTS ═══════════════════════════════ -->
+<div id="view-intervene-requests" class="view">
+  <div class="view-header">
+    <div><h2>Intervene Requests</h2><div class="view-desc">Review and respond to agent requests for human input — including those from conversational sessions</div></div>
+    <button class="btn btn-secondary btn-sm" onclick="irRefreshMock()">↻ Refresh</button>
+  </div>
+
+  <!-- Stats row -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Pending Requests</div>
+      <div class="metric-value" style="color:var(--warning)" id="irPendingCount">4</div>
+      <div class="metric-delta delta-neutral">Across all agents</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg Response Time</div>
+      <div class="metric-value">2m 14s</div>
+      <div class="metric-delta delta-up">↓ 18% this week</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Resolved Today</div>
+      <div class="metric-value" style="color:var(--success)">12</div>
+      <div class="metric-delta delta-up">↑ 3 vs yesterday</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Resolution Rate</div>
+      <div class="metric-value">94%</div>
+      <div class="metric-delta delta-up">+2.4%</div>
+    </div>
+  </div>
+
+  <!-- Filter chips -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-sm btn-primary" id="irFilterAll" onclick="irFilter('all')">All</button>
+    <button class="btn btn-sm btn-secondary" id="irFilterApproval" onclick="irFilter('approval')">Approval</button>
+    <button class="btn btn-sm btn-secondary" id="irFilterChoice" onclick="irFilter('choice')">Choice</button>
+    <button class="btn btn-sm btn-secondary" id="irFilterText" onclick="irFilter('text')">Text</button>
+  </div>
+
+  <!-- Pending table -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header"><h3>Pending Requests <span class="chip chip-yellow" id="irPendingBadge">4</span></h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table id="irPendingTable">
+          <thead><tr>
+            <th>Agent</th><th>Execution ID</th><th>Context</th><th>Reason</th><th>Type</th><th>Received</th><th>Wait</th><th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Responded history table -->
+  <div class="card">
+    <div class="card-header"><h3>Response History</h3></div>
+    <div class="card-body" style="padding:0">
+      <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+        <table id="irHistoryTable">
+          <thead><tr>
+            <th>Agent</th><th>Execution ID</th><th>Type</th><th>Response</th><th>Responded By</th><th>Responded At</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════ DRAWERS ═══════════════════════════════ -->
 
 <!-- Sessions Drawer -->
@@ -3357,7 +3539,7 @@ Returns: { request_id, status }</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)">
         <span>Date: <strong style="color:var(--text-primary)">Today 11:15</strong></span>
         <span>Status: <span class="chip chip-blue" style="font-size:11px">Completed</span></span>
-        <span>Turns: <strong style="color:var(--text-primary)">4</strong></span>
+        <span>Turns: <strong style="color:var(--text-primary)">8</strong> (incl. intervention)</span>
       </div>
     </div>
     <div class="timeline">
@@ -3398,6 +3580,21 @@ Returns: { request_id, status }</div>
             (2) Missing rate limit on /auth/token endpoint<br>
             Shall I create GitHub issues for these?
           </div>
+        </div>
+      </div>
+      <!-- Intervention request & response turns (audit trail) -->
+      <div class="timeline-item intervene-turn">
+        <div class="timeline-stamp">14:32:22</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-intervene">intervene_request</div>
+          <div class="timeline-intervene">⚠ approval · Delegated sub-agent (PR Checker, depth 2) requests confirmation to create issues.<br>Request ID: intv-req-7a3f · Status: responded</div>
+        </div>
+      </div>
+      <div class="timeline-item intervene-response-turn">
+        <div class="timeline-stamp">14:32:38</div>
+        <div class="timeline-content">
+          <div class="timeline-role role-intervene-resp">intervene_response</div>
+          <div class="timeline-intervene-resp">✓ Approved · Response: "Yes, create the issues" · By: Alex Harper<br>Response paired to intv-req-7a3f</div>
         </div>
       </div>
       <div class="timeline-item user-turn">
@@ -3502,7 +3699,9 @@ const viewTitles = {
   'agent-logs': 'Agent Logs',
   'runtime-control': 'Runtime Control',
   'agent-trails': 'Agent Trails',
-  'system-config': 'System Config'
+  'system-config': 'System Config',
+  'conversational-intervention': 'Conversational Agent Intervention',
+  'intervene-requests': 'Intervene Requests'
 };
 
 
@@ -6343,6 +6542,378 @@ document.addEventListener('click', function(e) {
 mcRenderTable();
 mcRenderCascade('mcCascadeTree');
 mcRenderCascade('mcCascadeModalTree');
+
+// ═══════════════════════════════ CONVERSATIONAL INTERVENTION DEMO ═══════════════════════════════
+(function(){
+  var ciStep = -1;
+  var ciChoice = null;
+
+  var ciSteps = [
+    { id:'ci-start', label:'1. Start Conversation', desc:'User initiates chat with CS agent' },
+    { id:'ci-delegate', label:'2. Agent Delegates', desc:'Agent delegates to Fraud Check sub-agent' },
+    { id:'ci-intervene', label:'3. Intervention Request', desc:'Sub-agent calls human_intervene — dialog appears' },
+    { id:'ci-respond', label:'4. User Responds', desc:'User approves; conversation resumes' },
+    { id:'ci-dismiss', label:'5. Dismiss Demo', desc:'User cancels an intervention request' }
+  ];
+
+  function ciBuildSteps() {
+    var el = document.getElementById('ciStepButtons');
+    el.innerHTML = '';
+    ciSteps.forEach(function(s, i){
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-secondary';
+      btn.style.textAlign = 'left';
+      btn.style.justifyContent = 'flex-start';
+      btn.innerHTML = '<span style="font-size:10px;color:var(--text-secondary);width:18px;flex-shrink:0">' + (i+1) + '.</span> ' + s.label + '<br><span style="font-size:10px;color:var(--text-secondary);font-weight:400">' + s.desc + '</span>';
+      btn.onclick = (function(idx){ return function(){ ciRunStep(idx); }; })(i);
+      el.appendChild(btn);
+    });
+  }
+
+  function ciClear() {
+    var msgs = document.getElementById('ciMessages');
+    msgs.innerHTML = '';
+  }
+
+  function ciAddMsg(type, content) {
+    var msgs = document.getElementById('ciMessages');
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;gap:8px;max-width:85%';
+    if (type === 'user') {
+      div.style.alignSelf = 'flex-end';
+      div.style.flexDirection = 'row-reverse';
+      div.innerHTML = '<div style="padding:8px 12px;background:var(--primary);color:#fff;border-radius:12px 12px 2px 12px;font-size:12.5px;line-height:1.4">' + content + '</div>';
+    } else if (type === 'agent') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">CS</div><div style="padding:8px 12px;background:#F1F5F9;border-radius:12px 12px 12px 2px;font-size:12.5px;line-height:1.4;color:var(--text-primary)">' + content + '</div>';
+    } else if (type === 'tool') {
+      div.style.alignSelf = 'flex-start';
+      div.style.marginLeft = '20px';
+      div.innerHTML = '<div style="padding:6px 10px;background:#F8FAFC;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text-secondary);font-family:monospace;display:flex;gap:6px;align-items:center"><span>🔧</span><span>' + content + '</span></div>';
+    } else if (type === 'fraud') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="width:26px;height:26px;border-radius:50%;background:#7C3AED;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">FC</div><div style="padding:8px 12px;background:#EDE9FE;color:#4C1D95;border-radius:12px 12px 12px 2px;font-size:11.5px;line-height:1.4">' + content + '</div>';
+    } else if (type === 'delegation') {
+      div.style.alignSelf = 'flex-start';
+      div.style.marginLeft = '10px';
+      div.innerHTML = '<div style="padding:8px 12px;background:#EDE9FE;border:1px solid #7C3AED;border-left:3px solid #7C3AED;border-radius:var(--radius);font-size:12px;color:#4C1D95">' + content + '</div>';
+    } else if (type === 'intervene-resp') {
+      div.className = 'iv-resp-msg';
+      div.innerHTML = '<div class="iv-resp-bubble"><div class="iv-resp-label">' + content + '</div><div style="font-size:11px;color:#6D28D9">Response recorded in audit trail</div></div>';
+    } else if (type === 'pending') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:#FFF8E1;border:1px solid #FFE0B2;border-radius:var(--radius);font-size:12px;font-weight:600;color:#92400E"><div style="width:16px;height:16px;border:3px solid #FFE0B2;border-top-color:#FF9800;border-radius:50%;animation:ivSpin 0.9s linear infinite;flex-shrink:0"></div><span>Waiting for your input</span></div>';
+    } else if (type === 'thinking') {
+      div.style.alignSelf = 'flex-start';
+      div.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:24px;font-size:12px;font-weight:600;color:#1E3A8A;background:#EDF5FF;border:1px solid #CFE3FF"><span style="display:inline-flex;gap:3px"><span style="width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:pulse 1.2s infinite"></span><span style="width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:pulse 1.2s infinite .15s"></span><span style="width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.25;animation:pulse 1.2s infinite .3s"></span></span><span>Fraud Check Agent is analysing…</span></div>';
+    }
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function ciBlockInput(reason) {
+    var input = document.getElementById('ciInput');
+    var send = document.getElementById('ciSendBtn');
+    var blocked = document.getElementById('ciInputBlocked');
+    input.disabled = true; send.disabled = true;
+    input.value = '';
+    if (reason) { input.placeholder = reason; blocked.style.display = 'flex'; }
+    else { blocked.style.display = 'none'; }
+  }
+
+  function ciEnableInput() {
+    var input = document.getElementById('ciInput');
+    var send = document.getElementById('ciSendBtn');
+    var blocked = document.getElementById('ciInputBlocked');
+    input.disabled = false; send.disabled = false;
+    input.placeholder = 'Type your message...';
+    blocked.style.display = 'none';
+    document.getElementById('ciStatusChip').textContent = 'connected';
+    document.getElementById('ciStatusChip').className = 'chip chip-green';
+    document.getElementById('ciQueueStatus').textContent = 'Empty';
+  }
+
+  function ciSetStatus(status, queueText) {
+    var chip = document.getElementById('ciStatusChip');
+    if (status === 'waiting') {
+      chip.textContent = 'waiting_for_human';
+      chip.className = 'chip chip-yellow';
+    } else if (status === 'thinking') {
+      chip.textContent = 'thinking';
+      chip.className = 'chip chip-blue';
+    } else {
+      chip.textContent = 'connected';
+      chip.className = 'chip chip-green';
+    }
+    if (queueText) document.getElementById('ciQueueStatus').textContent = queueText;
+  }
+
+  function ciRemoveInterventionDialog() {
+    var dlg = document.querySelector('#ciMessages .intervene-dialog-card');
+    if (dlg) dlg.remove();
+  }
+
+  function ciAddInterventionDialog(type, reason, choices) {
+    ciRemoveInterventionDialog();
+    var msgs = document.getElementById('ciMessages');
+    var card = document.createElement('div');
+    card.className = 'intervene-dialog-card';
+
+    var typeLabel = '', typeCls = '';
+    if (type === 'approval') { typeLabel = 'Approval Required'; typeCls = 'iv-type-approval'; }
+    else if (type === 'choice') { typeLabel = 'Choice Required'; typeCls = 'iv-type-choice'; }
+    else { typeLabel = 'Text Input Required'; typeCls = 'iv-type-text'; }
+
+    var body = '';
+    if (type === 'approval') {
+      body = '<div class="iv-reason">' + reason + '</div><div class="iv-approval-btns"><button class="btn iv-btn-approve" onclick="ciRespondApproval(true)">✓ Approve</button><button class="btn iv-btn-deny" onclick="ciRespondApproval(false)">✕ Deny</button></div>';
+    } else if (type === 'choice') {
+      body = '<div class="iv-reason">' + reason + '</div><div class="iv-choices">';
+      choices.forEach(function(c){
+        body += '<div class="iv-choice-opt" data-val="' + c + '" onclick="ciSelectChoice(this,\'' + c.replace(/'/g,"\\'") + '\')"><div class="iv-radio"></div><span>' + c + '</span></div>';
+      });
+      body += '</div><div style="margin-top:10px;display:flex;justify-content:flex-end"><button class="btn btn-primary btn-sm" id="ciChoiceConfirmBtn" disabled onclick="ciConfirmChoice()">Confirm Selection</button></div>';
+    }
+    card.innerHTML = '<div class="intervene-dialog-header"><div class="intervene-dialog-icon">⚠</div><div class="intervene-dialog-info"><h4>Fraud Check Agent requires your input</h4><div class="iv-meta">Delegated by Customer Support Agent — depth 2</div><div class="iv-type-badge ' + typeCls + '">' + typeLabel + '</div></div></div><div class="intervene-dialog-body">' + body + '</div><div class="intervene-dialog-dismiss"><button class="btn-ghost" onclick="ciDismissIntervention()">Dismiss / Cancel</button></div>';
+    msgs.appendChild(card);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  window.ciRespondApproval = function(approved) {
+    ciRemoveInterventionDialog();
+    ciAddMsg('intervene-resp', 'Intervention Response · ' + (approved ? 'Approved' : 'Denied'));
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    ciAddMsg('agent', 'Thank you for confirming. The fraud check has been completed.');
+  };
+
+  window.ciSelectChoice = function(el, value) {
+    ciChoice = value;
+    document.querySelectorAll('#ciMessages .iv-choice-opt').forEach(function(o){ o.classList.remove('sel'); });
+    el.classList.add('sel');
+    var btn = document.getElementById('ciChoiceConfirmBtn');
+    if (btn) btn.disabled = false;
+  };
+
+  window.ciConfirmChoice = function() {
+    if (!ciChoice) return;
+    ciRemoveInterventionDialog();
+    ciAddMsg('intervene-resp', 'Intervention Response · Selected: ' + ciChoice);
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    ciChoice = null;
+  };
+
+  window.ciDismissIntervention = function() {
+    ciRemoveInterventionDialog();
+    ciAddMsg('intervene-resp', 'Intervention Cancelled — user dismissed the request');
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    ciAddMsg('agent', 'The fraud check was cancelled. How would you like to proceed?');
+  };
+
+  window.ciRunStep = function(idx) {
+    ciStep = idx;
+    ciClear();
+    ciRemoveInterventionDialog();
+    ciChoice = null;
+
+    switch (ciSteps[idx].id) {
+      case 'ci-start':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged. Can you check what happened?");
+        setTimeout(function(){ ciAddMsg('agent', "Of course! Let me look into that for you. Can you provide the transaction ID?"); }, 300);
+        setTimeout(function(){ ciAddMsg('user', "Sure — transaction ID is TXN-2026-8842, amount was $2,450 to an overseas vendor."); }, 600);
+        setTimeout(function(){ ciAddMsg('agent', "I can see that transaction. The amount triggered our fraud detection. Let me delegate a detailed analysis to our Fraud Check Agent."); }, 900);
+        ciEnableInput();
+        ciSetStatus('thinking');
+        break;
+      case 'ci-delegate':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged. Can you check what happened?");
+        ciAddMsg('agent', "Of course! Let me look into that for you.");
+        ciAddMsg('user', "Sure — TXN-2026-8842, $2,450 to an overseas vendor.");
+        ciAddMsg('agent', "Let me delegate a detailed analysis to our Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong><br><span style="font-size:11px">depth 2 · fraud analysis</span>');
+        ciAddMsg('thinking', '');
+        ciEnableInput();
+        ciSetStatus('delegating');
+        break;
+      case 'ci-intervene':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged.");
+        ciAddMsg('agent', "Let me delegate a detailed analysis to our Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong> — depth 2');
+        ciAddMsg('fraud', "I've analysed the transaction. Risk indicators present but not definitive. I need human confirmation.");
+        ciAddMsg('tool', 'Fraud Check Agent calling system____human_intervene (type: approval)');
+        ciAddMsg('pending', '');
+        ciAddInterventionDialog('approval', 'Transaction TXN-2026-8842 for $2,450 has medium risk indicators (3 of 7 positive). Should the Fraud Check Agent proceed with the full investigation?');
+        ciBlockInput('Waiting for your intervention response...');
+        ciSetStatus('waiting', '<span style="color:var(--warning);font-weight:600">1 pending</span>');
+        break;
+      case 'ci-respond':
+        ciAddMsg('user', "Hi, I just noticed a transaction on my account was flagged.");
+        ciAddMsg('agent', "Let me delegate a detailed analysis to our Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong> — depth 2');
+        ciAddMsg('fraud', "I've analysed the transaction. Need human confirmation.");
+        ciAddMsg('tool', 'system____human_intervene → resolved');
+        ciAddMsg('intervene-resp', 'Intervention Response · Approved');
+        ciAddMsg('agent', "Thank you. The fraud check investigation is in progress and will report back shortly.");
+        ciEnableInput();
+        ciSetStatus('thinking');
+        break;
+      case 'ci-dismiss':
+        ciAddMsg('user', "I need to review a flagged transaction from yesterday.");
+        ciAddMsg('agent', "Let me pull that up. Delegating to Fraud Check Agent.");
+        ciAddMsg('tool', 'Calling agent_delegate → fraud-check-agent (compliance check)');
+        ciAddMsg('delegation', '<strong>↳ Delegated to Fraud Check Agent</strong> — depth 2');
+        ciAddMsg('fraud', "This requires compliance officer sign-off. Seeking human input…");
+        ciAddMsg('tool', 'system____human_intervene (type: approval) — "Compliance review needed"');
+        ciAddMsg('pending', '');
+        ciAddInterventionDialog('approval', 'Transaction TXN-2026-9910 requires compliance officer approval before proceeding. Do you authorise this review?');
+        ciBlockInput('Waiting for your intervention response...');
+        ciSetStatus('waiting', '<span style="color:var(--warning);font-weight:600">1 pending</span>');
+        break;
+    }
+  };
+
+  function ciReset() {
+    ciStep = -1; ciChoice = null;
+    ciClear(); ciRemoveInterventionDialog();
+    ciEnableInput();
+    ciSetStatus('connected', 'Empty');
+    var msgs = document.getElementById('ciMessages');
+    msgs.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-secondary);font-size:13px"><div style="font-size:36px;margin-bottom:8px">💬</div><div>Click a demo step to see the conversation flow</div></div>';
+  }
+
+  window.ciReset = ciReset;
+  ciBuildSteps();
+})();
+
+// ═══════════════════════════════ INTERVENE REQUESTS ═══════════════════════════════
+(function(){
+  var irFilterType = 'all';
+
+  var mockPending = [
+    { id:'req-001', agent_name:'Fraud Check Agent', agent_session_id:'sess-a3f2c1b9', conversation_session_id:'conv-8f3a2c', delegation_depth:2, reason:'Transaction TXN-2026-8842 shows medium risk. Proceed?', intervention_type:'approval', created_at: new Date(Date.now()-120000).toISOString() },
+    { id:'req-002', agent_name:'Compliance Bot', agent_session_id:'sess-b7e9d4a1', conversation_session_id:null, delegation_depth:0, reason:'Report #442 requires sign-off before submission', intervention_type:'approval', created_at: new Date(Date.now()-300000).toISOString() },
+    { id:'req-003', agent_name:'Data Analyst Agent', agent_session_id:'sess-c1d5f7e3', conversation_session_id:'conv-7a1b3c', delegation_depth:3, reason:'Classify the sensitivity of discovered PII data', intervention_type:'choice', created_at: new Date(Date.now()-480000).toISOString() },
+    { id:'req-004', agent_name:'Report Generator', agent_session_id:'sess-d9a2b3c4', conversation_session_id:null, delegation_depth:0, reason:'Please provide additional context for the Q3 summary', intervention_type:'text', created_at: new Date(Date.now()-900000).toISOString() }
+  ];
+
+  var mockHistory = [
+    { id:'h001', agent_name:'PR Reviewer', agent_session_id:'sess-e5f6g7h8', intervention_type:'approval', response:{approval_value:true,operator_user_name:'Alex Harper'}, created_at: new Date(Date.now()-1800000).toISOString(), responded_at: new Date(Date.now()-1700000).toISOString() },
+    { id:'h002', agent_name:'Fraud Check Agent', agent_session_id:'sess-i9j0k1l2', intervention_type:'choice', response:{selected_choice:'Medium Risk — Full investigation',operator_user_name:'Alex Harper'}, created_at: new Date(Date.now()-3600000).toISOString(), responded_at: new Date(Date.now()-3500000).toISOString() },
+    { id:'h003', agent_name:'Data Analyst', agent_session_id:'sess-m3n4o5p6', intervention_type:'text', response:{text_value:'Customer has history with this vendor — 3 prior transactions',operator_user_name:'Sam Smith'}, created_at: new Date(Date.now()-5400000).toISOString(), responded_at: new Date(Date.now()-5300000).toISOString() }
+  ];
+
+  function timeAgo(d) { var s = Math.floor((Date.now()-new Date(d).getTime())/1000); if(s<60)return s+'s'; var m = Math.floor(s/60); if(m<60)return m+'m'; return Math.floor(m/60)+'h'; }
+  function fmtTime(d) { return new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+  function irRender() {
+    var filtered = irFilterType === 'all' ? mockPending : mockPending.filter(function(r){ return r.intervention_type === irFilterType; });
+    irRenderPending(filtered);
+    irRenderHistory();
+    document.getElementById('irPendingCount').textContent = mockPending.length;
+    document.getElementById('irPendingBadge').textContent = mockPending.length;
+  }
+
+  function irRenderPending(list) {
+    var tbody = document.querySelector('#irPendingTable tbody');
+    tbody.innerHTML = '';
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-secondary)">No pending intervention requests</td></tr>';
+      return;
+    }
+    list.forEach(function(r){
+      var typeChip = '';
+      if (r.intervention_type === 'approval') typeChip = '<span class="chip chip-yellow">Approval</span>';
+      else if (r.intervention_type === 'choice') typeChip = '<span class="chip chip-blue">Choice</span>';
+      else typeChip = '<span class="chip chip-green">Text</span>';
+
+      var ctxChip = r.conversation_session_id
+        ? '<span class="chip chip-purple" style="font-size:10px">In Conversation</span>' + (r.delegation_depth > 0 ? '<br><span style="font-size:10px;color:var(--text-secondary)">Depth: ' + r.delegation_depth + '</span>' : '')
+        : '<span style="font-size:11px;color:var(--text-secondary)">Standalone</span>';
+
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><strong>' + r.agent_name + '</strong></td>' +
+        '<td><span class="font-mono text-sm">' + r.agent_session_id.slice(0,8) + '</span></td>' +
+        '<td>' + ctxChip + '</td>' +
+        '<td><span style="max-width:200px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + r.reason + '</span></td>' +
+        '<td>' + typeChip + '</td>' +
+        '<td class="text-secondary">' + fmtTime(r.created_at) + '</td>' +
+        '<td><span class="chip chip-yellow" style="border:1px solid #FDE68A">' + timeAgo(r.created_at) + '</span></td>' +
+        '<td align="right"><button class="btn btn-xs btn-primary" onclick="irRespond(\'' + r.id + '\')">Respond</button></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function irRenderHistory() {
+    var tbody = document.querySelector('#irHistoryTable tbody');
+    tbody.innerHTML = '';
+    mockHistory.forEach(function(r){
+      var typeChip = '';
+      if (r.intervention_type === 'approval') typeChip = '<span class="chip chip-yellow">Approval</span>';
+      else if (r.intervention_type === 'choice') typeChip = '<span class="chip chip-blue">Choice</span>';
+      else typeChip = '<span class="chip chip-green">Text</span>';
+
+      var respLabel = '—';
+      var respColor = 'gray';
+      if (r.response) {
+        if (r.response.approval_value === true) { respLabel = 'Approved'; respColor = 'green'; }
+        else if (r.response.approval_value === false) { respLabel = 'Rejected'; respColor = 'red'; }
+        else if (r.response.selected_choice) { respLabel = r.response.selected_choice; respColor = 'blue'; }
+        else if (r.response.text_value) { respLabel = r.response.text_value.slice(0, 40); respColor = 'purple'; }
+      }
+
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td><strong>' + r.agent_name + '</strong></td>' +
+        '<td><span class="font-mono text-sm">' + r.agent_session_id.slice(0,8) + '</span></td>' +
+        '<td>' + typeChip + '</td>' +
+        '<td><span class="chip chip-' + respColor + '">' + respLabel + '</span></td>' +
+        '<td>' + (r.response && r.response.operator_user_name || '—') + '</td>' +
+        '<td class="text-secondary">' + (r.responded_at ? new Date(r.responded_at).toLocaleString() : '—') + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  window.irFilter = function(type) {
+    irFilterType = type;
+    ['All','Approval','Choice','Text'].forEach(function(t){
+      var btn = document.getElementById('irFilter' + t);
+      if (btn) { btn.className = 'btn btn-sm ' + (type === t.toLowerCase() ? 'btn-primary' : 'btn-secondary'); }
+    });
+    irRender();
+  };
+
+  window.irRespond = function(reqId) {
+    var req = mockPending.find(function(r){ return r.id === reqId; });
+    if (!req) return;
+    // Simulate response: remove from pending, add to history
+    mockPending = mockPending.filter(function(r){ return r.id !== reqId; });
+    mockHistory.unshift({
+      id: 'h' + Date.now(),
+      agent_name: req.agent_name,
+      agent_session_id: req.agent_session_id,
+      intervention_type: req.intervention_type,
+      response: { approval_value: true, operator_user_name: 'Alex Harper' },
+      created_at: req.created_at,
+      responded_at: new Date().toISOString()
+    });
+    irRender();
+    // Show toast
+    var t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;background:#F0FDF4;color:#166534;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:3000;animation:toastIn 0.25s ease';
+    t.textContent = '✓ Response submitted for ' + req.agent_name;
+    document.body.appendChild(t);
+    setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){ t.remove(); },300); },2500);
+  };
+
+  window.irRefreshMock = function() { irRender(); };
+
+  // Initial render on page load (if view shown)
+  irRender();
+})();
 </script>
 
 </body>

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.models.agents import AgentJob, AgentJobStatus, AgentType
+from app.db.models.conversations import ConversationSession, ConversationTurn, TurnRole, TurnType
 from app.db.models.identity import Identity
 from app.db.models.intervene import (
     InterveneRequest,
@@ -18,6 +19,7 @@ from app.db.models.intervene import (
     InterveneResponse,
     InterventionType,
 )
+from app.services.conversations.store import ConversationStore
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -38,6 +40,8 @@ class InterveneRequestStore:
         intervention_type: InterventionType,
         reason: str,
         choices: list[str] | None = None,
+        conversation_session_id: uuid.UUID | None = None,
+        delegation_depth: int = 0,
     ) -> InterveneRequest:
         """Create a new intervene request for an agent session.
 
@@ -48,6 +52,8 @@ class InterveneRequestStore:
             attributes={
                 "intervene.agent_session_id": str(agent_session_id),
                 "intervene.intervention_type": intervention_type.value,
+                "intervene.conversation_session_id": str(conversation_session_id) if conversation_session_id else None,
+                "intervene.delegation_depth": delegation_depth,
             },
         ) as span:
             existing = await self._find_pending_for_session(db, agent_session_id)
@@ -65,6 +71,8 @@ class InterveneRequestStore:
                 reason=reason,
                 choices=choices,
                 status=InterveneRequestStatus.pending,
+                conversation_session_id=conversation_session_id,
+                delegation_depth=delegation_depth,
             )
             db.add(request)
             await db.flush()
@@ -205,6 +213,29 @@ class InterveneRequestStore:
             await db.flush()
             await db.refresh(response)
 
+            # For conversation-scoped interventions, auto-create an
+            # intervene_response conversation turn for audit traceability.
+            if request.conversation_session_id:
+                conv_store = ConversationStore()
+                # Build a human-readable summary of the response
+                if approval_value is not None:
+                    summary = "Approved" if approval_value else "Denied"
+                elif selected_choice is not None:
+                    summary = f"Selected: {selected_choice}"
+                elif text_value is not None:
+                    summary = f"Provided notes: {text_value[:120]}"
+                else:
+                    summary = "Response submitted"
+                await conv_store.add_turn(
+                    session_id=request.conversation_session_id,
+                    role=TurnRole.system,
+                    content=summary,
+                    db=db,
+                    turn_type=TurnType.intervene_response,
+                    intervene_request_id=request.id,
+                )
+                span.set_attribute("intervene.conversation_turn_created", True)
+
             # Populate operator name
             identity_stmt = select(Identity).where(Identity.id == operator_user_id)
             identity_result = await db.execute(identity_stmt)
@@ -309,6 +340,52 @@ class InterveneRequestStore:
                 "avg_response_time_seconds": avg_response_time_seconds,
                 "resolution_rate": resolution_rate,
             }
+
+    async def list_pending_for_conversation(
+        self,
+        db: AsyncSession,
+        conversation_session_id: uuid.UUID,
+    ) -> list[InterveneRequest]:
+        """Return pending intervention requests for a given conversation session.
+
+        Results are ordered by created_at ascending (FIFO queue semantics).
+        Returns an empty list (not an error) when no pending requests exist.
+        """
+        with tracer.start_as_current_span("intervene.list_pending_for_conversation") as span:
+            span.set_attribute("intervene.conversation_session_id", str(conversation_session_id))
+            stmt = (
+                select(InterveneRequest)
+                .options(
+                    selectinload(InterveneRequest.response),
+                    selectinload(InterveneRequest.agent_session).selectinload(AgentJob.agent_type),
+                )
+                .where(
+                    InterveneRequest.conversation_session_id == conversation_session_id,
+                    InterveneRequest.status == InterveneRequestStatus.pending,
+                )
+                .order_by(InterveneRequest.created_at.asc())
+            )
+            result = await db.execute(stmt)
+            requests = list(result.scalars().all())
+
+            # Populate agent_name and triggered_by_user_name
+            user_ids = set()
+            for req in requests:
+                if req.agent_session and req.agent_session.triggered_by_user_id:
+                    user_ids.add(req.agent_session.triggered_by_user_id)
+                if req.response and req.response.operator_user_id:
+                    user_ids.add(req.response.operator_user_id)
+            identity_map: dict[uuid.UUID, str] = {}
+            if user_ids:
+                identity_stmt = select(Identity).where(Identity.id.in_(user_ids))
+                identity_result = await db.execute(identity_stmt)
+                identity_map = {ident.id: ident.display_name for ident in identity_result.scalars().all()}
+            for req in requests:
+                if req.agent_session:
+                    req.agent_name = req.agent_session.agent_type.name if req.agent_session.agent_type else None
+                    req.triggered_by_user_name = identity_map.get(req.agent_session.triggered_by_user_id) if req.agent_session.triggered_by_user_id else None
+
+            return requests
 
     # ── Internal helpers ───────────────────────────────────────────────────
 

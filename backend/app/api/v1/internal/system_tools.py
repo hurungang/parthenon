@@ -36,6 +36,7 @@ class SystemToolRequest(BaseModel):
 
     session_id: str
     tool_args: dict[str, Any]
+    conversation_session_id: str | None = None
 
 
 class SystemToolResponse(BaseModel):
@@ -323,6 +324,12 @@ async def human_intervene_tool(
 
     try:
         session_id = uuid.UUID(body.session_id)
+        conversation_session_id = None
+        if body.conversation_session_id:
+            try:
+                conversation_session_id = uuid.UUID(body.conversation_session_id)
+            except ValueError:
+                logger.warning("Invalid conversation_session_id: %s", body.conversation_session_id)
         intervention_type_str = body.tool_args.get("intervention_type")
         reason = body.tool_args.get("reason", "")
         choices = body.tool_args.get("choices")
@@ -334,35 +341,93 @@ async def human_intervene_tool(
 
         from app.db.models.agents import AgentJob
         from app.db.models.intervene import InterventionType
+        from app.db.models.conversations import ConversationSession
         from app.services.agents.intervene_service import InterveneRequestStore
 
         result = await db.execute(
             select(AgentJob).where(AgentJob.id == session_id)
         )
         job = result.scalar_one_or_none()
-        if not job:
+
+        # For conversation-scoped interventions, resolve via ConversationSession
+        conv_job = job
+        if not job and conversation_session_id:
+            conv_result = await db.execute(
+                select(ConversationSession).where(
+                    ConversationSession.id == conversation_session_id
+                )
+            )
+            conv_session = conv_result.scalar_one_or_none()
+            if conv_session and conv_session.agent_job_id:
+                result = await db.execute(
+                    select(AgentJob).where(AgentJob.id == conv_session.agent_job_id)
+                )
+                conv_job = result.scalar_one_or_none()
+
+        if not conv_job:
             raise HTTPException(
                 status_code=404, detail=f"Session {session_id} not found"
             )
 
         itype = InterventionType(intervention_type_str)
         store = InterveneRequestStore()
+
+        # Get agent type name for dispatch metadata
+        from app.db.models.agents import AgentType
+        result_at = await db.execute(
+            select(AgentType).where(AgentType.id == conv_job.agent_type_id)
+        )
+        agent_type_row = result_at.scalar_one_or_none()
+        agent_type_name = agent_type_row.name if agent_type_row else "unknown"
+
         request = await store.create_request(
             db=db,
-            agent_session_id=session_id,
-            agent_type_id=job.agent_type_id,
+            agent_session_id=conv_job.id,
+            agent_type_id=conv_job.agent_type_id,
             intervention_type=itype,
             reason=reason,
             choices=choices,
+            conversation_session_id=conversation_session_id,
+            delegation_depth=conv_job.delegation_depth if conv_job.delegation_depth else 0,
         )
 
         await db.commit()
 
         logger.info(
-            "Created intervene request %s for session %s",
+            "Created intervene request %s for session %s%s",
             request.id,
             session_id,
+            f" (conversation: {conversation_session_id})" if conversation_session_id else "",
         )
+
+        # Dispatch to Communication Hub when this is a conversation-scoped intervention
+        if conversation_session_id:
+            try:
+                from app.services.control_center.comm_hub_client import CommunicationHubClient
+                ch_client = CommunicationHubClient()
+                await ch_client.dispatch_message(
+                    session_id=conversation_session_id,
+                    message_type="intervene_request",
+                    content={
+                        "request_id": str(request.id),
+                        "conversation_session_id": str(conversation_session_id),
+                        "intervention_type": request.intervention_type.value,
+                        "reason": request.reason,
+                        "choices": request.choices,
+                        "agent_type": agent_type_name,
+                        "delegation_depth": request.delegation_depth,
+                    },
+                )
+                logger.info(
+                    "Dispatched intervene_request to CH for conversation %s",
+                    conversation_session_id,
+                )
+            except Exception as dispatch_exc:
+                logger.warning(
+                    "Failed to dispatch intervene_request to CH: %s (intervention %s still created)",
+                    dispatch_exc,
+                    request.id,
+                )
 
         # Attempt to dispatch a notification for the new intervene request.
         # This is best-effort — if no recipient group is configured for

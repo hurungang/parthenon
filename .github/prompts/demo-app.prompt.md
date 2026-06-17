@@ -48,6 +48,7 @@ Available scenarios (from `e2e/tests/`):
 - `skills-sops` — skills and SOPs
 - `observability` — metrics and traces
 - `permissions` — user permission management (tags, roles, groups, users, access requests)
+- `conversational-agent-intervention` — inline intervention dialogs during conversational agent delegation (approval/choice/text)
 
 ---
 

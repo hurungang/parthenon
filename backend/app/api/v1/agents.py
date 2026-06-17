@@ -953,12 +953,11 @@ async def create_agent_type(
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentTypeRead:
-    if body.input_type == AgentInputType.none:
-        if not body.sop_bindings:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Agent types with no input must specify at least one SOP binding",
-            )
+    if not body.sop_bindings and not body.skill_bindings:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Agent types must specify at least one SOP or Skill binding",
+        )
 
     # Validate bindings against role permissions
     if body.sop_bindings or body.skill_bindings:
@@ -1083,8 +1082,7 @@ async def update_agent_type(
 
     update_data = body.model_dump(exclude_unset=True)
 
-    # Determine effective input_type and role_id after applying the update
-    effective_input_type = update_data.get("input_type", agent_type.input_type)
+    # Determine effective role_id after applying the update
     effective_role_id = update_data.get("role_id", agent_type.role_id)
 
     # Determine effective sop_bindings after applying the update
@@ -1094,26 +1092,47 @@ async def update_agent_type(
     effective_sop_bindings = raw_sop_bindings if sop_bindings_provided else None
     effective_skill_bindings = raw_skill_bindings if skill_bindings_provided else None
 
-    if effective_input_type == AgentInputType.none:
-        # Check if bindings are being provided in this update
-        has_sop_bindings_in_update = (
-            effective_sop_bindings is not None and len(effective_sop_bindings) > 0
-        )
-        # If no bindings in update and agent type already has bindings, that's fine
-        # But if no bindings anywhere, reject
-        if not has_sop_bindings_in_update:
-            # Check existing bindings
-            existing_count = await db.execute(
+    # Enforce at least one SOP or Skill binding for all input types
+    if sop_bindings_provided or skill_bindings_provided:
+        effective_sop_count = len(effective_sop_bindings) if effective_sop_bindings else 0
+        effective_skill_count = len(effective_skill_bindings) if effective_skill_bindings else 0
+
+        if not sop_bindings_provided:
+            existing_sop = await db.execute(
                 select(AgentTypeSopBinding).where(
                     AgentTypeSopBinding.agent_type_id == agent_type.id
                 )
             )
-            existing_sop_count = len(existing_count.scalars().all())
-            if existing_sop_count == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Agent types with no input must specify at least one SOP binding",
+            effective_sop_count = len(existing_sop.scalars().all())
+        if not skill_bindings_provided:
+            existing_skill = await db.execute(
+                select(AgentTypeSkillBinding).where(
+                    AgentTypeSkillBinding.agent_type_id == agent_type.id
                 )
+            )
+            effective_skill_count = len(existing_skill.scalars().all())
+
+        if effective_sop_count == 0 and effective_skill_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Agent types must specify at least one SOP or Skill binding",
+            )
+    else:
+        existing_sop = await db.execute(
+            select(AgentTypeSopBinding).where(
+                AgentTypeSopBinding.agent_type_id == agent_type.id
+            )
+        )
+        existing_skill = await db.execute(
+            select(AgentTypeSkillBinding).where(
+                AgentTypeSkillBinding.agent_type_id == agent_type.id
+            )
+        )
+        if len(existing_sop.scalars().all()) == 0 and len(existing_skill.scalars().all()) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Agent types must specify at least one SOP or Skill binding",
+            )
 
     # Validate bindings if they are being updated
     if effective_sop_bindings is not None or effective_skill_bindings is not None:

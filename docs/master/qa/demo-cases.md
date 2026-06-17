@@ -145,6 +145,8 @@
 - test_hello_user_tool_with_role_returns_greeting
 - test_hello_user_tool_without_role_returns_access_denied
 - test_tools_call_with_real_jwt_returns_agent_sub
+- Human Intervene > submitting approval response sends API call
+- Real Backend Integration - Conversational Agent Intervention > GET /api/v1/intervene/requests returns data
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -296,3 +298,5 @@
 | 135 | MCP Dual-Identity — helloUser authorized | User identity via `X-User-Identity` header with `mcp_role: demo_user` gets greeting with user claims — demonstrates dual-identity chain | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
 | 136 | MCP Dual-Identity — helloUser access-denied | User without required `demo_user` role gets access-denied — proves per-tool role gating works independently from agent identity | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
 | 137 | MCP Dual-Identity — helloWorld regression | Existing helloWorld tool unchanged: still surfaces agent identity, no role gating, works with real Keycloak JWT | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
+| 138 | Intervention Response with Approval Dialog | User opens intervention dialog, selects Yes, submits approval, and verifies the API call was sent — the complete user decision-making loop | add-conversational-agent-intervention | e2e/tests/intervene.spec.ts |
+| 139 | Intervention API Endpoint Integration | Real-backend validation that the intervention requests data endpoint serves correctly against live services with migrations applied | add-conversational-agent-intervention | e2e/tests/conversation-intervention.spec.ts |

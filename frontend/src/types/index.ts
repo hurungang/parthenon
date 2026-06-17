@@ -607,6 +607,7 @@ export interface JobExecution {
 
 export type ConversationStatus = 'active' | 'closed' | 'archived' | 'error'
 export type TurnRole = 'user' | 'agent' | 'tool' | 'system'
+export type TurnType = 'message' | 'intervene_request' | 'intervene_response'
 
 export interface ToolCallRecord {
   id: string
@@ -623,7 +624,9 @@ export interface ConversationTurn {
   id: string
   session_id: string
   role: TurnRole
+  turn_type: TurnType
   content: string
+  intervene_request_id: string | null
   token_count: number | null
   created_at: string
   tool_calls: ToolCallRecord[]
@@ -855,10 +858,12 @@ export interface InterveneRequest {
   id: string
   agent_session_id: string
   agent_type_id: string
+  conversation_session_id?: string | null
   intervention_type: InterventionType
   reason: string
   choices?: string[]
   status: InterveneRequestStatus
+  delegation_depth: number
   created_at: string
   responded_at?: string
   expires_at?: string
@@ -883,3 +888,47 @@ export interface InterveneMetrics {
   avg_response_time_seconds: number
   resolution_rate: number
 }
+
+// ── Intervention WebSocket Messages ─────────────────────────────────────────────
+
+export interface InterveneRequestMessage {
+  type: 'intervene_request'
+  request_id: string
+  intervention_type: InterventionType
+  reason: string
+  choices?: string[]
+  agent_type?: string
+  delegation_depth: number
+  conversation_session_id: string
+}
+
+export interface InterveneResponseMessage {
+  type: 'intervene_response'
+  request_id: string
+  approval_value?: boolean
+  selected_choice?: string
+  text_value?: string
+}
+
+export interface InterveneCancelMessage {
+  type: 'intervene_cancel'
+  request_id: string
+}
+
+export interface InterveneStatusMessage {
+  type: 'intervene_status'
+  request_id: string
+  status: 'pending' | 'responded' | 'cancelled' | 'expired' | 'error'
+  message?: string
+}
+
+export interface ChatBlockedMessage {
+  type: 'chat_blocked'
+  reason: string
+  message: string
+}
+
+export type InterventionWsMessage =
+  | InterveneRequestMessage
+  | InterveneStatusMessage
+  | ChatBlockedMessage

@@ -24,38 +24,74 @@ async def _wait_for_receiver_result(
     receiver_session_id: uuid.UUID,
     timeout_seconds: float,
     broker: MessageBroker | None = None,
+    data_client: Any | None = None,
 ) -> dict[str, Any]:
     """Wait for a receiver result message on Redis pub/sub until timeout.
 
     Only messages with metadata.message_type == "agent_result" are processed.
+    When a data_client is provided, the session status is periodically checked
+    and the deadline is extended while the session is ``waiting_for_human``,
+    ensuring human-in-the-loop interventions do not trigger a timeout.
     """
-    deadline = asyncio.get_running_loop().time() + max(0.5, timeout_seconds)
+    base_deadline = asyncio.get_running_loop().time() + max(0.5, timeout_seconds)
+    deadline = base_deadline
     active_broker = broker or MessageBroker()
     owns_broker = broker is None
+    status_check_interval = 5.0  # seconds between session status polls
 
     try:
         subscription = active_broker.subscribe(str(receiver_session_id))
+        is_waiting = False
+        _terminal_status: str | None = None
 
         while True:
+            # Check session status if data_client is available
+            prev_is_waiting = is_waiting
+            is_waiting = False
+            if data_client is not None:
+                try:
+                    session_data = await data_client.get_session(receiver_session_id)
+                    if session_data:
+                        status = session_data.get("status")
+                        if status == "waiting_for_human":
+                            is_waiting = True
+                        elif status in ("completed", "failed", "terminated"):
+                            # Bug #2: Don't return "expired" immediately — a result
+                            # message may already be pending in Redis.  Defer the
+                            # "expired" decision until the deadline fires.
+                            _terminal_status = status
+                except Exception:
+                    pass
+
+            # Bug #1: When transitioning OUT of waiting_for_human (e.g. human
+            # responded and sub-agent resumed), extend the deadline so the poll
+            # loop keeps waiting for the sub-agent's final result.
+            if prev_is_waiting and not is_waiting:
+                deadline = asyncio.get_running_loop().time() + max(timeout_seconds, 30.0)
+
             remaining = deadline - asyncio.get_running_loop().time()
-            if remaining <= 0:
+            if remaining <= 0 and not is_waiting:
+                # Bug #2: Only return "expired" after confirming no result message
+                # arrived (deadline fired while session is in a terminal state).
+                if _terminal_status:
+                    return {
+                        "status": "expired",
+                        "error": f"Session {_terminal_status} before result received",
+                    }
                 return {
                     "status": "timeout",
                     "error": "Timed out waiting for receiver response",
                 }
 
+            poll_timeout = min(max(remaining, 5.0), status_check_interval) if is_waiting else min(remaining, status_check_interval)
+
             try:
-                message = await asyncio.wait_for(subscription.__anext__(), timeout=remaining)
+                message = await asyncio.wait_for(subscription.__anext__(), timeout=poll_timeout)
             except asyncio.TimeoutError:
-                return {
-                    "status": "timeout",
-                    "error": "Timed out waiting for receiver response",
-                }
+                continue
             except StopAsyncIteration:
-                return {
-                    "status": "timeout",
-                    "error": "Timed out waiting for receiver response",
-                }
+                subscription = active_broker.subscribe(str(receiver_session_id))
+                continue
 
             metadata = message.metadata if isinstance(message.metadata, dict) else {}
             if metadata.get("message_type") != "agent_result":
@@ -153,6 +189,7 @@ async def request_a2a(
 
     # Request preparation is fully delegated to Control Center (DB owner).
     session_link_id = request.conversation_metadata.get("session_link_id")
+    conv_session_id_raw = request.conversation_metadata.get("conv_session_id")
     active_receiver_instance_id = request.conversation_metadata.get(
         "active_receiver_instance_id"
     )
@@ -166,6 +203,7 @@ async def request_a2a(
             active_receiver_instance_id=(
                 str(active_receiver_instance_id) if active_receiver_instance_id else None
             ),
+            conv_session_id=str(conv_session_id_raw) if conv_session_id_raw else None,
         )
     except ControlCenterDataError as exc:
         detail = str(exc)
@@ -191,7 +229,9 @@ async def request_a2a(
         except (TypeError, ValueError):
             timeout_seconds = 20.0
         timeout_seconds = min(max(timeout_seconds, 1.0), 120.0)
-        response_payload = await _wait_for_receiver_result(receiver_session_id, timeout_seconds)
+        response_payload = await _wait_for_receiver_result(
+            receiver_session_id, timeout_seconds, data_client=data_client,
+        )
     
     return A2AResponse(
         receiver_instance_id=receiver_instance_id,
@@ -205,15 +245,12 @@ async def request_a2a(
 @router.get("/wait/{receiver_session_id}")
 async def wait_for_a2a_response(
     receiver_session_id: uuid.UUID,
+    http_request: Request,
     timeout_seconds: float = Query(default=20.0, ge=1.0, le=120.0),
 ) -> dict[str, Any]:
-    """Wait for a delegated receiver session result.
-
-    This keeps request acceptance and result waiting decoupled so callers can
-    emit receiver_session_id immediately and still wait for completion.
-    """
-
-    return await _wait_for_receiver_result(receiver_session_id, timeout_seconds)
+    """Wait for a delegated receiver session result."""
+    dc: ControlCenterDataClient | None = getattr(http_request.app.state, "data_client", None)
+    return await _wait_for_receiver_result(receiver_session_id, timeout_seconds, data_client=dc)
 
 
 @router.post("/disconnect/{session_link_id}")

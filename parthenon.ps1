@@ -24,6 +24,9 @@
 .PARAMETER Follow
     Follow log output in real-time (used with logs command)
 
+.PARAMETER LogLevel
+    Set the log level for backend services: DEBUG, INFO (default), WARNING, ERROR, CRITICAL
+
 .EXAMPLE
     .\parthenon.ps1 start
     Start all services
@@ -61,6 +64,10 @@
     Follow Agent Runtime logs in real-time
 
 .EXAMPLE
+    .\parthenon.ps1 start -LogLevel DEBUG
+    Start all services with DEBUG-level logging
+
+.EXAMPLE
     .\parthenon.ps1 init
     Initialize local development environment (Keycloak realm, admin user, database)
 #>
@@ -82,7 +89,11 @@ param(
     [int]$Lines = 50,
     
     [Parameter()]
-    [switch]$Follow
+    [switch]$Follow,
+
+    [Parameter()]
+    [ValidateSet('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')]
+    [string]$LogLevel = 'INFO'
 )
 
 # Script configuration
@@ -157,7 +168,7 @@ $Script:ServiceConfig = @{
             }
 
             # Start using helper script
-            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "control-center"
+            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "control-center", "-LogLevel", "$LogLevel"
             
             # Wait for service to be ready with better health checking
             Write-Host "  Waiting for Control Center to be ready (max 60s)..." -ForegroundColor Cyan
@@ -243,7 +254,7 @@ $Script:ServiceConfig = @{
             
             $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
             $logPath = Join-Path $Script:ProjectRoot "backend\logs\agent-runtime.log"
-            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "agent-runtime"
+            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "agent-runtime", "-LogLevel", "$LogLevel"
             
             Write-Host "  Waiting for Agent Runtime to be ready (max 60s)..." -ForegroundColor Cyan
             $ready = $false
@@ -325,7 +336,7 @@ $Script:ServiceConfig = @{
             
             $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
             $logPath = Join-Path $Script:ProjectRoot "backend\logs\communication-hub.log"
-            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "communication-hub"
+            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "communication-hub", "-LogLevel", "$LogLevel"
             
             Write-Host "  Waiting for Communication Hub to be ready (max 60s)..." -ForegroundColor Cyan
             $ready = $false

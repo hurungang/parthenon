@@ -9,6 +9,8 @@ flowchart LR
     AR[Agent Runtime]
     CC[Control Center]
     MCP[MCP and channel integrations]
+    IR[Intervention Router]
+    IQ[Intervention Queue]
     STAT[Workflow status channel]
     CSTAT[Chat status channel]
     CTX[Governed Context Package]
@@ -35,6 +37,12 @@ flowchart LR
     CH --> CSTAT
     STAT --> UI
     CSTAT --> CHAT
+    AR -->|Intervene signal with conv_session_id| IR
+    IR -->|Enqueue pending per session| IQ
+    IQ -->|Deliver next when resolved| IR
+    IR -->|intervene_request WS message| CHAT
+    CHAT -->|intervene_response WS message| IR
+    IR -->|Persist intervene turn| CC
 ```
 
 ```mermaid
@@ -55,3 +63,21 @@ flowchart TB
     CH --> S1
     S1 --> UI
 ```
+
+## Responsibilities
+
+- **Message Broker**: Routes agent execution, tool calls, and delegation requests between Web UI, Agent Runtime, and Control Center. Detects intervention requests originating from delegated sub-agents within a conversation session and routes them to the parent conversation's UI via the Intervention Router.
+- **Conversation Session Manager**: Manages conversation WebSocket connections, session state transitions, and intervention-pending flags that block new user messages until outstanding interventions are resolved.
+- **Intervention Router**: Inspects `human_intervene` suspend signals for a `conversation_session_id`. When present, routes the intervention request to the connected WebSocket client of the parent conversation. When absent, falls through to the existing dashboard-based intervention flow.
+- **Intervention Queue**: Per-conversation-session FIFO queue for intervention requests. When multiple delegated sub-agents request intervention concurrently, requests are delivered sequentially.
+
+## WebSocket Message Types
+
+### Intervention messages (new)
+- `intervene_request` (server → client): Intervention prompt with type, reason, options, delegation context
+- `intervene_response` (client → server): User's response with request_id and response value
+- `intervene_cancel` (client → server): User's dismissal with request_id
+- `intervene_status` (server → client): Lifecycle updates with request_id and status
+
+### Chat message changes
+- `chat` messages from client are rejected when session has pending intervention

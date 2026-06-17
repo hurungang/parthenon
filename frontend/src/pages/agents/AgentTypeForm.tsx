@@ -3,6 +3,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Box,
   Button,
   Chip,
@@ -167,6 +168,25 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
   const roleSkills = (skills ?? []).filter((s) => (selectedRole?.skill_ids ?? []).includes(s.id))
   const isConversation = values.input_type === 'conversation'
 
+  // Detect orphaned bindings — bound SOPs/Skills no longer in the selected role
+  const roleSopIdSet = new Set(selectedRole?.sop_ids ?? [])
+  const roleSkillIdSet = new Set(selectedRole?.skill_ids ?? [])
+  const orphanSops = values.sop_bindings.filter((b) => !roleSopIdSet.has(b.sop_id))
+  const orphanSkills = values.skill_bindings.filter((b) => !roleSkillIdSet.has(b.skill_id))
+  const hasOrphans = orphanSops.length > 0 || orphanSkills.length > 0
+  const orphanSopNames = orphanSops
+    .map((b) => (sops ?? []).find((s) => s.id === b.sop_id)?.name ?? b.sop_id)
+    .join(', ')
+  const orphanSkillNames = orphanSkills
+    .map((b) => (skills ?? []).find((s) => s.id === b.skill_id)?.name ?? b.skill_id)
+    .join(', ')
+
+  const handleRemoveOrphans = () => {
+    const validSops = values.sop_bindings.filter((b) => roleSopIdSet.has(b.sop_id))
+    const validSkills = values.skill_bindings.filter((b) => roleSkillIdSet.has(b.skill_id))
+    onChange({ ...values, sop_bindings: validSops, skill_bindings: validSkills })
+  }
+
   // ── Binding management helpers ─────────────────────────────────────────
   const [showAddBinding, setShowAddBinding] = useState(false)
   const [addBindingType, setAddBindingType] = useState<'sop' | 'skill'>('sop')
@@ -330,9 +350,31 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
         </Typography>
 
         {values.sop_bindings.length === 0 && values.skill_bindings.length === 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
-            {t('agents.types.bindings.noBindings')}
+          <Typography variant="body2" color="error" sx={{ fontStyle: 'italic', mb: 1 }}>
+            {t('agents.types.bindings.validationRequired')}
           </Typography>
+        )}
+
+        {hasOrphans && (
+          <Alert severity="warning" sx={{ mb: 1.5 }} action={
+            <Button size="small" color="inherit" onClick={handleRemoveOrphans}>
+              {t('agents.types.bindings.removeOrphans')}
+            </Button>
+          }>
+            <Typography variant="body2">
+              {t('agents.types.bindings.orphanWarning')}
+            </Typography>
+            {orphanSopNames && (
+              <Typography variant="body2" component="div" sx={{ mt: 0.5 }}>
+                <strong>SOP:</strong> {orphanSopNames}
+              </Typography>
+            )}
+            {orphanSkillNames && (
+              <Typography variant="body2" component="div">
+                <strong>{t('agents.types.bindings.typeSkill')}:</strong> {orphanSkillNames}
+              </Typography>
+            )}
+          </Alert>
         )}
 
         {/* Render sorted merged bindings */}
@@ -350,8 +392,13 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
             const list = isSop ? values.sop_bindings : values.skill_bindings
             const isFirst = listIndex === 0
             const isLast = listIndex === list.length - 1
+            const isOrphan = isSop
+              ? !roleSopIdSet.has((binding as typeof binding & { sop_id: string }).sop_id)
+              : !roleSkillIdSet.has((binding as typeof binding & { skill_id: string }).skill_id)
             return (
-              <Box key={`${isSop ? 'sop' : 'skill'}-${isSop ? (binding as typeof binding & { sop_id: string }).sop_id : (binding as typeof binding & { skill_id: string }).skill_id}`} display="flex" alignItems="center" gap={1} mb={0.5}>
+              <Box key={`${isSop ? 'sop' : 'skill'}-${isSop ? (binding as typeof binding & { sop_id: string }).sop_id : (binding as typeof binding & { skill_id: string }).skill_id}`}
+                display="flex" alignItems="center" gap={1} mb={0.5}
+                sx={isOrphan ? { border: 1, borderColor: 'warning.main', borderRadius: 1, p: 0.5, bgcolor: 'warning.50' } : undefined}>
                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 28 }}>
                   #{binding.order}
                 </Typography>

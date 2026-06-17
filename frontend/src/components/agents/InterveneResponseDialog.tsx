@@ -32,6 +32,7 @@ interface InterveneResponseDialogProps {
     selected_choice?: string
     text_value?: string
   }) => Promise<void>
+  onTerminate?: (sessionId: string, requestId: string) => Promise<void>
 }
 
 export function InterveneResponseDialog({
@@ -39,10 +40,12 @@ export function InterveneResponseDialog({
   request,
   onClose,
   onSubmit,
+  onTerminate,
 }: InterveneResponseDialogProps) {
   const { t } = useTranslation()
   const { dialogError, setDialogError, clearDialogError } = useDialogErrorHandler()
   const [submitting, setSubmitting] = useState(false)
+  const [terminating, setTerminating] = useState(false)
   const [approvalValue, setApprovalValue] = useState<boolean | null>(null)
   const [selectedChoice, setSelectedChoice] = useState('')
   const [textValue, setTextValue] = useState('')
@@ -185,14 +188,34 @@ export function InterveneResponseDialog({
         {submitting && <LinearProgress sx={{ mt: 2 }} />}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={submitting}>
+        {onTerminate && (
+          <Button
+            color="error"
+            disabled={submitting || terminating}
+            onClick={async () => {
+              try {
+                setTerminating(true)
+                await onTerminate(request.agent_session_id, request.id)
+                handleClose()
+              } catch (err) {
+                setDialogError(err)
+              } finally {
+                setTerminating(false)
+              }
+            }}
+          >
+            {terminating ? t('app.saving') : t('intervene.terminate', 'Terminate Session')}
+          </Button>
+        )}
+        <Box flex={1} />
+        <Button onClick={handleClose} disabled={submitting || terminating}>
           {t('app.cancel')}
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
           disabled={
-            submitting ||
+            submitting || terminating ||
             (request.intervention_type === 'choice' && !selectedChoice)
           }
         >

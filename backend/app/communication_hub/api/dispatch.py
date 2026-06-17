@@ -4,6 +4,11 @@ Accepts dispatch requests from Control Center (mTLS-authenticated) and
 publishes the message payload to the session's Redis pub/sub broker channel
 so that connected WebSocket subscribers receive the agent result.
 
+For conversation-scoped intervention signals (message_type "intervene_request"
+with conversation_session_id), routes through the InterventionRouter to
+deliver directly to the connected conversation WebSocket client instead of
+the operator dashboard.
+
 Route: POST /internal/dispatch
 
 Security:
@@ -20,7 +25,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.services.comm_hub.broker import BrokerMessage, MessageBroker
@@ -54,11 +59,15 @@ class DispatchResponse(BaseModel):
     response_model=DispatchResponse,
     summary="Dispatch message to broker channel (Control Center → Communication Hub)",
 )
-async def dispatch_message(body: DispatchRequest) -> DispatchResponse:
+async def dispatch_message(body: DispatchRequest, request: Request) -> DispatchResponse:
     """Publish a message to the session's Redis pub/sub channel.
 
     Control Center calls this endpoint to deliver agent execution results
     (and other server-initiated messages) to connected WebSocket subscribers.
+
+    For conversation-scoped intervention signals, routes through the
+    InterventionRouter to deliver directly to the connected conversation
+    WebSocket client.
 
     ``content`` may be either a plain string or a dict; dicts are
     JSON-serialised before insertion into the BrokerMessage so that existing
@@ -74,6 +83,39 @@ async def dispatch_message(body: DispatchRequest) -> DispatchResponse:
     Raises:
         502 — Redis publish failed (broker unreachable).
     """
+    content_dict: dict[str, Any] = (
+        body.content
+        if isinstance(body.content, dict)
+        else (json.loads(body.content) if isinstance(body.content, str) else {})
+    )
+
+    # Route conversation-scoped intervention signals through InterventionRouter
+    if body.message_type in ("intervene_request", "intervention"):
+        interven_router = getattr(request.app.state, "intervention_router", None)
+        if interven_router is not None:
+            try:
+                routed = await interven_router.route_intervention_signal(
+                    session_id=str(body.session_id),
+                    message_type=body.message_type,
+                    content=content_dict,
+                    metadata=body.metadata,
+                )
+                if routed:
+                    channel = f"parthenon:session:{body.session_id}"
+                    return DispatchResponse(
+                        dispatched=True,
+                        channel=f"{channel} (intervention-router)",
+                        subscribers=1,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Intervention routing failed for session %s: %s — "
+                    "falling through to Redis broker",
+                    body.session_id,
+                    exc,
+                )
+
+    # Standard dispatch via Redis pub/sub
     content_str = (
         body.content
         if isinstance(body.content, str)

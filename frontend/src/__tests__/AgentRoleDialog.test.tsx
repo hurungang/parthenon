@@ -11,12 +11,14 @@ vi.mock('react-i18next', () => ({
 const mockGet = vi.fn()
 const mockPost = vi.fn()
 const mockPut = vi.fn()
+const mockDelete = vi.fn()
 
 vi.mock('../api/apiClient', () => ({
   default: {
     get: mockGet,
     post: mockPost,
     put: mockPut,
+    delete: mockDelete,
   },
 }))
 
@@ -364,6 +366,9 @@ describe('AgentRoleDialog', () => {
       if (url === '/skills') {
         return Promise.resolve({ data: [] })
       }
+      if (url === '/mcp/servers') {
+        return Promise.resolve({ data: [] })
+      }
       if (url.includes('/identities') || url.includes('/mcp-sessions') || url.includes('/mcp-tools')) {
         return Promise.resolve({ data: [] })
       }
@@ -404,5 +409,416 @@ describe('AgentRoleDialog', () => {
         mockGet.mock.calls.some(([url]) => String(url).includes('/allowed-agent-types?sop_ids=sop-1,sop-2'))
       ).toBe(true)
     })
+  })
+
+  // ── New: Inline MCP Session Assignment Tests ──
+
+  it('shows MCP session assignment hint when no SOPs/Skills are selected', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') return Promise.resolve({ data: [] })
+      if (url === '/skills') return Promise.resolve({ data: [] })
+      if (url === '/mcp/servers') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.mcpSessionAssignmentHint')).toBeDefined()
+    })
+  })
+
+  it('disables save button when required MCP server lacks session assignment', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') return Promise.resolve({ data: [] })
+      if (url === '/skills') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'skill-1',
+              name: 'Test Skill',
+              description: null,
+              is_active: true,
+              is_system: false,
+              tool_ids: ['tool-1'],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        })
+      }
+      if (url === '/mcp/servers') {
+        return Promise.resolve({
+          data: [
+            { id: 'server-1', slug: 'github-mcp', name: 'GitHub MCP', description: null, base_url: '', status: 'active', last_synced_at: null, session_count: 1, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (url === '/mcp/tools') {
+        return Promise.resolve({
+          data: [
+            { id: 'tool-1', server_id: 'server-1', name: 'github-mcp____list_repos', original_name: 'list_repos', description: null, input_schema: null, is_active: true, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (url.includes('/sessions')) {
+        return Promise.resolve({
+          data: [
+            { id: 'sess-1', server_id: 'server-1', name: 'Admin Session', description: null, auth_type: 'api_key', identity_subject: null, is_active: true, is_default: false, identity_binding: null, credential_config: null, oauth_expires_at: null, oauth_refresh_expires_at: null, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    // Fill name
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.createTitle')).toBeDefined()
+    })
+
+    const nameInput = screen.getByLabelText(/app\.name/)
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: 'New Role' } })
+    })
+
+    // Select skill
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Test Skill'))
+    })
+
+    // Wait for the MCP server row to appear
+    await waitFor(() => {
+      expect(screen.getByText('GitHub MCP')).toBeDefined()
+    })
+
+    // Save button should be disabled because no session is selected
+    const saveBtn = screen.getByText('app.save').closest('button')
+    expect(saveBtn?.disabled).toBe(true)
+
+    // Validation warning should appear
+    expect(screen.getByText(/agents.roles.mcpSessionMissing/)).toBeDefined()
+  })
+
+  it('displays passthrough badge for servers with passthrough sessions', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (String(url).includes('/sops')) return Promise.resolve({ data: [] })
+      if (String(url).includes('/skills') && !String(url).includes('tool')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'skill-pt',
+              name: 'Passthrough Skill',
+              description: null,
+              is_active: true,
+              is_system: false,
+              tool_ids: ['tool-pt'],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        })
+      }
+      if (String(url) === '/mcp/servers' || String(url).startsWith('/mcp/servers?')) {
+        return Promise.resolve({
+          data: [
+            { id: 'server-pt', slug: 'github-mcp', name: 'GitHub MCP', description: null, base_url: '', status: 'active', last_synced_at: null, session_count: 1, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (String(url).includes('/mcp/tools')) {
+        return Promise.resolve({
+          data: [
+            { id: 'tool-pt', server_id: 'server-pt', name: 'github-mcp____list_repos', original_name: 'list_repos', description: null, input_schema: null, is_active: true, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (String(url).includes('/sessions')) {
+        return Promise.resolve({
+          data: [
+            { id: 'sess-pt', server_id: 'server-pt', name: 'Passthrough Session', description: null, auth_type: 'passthrough', identity_subject: null, is_active: true, is_default: false, identity_binding: null, credential_config: null, oauth_expires_at: null, oauth_refresh_expires_at: null, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.createTitle')).toBeDefined()
+    })
+
+    // Wait for skills data to load, then select the skill
+    await waitFor(() => {
+      expect(screen.getByText('Passthrough Skill')).toBeDefined()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByText('Passthrough Skill'))
+    })
+
+    // Wait for passthrough chip
+    await waitFor(() => {
+      expect(screen.getByText('mcp.sessions.passthrough')).toBeDefined()
+    })
+  })
+
+  it('enables save after selecting sessions for all required servers', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') return Promise.resolve({ data: [] })
+      if (url === '/skills') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'skill-1',
+              name: 'Test Skill',
+              description: null,
+              is_active: true,
+              is_system: false,
+              tool_ids: ['tool-1'],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        })
+      }
+      if (url === '/mcp/servers') {
+        return Promise.resolve({
+          data: [
+            { id: 'server-1', slug: 'github-mcp', name: 'GitHub MCP', description: null, base_url: '', status: 'active', last_synced_at: null, session_count: 1, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (url === '/mcp/tools') {
+        return Promise.resolve({
+          data: [
+            { id: 'tool-1', server_id: 'server-1', name: 'github-mcp____list_repos', original_name: 'list_repos', description: null, input_schema: null, is_active: true, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (url.includes('/sessions')) {
+        return Promise.resolve({
+          data: [
+            { id: 'sess-1', server_id: 'server-1', name: 'Admin Session', description: null, auth_type: 'api_key', identity_subject: null, is_active: true, is_default: false, identity_binding: null, credential_config: null, oauth_expires_at: null, oauth_refresh_expires_at: null, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.createTitle')).toBeDefined()
+    })
+
+    // Fill name
+    const nameInput = screen.getByLabelText(/app\.name/)
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: 'New Role' } })
+    })
+
+    // Select skill
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Test Skill'))
+    })
+
+    // Wait for dropdown
+    await waitFor(() => {
+      expect(screen.getByText('GitHub MCP')).toBeDefined()
+    })
+
+    // Save should be disabled
+    let saveBtn = screen.getByText('app.save').closest('button')
+    expect(saveBtn?.disabled).toBe(true)
+
+    // Select a session from the dropdown
+    const select = screen.getByRole('combobox')
+    await act(async () => {
+      fireEvent.mouseDown(select)
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByText('Admin Session'))
+    })
+
+    await waitFor(() => {
+      saveBtn = screen.getByText('app.save').closest('button')
+      expect(saveBtn?.disabled).toBe(false)
+    })
+  })
+
+  it('creates role and assigns sessions in create mode', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/sops') return Promise.resolve({ data: [] })
+      if (url === '/skills') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'skill-1',
+              name: 'Test Skill',
+              description: null,
+              is_active: true,
+              is_system: false,
+              tool_ids: ['tool-1'],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        })
+      }
+      if (url === '/mcp/servers') {
+        return Promise.resolve({
+          data: [
+            { id: 'server-1', slug: 'github-mcp', name: 'GitHub MCP', description: null, base_url: '', status: 'active', last_synced_at: null, session_count: 1, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (url === '/mcp/tools') {
+        return Promise.resolve({
+          data: [
+            { id: 'tool-1', server_id: 'server-1', name: 'github-mcp____list_repos', original_name: 'list_repos', description: null, input_schema: null, is_active: true, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (url.includes('/sessions')) {
+        return Promise.resolve({
+          data: [
+            { id: 'sess-1', server_id: 'server-1', name: 'Admin Session', description: null, auth_type: 'api_key', identity_subject: null, is_active: true, is_default: false, identity_binding: null, credential_config: null, oauth_expires_at: null, oauth_refresh_expires_at: null, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+    mockPost.mockResolvedValue({ data: { id: 'new-role', name: 'New Role' } })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.createTitle')).toBeDefined()
+    })
+
+    // Fill name
+    const nameInput = screen.getByLabelText(/app\.name/)
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: 'New Role' } })
+    })
+
+    // Select skill
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Test Skill'))
+    })
+
+    // Wait for dropdown and select session
+    await waitFor(() => {
+      expect(screen.getByText('GitHub MCP')).toBeDefined()
+    })
+
+    const select = screen.getByRole('combobox')
+    await act(async () => {
+      fireEvent.mouseDown(select)
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByText('Admin Session'))
+    })
+
+    // Click save
+    await act(async () => {
+      fireEvent.click(screen.getByText('app.save'))
+    })
+
+    await waitFor(() => {
+      // Verify role creation was called
+      expect(mockPost).toHaveBeenCalledWith('/agents/roles', expect.any(Object))
+      // Verify session assignment was called
+      expect(mockPost).toHaveBeenCalledWith('/agents/roles/new-role/mcp-sessions', { mcp_session_id: 'sess-1' })
+      expect(onSaved).toHaveBeenCalled()
+    })
+  })
+
+  it('handles system tool exclusion in required servers computation', async () => {
+    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    mockGet.mockImplementation((url: string) => {
+      if (String(url).includes('/sops')) return Promise.resolve({ data: [] })
+      if (String(url).includes('/skills') && !String(url).includes('tool')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'skill-sys',
+              name: 'System Tool Skill',
+              description: null,
+              is_active: true,
+              is_system: false,
+              tool_ids: ['tool-sys'],
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+            },
+          ],
+        })
+      }
+      if (String(url) === '/mcp/servers' || String(url).startsWith('/mcp/servers?')) {
+        return Promise.resolve({
+          data: [
+            { id: 'server-sys', slug: 'github-mcp', name: 'GitHub MCP', description: null, base_url: '', status: 'active', last_synced_at: null, session_count: 1, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (String(url).includes('/mcp/tools')) {
+        return Promise.resolve({
+          data: [
+            { id: 'tool-sys', server_id: 'server-sys', name: 'system____save_result', original_name: 'save_result', description: null, input_schema: null, is_active: true, created_at: '', updated_at: '' },
+          ],
+        })
+      }
+      if (String(url).includes('/sessions')) {
+        return Promise.resolve({ data: [] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    render(
+      <AgentRoleDialog open={true} editRole={null} onClose={onClose} onSaved={onSaved} />,
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('agents.roles.createTitle')).toBeDefined()
+    })
+
+    // Wait for skills data to load, then select the skill
+    await waitFor(() => {
+      expect(screen.getByText('System Tool Skill')).toBeDefined()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByText('System Tool Skill'))
+    })
+
+    // No MCP server rows should appear (system tool is excluded)
+    await waitFor(() => {
+      expect(screen.queryByText('GitHub MCP')).toBeNull()
+    })
+
+    // The hint should still show (no servers required)
+    expect(screen.getByText('agents.roles.mcpSessionAssignmentHint')).toBeDefined()
   })
 })

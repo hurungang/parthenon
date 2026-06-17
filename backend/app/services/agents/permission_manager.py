@@ -197,8 +197,8 @@ class AgentPermissionManager:
         skill_ids: set[uuid.UUID] = set()
 
         # Allow caller to override with temporary selections (for preview)
-        if override_skill_ids is not None and override_sop_ids is not None:
-            skill_ids = override_skill_ids.copy()
+        if override_skill_ids is not None or override_sop_ids is not None:
+            skill_ids = (override_skill_ids or set()).copy()
             if override_sop_ids:
                 step_rows = await db.execute(
                     select(SopStep.skill_id)
