@@ -11,6 +11,8 @@ describe('delegationHistory utils', () => {
         role: 'agent',
         content: 'Final delegated result',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-29T10:00:00Z',
         tool_calls: [
           {
@@ -59,6 +61,8 @@ describe('delegationHistory utils', () => {
         role: 'user',
         content: 'Please delegate this task',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-29T10:00:00Z',
         tool_calls: [],
       },
@@ -68,6 +72,8 @@ describe('delegationHistory utils', () => {
         role: 'agent',
         content: 'Delegated result is complete',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-29T10:00:05Z',
         tool_calls: [
           {
@@ -104,6 +110,8 @@ describe('delegationHistory utils', () => {
         role: 'user',
         content: 'Please delegate this task',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-29T10:00:00Z',
         tool_calls: [],
       },
@@ -113,6 +121,8 @@ describe('delegationHistory utils', () => {
         role: 'agent',
         content: 'Delegating to agent research-agent',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-29T10:00:01Z',
         tool_calls: [
           {
@@ -136,6 +146,8 @@ describe('delegationHistory utils', () => {
         role: 'agent',
         content: 'Delegated result is complete',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-29T10:00:05Z',
         tool_calls: [],
       },
@@ -163,6 +175,8 @@ describe('delegationHistory utils', () => {
         role: 'user',
         content: 'can you help find supabase project name',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-30T12:14:24Z',
         tool_calls: [],
       },
@@ -172,6 +186,8 @@ describe('delegationHistory utils', () => {
         role: 'agent',
         content: 'Delegating to agent supabase-agent',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-30T12:14:29Z',
         tool_calls: [
           {
@@ -196,6 +212,8 @@ describe('delegationHistory utils', () => {
         role: 'agent',
         content: 'The supabase project name is example-project',
         token_count: null,
+        turn_type: 'message',
+        intervene_request_id: null,
         created_at: '2026-05-30T12:14:35Z',
         tool_calls: [
           {

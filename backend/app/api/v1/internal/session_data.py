@@ -122,6 +122,7 @@ class SessionStatusUpdateRequest(BaseModel):
     stop_reason: str | None = None
     stop_details: dict | None = None
     intervene_request_id: str | None = None
+    conversation_history: list | None = None
 
 
 class SessionStatusUpdateResponse(BaseModel):
@@ -194,6 +195,7 @@ class A2ADataRequest(BaseModel):
     request_payload: dict = Field(default_factory=dict)
     session_link_id: str | None = None
     active_receiver_instance_id: str | None = None
+    conv_session_id: str | None = None
 
 
 class A2ADataResponse(BaseModel):
@@ -628,6 +630,8 @@ async def update_session_status(
         job.status = AgentJobStatus.waiting_for_human
         if body.intervene_request_id is not None:
             job.intervene_request_id = uuid.UUID(body.intervene_request_id)
+        if body.conversation_history is not None:
+            job.conversation_history = body.conversation_history
 
     await db.flush()
     await db.commit()
@@ -746,9 +750,12 @@ async def prepare_a2a_request(
     await db.flush()
 
     session_service = AgentSessionService()
+    enqueue_input = body.request_payload.copy() if body.request_payload else {}
+    if body.conv_session_id:
+        enqueue_input["__conv_session_id"] = body.conv_session_id
     receiver_job = await session_service.enqueue(
         agent_type_id=target_agent_type.id,
-        input_data=body.request_payload,
+        input_data=enqueue_input,
         user_id=None,
         db=db,
     )
@@ -1028,3 +1035,85 @@ async def auto_name_conversation(
     except Exception as exc:
         logger.warning("Auto-naming failed for conversation %s: %s", conv_session_id, exc)
         return AutoNameResponse(title=None)
+
+
+# ── Internal intervention respond (CH cert auth, no JWT needed) ──────────────
+
+from app.schemas.intervene import InterveneResponseRead
+from app.services.agents.intervene_service import InterveneRequestStore
+from app.db.models.intervene import InterveneRequest, InterveneRequestStatus
+from app.api.v1.intervene import _resume_agent_session
+
+_internal_intervene_store = InterveneRequestStore()
+
+
+class InternalInterveneRespondRequest(BaseModel):
+    request_id: uuid.UUID
+    approval_value: bool | None = None
+    selected_choice: str | None = None
+    text_value: str | None = None
+    operator_subject: str | None = None  # OIDC subject from WebSocket session
+
+
+@InternalSessionDataRouter.post(
+    "/intervene/respond",
+    response_model=InterveneResponseRead,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Submit intervention response (internal, service-cert auth)",
+)
+async def internal_intervene_respond(
+    body: InternalInterveneRespondRequest,
+    db: DbSession,
+) -> InterveneResponseRead:
+    req = await db.get(InterveneRequest, body.request_id)
+    if req is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.status != InterveneRequestStatus.pending:
+        raise HTTPException(status_code=400, detail=f"Request is {req.status.value}")
+
+    # Resolve operator user from the conversation session or agent job
+    operator_user_id: uuid.UUID | None = None
+    from app.db.models.agents import AgentJob
+    from app.db.models.identity import Identity
+
+    job = await db.get(AgentJob, req.agent_session_id)
+    if job and job.triggered_by_user_id:
+        # triggered_by_user_id on AgentJob IS an Identity UUID (FK → identities.id)
+        operator_user_id = job.triggered_by_user_id
+
+    if operator_user_id is None and body.operator_subject:
+        # Look up Identity by OIDC subject
+        identity_result = await db.execute(
+            select(Identity).where(Identity.subject == body.operator_subject)
+        )
+        identity = identity_result.scalar_one_or_none()
+        if identity:
+            operator_user_id = identity.id
+
+    if operator_user_id is None:
+        raise HTTPException(status_code=400, detail="Cannot determine operator user for intervention response")
+
+    response = await _internal_intervene_store.submit_response(
+        db=db,
+        request_id=body.request_id,
+        operator_user_id=operator_user_id,
+        approval_value=body.approval_value,
+        selected_choice=body.selected_choice,
+        text_value=body.text_value,
+    )
+    response_data = InterveneResponseRead.model_validate(response)
+    await db.commit()
+
+    response_value: dict = {}
+    if body.approval_value is not None:
+        response_value["approval_value"] = body.approval_value
+    if body.selected_choice is not None:
+        response_value["selected_choice"] = body.selected_choice
+    if body.text_value is not None:
+        response_value["text_value"] = body.text_value
+
+    if req.agent_session_id is not None:
+        agent_session_id = req.agent_session_id
+        await _resume_agent_session(agent_session_id, response_value)
+
+    return response_data

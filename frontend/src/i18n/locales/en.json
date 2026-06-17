@@ -344,6 +344,15 @@
       "skillCount_other": "{{count}} Skills",
       "mcpToolPreview": "Allowed MCP Tools Preview",
       "mcpToolPreviewHint": "Save this role first to preview which MCP tools will be accessible.",
+      "mcpSessionAssignment": "Required MCP Session Assignments",
+      "mcpSessionAssignmentHint": "Select a session for each required MCP server before saving.",
+      "mcpSessionLoading": "Loading sessions...",
+      "mcpSessionLoadError": "Failed to load sessions",
+      "mcpSessionRetry": "Retry",
+      "mcpSessionNoSessions": "No sessions available",
+      "mcpSessionRequired": "Session required",
+      "mcpSessionRefresh": "Refresh available sessions",
+      "mcpSessionMissing": "Assign sessions for all required MCP servers before saving.",
       "noMcpTools": "No MCP tools resolved. Assign SOPs or Skills to populate this list.",
       "allowedAgentTypePreview": "Allowed Agent Types Preview",
       "allowedAgentTypePreviewHint": "Save this role first to preview which delegated agent types will be accessible.",
@@ -354,14 +363,6 @@
       "assignIdentitiesHint": "Select identities to assign to this role. Only assigned identities can use this role for agent execution.",
       "noAssignedIdentities": "No identities assigned to this role yet.",
       "removeIdentity": "Remove identity from role",
-      "assignedMcpSessions": "Assigned MCP Sessions",
-      "assignMcpSessions": "Assign MCP Sessions",
-      "assignMcpSessionsTitle": "Assign MCP Sessions to Role: {{name}}",
-      "assignMcpSessionsHint": "Select MCP sessions to assign to this role. Only one session per MCP server is allowed. Sessions are filtered by the servers whose tools this role uses.",
-      "noAssignedMcpSessions": "No MCP sessions assigned to this role yet.",
-      "noAvailableMcpSessions": "No available MCP sessions. Make sure the role has skills or SOPs that use MCP tools, and that sessions exist for those servers.",
-      "removeMcpSession": "Remove MCP session from role",
-      "selectedForServer": "Selected for this server",
       "deleteConfirm": "Delete role \"{{name}}\"? This cannot be undone.",
       "empty": "No agent roles defined. Create one to get started."
     },
@@ -449,6 +450,7 @@
         "title": "SOP / Skill Bindings",
         "sectionHint": "Curate which SOPs and skills this agent type uses. Order controls the context priority for AI-generated instructions.",
         "noBindings": "No bindings configured. Use the button below to add SOP or skill bindings.",
+        "validationRequired": "At least one SOP or Skill binding is required. Add a binding before saving.",
         "addBinding": "Add Binding",
         "typeSop": "SOP",
         "typeSkill": "Skill",
@@ -456,8 +458,10 @@
         "moveDown": "Move down",
         "remove": "Remove",
         "selectPlaceholder": "Select an item…",
-        "brokenReference": "(deleted)",
-        "bound": "Bound"
+    "brokenReference": "(deleted)",
+    "orphanWarning": "Some bound items are no longer available in the selected role. Remove them before saving.",
+    "removeOrphans": "Remove All",
+    "bound": "Bound"
       },
       "guardrails": {
         "title": "Execution Guardrails",
@@ -930,6 +934,23 @@
         "closed": "Closed",
         "archived": "Archived",
         "error": "Error"
+      },
+      "intervention": {
+        "waitingForInput": "Waiting for your input…",
+        "inputBlocked": "Waiting for your intervention response...",
+        "requiresYourInput": "{{agentType}} requires your input",
+        "delegatedBy": "Sub-agent delegated by {{parentAgent}} — depth {{depth}}",
+        "approve": "Approve",
+        "deny": "Deny",
+        "confirmSelection": "Confirm Selection",
+        "submitResponse": "Submit Response",
+        "dismissCancel": "Dismiss / Cancel",
+        "typeApproval": "Approval Required",
+        "typeChoice": "Choice Required",
+        "typeText": "Text Input Required",
+        "cancelled": "Intervention cancelled — conversation resumed",
+        "responded": "Response sent",
+        "placeholderText": "Type your response..."
       }
     }
   },
@@ -1278,7 +1299,13 @@
     "emptyDesc": "No pending intervene requests.",
     "historyTitle": "Response History",
     "historyDesc": "Previously responded intervene requests.",
-    "metricsResolvedToday": "Resolved Today"
+    "metricsResolvedToday": "Resolved Today",
+    "inConversation": "In Conversation",
+    "standalone": "Standalone",
+    "delegationDepth": "Depth: {{depth}}",
+    "context": "Context",
+    "terminate": "Terminate Session",
+    "viewLogs": "View Logs"
   },
   "systemConfig": {
     "title": "System Configuration",

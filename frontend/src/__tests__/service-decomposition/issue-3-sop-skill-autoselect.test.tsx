@@ -49,10 +49,6 @@ vi.mock('../../pages/agents/AssignIdentitiesToRoleDialog', () => ({
   AssignIdentitiesToRoleDialog: () => <div data-testid="assign-identities-dialog" />,
 }))
 
-vi.mock('../../pages/agents/AssignMcpSessionsToRoleDialog', () => ({
-  AssignMcpSessionsToRoleDialog: () => <div data-testid="assign-mcp-dialog" />,
-}))
-
 // ── Test data ─────────────────────────────────────────────────────────────────
 
 // The skill that is required by the SOP below

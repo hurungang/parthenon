@@ -34,6 +34,9 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
+import { InlineInterventionDialog } from '../conversations/InlineInterventionDialog'
+import { InterventionPendingIndicator } from '../conversations/InterventionPendingIndicator'
+import { useConversationIntervention } from '../../hooks/useConversationIntervention'
 import {
   useChatSession,
   type ChatMessage,
@@ -243,7 +246,7 @@ export function ConversationDialog({
     connected,
     pendingQuestion,
     sessionTitle,
-    guardrailUsage,
+    guardrailUsage: liveGuardrailUsage,
     chatStatus,
     delegationCycles,
     activeDelegationCycleId,
@@ -255,9 +258,24 @@ export function ConversationDialog({
     toggleDelegationSnippetsCollapsed,
     hydrateDelegationFromHistory,
     sendMessage,
+    interventionRequest,
+    interventionQueueLength: _interventionQueueLength,
+    sendInterventionResponse,
+    cancelIntervention,
   } =
     useChatSession(wsSessionId, convSessionId)
-  const effectiveGuardrailUsage = guardrailUsage ?? resumedGuardrailUsage
+  const effectiveGuardrailUsage = liveGuardrailUsage ?? resumedGuardrailUsage
+
+  const {
+    dialogError: interventionDialogError,
+    isSubmitting: interventionIsSubmitting,
+    respondToIntervention,
+    cancelIntervention: cancelInterventionRequest,
+  } = useConversationIntervention(
+    convSessionId,
+    sendInterventionResponse,
+    cancelIntervention,
+  )
 
   const formatTokenCountK = (value: number | null): string => {
     if (value == null) return t('agents.sessions.logViewer.summary.notAvailable')
@@ -489,13 +507,15 @@ export function ConversationDialog({
 
   const displayTitle = sessionTitle ?? agentTypeName
   const connectionLabel =
-    convSessionId && !connected
-      ? pendingInitialMessage || isResuming
-        ? t('conversations.sessions.connecting')
-        : t('conversations.sessions.disconnected')
-      : connected
-        ? t('conversations.sessions.connected')
-        : null
+    interventionRequest
+      ? t('conversations.sessions.intervention.waitingForInput')
+      : convSessionId && !connected
+        ? pendingInitialMessage || isResuming
+          ? t('conversations.sessions.connecting')
+          : t('conversations.sessions.disconnected')
+        : connected
+          ? t('conversations.sessions.connected')
+          : null
 
   const handleToggleGuardrailHint = (event: React.MouseEvent<HTMLElement>) => {
     setGuardrailHintAnchorEl((current) => (current ? null : event.currentTarget))
@@ -528,7 +548,7 @@ export function ConversationDialog({
             {connectionLabel && (
               <Chip
                 label={connectionLabel}
-                color={connected ? 'success' : pendingInitialMessage || isResuming ? 'info' : 'error'}
+                color={interventionRequest ? 'warning' : connected ? 'success' : pendingInitialMessage || isResuming ? 'info' : 'error'}
                 size="small"
               />
             )}
@@ -779,6 +799,47 @@ export function ConversationDialog({
                       </Box>
                     </Box>
                   )}
+
+                  {/* Intervention Waiting Indicator */}
+                  {chatStatus?.kind === 'waiting_for_human' && !interventionRequest && (
+                    <Box mb={2} data-testid={testId('intervention-pending-indicator')}>
+                      <InterventionPendingIndicator />
+                    </Box>
+                  )}
+
+                  {/* Inline Intervention Dialog */}
+                  {interventionRequest && (
+                    <Box mb={2} data-testid={testId('intervention-dialog')}>
+                      <InlineInterventionDialog
+                        request={interventionRequest}
+                        isSubmitting={interventionIsSubmitting}
+                        dialogError={interventionDialogError}
+                        onApprove={() =>
+                          respondToIntervention(interventionRequest.request_id, {
+                            approval_value: true,
+                          })
+                        }
+                        onDeny={() =>
+                          respondToIntervention(interventionRequest.request_id, {
+                            approval_value: false,
+                          })
+                        }
+                        onSelectChoice={(choice) =>
+                          respondToIntervention(interventionRequest.request_id, {
+                            selected_choice: choice,
+                          })
+                        }
+                        onSubmitText={(text) =>
+                          respondToIntervention(interventionRequest.request_id, {
+                            text_value: text,
+                          })
+                        }
+                        onDismiss={() =>
+                          cancelInterventionRequest(interventionRequest.request_id)
+                        }
+                      />
+                    </Box>
+                  )}
                 </Paper>
 
                 {guardrailRows.length > 0 && (
@@ -822,14 +883,22 @@ export function ConversationDialog({
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={t('conversations.sessions.chatPlaceholder')}
-                    disabled={convSessionId ? !connected || !!pendingQuestion || !!pendingInitialMessage : false}
+                    placeholder={
+                      interventionRequest
+                        ? t('conversations.sessions.intervention.inputBlocked')
+                        : t('conversations.sessions.chatPlaceholder')
+                    }
+                    disabled={
+                      convSessionId
+                        ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage
+                        : false
+                    }
                     size="small"
                   />
                   <Button
                     variant="contained"
                     onClick={() => void handleSend()}
-                    disabled={!inputText.trim() || (convSessionId ? !connected || !!pendingQuestion || !!pendingInitialMessage : false)}
+                    disabled={!inputText.trim() || (convSessionId ? !!interventionRequest || !connected || !!pendingQuestion || !!pendingInitialMessage : false)}
                     startIcon={<SendIcon />}
                   >
                     {t('conversations.sessions.send')}

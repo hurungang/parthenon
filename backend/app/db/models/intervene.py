@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,6 +51,11 @@ class InterveneRequest(Base):
         ForeignKey("agent_types.id", ondelete="CASCADE"),
         nullable=False,
     )
+    conversation_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversation_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     intervention_type: Mapped[InterventionType] = mapped_column(
         Enum(InterventionType, name="intervention_type_enum"),
         nullable=False,
@@ -61,6 +66,9 @@ class InterveneRequest(Base):
         Enum(InterveneRequestStatus, name="intervene_request_status_enum"),
         nullable=False,
         default=InterveneRequestStatus.pending,
+    )
+    delegation_depth: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -76,8 +84,14 @@ class InterveneRequest(Base):
     agent_session: Mapped["AgentJob"] = relationship(
         "AgentJob", back_populates="intervene_requests"
     )
+    conversation_session: Mapped["ConversationSession | None"] = relationship(
+        "ConversationSession", back_populates="intervene_requests"
+    )
     response: Mapped["InterveneResponse | None"] = relationship(
         "InterveneResponse", back_populates="request", uselist=False, cascade="all, delete-orphan"
+    )
+    conversation_turns: Mapped[list["ConversationTurn"]] = relationship(
+        "ConversationTurn", back_populates="intervene_request"
     )
 
     def __repr__(self) -> str:
@@ -130,3 +144,4 @@ class InterveneResponse(Base):
 
 # Resolve forward references
 from app.db.models.agents import AgentJob  # noqa: E402, F401
+from app.db.models.conversations import ConversationSession, ConversationTurn  # noqa: E402, F401

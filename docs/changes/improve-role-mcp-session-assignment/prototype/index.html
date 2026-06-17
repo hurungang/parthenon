@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Role MCP Session Assignment Prototype</title>
+<style>
+/* ── Parthenon Design Tokens (from master prototype) ─────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-primary:disabled{background:#93C5FD;color:#BFDBFE;cursor:not-allowed;box-shadow:none}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── CHIPS / BADGES ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-teal{background:#D1FAE5;color:#065F46}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.badge{position:absolute;top:2px;right:2px;background:var(--error);color:#fff;font-size:10px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
+.count-badge{background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+
+/* ── MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:620px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-lg{max-width:720px}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition)}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;align-items:center}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 3px rgba(244,67,54,0.12)}
+.form-control::placeholder{color:#94A3B8}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ── CHECKBOX LIST ── */
+.checkbox-group{display:flex;flex-direction:column;gap:8px}
+.checkbox-item{display:flex;align-items:center;gap:8px;cursor:pointer}
+.checkbox-item input{width:15px;height:15px;cursor:pointer;accent-color:var(--primary)}
+
+/* ── SECTION TITLE ── */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:20px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ── MCP ASSIGNMENT SECTION ── */
+.mcp-section{margin-top:16px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all var(--transition)}
+.mcp-section-header{background:#F8FAFC;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text-primary)}
+.mcp-section-body{padding:0}
+.mcp-server-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);position:relative;transition:background var(--transition)}
+.mcp-server-row:last-child{border-bottom:none}
+.mcp-server-row.has-error{background:#FFF5F5}
+.mcp-server-label{min-width:140px;font-size:13px;font-weight:500;color:var(--text-primary);display:flex;align-items:center;gap:6px}
+.mcp-server-icon{font-size:16px;flex-shrink:0}
+.mcp-select-wrap{flex:1;position:relative}
+.mcp-select-wrap select{width:100%}
+.mcp-refresh-btn{flex-shrink:0}
+.mcp-error-indicator{color:var(--error);font-size:18px;flex-shrink:0;margin-left:-4px;display:none}
+.mcp-server-row.has-error .mcp-error-indicator{display:block}
+.mcp-required-dot{width:7px;height:7px;border-radius:50%;background:var(--error);flex-shrink:0}
+.mcp-assigned-dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0}
+.passthrough-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;background:#EDE9FE;color:#6D28D9;margin-left:4px}
+.btn-refresh{background:none;border:1px solid var(--border);padding:6px 8px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;transition:all var(--transition);display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+.btn-refresh:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.btn-refresh:disabled{opacity:0.4;cursor:not-allowed}
+.btn-refresh-all{background:var(--surface);border:1px solid var(--border);padding:5px 12px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:12px;font-weight:500;transition:all var(--transition);display:inline-flex;align-items:center;gap:5px}
+.btn-refresh-all:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.btn-refresh.spinning span{animation:spin 0.8s linear infinite;display:inline-block}
+@keyframes spin{100%{transform:rotate(360deg)}}
+
+/* ── MCP REQUIREMENT COUNT ── */
+.mcp-count-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.mcp-count-pending{background:#FEF3C7;color:#92400E}
+.mcp-count-complete{background:#DCFCE7;color:#15803D}
+.mcp-count-none{background:#F1F5F9;color:#475569}
+
+/* ── VALIDATION BANNER ── */
+.validation-error{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);color:#B91C1C;font-size:12.5px;margin-top:12px}
+.validation-error span{flex:1}
+
+/* ── TOAST ── */
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
+.toast-success{background:#2E7D32}
+.toast-error{background:#C62828}
+.toast-info{background:#1565C0}
+
+/* ── PROTOTYPE OVERLAY ── */
+.prototype-label{position:fixed;bottom:12px;left:12px;z-index:3000;background:#1E293B;color:#fff;font-size:10px;font-weight:600;padding:4px 10px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase}
+
+/* ── SCENARIO TOGGLE BAR ── */
+.scenario-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.scenario-bar span{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.scenario-btn{padding:4px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition);background:var(--surface);color:var(--text-secondary)}
+.scenario-btn:hover{border-color:var(--primary);color:var(--primary)}
+.scenario-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+  <div class="nav-item" data-view="dashboard">
+    <span class="nav-icon">🏠</span>Dashboard
+  </div>
+  <div class="nav-parent-group" data-group="agents">
+    <div class="nav-parent-group-label">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item active"><span class="nav-icon">👤</span>Agent Roles</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🆔</span>Agent Identities</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔧</span>Skills</div>
+      <div class="nav-item sub-item"><span class="nav-icon">📋</span>SOPs</div>
+      <div class="nav-item sub-item"><span class="nav-icon">⚙️</span>Model Configs</div>
+    </div>
+  </div>
+  <div class="nav-parent-group" data-group="integrations">
+    <div class="nav-parent-group-label">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">🔌</span>MCP Hub</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title">Agent Roles</div>
+    <div class="topbar-actions">
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- Scenario bar -->
+  <div class="scenario-bar">
+    <span>Scenario:</span>
+    <button class="scenario-btn active" onclick="setScenario(0)">All selected</button>
+    <button class="scenario-btn" onclick="setScenario(1)">Partial selection</button>
+    <button class="scenario-btn" onclick="setScenario(2)">No SOPs/Skills</button>
+    <span style="margin-left:auto;font-size:10px;font-weight:400;text-transform:none;color:var(--text-secondary)">Click a scenario to reset the dialog state</span>
+  </div>
+
+  <!-- Main content area -->
+  <div class="main-content">
+    <!-- Agent Roles Table -->
+    <div class="view-header">
+      <div><h2>Agent Roles</h2><div class="view-desc">Define and manage agent roles with SOP, Skill, and MCP session assignments</div></div>
+      <button class="btn btn-primary" onclick="openEditDialog()">+ Create Role</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Role Name</th><th>SOPs</th><th>Skills</th>
+            <th>MCP Sessions</th><th>Status</th><th style="text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:600">Support Agent Role</td>
+            <td><span class="chip chip-blue">Customer Inquiry Handler</span> <span class="chip chip-gray">Transaction Processor</span></td>
+            <td><span class="chip chip-green">Email Sender</span> <span class="chip chip-purple">Database Query</span></td>
+            <td><span class="chip chip-green">3 assigned</span></td>
+            <td><span class="chip chip-green">Ready</span></td>
+            <td class="actions-cell" style="text-align:right">
+              <button class="btn btn-ghost btn-sm" onclick="openEditDialog()">Edit</button>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">Fraud Analyst Role</td>
+            <td><span class="chip chip-blue">Fraud Detection Routine</span></td>
+            <td><span class="chip chip-purple">Database Query</span> <span class="chip chip-teal">Log Analyzer</span></td>
+            <td><span class="chip chip-yellow">2 assigned, 1 missing</span></td>
+            <td><span class="chip chip-yellow">⚠ Incomplete</span></td>
+            <td class="actions-cell" style="text-align:right">
+              <button class="btn btn-ghost btn-sm" onclick="openEditDialog()">Edit</button>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">Notification Dispatcher</td>
+            <td>&mdash;</td>
+            <td><span class="chip chip-green">Email Sender</span></td>
+            <td><span class="chip chip-green">1 assigned</span></td>
+            <td><span class="chip chip-green">Ready</span></td>
+            <td class="actions-cell" style="text-align:right">
+              <button class="btn btn-ghost btn-sm" onclick="openEditDialog()">Edit</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ EDIT ROLE MODAL ═══════════════════════════════ -->
+<div class="modal-overlay" id="editRoleModal">
+  <div class="modal modal-lg" style="max-width:680px">
+    <div class="modal-header">
+      <h3 id="modalTitle">Edit Agent Role — Support Agent Role</h3>
+      <button class="modal-close" onclick="closeEditDialog()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Role Name & Description -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="roleName">Role Name</label>
+          <input type="text" id="roleName" class="form-control" value="Support Agent Role" placeholder="Enter role name">
+        </div>
+        <div class="form-group">
+          <label for="roleDesc">Description</label>
+          <input type="text" id="roleDesc" class="form-control" value="Handles customer inquiries and transaction processing" placeholder="Brief description of this role">
+        </div>
+      </div>
+
+      <!-- SOPs Section -->
+      <div class="section-title">Standard Operating Procedures (SOPs)</div>
+      <div class="checkbox-group" id="sopCheckboxes">
+        <label class="checkbox-item"><input type="checkbox" value="sop-customer-inquiry" onchange="onSopSkillChange()"> Customer Inquiry Handler <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses github-mcp, database-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="sop-transaction" onchange="onSopSkillChange()"> Transaction Processor <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses database-mcp, notification-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="sop-fraud" onchange="onSopSkillChange()"> Fraud Detection Routine <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses github-mcp, notification-mcp, database-mcp</span></label>
+      </div>
+
+      <!-- Skills Section -->
+      <div class="section-title">Skills</div>
+      <div class="checkbox-group" id="skillCheckboxes">
+        <label class="checkbox-item"><input type="checkbox" value="skill-email" onchange="onSopSkillChange()"> Email Sender <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses notification-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="skill-dbquery" onchange="onSopSkillChange()"> Database Query <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses database-mcp</span></label>
+        <label class="checkbox-item"><input type="checkbox" value="skill-loganalyzer" onchange="onSopSkillChange()"> Log Analyzer <span class="form-hint" style="margin-top:0;margin-left:4px">— Uses github-mcp</span></label>
+      </div>
+
+      <!-- Required MCP Session Assignments -->
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Required MCP Session Assignments</span>
+        <span id="mcpCountBadge" class="mcp-count-badge mcp-count-none">No MCP servers required</span>
+      </div>
+
+      <div class="mcp-section" id="mcpSection">
+        <div class="mcp-section-header">
+          <span>MCP Servers Requiring Session Assignment</span>
+          <button class="btn-refresh-all" id="btnRefreshAll" onclick="refreshAllSessions()" title="Refresh all session lists">
+            <span>↻</span> Refresh All
+          </button>
+        </div>
+        <div class="mcp-section-body" id="mcpServerRows">
+          <!-- Dynamically populated -->
+          <div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:13px" id="mcpEmptyState">
+            Select SOPs or Skills above to reveal required MCP server session assignments.
+          </div>
+        </div>
+      </div>
+
+      <!-- Validation error banner -->
+      <div class="validation-error" id="validationBanner" style="display:none">
+        <span style="font-size:16px">⚠</span>
+        <span id="validationMsg">All required MCP servers must have a session selected before saving.</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEditDialog()">Cancel</button>
+      <button class="btn btn-primary" id="btnSave" onclick="saveRole()" disabled>Save Role</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Prototype label -->
+<div class="prototype-label">Prototype — not for production</div>
+
+<script>
+/* ═══════════════════════════════ DATA ═══════════════════════════════ */
+
+// ---- Mappings: SOP / Skill → required MCP servers ----
+var sopMcpMap = {
+  'sop-customer-inquiry': ['github-mcp', 'database-mcp'],
+  'sop-transaction': ['database-mcp', 'notification-mcp'],
+  'sop-fraud': ['github-mcp', 'notification-mcp', 'database-mcp']
+};
+var skillMcpMap = {
+  'skill-email': ['notification-mcp'],
+  'skill-dbquery': ['database-mcp'],
+  'skill-loganalyzer': ['github-mcp']
+};
+
+// ---- MCP server display info ----
+var mcpServerInfo = {
+  'github-mcp': { name: 'GitHub MCP', icon: '🐙', isPassthrough: false },
+  'database-mcp': { name: 'Database MCP', icon: '🗄️', isPassthrough: false },
+  'notification-mcp': { name: 'Notification MCP', icon: '🔔', isPassthrough: true }
+};
+
+// ---- Available sessions per MCP server ----
+var availableSessions = {
+  'github-mcp': [
+    { id: 'gh-sess-1', label: 'github-admin-session (admin)' },
+    { id: 'gh-sess-2', label: 'github-readonly-session (read)' },
+    { id: 'gh-sess-3', label: 'github-ci-session (CI bot)' }
+  ],
+  'database-mcp': [
+    { id: 'db-sess-1', label: 'db-readwrite-session (rw)' },
+    { id: 'db-sess-2', label: 'db-readonly-session (ro)' }
+  ],
+  'notification-mcp': [
+    { id: 'notif-sess-1', label: 'notif-email-session (SMTP)' },
+    { id: 'notif-sess-2', label: 'notif-slack-session (webhook)' },
+    { id: 'notif-sess-3', label: 'notif-passthrough-1 (passthrough)' }
+  ]
+};
+
+// ---- Current selections (in-memory state) ----
+var selectedSessions = {}; // { 'github-mcp': 'gh-sess-1', ... }
+
+/* ═══════════════════════════════ UTILITIES ═══════════════════════════════ */
+
+function showToast(message, type) {
+  var container = document.getElementById('toastContainer');
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + (type || 'info');
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() { toast.remove(); }, 3000);
+}
+
+/* ═══════════════════════════════ MODAL ═══════════════════════════════ */
+
+function openEditDialog() {
+  var modal = document.getElementById('editRoleModal');
+  modal.style.display = 'flex';
+  recomputeMcpSection();
+}
+
+function closeEditDialog() {
+  var modal = document.getElementById('editRoleModal');
+  modal.style.display = 'none';
+  // Don't reset state on close so user can see previous selections when re-opening
+  showToast('Dialog closed — changes discarded', 'info');
+}
+
+/* ═══════════════════════════════ GET SELECTED SOPs/SKILLs ═══════════════════════════════ */
+
+function getSelectedSops() {
+  var checked = [];
+  var boxes = document.querySelectorAll('#sopCheckboxes input[type=checkbox]:checked');
+  boxes.forEach(function(cb) { checked.push(cb.value); });
+  return checked;
+}
+
+function getSelectedSkills() {
+  var checked = [];
+  var boxes = document.querySelectorAll('#skillCheckboxes input[type=checkbox]:checked');
+  boxes.forEach(function(cb) { checked.push(cb.value); });
+  return checked;
+}
+
+function getRequiredMcpServers() {
+  var servers = {};
+  var sops = getSelectedSops();
+  var skills = getSelectedSkills();
+
+  sops.forEach(function(sop) {
+    if (sopMcpMap[sop]) {
+      sopMcpMap[sop].forEach(function(mcp) { servers[mcp] = true; });
+    }
+  });
+  skills.forEach(function(skill) {
+    if (skillMcpMap[skill]) {
+      skillMcpMap[skill].forEach(function(mcp) { servers[mcp] = true; });
+    }
+  });
+
+  return Object.keys(servers).sort();
+}
+
+/* ═══════════════════════════════ RECOMPUTE MCP SECTION ═══════════════════════════════ */
+
+function recomputeMcpSection() {
+  var required = getRequiredMcpServers();
+  var mcpRows = document.getElementById('mcpServerRows');
+  var emptyState = document.getElementById('mcpEmptyState');
+  var countBadge = document.getElementById('mcpCountBadge');
+
+  // Update count badge
+  if (required.length === 0) {
+    countBadge.className = 'mcp-count-badge mcp-count-none';
+    countBadge.textContent = 'No MCP servers required';
+    emptyState.style.display = 'block';
+    mcpRows.querySelectorAll('.mcp-server-row').forEach(function(r) { r.remove(); });
+  } else {
+    countBadge.className = 'mcp-count-badge mcp-count-pending';
+    countBadge.textContent = required.length + ' MCP server' + (required.length > 1 ? 's' : '') + ' need assignment';
+    emptyState.style.display = 'none';
+
+    // Remove rows for servers no longer needed
+    var existingRows = mcpRows.querySelectorAll('.mcp-server-row');
+    existingRows.forEach(function(row) {
+      var mcpKey = row.getAttribute('data-mcp');
+      if (required.indexOf(mcpKey) === -1) {
+        row.remove();
+        // Also clear the selection for this server
+        delete selectedSessions[mcpKey];
+      }
+    });
+
+    // Add rows for new servers
+    required.forEach(function(mcpKey) {
+      var existing = mcpRows.querySelector('.mcp-server-row[data-mcp="' + mcpKey + '"]');
+      if (!existing) {
+        var info = mcpServerInfo[mcpKey] || { name: mcpKey, icon: '🔌', isPassthrough: false };
+        var sessions = availableSessions[mcpKey] || [];
+
+        var row = document.createElement('div');
+        row.className = 'mcp-server-row';
+        row.setAttribute('data-mcp', mcpKey);
+
+        var passthroughHtml = info.isPassthrough ? '<span class="passthrough-badge">⇄ Passthrough</span>' : '';
+
+        var optionsHtml = '<option value="">-- Select session --</option>';
+        sessions.forEach(function(s) {
+          optionsHtml += '<option value="' + s.id + '">' + s.label + '</option>';
+        });
+
+        row.innerHTML =
+          '<div class="mcp-server-label">' +
+            '<span class="mcp-server-icon">' + info.icon + '</span>' +
+            '<span>' + info.name + '</span>' +
+            passthroughHtml +
+            '<span class="mcp-required-dot" title="Session required"></span>' +
+          '</div>' +
+          '<div class="mcp-select-wrap">' +
+            '<select class="form-control" onchange="onSessionSelect(\'' + mcpKey + '\', this.value)">' +
+              optionsHtml +
+            '</select>' +
+          '</div>' +
+          '<span class="mcp-error-indicator" title="Session assignment required">⚠</span>' +
+          '<button class="btn-refresh btn-refresh-all" onclick="refreshSingleSession(\'' + mcpKey + '\')" title="Refresh available sessions">' +
+            '<span>↻</span>' +
+          '</button>';
+
+        mcpRows.appendChild(row);
+
+        // Restore previous selection if it exists
+        if (selectedSessions[mcpKey]) {
+          var sel = row.querySelector('select');
+          sel.value = selectedSessions[mcpKey];
+        }
+      }
+    });
+  }
+
+  updateSaveButton();
+}
+
+/* ═══════════════════════════════ SESSION SELECTION ═══════════════════════════════ */
+
+function onSessionSelect(mcpKey, value) {
+  if (value) {
+    selectedSessions[mcpKey] = value;
+  } else {
+    delete selectedSessions[mcpKey];
+  }
+  updateRowErrorState(mcpKey);
+  updateSaveButton();
+}
+
+function updateRowErrorState(mcpKey) {
+  var row = document.querySelector('.mcp-server-row[data-mcp="' + mcpKey + '"]');
+  if (!row) return;
+
+  var select = row.querySelector('select');
+  if (!select.value) {
+    row.classList.add('has-error');
+    select.classList.add('error');
+  } else {
+    row.classList.remove('has-error');
+    select.classList.remove('error');
+  }
+}
+
+/* ═══════════════════════════════ SAVE BUTTON LOGIC ═══════════════════════════════ */
+
+function updateSaveButton() {
+  var required = getRequiredMcpServers();
+  var btnSave = document.getElementById('btnSave');
+  var validationBanner = document.getElementById('validationBanner');
+  var validationMsg = document.getElementById('validationMsg');
+  var countBadge = document.getElementById('mcpCountBadge');
+
+  if (required.length === 0) {
+    // No MCP servers needed — save is allowed
+    btnSave.disabled = false;
+    btnSave.title = '';
+    validationBanner.style.display = 'none';
+    countBadge.className = 'mcp-count-badge mcp-count-none';
+    countBadge.textContent = 'No MCP servers required';
+    return;
+  }
+
+  // Check all required servers have a session assigned
+  var missing = [];
+  required.forEach(function(mcpKey) {
+    if (!selectedSessions[mcpKey]) {
+      missing.push(mcpServerInfo[mcpKey] ? mcpServerInfo[mcpKey].name : mcpKey);
+    }
+    updateRowErrorState(mcpKey);
+  });
+
+  if (missing.length > 0) {
+    btnSave.disabled = true;
+    btnSave.title = 'All required MCP servers must have a session assigned';
+    validationBanner.style.display = 'flex';
+    validationMsg.textContent = 'Missing session assignments: ' + missing.join(', ') + '. Please select a session for each required server.';
+    countBadge.className = 'mcp-count-badge mcp-count-pending';
+    countBadge.textContent = required.length + ' MCP server' + (required.length > 1 ? 's' : '') + ' — ' + missing.length + ' unassigned';
+  } else {
+    btnSave.disabled = false;
+    btnSave.title = '';
+    validationBanner.style.display = 'none';
+    countBadge.className = 'mcp-count-badge mcp-count-complete';
+    countBadge.textContent = required.length + ' MCP server' + (required.length > 1 ? 's' : '') + ' — all assigned ✓';
+  }
+}
+
+/* ═══════════════════════════════ REFRESH ═══════════════════════════════ */
+
+function refreshSingleSession(mcpKey) {
+  var row = document.querySelector('.mcp-server-row[data-mcp="' + mcpKey + '"]');
+  if (!row) return;
+
+  var refreshBtn = row.querySelector('.btn-refresh');
+  var select = row.querySelector('select');
+  var prevValue = select.value;
+
+  // Simulate loading spin
+  refreshBtn.classList.add('spinning');
+  refreshBtn.disabled = true;
+
+  setTimeout(function() {
+    // Simulate refreshed data (same data in prototype)
+    var sessions = availableSessions[mcpKey] || [];
+    var optionsHtml = '<option value="">-- Select session --</option>';
+    sessions.forEach(function(s) {
+      optionsHtml += '<option value="' + s.id + '"' + (s.id === prevValue ? ' selected' : '') + '>' + s.label + '</option>';
+    });
+    select.innerHTML = optionsHtml;
+
+    // If the previously selected value no longer exists, clear it
+    if (prevValue && select.value !== prevValue) {
+      delete selectedSessions[mcpKey];
+      updateRowErrorState(mcpKey);
+      updateSaveButton();
+      showToast('Previously selected session for ' + (mcpServerInfo[mcpKey] ? mcpServerInfo[mcpKey].name : mcpKey) + ' is no longer available.', 'error');
+    }
+
+    refreshBtn.classList.remove('spinning');
+    refreshBtn.disabled = false;
+    showToast('Sessions refreshed for ' + (mcpServerInfo[mcpKey] ? mcpServerInfo[mcpKey].name : mcpKey), 'info');
+  }, 800);
+}
+
+function refreshAllSessions() {
+  var required = getRequiredMcpServers();
+  if (required.length === 0) {
+    showToast('No MCP servers to refresh', 'info');
+    return;
+  }
+
+  var refreshAllBtn = document.getElementById('btnRefreshAll');
+  refreshAllBtn.querySelector('span').classList.add('spinning');
+  refreshAllBtn.disabled = true;
+
+  setTimeout(function() {
+    required.forEach(function(mcpKey) {
+      var row = document.querySelector('.mcp-server-row[data-mcp="' + mcpKey + '"]');
+      if (!row) return;
+      var select = row.querySelector('select');
+      var prevValue = select.value;
+      var sessions = availableSessions[mcpKey] || [];
+      var optionsHtml = '<option value="">-- Select session --</option>';
+      sessions.forEach(function(s) {
+        optionsHtml += '<option value="' + s.id + '"' + (s.id === prevValue ? ' selected' : '') + '>' + s.label + '</option>';
+      });
+      select.innerHTML = optionsHtml;
+    });
+
+    refreshAllBtn.querySelector('span').classList.remove('spinning');
+    refreshAllBtn.disabled = false;
+    showToast('All session lists refreshed', 'success');
+  }, 1000);
+}
+
+/* ═══════════════════════════════ SAVE ═══════════════════════════════ */
+
+function saveRole() {
+  var required = getRequiredMcpServers();
+  var allAssigned = true;
+
+  required.forEach(function(mcpKey) {
+    if (!selectedSessions[mcpKey]) allAssigned = false;
+  });
+
+  if (required.length > 0 && !allAssigned) {
+    showToast('Cannot save — all required MCP servers need a session assigned', 'error');
+    return;
+  }
+
+  // Simulate save
+  showToast('Role saved successfully! ' + required.length + ' MCP session(s) assigned.', 'success');
+
+  // Build summary for toast
+  if (required.length > 0) {
+    var assignments = [];
+    required.forEach(function(mcpKey) {
+      var info = mcpServerInfo[mcpKey] || { name: mcpKey };
+      assignments.push(info.name + ' → ' + selectedSessions[mcpKey]);
+    });
+    console.log('Saved assignments:', assignments);
+  }
+
+  // Close dialog after short delay
+  setTimeout(function() {
+    closeEditDialog();
+    showToast('Agent Roles table refreshed with updated data', 'info');
+  }, 800);
+}
+
+/* ═══════════════════════════════ EVENT: SOP/SKILL CHANGE ═══════════════════════════════ */
+
+function onSopSkillChange() {
+  recomputeMcpSection();
+}
+
+/* ═══════════════════════════════ SCENARIOS ═══════════════════════════════ */
+
+function setScenario(index) {
+  // Update scenario bar buttons
+  var btns = document.querySelectorAll('.scenario-btn');
+  btns.forEach(function(b, i) { b.classList.toggle('active', i === index); });
+
+  // Clear all checkboxes and selections
+  document.querySelectorAll('#sopCheckboxes input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
+  document.querySelectorAll('#skillCheckboxes input[type=checkbox]').forEach(function(cb) { cb.checked = false; });
+  selectedSessions = {};
+
+  if (index === 0) {
+    // All selected — everything checked
+    document.querySelectorAll('#sopCheckboxes input[type=checkbox]').forEach(function(cb) { cb.checked = true; });
+    document.querySelectorAll('#skillCheckboxes input[type=checkbox]').forEach(function(cb) { cb.checked = true; });
+    // Pre-select sessions for a complete state
+    selectedSessions = { 'github-mcp': 'gh-sess-1', 'database-mcp': 'db-sess-1', 'notification-mcp': 'notif-sess-1' };
+  } else if (index === 1) {
+    // Partial selection — just 2 SOPs leaving 1 MCP unassigned
+    document.querySelector('#sopCheckboxes input[value="sop-customer-inquiry"]').checked = true;
+    document.querySelector('#sopCheckboxes input[value="sop-transaction"]').checked = true;
+    // This gives us github-mcp, database-mcp, notification-mcp
+    // Pre-assign 2 of 3
+    selectedSessions = { 'github-mcp': 'gh-sess-1', 'database-mcp': 'db-sess-1' };
+  } else if (index === 2) {
+    // No SOPs/Skills selected
+    selectedSessions = {};
+  }
+
+  // Open dialog and recompute
+  openEditDialog();
+}
+
+/* ═══════════════════════════════ KEYBOARD SHORTCUT ═══════════════════════════════ */
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var modal = document.getElementById('editRoleModal');
+    if (modal.style.display === 'flex') {
+      closeEditDialog();
+    }
+  }
+});
+
+// Close modal on overlay click
+document.getElementById('editRoleModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditDialog();
+});
+
+/* ═══════════════════════════════ INITIALISE ═══════════════════════════════ */
+
+// Pre-open the dialog with scenario 0 (all selected) to show the full MCP section
+setScenario(0);
+
+</script>
+</body>
+</html>

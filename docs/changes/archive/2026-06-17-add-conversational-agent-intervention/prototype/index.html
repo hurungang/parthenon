@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Parthenon — Conversational Agent Intervention Prototype</title>
 <style>
-/* ── Parthenon Design Tokens (from master prototype) ─────────────────── */
+/* ── Parthenon Design Tokens ──────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
@@ -28,15 +28,13 @@ input,select,textarea{font-family:inherit;font-size:14px}
 /* ── APP SHELL ── */
 .app-shell{display:flex;height:100vh;overflow:hidden}
 
-/* ── SIDEBAR (scenario navigator) ── */
+/* ── SIDEBAR ── */
 .sidebar{width:300px;background:var(--sidebar-bg);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;z-index:100}
 .sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
 .sidebar-logo{padding:20px;border-bottom:1px solid var(--border);flex-shrink:0}
 .sidebar-logo h1{font-size:17px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
 .sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase;display:block;margin-top:2px}
 .sidebar-section{padding:16px 20px 8px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
-
-/* ── Scenario steps ── */
 .scenario-list{flex:1;overflow-y:auto;padding:0 12px}
 .scenario-step{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:2px 0;border-radius:var(--radius);cursor:pointer;transition:background var(--transition);position:relative;user-select:none}
 .scenario-step:hover{background:var(--sidebar-hover-bg)}
@@ -64,8 +62,6 @@ input,select,textarea{font-family:inherit;font-size:14px}
 @keyframes dotPulse{0%,80%,100%{opacity:.25;transform:scale(1)}40%{opacity:1;transform:scale(1.3)}}
 
 .chat-container{flex:1;display:flex;overflow:hidden}
-
-/* ── Chat messages area ── */
 .chat-main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--surface)}
 .chat-messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:8px}
 .chat-messages::-webkit-scrollbar{width:4px}.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
@@ -82,15 +78,13 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .avatar-fc{background:var(--fraud-accent)}
 .avatar-user{background:#64748B}
 
-/* Tool call message */
 .msg-tool{align-self:flex-start;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:var(--text-secondary);font-family:'Consolas','Courier New',monospace;margin-left:20px;display:flex;gap:8px;align-items:center;max-width:85%}
 .msg-tool .tool-icon{flex-shrink:0;font-size:15px}
 
-/* Delegation indicator */
 .msg-delegation{align-self:flex-start;background:var(--fraud-light);border:1px solid var(--fraud-accent);border-left:3px solid var(--fraud-accent);border-radius:var(--radius);padding:10px 14px;font-size:13px;color:#4C1D95;max-width:85%;margin-left:10px}
 .msg-delegation strong{color:var(--fraud-accent)}
 
-/* Status/thinking pill */
+/* Status pills */
 .status-pill{align-self:flex-start;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:600;margin:4px 0;max-width:85%}
 .status-thinking{background:#EDF5FF;color:#1E3A8A;border:1px solid #CFE3FF}
 .status-waiting{background:var(--intervene-bg);color:#92400E;border:1px solid #FFE0B2}
@@ -100,6 +94,13 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .dots span{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.25;animation:dPulse 1.2s infinite}
 .dots span:nth-child(2){animation-delay:.15s}.dots span:nth-child(3){animation-delay:.3s}
 @keyframes dPulse{0%,80%,100%{opacity:.25}40%{opacity:.85}}
+
+/* ── INTERVENTION PENDING INDICATOR ── */
+.intervention-pending{align-self:flex-start;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--intervene-bg);border:1px solid #FFE0B2;border-radius:var(--radius);margin:4px 0;animation:fadeIn 0.3s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.intervention-pending .ip-spinner{width:18px;height:18px;border:3px solid #FFE0B2;border-top-color:var(--warning);border-radius:50%;animation:spinner 0.9s linear infinite;flex-shrink:0}
+@keyframes spinner{to{transform:rotate(360deg)}}
+.intervention-pending .ip-text{font-size:13px;font-weight:600;color:#92400E}
 
 /* ── INTERVENTION DIALOG (inline in chat) ── */
 .intervene-dialog{align-self:flex-start;max-width:520px;width:100%;margin:8px 0;animation:slideIn .3s ease}
@@ -115,18 +116,31 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .type-approval{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
 .type-choice{background:#DBEAFE;color:#1D4ED8;border:1px solid #BFDBFE}
 .type-text{background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0}
-.type-approval span,.type-choice span,.type-text span{opacity:0.7}
+
+/* Loading bar */
+.intervene-loading{height:3px;background:#FFE0B2;overflow:hidden}
+.intervene-loading .il-bar{height:100%;width:0;background:var(--warning);animation:loadingBar 2s ease-in-out infinite}
+@keyframes loadingBar{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
 
 .intervene-body{padding:18px}
-.intervene-question{font-size:13.5px;color:var(--text-primary);margin-bottom:16px;line-height:1.5}
+.intervene-reason{font-size:13.5px;color:var(--text-primary);margin-bottom:16px;line-height:1.5}
+
+/* Error banner in dialog */
+.intervene-error{background:#FFEBEE;border:1px solid #FFCDD2;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.intervene-error .ie-icon{font-size:18px;flex-shrink:0}
+.intervene-error .ie-title{font-size:13px;font-weight:600;color:#B71C1C;margin-bottom:3px}
+.intervene-error .ie-msg{font-size:12px;color:#C62828;line-height:1.4}
+.intervene-error .ie-dismiss{background:none;border:none;color:#B71C1C;cursor:pointer;font-size:16px;padding:0;line-height:1;margin-left:auto;flex-shrink:0}
 
 /* Approval buttons */
 .approval-buttons{display:flex;gap:10px}
 .approval-buttons .btn{flex:1;justify-content:center;padding:12px}
-.btn-approve{background:var(--success);color:#fff;border:none;border-radius:var(--radius-sm);font-weight:600;font-size:14px;transition:all var(--transition);box-shadow:var(--shadow)}
-.btn-approve:hover{opacity:.9;box-shadow:var(--shadow-md)}
-.btn-deny{background:var(--surface);color:var(--error);border:2px solid var(--error);border-radius:var(--radius-sm);font-weight:600;font-size:14px;transition:all var(--transition)}
-.btn-deny:hover{background:#FFEBEE}
+.btn-approve{background:var(--success);color:#fff;border:none;border-radius:var(--radius-sm);font-weight:600;font-size:14px;transition:all var(--transition);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-approve:hover:not(:disabled){opacity:.9;box-shadow:var(--shadow-md)}
+.btn-approve:disabled{opacity:0.6;cursor:not-allowed}
+.btn-deny{background:var(--surface);color:var(--error);border:2px solid var(--error);border-radius:var(--radius-sm);font-weight:600;font-size:14px;transition:all var(--transition);display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-deny:hover:not(:disabled){background:#FFEBEE}
+.btn-deny:disabled{opacity:0.6;cursor:not-allowed}
 
 /* Choice options */
 .choice-options{display:flex;flex-direction:column;gap:8px}
@@ -167,7 +181,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .btn-send:hover:not(:disabled){background:var(--primary-dark);box-shadow:var(--shadow-md)}
 .btn-send:disabled{background:#93C5FD;cursor:not-allowed;box-shadow:none}
 
-/* ── Context info panel (right side) ── */
+/* ── Context panel ── */
 .context-panel{width:280px;flex-shrink:0;background:var(--bg);border-left:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
 .context-panel::-webkit-scrollbar{width:4px}.context-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .ctx-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:14px}
@@ -187,11 +201,10 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
 .btn-sm{padding:5px 12px;font-size:12px}
 
-/* ── Reset / scenario buttons at bottom of sidebar ── */
 .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;flex-shrink:0}
 .sidebar-footer .btn{width:100%;justify-content:center;font-size:12px}
 
-/* ── Toast notification ── */
+/* ── Toast ── */
 .toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
 .toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
 .toast-info{background:#1565C0}
@@ -199,11 +212,9 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .toast-error{background:#C62828}
 @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── Empty state for messages ── */
 .empty-chat{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);font-size:14px;flex-direction:column;gap:8px}
 .empty-chat .empty-icon{font-size:36px;opacity:.5;margin-bottom:4px}
 
-/* Info banner */
 .info-banner{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:var(--radius);padding:12px 16px;font-size:12px;color:#1E40AF;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
 .info-banner .info-icon{flex-shrink:0;font-size:16px}
 </style>
@@ -211,23 +222,18 @@ input,select,textarea{font-family:inherit;font-size:14px}
 <body>
 <div class="app-shell">
 
-<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<!-- ══════ SIDEBAR ══════ -->
 <nav class="sidebar">
   <div class="sidebar-logo">
     <h1>⚡ Parthenon</h1>
     <small>Conversational Intervention Prototype</small>
   </div>
-
   <div class="sidebar-section">Scenario: Fraud Check Delegation</div>
   <div class="info-banner" style="margin:0 12px 8px">
     <span class="info-icon">ℹ</span>
     <span>Click each step below to progress through the scenario. The chat updates automatically.</span>
   </div>
-
-  <div class="scenario-list" id="scenarioList">
-    <!-- Populated by JS -->
-  </div>
-
+  <div class="scenario-list" id="scenarioList"></div>
   <div class="sidebar-footer">
     <button class="btn btn-secondary" onclick="resetScenario()" style="justify-content:center">↺ Reset Scenario</button>
     <div style="font-size:10px;color:var(--text-secondary);text-align:center;margin-top:4px">
@@ -237,11 +243,11 @@ input,select,textarea{font-family:inherit;font-size:14px}
   </div>
 </nav>
 
-<!-- ═══════════════════════════════ MAIN CHAT ═══════════════════════════════ -->
+<!-- ══════ MAIN CHAT ══════ -->
 <div class="main-wrapper">
-  <!-- Top bar -->
   <div class="topbar">
     <div class="topbar-title">💬 Customer Support Agent — Conversation</div>
+    <!-- Status badge matching ConversationDialog titlebar Chip -->
     <span class="topbar-badge badge-live" id="topbarBadge">
       <span class="dot-pulse"></span>
       <span id="topbarBadgeText">Connected</span>
@@ -249,21 +255,25 @@ input,select,textarea{font-family:inherit;font-size:14px}
   </div>
 
   <div class="chat-container">
-    <!-- Chat messages -->
     <div class="chat-main">
       <div class="chat-messages" id="chatMessages">
         <div class="empty-chat" id="emptyChat">
           <div class="empty-icon">💬</div>
           <div>Click a scenario step in the sidebar to begin</div>
-          <div style="font-size:12px;color:var(--text-secondary)">or click "Start Conversation" to see the full flow</div>
+          <div style="font-size:12px;color:var(--text-secondary)">
+            or click "Start Conversation" to see the full flow
+          </div>
         </div>
       </div>
 
-      <!-- Chat input -->
       <div class="chat-input-area">
-        <input class="chat-input" id="chatInput" type="text" placeholder="Type your message..." disabled>
+        <input class="chat-input" id="chatInput" type="text"
+          placeholder="Type your message..." disabled>
         <button class="btn-send" id="btnSend" disabled onclick="sendMessage()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
           Send
         </button>
       </div>
@@ -276,7 +286,12 @@ input,select,textarea{font-family:inherit;font-size:14px}
         <div class="ctx-row"><span class="ctx-label">Agent</span><span class="ctx-value">Customer Support</span></div>
         <div class="ctx-row"><span class="ctx-label">Model</span><span class="ctx-value">gpt-4o</span></div>
         <div class="ctx-row"><span class="ctx-label">Session</span><span class="ctx-value" style="font-family:monospace;font-size:11px">sess-8f3a2c</span></div>
-        <div class="ctx-row"><span class="ctx-label">Status</span><span class="ctx-state ctx-state-live" id="ctxStatus"><span class="dot-pulse"></span> Running</span></div>
+        <div class="ctx-row">
+          <span class="ctx-label">Chat Status</span>
+          <span class="ctx-state ctx-state-live" id="ctxStatus">
+            <span class="dot-pulse"></span> thinking
+          </span>
+        </div>
       </div>
       <div class="ctx-card">
         <h5>Delegation Chain</h5>
@@ -292,15 +307,16 @@ input,select,textarea{font-family:inherit;font-size:14px}
 
 </div><!-- /app-shell -->
 
-<!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
-/* ═══════════════════════════════ SCENARIO ENGINE ═══════════════════════════════ */
+/* ═══════════════════════════════ SCENARIO ENGINE ═══════════════════════ */
 
 var currentStep = -1;
 var selectedChoice = null;
-var interventionActive = false;
+var isSubmitting = false;        // matches isSubmitting in real component
+var dialogErrorActive = false;   // matches dialogError in real component
+
 var scenarioSteps = [
   {
     id: 'start',
@@ -384,7 +400,6 @@ function buildScenarioList() {
   });
 }
 
-// ── Update sidebar highlighting ──
 function updateSidebar() {
   var steps = document.querySelectorAll('.scenario-step');
   steps.forEach(function(el, i) {
@@ -394,63 +409,49 @@ function updateSidebar() {
   });
 }
 
-// ── Highlight a specific step ──
-function highlightStep(index) {
-  currentStep = index;
-  updateSidebar();
-}
-
-// ── Advance to a specific scenario step ──
 function advanceToStep(index) {
   currentStep = index;
   updateSidebar();
   renderChatForStep(index);
 }
 
-// ── Reset scenario ──
 function resetScenario() {
   currentStep = -1;
   selectedChoice = null;
-  interventionActive = false;
+  isSubmitting = false;
+  dialogErrorActive = false;
   updateSidebar();
   clearChat();
   resetInputState();
+  updateChatStatus('thinking');
   updateContextPanel('live', 'No active delegations', 'Empty');
 }
 
-// ── Clear chat ──
 function clearChat() {
   var msgs = document.getElementById('chatMessages');
   document.getElementById('emptyChat').style.display = 'flex';
-  // Remove all dynamic children, keep emptyChat
   var children = msgs.querySelectorAll(':scope > :not(#emptyChat)');
   children.forEach(function(c) { c.remove(); });
 }
 
-// ── Reset input ──
 function resetInputState() {
   document.getElementById('chatInput').disabled = true;
   document.getElementById('btnSend').disabled = true;
   document.getElementById('chatInput').placeholder = 'Type your message...';
 }
 
-// ── Enable input ──
 function enableInput() {
   document.getElementById('chatInput').disabled = false;
   document.getElementById('btnSend').disabled = false;
   document.getElementById('chatInput').placeholder = 'Type your message...';
-  interventionActive = false;
 }
 
-// ── Block input (intervention waiting) ──
 function blockInput(reason) {
   document.getElementById('chatInput').disabled = true;
   document.getElementById('btnSend').disabled = true;
   document.getElementById('chatInput').placeholder = reason || 'Waiting for your intervention response...';
-  interventionActive = true;
 }
 
-// ── Update topbar badge ──
 function updateTopbarBadge(state) {
   var badge = document.getElementById('topbarBadge');
   var text = document.getElementById('topbarBadgeText');
@@ -461,20 +462,26 @@ function updateTopbarBadge(state) {
   else if (state === 'resolved') { badge.classList.add('badge-resolved'); text.textContent = 'Resolved'; }
 }
 
-// ── Update context panel ──
-function updateContextPanel(status, delegationHtml, queueHtml) {
+function updateChatStatus(kind) {
   var statusEl = document.getElementById('ctxStatus');
   statusEl.innerHTML = '';
-  if (status === 'live') {
+  if (kind === 'thinking') {
     statusEl.className = 'ctx-state ctx-state-live';
-    statusEl.innerHTML = '<span class="dot-pulse"></span> Running';
-  } else if (status === 'waiting') {
+    statusEl.innerHTML = '<span class="dot-pulse"></span> thinking';
+  } else if (kind === 'delegating') {
+    statusEl.className = 'ctx-state ctx-state-live';
+    statusEl.innerHTML = '<span class="dot-pulse"></span> delegating';
+  } else if (kind === 'waiting' || kind === 'waiting_for_human') {
     statusEl.className = 'ctx-state ctx-state-waiting';
-    statusEl.innerHTML = '⏸ Waiting';
-  } else if (status === 'blocked') {
+    statusEl.innerHTML = '⏸ waiting_for_human';
+  } else if (kind === 'blocked') {
     statusEl.className = 'ctx-state ctx-state-blocked';
     statusEl.innerHTML = '⊘ Blocked';
   }
+}
+
+function updateContextPanel(status, delegationHtml, queueHtml) {
+  updateChatStatus(status);
   document.getElementById('ctxDelegation').innerHTML = delegationHtml;
   document.getElementById('ctxQueue').innerHTML = queueHtml;
 }
@@ -483,7 +490,6 @@ function updateContextPanel(status, delegationHtml, queueHtml) {
 function addMessage(type, content, avatarText) {
   var msgs = document.getElementById('chatMessages');
   document.getElementById('emptyChat').style.display = 'none';
-
   var div = document.createElement('div');
 
   if (type === 'user') {
@@ -518,7 +524,6 @@ function addMessage(type, content, avatarText) {
 function addStatusPill(state, text) {
   var msgs = document.getElementById('chatMessages');
   document.getElementById('emptyChat').style.display = 'none';
-
   var div = document.createElement('div');
   div.className = 'status-pill status-' + state;
   div.id = 'statusPill_' + state;
@@ -530,18 +535,39 @@ function addStatusPill(state, text) {
   return div;
 }
 
-// ── Remove specific status pill ──
 function removeStatusPill(id) {
   var el = document.getElementById(id);
   if (el) el.remove();
 }
 
-// ── Add intervention dialog ──
-function addInterventionDialog(type, question, options, onResponse) {
+// ── Add InterventionPendingIndicator (matches real component) ──
+function addInterventionPendingIndicator() {
+  var msgs = document.getElementById('chatMessages');
+  document.getElementById('emptyChat').style.display = 'none';
+  var existing = document.querySelector('.intervention-pending');
+  if (existing) existing.remove();
+
+  var div = document.createElement('div');
+  div.className = 'intervention-pending';
+  div.id = 'interventionPendingIndicator';
+  div.innerHTML =
+    '<div class="ip-spinner"></div>' +
+    '<span class="ip-text">Waiting for your input</span>';
+  msgs.appendChild(div);
+  scrollChat();
+}
+
+function removeInterventionPendingIndicator() {
+  var el = document.getElementById('interventionPendingIndicator');
+  if (el) el.remove();
+}
+
+// ── Add inline intervention dialog (matches InlineInterventionDialog.tsx) ──
+// request shape: { intervention_type, reason, choices, agent_type, delegation_depth }
+function addInterventionDialog(request, onResponse) {
   var msgs = document.getElementById('chatMessages');
   document.getElementById('emptyChat').style.display = 'none';
 
-  // Remove any existing dialog
   var existing = document.querySelector('.intervene-dialog');
   if (existing) existing.remove();
 
@@ -549,26 +575,29 @@ function addInterventionDialog(type, question, options, onResponse) {
   dialog.className = 'intervene-dialog';
   dialog.id = 'interveneDialog';
 
+  var type = request.intervention_type;
   var typeLabel = '';
   var typeClass = '';
   if (type === 'approval') { typeLabel = 'Approval Required'; typeClass = 'type-approval'; }
   else if (type === 'choice') { typeLabel = 'Choice Required'; typeClass = 'type-choice'; }
   else if (type === 'text') { typeLabel = 'Text Input Required'; typeClass = 'type-text'; }
 
-  var bodyHtml = '';
+  var agentName = request.agent_type || 'Sub-agent';
+  var depth = request.delegation_depth || 2;
 
+  var bodyHtml = '';
   if (type === 'approval') {
     bodyHtml =
-      '<div class="intervene-question">' + question + '</div>' +
+      '<div class="intervene-reason">' + request.reason + '</div>' +
       '<div class="approval-buttons">' +
-        '<button class="btn btn-approve" onclick="handleInterveneResponse(\'approve\', \'' + type + '\')">✓ Approve</button>' +
-        '<button class="btn btn-deny" onclick="handleInterveneResponse(\'deny\', \'' + type + '\')">✕ Deny</button>' +
+        '<button class="btn btn-approve" id="btnApprove" onclick="handleInterveneResponse(\'approve\', \'approval\')">✓ Approve</button>' +
+        '<button class="btn btn-deny" id="btnDeny" onclick="handleInterveneResponse(\'deny\', \'approval\')">✕ Deny</button>' +
       '</div>';
   } else if (type === 'choice') {
-    bodyHtml = '<div class="intervene-question">' + question + '</div><div class="choice-options">';
-    options.forEach(function(opt) {
+    bodyHtml = '<div class="intervene-reason">' + request.reason + '</div><div class="choice-options">';
+    (request.choices || []).forEach(function(opt) {
       bodyHtml +=
-        '<div class="choice-option" data-value="' + opt + '" onclick="selectChoice(this, \'' + opt + '\')">' +
+        '<div class="choice-option" data-value="' + opt + '" onclick="selectChoice(this, \'' + opt.replace(/'/g, "\\'") + '\')">' +
           '<div class="radio"></div>' +
           '<span>' + opt + '</span>' +
         '</div>';
@@ -580,7 +609,7 @@ function addInterventionDialog(type, question, options, onResponse) {
       '</div>';
   } else if (type === 'text') {
     bodyHtml =
-      '<div class="intervene-question">' + question + '</div>' +
+      '<div class="intervene-reason">' + request.reason + '</div>' +
       '<div class="text-input-area">' +
         '<textarea id="interveneTextInput" placeholder="Type your response..."></textarea>' +
         '<div style="display:flex;justify-content:flex-end">' +
@@ -594,8 +623,8 @@ function addInterventionDialog(type, question, options, onResponse) {
       '<div class="intervene-header">' +
         '<div class="intervene-icon">⚠</div>' +
         '<div class="intervene-header-info">' +
-          '<h4>Fraud Check Agent requires your input</h4>' +
-          '<p>Sub-agent delegated by Customer Support Agent — depth 2</p>' +
+          '<h4>' + agentName + ' requires your input</h4>' +
+          '<p>Delegated by Customer Support Agent — depth ' + depth + '</p>' +
           '<div class="intervene-type-badge ' + typeClass + '"><span>' + typeLabel + '</span></div>' +
         '</div>' +
       '</div>' +
@@ -608,6 +637,69 @@ function addInterventionDialog(type, question, options, onResponse) {
   msgs.appendChild(dialog);
   scrollChat();
   return dialog;
+}
+
+// ── Show loading bar in intervention dialog ──
+function showInterventionLoading() {
+  isSubmitting = true;
+  var card = document.querySelector('.intervene-card');
+  if (!card) return;
+
+  // Disable all buttons
+  var btns = card.querySelectorAll('button');
+  btns.forEach(function(b) { b.disabled = true; });
+
+  // Insert loading bar after header
+  var header = card.querySelector('.intervene-header');
+  var loadBar = document.createElement('div');
+  loadBar.className = 'intervene-loading';
+  loadBar.id = 'interveneLoadingBar';
+  loadBar.innerHTML = '<div class="il-bar"></div>';
+  if (header && header.nextSibling) {
+    card.insertBefore(loadBar, header.nextSibling);
+  }
+}
+
+function hideInterventionLoading() {
+  isSubmitting = false;
+  var lb = document.getElementById('interveneLoadingBar');
+  if (lb) lb.remove();
+}
+
+// ── Show error in intervention dialog ──
+function showInterventionError(message) {
+  dialogErrorActive = true;
+  hideInterventionLoading();
+  var body = document.querySelector('.intervene-body');
+  if (!body) return;
+
+  var existing = body.querySelector('.intervene-error');
+  if (existing) existing.remove();
+
+  var errDiv = document.createElement('div');
+  errDiv.className = 'intervene-error';
+  errDiv.id = 'interveneDialogError';
+  errDiv.innerHTML =
+    '<span class="ie-icon">⛔</span>' +
+    '<div style="flex:1">' +
+      '<div class="ie-title">Permission Denied</div>' +
+      '<div class="ie-msg">' + message + '</div>' +
+    '</div>' +
+    '<button class="ie-dismiss" onclick="clearInterventionError()" title="Dismiss">✕</button>';
+  body.insertBefore(errDiv, body.firstChild);
+
+  // Re-enable buttons
+  var card = document.querySelector('.intervene-card');
+  if (card) {
+    var btns = card.querySelectorAll('button:not(.ie-dismiss)');
+    btns.forEach(function(b) { b.disabled = false; });
+  }
+}
+
+function clearInterventionError() {
+  dialogErrorActive = false;
+  var errEl = document.getElementById('interveneDialogError');
+  if (errEl) errEl.remove();
 }
 
 // ── Select choice option ──
@@ -627,60 +719,62 @@ function handleInterveneResponse(value, type) {
     return;
   }
 
-  // Remove intervention dialog
-  var dialog = document.getElementById('interveneDialog');
-  if (dialog) dialog.remove();
+  // Show submitting state
+  showInterventionLoading();
 
-  // Remove waiting status pill
-  removeStatusPill('statusPill_waiting');
+  // Simulate brief processing delay
+  setTimeout(function() {
+    hideInterventionLoading();
 
-  // Add the response as a conversation turn
-  var responseLabel = '';
-  if (type === 'approval') {
-    responseLabel = value === 'approve' ? 'Approved' : 'Denied';
-  } else if (type === 'choice') {
-    responseLabel = 'Selected: ' + value;
-  } else if (type === 'text') {
-    responseLabel = 'Provided notes';
-  }
+    // Remove intervention dialog and pending indicator
+    var dialog = document.getElementById('interveneDialog');
+    if (dialog) dialog.remove();
+    removeStatusPill('statusPill_waiting');
+    removeInterventionPendingIndicator();
 
-  var msgs = document.getElementById('chatMessages');
-  var responseDiv = document.createElement('div');
-  responseDiv.className = 'msg msg-intervene-response';
-  responseDiv.innerHTML =
-    '<div class="msg-bubble">' +
-      '<div class="response-label">Intervention Response · ' + responseLabel + '</div>' +
-      '<div>' + value + '</div>' +
-    '</div>';
-  msgs.appendChild(responseDiv);
+    // Add response as a conversation turn
+    var responseLabel = '';
+    if (type === 'approval') {
+      responseLabel = value === 'approve' ? 'Approved' : 'Denied';
+    } else if (type === 'choice') {
+      responseLabel = 'Selected: ' + value;
+    } else if (type === 'text') {
+      responseLabel = 'Provided notes';
+    }
 
-  // Show toast
-  showToast('Response sent to Fraud Check Agent', 'success');
+    var msgs = document.getElementById('chatMessages');
+    var responseDiv = document.createElement('div');
+    responseDiv.className = 'msg msg-intervene-response';
+    responseDiv.innerHTML =
+      '<div class="msg-bubble">' +
+        '<div class="response-label">Intervention Response · ' + responseLabel + '</div>' +
+        '<div>' + value + '</div>' +
+      '</div>';
+    msgs.appendChild(responseDiv);
 
-  // Re-enable input
-  enableInput();
-  updateTopbarBadge('live');
-  updateContextPanel('live',
-    '<div style="display:flex;align-items:center;gap:6px">' +
-      '<span style="color:var(--fraud-accent);font-weight:600">Customer Support Agent</span>' +
-      '<span style="color:var(--text-secondary)">→</span>' +
-      '<span style="color:var(--fraud-accent);font-weight:600">Fraud Check Agent</span>' +
-    '</div>' +
-    '<div style="font-size:11px;color:var(--success);margin-top:4px">✓ Intervention resolved</div>',
-    'Empty');
+    showToast('Response sent to Fraud Check Agent', 'success');
+    enableInput();
+    updateTopbarBadge('live');
+    updateContextPanel('live',
+      '<div style="display:flex;align-items:center;gap:6px">' +
+        '<span style="color:var(--primary);font-weight:600">Customer Support Agent</span>' +
+        '<span style="color:var(--text-secondary)">→</span>' +
+        '<span style="color:var(--fraud-accent);font-weight:600">Fraud Check Agent</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--success);margin-top:4px">✓ Intervention resolved</div>',
+      'Empty');
+    scrollChat();
+    isSubmitting = false;
+    selectedChoice = null;
 
-  scrollChat();
-
-  // Auto-advance to next step
-  if (currentStep === 3) advanceToStep(4);   // after approval → choice intervention
-  else if (currentStep === 5) advanceToStep(6); // after choice → text intervention
-  else if (currentStep === 7) advanceToStep(8); // after text → dismiss demo
-  else if (currentStep === 8) advanceToStep(9); // after dismiss → error demo
-
-  selectedChoice = null;
+    // Auto-advance scenario
+    if (currentStep === 3) advanceToStep(4);
+    else if (currentStep === 5) advanceToStep(6);
+    else if (currentStep === 7) advanceToStep(8);
+    else if (currentStep === 8) advanceToStep(9);
+  }, 600);
 }
 
-// ── Submit text response ──
 function submitTextResponse() {
   var input = document.getElementById('interveneTextInput');
   if (!input || !input.value.trim()) {
@@ -690,51 +784,53 @@ function submitTextResponse() {
   handleInterveneResponse(input.value.trim(), 'text');
 }
 
-// ── Dismiss intervention ──
+// ── Dismiss intervention (cancellation) ──
 function dismissIntervention() {
-  var dialog = document.getElementById('interveneDialog');
-  if (dialog) dialog.remove();
+  showInterventionLoading();
 
-  removeStatusPill('statusPill_waiting');
+  setTimeout(function() {
+    hideInterventionLoading();
+    var dialog = document.getElementById('interveneDialog');
+    if (dialog) dialog.remove();
+    removeStatusPill('statusPill_waiting');
+    removeInterventionPendingIndicator();
 
-  // Add cancellation message
-  var msgs = document.getElementById('chatMessages');
-  var cancelDiv = document.createElement('div');
-  cancelDiv.className = 'msg msg-intervene-response';
-  cancelDiv.innerHTML =
-    '<div class="msg-bubble" style="background:#FFF;color:var(--text-secondary);border:1px dashed var(--border)">' +
-      '<div class="response-label">Intervention Cancelled</div>' +
-      '<div>User dismissed the intervention request. Sub-agent notified with cancellation signal.</div>' +
-    '</div>';
-  msgs.appendChild(cancelDiv);
+    var msgs = document.getElementById('chatMessages');
+    var cancelDiv = document.createElement('div');
+    cancelDiv.className = 'msg msg-intervene-response';
+    cancelDiv.innerHTML =
+      '<div class="msg-bubble" style="background:#FFF;color:var(--text-secondary);border:1px dashed var(--border)">' +
+        '<div class="response-label">Intervention Cancelled</div>' +
+        '<div>User dismissed the intervention request. Sub-agent notified with cancellation signal.</div>' +
+      '</div>';
+    msgs.appendChild(cancelDiv);
 
-  // Add agent recovery message
-  var recoveryDiv = document.createElement('div');
-  recoveryDiv.className = 'msg msg-agent';
-  recoveryDiv.innerHTML =
-    '<div class="msg-avatar avatar-cs">CS</div>' +
-    '<div class="msg-bubble">The fraud check was cancelled. How would you like to proceed with the transaction review?</div>';
-  msgs.appendChild(recoveryDiv);
+    var recoveryDiv = document.createElement('div');
+    recoveryDiv.className = 'msg msg-agent';
+    recoveryDiv.innerHTML =
+      '<div class="msg-avatar avatar-cs">CS</div>' +
+      '<div class="msg-bubble">The fraud check was cancelled. How would you like to proceed with the transaction review?</div>';
+    msgs.appendChild(recoveryDiv);
 
-  showToast('Intervention cancelled — conversation resumed', 'info');
-  enableInput();
-  updateTopbarBadge('live');
-  updateContextPanel('live',
-    '<span style="color:var(--text-secondary)">Delegation chain released</span>',
-    'Empty');
-  scrollChat();
-  interventionActive = false;
+    showToast('Intervention cancelled — conversation resumed', 'info');
+    enableInput();
+    updateTopbarBadge('live');
+    updateContextPanel('live',
+      '<span style="color:var(--text-secondary)">Delegation chain released</span>',
+      'Empty');
+    scrollChat();
+    isSubmitting = false;
 
-  // Auto-advance
-  if (currentStep === 8) advanceToStep(9);
+    if (currentStep === 8) advanceToStep(9);
+  }, 400);
 }
 
-// ── Show error state ──
+// ── Show permission error state ──
 function showPermissionError() {
   var dialog = document.getElementById('interveneDialog');
   if (dialog) dialog.remove();
-
   removeStatusPill('statusPill_waiting');
+  removeInterventionPendingIndicator();
 
   var msgs = document.getElementById('chatMessages');
   var errorBanner = document.createElement('div');
@@ -742,9 +838,10 @@ function showPermissionError() {
   errorBanner.id = 'errorBanner';
   errorBanner.innerHTML =
     '<h4>⛔ Permission Denied</h4>' +
-    '<p>You do not have the required permission to respond to this intervention type (<code>approval</code>). ' +
-    'Contact your platform administrator to request the <strong>intervention.approve</strong> permission, ' +
-    'or ask an authorised operator to respond on your behalf.</p>' +
+    '<p>You do not have the required permission to respond to this intervention type ' +
+    '(<code>approval</code>). Contact your platform administrator to request the ' +
+    '<strong>intervention.approve</strong> permission, or ask an authorised operator ' +
+    'to respond on your behalf.</p>' +
     '<div style="margin-top:10px;display:flex;gap:8px">' +
       '<button class="btn btn-sm btn-secondary" onclick="dismissError()">Dismiss</button>' +
       '<button class="btn btn-sm btn-primary" onclick="requestPermission()">Request Permission</button>' +
@@ -758,8 +855,6 @@ function showPermissionError() {
 function dismissError() {
   var banner = document.getElementById('errorBanner');
   if (banner) banner.remove();
-
-  // Add agent message about the failure
   var msgs = document.getElementById('chatMessages');
   var msg = document.createElement('div');
   msg.className = 'msg msg-agent';
@@ -768,11 +863,9 @@ function dismissError() {
     '<div class="msg-bubble">The intervention request could not be processed due to permission restrictions. ' +
     'The sub-agent has been notified. Is there another way I can help?</div>';
   msgs.appendChild(msg);
-
   enableInput();
   updateTopbarBadge('live');
   updateContextPanel('live', 'Delegation chain released', 'Empty');
-  interventionActive = false;
   scrollChat();
 }
 
@@ -781,13 +874,11 @@ function requestPermission() {
   dismissError();
 }
 
-// ── Scroll chat to bottom ──
 function scrollChat() {
   var msgs = document.getElementById('chatMessages');
   setTimeout(function() { msgs.scrollTop = msgs.scrollHeight; }, 50);
 }
 
-// ── Toast ──
 function showToast(message, type) {
   var container = document.getElementById('toastContainer');
   var toast = document.createElement('div');
@@ -797,18 +888,20 @@ function showToast(message, type) {
   setTimeout(function() { toast.remove(); }, 3000);
 }
 
-// ── Render chat for a specific step ──
+// ── Render chat for a specific scenario step ──
 function renderChatForStep(index) {
   clearChat();
   resetInputState();
   selectedChoice = null;
-  interventionActive = false;
+  isSubmitting = false;
+  dialogErrorActive = false;
   updateTopbarBadge('live');
-  updateContextPanel('live', 'No active delegations', 'Empty');
+  updateChatStatus('thinking');
+  updateContextPanel('thinking', 'No active delegations', 'Empty');
 
-  // Remove any leftover dialogs
   var existing = document.querySelector('.intervene-dialog');
   if (existing) existing.remove();
+  removeInterventionPendingIndicator();
   var errBanner = document.getElementById('errorBanner');
   if (errBanner) errBanner.remove();
 
@@ -816,7 +909,6 @@ function renderChatForStep(index) {
 
   switch (step.id) {
 
-    // ── STEP 0: Initial conversation ──
     case 'start':
       addMessage('user', 'Hi, I just noticed a transaction on my account was flagged. Can you check what happened?');
       setTimeout(function() {
@@ -831,7 +923,6 @@ function renderChatForStep(index) {
       enableInput();
       break;
 
-    // ── STEP 1: Delegation ──
     case 'delegate':
       addMessage('user', 'Hi, I just noticed a transaction on my account was flagged. Can you check what happened?');
       addMessage('agent', 'Of course! Let me look into that for you right away. Can you provide the transaction ID or the last four digits of the card used?', 'CS');
@@ -843,7 +934,7 @@ function renderChatForStep(index) {
         '<span style="font-size:12px">Agent: fraud-check-agent · Role: fraud-analyst · Depth: 2</span>'
       );
       addStatusPill('thinking', 'Fraud Check Agent is analysing the transaction…');
-      updateContextPanel('live',
+      updateContextPanel('thinking',
         '<div style="font-size:12px">' +
           '<span style="color:var(--primary);font-weight:600">Customer Support Agent</span><br>' +
           '<span style="color:var(--text-secondary)">↳ delegated to</span><br>' +
@@ -853,7 +944,6 @@ function renderChatForStep(index) {
         'Empty');
       break;
 
-    // ── STEP 2: Intervention approval dialog ──
     case 'intervene-approval':
       addMessage('user', 'Hi, I just noticed a transaction on my account was flagged. Can you check what happened?');
       addMessage('agent', 'Of course! Let me look into that for you right away. Can you provide the transaction ID or the last four digits of the card used?', 'CS');
@@ -865,37 +955,37 @@ function renderChatForStep(index) {
         '<span style="font-size:12px">Agent: fraud-check-agent · Role: fraud-analyst · Depth: 2</span>'
       );
       addMessage('fraud-agent', 'I\'ve analysed the transaction. Several risk indicators are present but none are definitive. I need human confirmation before proceeding.');
-      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>message: <em>"Transaction TXN-2026-8842 shows medium risk. Proceed?"</em>');
+      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>reason: <em>"Transaction TXN-2026-8842 shows medium risk. Proceed?"</em>');
+
+      addInterventionPendingIndicator();  // Matches InterventionPendingIndicator component
       addStatusPill('waiting', 'Waiting for your input…');
 
-      addInterventionDialog(
-        'approval',
-        'Transaction TXN-2026-8842 for $2,450 to an overseas vendor has been flagged with medium risk indicators. The automated analysis found 3 of 7 fraud indicators positive. Should the Fraud Check Agent proceed with the full investigation?',
-        null
-      );
+      addInterventionDialog({
+        intervention_type: 'approval',
+        reason: 'Transaction TXN-2026-8842 for $2,450 to an overseas vendor has been flagged with medium risk indicators. The automated analysis found 3 of 7 fraud indicators positive. Should the Fraud Check Agent proceed with the full investigation?',
+        choices: null,
+        agent_type: 'Fraud Check Agent',
+        delegation_depth: 2
+      });
 
       blockInput('Waiting for your intervention response...');
       updateTopbarBadge('waiting');
-      updateContextPanel('waiting',
+      updateContextPanel('waiting_for_human',
         '<div style="font-size:12px">' +
           '<span style="color:var(--primary);font-weight:600">Customer Support Agent</span><br>' +
           '<span style="color:var(--text-secondary)">↳ delegated to</span><br>' +
           '<span style="color:var(--fraud-accent);font-weight:600">Fraud Check Agent</span><br>' +
-          '<span style="color:var(--warning);font-size:11px">⏸ waiting for intervention</span>' +
+          '<span style="color:var(--warning);font-size:11px">⏸ waiting_for_human</span>' +
         '</div>',
         '<span style="color:var(--warning);font-weight:600">1 pending</span>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">Approval · Fraud Check Agent</div>');
       break;
 
-    // ── STEP 3: User responds to approval (auto-handled via dialog buttons) ──
-    // This step just pre-renders the state; the actual response is handled by handleInterveneResponse
     case 'respond-approve':
-      renderChatForStep(2); // Re-render step 2 (the intervention state)
+      renderChatForStep(2);
       break;
 
-    // ── STEP 4: Choice intervention ──
     case 'intervene-choice':
-      // Show the resolved approval and then the new choice intervention
       addMessage('user', 'Hi, I just noticed a transaction on my account was flagged. Can you check what happened?');
       addMessage('agent', 'Of course! Let me look into that for you right away. Can you provide the transaction ID or the last four digits of the card used?', 'CS');
       addMessage('user', 'Sure — transaction ID is TXN-2026-8842, amount was $2,450 to an overseas vendor.');
@@ -906,10 +996,10 @@ function renderChatForStep(index) {
         '<span style="font-size:12px">Agent: fraud-check-agent · Role: fraud-analyst · Depth: 2</span>'
       );
       addMessage('fraud-agent', 'I\'ve analysed the transaction. Several risk indicators are present but none are definitive. I need human confirmation before proceeding.');
-      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>message: <em>"Transaction TXN-2026-8842 shows medium risk. Proceed?"</em>');
+      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em> → resolved');
 
       // Show resolved approval response
-      var msgs = document.getElementById('chatMessages');
+      var msgsA = document.getElementById('chatMessages');
       var respDiv = document.createElement('div');
       respDiv.className = 'msg msg-intervene-response';
       respDiv.innerHTML =
@@ -917,37 +1007,38 @@ function renderChatForStep(index) {
           '<div class="response-label">Intervention Response · Approved</div>' +
           '<div>Approve</div>' +
         '</div>';
-      msgs.appendChild(respDiv);
+      msgsA.appendChild(respDiv);
 
-      // Second intervention
-      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>choice</em><br>message: <em>"Classify the risk level for this transaction"</em>');
+      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>choice</em><br>reason: <em>"Classify the risk level for this transaction"</em>');
+
+      addInterventionPendingIndicator();
       addStatusPill('waiting', 'Waiting for your input…');
 
-      addInterventionDialog(
-        'choice',
-        'Based on the fraud indicators found, please classify the risk level for transaction TXN-2026-8842. This classification will determine the investigation depth and any automated actions taken.',
-        ['Low Risk — Routine check only', 'Medium Risk — Full investigation', 'High Risk — Escalate to fraud team', 'Critical — Freeze account immediately']
-      );
+      addInterventionDialog({
+        intervention_type: 'choice',
+        reason: 'Based on the fraud indicators found, please classify the risk level for transaction TXN-2026-8842. This classification will determine the investigation depth and any automated actions taken.',
+        choices: ['Low Risk — Routine check only', 'Medium Risk — Full investigation', 'High Risk — Escalate to fraud team', 'Critical — Freeze account immediately'],
+        agent_type: 'Fraud Check Agent',
+        delegation_depth: 2
+      });
 
       blockInput('Waiting for your intervention response...');
       updateTopbarBadge('waiting');
-      updateContextPanel('waiting',
+      updateContextPanel('waiting_for_human',
         '<div style="font-size:12px">' +
           '<span style="color:var(--primary);font-weight:600">Customer Support Agent</span><br>' +
           '<span style="color:var(--text-secondary)">↳ delegated to</span><br>' +
           '<span style="color:var(--fraud-accent);font-weight:600">Fraud Check Agent</span><br>' +
-          '<span style="color:var(--warning);font-size:11px">⏸ waiting for intervention (2nd request)</span>' +
+          '<span style="color:var(--warning);font-size:11px">⏸ waiting_for_human (2nd request)</span>' +
         '</div>',
         '<span style="color:var(--warning);font-weight:600">1 pending</span>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">Choice · Fraud Check Agent</div>');
       break;
 
-    // ── STEP 5: User selects choice ──
     case 'respond-choice':
       renderChatForStep(4);
       break;
 
-    // ── STEP 6: Text intervention ──
     case 'intervene-text':
       addMessage('user', 'Hi, I just noticed a transaction on my account was flagged. Can you check what happened?');
       addMessage('agent', 'Of course! Let me look into that for you right away. Can you provide the transaction ID or the last four digits of the card used?', 'CS');
@@ -961,7 +1052,7 @@ function renderChatForStep(index) {
       addMessage('fraud-agent', 'I\'ve analysed the transaction. Several risk indicators are present but none are definitive. I need human confirmation before proceeding.');
       addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em> → resolved');
 
-      var msgs2 = document.getElementById('chatMessages');
+      var msgsT = document.getElementById('chatMessages');
       var respDiv2 = document.createElement('div');
       respDiv2.className = 'msg msg-intervene-response';
       respDiv2.innerHTML =
@@ -969,36 +1060,38 @@ function renderChatForStep(index) {
           '<div class="response-label">Intervention Response · Selected: Medium Risk — Full investigation</div>' +
           '<div>Medium Risk — Full investigation</div>' +
         '</div>';
-      msgs2.appendChild(respDiv2);
+      msgsT.appendChild(respDiv2);
 
-      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>text</em><br>message: <em>"Please provide any additional context or notes about this transaction"</em>');
+      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>text</em><br>reason: <em>"Please provide any additional context or notes about this transaction"</em>');
+
+      addInterventionPendingIndicator();
       addStatusPill('waiting', 'Waiting for your input…');
 
-      addInterventionDialog(
-        'text',
-        'The investigation for transaction TXN-2026-8842 is nearly complete. Please provide any additional context or notes that may help the fraud analysis — for example, whether the customer has a history with this vendor, or any relevant account notes.',
-        null
-      );
+      addInterventionDialog({
+        intervention_type: 'text',
+        reason: 'The investigation for transaction TXN-2026-8842 is nearly complete. Please provide any additional context or notes that may help the fraud analysis — for example, whether the customer has a history with this vendor, or any relevant account notes.',
+        choices: null,
+        agent_type: 'Fraud Check Agent',
+        delegation_depth: 2
+      });
 
       blockInput('Waiting for your intervention response...');
       updateTopbarBadge('waiting');
-      updateContextPanel('waiting',
+      updateContextPanel('waiting_for_human',
         '<div style="font-size:12px">' +
           '<span style="color:var(--primary);font-weight:600">Customer Support Agent</span><br>' +
           '<span style="color:var(--text-secondary)">↳ delegated to</span><br>' +
           '<span style="color:var(--fraud-accent);font-weight:600">Fraud Check Agent</span><br>' +
-          '<span style="color:var(--warning);font-size:11px">⏸ waiting for intervention (3rd request)</span>' +
+          '<span style="color:var(--warning);font-size:11px">⏸ waiting_for_human (3rd request)</span>' +
         '</div>',
         '<span style="color:var(--warning);font-weight:600">1 pending</span>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">Text · Fraud Check Agent</div>');
       break;
 
-    // ── STEP 7: User provides text ──
     case 'respond-text':
       renderChatForStep(6);
       break;
 
-    // ── STEP 8: Dismiss demonstration ──
     case 'dismiss-demo':
       addMessage('user', 'Hi, I need to review a flagged transaction from yesterday.');
       addMessage('agent', 'Let me pull that up. One moment…', 'CS');
@@ -1008,29 +1101,32 @@ function renderChatForStep(index) {
         '<span style="font-size:12px">depth 2 · compliance review</span>'
       );
       addMessage('fraud-agent', 'This transaction requires a compliance officer sign-off. Seeking human input…');
-      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>message: <em>"Compliance review needed for TXN-2026-9910"</em>');
+      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>reason: <em>"Compliance review needed for TXN-2026-9910"</em>');
+
+      addInterventionPendingIndicator();
       addStatusPill('waiting', 'Waiting for your input…');
 
-      addInterventionDialog(
-        'approval',
-        'Transaction TXN-2026-9910 requires compliance officer approval before the Fraud Check Agent can proceed. Do you authorise this review?',
-        null
-      );
+      addInterventionDialog({
+        intervention_type: 'approval',
+        reason: 'Transaction TXN-2026-9910 requires compliance officer approval before the Fraud Check Agent can proceed. Do you authorise this review?',
+        choices: null,
+        agent_type: 'Fraud Check Agent',
+        delegation_depth: 2
+      });
 
       blockInput('Waiting for your intervention response...');
       updateTopbarBadge('waiting');
-      updateContextPanel('waiting',
+      updateContextPanel('waiting_for_human',
         '<div style="font-size:12px">' +
           '<span style="color:var(--primary);font-weight:600">Customer Support Agent</span><br>' +
           '<span style="color:var(--text-secondary)">↳ delegated to</span><br>' +
           '<span style="color:var(--fraud-accent);font-weight:600">Fraud Check Agent</span><br>' +
-          '<span style="color:var(--warning);font-size:11px">⏸ waiting for intervention</span>' +
+          '<span style="color:var(--warning);font-size:11px">⏸ waiting_for_human</span>' +
         '</div>',
         '<span style="color:var(--warning);font-weight:600">1 pending</span>' +
         '<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">Approval · Fraud Check Agent</div>');
       break;
 
-    // ── STEP 9: Permission error demonstration ──
     case 'error-demo':
       addMessage('user', 'I need to escalate this case to the fraud investigation team.');
       addMessage('agent', 'Understood. Let me initiate the escalation workflow, which involves the Fraud Check Agent.', 'CS');
@@ -1040,14 +1136,18 @@ function renderChatForStep(index) {
         '<span style="font-size:12px">depth 2 · escalation workflow</span>'
       );
       addMessage('fraud-agent', 'Escalation requires operator authorisation. Requesting human intervention…');
-      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>message: <em>"Authorise escalation to fraud investigation team?"</em>');
+      addMessage('tool', 'Fraud Check Agent calling <strong>system____human_intervene</strong>:<br>type: <em>approval</em><br>reason: <em>"Authorise escalation to fraud investigation team?"</em>');
+
+      addInterventionPendingIndicator();
       addStatusPill('waiting', 'Waiting for your input…');
 
-      addInterventionDialog(
-        'approval',
-        'The Fraud Check Agent is requesting authorisation to escalate this case to the fraud investigation team. This action will lock the transaction and notify the on-call fraud analyst.',
-        null
-      );
+      addInterventionDialog({
+        intervention_type: 'approval',
+        reason: 'The Fraud Check Agent is requesting authorisation to escalate this case to the fraud investigation team. This action will lock the transaction and notify the on-call fraud analyst.',
+        choices: null,
+        agent_type: 'Fraud Check Agent',
+        delegation_depth: 2
+      });
 
       blockInput('Waiting for intervention...');
       updateTopbarBadge('waiting');
@@ -1070,15 +1170,16 @@ function renderChatForStep(index) {
   scrollChat();
 }
 
-// ── Send message (basic functionality) ──
+// ── Send message ──
 function sendMessage() {
   var input = document.getElementById('chatInput');
-  if (!input.value.trim() || interventionActive) return;
+  // Block messages when intervention is active (matches useChatSession.sendMessage)
+  if (!input.value.trim()) return;
 
   addMessage('user', input.value.trim());
   input.value = '';
 
-  // Simulate agent response after delay
+  // Simulate agent response
   blockInput('Agent is responding...');
   setTimeout(function() {
     enableInput();
@@ -1089,8 +1190,6 @@ function sendMessage() {
 // ── Initialise ──
 buildScenarioList();
 updateSidebar();
-
-// Show initial help message in the sidebar
 </script>
 </body>
 </html>

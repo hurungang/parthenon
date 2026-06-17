@@ -291,16 +291,17 @@ class ControlCenterDataClient:
         await self._patch(f"/sessions/{session_id}/status", {"status": "running"})
 
     async def mark_session_waiting_for_human(
-        self, session_id: uuid.UUID, intervene_request_id: str
+        self, session_id: uuid.UUID, intervene_request_id: str,
+        conversation_history: list | None = None,
     ) -> None:
         """Transition a session to waiting_for_human status.
 
         Calls ``PATCH /internal/data/sessions/{session_id}/status``.
         """
-        await self._patch(
-            f"/sessions/{session_id}/status",
-            {"status": "waiting_for_human", "intervene_request_id": intervene_request_id},
-        )
+        body: dict = {"status": "waiting_for_human", "intervene_request_id": intervene_request_id}
+        if conversation_history is not None:
+            body["conversation_history"] = conversation_history
+        await self._patch(f"/sessions/{session_id}/status", body)
 
     async def mark_session_completed(
         self, session_id: uuid.UUID, output_data: dict[str, Any]

@@ -1,4 +1,5 @@
 """WebSocket server — authenticates connections, runs conversational agent, persists turns."""
+import asyncio
 import json
 import logging
 import uuid
@@ -8,7 +9,7 @@ from typing import Any, Awaitable, Callable
 import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
-from app.communication_hub.api.internal.tool_routing import cache_user_jwt
+from app.communication_hub.api.internal.tool_routing import cache_user_jwt, get_user_jwt
 
 from app.core.config import get_settings
 from app.core.oidc_client import OIDCError, get_oidc_client
@@ -19,6 +20,60 @@ from app.services.agents.model_binding import ModelBindingError
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter(tags=["WebSocket"])
+
+
+class ActiveSessionTracker:
+    """Tracks active WebSocket connections for intervention routing.
+
+    Maps conversation session IDs to connected WebSocket instances so the
+    InterventionRouter can deliver intervention messages directly to the
+    conversation UI instead of the operator dashboard.
+    """
+
+    _connections: dict[str, WebSocket] = {}
+    _intervention_active: set[str] = set()
+
+    @classmethod
+    def register(cls, session_id: str, websocket: WebSocket) -> None:
+        cls._connections[str(session_id)] = websocket
+
+    @classmethod
+    def unregister(cls, session_id: str) -> None:
+        cls._connections.pop(str(session_id), None)
+        cls._intervention_active.discard(str(session_id))
+
+    @classmethod
+    def is_connected(cls, session_id: str) -> bool:
+        return str(session_id) in cls._connections
+
+    @classmethod
+    def get_ws(cls, session_id: str) -> WebSocket | None:
+        return cls._connections.get(str(session_id))
+
+    @classmethod
+    def set_intervention_active(cls, session_id: str, active: bool) -> None:
+        key = str(session_id)
+        if active:
+            cls._intervention_active.add(key)
+        else:
+            cls._intervention_active.discard(key)
+
+    @classmethod
+    def has_pending_intervention(cls, session_id: str) -> bool:
+        return str(session_id) in cls._intervention_active
+
+    @classmethod
+    async def send_to_session(
+        cls, session_id: str, message: dict[str, Any]
+    ) -> None:
+        """Send a JSON message to a specific WebSocket session."""
+        ws = cls._connections.get(str(session_id))
+        if ws and ws.client_state.name == "CONNECTED":
+            await ws.send_json(message)
+        else:
+            raise RuntimeError(
+                f"No connected WebSocket for session {session_id}"
+            )
 
 
 def _build_chat_status_event(
@@ -84,6 +139,9 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
     await websocket.accept()
     subject = claims.get("sub", "unknown")
 
+    # Register this WebSocket connection for intervention routing
+    ActiveSessionTracker.register(session_id, websocket)
+
     # Cache the raw user JWT for dual-identity MCP tool calls
     user_jwt = websocket.query_params.get("token")
     if user_jwt:
@@ -108,16 +166,43 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
         while True:
             raw_text = await websocket.receive_text()
 
-            # Parse JSON payload — client sends {"message": "..."}
+            # Parse JSON payload
             try:
                 payload = json.loads(raw_text)
-                user_message: str = (
-                    payload.get("message", raw_text)
-                    if isinstance(payload, dict)
-                    else raw_text
-                )
             except (json.JSONDecodeError, AttributeError):
-                user_message = raw_text
+                # If payload is not JSON, treat as a plain text chat message
+                payload = {"message": raw_text}
+
+            # ── Handle intervention messages ───────────────────────────────
+            msg_type = payload.get("type") if isinstance(payload, dict) else None
+
+            if msg_type == "intervene_response":
+                await _handle_intervention_response(
+                    websocket, session_id, payload, subject,
+                )
+                continue
+
+            if msg_type == "intervene_cancel":
+                await _handle_intervention_cancel(
+                    websocket, session_id, payload
+                )
+                continue
+
+            # ── Block chat messages when intervention is pending ───────────
+            if ActiveSessionTracker.has_pending_intervention(session_id):
+                await websocket.send_json({
+                    "type": "chat_blocked",
+                    "reason": "intervention_pending",
+                    "message": "An intervention request is pending. Please respond to the intervention before sending new messages.",
+                })
+                continue
+
+            # ── Process chat message ───────────────────────────────────────
+            user_message: str = (
+                payload.get("message", raw_text)
+                if isinstance(payload, dict)
+                else raw_text
+            )
 
             user_message = user_message.strip()
             if not user_message:
@@ -142,54 +227,191 @@ async def websocket_chat(websocket: WebSocket, session_id: str) -> None:
 
             async def send_status_event(status_event: dict[str, str]) -> None:
                 event_timestamp = status_event.get("timestamp")
-                await websocket.send_json(
-                    {
-                        "type": "chat_status",
-                        **status_event,
-                        "timestamp": event_timestamp or datetime.now(timezone.utc).isoformat(),
-                    }
-                )
+                try:
+                    await websocket.send_json(
+                        {
+                            "type": "chat_status",
+                            **status_event,
+                            "timestamp": event_timestamp or datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+                except Exception as ws_exc:
+                    logger.warning(
+                        "Failed to send status event via WebSocket for session %s: %s",
+                        session_id,
+                        ws_exc,
+                    )
 
-            # Persist turns, call LLM, optionally auto-name
-            agent_reply, session_title, guardrail_usage, status_events = await _process_message(
-                conv_session_id=conv_session_id,
-                user_message=user_message,
-                is_first_message=(message_count == 1),
-                app=websocket.app,
-                on_status_event=send_status_event,
-            )
+            # Run the conversation turn as a background task so the WebSocket
+            # loop is not blocked — this allows intervention response messages
+            # to be processed while the turn waits for delegated agents.
+            async def _run_turn_and_reply() -> None:
+                try:
+                    agent_reply, session_title, guardrail_usage, status_events = await _process_message(
+                        conv_session_id=conv_session_id,
+                        user_message=user_message,
+                        is_first_message=(message_count == 1),
+                        app=websocket.app,
+                        on_status_event=send_status_event,
+                    )
 
-            # Send agent response back to client
-            await websocket.send_json(
-                {
-                    "sender_role": "agent",
-                    "content": agent_reply,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-            logger.debug(
-                "Conversation agent response sent: message=%d session=%s length=%d",
-                message_count,
-                session_id,
-                len(agent_reply),
-                extra={"data": {"agent_response": agent_reply}},
-            )
+                    await websocket.send_json(
+                        {
+                            "sender_role": "agent",
+                            "content": agent_reply,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                    )
+                    logger.debug(
+                        "Conversation agent response sent: message=%d session=%s length=%d",
+                        message_count,
+                        session_id,
+                        len(agent_reply),
+                        extra={"data": {"agent_response": agent_reply}},
+                    )
 
-            # Push auto-generated title on first message
-            if session_title:
-                await websocket.send_json(
-                    {"type": "title_update", "title": session_title}
-                )
+                    if session_title:
+                        await websocket.send_json(
+                            {"type": "title_update", "title": session_title}
+                        )
 
-            if guardrail_usage:
-                await websocket.send_json(
-                    {"type": "guardrail_update", "guardrail_usage": guardrail_usage}
-                )
+                    if guardrail_usage:
+                        await websocket.send_json(
+                            {"type": "guardrail_update", "guardrail_usage": guardrail_usage}
+                        )
+                except Exception:
+                    logger.exception("Background conversation turn failed for session %s", session_id)
+                    try:
+                        await websocket.send_json(
+                            {
+                                "sender_role": "agent",
+                                "content": "I encountered an error processing your request. Please try again.",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            }
+                        )
+                    except Exception:
+                        pass
+
+            asyncio.create_task(_run_turn_and_reply())
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected: session=%s", session_id)
     except Exception as exc:
         logger.error("WebSocket error for session %s: %s", session_id, exc, exc_info=True)
+    finally:
+        ActiveSessionTracker.unregister(session_id)
+
+
+async def _handle_intervention_response(
+    websocket: WebSocket, session_id: str, payload: dict[str, Any], subject: str = "",
+) -> None:
+    """Handle an intervene_response message from the WebSocket client."""
+    request_id = payload.get("request_id")
+    if not request_id:
+        await websocket.send_json({
+            "type": "intervene_status",
+            "status": "error",
+            "message": "Missing request_id in intervention response",
+        })
+        return
+
+    logger.info(
+        "Received intervention response for request %s from session %s",
+        request_id,
+        session_id,
+    )
+
+    # Forward to Control Center via data client
+    data_client: ControlCenterDataClient | None = getattr(
+        websocket.app.state, "data_client", None
+    )
+    if data_client:
+        try:
+            # Build response payload matching InterveneResponseSubmit schema
+            response_body: dict[str, Any] = {"request_id": request_id}
+            approval = payload.get("approval_value")
+            choice = payload.get("selected_choice")
+            text = payload.get("text_value")
+            if approval is not None:
+                response_body["approval_value"] = approval
+            elif choice is not None:
+                response_body["selected_choice"] = choice
+            elif text is not None:
+                response_body["text_value"] = text
+
+            # Submit via CC internal intervene endpoint (service cert, no JWT needed)
+            response_body["operator_subject"] = subject
+            await data_client._post(
+                "/internal/data/intervene/respond",
+                response_body,
+            )
+            logger.info("Intervention response %s persisted via CC", request_id)
+        except Exception as exc:
+            logger.error(
+                "Failed to persist intervention response %s: %s",
+                request_id,
+                exc,
+            )
+            await websocket.send_json({
+                "type": "intervene_status",
+                "request_id": request_id,
+                "status": "error",
+                "message": "Failed to submit intervention response",
+            })
+            return
+
+    # Clear intervention active state
+    ActiveSessionTracker.set_intervention_active(session_id, False)
+
+    # Notify client of success
+    await websocket.send_json({
+        "type": "intervene_status",
+        "request_id": request_id,
+        "status": "responded",
+    })
+
+
+async def _handle_intervention_cancel(
+    websocket: WebSocket, session_id: str, payload: dict[str, Any]
+) -> None:
+    """Handle an intervene_cancel message from the WebSocket client."""
+    request_id = payload.get("request_id")
+    if not request_id:
+        logger.warning("Received intervene_cancel without request_id from session %s", session_id)
+        return
+
+    logger.info(
+        "Received intervention cancel for request %s from session %s",
+        request_id,
+        session_id,
+    )
+
+    # Forward cancellation to Control Center
+    data_client: ControlCenterDataClient | None = getattr(
+        websocket.app.state, "data_client", None
+    )
+    if data_client:
+        try:
+            await data_client._post(
+                f"/intervene/requests/{request_id}/cancel",
+                {},
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to cancel intervention request %s via CC: %s",
+                request_id,
+                exc,
+            )
+
+    # Clear intervention state
+    ActiveSessionTracker.set_intervention_active(session_id, False)
+
+    # Notify client
+    await websocket.send_json({
+        "type": "intervene_status",
+        "request_id": request_id,
+        "status": "cancelled",
+    })
 
 
 async def _process_message(
@@ -334,8 +556,14 @@ async def _delegate_conversation_turn_to_agent_runtime(
     settings = get_settings()
     ar_base = (settings.agent_runtime_url or "http://localhost:8001").rstrip("/")
     endpoint = f"{ar_base}/internal/conversation/turn"
-    configured_timeout = int(getattr(settings, "agent_question_timeout_seconds", 300))
-    timeout_seconds = float(max(30, configured_timeout))
+    # When streaming status events, disable the HTTP timeout — the connection
+    # is kept alive by the NDJSON stream and HITL pauses may last indefinitely.
+    # The WebSocket disconnect or AR failure will close the TCP connection.
+    if on_status_event is not None:
+        timeout_seconds = None  # No timeout for streaming connections
+    else:
+        configured_timeout = int(getattr(settings, "agent_question_timeout_seconds", 300))
+        timeout_seconds = float(max(30, configured_timeout))
 
     payload = {
         "conv_session_id": str(conv_session_id),
@@ -375,6 +603,11 @@ async def _delegate_conversation_turn_to_agent_runtime(
                     chunk_type = chunk.get("type")
                     if chunk_type == "status_event":
                         item = chunk.get("event")
+                        logger.info(
+                            "CH received status event for session %s: %s",
+                            conv_session_id,
+                            item,
+                        )
                         if not isinstance(item, dict):
                             continue
                         status_value = item.get("status")

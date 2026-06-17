@@ -20,6 +20,8 @@ import { useTranslation } from 'react-i18next'
 import { useInterveneRequests } from '../../hooks/useInterveneRequests'
 import { InterveneResponseDialog } from '../../components/agents/InterveneResponseDialog'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
+import { useNodeTermination } from '../../hooks/useNodeTermination'
+import { cancelInterveneRequest } from '../../api/interveneApi'
 import type { InterveneRequest, InterventionType } from '../../types'
 
 const TYPE_FILTERS: { key: string; value: InterventionType | '' }[] = [
@@ -128,6 +130,26 @@ function RequestsTable({ requests, onRespond, empty }: RequestsTableProps) {
                     </Typography>
                   </TableCell>
                   <TableCell>
+                    {req.conversation_session_id ? (
+                      <Chip
+                        label={t('intervene.inConversation', 'In Conversation')}
+                        color="primary"
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontSize: '0.7rem' }}
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        {t('intervene.standalone', 'Standalone')}
+                      </Typography>
+                    )}
+                    {req.delegation_depth > 0 && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {t('intervene.delegationDepth', 'Depth: {{depth}}', { depth: req.delegation_depth })}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Typography
                       variant="body2"
                       sx={{
@@ -193,6 +215,29 @@ export function IntervenePage() {
     submitResponse,
     refetch,
   } = useInterveneRequests({ typeFilter: typeFilter || undefined })
+
+  const terminateMutation = useNodeTermination()
+
+  const handleTerminateSession = async (sessionId: string, requestId: string) => {
+    // Cancel the intervention first (marks operator intent), then terminate the session.
+    // The backend may also cancel interventions during termination — if cancel fails
+    // due to already-cancelled status, that's fine.
+    try {
+      await cancelInterveneRequest(requestId)
+    } catch {
+      // Already cancelled by terminate or other process — non-critical
+    }
+    try {
+      await terminateMutation.mutateAsync({
+        target_session_id: sessionId,
+        termination_scope: 'cascade_subtree',
+        operator_reason: 'Terminated via human intervention',
+      })
+    } catch {
+      // Session may already be gone
+    }
+    await refetch()
+  }
 
   const handleTabChange = (_: SyntheticEvent, newValue: number) => setTab(newValue)
 
@@ -419,6 +464,7 @@ export function IntervenePage() {
                         <TableCell>{t('intervene.responseDetails', 'Response')}</TableCell>
                         <TableCell>{t('intervene.respondedBy', 'Responded by')}</TableCell>
                         <TableCell>{t('intervene.respondedAt', 'Responded at')}</TableCell>
+                        <TableCell align="right">{t('app.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -463,6 +509,18 @@ export function IntervenePage() {
                                 {req.responded_at ? new Date(req.responded_at).toLocaleString() : '—'}
                               </Typography>
                             </TableCell>
+                            <TableCell align="right">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  setExecutionSessionId(req.agent_session_id)
+                                  setExecutionDialogOpen(true)
+                                }}
+                              >
+                                {t('intervene.viewLogs', 'View Logs')}
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         )
                       })}
@@ -481,6 +539,7 @@ export function IntervenePage() {
         request={selectedRequest}
         onClose={handleCloseDialog}
         onSubmit={handleSubmitResponse}
+        onTerminate={handleTerminateSession}
       />
 
       {/* Auto-open execution dialog after response */}

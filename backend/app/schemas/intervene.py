@@ -14,6 +14,8 @@ class InterveneRequestCreate(BaseModel):
     intervention_type: InterventionType
     reason: str
     choices: list[str] | None = None
+    conversation_session_id: uuid.UUID | None = None
+    delegation_depth: int = 0
 
 
 class InterveneRequestRead(BaseModel):
@@ -24,10 +26,12 @@ class InterveneRequestRead(BaseModel):
     id: uuid.UUID
     agent_session_id: uuid.UUID
     agent_type_id: uuid.UUID
+    conversation_session_id: uuid.UUID | None = None
     intervention_type: InterventionType
     reason: str
     choices: list[str] | None
     status: InterveneRequestStatus
+    delegation_depth: int
     created_at: datetime
     responded_at: datetime | None
     expires_at: datetime | None

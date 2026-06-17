@@ -166,6 +166,11 @@ export function AgentManagementPage() {
         setSaving(false)
         return
       }
+      if (form.sop_bindings.length === 0 && form.skill_bindings.length === 0) {
+        setDialogError(new Error(t('agents.types.bindings.validationRequired')))
+        setSaving(false)
+        return
+      }
       const body = {
         name: form.name,
         description: form.description || null,
@@ -377,7 +382,7 @@ export function AgentManagementPage() {
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={!form.name.trim() || invalidAgentName || saving}
+            disabled={!form.name.trim() || invalidAgentName || saving || (form.sop_bindings.length === 0 && form.skill_bindings.length === 0)}
           >
             {t('app.save')}
           </Button>

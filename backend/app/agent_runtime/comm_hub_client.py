@@ -53,6 +53,7 @@ class CommHubToolClient:
         tool_args: dict[str, Any],
         session_id: str,
         agent_type_id: str,
+        conv_session_id: str | None = None,
     ) -> dict[str, Any]:
         """Call a tool through Communication Hub.
 
@@ -61,6 +62,7 @@ class CommHubToolClient:
             tool_args: Tool arguments
             session_id: Agent session ID
             agent_type_id: Agent type ID
+            conv_session_id: Parent conversation session ID (for conversation-context interventions)
 
         Returns:
             Tool execution result
@@ -70,12 +72,14 @@ class CommHubToolClient:
         """
         endpoint = f"{self._comm_hub_url}/internal/tools/call"
 
-        payload = {
+        payload: dict[str, Any] = {
             "tool_name": tool_name,
             "tool_args": tool_args,
             "session_id": session_id,
             "agent_type_id": agent_type_id,
         }
+        if conv_session_id:
+            payload["conv_session_id"] = conv_session_id
 
         logger.info(
             "Calling tool '%s' via Communication Hub (session=%s)",
@@ -171,6 +175,7 @@ class CommHubToolClient:
         session_link_id: str | None = None,
         wait_for_response: bool = False,
         wait_timeout_seconds: float = 20.0,
+        conv_session_id: str | None = None,
     ) -> dict[str, Any]:
         """Initiate an A2A delegation request through Communication Hub.
 
@@ -180,6 +185,7 @@ class CommHubToolClient:
             requester_role_id: Requester role UUID string for permission check.
             request_payload: Optional payload forwarded to receiver.
             session_link_id: Optional existing A2A session link for multi-turn continuation.
+            conv_session_id: Parent conversation session ID for conversation-context propagation.
 
         Returns:
             Parsed A2A response payload.
@@ -199,6 +205,8 @@ class CommHubToolClient:
         if wait_for_response:
             conversation_metadata["wait_for_response"] = True
             conversation_metadata["wait_timeout_seconds"] = wait_timeout_seconds
+        if conv_session_id:
+            conversation_metadata["conv_session_id"] = conv_session_id
 
         payload = {
             "target_agent_type_slug": target_agent_type_slug,
@@ -207,8 +215,14 @@ class CommHubToolClient:
         }
 
         try:
+            # When waiting for a response, the CH may hold the connection for up to
+            # wait_timeout_seconds + HITL extensions.  Set the HTTP timeout high enough
+            # to avoid cutting off the CH before it can return the receiver result.
+            http_timeout: float = 60.0
+            if wait_for_response:
+                http_timeout = max(http_timeout, wait_timeout_seconds + 300.0)
             client_kwargs: dict[str, Any] = {
-                "timeout": 60.0,
+                "timeout": http_timeout,
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}
@@ -241,6 +255,7 @@ class CommHubToolClient:
         reason: str,
         choices: list[str] | None = None,
         prompt: str | None = None,
+        conv_session_id: str | None = None,
     ) -> dict[str, Any]:
         """Request human intervention through Communication Hub.
 
@@ -253,6 +268,7 @@ class CommHubToolClient:
             reason: Explanation of why human input is needed.
             choices: Available options when type is ``choice``.
             prompt: Descriptive prompt when type is ``text``.
+            conv_session_id: Parent conversation session ID for conversation-context routing.
 
         Returns:
             Dict with ``request_id`` and ``status``.
@@ -271,12 +287,14 @@ class CommHubToolClient:
         if prompt is not None:
             tool_args["prompt"] = prompt
 
-        payload = {
+        payload: dict[str, Any] = {
             "tool_name": "human_intervene",
             "tool_args": tool_args,
             "session_id": session_id,
             "agent_type_id": "",
         }
+        if conv_session_id:
+            payload["conv_session_id"] = conv_session_id
 
         try:
             client_kwargs: dict[str, Any] = {
@@ -334,9 +352,17 @@ class CommHubToolClient:
 
         endpoint = f"{self._comm_hub_url}/internal/a2a/wait/{receiver_session_id}"
 
+        logger.info(
+            "A2A wait: calling CH endpoint %s with timeout=%ss",
+            endpoint,
+            timeout_seconds,
+        )
+
         try:
+            # The CH wait may hold the connection indefinitely for HITL.
+            # Use a generous HTTP timeout (1 hour) to accommodate human response time.
             client_kwargs: dict[str, Any] = {
-                "timeout": max(5.0, timeout_seconds + 5.0),
+                "timeout": 3600.0,
                 "verify": get_ssl_context(),
             }
             headers: dict[str, str] = {}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_CONFIG } from '../api/API_CONFIG'
 import apiClient from '../api/apiClient'
+import type { InterventionType, InterveneRequestMessage } from '../types'
 
 export type ChatRole = 'user' | 'agent' | 'system'
 
@@ -28,6 +29,8 @@ export type ChatStatusKind =
   | 'delegating'
   | 'waiting'
   | 'using_tool'
+  | 'waiting_for_human'
+  | 'delegation_resumed'
   | 'timeout_or_failed'
 
 export interface ChatStatus {
@@ -126,7 +129,8 @@ function parseChatStatus(value: unknown): ChatStatus | null {
     status !== 'delegating' &&
     status !== 'waiting' &&
     status !== 'using_tool' &&
-    status !== 'timeout_or_failed'
+    status !== 'timeout_or_failed' &&
+    status !== 'delegation_resumed'
   ) {
     return null
   }
@@ -241,6 +245,11 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const seenExecutionLogIdsByCycleRef = useRef<Map<string, Set<string>>>(new Map())
   const pendingNewDelegationCycleRef = useRef(false)
 
+  // Intervention state
+  const [interventionRequest, setInterventionRequest] = useState<InterveneRequestMessage | null>(null)
+  const [interventionQueueLength, _setInterventionQueueLength] = useState(0)
+  const interventionActiveRef = useRef(false)
+
   useEffect(() => {
     chatStatusRef.current = chatStatus
   }, [chatStatus])
@@ -291,6 +300,55 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           guardrail_usage?: unknown
           status?: string
           agent_type?: string
+          request_id?: string
+          intervention_type?: string
+          reason?: string
+          choices?: string[]
+          delegation_depth?: number
+          conversation_session_id?: string
+        }
+
+        // ── Handle intervention messages ───────────────────────────────────
+        if (data.type === 'intervene_request') {
+          const interveneMsg: InterveneRequestMessage = {
+            type: 'intervene_request',
+            request_id: data.request_id ?? '',
+            intervention_type: (data.intervention_type as InterventionType) ?? 'approval',
+            reason: data.reason ?? '',
+            choices: data.choices,
+            agent_type: data.agent_type,
+            delegation_depth: data.delegation_depth ?? 0,
+            conversation_session_id: data.conversation_session_id ?? '',
+          }
+          setInterventionRequest(interveneMsg)
+          interventionActiveRef.current = true
+          setChatStatus({
+            kind: 'waiting_for_human',
+            agentType: data.agent_type ?? null,
+            toolName: null,
+            receiverSessionId: null,
+            timestamp: new Date().toISOString(),
+          })
+          return
+        }
+
+        if (data.type === 'intervene_status') {
+          const statusVal = data.status
+          if (statusVal === 'responded' || statusVal === 'cancelled' || statusVal === 'expired') {
+            setInterventionRequest(null)
+            interventionActiveRef.current = false
+            setChatStatus((prev) => {
+              const agentType = prev?.agentType ?? null
+              return { kind: 'waiting', agentType, toolName: null, receiverSessionId: null, timestamp: new Date().toISOString() }
+            })
+          }
+          return
+        }
+
+        if (data.type === 'chat_blocked') {
+          // Client tried to send a message while intervention is pending
+          // The message is silently dropped; the UI blocks input anyway
+          return
         }
 
         const parsedStatus = parseChatStatus(data)
@@ -301,6 +359,31 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
             parsedStatus.kind === 'using_tool'
 
           setChatStatus(parsedStatus)
+
+          if (parsedStatus.kind === 'delegation_resumed') {
+            const targetCycleId = activeDelegationCycleIdRef.current
+            if (targetCycleId) {
+              const resumeLine: DelegationSnippetLine = {
+                id: crypto.randomUUID(),
+                kind: 'waiting',
+                agentType: parsedStatus.agentType,
+                toolName: null,
+                logTitle: null,
+                timestamp: parsedStatus.timestamp,
+              }
+              setDelegationCycles((prev) =>
+                prev.map((cycle) =>
+                  cycle.id === targetCycleId
+                    ? {
+                        ...cycle,
+                        snippets: [...cycle.snippets, resumeLine],
+                      }
+                    : cycle,
+                ),
+              )
+            }
+            return
+          }
 
           if (!isDelegationKind) {
             return
@@ -438,6 +521,7 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     const shouldPollLogs =
       chatStatus?.kind === 'delegating' ||
       chatStatus?.kind === 'waiting' ||
+      chatStatus?.kind === 'waiting_for_human' ||
       chatStatus?.kind === 'using_tool'
 
     if (!activeDelegationCycleId) {
@@ -529,6 +613,11 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
 
   const sendMessage = useCallback((content: string) => {
     if (!content.trim()) return false
+
+    // Block messages when intervention is active
+    if (interventionActiveRef.current) {
+      return false
+    }
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ message: content }))
@@ -697,6 +786,60 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
   const delegationExecutionLogAvailable = activeDelegationCycle?.executionLogAvailable ?? false
   const delegationExecutionSessionId = activeDelegationCycle?.executionSessionId ?? null
 
+  // ── Intervention actions ─────────────────────────────────────────────────
+
+  const sendInterventionResponse = useCallback(
+    (requestId: string, value: {
+      approval_value?: boolean
+      selected_choice?: string
+      text_value?: string
+    }) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'intervene_response',
+            request_id: requestId,
+            ...value,
+          }),
+        )
+        setInterventionRequest(null)
+        interventionActiveRef.current = false
+        setChatStatus((prev) => ({
+          kind: 'waiting',
+          agentType: prev?.agentType ?? null,
+          toolName: null,
+          receiverSessionId: null,
+          timestamp: new Date().toISOString(),
+        }))
+        return true
+      }
+      return false
+    },
+    [],
+  )
+
+  const cancelIntervention = useCallback((requestId: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'intervene_cancel',
+          request_id: requestId,
+        }),
+      )
+      setInterventionRequest(null)
+      interventionActiveRef.current = false
+      setChatStatus((prev) => ({
+        kind: 'waiting',
+        agentType: prev?.agentType ?? null,
+        toolName: null,
+        receiverSessionId: null,
+        timestamp: new Date().toISOString(),
+      }))
+      return true
+    }
+    return false
+  }, [])
+
   return {
     messages,
     connected,
@@ -716,5 +859,10 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
     hydrateDelegationFromHistory,
     sendMessage,
     clearMessages,
+    // Intervention
+    interventionRequest,
+    interventionQueueLength,
+    sendInterventionResponse,
+    cancelIntervention,
   }
 }

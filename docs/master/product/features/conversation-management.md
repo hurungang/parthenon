@@ -21,6 +21,9 @@ Conversation Management ensures that all interactions—across users, agents, an
 - Keeps a visible waiting indicator during delegated work until a delegated response or terminal status is received
 - Shows delegation execution snippets in a compact folded state, with optional expansion for additional detail
 - Shows a clear timeout or failure end state so users are not left in indefinite waiting
+- Shows an inline intervention dialog (approval, choice, or text) in the conversation when a delegated sub-agent requests human input, replacing the previous indefinite waiting state
+- Pauses the conversation with a distinct "Waiting for your input" indicator and blocks new message input until the intervention is resolved
+- Surfaces pending intervention requests automatically when a user reconnects to a conversation that was mid-intervention
 - Supports audit and replay of any conversation
 - Provides UI access to search and review conversation history
 - Ensures all turn types are captured and traceable
@@ -32,9 +35,10 @@ Conversation Management ensures that all interactions—across users, agents, an
 - **Session Lifecycle**: Transitions between active (accepting messages), closed (ended by user), and archived (hidden from active list but retained for audit)
 - **Current-Session Token Visibility**: Ongoing display of conversational token consumption during active sessions
 - **Conversation Continuation Policy**: Conversational sessions continue unless non-token guardrails (for example recursion, iteration, delegation boundary, or timeout policies) require termination
-- **Delegation Visibility Cues**: In-conversation progress signals (thinking, delegating, waiting, completion, timeout/failure) that make delegated execution understandable to non-technical users
+- **Delegation Visibility Cues**: In-conversation progress signals (thinking, delegating, waiting, completion, timeout/failure, intervention wait) that make delegated execution understandable to non-technical users. The intervention wait state appears when a delegated sub-agent requests human input, showing the intervention dialog inline and blocking new messages until resolved
 - **Folded Delegation Snippets**: Compact delegation progress lines that are collapsed by default and can be expanded on demand without overwhelming chat readability
-- **Turn Types**: Different types of conversation events (user, agent, tool, agent-to-agent, intervene_request, intervene_response)
+- **Conversation Session Intervention Block**: While an intervention request is outstanding, the conversation session enters a distinct blocked state — message input is disabled and the session list shows a `waiting_for_human` indicator, allowing operators to identify conversations needing attention
+- **Turn Types**: Different types of conversation events (user, agent, tool, agent-to-agent, intervene_request, intervene_response). Intervention turns now include delegation chain metadata so auditors can trace which sub-agent at which depth made the request
 - **Audit and Replay**: Reviewing and replaying past conversations
 - **Conversation Traceability**: Ensuring every interaction is logged and accessible
 
@@ -58,3 +62,8 @@ Conversation Management ensures that all interactions—across users, agents, an
 - Delegation execution snippets appear folded by default and can be expanded by users on demand
 - Folded snippets provide enough context for users to confirm progress at a glance
 - If delegated execution times out or fails, users see a clear final status instead of indefinite waiting
+- When a delegated sub-agent requests intervention in a conversation, an intervention dialog (approval, choice, or text) appears inline in the chat at the point of delegation
+- During an intervention wait, the conversation shows a distinct "Waiting for your input" indicator and blocks new message input until the intervention is resolved
+- The user's intervention response is recorded as a conversation turn visible in history and replay
+- If a user disconnects while an intervention dialog is open, the pending intervention request is re-surfaced automatically when the user reconnects
+- The parent conversational session shows a `waiting_for_human` state in the session list and dashboard while a sub-agent intervention is outstanding

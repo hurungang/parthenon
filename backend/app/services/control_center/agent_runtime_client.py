@@ -203,6 +203,13 @@ class AgentRuntimeClient:
         if response_value:
             body["response_value"] = response_value
 
+        logger.info(
+            "Resume session %s with response_value=%s -> body keys=%s",
+            session_id,
+            response_value,
+            list(body.keys()),
+        )
+
         async with self._make_client() as client:
             try:
                 resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)

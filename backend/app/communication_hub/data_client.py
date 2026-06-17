@@ -104,11 +104,14 @@ class ControlCenterDataClient:
             except Exception as exc:
                 raise ControlCenterDataError(f"CC GET {url} failed: {exc}") from exc
 
-    async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def _post(self, path: str, body: dict[str, Any], user_jwt: str | None = None) -> dict[str, Any]:
         url = self._url(path)
+        headers: dict[str, str] = {}
+        if user_jwt:
+            headers["Authorization"] = f"Bearer {user_jwt}"
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -262,6 +265,7 @@ class ControlCenterDataClient:
         request_payload: dict[str, Any],
         session_link_id: str | None,
         active_receiver_instance_id: str | None,
+        conv_session_id: str | None = None,
     ) -> dict[str, Any]:
         """Prepare an A2A request in Control Center.
 
@@ -277,6 +281,8 @@ class ControlCenterDataClient:
         }
         if requester_role_id:
             body["requester_role_id"] = requester_role_id
+        if conv_session_id:
+            body["conv_session_id"] = conv_session_id
 
         return await self._post("/internal/data/a2a/request", body)
 

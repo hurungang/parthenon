@@ -202,19 +202,6 @@ def _extract_sop_name_from_fallback_content(sop_content: str | None) -> str | No
     return sop_name or None
 
 
-def _instruction_mentions_any_sop_reference(system_instruction: str | None) -> bool:
-    """Return True when instruction already references any SOP guidance.
-
-    Default(primary) SOP content is fallback-only and should not be appended when the
-    base instruction already directs the model via an SOP reference.
-    """
-    if not system_instruction:
-        return False
-
-    return bool(
-        re.search(r"\bsop\b", system_instruction, re.IGNORECASE)
-        or re.search(r"standard\s+operating\s+procedure", system_instruction, re.IGNORECASE)
-    )
 
 
 def _build_dynamic_agent_tool_definition(
@@ -1304,6 +1291,9 @@ class AgentRuntimeExecutor:
         agent_type_id = job_data["agent_type_id"]
         input_data = job_data.get("input_data") or {}
 
+        # Extract conversation session ID for delegation context
+        self._conv_session_id: str | None = input_data.get("__conv_session_id")
+
         # ── Log session_started ───────────────────────────────────────────────
         await data_client.log_execution_event(
             session_id=session_id,
@@ -1353,27 +1343,17 @@ class AgentRuntimeExecutor:
         system_instruction: str | None = context.get("system_instruction")
         binding_content: str | None = context.get("sop_content")
         if binding_content:
-            if _instruction_mentions_any_sop_reference(system_instruction):
-                await data_client.log_execution_event(
-                    session_id=session_id,
-                    event_type="binding_fallback_skipped",
-                    message="Skipped binding content append; SOP already explicitly referenced",
-                    data={
-                        "agent_type_id": context.get("agent_type_id"),
-                    },
-                )
-            else:
-                base = system_instruction or ""
-                system_instruction = f"{base}\n\n{binding_content}".strip()
-                await data_client.log_execution_event(
-                    session_id=session_id,
-                    event_type="binding_content_loaded",
-                    message="Binding content loaded into system instruction",
-                    data={
-                        "agent_type_id": context.get("agent_type_id"),
-                        "binding_content_preview": binding_content[:300],
-                        "total_instruction_length": len(system_instruction),
-                    },
+            base = system_instruction or ""
+            system_instruction = f"{base}\n\n{binding_content}".strip()
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="binding_content_loaded",
+                message="Binding content loaded into system instruction",
+                data={
+                    "agent_type_id": context.get("agent_type_id"),
+                    "binding_content_preview": binding_content[:300],
+                    "total_instruction_length": len(system_instruction),
+                },
                 )
 
         mcp_context: str | None = context.get("mcp_session_context")
@@ -1521,26 +1501,84 @@ class AgentRuntimeExecutor:
 
         # ── Observe-Reason-Act loop ───────────────────────────────────────────
         messages: list[dict[str, Any]] = []
-        if user_prompt:
-            messages.append({"role": "user", "content": user_prompt})
 
-        # ── Inject human response for resumed sessions ────────────────────────
-        if response_value:
+        # ── Restore conversation history for resumed sessions ──────────────────
+        saved_history = job_data.get("conversation_history")
+        if saved_history and isinstance(saved_history, list) and len(saved_history) > 0:
+            messages = saved_history
+            if response_value:
+                # Find the last human_intervene tool call_id and append the
+                # human response as a proper ToolMessage so the LLM sees the
+                # tool call as resolved.
+                call_id: str | None = None
+                for msg in reversed(messages):
+                    if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                        for tc in msg["tool_calls"]:
+                            if tc.get("function", {}).get("name") == "human_intervene":
+                                call_id = tc.get("id")
+                                break
+                    if call_id:
+                        break
+                if call_id:
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": json.dumps(response_value),
+                    })
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        f"Human intervention has been resolved. "
+                        f"Your plan's human_intervene step is now COMPLETE. "
+                        f"Move to the NEXT step in your plan immediately. "
+                        f"Do NOT call human_intervene again."
+                    ),
+                })
+                await data_client.log_execution_event(
+                    session_id=session_id,
+                    event_type="human_response_injected",
+                    message="Human intervention response injected for resumed session",
+                    data={"response_value": response_value},
+                )
+        elif response_value:
+            # Legacy path: no saved conversation history — build synthetic
+            # tool-call context so the LLM can continue.
             formatted = json.dumps(response_value)
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": "call_resume_context",
+                    "type": "function",
+                    "function": {
+                        "name": "human_intervene",
+                        "arguments": json.dumps({"intervention_type": "approval", "reason": "Requested human input"}),
+                    },
+                }],
+            })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": "call_resume_context",
+                "content": formatted,
+            })
             messages.append({
                 "role": "user",
                 "content": (
-                    f"The human operator has provided the following response to your "
-                    f"intervention request: {formatted}. "
-                    f"Continue with your task using this input."
+                    f"Human intervention has been resolved. "
+                    f"Your plan's human_intervene step is now COMPLETE. "
+                    f"Move to the NEXT step in your plan immediately. "
+                    f"Do NOT call human_intervene again."
                 ),
             })
             await data_client.log_execution_event(
                 session_id=session_id,
                 event_type="human_response_injected",
-                message="Human intervention response injected for resumed session",
+                message="Human intervention response injected for resumed session (legacy)",
                 data={"response_value": response_value},
             )
+        else:
+            if user_prompt:
+                messages.append({"role": "user", "content": user_prompt})
 
         output_data: dict[str, Any] = {}
         max_iterations = max(1, guardrail_state.max_iterations)
@@ -1827,12 +1865,28 @@ class AgentRuntimeExecutor:
                         reason=reason,
                         choices=choices,
                         prompt=prompt,
+                        conv_session_id=getattr(self, "_conv_session_id", None),
                     )
                     request_id = intervene_result.get("request_id")
 
-                    await data_client.mark_session_waiting_for_human(session_id, request_id)
+                    # Save conversation history BEFORE appending the pending
+                    # tool result, so that on resume we only append ONE ToolMessage
+                    # (the real response) instead of two (pending + response).
+                    await data_client.mark_session_waiting_for_human(
+                        session_id, request_id,
+                        conversation_history=messages,
+                    )
 
+                    # Append pending tool result for completeness, but this is
+                    # NOT saved to history — the real response will replace it
+                    # on resume.
                     tool_result = {"request_id": request_id, "status": "pending"}
+                    messages.append({
+                        "role": "tool",
+                        "content": json.dumps(tool_result),
+                        "tool_call_id": call_id,
+                    })
+
                     raise HumanInterveneRequired()
                 elif bare_tool_name in ("send_notification", "get_recipient_group"):
                     # System tools now route through Communication Hub
@@ -1974,6 +2028,7 @@ class AgentRuntimeExecutor:
         agent_type_id: str | None,
         session_id: str,
         comm_hub_client: "CommHubToolClient",
+        conv_session_id: str | None = None,
     ) -> dict[str, Any]:
         """Dispatch tool call from Agent Runtime via Communication Hub (no DB access).
 
@@ -1989,6 +2044,7 @@ class AgentRuntimeExecutor:
             agent_type_id: Agent type ID
             session_id: Agent session ID
             comm_hub_client: Communication Hub tool client
+            conv_session_id: Parent conversation session ID (for conversation-context interventions)
 
         Returns:
             Tool execution result
@@ -1996,11 +2052,14 @@ class AgentRuntimeExecutor:
         from app.agent_runtime.comm_hub_client import CommHubToolClientError
 
         try:
+            # Use conversation session ID from delegation context if available
+            effective_conv_session_id = conv_session_id or getattr(self, "_conv_session_id", None)
             result = await comm_hub_client.call_tool(
                 tool_name=tool_name,
                 tool_args=tool_args,
                 session_id=session_id,
                 agent_type_id=agent_type_id or "",
+                conv_session_id=effective_conv_session_id,
             )
             return result
         except CommHubToolClientError as exc:
@@ -2031,19 +2090,45 @@ class AgentRuntimeExecutor:
         Returns the final text response from the agent.
         """
         from app.services.agents.model_binding import ModelBindingLayer
+        from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding
+
+        from sqlalchemy import select as _sel
 
         binding = ModelBindingLayer()
         model_config = await binding.resolve_model_config(agent_type.model_id, db)
 
-        # Resolve allowed tools for the agent's role, including delegated agent tools.
+        # Query AgentType bindings for permission scoping
+        bind_sop_rows = await db.execute(
+            _sel(AgentTypeSopBinding.sop_id).where(
+                AgentTypeSopBinding.agent_type_id == agent_type.id
+            )
+        )
+        bound_sop_ids: set[uuid.UUID] = {row[0] for row in bind_sop_rows.fetchall()}
+
+        bind_skill_rows = await db.execute(
+            _sel(AgentTypeSkillBinding.skill_id).where(
+                AgentTypeSkillBinding.agent_type_id == agent_type.id
+            )
+        )
+        bound_skill_ids: set[uuid.UUID] = {row[0] for row in bind_skill_rows.fetchall()}
+
+        has_bindings = bool(bound_sop_ids or bound_skill_ids)
+
+        # Resolve allowed tools for the agent's role, scoped by AgentType bindings
         allowed_tools: set[str] = set()
         if agent_type.role_id:
+            pm_sop_overrides = bound_sop_ids if (has_bindings and bound_sop_ids) else None
+            pm_skill_overrides = bound_skill_ids if (has_bindings and bound_skill_ids) else None
+
             allowed_tools = await self._permission_manager.calculate_allowed_tools(
-                agent_type.role_id, db
+                agent_type.role_id, db,
+                override_sop_ids=pm_sop_overrides,
+                override_skill_ids=pm_skill_overrides,
             )
             delegated_agent_types = await self._permission_manager.calculate_allowed_agent_types(
                 agent_type.role_id,
                 db,
+                override_sop_ids=pm_sop_overrides if has_bindings else None,
             )
             allowed_tools.update(
                 {build_tool_name("agent", slug) for slug in delegated_agent_types}
@@ -2215,6 +2300,7 @@ class AgentRuntimeExecutor:
                             session_link_id=args.get("session_link_id"),
                             wait_for_response=True,
                             wait_timeout_seconds=45.0,
+                            conv_session_id=str(conv_session_id),
                         )
                     else:
                         logger.info(
@@ -2230,13 +2316,14 @@ class AgentRuntimeExecutor:
                             str(agent_type.id),
                             str(conv_session_id),
                             comm_hub_client,
+                            conv_session_id=str(conv_session_id),
                         )
 
-                local_messages.append({
-                    "role": "tool",
-                    "content": str(tool_result),
-                    "tool_call_id": call_id,
-                })
+                    local_messages.append({
+                        "role": "tool",
+                        "content": str(tool_result),
+                        "tool_call_id": call_id,
+                    })
 
         logger.warning(
             "Conversation turn exceeded max iterations (%d) for session %s",
@@ -2529,29 +2616,34 @@ class AgentRuntimeExecutor:
                             request_payload=delegation_payload,
                             session_link_id=args.get("session_link_id"),
                             wait_for_response=False,
+                            wait_timeout_seconds=120.0,
+                            conv_session_id=str(conv_session_id),
                         )
 
+                        # Extract receiver_session_id and wait with HITL awareness
                         delegated_session_id = None
                         if isinstance(tool_result, dict):
-                            receiver_session_id = tool_result.get("receiver_session_id")
-                            if isinstance(receiver_session_id, str) and receiver_session_id.strip():
-                                delegated_session_id = receiver_session_id.strip()
+                            rsid = tool_result.get("receiver_session_id")
+                            if isinstance(rsid, str) and rsid.strip():
+                                delegated_session_id = rsid.strip()
 
                         if delegated_session_id:
-                            await emit_status_event(
-                                {
-                                    "status": "waiting",
-                                    "agent_type": delegated_target_slug,
-                                    "receiver_session_id": delegated_session_id,
-                                }
-                            )
-
+                            await emit_status_event({
+                                "status": "waiting",
+                                "agent_type": delegated_target_slug,
+                                "receiver_session_id": delegated_session_id,
+                            })
                             wait_payload = await comm_hub_client.wait_for_a2a_response(
                                 receiver_session_id=delegated_session_id,
-                                timeout_seconds=45.0,
+                                timeout_seconds=120.0,
                             )
+                            await emit_status_event({
+                                "status": "delegation_resumed",
+                                "agent_type": delegated_target_slug,
+                            })
                             if isinstance(tool_result, dict):
                                 tool_result["response_payload"] = wait_payload
+
                     else:
                         logger.info(
                             "Conversation tool dispatch (from context): session=%s tool=%s route_type=%s",
@@ -2669,19 +2761,44 @@ class AgentRuntimeExecutor:
             },
         )
 
-        # Resolve permissions
+        # Resolve permissions — scoped by AgentType bindings
         allowed_tools: set[str] = set()
         if agent_type.role_id:
             with tracer.start_as_current_span(
                 "runtime_executor.resolve_permissions",
                 attributes={"role_id": str(agent_type.role_id)},
             ):
+                # Load AgentType bindings
+                from sqlalchemy import select as _sel2
+                from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding  # noqa: F811
+
+                _sop_rows = await db.execute(
+                    _sel2(AgentTypeSopBinding.sop_id).where(
+                        AgentTypeSopBinding.agent_type_id == agent_type.id
+                    )
+                )
+                _bound_sop_set: set[uuid.UUID] = {row[0] for row in _sop_rows.fetchall()}
+
+                _skill_rows = await db.execute(
+                    _sel2(AgentTypeSkillBinding.skill_id).where(
+                        AgentTypeSkillBinding.agent_type_id == agent_type.id
+                    )
+                )
+                _bound_skill_set: set[uuid.UUID] = {row[0] for row in _skill_rows.fetchall()}
+
+                _has_bindings = bool(_bound_sop_set or _bound_skill_set)
+                _sop_overrides = _bound_sop_set if (_has_bindings and _bound_sop_set) else None
+                _skill_overrides = _bound_skill_set if (_has_bindings and _bound_skill_set) else None
+
                 allowed_tools = await self._permission_manager.calculate_allowed_tools(
-                    agent_type.role_id, db
+                    agent_type.role_id, db,
+                    override_sop_ids=_sop_overrides,
+                    override_skill_ids=_skill_overrides,
                 )
                 delegated_agent_types = await self._permission_manager.calculate_allowed_agent_types(
                     agent_type.role_id,
                     db,
+                    override_sop_ids=_sop_overrides if _has_bindings else None,
                 )
                 allowed_tools.update(
                     {build_tool_name("agent", slug) for slug in delegated_agent_types}
@@ -2745,23 +2862,13 @@ class AgentRuntimeExecutor:
             # ── Load binding content (bound SOPs+skills) and append to system instruction ──
             binding_content = await self._load_binding_content(agent_type, db)
             if binding_content:
-                if _instruction_mentions_any_sop_reference(ctx.system_instruction):
-                    await self._log_execution_event(
-                        session_id=job.id,
-                        event_type="binding_fallback_skipped",
-                        message="Skipped binding content append; SOP already explicitly referenced",
-                        data={
-                            "agent_type_id": str(agent_type.id),
-                        },
-                    )
-                else:
-                    base = ctx.system_instruction or ""
-                    ctx.system_instruction = f"{base}\n\n{binding_content}".strip()
-                    await self._log_execution_event(
-                        session_id=job.id,
-                        event_type="binding_content_loaded",
-                        message="Binding content loaded into system instruction",
-                        data={
+                base = ctx.system_instruction or ""
+                ctx.system_instruction = f"{base}\n\n{binding_content}".strip()
+                await self._log_execution_event(
+                    session_id=job.id,
+                    event_type="binding_content_loaded",
+                    message="Binding content loaded into system instruction",
+                    data={
                             "agent_type_id": str(agent_type.id),
                             "binding_content_preview": binding_content[:300],
                             "total_instruction_length": len(ctx.system_instruction),
@@ -2871,14 +2978,8 @@ class AgentRuntimeExecutor:
             # ── Load binding content (bound SOPs+skills) and append to system instruction ──
             binding_content = await self._load_binding_content(agent_type, db)
             if binding_content:
-                if _instruction_mentions_any_sop_reference(ctx.system_instruction):
-                    logger.info(
-                        "Skipped binding content append for session %s; SOP already referenced",
-                        job.id,
-                    )
-                else:
-                    base = ctx.system_instruction or ""
-                    ctx.system_instruction = f"{base}\n\n{binding_content}".strip()
+                base = ctx.system_instruction or ""
+                ctx.system_instruction = f"{base}\n\n{binding_content}".strip()
 
             # ── Load MCP session context and append to system instruction ────
             if agent_type.role_id:

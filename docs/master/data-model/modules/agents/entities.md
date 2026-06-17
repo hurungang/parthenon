@@ -116,10 +116,12 @@ erDiagram
         uuid id
         uuid agent_session_id
         uuid agent_type_id
+        uuid conversation_session_id
         enum intervention_type "approval | choice | text"
         string reason
         json choices "required when intervention_type = choice"
         enum status "pending | responded | cancelled | expired"
+        int delegation_depth
         datetime created_at
         datetime responded_at "set when status becomes responded, cancelled, or expired"
         datetime expires_at "optional timeout deadline"
@@ -165,6 +167,11 @@ erDiagram
     Identity {
         uuid id
         string subject
+    }
+    ConversationSession {
+        uuid id
+        uuid agent_type_id
+        enum status
     }
 
     AgentRole ||--o{ AgentRoleSOP : "grants access to"
@@ -223,6 +230,7 @@ erDiagram
     AgentSession }o--|| AgentType : "executes"
     InterveneRequest }o--|| AgentSession : "originates from"
     InterveneRequest }o--|| AgentType : "initiated by"
+    InterveneRequest }o--|| ConversationSession : "surfaced in"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
     AgentType ||--o{ AgentRoleAllowedType : "listed as"
@@ -253,7 +261,7 @@ erDiagram
 | **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
 | **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
 | **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. Status includes `waiting_for_human` when the agent is paused pending operator response to an intervene request. |
-| **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. Each request is scoped to a single agent session and agent type. |
+| **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. Links to the parent `ConversationSession` (when surfaced in a conversational context) and preserves `delegation_depth` from the originating `AgentJob` for audit. |
 | **InterveneResponse** | The operator's response to an intervene request. Exactly one response per request. The response field populated depends on the intervention type: `approval_value` (boolean) for approval requests, `selected_choice` (string) for choice requests, `text_value` (string) for text requests. |
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |

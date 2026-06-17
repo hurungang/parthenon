@@ -27,7 +27,9 @@ class ConversationTurnRead(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID
     role: TurnRole
+    turn_type: str
     content: str
+    intervene_request_id: uuid.UUID | None = None
     token_count: int | None
     created_at: datetime
     tool_calls: list[ToolCallRecordRead] = []

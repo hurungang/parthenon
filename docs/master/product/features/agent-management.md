@@ -46,6 +46,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 	- Users can resume previous sessions with full conversation history
 	- Users can end or archive sessions to manage their workspace
 	- All sessions are user-scoped (users only see their own sessions)
+	- Conversation sessions surface inline intervention dialogs when delegated sub-agents request human input, with the pause-on-intervention state visible in the session list
 
 
 
@@ -104,6 +105,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 	- Users can archive sessions (status becomes 'archived', excluded from default listing)
 	- Sessions are user-scoped (users only see their own sessions)
 	- Sessions list updates automatically after create/end/archive operations
+	- Conversation sessions show intervention requests from delegated agents and allow inline response without leaving the conversation view
 - All changes are observable in the UI without requiring a page reload
 - Error messages are clear and actionable if features fail
 

@@ -92,6 +92,10 @@ class AgentContextResponse(BaseModel):
     role_mcp_sessions: dict[str, dict[str, str]]  # server_id → {session_id, auth_type}
     allowed_agent_types: list[str]  # delegated agent slugs permitted by SOP steps
 
+    # AgentType binding IDs used to scope tool permissions
+    bound_sop_ids: list[uuid.UUID]
+    bound_skill_ids: list[uuid.UUID]
+
     # Summaries for execution logging
     sops: list[SopSummary]
     skills: list[SkillSummary]
@@ -283,6 +287,8 @@ async def get_agent_context(
         AgentRoleSOP,
         AgentRoleSkill,
         AgentType,
+        AgentTypeSopBinding,
+        AgentTypeSkillBinding,
         ModelConfig,
     )
     from app.db.models.mcp_hub import McpSession, McpTool
@@ -324,46 +330,144 @@ async def get_agent_context(
     skills_summary: list[SkillSummary] = []
     allowed_agent_types: set[str] = set()
     delegated_agent_type_metadata: dict[str, dict[str, Any]] = {}
+    bound_sop_ids_list: list[uuid.UUID] = []
+    bound_skill_ids_list: list[uuid.UUID] = []
 
     if agent_type.role_id:
         role_id = agent_type.role_id
 
-        # Directly assigned skills
-        direct_rows = await db.execute(
-            select(AgentRoleSkill.skill_id, Skill.name)
-            .join(Skill, AgentRoleSkill.skill_id == Skill.id)
-            .where(AgentRoleSkill.role_id == role_id)
+        # Query AgentType SOP/Skill bindings for permission scoping
+        sop_bind_rows = await db.execute(
+            select(AgentTypeSopBinding.sop_id)
+            .where(AgentTypeSopBinding.agent_type_id == agent_type_id)
         )
-        for skill_id, skill_name in direct_rows.fetchall():
-            skill_ids.add(skill_id)
-            skills_summary.append(SkillSummary(id=skill_id, name=skill_name))
+        bound_sop_set: set[uuid.UUID] = {row[0] for row in sop_bind_rows.fetchall()}
 
-        # SOPs and their step-referenced skills
-        sop_rows = await db.execute(
-            select(AgentRoleSOP.sop_id, Sop.name)
-            .join(Sop, AgentRoleSOP.sop_id == Sop.id)
-            .where(AgentRoleSOP.role_id == role_id)
+        skill_bind_rows = await db.execute(
+            select(AgentTypeSkillBinding.skill_id)
+            .where(AgentTypeSkillBinding.agent_type_id == agent_type_id)
         )
-        sop_ids: list[uuid.UUID] = []
-        for sop_id, sop_name in sop_rows.fetchall():
-            sop_ids.append(sop_id)
-            sops_summary.append(SopSummary(id=sop_id, name=sop_name))
+        bound_skill_set: set[uuid.UUID] = {row[0] for row in skill_bind_rows.fetchall()}
 
-        if sop_ids:
-            step_rows = await db.execute(
-                select(SopStep.skill_id, Skill.name)
-                .join(Skill, SopStep.skill_id == Skill.id)
-                .where(
-                    SopStep.sop_id.in_(sop_ids),
-                    SopStep.step_type == SopStepType.skill_invocation,
-                    SopStep.skill_id.isnot(None),
+        bound_sop_ids_list = sorted(bound_sop_set)
+        bound_skill_ids_list = sorted(bound_skill_set)
+        has_bindings = bool(bound_sop_set or bound_skill_set)
+
+        # Skills: directly bound skills only when bindings exist, otherwise all role skills
+        if has_bindings:
+            skill_ids_to_load = bound_skill_set
+        else:
+            skill_ids_to_load = None
+        if skill_ids_to_load is not None and not skill_ids_to_load:
+            pass  # empty binding set → skip direct skill loading
+        else:
+            skills_query = select(AgentRoleSkill.skill_id, Skill.name).join(
+                Skill, AgentRoleSkill.skill_id == Skill.id
+            ).where(AgentRoleSkill.role_id == role_id)
+            if skill_ids_to_load is not None:
+                skills_query = skills_query.where(AgentRoleSkill.skill_id.in_(skill_ids_to_load))
+            direct_rows = await db.execute(skills_query)
+            for s_id, s_name in direct_rows.fetchall():
+                skill_ids.add(s_id)
+                skills_summary.append(SkillSummary(id=s_id, name=s_name))
+
+        # SOPs: only bound SOPs when bindings exist, otherwise all role SOPs
+        if has_bindings:
+            sop_ids_to_load = bound_sop_set
+        else:
+            sop_ids_to_load = None
+        if sop_ids_to_load is not None and not sop_ids_to_load:
+            pass  # empty binding set → skip SOP loading
+        else:
+            sops_query = select(AgentRoleSOP.sop_id, Sop.name).join(
+                Sop, AgentRoleSOP.sop_id == Sop.id
+            ).where(AgentRoleSOP.role_id == role_id)
+            if sop_ids_to_load is not None:
+                sops_query = sops_query.where(AgentRoleSOP.sop_id.in_(sop_ids_to_load))
+            sop_rows_raw = await db.execute(sops_query)
+            sop_ids: list[uuid.UUID] = []
+            for s_id, s_name in sop_rows_raw.fetchall():
+                sop_ids.append(s_id)
+                sops_summary.append(SopSummary(id=s_id, name=s_name))
+
+            # Skills referenced by SOP steps (always from bound SOPs when bindings exist)
+            if sop_ids:
+                step_rows = await db.execute(
+                    select(SopStep.skill_id, Skill.name)
+                    .join(Skill, SopStep.skill_id == Skill.id)
+                    .where(
+                        SopStep.sop_id.in_(sop_ids),
+                        SopStep.step_type == SopStepType.skill_invocation,
+                        SopStep.skill_id.isnot(None),
+                    )
                 )
-            )
-            for skill_id, skill_name in step_rows.fetchall():
-                if skill_id not in skill_ids:
-                    skill_ids.add(skill_id)
-                    skills_summary.append(SkillSummary(id=skill_id, name=skill_name))
+                for s_id, s_name in step_rows.fetchall():
+                    if s_id not in skill_ids:
+                        skill_ids.add(s_id)
+                        skills_summary.append(SkillSummary(id=s_id, name=s_name))
 
+        if has_bindings:
+            from app.services.agents.permission_manager import AgentPermissionManager as _PM  # noqa: N811
+
+            _pm = _PM()
+            pm_sop_overrides = bound_sop_set if bound_sop_set else None
+            pm_skill_overrides = bound_skill_set if bound_skill_set else None
+
+            allowed_tools = await _pm.calculate_allowed_tools(
+                role_id, db,
+                override_sop_ids=pm_sop_overrides,
+                override_skill_ids=pm_skill_overrides,
+            )
+            allowed_agent_types_set = await _pm.calculate_allowed_agent_types(
+                role_id, db,
+                override_sop_ids=pm_sop_overrides,
+            )
+            allowed_agent_types = allowed_agent_types_set
+
+            delegation_sop_ids_for_meta = list(bound_sop_set) if bound_sop_set else []
+            if delegation_sop_ids_for_meta:
+                delegation_rows = await db.execute(
+                    select(
+                        AgentType.name,
+                        AgentType.description,
+                        AgentType.input_type,
+                        AgentType.input_schema,
+                    )
+                    .select_from(SopStep)
+                    .join(AgentType, AgentType.id == SopStep.target_agent_type_id)
+                    .where(
+                        SopStep.sop_id.in_(delegation_sop_ids_for_meta),
+                        SopStep.step_type == SopStepType.agent_delegation,
+                        SopStep.target_agent_type_id.isnot(None),
+                        AgentType.is_active.is_(True),
+                    )
+                )
+                for (
+                    at_name,
+                    at_description,
+                    at_input_type,
+                    at_input_schema,
+                ) in delegation_rows.fetchall():
+                    if at_name and at_name != agent_type.name:
+                        delegated_agent_type_metadata[at_name] = {
+                            "description": at_description,
+                            "input_type": (
+                                at_input_type.value
+                                if isinstance(at_input_type, AgentInputType)
+                                else str(at_input_type)
+                            ),
+                            "input_schema": at_input_schema,
+                        }
+
+            for tool_name in allowed_tools:
+                try:
+                    server, bare = parse_tool_name(tool_name)
+                    if server in ("system", "agent"):
+                        continue
+                except ValueError:
+                    pass
+                resolved_tool_names_raw.add(tool_name)
+        else:
             delegation_rows = await db.execute(
                 select(
                     AgentType.name,
@@ -386,8 +490,6 @@ async def get_agent_context(
                 agent_input_type,
                 agent_input_schema,
             ) in delegation_rows.fetchall():
-                # Skip self-delegation — avoid an agent appearing in its own
-                # allowed delegation targets (avoids false cycle detection).
                 if agent_type_name and agent_type_name != agent_type.name:
                     allowed_agent_types.add(agent_type_name)
                     delegated_agent_type_metadata[agent_type_name] = {
@@ -400,19 +502,18 @@ async def get_agent_context(
                         "input_schema": agent_input_schema,
                     }
 
-        # Tool identifiers from skill → tool bindings
-        if skill_ids:
-            tool_rows = await db.execute(
-                select(McpTool.name)
-                .join(SkillToolBinding, SkillToolBinding.tool_id == McpTool.id)
-                .where(
-                    SkillToolBinding.skill_id.in_(skill_ids),
-                    McpTool.is_active.is_(True),
+            if skill_ids:
+                tool_rows = await db.execute(
+                    select(McpTool.name)
+                    .join(SkillToolBinding, SkillToolBinding.tool_id == McpTool.id)
+                    .where(
+                        SkillToolBinding.skill_id.in_(skill_ids),
+                        McpTool.is_active.is_(True),
+                    )
                 )
-            )
-            for (tool_name,) in tool_rows.fetchall():
-                resolved_tool_names_raw.add(tool_name)
-                allowed_tools.add(_canonicalize_tool_identifier(tool_name))
+                for (tool_name,) in tool_rows.fetchall():
+                    resolved_tool_names_raw.add(tool_name)
+                    allowed_tools.add(_canonicalize_tool_identifier(tool_name))
 
     # ── Tool definitions (OpenAI format) ─────────────────────────────────────
     tool_definitions: list[dict[str, Any]] = []
@@ -547,6 +648,8 @@ async def get_agent_context(
         tool_name_map=tool_name_map,
         role_mcp_sessions=role_mcp_sessions,
         allowed_agent_types=sorted(allowed_agent_types),
+        bound_sop_ids=bound_sop_ids_list,
+        bound_skill_ids=bound_skill_ids_list,
         sops=sops_summary,
         skills=skills_summary,
     )

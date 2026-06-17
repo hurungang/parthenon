@@ -70,6 +70,12 @@ Agents can pause execution and request human input during the observe-reason-act
 
 When an agent calls `human_intervene`, the session transitions from `running` to `waiting_for_human` state. No further LLM or tool calls are made while waiting. An operator views and responds to the request through the Web UI, and the session automatically resumes with the response value injected as the tool's return value. If the session is terminated while waiting, all pending intervene requests are automatically cancelled.
 
+### Intervention in Conversational Delegation
+
+When a **delegated sub-agent** calls `human_intervene` during a conversational session, the intervention request is routed to the parent conversation's UI — not just to the operator dashboard. An intervention dialog (approval, choice, or text) appears inline in the chat at the point of delegation. The parent conversation pauses with a "Waiting for your input" indicator. The user responds in-place, and the response is injected into the sub-agent's execution. The conversation resumes automatically, and the response is recorded as a conversation turn. If multiple delegated sub-agents request intervention in parallel, requests are queued and presented sequentially — one intervention at a time — in the conversation UI.
+
+The runtime control dashboard now surfaces intervention requests from both non-conversational standalone agents and delegated agents in conversational sessions, giving operators a single view of all pending human interventions regardless of execution context.
+
 The `human_intervene` tool follows the same explicit-trigger pattern as `system____save_result` — it is available to all agents by default and must be referenced in SOP or agent instructions to be used.
 
 ## Runtime Control and Termination Governance
@@ -112,6 +118,9 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - **The default enforcement mode for newly configured guardrails is terminate unless an authorized operator explicitly selects a different posture**
 - **When guardrail limits are reached in observe-only mode, a clear alert is visible in user-facing execution logs for the affected run**
 - **Agent execution is blocked when the requested model is disabled or when the model is under a disabled vendor, and the block is surfaced in execution logs**
+- Delegated sub-agent intervention requests in conversational sessions are routed to the parent conversation and surfaced as inline intervention dialogs in the conversation UI
+- Parallel intervention requests from multiple delegated sub-agents are queued and presented sequentially in the conversation — one at a time
+- The runtime control dashboard surfaces intervention requests from conversational delegated agents alongside those from standalone non-conversational agents
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

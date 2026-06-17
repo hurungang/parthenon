@@ -12,6 +12,7 @@ const baseRequest = {
   agent_type_id: 'agent-1',
   reason: 'Test reason',
   status: 'pending' as const,
+  delegation_depth: 0,
   created_at: '2026-06-01T00:00:00Z',
 }
 

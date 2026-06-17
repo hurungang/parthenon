@@ -2,7 +2,11 @@
 param(
     [Parameter(Mandatory=$true)]
     [ValidateSet('control-center', 'agent-runtime', 'communication-hub')]
-    [string]$Service
+    [string]$Service,
+
+    [Parameter()]
+    [ValidateSet('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')]
+    [string]$LogLevel = 'INFO'
 )
 
 # Load .env file
@@ -35,6 +39,10 @@ if (Test-Path $envFile) {
 # Prevent Python bytecode caching to ensure fresh code loads
 $env:PYTHONDONTWRITEBYTECODE = "1"
 
+# Apply log level
+Write-Host "? Log level: $LogLevel" -ForegroundColor Cyan
+$env:TELEMETRY__LOG_LEVELS = "{""root"": ""$LogLevel""}"
+
 # Service-specific environment
 switch ($Service) {
     'control-center' {
@@ -49,7 +57,7 @@ switch ($Service) {
         Write-Host "Logs: backend\logs\control-center.log`n" -ForegroundColor Gray
         
         cd backend
-        & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+        & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --no-access-log
     }
     
     'agent-runtime' {
@@ -69,7 +77,7 @@ switch ($Service) {
         Write-Host "Logs: backend\logs\agent-runtime.log`n" -ForegroundColor Gray
         
         cd backend
-        & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn app.agent_runtime.main:app --reload --host 0.0.0.0 --port 8001
+        & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn app.agent_runtime.main:app --reload --host 0.0.0.0 --port 8001 --no-access-log
     }
     
     'communication-hub' {
@@ -86,6 +94,6 @@ switch ($Service) {
         Write-Host "Logs: backend\logs\communication-hub.log`n" -ForegroundColor Gray
         
         cd backend
-        & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn app.communication_hub.main:app --reload --host 0.0.0.0 --port 8002
+        & "$PSScriptRoot\.venv\Scripts\python.exe" -m uvicorn app.communication_hub.main:app --reload --host 0.0.0.0 --port 8002 --no-access-log
     }
 }

@@ -141,6 +141,7 @@ async def startup_event() -> None:
     _init_data_client()
     await _start_certificate_renewal()
     await _verify_redis_connectivity()
+    await _init_intervention_router()
 
 
 async def _load_certificate() -> None:
@@ -203,3 +204,22 @@ async def _verify_redis_connectivity() -> None:
             redis_url,
             exc,
         )
+
+
+async def _init_intervention_router() -> None:
+    """Initialize the Intervention Router for conversation-scoped intervention routing.
+
+    Wires the InterventionRouter into the ActiveSessionTracker so intervention
+    messages can be delivered directly to connected WebSocket clients.
+    """
+    try:
+        from app.api.ws.chat import ActiveSessionTracker
+        from app.communication_hub.intervention_router import InterventionRouter
+
+        data_client = getattr(app.state, "data_client", None)
+        router = InterventionRouter(data_client=data_client)
+        router.set_send_to_session(ActiveSessionTracker.send_to_session)
+        app.state.intervention_router = router
+        logger.info("Intervention Router initialized and wired to ActiveSessionTracker")
+    except Exception as exc:
+        logger.warning("Intervention Router initialization failed: %s", exc)

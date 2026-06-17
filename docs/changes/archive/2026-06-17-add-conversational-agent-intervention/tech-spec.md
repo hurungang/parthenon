@@ -242,10 +242,12 @@ This change bridges the gap between delegated agent intervention requests and th
 | `InterveneRequestStore.create_request` | Method | Extended with `conversation_session_id` and `delegation_depth` params | `backend/app/services/agents/intervene_service.py` |
 | `InterveneRequestStore.list_pending_for_conversation` | Method | New query method for conversation-scoped pending interventions | `backend/app/services/agents/intervene_service.py` |
 | `InterveneRequestStore.submit_response` | Method | Extended to auto-create `intervene_response` conversation turn when conversation-scoped | `backend/app/services/agents/intervene_service.py` |
+| `delegation_resumed` status event | Event (runtime_executor) | Emitted after `wait_for_a2a_response()` returns (sub-agent completed, HITL resolved); carries `agent_type`. Triggers frontend to restart delegation log polling. | `backend/app/services/agents/runtime_executor.py` (delegation path in `execute_conversation_turn_from_context`) |
 | `POST /conversations/{id}/interventions/{req_id}/respond` | API Endpoint | Respond to intervention within conversation session | `backend/app/api/v1/conversations.py` |
 | `GET /conversations/{id}/interventions/pending` | API Endpoint | List pending interventions for conversation session | `backend/app/api/v1/conversations.py` |
-| `InterventionRouter` | Class | Routes conversation-scoped intervention signals to WebSocket clients | New file in Communication Hub |
-| `InterventionQueue` | Class | Per-session FIFO queue for intervention requests | New file in Communication Hub |
+| `InterventionRouter` | Class | Routes conversation-scoped intervention signals to WebSocket clients | `backend/app/communication_hub/intervention_router.py` |
+| `InterventionQueue` | Class | Per-session FIFO queue for intervention requests | `backend/app/communication_hub/intervention_queue.py` |
+| `dispatch.py` (updated) | API Module | Message dispatch endpoint routes `intervene_request` signals through InterventionRouter when `conversation_session_id` is present | `backend/app/communication_hub/api/dispatch.py` |
 | `TurnType` | TypeScript Type | Union type: `'message' \| 'intervene_request' \| 'intervene_response'` | `frontend/src/types/index.ts` |
 | `ConversationTurn` (updated) | TypeScript Interface | Extended with `turn_type` and `intervene_request_id` | `frontend/src/types/index.ts` |
 | `InterveneRequest` (updated) | TypeScript Interface | Extended with `conversation_session_id` and `delegation_depth` | `frontend/src/types/index.ts` |
@@ -253,6 +255,8 @@ This change bridges the gap between delegated agent intervention requests and th
 | `InterveneResponseMessage` | TypeScript Interface | WebSocket `intervene_response` message payload | `frontend/src/types/index.ts` |
 | `InterveneCancelMessage` | TypeScript Interface | WebSocket `intervene_cancel` message payload | `frontend/src/types/index.ts` |
 | `InterveneStatusMessage` | TypeScript Interface | WebSocket `intervene_status` message payload | `frontend/src/types/index.ts` |
+| `ChatBlockedMessage` | TypeScript Interface | WebSocket `chat_blocked` message payload (sent when client sends chat while intervention is pending) | `frontend/src/types/index.ts` |
+| `InterventionWsMessage` | TypeScript Union Type | Union of `InterveneRequestMessage \| InterveneStatusMessage \| ChatBlockedMessage` | `frontend/src/types/index.ts` |
 | `useChatSession` (extended) | Hook | Extended to handle intervention messages, expose intervention state | `frontend/src/hooks/useChatSession.ts` |
 | `useConversationIntervention` | Hook | New hook for intervention lifecycle management | `frontend/src/hooks/useConversationIntervention.ts` |
 | `InlineInterventionDialog` | Component | Inline intervention dialog for approval/choice/text types | `frontend/src/components/conversations/InlineInterventionDialog.tsx` |

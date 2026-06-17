@@ -13,6 +13,7 @@ export interface InterveneRequestFilters {
   status?: string
   intervention_type?: string
   agent_session_id?: string
+  conversation_session_id?: string
   limit?: number
   offset?: number
 }

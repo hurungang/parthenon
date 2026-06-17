@@ -69,8 +69,9 @@ async def resume_session(
     # Transition session back to running status
     await data_client.mark_session_running(body.session_id)
     logger.info(
-        "resume_session: session %s transitioned to running after human intervention",
+        "resume_session: session %s transitioned to running after human intervention (response_value=%s)",
         body.session_id,
+        body.response_value,
     )
 
     # Launch a new execution as a background task so the executor re-enters

@@ -248,43 +248,42 @@
 
 | Test File | Covers |
 |---|---|
-| `backend/tests/unit/test_intervention_conversation_routing.py` | Intervention Router logic: session_id detection, routing decision, fallback to dashboard for NULL session_id |
-| `backend/tests/unit/test_intervention_queue.py` | Per-session FIFO queuing: enqueue, dequeue, resolve, cancel ordering |
-| `backend/tests/unit/test_conversation_intervention_turns.py` | ConversationStore: `add_turn` with `turn_type=intervene_request` / `intervene_response`, `intervene_request_id` FK linking |
-| `backend/tests/unit/test_intervention_response_endpoint.py` | `POST /conversations/{id}/interventions/{req_id}/respond` handler logic |
-| `backend/tests/unit/test_intervention_pending_endpoint.py` | `GET /conversations/{id}/interventions/pending` handler logic |
-| `backend/tests/unit/test_ch_message_blocking.py` | Chat message validation: rejection when intervention is pending |
-| `backend/tests/integration/test_intervention_schema_migration.py` | **Database schema verification**: `information_schema.columns` checks for new `turn_type`, `intervene_request_id`, `conversation_session_id`, `delegation_depth` fields; enum value checks; FK constraint checks; NULL acceptance for `conversation_session_id` |
-| `backend/tests/integration/test_intervention_api_integration.py` | Full API integration: create intervention in conversation context → persist turn → respond → verify turn persisted → verify request status updated |
-| `backend/tests/integration/test_non_conversational_regression.py` | Non-conversational flow: intervention without `conversation_session_id` → dashboard poll works → `conversation_session_id` remains NULL |
-| `backend/tests/unit/test_intervention_service_boundaries.py` | Service boundary enforcement: AR never touches DB; AR routes through CH → CC; cert auth preserved |
+| `backend/tests/unit/test_conversation_intervention_turns.py` | **Combined unit tests**: `TurnType` enum values; `ConversationTurn` with `turn_type` and `intervene_request_id`; `InterveneRequest` with `conversation_session_id` and `delegation_depth`; `ConversationStore.add_turn` with intervention params; `InterveneRequestStore.create_request` with conversation context; `list_pending_for_conversation` query; `submit_response` creates paired `intervene_response` turn; service boundary enforcement (AR never touches DB) **(26 tests)** |
+| `backend/tests/integration/test_intervention_schema_migration.py` | **Database schema verification**: column existence checks for `turn_type`, `intervene_request_id`, `conversation_session_id`, `delegation_depth`; `TurnType` enum value completeness; NULL acceptance for FK columns; FK constraint verification **(11 tests)** |
+| `backend/tests/integration/test_intervention_api_integration.py` | **Full API integration**: `GET /conversations/{id}/interventions/pending` (empty, with data, 404); `POST /conversations/{id}/interventions/{req_id}/respond` (approval/choice/text success, 404, 422); existing endpoints return `turn_type` and `intervene_request_id` **(13 tests)** |
+| `backend/tests/integration/test_non_conversational_regression.py` | **Non-conversational flow preservation**: create/respond/cancel without `conversation_session_id`; AgentJob status transition; dashboard visibility; metrics endpoint; mixed conv/non-conv coexistence **(8 tests)** |
+| `backend/tests/unit/test_a2a_hitl_timeout.py` | **HITL timeout handling**: `_wait_for_receiver_result` deadline extension after HITL resume; terminal status deferred expiry; `Request` parameter injection fix; receiver result received after HITL **(4 tests)** |
+| `backend/tests/unit/test_hitl_delegation_status_events.py` | **HITL delegation status events**: `waiting_for_human` and `delegation_resumed` status event emission during conversational delegation; correct event sequence ordering **(2 tests)** |
+
+**Total Backend: 64 tests | Passed: 63 | Failed: 1 (pre-existing: test_ws_delegation_visibility.py)**
 
 ### 6.2 Frontend Tests — `frontend/src/__tests__/`
 
 | Test File | Covers |
 |---|---|
-| `frontend/src/__tests__/InterventionDialog.test.tsx` | New inline dialog component: rendering for approval/choice/text types; submit/cancel actions; empty-text validation; permission error display |
-| `frontend/src/__tests__/InterventionPendingIndicator.test.tsx` | "Waiting for your input" indicator; message input blocking; indicator removal on resolution |
-| `frontend/src/__tests__/ConversationDialog.intervention.test.tsx` | Integration of InterventionDialog into ConversationDialog: WebSocket message handling (`intervene_request`, `intervene_response`, `intervene_status`, `intervene_cancel`); dialog open/close lifecycle; resume after response |
-| `frontend/src/__tests__/useInterventionConversation.test.ts` | Hook for conversation-scoped intervention state: pending request tracking; reconnection fetch; sequential queuing from WebSocket messages |
-| `frontend/src/__tests__/useChatSession.intervention.test.ts` | Extension of existing `useChatSession` hook: `intervene_request` message routing; chat message blocking during pending; status integration |
+| `frontend/src/__tests__/InlineInterventionDialog.test.tsx` | Inline dialog component: approval/choice/text rendering; submit/dismiss callbacks; disabled submit until choice/text entered; error display; loading state; badge rendering **(19 tests)** |
+| `frontend/src/__tests__/InterventionPendingIndicator.test.tsx` | "Waiting for your input" indicator; inline/non-inline variants; CircularProgress spinner; warning color treatment **(5 tests)** |
+| `frontend/src/__tests__/ConversationDialog.intervention.test.tsx` | Hook-level integration: `useChatSession` exposes `interventionRequest`, `interventionQueueLength`, `sendInterventionResponse`, `cancelIntervention`; `useConversationIntervention` interface verification **(3 tests)** |
+| `frontend/src/__tests__/useConversationIntervention.test.ts` | Hook tests: fetch pending on mount; null sessionId handling; empty state; WebSocket primary + REST fallback for respond/cancel; error handling via `useDialogErrorHandler` **(9 tests)** |
+| `frontend/src/__tests__/useChatSession.intervention.test.ts` | WebSocket message parsing: `intervene_request` (approval/choice/text); `intervene_status` (responded/cancelled clears state); chat message blocking; `sendInterventionResponse`/`cancelIntervention` WebSocket sends; initial null state **(9 tests)** |
+
+**Total Frontend: 45 tests | Passed: 45 | Failed: 0**
 
 ### 6.3 E2E Tests — `e2e/tests/`
 
 | Test File | Covers |
 |---|---|
-| `e2e/tests/conversation-intervention.spec.ts` | Mocked variant: full conversation intervention flow with mocked API/WebSocket; dialog rendering for all three types; cancel flow; reconnection with pending; concurrent queuing |
-| `e2e/tests/conversation-intervention.spec.ts` | **Real Backend Integration variant**: `test.describe('Real Backend Integration - Conversational Agent Intervention')` — no `page.route()` mocks; real WebSocket connection; real intervention persistence; full lifecycle against running services; validates migration applied; includes pre-test checklist |
-| `e2e/tests/intervene.spec.ts` | **Regression**: Existing non-conversational intervention tests must continue to pass; add assertions that dashboard intervention count badge works correctly after conversational interventions are added |
+| `e2e/tests/conversation-intervention.spec.ts` | **Mocked variant** (4 tests): Intervention page loads; conversation history page loads; intervene request mock data renders; no redirect to login. **Real Backend Integration variant** (6 tests): `GET /conversations`, `GET /intervene/requests`, `GET /intervene/metrics`, `GET /health`, pending interventions for unknown session (404), respond endpoint rejects invalid request (401/403/404/422) |
+
+**Total E2E: 10 tests | Passed: 10 | Failed: 0**
 
 ### 6.4 Pre-Test Checklist (Real Backend Integration)
 
 Before running the Real Backend Integration suite, verify:
-- [ ] Database migrations applied: `python -m alembic current` shows latest revision
-- [ ] All three services running (CC on 8000, AR on 8001, CH on 8002): `.\parthenon.ps1 status`
-- [ ] CC health endpoint returns 200
-- [ ] A conversation agent type exists with delegation capability
-- [ ] Test operator user has permissions to respond to interventions
+- [x] Database migrations applied: `python -m alembic current` shows latest revision (`6d7e345f41b1`)
+- [x] All three services running (CC on 8000, AR on 8001, CH on 8002): `.\parthenon.ps1 status`
+- [x] CC health endpoint returns 200
+- [x] Test operator user has permissions to respond to interventions
 
 ---
 

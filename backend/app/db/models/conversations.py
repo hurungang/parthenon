@@ -36,6 +36,14 @@ class TurnRole(str, enum.Enum):
     system = "system"
 
 
+class TurnType(str, enum.Enum):
+    """Type of conversation turn — distinguishes regular messages from intervention events."""
+
+    message = "message"
+    intervene_request = "intervene_request"
+    intervene_response = "intervene_response"
+
+
 class ConversationSession(Base):
     """A bounded interaction context between an initiator and an agent."""
 
@@ -86,6 +94,9 @@ class ConversationSession(Base):
         cascade="all, delete-orphan",
         order_by="ConversationTurn.created_at",
     )
+    intervene_requests: Mapped[list["InterveneRequest"]] = relationship(
+        "InterveneRequest", back_populates="conversation_session"
+    )
 
     def __repr__(self) -> str:
         return f"<ConversationSession id={self.id} status={self.status}>"
@@ -107,7 +118,17 @@ class ConversationTurn(Base):
     role: Mapped[TurnRole] = mapped_column(
         Enum(TurnRole, name="turn_role_enum"), nullable=False
     )
+    turn_type: Mapped[TurnType] = mapped_column(
+        Enum(TurnType, name="turn_type_enum"),
+        nullable=False,
+        default=TurnType.message,
+    )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    intervene_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("intervene_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -116,6 +137,9 @@ class ConversationTurn(Base):
     # Relationships
     session: Mapped["ConversationSession"] = relationship(
         "ConversationSession", back_populates="turns"
+    )
+    intervene_request: Mapped["InterveneRequest | None"] = relationship(
+        "InterveneRequest", back_populates="conversation_turns"
     )
     tool_calls: Mapped[list["ToolCallRecord"]] = relationship(
         "ToolCallRecord", back_populates="turn", cascade="all, delete-orphan"
@@ -154,3 +178,7 @@ class ToolCallRecord(Base):
 
     def __repr__(self) -> str:
         return f"<ToolCallRecord id={self.id} tool_name={self.tool_name}>"
+
+
+# Resolve forward references
+from app.db.models.intervene import InterveneRequest  # noqa: E402, F401
