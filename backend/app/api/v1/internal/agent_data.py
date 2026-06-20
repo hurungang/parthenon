@@ -100,6 +100,9 @@ class AgentContextResponse(BaseModel):
     sops: list[SopSummary]
     skills: list[SkillSummary]
 
+    # Guardrail policy snapshot (pre-computed from AgentType fields)
+    guardrail_policy: dict[str, Any]
+
 
 class ModelConfigResponse(BaseModel):
     """Model configuration with decrypted API credentials.
@@ -652,6 +655,18 @@ async def get_agent_context(
         bound_skill_ids=bound_skill_ids_list,
         sops=sops_summary,
         skills=skills_summary,
+        guardrail_policy={
+            "policy_snapshot_id": str(agent_type.id),
+            "max_iterations": agent_type.guardrail_max_iterations,
+            "max_delegation_depth": agent_type.guardrail_max_delegation_depth,
+            "max_delegated_steps": agent_type.guardrail_max_delegated_steps,
+            "execution_timeout_seconds": agent_type.guardrail_execution_timeout_seconds,
+            "token_budget": agent_type.guardrail_token_budget,
+            "token_enforcement_mode": agent_type.guardrail_token_enforcement_mode.value,
+            "token_fallback_mode": agent_type.guardrail_token_fallback_mode.value,
+            "conversational_token_visibility_mode": agent_type.guardrail_conversational_token_visibility_mode.value,
+            "conversational_continuation_policy": agent_type.guardrail_conversational_continuation_policy.value,
+        },
     )
 
 

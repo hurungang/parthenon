@@ -107,7 +107,7 @@ function formatValuePair(
   return limitLabel ? `${currentLabel} / ${limitLabel}` : currentLabel
 }
 
-type GuardrailState = 'good' | 'near' | 'over'
+type GuardrailState = 'good' | 'near' | 'reached' | 'over'
 
 function resolveGuardrailState(current: number | null, limit: number | null): GuardrailState {
   if (current == null || limit == null || limit <= 0) {
@@ -115,8 +115,11 @@ function resolveGuardrailState(current: number | null, limit: number | null): Gu
   }
 
   const ratio = current / limit
-  if (ratio >= 1) {
+  if (ratio > 1) {
     return 'over'
+  }
+  if (ratio === 1) {
+    return 'reached'
   }
   if (ratio >= 0.8) {
     return 'near'
@@ -128,7 +131,7 @@ function progressColor(state: GuardrailState): 'success' | 'warning' | 'error' {
   if (state === 'over') {
     return 'error'
   }
-  if (state === 'near') {
+  if (state === 'reached' || state === 'near') {
     return 'warning'
   }
   return 'success'
@@ -137,6 +140,9 @@ function progressColor(state: GuardrailState): 'success' | 'warning' | 'error' {
 function stateLabel(t: (key: string) => string, state: GuardrailState): string {
   if (state === 'over') {
     return t('agents.sessions.logViewer.summary.metric.stateOver')
+  }
+  if (state === 'reached') {
+    return t('agents.sessions.logViewer.summary.metric.stateReached')
   }
   if (state === 'near') {
     return t('agents.sessions.logViewer.summary.metric.stateNear')
@@ -148,7 +154,7 @@ function stateChipColor(state: GuardrailState): 'success' | 'warning' | 'error' 
   if (state === 'over') {
     return 'error'
   }
-  if (state === 'near') {
+  if (state === 'reached' || state === 'near') {
     return 'warning'
   }
   return 'success'
@@ -196,16 +202,17 @@ export function LogSummaryPanel({ summary }: Props) {
 
   const guardrailStates = guardrailMetrics.map((metric) => resolveGuardrailState(metric.current, metric.limit))
   const hasGuardrailOver = guardrailStates.includes('over')
+  const hasGuardrailReached = guardrailStates.includes('reached')
   const hasGuardrailNear = guardrailStates.includes('near')
   const guardrailRunStateLabel = hasGuardrailOver
     ? t('agents.sessions.logViewer.summary.runStateLimitExceeded')
-    : hasGuardrailNear
+    : (hasGuardrailReached || hasGuardrailNear)
       ? t('agents.sessions.logViewer.summary.runStateApproachingLimits')
       : t('agents.sessions.logViewer.summary.runStateWithinLimits')
 
   const guardrailRunStateColor: 'success' | 'warning' | 'error' = hasGuardrailOver
     ? 'error'
-    : hasGuardrailNear
+    : (hasGuardrailReached || hasGuardrailNear)
       ? 'warning'
       : 'success'
 

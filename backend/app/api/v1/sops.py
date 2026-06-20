@@ -12,6 +12,7 @@ from app.db.session import DbSession
 from app.db.models.skills import Skill, Sop, SopStep
 from app.db.models.agents import AgentRoleSOP, AgentType
 from app.schemas.skills import SopCreate, SopDetailRead, SopRead, SopStepCreate, SopStepRead, SopUpdate
+from app.services.agents.permission_manager import get_shared_permission_manager
 from app.schemas.skills import (
     SopWorkflowGenerateRequest,
     SopWorkflowGenerateResponse,
@@ -268,6 +269,15 @@ async def replace_sop_steps(
     for step in new_steps:
         await db.refresh(step)
 
+    # Invalidate permission cache for all roles bound to this SOP
+    # (SOP step changes may affect allowed agent types)
+    role_rows = await db.execute(
+        select(AgentRoleSOP.role_id).where(AgentRoleSOP.sop_id == sop_id)
+    )
+    pm = get_shared_permission_manager()
+    for role_id in role_rows.scalars().all():
+        pm.invalidate(role_id)
+
     return new_steps
 
 
@@ -305,4 +315,10 @@ async def set_sop_roles(
         db.add(AgentRoleSOP(role_id=role_id, sop_id=sop_id))
 
     await db.flush()
+
+    # Invalidate permission cache for all affected roles
+    pm = get_shared_permission_manager()
+    for role_id in role_ids:
+        pm.invalidate(role_id)
+
     return role_ids

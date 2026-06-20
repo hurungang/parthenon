@@ -64,8 +64,8 @@ flowchart LR
 
 ## Key Responsibilities
 
-- **Communication Hub** — Message broker, agent execution routing, conversation session management, **conversation intervention routing** (detects intervention requests from delegated sub-agents and routes to parent conversation WebSocket clients), and A2A messaging.
-- **Agent Runtime** — Deep agent execution engine (observe-reason-act loop), tool call orchestration, delegation, and HITL suspend/resume.
+- **Communication Hub** — Message broker, agent execution routing, conversation session management, **conversation intervention routing** (detects intervention requests from delegated sub-agents and routes to parent conversation WebSocket clients), **task delegation event routing** (routes non-conversational delegation status events and intervention requests to execution log viewers), and A2A messaging.
+- **Agent Runtime** — Deep agent execution engine (observe-reason-act loop), tool call orchestration, delegation, **delegation depth enforcement** (1-level limit for non-conversational agents), HITL suspend/resume, and delegation status event emission for non-conversational executions.
 - **Control Center** — Policy resolution, governed context assembly, generation model resolution, SOP resolution, **conversation intervention persistence** (new `intervene_request` and `intervene_response` turn types with delegation chain metadata), governance audit, termination orchestration.
 - **Governed Context** — Accumulated context package assembled per agent execution (policies, permissions, previous session context).
 - **Governance Audit** — Records all intervention request and response turns in the conversation audit trail with full delegation chain traceability.

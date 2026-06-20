@@ -61,3 +61,41 @@ export async function getInterveneMetrics(): Promise<InterveneMetrics> {
   const response = await apiClient.get<InterveneMetrics>('/intervene/metrics')
   return response.data
 }
+
+/**
+ * Terminate an agent session via the Runtime Control termination endpoint.
+ * Triggers a cascade shutdown of the session and any sub-agents.
+ */
+export async function terminateSession(
+  sessionId: string,
+  reason?: string,
+): Promise<void> {
+  await apiClient.post('/agents/runtime/terminate', {
+    target_session_id: sessionId,
+    termination_scope: 'cascade_subtree',
+    operator_reason: reason ?? 'Operator terminated via intervention dialog',
+  })
+}
+
+/**
+ * Fetch the currently pending intervention request for a given agent session (parent agent job).
+ * This queries the dedicated endpoint for non-conversational delegation context.
+ * Falls back to the generic filter-based approach if the new endpoint is not available (404).
+ */
+export async function getPendingInterventionForSession(sessionId: string): Promise<InterveneRequest | null> {
+  try {
+    const response = await apiClient.get<InterveneRequest>(`/agent-jobs/${sessionId}/interventions/pending`)
+    return response.data
+  } catch {
+    // Fall back to the existing filter-based approach
+    try {
+      const requests = await getInterveneRequests({
+        agent_session_id: sessionId,
+        status: 'pending',
+      })
+      return requests.length > 0 ? requests[0] : null
+    } catch {
+      return null
+    }
+  }
+}

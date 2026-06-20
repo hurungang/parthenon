@@ -353,3 +353,17 @@ class AgentPermissionManager:
                 server, tool = tool_identifier.split("/", 1)
                 return build_tool_name(server, tool)
             return tool_identifier
+
+
+# ── Shared singleton for Control Center process ─────────────────────────────
+# All CC-internal API modules (agents.py, session_data.py, permission_resolution.py)
+# share this one instance so cache invalidation (via AgentRoleService) works
+# correctly for all code paths.
+_shared_permission_manager: AgentPermissionManager | None = None
+
+
+def get_shared_permission_manager() -> AgentPermissionManager:
+    global _shared_permission_manager
+    if _shared_permission_manager is None:
+        _shared_permission_manager = AgentPermissionManager()
+    return _shared_permission_manager

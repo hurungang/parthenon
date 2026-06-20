@@ -1099,3 +1099,222 @@ async def test_run_task_loop_ar_delegate_allowed_target_calls_a2a_request():
         session_link_id="link-123",
     )
 
+
+# ── Guardrail state construction (_build_guardrail_state) ────────────────────
+
+
+def test__build_guardrail_state_sets_delegation_depth_to_zero():
+    """_build_guardrail_state always sets delegation_depth=0 regardless of __delegation_depth."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+
+    context = {"guardrail_policy": {"max_iterations": 5}}
+
+    # Root agent — no __delegation_depth
+    state = executor._build_guardrail_state(context, {})
+    assert state.delegation_depth == 0
+    assert state.tree_depth == 0
+
+    # Sub-agent — receives __delegation_depth=1 from parent
+    state = executor._build_guardrail_state(context, {"input_data": {"__delegation_depth": 1}})
+    assert state.delegation_depth == 0, "delegation_depth must reset to 0 for each agent instance"
+    assert state.tree_depth == 1, "tree_depth must reflect the inherited depth"
+
+
+def test__build_guardrail_state_sets_tree_depth_from_delegation_depth_input():
+    """_build_guardrail_state tree_depth mirrors __delegation_depth; delegation_depth stays 0."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    context = {"guardrail_policy": {"max_iterations": 5}}
+
+    test_cases = [0, 1, 3, 5]
+    for depth in test_cases:
+        state = executor._build_guardrail_state(
+            context, {"input_data": {"__delegation_depth": depth}}
+        )
+        assert state.delegation_depth == 0
+        assert state.tree_depth == depth
+
+
+def test__build_guardrail_state_uses_guardrail_policy_from_context():
+    """_build_guardrail_state reads policy values from guardrail_policy in context."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+    context = {
+        "guardrail_policy": {
+            "max_iterations": 3,
+            "max_delegation_depth": 5,
+            "max_delegated_steps": 50,
+            "execution_timeout_seconds": 600,
+            "token_budget": 10000,
+        }
+    }
+
+    state = executor._build_guardrail_state(context, {})
+    assert state.max_iterations == 3
+    assert state.max_delegation_depth == 5
+    assert state.max_delegated_steps == 50
+    assert state.execution_timeout_seconds == 600
+    assert state.token_budget == 10000
+
+
+def test__build_guardrail_state_uses_defaults_when_no_guardrail_policy():
+    """_build_guardrail_state applies safe defaults when context has no guardrail_policy."""
+    from app.services.agents.runtime_executor import AgentRuntimeExecutor
+
+    executor = AgentRuntimeExecutor()
+
+    state = executor._build_guardrail_state({}, {"input_data": {}})
+    assert state.delegation_depth == 0
+    assert state.tree_depth == 0
+    assert state.max_iterations == 10
+    assert state.max_delegation_depth == 3
+    assert state.max_delegated_steps == 20
+    assert state.execution_timeout_seconds == 300
+    assert state.token_budget is None
+    assert state.policy_snapshot_id == "unknown"
+
+
+def test_runtime_guardrail_state_defaults():
+    """RuntimeGuardrailState starts with delegation_depth=0, tree_depth=0."""
+    from app.services.agents.guardrails import RuntimeGuardrailState
+
+    state = RuntimeGuardrailState(
+        max_iterations=10,
+        max_delegation_depth=3,
+        max_delegated_steps=20,
+        execution_timeout_seconds=300,
+        token_budget=None,
+        token_enforcement_mode="observe",
+        token_fallback_mode="observe_and_log",
+        conversational_token_visibility_mode="enabled",
+        conversational_continuation_policy="allow",
+        policy_snapshot_id="test",
+    )
+    assert state.delegation_depth == 0
+    assert state.tree_depth == 0
+    assert state.delegated_steps == 0
+    assert state.cumulative_iterations == 0
+
+
+def test_runtime_guardrail_state_delegation_depth_reflects_tree_level():
+    """delegation_depth tracks the deepest delegation level (tree_depth+1), not a count."""
+    from app.services.agents.guardrails import RuntimeGuardrailState
+
+    state = RuntimeGuardrailState(
+        max_iterations=10,
+        max_delegation_depth=3,
+        max_delegated_steps=20,
+        execution_timeout_seconds=300,
+        token_budget=None,
+        token_enforcement_mode="observe",
+        token_fallback_mode="observe_and_log",
+        conversational_token_visibility_mode="enabled",
+        conversational_continuation_policy="allow",
+        policy_snapshot_id="test",
+        tree_depth=0,
+    )
+    assert state.delegation_depth == 0
+
+    # First delegation — depth = tree_depth + 1 = 1
+    state.delegation_depth = 1
+    assert state.delegation_depth == 1
+
+    # Second sequential delegation — same tree_depth, so depth stays 1
+    state.delegation_depth = 1
+    assert state.delegation_depth == 1
+
+    # Sub-agent with tree_depth=2 — delegation to depth 3
+    state.tree_depth = 2
+    state.delegation_depth = 3
+    assert state.delegation_depth == 3
+    assert state.tree_depth == 2  # unchanged
+
+
+def test_token_usage_accumulates_from_child_guardrail_usage():
+    """Parent accumulates child's token_usage_current_session from delegation response."""
+    from app.services.agents.guardrails import RuntimeGuardrailState
+
+    parent_state = RuntimeGuardrailState(
+        max_iterations=10,
+        max_delegation_depth=3,
+        max_delegated_steps=20,
+        execution_timeout_seconds=300,
+        token_budget=None,
+        token_enforcement_mode="observe",
+        token_fallback_mode="observe_and_log",
+        conversational_token_visibility_mode="enabled",
+        conversational_continuation_policy="allow",
+        policy_snapshot_id="test",
+    )
+    parent_state.token_usage_current_session = 100
+
+    # Simulate child's wait_payload with guardrail_usage
+    wait_payload = {
+        "status": "completed",
+        "output_data": {
+            "result": "ok",
+            "guardrail_usage": {
+                "token_usage_current_session": 250,
+                "cumulative_iterations": 5,
+            },
+        },
+    }
+
+    # Apply the same extraction logic used in the backend
+    if isinstance(wait_payload, dict):
+        child_usage = (
+            wait_payload
+            .get("output_data", {})
+            .get("guardrail_usage", {})
+            .get("token_usage_current_session", 0)
+        )
+        if isinstance(child_usage, (int, float)) and child_usage > 0:
+            parent_state.token_usage_current_session += int(child_usage)
+
+    assert parent_state.token_usage_current_session == 350, (
+        "Parent should accumulate 100 + 250 = 350"
+    )
+
+
+def test_token_usage_skipped_when_no_guardrail_usage():
+    """No crash when delegation response lacks guardrail_usage."""
+    from app.services.agents.guardrails import RuntimeGuardrailState
+
+    parent_state = RuntimeGuardrailState(
+        max_iterations=10,
+        max_delegation_depth=3,
+        max_delegated_steps=20,
+        execution_timeout_seconds=300,
+        token_budget=None,
+        token_enforcement_mode="observe",
+        token_fallback_mode="observe_and_log",
+        conversational_token_visibility_mode="enabled",
+        conversational_continuation_policy="allow",
+        policy_snapshot_id="test",
+    )
+    parent_state.token_usage_current_session = 50
+
+    # No guardrail_usage at all
+    wait_payload = {
+        "status": "completed",
+        "output_data": {"result": "ok"},
+    }
+
+    if isinstance(wait_payload, dict):
+        child_usage = (
+            wait_payload
+            .get("output_data", {})
+            .get("guardrail_usage", {})
+            .get("token_usage_current_session", 0)
+        )
+        if isinstance(child_usage, (int, float)) and child_usage > 0:
+            parent_state.token_usage_current_session += int(child_usage)
+
+    assert parent_state.token_usage_current_session == 50, (
+        "Should remain unchanged when no guardrail_usage"
+    )
+

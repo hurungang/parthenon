@@ -142,6 +142,7 @@ async def startup_event() -> None:
     await _start_certificate_renewal()
     await _verify_redis_connectivity()
     await _init_intervention_router()
+    _init_task_delegation_router()
 
 
 async def _load_certificate() -> None:
@@ -223,3 +224,23 @@ async def _init_intervention_router() -> None:
         logger.info("Intervention Router initialized and wired to ActiveSessionTracker")
     except Exception as exc:
         logger.warning("Intervention Router initialization failed: %s", exc)
+
+
+def _init_task_delegation_router() -> None:
+    """Initialize the Task Delegation Event Router for non-conversational
+    delegation event and intervention routing.
+
+    Stores the router on ``app.state.task_delegation_router`` for access
+    from dispatch and tool routing endpoints.
+    """
+    try:
+        from app.communication_hub.services.task_delegation_router import (
+            TaskDelegationEventRouter,
+        )
+
+        data_client = getattr(app.state, "data_client", None)
+        router = TaskDelegationEventRouter(data_client=data_client)
+        app.state.task_delegation_router = router
+        logger.info("Task Delegation Event Router initialized")
+    except Exception as exc:
+        logger.warning("Task Delegation Event Router initialization failed: %s", exc)

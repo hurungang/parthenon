@@ -15,6 +15,8 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 - As a **security administrator**, I want agent identities and credentials to never be accessible to agent runtime code so that credential exposure risk is eliminated.
 - As an **SOP author**, I want agents to be able to pause and request human input during execution so that critical decisions can be reviewed before proceeding.
 - As an **operations lead**, I want to identify cycle, iteration, delegation, timeout, and token-policy outcomes quickly in session summaries so that I can triage incidents efficiently.
+- As a **platform operator**, I want to see delegation status events (`delegating`, `waiting`, `delegation_resumed`) in the non-conversational agent execution log, so that I can follow the progress of automated workflows that involve agent-to-agent delegation in real time.
+- As a **platform operator**, I want a paused execution log with an inline intervention popup when a delegated sub-agent requests human input, so that I can respond to approve, choose, or provide text without leaving the log view.
 - As an **operator**, I want to terminate an entire execution tree (parent and all delegated children) from a single action so that I can stop problematic runs immediately.
 
 ## Key Principles
@@ -31,6 +33,7 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 - Delegation chains are checked for direct and indirect recursion before and during execution
 - Execution boundaries are enforced as one bounded policy that includes direct and delegated activity
 - Delegation boundaries are enforced through per-Agent-Type depth and delegated-step limits
+- Non-conversational agent delegation is limited to 1 level — delegated sub-agents cannot further delegate; attempts are blocked and recorded in execution logs
 - Runtime boundaries are enforced through per-Agent-Type timeout policies
 - Conversational sessions keep current-session token consumption continuously visible to users
 - Conversational sessions are not hard-stopped solely by token-budget thresholds
@@ -73,6 +76,10 @@ When an agent calls `human_intervene`, the session transitions from `running` to
 ### Intervention in Conversational Delegation
 
 When a **delegated sub-agent** calls `human_intervene` during a conversational session, the intervention request is routed to the parent conversation's UI — not just to the operator dashboard. An intervention dialog (approval, choice, or text) appears inline in the chat at the point of delegation. The parent conversation pauses with a "Waiting for your input" indicator. The user responds in-place, and the response is injected into the sub-agent's execution. The conversation resumes automatically, and the response is recorded as a conversation turn. If multiple delegated sub-agents request intervention in parallel, requests are queued and presented sequentially — one intervention at a time — in the conversation UI.
+
+### Intervention in Non-Conversational Delegation
+
+When a **delegated sub-agent** calls `human_intervene` during a non-conversational (task) agent execution, the intervention request is surfaced as an inline popup in the parent agent's execution log view — not as a separate modal. The execution log pauses and displays the intervention type (approval, choice, or text) with context. The operator can respond directly from the log view. After responding, the log stream resumes automatically and the response is recorded as a timeline event. If the popup is dismissed or the operator navigates away, a persistent banner at the top of the execution log indicates the session is waiting for human input. On reconnect, pending interventions are re-surfaced automatically.
 
 The runtime control dashboard now surfaces intervention requests from both non-conversational standalone agents and delegated agents in conversational sessions, giving operators a single view of all pending human interventions regardless of execution context.
 
@@ -121,6 +128,14 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - Delegated sub-agent intervention requests in conversational sessions are routed to the parent conversation and surfaced as inline intervention dialogs in the conversation UI
 - Parallel intervention requests from multiple delegated sub-agents are queued and presented sequentially in the conversation — one at a time
 - The runtime control dashboard surfaces intervention requests from conversational delegated agents alongside those from standalone non-conversational agents
+- When a non-conversational agent initiates delegation, the execution log displays a `delegating to <agent_type>` event in real time
+- While the non-conversational agent is waiting for a delegated sub-agent to complete, the execution log displays a `waiting` status with a visible indicator
+- When the delegated sub-agent completes and the parent agent resumes, the execution log displays a `delegation_resumed` event
+- All delegation status events appear in the execution log without requiring manual page refresh
+- Sub-agent intervention requests in non-conversational execution surface as inline popups in the log view with full context
+- Non-conversational agents are limited to 1-level delegation depth; sub-agents cannot further delegate
+- Blocked delegation attempts due to depth limit produce clear outcome messages in execution logs
+- Delegation exit conditions (success, timeout, failure, termination) appear as distinct statuses in execution logs
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

@@ -92,6 +92,9 @@ class TaskAgentLoop(AgentLoopContext):
     """
 
     input_data: dict[str, Any] | None = None
+    delegation_depth: int = 0
+    max_delegation_depth: int = 3
+    tree_depth: int = 0
 
 
 @dataclass

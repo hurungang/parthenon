@@ -78,6 +78,7 @@ class RuntimeGuardrailState:
     cumulative_iterations: int = 0
     delegated_steps: int = 0
     delegation_depth: int = 0
+    tree_depth: int = 0
     token_usage_current_session: int = 0
     token_threshold_reached: bool = False
     token_enforcement_applied: bool = False

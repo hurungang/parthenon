@@ -20,7 +20,7 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - Provides real-time updates for conversational agents and asynchronous result delivery for task agents
 - Ensures all lifecycle events, system instructions, and user prompts are tracked and accessible
 - Filters available tools and actions based on agent role permissions
-- Routes delegated intervention requests from Agent Runtime back to parent conversational sessions via the Communication Hub, preserving service segregation and certificate-based authentication boundaries
+- Routes delegated intervention requests from Agent Runtime back to parent sessions — to the conversation UI for conversational agents, and to the execution log view for non-conversational agents — via the Communication Hub, preserving service segregation and certificate-based authentication boundaries
 
 
 ## Key Concepts
@@ -30,6 +30,7 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - **Session Type**: Either traditional (named session) or passthrough (direct agent identity propagation to MCP server)
 - **Identity-Role Validation**: Ensuring only authorized identities perform actions
 - **Execution Logging**: Capturing system instructions and user prompts for audit
+- **Delegation Depth Limit**: Non-conversational agent delegation is limited to 1 level — delegated sub-agents cannot further delegate; attempts are blocked and recorded in execution logs
 
 
 ## Acceptance Criteria
@@ -40,7 +41,8 @@ The Agent Gateway provides a centralized, secure, and observable entry point for
 - Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - All interactions, system instructions, and user prompts are auditable and accessible from the UI
 - Real-time updates are provided for conversational agents; asynchronous result delivery for task agents
-- Delegated intervention requests are routed from sub-agent sessions to the parent conversation session without requiring direct database access from Agent Runtime, preserving service segregation
+- Delegated intervention requests are routed from sub-agent sessions to the parent session — conversation UI for conversational agents, execution log view for non-conversational agents — without requiring direct database access from Agent Runtime, preserving service segregation
+- Non-conversational agent delegation is limited to 1 level; depth limit is enforced server-side at the Agent Runtime level
 
 ## Out of Scope
 - Direct database access or bypassing the gateway for agent execution

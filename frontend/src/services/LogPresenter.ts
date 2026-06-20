@@ -61,6 +61,13 @@ const ITERATION_EVENT_TYPES = new Set([
   'llm_request',
   'llm_response',
   'tool_call',
+  'delegation_started',
+  'delegation_waiting',
+  'delegation_resumed',
+  'delegation_depth_blocked',
+  'delegation_timeout',
+  'delegation_failed',
+  'delegation_merged',
 ])
 
 function iconTypeFromEntry(entry: ExecutionLogEntry): WorkingStepIconType {
@@ -69,6 +76,14 @@ function iconTypeFromEntry(entry: ExecutionLogEntry): WorkingStepIconType {
   if (et === 'llm_call' || et === 'llm_start' || et === 'llm_end' || et === 'llm_request' || et === 'llm_response') return 'llm'
   if (et === 'tool_call' || et === 'tool_start' || et === 'tool_end') return 'tool'
   if (et === 'error' || ll === 'ERROR' || ll === 'CRITICAL') return 'error'
+  if (et === 'delegation_started') return 'delegating'
+  if (et === 'delegation_waiting') return 'waiting'
+  if (et === 'delegation_merged') {
+    const finalEt = entry.data?.['delegation_final_event_type'] as string | undefined
+    if (finalEt === 'delegation_resumed') return 'success'
+    if (finalEt === 'delegation_timeout' || finalEt === 'delegation_failed' || finalEt === 'delegation_depth_blocked') return 'error'
+    return 'info'
+  }
   if (
     et === 'agent_finish' ||
     et === 'task_complete' ||
@@ -76,9 +91,16 @@ function iconTypeFromEntry(entry: ExecutionLogEntry): WorkingStepIconType {
     et === 'session_completed' ||
     et === 'chain_end' ||
     et === 'save_result' ||
-    et === 'task_loop_completed'
+    et === 'task_loop_completed' ||
+    et === 'delegation_resumed'
   )
     return 'success'
+  if (
+    et === 'delegation_depth_blocked' ||
+    et === 'delegation_timeout' ||
+    et === 'delegation_failed'
+  )
+    return 'error'
   return 'info'
 }
 
@@ -91,8 +113,12 @@ function entryToWorkingStep(entry: ExecutionLogEntry): WorkingStep {
           (entry.data['tool_name'] as string | undefined) ??
           (entry.data['tool'] as string | undefined) ??
           (entry.data['function_name'] as string | undefined) ??
+          (entry.data['sub_agent'] as string | undefined) ??
+          (entry.data['agent_type'] as string | undefined) ??
+          (entry.data['delegation_target'] as string | undefined) ??
           entry.event_type,
         content: JSON.stringify(entry.data, null, 2),
+        eventType: entry.event_type,
       }
     : null
 
@@ -396,6 +422,8 @@ function extractIterationNumber(entry: ExecutionLogEntry): number | null {
  *   ▶ Completion
  */
 function buildSpans(entries: ExecutionLogEntry[]): WorkingStepSpan[] {
+  const mergedEntries = mergeDelegationEntries(entries)
+
   const prepSteps: WorkingStep[] = []
   const iterationSpans: WorkingStepSpan[] = []
   const completionSteps: WorkingStep[] = []
@@ -403,7 +431,7 @@ function buildSpans(entries: ExecutionLogEntry[]): WorkingStepSpan[] {
   let currentIterSteps: WorkingStep[] | null = null
   let currentIterNumber: number | null = null
 
-  for (const entry of entries) {
+  for (const entry of mergedEntries) {
     const et = entry.event_type.toLowerCase()
     if (SKIP_EVENT_TYPES.has(et)) continue
 
@@ -501,6 +529,84 @@ function buildSpans(entries: ExecutionLogEntry[]): WorkingStepSpan[] {
   }
 
   return spans
+}
+
+// ── Delegation event merging ────────────────────────────────────────────────────
+
+/** Delegation event types that are part of a single delegation lifecycle. */
+const DELEGATION_LIFECYCLE_TYPES = new Set([
+  'delegation_started',
+  'delegation_waiting',
+  'human_intervene',
+  'delegation_resumed',
+  'delegation_timeout',
+  'delegation_failed',
+  'delegation_depth_blocked',
+])
+
+/**
+ * Merge consecutive delegation events for the same target into a single
+ * `delegation_merged` entry so the UI renders one consolidated block.
+ */
+function mergeDelegationEntries(entries: ExecutionLogEntry[]): ExecutionLogEntry[] {
+  const result: ExecutionLogEntry[] = []
+  let i = 0
+  while (i < entries.length) {
+    const entry = entries[i]
+    if (entry.event_type === 'delegation_started') {
+      const group: ExecutionLogEntry[] = [entry]
+      const target = entry.data?.['delegation_target'] as string | undefined
+      let j = i + 1
+      while (j < entries.length) {
+        const next = entries[j]
+        // human_intervene entries use agent_type instead of delegation_target
+        const nextTarget = next.event_type === 'human_intervene'
+          ? (next.data?.['agent_type'] as string | undefined)
+          : (next.data?.['delegation_target'] as string | undefined)
+        if (DELEGATION_LIFECYCLE_TYPES.has(next.event_type) && nextTarget === target) {
+          group.push(next)
+          j++
+        } else {
+          break
+        }
+      }
+
+      if (group.length >= 2) {
+        const lastEvent = group[group.length - 1]
+        // Carry receiver_session_id from the terminal event first,
+        // then fall back to delegation_waiting (legacy).
+        const receiverSessionId =
+          (lastEvent.data?.['receiver_session_id'] as string | undefined) ??
+          (group.find((e) => e.event_type === 'delegation_waiting')
+            ?.data?.['receiver_session_id'] as string | undefined)
+
+        const merged: ExecutionLogEntry = {
+          id: entry.id,
+          timestamp: entry.timestamp,
+          log_level: entry.log_level,
+          event_type: 'delegation_merged',
+          message: entry.message,
+          data: {
+            ...entry.data,
+            ...(receiverSessionId ? { receiver_session_id: receiverSessionId } : {}),
+            delegation_events: group.map((e) => ({
+              event_type: e.event_type,
+              message: e.message,
+              timestamp: e.timestamp,
+            })),
+            delegation_final_event_type: lastEvent.event_type,
+            delegation_final_message: lastEvent.message,
+          },
+        }
+        result.push(merged)
+        i = j
+        continue
+      }
+    }
+    result.push(entry)
+    i++
+  }
+  return result
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────

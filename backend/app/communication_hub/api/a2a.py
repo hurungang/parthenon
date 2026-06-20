@@ -32,20 +32,33 @@ async def _wait_for_receiver_result(
     When a data_client is provided, the session status is periodically checked
     and the deadline is extended while the session is ``waiting_for_human``,
     ensuring human-in-the-loop interventions do not trigger a timeout.
+
+    When the session reaches a terminal status (completed/failed/terminated)
+    a short grace period (10s) is started.  If no result message arrives
+    within the grace window, the function falls back to reading the result
+    directly from the session's ``output_data`` — this handles the race
+    where the ``agent_result`` pub/sub message was sent before this
+    subscriber was registered (``(0 subscribers)`` in logs).
     """
     base_deadline = asyncio.get_running_loop().time() + max(0.5, timeout_seconds)
     deadline = base_deadline
     active_broker = broker or MessageBroker()
     owns_broker = broker is None
-    status_check_interval = 5.0  # seconds between session status polls
+    status_check_interval = 5.0
+    grace_period = 10.0
+
+    logger.info(
+        "A2A wait starting for session %s (timeout=%.1fs, deadline+%.1fs)",
+        receiver_session_id, timeout_seconds, base_deadline - asyncio.get_running_loop().time(),
+    )
 
     try:
         subscription = active_broker.subscribe(str(receiver_session_id))
         is_waiting = False
         _terminal_status: str | None = None
+        _terminal_at: float | None = None
 
         while True:
-            # Check session status if data_client is available
             prev_is_waiting = is_waiting
             is_waiting = False
             if data_client is not None:
@@ -56,23 +69,61 @@ async def _wait_for_receiver_result(
                         if status == "waiting_for_human":
                             is_waiting = True
                         elif status in ("completed", "failed", "terminated"):
-                            # Bug #2: Don't return "expired" immediately — a result
-                            # message may already be pending in Redis.  Defer the
-                            # "expired" decision until the deadline fires.
-                            _terminal_status = status
-                except Exception:
-                    pass
+                            if _terminal_status is None:
+                                _terminal_status = status
+                                _terminal_at = asyncio.get_running_loop().time()
+                                logger.info(
+                                    "A2A session %s → %s "
+                                    "(grace=%.1fs, data_client available=%s)",
+                                    receiver_session_id, status,
+                                    grace_period, data_client is not None,
+                                )
+                except Exception as exc:
+                    logger.warning(
+                        "A2A session status poll failed for %s: %s",
+                        receiver_session_id, exc,
+                    )
 
-            # Bug #1: When transitioning OUT of waiting_for_human (e.g. human
-            # responded and sub-agent resumed), extend the deadline so the poll
-            # loop keeps waiting for the sub-agent's final result.
             if prev_is_waiting and not is_waiting:
                 deadline = asyncio.get_running_loop().time() + max(timeout_seconds, 30.0)
+                logger.info(
+                    "A2A session %s resumed from waiting_for_human, "
+                    "deadline extended to +%.1fs",
+                    receiver_session_id,
+                    deadline - asyncio.get_running_loop().time(),
+                )
 
-            remaining = deadline - asyncio.get_running_loop().time()
+            effective_deadline = deadline
+            if _terminal_status is not None and _terminal_at is not None:
+                terminal_grace_deadline = _terminal_at + grace_period
+                effective_deadline = min(deadline, terminal_grace_deadline)
+
+            remaining = effective_deadline - asyncio.get_running_loop().time()
+
             if remaining <= 0 and not is_waiting:
-                # Bug #2: Only return "expired" after confirming no result message
-                # arrived (deadline fired while session is in a terminal state).
+                if _terminal_status and data_client is not None:
+                    try:
+                        session_data = await data_client.get_session(receiver_session_id)
+                        output_data = (session_data or {}).get("output_data")
+                        if output_data:
+                            logger.info(
+                                "A2A session %s: recovered %s result "
+                                "from session output_data (pub/sub message missed)",
+                                receiver_session_id, _terminal_status,
+                            )
+                            return {
+                                "status": _terminal_status,
+                                "output_data": output_data,
+                            }
+                    except Exception as exc:
+                        logger.warning(
+                            "A2A session %s: fallback get_session failed: %s",
+                            receiver_session_id, exc,
+                        )
+                    return {
+                        "status": "expired",
+                        "error": f"Session {_terminal_status} before result received",
+                    }
                 if _terminal_status:
                     return {
                         "status": "expired",
@@ -90,12 +141,18 @@ async def _wait_for_receiver_result(
             except asyncio.TimeoutError:
                 continue
             except StopAsyncIteration:
+                logger.debug("A2A session %s: resubscribing", receiver_session_id)
                 subscription = active_broker.subscribe(str(receiver_session_id))
                 continue
 
             metadata = message.metadata if isinstance(message.metadata, dict) else {}
             if metadata.get("message_type") != "agent_result":
                 continue
+
+            logger.info(
+                "A2A session %s: received agent_result via pub/sub",
+                receiver_session_id,
+            )
 
             content: Any = message.content
             if isinstance(content, str):
@@ -107,11 +164,19 @@ async def _wait_for_receiver_result(
             if isinstance(content, dict):
                 payload_status = content.get("status")
                 if payload_status == "completed":
+                    logger.info(
+                        "A2A session %s: completed via pub/sub",
+                        receiver_session_id,
+                    )
                     return {
                         "status": "completed",
                         "output_data": content.get("output_data", {}),
                     }
                 if payload_status == "failed":
+                    logger.info(
+                        "A2A session %s: failed via pub/sub",
+                        receiver_session_id,
+                    )
                     return {
                         "status": "failed",
                         "error": content.get("error") or "Receiver session failed",
@@ -121,17 +186,28 @@ async def _wait_for_receiver_result(
                         "stop_details": content.get("stop_details"),
                     }
                 if payload_status == "timeout":
+                    logger.info(
+                        "A2A session %s: timeout via pub/sub",
+                        receiver_session_id,
+                    )
                     return {
                         "status": "timeout",
                         "error": "Timed out waiting for receiver response",
                     }
 
-                # Backward compatibility: plain output dict without status means success.
+                logger.info(
+                    "A2A session %s: completed (backward-compat) via pub/sub",
+                    receiver_session_id,
+                )
                 return {
                     "status": "completed",
                     "output_data": content,
                 }
 
+            logger.info(
+                "A2A session %s: completed (non-dict) via pub/sub",
+                receiver_session_id,
+            )
             return {
                 "status": "completed",
                 "output_data": content,

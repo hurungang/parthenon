@@ -189,7 +189,7 @@ export function AgentTypeDetailsDialog({
       const { data } = await apiClient.get<Sop[]>('/sops')
       return data
     },
-    enabled: open && isConversation && activeTab === 1,
+    enabled: open && activeTab === 1,
   })
 
   const { data: allSkills } = useQuery<Skill[]>({
@@ -198,7 +198,7 @@ export function AgentTypeDetailsDialog({
       const { data } = await apiClient.get<Skill[]>('/skills')
       return data
     },
-    enabled: open && isConversation && activeTab === 1,
+    enabled: open && activeTab === 1,
   })
 
   // Fetch SOP details (with steps) to derive SOP→Skill relationships

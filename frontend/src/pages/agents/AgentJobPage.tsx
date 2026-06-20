@@ -91,6 +91,7 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
   const [chatInput, setChatInput] = useState('')
   const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
   const [interveneRequests, setInterveneRequests] = useState<InterveneRequest[]>([])
+  const [pendingInterventionsByChildSession, setPendingInterventionsByChildSession] = useState<Record<string, InterveneRequest>>({})
   const [interveneLoading, setInterveneLoading] = useState(false)
   const [autoDialogOpen, setAutoDialogOpen] = useState(false)
   const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
@@ -164,10 +165,25 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
     if (!id) return
     try {
       setInterveneLoading(true)
-      const requests = await interveneApi.getInterveneRequests({ agent_session_id: id })
-      setInterveneRequests(requests)
+      const [ownRequests, allPending] = await Promise.all([
+        interveneApi.getInterveneRequests({ agent_session_id: id }),
+        interveneApi.getInterveneRequests({ status: 'pending' }),
+      ])
+      setInterveneRequests(ownRequests)
+      // Build a map of child_session_id → pending intervention for inline
+      // rendering in delegation cards.  Uses all pending requests (not just
+      // own) because delegated sub-agents create their own InterveneRequest
+      // records with a different agent_session_id.
+      const pendingMap: Record<string, InterveneRequest> = {}
+      for (const req of allPending) {
+        if (req.agent_session_id) {
+          pendingMap[req.agent_session_id] = req
+        }
+      }
+      setPendingInterventionsByChildSession(pendingMap)
     } catch {
       // Intervene requests are best-effort
+      setPendingInterventionsByChildSession({})
     } finally {
       setInterveneLoading(false)
     }
@@ -310,6 +326,15 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
       handleAutoDialogClose()
     },
     [handleSubmitResponse, handleAutoDialogClose],
+  )
+
+  const handleTerminateSession = useCallback(
+    async (sessionId: string, _requestId: string) => {
+      await interveneApi.terminateSession(sessionId, 'Operator terminated from intervention dialog')
+      handleAutoDialogClose()
+      void fetchSession()
+    },
+    [handleAutoDialogClose, fetchSession],
   )
 
   // Auto-scroll chat to bottom
@@ -589,6 +614,7 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
         request={autoDialogRequest}
         onClose={handleAutoDialogClose}
         onSubmit={handleAutoDialogSubmit}
+        onTerminate={handleTerminateSession}
       />
 
       {/* Conversation History (read-only, for completed conversational sessions) */}
@@ -656,6 +682,7 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
           executionLog={execLogs[0] ?? null}
           entries={logEntries}
           sessionStatus={session.status}
+          pendingInterventionsByChildSession={pendingInterventionsByChildSession}
         />
       )}
     </Box>

@@ -34,6 +34,9 @@ For active non-conversation runs, execution progress is visible live so users an
 - As an operations lead, I want **operator-initiated termination recorded as a distinct outcome** so that I can distinguish it from genuine agent or runtime failures
 - As an operator, I want the live log stream to pause and show an intervene popup when a session is waiting for human input, so that I can review and respond without leaving the execution log page
 - As an operator, I want the log stream to resume automatically after I respond to an intervene request, so that I can continue monitoring execution without manual refresh
+- As a **platform operator**, I want to see delegation lifecycle events (`delegating`, `waiting`, `delegation_resumed`) in the non-conversational execution log stream, so that I can follow delegation progress without manual refresh
+- As an **SOP author**, I want non-conversational agents to respect their configured output type when generating results, so that downstream processes receive output in the expected format (markdown documents, structured JSON, or free-form text)
+- As a **platform operator**, I want the execution log to display agent output formatted according to the agent's output type definition (markdown rendered as rich text, typed JSON shown as structured data, auto shown as raw), so that I can review results in the intended presentation format
 
 
 ## Acceptance Criteria
@@ -58,6 +61,12 @@ For active non-conversation runs, execution progress is visible live so users an
 - **The intervene popup allows the operator to respond (approve/reject, choose an option, or enter text) directly from the execution log view**
 - **After the operator responds, the log stream resumes automatically and the response is recorded in the timeline**
 - **A persistent banner at the top of the execution log indicates the session is waiting for human input when the popup is dismissed or the operator navigates away**
+- **Delegation lifecycle events (`delegation_started`, `delegation_waiting`, `delegation_resumed`) appear as live progress updates in non-conversational execution log streams without manual refresh**
+- **Delegation exit conditions (timeout, failure, depth-blocked, termination) produce distinct, clearly labelled status events in the execution log**
+- **The execution log viewer's Result tab renders agent output formatted per the agent's `output_type`: markdown as rich HTML, typed JSON as a structured tree, auto as raw text**
+- **The Result tab label includes the output type badge (e.g., "Result [Markdown]") for operator awareness**
+- **The Result tab is visible immediately when the agent session completes — no additional navigation required**
+- **Previously emitted delegation status events are still visible in the log timeline after stream reconnect**
 
 
 ## Out of Scope

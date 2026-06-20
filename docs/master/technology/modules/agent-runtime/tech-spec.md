@@ -118,8 +118,13 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `_run_task_loop_ar` | method | Task execution loop enforcing runtime guardrails such as iteration ceilings, delegated step budgets, and timeout checks | `backend/app/services/agents/runtime_executor.py` |
+| `_run_task_loop_ar` | method | Task execution loop enforcing runtime guardrails such as iteration ceilings, delegated step budgets, timeout checks, and delegation depth limits | `backend/app/services/agents/runtime_executor.py` |
 | `execute_conversation_turn` | method | Conversation loop applying mode-aware token guardrail behavior, continuation semantics, and guardrail usage logging | `backend/app/services/agents/runtime_executor.py` |
+| Delegation Depth Guard | guardrail | Overrides `max_delegation_depth` to 1 for non-conversational agents; blocks sub-agent dispatch when `tree_depth + 1 > max_delegation_depth`; emits `delegation_depth_blocked` execution event | `backend/app/services/agents/runtime_executor.py` |
+| Delegation Status Events | emission | Emits `delegation_started` before sub-agent dispatch, `delegation_waiting` after dispatch (parent blocked), `delegation_failed` on dispatch/runtime error, and `delegation_resumed` on sub-agent completion — all for non-conversational delegation paths | `backend/app/services/agents/runtime_executor.py` |
+| HITL Intervention in Delegation | routing | When a delegated sub-agent calls `human_intervene`, the intervention flows through CH's Task Delegation Event Router to the parent agent's execution log NDJSON stream; response resumes the sub-agent and emits `delegation_resumed` | `backend/app/services/agents/runtime_executor.py` |
+| Output Type Prompt Injection | system prompt | Injects output format instruction into system prompt based on `AgentType.output_type`: `markdown` → produce markdown output; `typed` → produce JSON matching `output_schema`; `auto` → no extra instruction | `backend/app/services/agents/runtime_executor.py` |
+| `_resolve_content_type` | method | Maps `output_type` value to MIME content type (`text/markdown` or `application/json`); used by `save_result` tool for ResultRecord persistence | `backend/app/services/agents/runtime_executor.py` |
 
 ### Segregation Audit Coverage
 
