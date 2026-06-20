@@ -34,6 +34,20 @@ logger = logging.getLogger(__name__)
 
 dispatch_router = APIRouter(prefix="/internal", tags=["internal"])
 
+
+def _is_non_conversational_intervention(content: dict[str, Any]) -> bool:
+    """Check if an intervention payload targets a non-conversational agent job.
+
+    Non-conversational (task) agent interventions are identified by the
+    presence of ``parent_agent_job_id`` or ``agent_job_id`` in the payload
+    AND the absence of ``conversation_session_id``.
+    """
+    has_agent_job_id = bool(
+        content.get("parent_agent_job_id") or content.get("agent_job_id")
+    )
+    has_conv_session_id = bool(content.get("conversation_session_id"))
+    return has_agent_job_id and not has_conv_session_id
+
 _broker = MessageBroker()
 
 
@@ -114,6 +128,42 @@ async def dispatch_message(body: DispatchRequest, request: Request) -> DispatchR
                     body.session_id,
                     exc,
                 )
+
+        # Phase 2.3: Non-conversational intervention routing
+        # When no conversation_session_id is present but the payload carries
+        # parent_agent_job_id (non-conversational delegation context), route
+        # through the Task Delegation Event Router to the execution log viewer.
+        if _is_non_conversational_intervention(content_dict):
+            tdr = getattr(request.app.state, "task_delegation_router", None)
+            if tdr is not None:
+                agent_job_id = (
+                    content_dict.get("parent_agent_job_id")
+                    or content_dict.get("agent_job_id")
+                    or str(body.session_id)
+                )
+                try:
+                    await tdr.push_intervene_request(
+                        agent_job_id=agent_job_id,
+                        payload=content_dict,
+                    )
+                    logger.info(
+                        "Non-conversational intervention %s routed to "
+                        "execution log for agent job %s",
+                        content_dict.get("request_id", "unknown"),
+                        agent_job_id,
+                    )
+                    return DispatchResponse(
+                        dispatched=True,
+                        channel=f"task-delegation:{agent_job_id}",
+                        subscribers=1,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Task delegation router failed for session %s: %s — "
+                        "falling through to Redis broker",
+                        body.session_id,
+                        exc,
+                    )
 
     # Standard dispatch via Redis pub/sub
     content_str = (

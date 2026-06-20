@@ -421,7 +421,7 @@ class AgentRuntimeExecutor:
         if isinstance(input_data, dict):
             current_depth = _int_or_default(input_data.get("__delegation_depth"), 0)
 
-        return RuntimeGuardrailState(
+        guardrail = RuntimeGuardrailState(
             max_iterations=_int_or_default(policy.get("max_iterations"), 10),
             max_delegation_depth=_int_or_default(policy.get("max_delegation_depth"), 3),
             max_delegated_steps=_int_or_default(policy.get("max_delegated_steps"), 20),
@@ -443,8 +443,22 @@ class AgentRuntimeExecutor:
                 policy.get("conversational_continuation_policy") or "allow"
             ),
             policy_snapshot_id=str(policy.get("policy_snapshot_id") or "unknown"),
-            delegation_depth=max(0, current_depth),
+            delegation_depth=0,
+            tree_depth=max(0, current_depth),
         )
+
+        # Phase 1.1: Override max_delegation_depth to 1 for non-conversational agents.
+        # Non-conversational (task) agents are limited to 1 level of delegation so
+        # that automated workflows cannot create unbounded delegation chains.
+        input_type = context.get("input_type")
+        if input_type is not None:
+            input_type_value = (
+                input_type.value if hasattr(input_type, "value") else str(input_type)
+            )
+            if input_type_value != "conversation":
+                guardrail.max_delegation_depth = 1
+
+        return guardrail
 
     async def _precheck_delegation_graph(
         self,
@@ -623,7 +637,7 @@ class AgentRuntimeExecutor:
                 },
             )
 
-        if state.delegation_depth > state.max_delegation_depth:
+        if state.tree_depth > state.max_delegation_depth:
             raise GuardrailStop(
                 reason=GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED,
                 message="Delegation depth limit exceeded",
@@ -1902,18 +1916,40 @@ class AgentRuntimeExecutor:
                     delegated_target_slug = _extract_agent_delegation_target(original_name)
                     if delegated_target_slug is not None:
                         guardrail_state.delegated_steps += 1
-                        next_depth = guardrail_state.delegation_depth + 1
+                        next_depth = guardrail_state.tree_depth + 1
+
+                        # Phase 1.1: Delegation depth guard — emit blocked outcome
+                        # instead of raising GuardrailStop, so the agent can continue
+                        # with other actions after the blocked delegation attempt.
                         if next_depth > guardrail_state.max_delegation_depth:
-                            raise GuardrailStop(
-                                reason=GuardrailStopReason.DELEGATION_DEPTH_EXCEEDED,
-                                message="Delegation depth limit exceeded before dispatch",
-                                details={
-                                    "current_value": next_depth,
-                                    "threshold_value": guardrail_state.max_delegation_depth,
+                            await self._log_execution_event(
+                                session_id=session_id,
+                                event_type="delegation_depth_blocked",
+                                message=(
+                                    f"Delegation depth limit reached: "
+                                    f"depth={guardrail_state.tree_depth} "
+                                    f"next={next_depth} > max={guardrail_state.max_delegation_depth}"
+                                ),
+                                data={
+                                    "delegation_target": delegated_target_slug,
+                                    "current_depth": guardrail_state.tree_depth,
+                                    "next_depth": next_depth,
+                                    "max_depth": guardrail_state.max_delegation_depth,
                                     "policy_snapshot_id": guardrail_state.policy_snapshot_id,
                                 },
+                                data_client=data_client,
                             )
-                        if guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
+                            tool_result = {
+                                "blocked": True,
+                                "reason": (
+                                    f"Delegation depth limit reached "
+                                    f"(depth={guardrail_state.tree_depth}, "
+                                    f"next={next_depth} > max={guardrail_state.max_delegation_depth}). "
+                                    f"Non-conversational agents are limited to "
+                                    f"1 level of delegation."
+                                ),
+                            }
+                        elif guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
                             raise GuardrailStop(
                                 reason=GuardrailStopReason.DELEGATED_STEPS_EXCEEDED,
                                 message="Delegated-step limit exceeded before dispatch",
@@ -1923,8 +1959,7 @@ class AgentRuntimeExecutor:
                                     "policy_snapshot_id": guardrail_state.policy_snapshot_id,
                                 },
                             )
-
-                        if (
+                        elif (
                             allowed_agent_types
                             and delegated_target_slug not in allowed_agent_types
                         ):
@@ -1937,13 +1972,189 @@ class AgentRuntimeExecutor:
                         else:
                             delegation_payload = _build_delegation_request_payload(args)
                             delegation_payload["__delegation_depth"] = next_depth
-                            tool_result = await comm_hub_client.call_a2a_request(
-                                target_agent_type_slug=delegated_target_slug,
-                                session_id=str(session_id),
-                                requester_role_id=context.get("role_id"),
-                                request_payload=delegation_payload,
-                                session_link_id=args.get("session_link_id"),
+                            guardrail_state.delegation_depth = next_depth
+
+                            # Phase 1.2: Emit delegation_started before dispatch
+                            await self._log_execution_event(
+                                session_id=session_id,
+                                event_type="delegation_started",
+                                message=f"Delegating to agent '{delegated_target_slug}'",
+                                data={
+                                    "delegation_target": delegated_target_slug,
+                                    "delegation_depth": next_depth,
+                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                },
+                                data_client=data_client,
                             )
+
+                            # Dispatch A2A request (non-waiting to get receiver session)
+                            try:
+                                a2a_response = await comm_hub_client.call_a2a_request(
+                                    target_agent_type_slug=delegated_target_slug,
+                                    session_id=str(session_id),
+                                    requester_role_id=context.get("role_id"),
+                                    request_payload=delegation_payload,
+                                    session_link_id=args.get("session_link_id"),
+                                )
+                            except Exception as a2a_exc:
+                                # Phase 1.2: Emit delegation_failed on dispatch error
+                                await self._log_execution_event(
+                                    session_id=session_id,
+                                    event_type="delegation_failed",
+                                    message=f"Delegation dispatch failed for '{delegated_target_slug}': {a2a_exc}",
+                                    data={
+                                        "delegation_target": delegated_target_slug,
+                                        "error": str(a2a_exc),
+                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                    },
+                                    data_client=data_client,
+                                )
+                                tool_result = {"error": str(a2a_exc), "blocked": False}
+                            else:
+                                # Phase 1.2: Emit delegation_waiting after dispatch
+                                delegated_session_id = None
+                                if isinstance(a2a_response, dict):
+                                    rsid = a2a_response.get("receiver_session_id")
+                                    if isinstance(rsid, str) and rsid.strip():
+                                        delegated_session_id = rsid.strip()
+
+                                await self._log_execution_event(
+                                    session_id=session_id,
+                                    event_type="delegation_waiting",
+                                    message=f"Waiting for delegated agent '{delegated_target_slug}'",
+                                    data={
+                                        "delegation_target": delegated_target_slug,
+                                        "receiver_session_id": delegated_session_id,
+                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                    },
+                                    data_client=data_client,
+                                )
+
+                                if delegated_session_id:
+                                    # Wait for response with HITL-aware timeout
+                                    try:
+                                        wait_payload = await comm_hub_client.wait_for_a2a_response(
+                                            receiver_session_id=delegated_session_id,
+                                            timeout_seconds=float(
+                                                guardrail_state.execution_timeout_seconds
+                                            ),
+                                        )
+                                    except Exception as wait_exc:
+                                        wait_err = str(wait_exc)
+                                        # Phase 1.2/1.3: Check for timeout vs other failure
+                                        if "timeout" in wait_err.lower():
+                                            await self._log_execution_event(
+                                                session_id=session_id,
+                                                event_type="delegation_timeout",
+                                                message=f"Delegated agent '{delegated_target_slug}' timed out",
+                                                data={
+                                                    "delegation_target": delegated_target_slug,
+                                                    "error": wait_err,
+                                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                                },
+                                                data_client=data_client,
+                                            )
+                                        else:
+                                            await self._log_execution_event(
+                                                session_id=session_id,
+                                                event_type="delegation_failed",
+                                                message=f"Delegated agent '{delegated_target_slug}' failed: {wait_err}",
+                                                data={
+                                                    "delegation_target": delegated_target_slug,
+                                                    "error": wait_err,
+                                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                                },
+                                                data_client=data_client,
+                                            )
+                                        tool_result = {
+                                            "error": wait_err,
+                                            "blocked": False,
+                                        }
+                                    else:
+                                        # Phase 1.2: Check exit condition from wait_payload
+                                        exit_condition = "completed"
+                                        if isinstance(wait_payload, dict):
+                                            wait_status = wait_payload.get("status", "")
+                                            if wait_status == "timeout":
+                                                exit_condition = "timeout"
+                                                await self._log_execution_event(
+                                                    session_id=session_id,
+                                                    event_type="delegation_timeout",
+                                                    message=f"Delegated agent '{delegated_target_slug}' timed out",
+                                                    data={
+                                                        "delegation_target": delegated_target_slug,
+                                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                                    },
+                                                    data_client=data_client,
+                                                )
+                                            elif wait_status == "failed":
+                                                exit_condition = "failed"
+                                                await self._log_execution_event(
+                                                    session_id=session_id,
+                                                    event_type="delegation_failed",
+                                                    message=f"Delegated agent '{delegated_target_slug}' failed",
+                                                    data={
+                                                        "delegation_target": delegated_target_slug,
+                                                        "wait_payload": wait_payload,
+                                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                                    },
+                                                    data_client=data_client,
+                                                )
+
+                                        # Phase 1.3: Check for HITL waiting_for_human
+                                        if isinstance(wait_payload, dict) and (
+                                            wait_payload.get("waiting_for_human")
+                                            or wait_status == "waiting_for_human"
+                                        ):
+                                            await data_client.mark_session_waiting_for_human(
+                                                session_id=session_id,
+                                                request_id=wait_payload.get("request_id", ""),
+                                            )
+                                            await self._log_execution_event(
+                                                session_id=session_id,
+                                                event_type="intervention_required",
+                                                message=f"Delegated agent '{delegated_target_slug}' requires human intervention",
+                                                data={
+                                                    "delegation_target": delegated_target_slug,
+                                                    "intervention_type": wait_payload.get("intervention_type"),
+                                                    "reason": wait_payload.get("reason"),
+                                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                                },
+                                                data_client=data_client,
+                                            )
+
+                                        # Phase 1.2: Emit delegation_resumed with exit condition
+                                        await self._log_execution_event(
+                                            session_id=session_id,
+                                            event_type="delegation_resumed",
+                                            message=(
+                                                f"Delegation from '{delegated_target_slug}' "
+                                                f"resumed — exit condition: {exit_condition}"
+                                            ),
+                                            data={
+                                                "delegation_target": delegated_target_slug,
+                                                "exit_condition": exit_condition,
+                                                "receiver_session_id": delegated_session_id,
+                                                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                            },
+                                            data_client=data_client,
+                                        )
+
+                                        tool_result = wait_payload
+
+                                        # Accumulate child's token usage into parent's guardrail state
+                                        if isinstance(wait_payload, dict):
+                                            child_usage = (
+                                                wait_payload
+                                                .get("output_data", {})
+                                                .get("guardrail_usage", {})
+                                                .get("token_usage_current_session", 0)
+                                            )
+                                            if isinstance(child_usage, (int, float)) and child_usage > 0:
+                                                guardrail_state.token_usage_current_session += int(child_usage)
+                                else:
+                                    # No delegated session ID — use raw A2A response
+                                    tool_result = a2a_response
                     else:
                         # MCP tool via Communication Hub
                         tool_result = await self._execute_mcp_tool_ar(
@@ -2004,6 +2215,7 @@ class AgentRuntimeExecutor:
                     "cumulative_iterations": guardrail_state.cumulative_iterations,
                     "delegated_steps": guardrail_state.delegated_steps,
                     "delegation_depth": guardrail_state.delegation_depth,
+                    "tree_depth": guardrail_state.tree_depth,
                     "elapsed_seconds": guardrail_state.elapsed_seconds(),
                     "token_usage_current_session": guardrail_state.token_usage_current_session,
                 },
@@ -2593,7 +2805,7 @@ class AgentRuntimeExecutor:
                             }
                         )
                         guardrail_state.delegated_steps += 1
-                        next_depth = guardrail_state.delegation_depth + 1
+                        next_depth = guardrail_state.tree_depth + 1
                         if next_depth > guardrail_state.max_delegation_depth:
                             return (
                                 "Delegation depth limit exceeded.",
@@ -2609,6 +2821,7 @@ class AgentRuntimeExecutor:
 
                         delegation_payload = _build_delegation_request_payload(args)
                         delegation_payload["__delegation_depth"] = next_depth
+                        guardrail_state.delegation_depth = next_depth
                         tool_result = await comm_hub_client.call_a2a_request(
                             target_agent_type_slug=delegated_target_slug,
                             session_id=str(conv_session_id),
@@ -2637,6 +2850,18 @@ class AgentRuntimeExecutor:
                                 receiver_session_id=delegated_session_id,
                                 timeout_seconds=120.0,
                             )
+
+                            # Accumulate child's token usage into parent's guardrail state
+                            if isinstance(wait_payload, dict):
+                                child_usage = (
+                                    wait_payload
+                                    .get("output_data", {})
+                                    .get("guardrail_usage", {})
+                                    .get("token_usage_current_session", 0)
+                                )
+                                if isinstance(child_usage, (int, float)) and child_usage > 0:
+                                    guardrail_state.token_usage_current_session += int(child_usage)
+
                             await emit_status_event({
                                 "status": "delegation_resumed",
                                 "agent_type": delegated_target_slug,
@@ -2848,6 +3073,11 @@ class AgentRuntimeExecutor:
             "runtime_executor.task_loop",
             attributes={"session_id": str(job.id)},
         ):
+            input_data = job.input_data or {}
+            current_depth = 0
+            if isinstance(input_data, dict):
+                current_depth = _int_or_default(input_data.get("__delegation_depth"), 0)
+
             ctx = TaskAgentLoop(
                 session_id=str(job.id),
                 agent_type_id=str(job.agent_type_id),
@@ -2856,7 +3086,11 @@ class AgentRuntimeExecutor:
                 system_instruction=agent_type.system_instruction,
                 output_type=agent_type.output_type.value,
                 output_schema=agent_type.output_schema,
-                input_data=job.input_data,
+                input_data=input_data,
+                # Phase 1.1: Non-conversational agents are limited to 1 level of delegation
+                max_delegation_depth=1,
+                delegation_depth=0,
+                tree_depth=max(0, current_depth),
             )
 
             # ── Load binding content (bound SOPs+skills) and append to system instruction ──
@@ -3367,15 +3601,146 @@ class AgentRuntimeExecutor:
                     )
                 elif _extract_agent_delegation_target(tool_name) is not None:
                     target_slug = _extract_agent_delegation_target(tool_name)
-                    result = await comm_hub_client.call_a2a_request(
-                        target_agent_type_slug=target_slug or "",
-                        session_id=ctx.session_id,
-                        requester_role_id=ctx.role_id,
-                        request_payload=_build_delegation_request_payload(tool_args),
-                        session_link_id=tool_args.get("session_link_id"),
-                        wait_for_response=True,
-                        wait_timeout_seconds=45.0,
-                    )
+                    next_depth = ctx.tree_depth + 1
+
+                    # Phase 1.1: Delegation depth guard for TaskAgentLoop path
+                    if next_depth > ctx.max_delegation_depth:
+                        await self._log_execution_event(
+                            session_id=uuid.UUID(ctx.session_id),
+                            event_type="delegation_depth_blocked",
+                            message=(
+                                f"Delegation depth limit reached: "
+                                f"{ctx.tree_depth} >= {ctx.max_delegation_depth}"
+                            ),
+                            data={
+                                "delegation_target": target_slug,
+                                "current_depth": ctx.tree_depth,
+                                "max_depth": ctx.max_delegation_depth,
+                            },
+                        )
+                        result = {
+                            "blocked": True,
+                            "reason": (
+                                f"Delegation depth limit reached "
+                                f"({ctx.tree_depth} >= "
+                                f"{ctx.max_delegation_depth}). "
+                                f"Non-conversational agents are limited to "
+                                f"1 level of delegation."
+                            ),
+                        }
+                    else:
+                        ctx.delegation_depth = next_depth
+
+                        # Phase 1.2: Emit delegation_started before dispatch
+                        await self._log_execution_event(
+                            session_id=uuid.UUID(ctx.session_id),
+                            event_type="delegation_started",
+                            message=f"Delegating to agent '{target_slug}'",
+                            data={
+                                "delegation_target": target_slug,
+                                "delegation_depth": next_depth,
+                                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                            },
+                        )
+
+                        # Phase 1.2: Emit delegation_waiting before blocking wait
+                        await self._log_execution_event(
+                            session_id=uuid.UUID(ctx.session_id),
+                            event_type="delegation_waiting",
+                            message=f"Waiting for delegated agent '{target_slug}'",
+                            data={
+                                "delegation_target": target_slug,
+                                "delegation_depth": next_depth,
+                                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                            },
+                        )
+
+                        # Dispatch A2A request (blocking with wait_for_response=True)
+                        try:
+                            a2a_result = await comm_hub_client.call_a2a_request(
+                                target_agent_type_slug=target_slug or "",
+                                session_id=ctx.session_id,
+                                requester_role_id=ctx.role_id,
+                                request_payload=_build_delegation_request_payload(tool_args),
+                                session_link_id=tool_args.get("session_link_id"),
+                                wait_for_response=True,
+                                wait_timeout_seconds=45.0,
+                            )
+                        except Exception as a2a_exc:
+                            err_msg = str(a2a_exc)
+                            if "timeout" in err_msg.lower():
+                                await self._log_execution_event(
+                                    session_id=uuid.UUID(ctx.session_id),
+                                    event_type="delegation_timeout",
+                                    message=f"Delegated agent '{target_slug}' timed out",
+                                    data={
+                                        "delegation_target": target_slug,
+                                        "error": err_msg,
+                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                    },
+                                )
+                            else:
+                                await self._log_execution_event(
+                                    session_id=uuid.UUID(ctx.session_id),
+                                    event_type="delegation_failed",
+                                    message=f"Delegated agent '{target_slug}' failed: {err_msg}",
+                                    data={
+                                        "delegation_target": target_slug,
+                                        "error": err_msg,
+                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                    },
+                                )
+                            result = {"error": err_msg, "blocked": False}
+                        else:
+                            # Phase 1.2: Determine exit condition from response
+                            exit_condition = "completed"
+                            if isinstance(a2a_result, dict):
+                                resp_status = a2a_result.get("status", "")
+                                if resp_status == "timeout":
+                                    exit_condition = "timeout"
+                                    rsid = a2a_result.get("receiver_session_id")
+                                    await self._log_execution_event(
+                                        session_id=uuid.UUID(ctx.session_id),
+                                        event_type="delegation_timeout",
+                                        message=f"Delegated agent '{target_slug}' timed out",
+                                        data={
+                                            "delegation_target": target_slug,
+                                            "receiver_session_id": rsid,
+                                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                        },
+                                    )
+                                elif resp_status == "failed":
+                                    exit_condition = "failed"
+                                    rsid = a2a_result.get("receiver_session_id")
+                                    await self._log_execution_event(
+                                        session_id=uuid.UUID(ctx.session_id),
+                                        event_type="delegation_failed",
+                                        message=f"Delegated agent '{target_slug}' failed",
+                                        data={
+                                            "delegation_target": target_slug,
+                                            "receiver_session_id": rsid,
+                                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                        },
+                                    )
+
+                            # Phase 1.2: Emit delegation_resumed with exit condition
+                            rsid = a2a_result.get("receiver_session_id")
+                            await self._log_execution_event(
+                                session_id=uuid.UUID(ctx.session_id),
+                                event_type="delegation_resumed",
+                                message=(
+                                    f"Delegation from '{target_slug}' "
+                                    f"resumed — exit condition: {exit_condition}"
+                                ),
+                                data={
+                                    "delegation_target": target_slug,
+                                    "exit_condition": exit_condition,
+                                    "receiver_session_id": rsid,
+                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                },
+                            )
+
+                            result = a2a_result
                 else:
                     result = await self._execute_mcp_tool(
                         tool_name, tool_args, db, role_mcp_sessions,
@@ -3401,6 +3766,22 @@ class AgentRuntimeExecutor:
 
         return ctx
 
+    def _resolve_content_type(self, output_type: str | None) -> str:
+        """Resolve MIME content type from agent output type configuration.
+
+        Mirrors the logic in ``_content_type_from_output_type()`` from
+        ``system_tools.py`` to ensure consistent content type derivation.
+        """
+        if not output_type:
+            return "application/json"
+        normalized = output_type.strip().lower()
+        if normalized == "markdown":
+            return "text/markdown"
+        if normalized == "typed":
+            return "application/json"
+        # auto or unknown — default to JSON for ResultRecord compatibility
+        return "application/json"
+
     async def _handle_save_result_tool_call(
         self,
         ctx: TaskAgentLoop,
@@ -3416,10 +3797,13 @@ class AgentRuntimeExecutor:
         try:
             from app.db.models.results import ResultRecord
 
+            # Phase 1.4: Derive content_type from output_type instead of hardcoding
+            content_type = self._resolve_content_type(ctx.output_type)
+
             record = ResultRecord(
                 agent_type_id=uuid.UUID(ctx.agent_type_id),
                 payload=args.get("data") or args,
-                content_type="application/json",
+                content_type=content_type,
                 title=args.get("title", f"Session {ctx.session_id} result"),
                 tags=["agent_session"],
             )
@@ -3683,7 +4067,13 @@ class AgentRuntimeExecutor:
 
         For ``input_type=none``, the prompt is auto-generated from the agent type's
         first bound SOP: "Follow the SOP '<name>' to complete the task".
+
+        Phase 1.4: Appends output type formatting instructions (markdown, typed with
+        schema, or auto) based on the agent type's ``output_type`` configuration, so
+        the agent respects its configured output type at runtime.
         """
+        user_prompt: str | None = None
+
         if agent_type.input_type == AgentInputType.none:
             if db:
                 from sqlalchemy import select
@@ -3702,28 +4092,56 @@ class AgentRuntimeExecutor:
                     )
                     first_binding = result.scalar_one_or_none()
                     if first_binding and first_binding.sop:
-                        return f"Follow the SOP '{first_binding.sop.name}' to complete the task"
-
-                    logger.warning(
-                        "none-input agent_type %s has no SOP bindings set",
-                        agent_type.id,
-                    )
+                        user_prompt = f"Follow the SOP '{first_binding.sop.name}' to complete the task"
+                    else:
+                        logger.warning(
+                            "none-input agent_type %s has no SOP bindings set",
+                            agent_type.id,
+                        )
                 except Exception as exc:
                     logger.warning(
                         "Failed to resolve SOP binding for none-input agent_type %s: %s",
                         agent_type.id,
                         exc,
                     )
-            return None
-        if not input_data:
-            return None
-        if isinstance(input_data, dict):
+        elif not input_data:
+            pass  # user_prompt stays None
+        elif isinstance(input_data, dict):
             # Conversational: use the initial message
             if "message" in input_data:
-                return str(input_data["message"])
-            # Typed: serialise as compact JSON for the prompt
-            import json
-            return json.dumps(input_data, ensure_ascii=False)
-        return str(input_data)
+                user_prompt = str(input_data["message"])
+            else:
+                # Typed: serialise as compact JSON for the prompt
+                user_prompt = json.dumps(input_data, ensure_ascii=False)
+        else:
+            user_prompt = str(input_data)
+
+        # Phase 1.4: Append output type formatting instruction for non-conversational agents
+        output_instruction: str | None = None
+        if agent_type.input_type != AgentInputType.conversation:
+            output_type = getattr(agent_type, "output_type", None)
+            if output_type is not None:
+                output_type_value = (
+                    output_type.value if hasattr(output_type, "value") else str(output_type)
+                )
+                if output_type_value == "markdown":
+                    output_instruction = (
+                        "You must produce your final output in markdown format."
+                    )
+                elif output_type_value == "typed":
+                    output_schema = getattr(agent_type, "output_schema", None)
+                    if output_schema:
+                        output_instruction = (
+                            "The final output must be valid JSON conforming to this schema:\n"
+                            f"```json\n{json.dumps(output_schema, indent=2)}\n```"
+                        )
+                # auto: no additional instruction
+
+        if output_instruction:
+            if user_prompt:
+                return f"{user_prompt}\n\n{output_instruction}"
+            return output_instruction
+
+        return user_prompt
 
 

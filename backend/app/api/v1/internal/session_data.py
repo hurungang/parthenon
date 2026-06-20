@@ -26,11 +26,11 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_service_certificate
 from app.db.session import DbSession
-from app.services.agents.permission_manager import AgentPermissionManager
+from app.services.agents.permission_manager import get_shared_permission_manager
 from app.services.agents.tool_naming import build_tool_name, parse_tool_name
 
 logger = logging.getLogger(__name__)
-_permission_manager = AgentPermissionManager()
+_permission_manager = get_shared_permission_manager()
 
 
 def _canonicalize_mcp_tool_name(name: str, server_slug: str | None, original_name: str | None) -> str:
@@ -753,6 +753,7 @@ async def prepare_a2a_request(
     enqueue_input = body.request_payload.copy() if body.request_payload else {}
     if body.conv_session_id:
         enqueue_input["__conv_session_id"] = body.conv_session_id
+    enqueue_input["__requester_session_id"] = body.requester_instance_id
     receiver_job = await session_service.enqueue(
         agent_type_id=target_agent_type.id,
         input_data=enqueue_input,

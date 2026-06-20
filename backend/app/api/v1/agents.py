@@ -1,32 +1,38 @@
 """Agent management API routers: AgentRole, AgentIdentity, AgentJob, AgentType, AgentInstance, ModelConfig."""
 import asyncio
 import json
-import uuid
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+import uuid
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_permission, get_current_claims
+from app.api.deps import get_current_claims, require_permission
 from app.core.resource_types import RT_AGENT
-from app.db.session import DbSession
 from app.db.models.agents import (
     AgentIdentity,
-    AgentInputType,
     AgentInstance,
-    AgentInstanceStatus,
     AgentJob,
     AgentJobStatus,
-    AgentRole,
     AgentType,
-    AgentTypeSopBinding,
     AgentTypeSkillBinding,
-    ModelConfig,
+    AgentTypeSopBinding,
 )
+from app.db.models.sop_recursion_validation_check import SopRecursionCheckContext
+from app.db.session import DbSession
 from app.schemas.agents import (
     AgentIdentityCreate,
     AgentIdentityOAuthAuthorizeResponse,
@@ -46,8 +52,8 @@ from app.schemas.agents import (
     AgentTypeUpdate,
     ExecutionLogEntryRead,
     ExecutionLogRead,
-    ModelAvailabilityVendorRead,
     ModelAvailabilityUpdate,
+    ModelAvailabilityVendorRead,
     ModelConfigCreate,
     ModelConfigRead,
     ModelConfigUpdate,
@@ -69,7 +75,6 @@ from app.schemas.agents import (
     WorkflowGenerationModelConfigUpdate,
     WorkflowGenerationModelOption,
 )
-from app.schemas.agent_type_bindings import SopBindingCreate, SkillBindingCreate
 from app.services.agents.agent_type_service import AgentTypeService
 from app.services.agents.binding_validation import validate_bindings
 from app.services.agents.identity_service import (
@@ -84,10 +89,7 @@ from app.services.agents.model_config_service import (
     ModelConfigNotFoundError,
     ModelConfigService,
 )
-from app.services.agents.workflow_generation_settings import (
-    get_workflow_generation_model_id,
-    set_workflow_generation_model_id,
-)
+from app.services.agents.permission_manager import get_shared_permission_manager
 from app.services.agents.plan_generation_service import PlanGenerationService
 from app.services.agents.role_service import (
     AgentRoleConflictError,
@@ -95,27 +97,29 @@ from app.services.agents.role_service import (
     AgentRoleService,
 )
 from app.services.agents.session_service import AgentSessionService
-from app.services.agents.permission_manager import AgentPermissionManager
 from app.services.agents.tool_naming import build_tool_name, is_system_tool
-from app.services.gateway.lifecycle_handler import AgentAuthError, GatewayLifecycleHandler
-from app.services.control_center.recursion_validation_service import (
-    RecursionValidationError,
-    get_recursion_validation_service,
+from app.services.agents.workflow_generation_settings import (
+    get_workflow_generation_model_id,
+    set_workflow_generation_model_id,
+)
+from app.services.control_center.model_availability_service import (
+    ModelAvailabilityService,
 )
 from app.services.control_center.model_usage_guardrail_service import (
     ModelGuardrailDuplicatePeriodError,
     ModelGuardrailModelNotFoundError,
     ModelUsageGuardrailService,
 )
-from app.services.control_center.model_availability_service import (
-    ModelAvailabilityService,
+from app.services.control_center.recursion_validation_service import (
+    RecursionValidationError,
+    get_recursion_validation_service,
 )
 from app.services.control_center.runtime_topology_controller import RuntimeTopologyController
 from app.services.control_center.termination_orchestrator import (
     TerminationDeniedError,
     TerminationOrchestrator,
 )
-from app.db.models.sop_recursion_validation_check import SopRecursionCheckContext
+from app.services.gateway.lifecycle_handler import AgentAuthError, GatewayLifecycleHandler
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +127,7 @@ logger = logging.getLogger(__name__)
 _role_service = AgentRoleService()
 _identity_service = AgentIdentityService()
 _session_service = AgentSessionService()
-_permission_manager = AgentPermissionManager()
+_permission_manager = get_shared_permission_manager()
 _model_config_service = ModelConfigService()
 _model_usage_guardrail_service = ModelUsageGuardrailService()
 _model_availability_service = ModelAvailabilityService()
@@ -246,12 +250,12 @@ async def get_role_mcp_tools(
     try:
         override_skill_ids: set[uuid.UUID] | None = None
         override_sop_ids: set[uuid.UUID] | None = None
-        
+
         # Parse query parameters for preview mode
         if skill_ids is not None and sop_ids is not None:
             override_skill_ids = {uuid.UUID(s.strip()) for s in skill_ids.split(",") if s.strip()}
             override_sop_ids = {uuid.UUID(s.strip()) for s in sop_ids.split(",") if s.strip()}
-        
+
         tools = await _permission_manager.calculate_allowed_tools(role_id, db, override_skill_ids, override_sop_ids)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid UUID format: {exc}")
@@ -653,10 +657,10 @@ async def launch_agent_session(
 async def list_agent_sessions(
     db: DbSession,
     request: Request,
-    status: Optional[AgentJobStatus] = Query(None, description="Filter by session status"),
-    from_date: Optional[str] = Query(None, alias="from_date", description="ISO 8601 datetime lower bound"),
-    to_date: Optional[str] = Query(None, alias="to_date", description="ISO 8601 datetime upper bound"),
-    agent_type_id: Optional[uuid.UUID] = Query(None, description="Filter by agent type"),
+    status: AgentJobStatus | None = Query(None, description="Filter by session status"),
+    from_date: str | None = Query(None, alias="from_date", description="ISO 8601 datetime lower bound"),
+    to_date: str | None = Query(None, alias="to_date", description="ISO 8601 datetime upper bound"),
+    agent_type_id: uuid.UUID | None = Query(None, description="Filter by agent type"),
     limit: int = Query(50, description="Max number of sessions to return"),
     offset: int = Query(0, description="Number of sessions to skip"),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
@@ -785,9 +789,14 @@ async def stream_session_execution_logs(
     - {"type":"log_entry","entry":{...}}
     - {"type":"human_intervene","request_id":"...","reason":"...","intervention_type":"...","choices":[...]}
     - {"type":"stream_completed","session_id":"...","session_status":"completed|failed"}
+
+    When the client disconnects, the inner generator catches
+    ``asyncio.CancelledError`` / ``GeneratorExit`` so the DB session
+    can be returned to the pool without a ``CancelledError`` during
+    connection teardown.
     """
-    from app.db.models.session_logs import ExecutionLogEntry
     from app.db.models.intervene import InterveneRequest, InterveneRequestStatus
+    from app.db.models.session_logs import ExecutionLogEntry
 
     job = await _session_service.get_session(session_id, db)
     if not job:
@@ -796,74 +805,321 @@ async def stream_session_execution_logs(
     async def stream_events():
         sent_ids: set[uuid.UUID] = set()
         sent_intervene: bool = False
+        sent_propagate_ids: set[uuid.UUID] = set()
 
-        while True:
-            result = await db.execute(
-                select(ExecutionLogEntry)
-                .where(ExecutionLogEntry.session_id == session_id)
-                .order_by(ExecutionLogEntry.timestamp, ExecutionLogEntry.id)
-            )
-            entries = result.scalars().all()
-
-            for entry in entries:
-                if entry.id in sent_ids:
-                    continue
-                sent_ids.add(entry.id)
-                payload = {
-                    "type": "log_entry",
-                    "entry": ExecutionLogEntryRead.model_validate(entry).model_dump(mode="json"),
-                }
-                yield json.dumps(payload) + "\n"
-
-            current_job = await _session_service.get_session(session_id, db)
-            if not current_job:
-                terminal_payload = {
-                    "type": "stream_completed",
-                    "session_id": str(session_id),
-                    "session_status": "failed",
-                }
-                yield json.dumps(terminal_payload) + "\n"
-                break
-
-            if current_job.status in (
-                AgentJobStatus.completed,
-                AgentJobStatus.failed,
-                AgentJobStatus.terminated,
-            ):
-                terminal_payload = {
-                    "type": "stream_completed",
-                    "session_id": str(session_id),
-                    "session_status": current_job.status.value,
-                }
-                yield json.dumps(terminal_payload) + "\n"
-                break
-
-            if current_job.status == AgentJobStatus.waiting_for_human and not sent_intervene:
-                sent_intervene = True
-                stmt = (
-                    select(InterveneRequest)
-                    .where(
-                        InterveneRequest.agent_session_id == session_id,
-                        InterveneRequest.status == InterveneRequestStatus.pending,
-                    )
-                    .limit(1)
+        try:
+            while True:
+                result = await db.execute(
+                    select(ExecutionLogEntry)
+                    .where(ExecutionLogEntry.session_id == session_id)
+                    .order_by(ExecutionLogEntry.timestamp, ExecutionLogEntry.id)
                 )
-                intervene_result = await db.execute(stmt)
-                intervene_req = intervene_result.scalar_one_or_none()
-                if intervene_req:
-                    intervene_payload = {
-                        "type": "human_intervene",
-                        "request_id": str(intervene_req.id),
-                        "session_id": str(session_id),
-                        "reason": intervene_req.reason,
-                        "intervention_type": intervene_req.intervention_type.value,
-                        "choices": intervene_req.choices,
-                    }
-                    yield json.dumps(intervene_payload) + "\n"
+                entries = result.scalars().all()
 
-            await asyncio.sleep(poll_ms / 1000)
+                for entry in entries:
+                    if entry.id in sent_ids:
+                        continue
+                    sent_ids.add(entry.id)
+                    payload = {
+                        "type": "log_entry",
+                        "entry": ExecutionLogEntryRead.model_validate(entry).model_dump(mode="json"),
+                    }
+                    yield json.dumps(payload) + "\n"
+
+                current_job = await _session_service.get_session(session_id, db)
+                if not current_job:
+                    terminal_payload = {
+                        "type": "stream_completed",
+                        "session_id": str(session_id),
+                        "session_status": "failed",
+                    }
+                    yield json.dumps(terminal_payload) + "\n"
+                    break
+
+                if current_job.status in (
+                    AgentJobStatus.completed,
+                    AgentJobStatus.failed,
+                    AgentJobStatus.terminated,
+                ):
+                    terminal_payload = {
+                        "type": "stream_completed",
+                        "session_id": str(session_id),
+                        "session_status": current_job.status.value,
+                    }
+                    yield json.dumps(terminal_payload) + "\n"
+                    break
+
+                # Reset sent_intervene when the session leaves waiting_for_human so
+                # subsequent delegations in the same session can re-trigger the event.
+                if (
+                    sent_intervene
+                    and current_job.status != AgentJobStatus.waiting_for_human
+                ):
+                    sent_intervene = False
+
+                if not sent_intervene:
+                    # Emit a dedicated human_intervene event when:
+                    # 1. The session has a pending InterveneRequest (direct intervention), OR
+                    # 2. A human_intervene execution log entry was created (propagated from
+                    #    a delegated child session via system_tools.py)
+                    stmt = (
+                        select(InterveneRequest)
+                        .where(
+                            InterveneRequest.agent_session_id == session_id,
+                            InterveneRequest.status == InterveneRequestStatus.pending,
+                        )
+                        .limit(1)
+                    )
+                    intervene_result = await db.execute(stmt)
+                    intervene_req = intervene_result.scalar_one_or_none()
+
+                    if intervene_req:
+                        sent_intervene = True
+                        intervene_payload = {
+                            "type": "human_intervene",
+                            "request_id": str(intervene_req.id),
+                            "session_id": str(session_id),
+                            "reason": intervene_req.reason,
+                            "intervention_type": intervene_req.intervention_type.value,
+                            "choices": intervene_req.choices,
+                        }
+                        yield json.dumps(intervene_payload) + "\n"
+                    else:
+                        # Check for propagated human_intervene log entries
+                        # that have not already been sent. The old .limit(1)
+                        # always returned the oldest entry, so a second
+                        # delegation's intervention was never picked up.
+                        propagate_filters = [
+                            ExecutionLogEntry.session_id == session_id,
+                            ExecutionLogEntry.event_type == "human_intervene",
+                        ]
+                        if sent_propagate_ids:
+                            propagate_filters.append(
+                                ~ExecutionLogEntry.id.in_(list(sent_propagate_ids))
+                            )
+                        propagate_stmt = (
+                            select(ExecutionLogEntry)
+                            .where(*propagate_filters)
+                            .order_by(ExecutionLogEntry.timestamp)
+                            .limit(1)
+                        )
+                        log_result = await db.execute(propagate_stmt)
+                        propagate_entry = log_result.scalar_one_or_none()
+                        if propagate_entry:
+                            sent_intervene = True
+                            sent_propagate_ids.add(propagate_entry.id)
+                            entry_data = propagate_entry.data or {}
+                            intervene_payload = {
+                                "type": "human_intervene",
+                                "request_id": entry_data.get("request_id", ""),
+                                "session_id": str(session_id),
+                                "reason": propagate_entry.message,
+                                "intervention_type": entry_data.get(
+                                    "intervention_type", "general"
+                                ),
+                                "choices": None,
+                            }
+                            yield json.dumps(intervene_payload) + "\n"
+
+                await asyncio.sleep(poll_ms / 1000)
+
+        except (asyncio.CancelledError, GeneratorExit):
+            # Client disconnected — exit the stream loop gracefully.
+            # Starlette cancels the task when the response is closed, and
+            # without this guard the CancelledError propagates to the DB
+            # connection teardown, causing the pool error seen in logs.
+            logger.info(
+                "Stream cancelled for session %s (client disconnected)",
+                session_id,
+            )
 
     return StreamingResponse(stream_events(), media_type="application/x-ndjson")
+
+
+# ── Phase 3.2: Delegation & Intervention Status Endpoints ─────────────────────
+
+
+class PendingInterventionResponse(BaseModel):
+    """Pending intervention request for a non-conversational agent session."""
+
+    request_id: uuid.UUID
+    intervention_type: str
+    reason: str
+    choices: list[str] | None = None
+    sub_agent_session_id: uuid.UUID
+    sub_agent_type_slug: str
+    created_at: datetime
+    delegation_depth: int = 0
+
+
+class DelegationStatusResponse(BaseModel):
+    """Current delegation status for a task agent session."""
+
+    has_active_delegation: bool = False
+    current_depth: int = 0
+    max_depth: int = 1
+    active_sub_agent_slug: str | None = None
+    recent_events: list[dict] = Field(default_factory=list)
+
+
+@AgentJobRouter.get(
+    "/{session_id}/interventions/pending",
+    response_model=PendingInterventionResponse | None,
+)
+async def get_pending_intervention(
+    session_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> PendingInterventionResponse | None:
+    """Return the currently pending intervention request for a task agent session.
+
+    Non-conversational (task) agent interventions are created when a delegated
+    sub-agent calls ``human_intervene``. This endpoint queries child sessions
+    (via ``AgentJob.parent_job_id``) for pending intervene requests so the
+    execution log viewer can re-surface outstanding intervention dialogs on
+    reconnect.
+
+    Returns 404 if the session does not exist.
+    Returns the pending intervention details, or ``null`` if none is pending.
+    """
+    from app.db.models.intervene import InterveneRequest, InterveneRequestStatus
+
+    job = await _session_service.get_session(session_id, db)
+    if not job:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Find child sessions that have pending intervene requests.
+    # A child session is an AgentJob whose parent_job_id == our session_id.
+    child_jobs_result = await db.execute(
+        select(AgentJob.id).where(
+            AgentJob.parent_job_id == session_id,
+        )
+    )
+    child_job_ids = [row[0] for row in child_jobs_result.fetchall()]
+    if not child_job_ids:
+        return None
+
+    # Query pending intervene requests for any child session.
+    result = await db.execute(
+        select(InterveneRequest)
+        .options(selectinload(InterveneRequest.agent_session).selectinload(AgentJob.agent_type))
+        .where(
+            InterveneRequest.agent_session_id.in_(child_job_ids),
+            InterveneRequest.status == InterveneRequestStatus.pending,
+        )
+        .order_by(InterveneRequest.created_at.desc())
+        .limit(1)
+    )
+    intervene_req = result.scalar_one_or_none()
+    if intervene_req is None:
+        return None
+
+    sub_agent_type_slug = ""
+    if intervene_req.agent_session and intervene_req.agent_session.agent_type:
+        sub_agent_type_slug = intervene_req.agent_session.agent_type.name  # type: ignore[union-attr]
+
+    return PendingInterventionResponse(
+        request_id=intervene_req.id,
+        intervention_type=intervene_req.intervention_type.value,
+        reason=intervene_req.reason,
+        choices=intervene_req.choices,
+        sub_agent_session_id=intervene_req.agent_session_id,
+        sub_agent_type_slug=sub_agent_type_slug,
+        created_at=intervene_req.created_at,
+        delegation_depth=intervene_req.delegation_depth,
+    )
+
+
+@AgentJobRouter.get(
+    "/{session_id}/delegation/status",
+    response_model=DelegationStatusResponse,
+)
+async def get_delegation_status(
+    session_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> DelegationStatusResponse:
+    """Return the current delegation status for a task agent session.
+
+    Queries recent delegation-related ``ExecutionLogEntry`` entries for the
+    session and checks child ``AgentJob`` records to determine current
+    delegation depth and active sub-agent.
+
+    Used by the execution log viewer to render the delegation status timeline
+    on initial load.
+
+    Returns 404 if the session does not exist.
+    """
+    from app.db.models.session_logs import ExecutionLogEntry
+
+    job = await _session_service.get_session(session_id, db)
+    if not job:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Query recent delegation-related log entries
+    delegation_event_types = [
+        "delegation_started",
+        "delegation_waiting",
+        "delegation_resumed",
+        "delegation_depth_blocked",
+        "delegation_timeout",
+        "delegation_failed",
+    ]
+
+    entries_result = await db.execute(
+        select(ExecutionLogEntry)
+        .where(
+            ExecutionLogEntry.session_id == session_id,
+            ExecutionLogEntry.event_type.in_(delegation_event_types),
+        )
+        .order_by(ExecutionLogEntry.timestamp.desc())
+        .limit(20)
+    )
+    recent_entries = entries_result.scalars().all()
+
+    # Determine current depth and active sub-agent from the most recent
+    # delegation_started / delegation_resumed sequence.
+    current_depth = 0
+    active_sub_agent: str | None = None
+    has_active_delegation = False
+
+    # Check child sessions to see if any are still running
+    child_result = await db.execute(
+        select(AgentJob).where(
+            AgentJob.parent_job_id == session_id,
+            AgentJob.status == AgentJobStatus.running,
+        )
+    )
+    running_child = child_result.scalar_one_or_none()
+    if running_child:
+        has_active_delegation = True
+        current_depth = running_child.delegation_depth
+        if running_child.agent_type:
+            active_sub_agent = running_child.agent_type.name  # type: ignore[union-attr]
+    else:
+        # Determine depth from the most recent delegation_started entry
+        for entry in reversed(recent_entries):
+            if entry.event_type == "delegation_started":
+                current_depth = entry.data.get("delegation_depth", 0) if entry.data else 0
+                active_sub_agent = entry.data.get("delegation_target") if entry.data else None
+                break
+
+    recent_event_list: list[dict] = []
+    for entry in recent_entries:
+        recent_event_list.append({
+            "event_type": entry.event_type,
+            "message": entry.message,
+            "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+            "data": entry.data,
+        })
+
+    return DelegationStatusResponse(
+        has_active_delegation=has_active_delegation,
+        current_depth=current_depth,
+        max_depth=1,
+        active_sub_agent_slug=active_sub_agent,
+        recent_events=recent_event_list,
+    )
 
 
 @AgentJobRouter.get("/{session_id}/execution-logs", response_model=list[ExecutionLogRead])
@@ -1324,11 +1580,11 @@ async def agent_oauth_authorize(
             origin = f"{parsed.scheme}://{parsed.netloc}"
     if not origin or not origin.startswith("http"):
         origin = "http://localhost:5173"  # Default to Vite dev server
-    
+
     # Build redirect_uri pointing at the frontend callback page (not the API endpoint)
     redirect_uri = f"{origin}/agents/identities/oauth/callback"
     logger.info("[AUTHORIZE] origin=%s, redirect_uri=%s", origin, redirect_uri)
-    
+
     # Use identity_id as state if provided, else use "new" to signal creation
     state_value = str(identity_id) if identity_id else "new"
     authorization_url = _identity_service.get_oauth_authorize_url(state_value, redirect_uri)
@@ -1373,11 +1629,11 @@ async def agent_oauth_callback(
             origin = f"{parsed.scheme}://{parsed.netloc}"
     if not origin or not origin.startswith("http"):
         origin = "http://localhost:5173"  # Default to Vite dev server
-    
+
     # Build redirect_uri the same way as authorize step
     redirect_uri = f"{origin}/agents/identities/oauth/callback"
     logger.info("[CALLBACK] origin=%s, redirect_uri=%s", origin, redirect_uri)
-    
+
     if state == "new":
         # Auto-create flow: exchange code, get user info, create identity
         try:
@@ -1896,15 +2152,16 @@ async def purge_terminal_jobs(
     CASCADE) and to ``session_logs`` rows that reference the session
     through the application-level delete path.
     """
-    from app.db.models.agents import AgentJob, AgentJobStatus
     from sqlalchemy import delete as sql_delete
+
+    from app.db.models.agents import AgentJob, AgentJobStatus
 
     statuses = [
         AgentJobStatus.completed,
         AgentJobStatus.failed,
         AgentJobStatus.terminated,
     ]
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=older_than_hours)
 
     # Count before deletion so the response can show the remaining terminal
     # population (which is the same set, just minus what we deleted).

@@ -71,6 +71,10 @@ Most system tools (e.g., `system____save_result`, `system____send_notification`)
 
 This suspend-on-call vs return-on-response difference is unique to `human_intervene` among system tools. The tool call still flows through the standard Communication Hub routing chain, but the response arrives asynchronously through a separate resume signal rather than inline in the tool execution path.
 
+When a **delegated sub-agent** (depth 1) in a non-conversational execution calls `human_intervene`, the response arrives through the execution log viewer path rather than the conversation WebSocket or dashboard poll path. The CH `InterventionRouter` detects no `conversation_session_id` and falls through to the log stream delivery path, where the Task Delegation Event Router pushes the intervention request as an NDJSON event to the parent agent's log viewer.
+
+For non-conversational SOP executions, the **agent-delegation step** includes an additional depth check via the Delegation Depth Guard before the sub-agent is spawned. If the depth exceeds 1 (i.e., a delegatee at depth 1 attempting to delegate further), the call is blocked and a `delegation_depth_blocked` execution event is emitted.
+
 ## Execution Chain
 
 ### Skill Engine

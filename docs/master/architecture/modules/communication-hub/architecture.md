@@ -4,6 +4,7 @@
 flowchart LR
     UI[Workflow Authoring UI]
     CHAT[Conversation UI]
+    LOG[Execution Log Viewer]
     CFG[System Configuration]
     CH[Communication Hub]
     AR[Agent Runtime]
@@ -11,6 +12,7 @@ flowchart LR
     MCP[MCP and channel integrations]
     IR[Intervention Router]
     IQ[Intervention Queue]
+    TDER[Task Delegation Event Router\nNEW]
     STAT[Workflow status channel]
     CSTAT[Chat status channel]
     CTX[Governed Context Package]
@@ -38,6 +40,9 @@ flowchart LR
     STAT --> UI
     CSTAT --> CHAT
     AR -->|Intervene signal with conv_session_id| IR
+    AR -->|Non-conversational delegation\nevents and intervene| TDER
+    TDER -->|Delegation status push| LOG
+    LOG -->|Intervene response| TDER
     IR -->|Enqueue pending per session| IQ
     IQ -->|Deliver next when resolved| IR
     IR -->|intervene_request WS message| CHAT
@@ -70,6 +75,7 @@ flowchart TB
 - **Conversation Session Manager**: Manages conversation WebSocket connections, session state transitions, and intervention-pending flags that block new user messages until outstanding interventions are resolved.
 - **Intervention Router**: Inspects `human_intervene` suspend signals for a `conversation_session_id`. When present, routes the intervention request to the connected WebSocket client of the parent conversation. When absent, falls through to the existing dashboard-based intervention flow.
 - **Intervention Queue**: Per-conversation-session FIFO queue for intervention requests. When multiple delegated sub-agents request intervention concurrently, requests are delivered sequentially.
+- **Task Delegation Event Router**: In-memory router that manages delivery of non-conversational delegation status events and intervention requests to execution log viewer clients. Maintains a mapping of active log viewer connections to parent task agent sessions. Pushes delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) and intervention requests to the correct log viewer. Falls back to poll-based delivery when no live viewer is connected.
 
 ## WebSocket Message Types
 

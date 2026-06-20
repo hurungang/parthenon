@@ -5,7 +5,7 @@ import { presentLog } from '../../services/LogPresenter'
 import { LogSummaryPanel } from './LogSummaryPanel'
 import { WorkingStepsPanel } from './WorkingStepsPanel'
 import { RawLogToggle } from './RawLogToggle'
-import type { AgentJobStatus, ExecutionLogEntry, ExecutionLogRead } from '../../types'
+import type { AgentJobStatus, ExecutionLogEntry, ExecutionLogRead, InterveneRequest } from '../../types'
 
 const EMPTY_EXECUTION_LOG: ExecutionLogRead = {
   id: '',
@@ -19,9 +19,11 @@ interface Props {
   executionLog?: ExecutionLogRead | null
   entries: ExecutionLogEntry[]
   sessionStatus?: AgentJobStatus
+  onViewSubAgentExecution?: (sessionId: string) => void
+  pendingInterventionsByChildSession?: Record<string, InterveneRequest>
 }
 
-export function LogViewer({ executionLog, entries, sessionStatus }: Props) {
+export function LogViewer({ executionLog, entries, sessionStatus, onViewSubAgentExecution, pendingInterventionsByChildSession }: Props) {
   const resolvedLog = executionLog ?? EMPTY_EXECUTION_LOG
   const { t } = useTranslation()
   const [rawMode, setRawMode] = useState(false)
@@ -51,7 +53,7 @@ export function LogViewer({ executionLog, entries, sessionStatus }: Props) {
       {!rawMode && (
         <Box>
           <LogSummaryPanel summary={structured.summary} />
-          <WorkingStepsPanel spans={structured.spans} />
+          <WorkingStepsPanel spans={structured.spans} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} />
         </Box>
       )}
 

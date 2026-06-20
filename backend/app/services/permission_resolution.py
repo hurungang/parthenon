@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.credential_vault import get_vault
 from app.db.models.agent_security import AgentInstanceCertificate
 from app.db.models.agents import AgentIdentity, AgentType
-from app.services.agents.permission_manager import AgentPermissionManager
+from app.services.agents.permission_manager import get_shared_permission_manager
 from app.services.certificate_authority import (
     CertificateValidationResult,
     validate_certificate,
@@ -33,7 +33,7 @@ from app.services.token_refresh import TokenRefreshError, refresh_oauth_token, c
 
 logger = logging.getLogger(__name__)
 
-_permission_manager = AgentPermissionManager()
+_permission_manager = get_shared_permission_manager()
 
 
 # ── Result types ──────────────────────────────────────────────────────────────

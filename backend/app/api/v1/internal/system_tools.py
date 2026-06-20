@@ -11,16 +11,17 @@ These are called by Communication Hub when routing system tool calls.
 """
 import logging
 import uuid
-from typing import Any, Annotated
+from datetime import UTC
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_service_certificate
-from app.db.session import get_db
 from app.db.models.agents import AgentOutputType
+from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -254,9 +255,10 @@ async def get_recipient_group_tool(
             )
 
         # Import models
-        from app.db.models.notifications import RecipientGroup
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
+
+        from app.db.models.notifications import RecipientGroup
 
         # Get the group with channels
         result = await db.execute(
@@ -340,8 +342,8 @@ async def human_intervene_tool(
             )
 
         from app.db.models.agents import AgentJob
-        from app.db.models.intervene import InterventionType
         from app.db.models.conversations import ConversationSession
+        from app.db.models.intervene import InterventionType
         from app.services.agents.intervene_service import InterveneRequestStore
 
         result = await db.execute(
@@ -391,14 +393,76 @@ async def human_intervene_tool(
             delegation_depth=conv_job.delegation_depth if conv_job.delegation_depth else 0,
         )
 
+        # Extract parent session ID from child's input_data BEFORE commit
+        # (conv_job is expired by commit, so read what we need now)
+        requester_session_id = None
+        child_session_id = str(conv_job.id)
+        input_data = conv_job.input_data if isinstance(conv_job.input_data, dict) else {}
+        if isinstance(input_data, dict):
+            raw = input_data.get("__requester_session_id")
+            if raw:
+                try:
+                    requester_session_id = uuid.UUID(str(raw))
+                except (ValueError, TypeError):
+                    logger.warning("Invalid __requester_session_id: %s", raw)
+
+        # Extract request attributes BEFORE commit for post-commit use.
+        # After commit (or a subsequent rollback), ORM objects may be expired
+        # and lazy-loading from sync attribute access triggers MissingGreenlet.
+        request_id = request.id
+        request_id_str = str(request.id)
+        intervention_type_value = request.intervention_type.value
+        request_reason = request.reason
+        request_choices = request.choices
+        request_delegation_depth = request.delegation_depth
+
         await db.commit()
 
         logger.info(
             "Created intervene request %s for session %s%s",
-            request.id,
+            request_id_str,
             session_id,
             f" (conversation: {conversation_session_id})" if conversation_session_id else "",
         )
+
+        if requester_session_id is not None:
+            try:
+                from datetime import datetime
+
+                from app.db.models.session_logs import (
+                    ExecutionEventCategory,
+                    ExecutionLogEntry,
+                )
+                log_entry = ExecutionLogEntry(
+                    id=uuid.uuid4(),
+                    session_id=requester_session_id,
+                    event_type="human_intervene",
+                    log_level="INFO",
+                    message=(
+                        f"Delegated agent {agent_type_name} requires "
+                        f"human intervention: {reason}"
+                    ),
+                    data={
+                        "request_id": request_id_str,
+                        "intervention_type": intervention_type_value,
+                        "child_session_id": child_session_id,
+                        "agent_type": agent_type_name,
+                    },
+                    event_category=ExecutionEventCategory.functional,
+                    timestamp=datetime.now(UTC),
+                )
+                db.add(log_entry)
+                await db.flush()
+                logger.info(
+                    "Propagated intervene_request to parent session %s",
+                    requester_session_id,
+                )
+            except Exception as propagate_exc:
+                logger.warning(
+                    "Failed to propagate intervene_request to parent session: %s",
+                    propagate_exc,
+                )
+                await db.rollback()
 
         # Dispatch to Communication Hub when this is a conversation-scoped intervention
         if conversation_session_id:
@@ -409,13 +473,13 @@ async def human_intervene_tool(
                     session_id=conversation_session_id,
                     message_type="intervene_request",
                     content={
-                        "request_id": str(request.id),
+                        "request_id": request_id_str,
                         "conversation_session_id": str(conversation_session_id),
-                        "intervention_type": request.intervention_type.value,
-                        "reason": request.reason,
-                        "choices": request.choices,
+                        "intervention_type": intervention_type_value,
+                        "reason": request_reason,
+                        "choices": request_choices,
                         "agent_type": agent_type_name,
-                        "delegation_depth": request.delegation_depth,
+                        "delegation_depth": request_delegation_depth,
                     },
                 )
                 logger.info(
@@ -426,7 +490,7 @@ async def human_intervene_tool(
                 logger.warning(
                     "Failed to dispatch intervene_request to CH: %s (intervention %s still created)",
                     dispatch_exc,
-                    request.id,
+                    request_id_str,
                 )
 
         # Attempt to dispatch a notification for the new intervene request.
@@ -440,20 +504,20 @@ async def human_intervene_tool(
             nsvc = NotificationService(db)
             await nsvc.send_to_group(
                 group_slug="intervene-notifications",
-                body=f"Human intervention required: {request.reason}",
-                subject=f"Intervene Request ({request.intervention_type.value})",
+                body=f"Human intervention required: {request_reason}",
+                subject=f"Intervene Request ({intervention_type_value})",
                 source_type=SourceType.INTERVENE_REQUEST_CREATED,
-                source_id=request.id,
+                source_id=request_id,
             )
         except Exception:
             logger.warning(
                 "Failed to dispatch notification for intervene request %s "
                 "(no recipient group 'intervene-notifications' configured?)",
-                request.id,
+                request_id_str,
             )
 
         return SystemToolResponse(
-            result={"request_id": str(request.id), "status": "pending"}
+            result={"request_id": request_id_str, "status": "pending"}
         )
 
     except ValueError as exc:

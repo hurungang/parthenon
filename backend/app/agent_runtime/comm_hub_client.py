@@ -358,6 +358,15 @@ class CommHubToolClient:
             timeout_seconds,
         )
 
+        # Cap timeout to CH API's max (120s) to avoid HTTP 422
+        capped_timeout = min(timeout_seconds, 120.0)
+        if capped_timeout != timeout_seconds:
+            logger.warning(
+                "A2A wait: clamping timeout from %ss to %ss (CH API max)",
+                timeout_seconds,
+                capped_timeout,
+            )
+
         try:
             # The CH wait may hold the connection indefinitely for HITL.
             # Use a generous HTTP timeout (1 hour) to accommodate human response time.
@@ -379,7 +388,7 @@ class CommHubToolClient:
             async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(
                     endpoint,
-                    params={"timeout_seconds": timeout_seconds},
+                    params={"timeout_seconds": capped_timeout},
                     headers=headers,
                 )
                 response.raise_for_status()

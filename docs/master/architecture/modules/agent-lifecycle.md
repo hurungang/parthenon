@@ -104,6 +104,21 @@ During the observe-reason-act loop, an agent may call the `system____human_inter
 
 This suspend/resume cycle also applies to the inline intervene popup on the execution log streaming page — when a user is viewing live logs and the agent triggers an intervene request, a popup appears directly on the log page. After the user responds, the popup closes and the stream resumes automatically.
 
+### 5b. Non-Conversational Delegation with HITL
+
+When a **delegated sub-agent** in a non-conversational (task) session calls `human_intervene`, the intervention request follows a different routing path:
+
+1. The sub-agent's `human_intervene` call arrives at the Communication Hub without a `conversation_session_id`.
+2. CH's `InterventionRouter` detects the absence of a `conversation_session_id` and falls through — the request is not routed to a conversation WebSocket client.
+3. Instead, CH's **Task Delegation Event Router** pushes a `task_intervene_request` event through the parent agent's execution log NDJSON stream.
+4. The parent `AgentJob` transitions to `waiting_for_human` status.
+5. The execution log viewer renders an inline intervention dialog (approval, choice, or text) at the point of the intervention event.
+6. The operator responds inline — the response flows: execution log viewer → CH → CC for persistence.
+7. CC signals resume through CH to AR, which restores the sub-agent's execution with the response value.
+8. The parent agent's delegation loop resumes and emits a `delegation_resumed` event.
+
+Delegation depth is limited to 1 level for non-conversational agents. The **Delegation Depth Guard** in AR blocks sub-agents (depth 1) from further delegation, emitting a `delegation_depth_blocked` event. Conversational agents are not subject to this limit.
+
 ### 6. Result Persistence and Completion
 
 The structured result, full conversation history, and complete execution log are persisted to the Result Store. The Agent Session Queue marks the session as complete. The Agent Instance Dashboard surfaces session status, filtering by state (running / waiting_for_human / completed / failed / cancelled) and time range. See [Agent Instance Dashboard](../agent-instance-dashboard.md) and [Execution Logs](../execution-logs.md).

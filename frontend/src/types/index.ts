@@ -799,11 +799,12 @@ export interface ExecutionLogEntry {
   data: Record<string, unknown>
 }
 
-export type WorkingStepIconType = 'llm' | 'tool' | 'success' | 'error' | 'info'
+export type WorkingStepIconType = 'llm' | 'tool' | 'success' | 'error' | 'info' | 'delegating' | 'waiting'
 
 export interface WorkingStepDetail {
   label: string
   content: string
+  eventType?: string
 }
 
 export interface WorkingStep {

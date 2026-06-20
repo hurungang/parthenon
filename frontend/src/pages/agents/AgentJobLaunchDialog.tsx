@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -15,10 +15,12 @@ import {
 } from '@mui/material'
 import CodeIcon from '@mui/icons-material/Code'
 import EditIcon from '@mui/icons-material/Edit'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { DynamicSchemaForm } from '../../components/DynamicSchemaForm'
-import type { AgentJob, AgentType } from '../../types'
+import type { AgentJob, AgentRole, AgentType, Skill, Sop } from '../../types'
 
 interface AgentJobLaunchDialogProps {
   open: boolean
@@ -57,6 +59,92 @@ export function AgentJobLaunchDialog({
       setDialogError(null)
     }
   }, [open])
+
+  const queryClient = useQueryClient()
+
+  const { data: allRoles } = useQuery<AgentRole[]>({
+    queryKey: ['agents', 'roles'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentRole[]>('/agents/roles')
+      return data
+    },
+    enabled: open && !!agentType?.role_id,
+  })
+
+  const { data: allSops } = useQuery<Sop[]>({
+    queryKey: ['sops'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Sop[]>('/sops')
+      return data
+    },
+    enabled: open && !!agentType?.role_id,
+  })
+
+  const { data: allSkills } = useQuery<Skill[]>({
+    queryKey: ['skills'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Skill[]>('/skills')
+      return data
+    },
+    enabled: open && !!agentType?.role_id,
+  })
+
+  const currentRole = allRoles?.find((r) => r.id === agentType?.role_id)
+  const roleSops = (allSops ?? []).filter((s) => currentRole?.sop_ids.includes(s.id))
+  const roleSkills = (allSkills ?? []).filter((s) => currentRole?.skill_ids.includes(s.id))
+
+  const planGeneratedAt = agentType?.plan?.generated_at ? new Date(agentType.plan.generated_at) : null
+
+  const staleDefinitionLabels = useMemo(() => {
+    if (!planGeneratedAt) {
+      return [] as string[]
+    }
+
+    const labels: string[] = []
+
+    if (currentRole?.updated_at && new Date(currentRole.updated_at) > planGeneratedAt) {
+      labels.push('role')
+    }
+
+    if (roleSops.some((sop) => new Date(sop.updated_at) > planGeneratedAt)) {
+      labels.push('SOPs')
+    }
+
+    if (roleSkills.some((skill) => new Date(skill.updated_at) > planGeneratedAt)) {
+      labels.push('skills')
+    }
+
+    return labels
+  }, [currentRole?.updated_at, planGeneratedAt, roleSops, roleSkills])
+
+  const staleDefinitionsMessage = useMemo(() => {
+    if (staleDefinitionLabels.length === 0) {
+      return null
+    }
+
+    if (staleDefinitionLabels.length === 1) {
+      return `This plan is older than the current ${staleDefinitionLabels[0]} definition.`
+    }
+
+    const last = staleDefinitionLabels.pop()
+    return `This plan is older than the current ${staleDefinitionLabels.join(', ')} and ${last} definitions.`
+  }, [staleDefinitionLabels])
+
+  const planIsStale = !!planGeneratedAt && staleDefinitionLabels.length > 0
+
+  const regeneratePlanMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post(`/agents/types/${agentType.id}/regenerate-plan`)
+      return data
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'types', agentType.id] })
+      await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+    },
+    onError: (error) => {
+      setDialogError(error)
+    },
+  })
 
   const handleLaunch = async () => {
     try {
@@ -112,6 +200,23 @@ export function AgentJobLaunchDialog({
         {dialogError ? (
           <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
         ) : null}
+
+        {planIsStale && (
+          <Box display="flex" gap={1} alignItems="stretch" sx={{ mb: 1 }}>
+            <Alert severity="warning" sx={{ flex: 1, alignItems: 'center' }}>
+              {staleDefinitionsMessage}
+            </Alert>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<RefreshIcon />}
+              onClick={() => void regeneratePlanMutation.mutateAsync()}
+              disabled={regeneratePlanMutation.isPending}
+            >
+              Regenerate plan
+            </Button>
+          </Box>
+        )}
 
         <Box display="flex" flexDirection="column" gap={2} pt={1}>
           {agentType.input_type === 'none' && (

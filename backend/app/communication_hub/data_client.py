@@ -292,3 +292,37 @@ class ControlCenterDataClient:
             f"/internal/data/a2a/sessions/{session_link_id}/disconnect",
             {},
         )
+
+    # ── Execution logging ─────────────────────────────────────────────────────
+
+    async def log_execution_event(
+        self,
+        session_id: uuid.UUID | str,
+        event_type: str,
+        message: str,
+        data: dict[str, Any] | None = None,
+        log_level: str = "INFO",
+        event_category: str = "functional",
+    ) -> None:
+        """Write a structured execution log entry to Control Center.
+
+        Calls ``POST /internal/data/sessions/{session_id}/log``.
+        Failures are swallowed — logging must never abort execution.
+        """
+        session_uuid = uuid.UUID(str(session_id)) if isinstance(session_id, str) else session_id
+        try:
+            await self._post(
+                f"/internal/data/sessions/{session_uuid}/log",
+                {
+                    "event_type": event_type,
+                    "log_level": log_level,
+                    "message": message,
+                    "data": data or {},
+                    "event_category": event_category,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist execution log for session %s: %s",
+                session_id, exc,
+            )

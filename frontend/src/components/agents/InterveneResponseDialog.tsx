@@ -46,14 +46,12 @@ export function InterveneResponseDialog({
   const { dialogError, setDialogError, clearDialogError } = useDialogErrorHandler()
   const [submitting, setSubmitting] = useState(false)
   const [terminating, setTerminating] = useState(false)
-  const [approvalValue, setApprovalValue] = useState<boolean | null>(null)
   const [selectedChoice, setSelectedChoice] = useState('')
   const [textValue, setTextValue] = useState('')
 
   const handleClose = () => {
     clearDialogError()
     setSubmitting(false)
-    setApprovalValue(null)
     setSelectedChoice('')
     setTextValue('')
     onClose()
@@ -65,13 +63,10 @@ export function InterveneResponseDialog({
       clearDialogError()
       setSubmitting(true)
       const value: {
-        approval_value?: boolean
         selected_choice?: string
         text_value?: string
       } = {}
-      if (request.intervention_type === 'approval') {
-        value.approval_value = approvalValue ?? false
-      } else if (request.intervention_type === 'choice') {
+      if (request.intervention_type === 'choice') {
         value.selected_choice = selectedChoice
       } else if (request.intervention_type === 'text') {
         value.text_value = textValue
@@ -131,20 +126,44 @@ export function InterveneResponseDialog({
         {request.intervention_type === 'approval' && (
           <Box display="flex" gap={2} justifyContent="center" sx={{ mt: 2 }}>
             <Button
-              variant={approvalValue === true ? 'contained' : 'outlined'}
+              variant="contained"
               color="success"
-              onClick={() => setApprovalValue(true)}
+              disabled={submitting}
+              onClick={async () => {
+                clearDialogError()
+                setSubmitting(true)
+                try {
+                  await onSubmit(request.id, { approval_value: true })
+                  handleClose()
+                } catch (err) {
+                  setDialogError(err)
+                } finally {
+                  setSubmitting(false)
+                }
+              }}
               sx={{ minWidth: 120 }}
             >
-              {t('app.yes')}
+              {submitting ? t('app.saving') : t('app.yes')}
             </Button>
             <Button
-              variant={approvalValue === false ? 'contained' : 'outlined'}
+              variant="contained"
               color="error"
-              onClick={() => setApprovalValue(false)}
+              disabled={submitting}
+              onClick={async () => {
+                clearDialogError()
+                setSubmitting(true)
+                try {
+                  await onSubmit(request.id, { approval_value: false })
+                  handleClose()
+                } catch (err) {
+                  setDialogError(err)
+                } finally {
+                  setSubmitting(false)
+                }
+              }}
               sx={{ minWidth: 120 }}
             >
-              {t('app.no')}
+              {submitting ? t('app.saving') : t('app.no')}
             </Button>
           </Box>
         )}
@@ -211,16 +230,18 @@ export function InterveneResponseDialog({
         <Button onClick={handleClose} disabled={submitting || terminating}>
           {t('app.cancel')}
         </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={
-            submitting || terminating ||
-            (request.intervention_type === 'choice' && !selectedChoice)
-          }
-        >
-          {submitting ? t('app.saving') : t('intervene.submitResponse', 'Submit')}
-        </Button>
+        {request.intervention_type !== 'approval' && (
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={
+              submitting || terminating ||
+              (request.intervention_type === 'choice' && !selectedChoice)
+            }
+          >
+            {submitting ? t('app.saving') : t('intervene.submitResponse', 'Submit')}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   )

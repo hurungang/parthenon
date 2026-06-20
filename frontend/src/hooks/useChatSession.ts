@@ -472,7 +472,9 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
           const hadDelegationInFlight =
             statusKind === 'delegating' ||
             statusKind === 'waiting' ||
-            statusKind === 'using_tool'
+            statusKind === 'using_tool' ||
+            statusKind === 'delegation_resumed' ||
+            statusKind === 'waiting_for_human'
 
           const targetCycleId = activeDelegationCycleIdRef.current
           if (hadDelegationInFlight && targetCycleId) {

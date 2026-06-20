@@ -17,6 +17,7 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - Validates SOP/delegation configuration for **recursive delegation risk** at create and update entry points, blocking recursion-prone submissions
 - Validates **recursion/dead-loop risk** at run initiation and prevents execution when risk conditions are detected
 - The model picker in the Agent Type form is sourced from the centrally managed [Model Configurations](./model-configurations.md) catalogue and grows automatically as new providers and models are configured
+- The configured `output_type` (`auto`, `markdown`, `typed`) is actively enforced for non-conversational agents via system prompt injection — markdown agents receive formatting instructions, typed agents receive schema-driven JSON instructions, auto agents receive no extra guidance
 - Supports binding multiple SOPs and skills to an Agent Type as an ordered list of entries, where each entry references either an SOP or a skill; bindings define the curated capability set used for system instruction generation and Agent Plan Mode
 
 ## SOP & Skill Binding

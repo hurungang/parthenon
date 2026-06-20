@@ -733,6 +733,7 @@
             "stateGood": "Good",
             "stateNear": "Near",
             "stateOver": "Over",
+            "stateReached": "Reached",
             "notConfigured": "Not Configured"
           },
           "statusSuccess": "Success",
@@ -755,6 +756,48 @@
           "copyToClipboard": "Copy Raw Log",
           "copied": "Copied!"
         }
+      }
+    },
+    "executions": {
+      "delegationTimeline": {
+        "title": "Delegation Timeline",
+        "labelDelegating": "DELEGATING",
+        "labelWaiting": "WAITING",
+        "labelResumed": "DELEGATION RESUMED",
+        "labelBlocked": "DELEGATION BLOCKED",
+        "labelTimeout": "DELEGATION TIMEOUT",
+        "labelFailed": "DELEGATION FAILED",
+        "subAgentExecuting": "Sub-agent executing...",
+        "subAgentCompleted": "Sub-agent completed",
+        "subAgentFailed": "Sub-agent failed",
+        "stateRunning": "Running",
+        "stateCompleted": "Completed",
+        "stateFailed": "Failed"
+      },
+      "taskIntervention": {
+        "title": "Intervention Required",
+        "requestedByMeta": "Requested by {{agent}} during delegation",
+        "requestedBy": "Requested by",
+        "responseSubmitted": "Response submitted",
+        "expiredMessage": "This intervention request has expired (sub-agent timed out). No further action possible.",
+        "approve": "Approve",
+        "deny": "Deny",
+        "textPlaceholder": "Enter your response here...",
+        "dismiss": "Dismiss (banner stays)",
+        "choicesAvailable": "Options available: {{count}}"
+      },
+      "pendingBanner": {
+        "title": "Intervention Required — Delegated sub-agent needs input",
+        "subtitle": "{{type}} requested by {{agent}} · pending since {{time}}",
+        "respondNow": "Respond Now ↓"
+      },
+      "resultTab": {
+        "noData": "No result data available.",
+        "structuredOutput": "Structured Output",
+        "agentOutput": "Agent Output",
+        "showSchema": "Show Output Schema",
+        "hideSchema": "Hide Output Schema",
+        "validated": "Validated ✓"
       }
     },
     "modelConfigs": {
