@@ -28,7 +28,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
-import type { AgentIdentity, AgentInputType, AgentOutputType, AgentRole, ModelConfig, Skill, Sop, SopBindingInput, SkillBindingInput } from '../../types'
+import type { AgentDataType, AgentIdentity, AgentInputType, AgentOutputType, AgentRole, ModelConfig, Skill, Sop, SopBindingInput, SkillBindingInput } from '../../types'
 import { JsonSchemaBuilder } from '../../components/JsonSchemaBuilder'
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/
@@ -44,6 +44,7 @@ export interface AgentTypeFormValues {
   input_schema: string
   output_type: AgentOutputType
   output_schema: string
+  output_data_type_id: string
   sop_bindings: SopBindingInput[]
   skill_bindings: SkillBindingInput[]
   guardrail_max_iterations: number
@@ -66,8 +67,9 @@ export const defaultAgentTypeFormValues: AgentTypeFormValues = {
   system_instruction: '',
   input_type: 'none',
   input_schema: '',
-  output_type: 'auto',
+  output_type: 'typed',
   output_schema: '',
+  output_data_type_id: '',
   sop_bindings: [],
   skill_bindings: [],
   guardrail_max_iterations: 10,
@@ -152,6 +154,14 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
     queryFn: async () => {
       const { data } = await apiClient.get<Skill[]>('/skills')
       return data
+    },
+  })
+
+  const { data: dataTypes } = useQuery<AgentDataType[]>({
+    queryKey: ['data-types', 'list'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ items: AgentDataType[] }>('/data-types?page_size=100')
+      return data.items
     },
   })
 
@@ -534,27 +544,47 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
       )}
 
       {values.input_type !== 'conversation' && (
-        <FormControl fullWidth>
-          <InputLabel>{t('agents.types.outputType')}</InputLabel>
-          <Select
-            value={values.output_type}
-            label={t('agents.types.outputType')}
-            onChange={(e) => set('output_type', e.target.value as AgentOutputType)}
-          >
-            <MenuItem value="auto">{t('agents.types.outputAuto')}</MenuItem>
-            <MenuItem value="typed">{t('agents.types.outputTyped')}</MenuItem>
-            <MenuItem value="markdown">{t('agents.types.outputMarkdown')}</MenuItem>
-          </Select>
-        </FormControl>
-      )}
+        <>
+          <FormControl fullWidth>
+            <InputLabel>{t('agents.types.outputType')}</InputLabel>
+            <Select
+              value={values.output_type}
+              label={t('agents.types.outputType')}
+              onChange={(e) => {
+                const newType = e.target.value as AgentOutputType
+                const updated = { ...values, output_type: newType }
+                if (newType !== 'typed') {
+                  updated.output_data_type_id = ''
+                }
+                onChange(updated)
+              }}
+            >
+              <MenuItem value="typed">{t('agents.types.outputTyped')}</MenuItem>
+              <MenuItem value="markdown">{t('agents.types.outputMarkdown')}</MenuItem>
+            </Select>
+          </FormControl>
 
-      {values.input_type !== 'conversation' && values.output_type === 'typed' && (
-        <JsonSchemaBuilder
-          value={values.output_schema}
-          onChange={(schema) => set('output_schema', schema)}
-          label={t('agents.types.outputSchema')}
-          helperText={t('agents.types.schemaBuilder.outputSchemaHelper')}
-        />
+          {values.output_type === 'typed' && (
+            <FormControl fullWidth>
+              <InputLabel>{t('agents.types.outputDataType')}</InputLabel>
+              <Select
+                value={values.output_data_type_id}
+                label={t('agents.types.outputDataType')}
+                onChange={(e) => set('output_data_type_id', e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>{t('agents.types.noOutputDataType')}</em>
+                </MenuItem>
+                {(dataTypes ?? []).map((dt) => (
+                  <MenuItem key={dt.id} value={dt.id}>
+                    {dt.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>{t('agents.types.outputDataTypeHint')}</FormHelperText>
+            </FormControl>
+          )}
+        </>
       )}
 
       <Accordion variant="outlined" defaultExpanded={false}>

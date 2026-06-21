@@ -141,6 +141,7 @@ export function AgentManagementPage() {
       input_schema: at.input_schema ? JSON.stringify(at.input_schema, null, 2) : '',
       output_type: at.output_type,
       output_schema: at.output_schema ? JSON.stringify(at.output_schema, null, 2) : '',
+      output_data_type_id: at.output_data_type_id ?? '',
       sop_bindings: (at.sop_bindings ?? []).map((b) => ({ sop_id: b.sop_id, order: b.order })),
       skill_bindings: (at.skill_bindings ?? []).map((b) => ({ skill_id: b.skill_id, order: b.order })),
       guardrail_max_iterations: at.guardrail_max_iterations ?? 10,
@@ -182,6 +183,7 @@ export function AgentManagementPage() {
         input_schema: form.input_schema ? JSON.parse(form.input_schema) : null,
         output_type: form.output_type,
         output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
+        output_data_type_id: form.output_data_type_id || null,
         sop_bindings: form.sop_bindings,
         skill_bindings: form.skill_bindings,
         guardrail_max_iterations: form.guardrail_max_iterations,
@@ -244,6 +246,7 @@ export function AgentManagementPage() {
                 <TableCell>{t('app.name')}</TableCell>
                 <TableCell>{t('agents.types.inputType')}</TableCell>
                 <TableCell>{t('agents.types.outputType')}</TableCell>
+                <TableCell>{t('agents.types.outputDataType')}</TableCell>
                 <TableCell>{t('agents.llmModel')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
                 <TableCell>{t('agents.types.role')}</TableCell>
@@ -265,6 +268,11 @@ export function AgentManagementPage() {
                   </TableCell>
                   <TableCell>
                     <Chip label={at.output_type} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell>
+                    {at.output_data_type_name
+                      ? <Chip label={at.output_data_type_name} size="small" variant="outlined" color="info" />
+                      : '—'}
                   </TableCell>
                   <TableCell>{at.model_id ?? '—'}</TableCell>
                   <TableCell>
@@ -317,7 +325,7 @@ export function AgentManagementPage() {
               ))}
               {(agentTypes ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">{t('app.noData')}</TableCell>
+                  <TableCell colSpan={8} align="center">{t('app.noData')}</TableCell>
                 </TableRow>
               )}
             </TableBody>

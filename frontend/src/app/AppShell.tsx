@@ -34,6 +34,8 @@ import MonitorIcon from '@mui/icons-material/Monitor'
 import LogoutIcon from '@mui/icons-material/Logout'
 import SecurityIcon from '@mui/icons-material/Security'
 import SettingsIcon from '@mui/icons-material/Settings'
+import StorageIcon from '@mui/icons-material/Storage'
+import ListAltIcon from '@mui/icons-material/ListAlt'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import TimelineIcon from '@mui/icons-material/Timeline'
@@ -112,6 +114,8 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.schedules', path: '/schedules', icon: <ScheduleIcon /> },
       { labelKey: 'nav.agentTrails', path: '/agent-trails', icon: <TimelineIcon /> },
       { labelKey: 'nav.humanIntervene', path: '/agents/intervene', icon: <PanToolIcon /> },
+      { labelKey: 'nav.dataTypes', path: '/admin/data-types', icon: <StorageIcon /> },
+      { labelKey: 'nav.agentOutputs', path: '/admin/agent-outputs', icon: <ListAltIcon /> },
     ],
   },
   {

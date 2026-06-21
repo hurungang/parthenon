@@ -101,6 +101,8 @@ const MOCK_AGENT_TYPE: AgentType = {
   input_schema: null,
   output_type: 'markdown',
   output_schema: null,
+  output_data_type_id: null,
+  output_data_type_name: null,
   sop_bindings: [],
   skill_bindings: [],
   is_active: true,

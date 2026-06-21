@@ -32,6 +32,7 @@ class AgentLoopContext:
     system_instruction: str | None
     output_type: str  # "auto" | "typed" | "markdown"
     output_schema: dict[str, Any] | None
+    output_json_schema: dict[str, Any] | None = None  # JSON Schema for provider-native structured output
     # Accumulated LLM message thread (role + content dicts)
     messages: list[dict[str, Any]] = field(default_factory=list)
     # Results returned by tool calls in the current session

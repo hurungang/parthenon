@@ -550,4 +550,223 @@ describe('AgentTypeForm', () => {
     )
     expect(screen.queryByText('agents.types.primarySopId')).toBeNull()
   })
+
+  // ── Data Type Selector (Phase 3) ─────────────────────────────────────────────
+
+  it('renders output data type selector dropdown', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.outputDataType', { selector: 'label' })).toBeDefined()
+    })
+  })
+
+  it('renders data type hint text', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.outputDataTypeHint')).toBeDefined()
+    })
+  })
+
+  it('shows data type options and calls onChange when selected', async () => {
+    const mockApiClient = (await import('../api/apiClient')).default
+    ;(mockApiClient.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (String(url).includes('data-types')) {
+        return Promise.resolve({
+          data: {
+            items: [
+              { id: 'dt-1', name: 'Structured Report', slug: 'structured-report', description: '', fields: [], created_at: '', updated_at: '' },
+              { id: 'dt-2', name: 'JSON Summary', slug: 'json-summary', description: '', fields: [], created_at: '', updated_at: '' },
+            ],
+          },
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const onChange = vi.fn()
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={onChange} />,
+      { wrapper },
+    )
+
+    // Wait for form to render
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.outputDataType', { selector: 'label' })).toBeDefined()
+    })
+
+    // Open the data type Select by finding the label and navigating to the combobox
+    const label = screen.getByText('agents.types.outputDataType', { selector: 'label' })
+    const formControl = label.closest('.MuiFormControl-root') as HTMLElement
+    const selectTrigger = formControl.querySelector('[role="combobox"]') as HTMLElement
+    fireEvent.mouseDown(selectTrigger)
+
+    // Verify the "no data type assigned" option appears
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.noOutputDataType')).toBeDefined()
+    })
+
+    // Select "Structured Report"
+    fireEvent.click(screen.getByText('Structured Report'))
+
+    // Verify onChange was called with correct value
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ output_data_type_id: 'dt-1' })
+      )
+    })
+
+    // Verify data types API was queried
+    expect((mockApiClient.get as ReturnType<typeof vi.fn>).mock.calls.some(
+      (call) => String(call[0]).includes('data-types')
+    )).toBe(true)
+  })
+
+  // ── Output Type Behaviour ─────────────────────────────────────────────────
+
+  it('default output_type is typed and data type dropdown is visible', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.getByText('agents.types.outputDataType', { selector: 'label' })).toBeDefined()
+    })
+  })
+
+  it('hides data type dropdown when output_type is markdown', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm
+        values={{ ...defaultAgentTypeFormValues, output_type: 'markdown' }}
+        onChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.queryByText('agents.types.outputDataType', { selector: 'label' })).toBeNull()
+    })
+  })
+
+  it('does not show data type dropdown when output_type is auto (legacy)', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm
+        values={{ ...defaultAgentTypeFormValues, output_type: 'auto' }}
+        onChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.queryByText('agents.types.outputDataType', { selector: 'label' })).toBeNull()
+    })
+  })
+
+  it('hides entire output section for conversational agents', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm
+        values={{ ...defaultAgentTypeFormValues, input_type: 'conversation' }}
+        onChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+    await waitFor(() => {
+      expect(screen.queryByText('agents.types.outputType', { selector: 'label' })).toBeNull()
+      expect(screen.queryByText('agents.types.outputDataType', { selector: 'label' })).toBeNull()
+    })
+  })
+
+  it('clears output_data_type_id when switching from typed to markdown', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const onChange = vi.fn()
+    render(
+      <AgentTypeForm
+        values={{ ...defaultAgentTypeFormValues, output_type: 'typed', output_data_type_id: 'dt-1' }}
+        onChange={onChange}
+      />,
+      { wrapper },
+    )
+
+    // Open output type dropdown
+    const outputTypeLabel = screen.getByText('agents.types.outputType', { selector: 'label' })
+    const outputTypeControl = outputTypeLabel.closest('.MuiFormControl-root') as HTMLElement
+    const outputTypeTrigger = outputTypeControl.querySelector('[role="combobox"]') as HTMLElement
+    fireEvent.mouseDown(outputTypeTrigger)
+
+    // Select markdown
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'agents.types.outputMarkdown' })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('option', { name: 'agents.types.outputMarkdown' }))
+
+    // onChange should be called with cleared output_data_type_id
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ output_type: 'markdown', output_data_type_id: '' })
+      )
+    })
+  })
+
+  it('switching from markdown to typed shows data type dropdown', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    const onChange = vi.fn()
+    render(
+      <AgentTypeForm
+        values={{ ...defaultAgentTypeFormValues, output_type: 'markdown', output_data_type_id: '' }}
+        onChange={onChange}
+      />,
+      { wrapper },
+    )
+
+    // Data type dropdown should be hidden initially
+    await waitFor(() => {
+      expect(screen.queryByText('agents.types.outputDataType', { selector: 'label' })).toBeNull()
+    })
+
+    // Switch to typed
+    const outputTypeLabel = screen.getByText('agents.types.outputType', { selector: 'label' })
+    const outputTypeControl = outputTypeLabel.closest('.MuiFormControl-root') as HTMLElement
+    const outputTypeTrigger = outputTypeControl.querySelector('[role="combobox"]') as HTMLElement
+    fireEvent.mouseDown(outputTypeTrigger)
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'agents.types.outputTyped' })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('option', { name: 'agents.types.outputTyped' }))
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ output_type: 'typed', output_data_type_id: '' })
+      )
+    })
+  })
+
+  it('output type selector only shows typed and markdown options', async () => {
+    const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
+    render(
+      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      { wrapper },
+    )
+
+    const outputTypeLabel = screen.getByText('agents.types.outputType', { selector: 'label' })
+    const outputTypeControl = outputTypeLabel.closest('.MuiFormControl-root') as HTMLElement
+    const outputTypeTrigger = outputTypeControl.querySelector('[role="combobox"]') as HTMLElement
+    fireEvent.mouseDown(outputTypeTrigger)
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'agents.types.outputTyped' })).toBeDefined()
+      expect(screen.getByRole('option', { name: 'agents.types.outputMarkdown' })).toBeDefined()
+      expect(screen.queryByRole('option', { name: 'agents.types.outputAuto' })).toBeNull()
+    })
+  })
 })

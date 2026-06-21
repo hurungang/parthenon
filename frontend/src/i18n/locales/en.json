@@ -39,6 +39,7 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "agentOutputs": "Agent Outputs",
     "mcpHub": "MCP Hub",
     "skills": "Skills",
     "sops": "SOPs",
@@ -64,6 +65,7 @@
     "logout": "Logout",
     "permissions": "Permissions",
     "systemConfig": "System Config",
+    "dataTypes": "Data Types",
     "groupAgents": "Agents",
     "groupIntegrations": "Integrations",
     "groupSystem": "System"
@@ -424,6 +426,9 @@
       "outputTyped": "Typed Object",
       "outputMarkdown": "Markdown Text",
       "outputSchema": "Output Schema (JSON)",
+      "outputDataType": "Data Type",
+      "noOutputDataType": "No data type assigned",
+      "outputDataTypeHint": "Select the structured output contract for this agent type.",
       "launch": "Launch Session",
       "detailsTab": "Details",
       "planPreviewTab": "Plan Preview",
@@ -797,7 +802,16 @@
         "agentOutput": "Agent Output",
         "showSchema": "Show Output Schema",
         "hideSchema": "Hide Output Schema",
-        "validated": "Validated ✓"
+        "validated": "Validated ✓",
+        "dataTypeBadge": "{{name}}"
+      },
+      "result": {
+        "dataTypeBadge": "{{name}}",
+        "validationError": "Validation Error",
+        "validationErrorTitle": "Output Validation Failed",
+        "validationErrorHint": "The agent output did not match the expected schema. Raw output is shown below as fallback.",
+        "fieldErrors": "Field Errors",
+        "rawFallback": "Raw Output (Fallback)"
       }
     },
     "modelConfigs": {
@@ -1358,5 +1372,64 @@
     "workflowNotConfigured": "Not configured",
     "workflowNoOptions": "No model configurations found. Create a model configuration in Model Configs first.",
     "saveSuccess": "Configuration saved"
+  },
+  "admin": {
+    "dataTypes": {
+      "title": "Data Types",
+      "create": "Create Data Type",
+      "edit": "Edit Data Type",
+      "delete": "Delete",
+      "name": "Name",
+      "slug": "Slug",
+      "slugHelper": "Unique identifier used in API calls and query_result tool",
+      "description": "Description",
+      "fields": "Fields",
+      "fieldName": "Field Name",
+      "fieldType": "Field Type",
+      "fieldDescription": "Description",
+      "fieldDescriptionHint": "Explain what this field means to the LLM",
+      "enumValues": "Enum Values",
+      "required": "Required",
+      "addField": "Add Field",
+      "removeField": "Remove Field",
+      "fieldCount": "Fields",
+      "inUse": "This data type is currently in use by one or more agent types and cannot be deleted.",
+      "referencedBy": "Referenced by the following agent types:",
+      "confirmDelete": "Delete Data Type",
+      "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+      "atLeastOneField": "At least one field is required."
+    },
+    "agentOutputs": {
+      "title": "Agent Outputs",
+      "filterDataType": "Data Type",
+      "filterAgentType": "Agent Type",
+      "filterDateRange": "Date Range",
+      "filterDateFrom": "From",
+      "filterDateTo": "To",
+      "exportCsv": "Export CSV",
+      "columnTimestamp": "Timestamp",
+      "columnAgentType": "Agent Type",
+      "columnDataType": "Data Type",
+      "columnStatus": "Status",
+      "statusValid": "Valid",
+      "statusError": "Validation Error",
+      "detailTitle": "Output Detail",
+      "noResults": "No agent outputs found matching the current filters.",
+      "loading": "Loading agent outputs...",
+      "error": "Failed to load agent outputs."
+    }
+  },
+  "dataTypeSelector": {
+    "label": "Output Data Type",
+    "none": "None",
+    "loading": "Loading data types...",
+    "error": "Failed to load data types"
+  },
+  "typedField": {
+    "true": "On",
+    "false": "Off",
+    "null": "null",
+    "empty": "empty",
+    "missing": "Missing required value"
   }
 }

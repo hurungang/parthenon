@@ -27,7 +27,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - **Default Session**: The session used for sync and tool calls when no specific session is specified. Each MCP server has exactly one default session — explicitly set by the admin, or automatically assigned when only one session exists.
 - **Passthrough Session**: A session type where agent identity is automatically forwarded to the MCP server, eliminating manual session selection
 - **Credential Binding**: Associating credentials with sessions for secure access (not required for passthrough)
-- **Session-to-Role Mapping**: Assigning sessions or passthrough configuration to specific agent roles or identities
+- **Session-to-Role Mapping**: Assigning sessions or passthrough configuration to specific agent roles or identities; performed inline within the Edit Agent Role dialog via dynamic dropdowns that appear based on selected SOPs/Skills — no separate popup dialog
 - **Agent Identity Validation**: All MCP apps must support agent identities as first-class OIDC principals. The MCP Demo App serves as a reference implementation and validation artifact, now validating both dual-identity propagation (agent and user identities forwarded independently by the Communication Hub) and per-identity `mcp_role` claim-based tool access control.
 
 

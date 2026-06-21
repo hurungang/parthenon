@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Box, Chip, Collapse, Typography } from '@mui/material'
+import { Alert, Box, Chip, CircularProgress, Collapse, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import type { AgentOutputType } from '../../types'
+import type { AgentOutputType, AgentDataType } from '../../types'
+import { useDataType } from '../../hooks/useDataTypes'
+import { TypedOutputRenderer } from './TypedOutputRenderer'
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -10,6 +12,16 @@ interface OutputTypeResultTabProps {
   outputType: AgentOutputType
   outputData: Record<string, unknown> | null
   outputSchema?: Record<string, unknown> | null
+  /** When set, the typed output uses a data type schema for structured rendering */
+  dataTypeId?: string | null
+  /** Pre-resolved schema — if not provided, component will fetch by dataTypeId */
+  dataTypeSchema?: AgentDataType | null
+  /** Validation status for typed outputs (from AgentOutput.validation_status) */
+  validationStatus?: 'valid' | 'validation_error' | null
+  /** Raw output text fallback for validation errors */
+  rawOutput?: string | null
+  /** Data type display name (for badge) */
+  dataTypeName?: string | null
 }
 
 // ── Badge config ──────────────────────────────────────────────────────────────
@@ -20,7 +32,18 @@ interface BadgeStyle {
   color: string
 }
 
-function badgeForType(outputType: AgentOutputType, t: TFunction): BadgeStyle {
+function badgeForType(
+  outputType: AgentOutputType,
+  t: TFunction,
+  dataTypeName?: string | null,
+): BadgeStyle {
+  if (outputType === 'typed' && dataTypeName) {
+    return {
+      label: dataTypeName,
+      bg: '#DBEAFE',
+      color: '#1D4ED8',
+    }
+  }
   switch (outputType) {
     case 'markdown':
       return { label: t('agents.agentType.outputMarkdown', { defaultValue: 'Markdown' }), bg: '#EDE9FE', color: '#7C3AED' }
@@ -120,10 +143,22 @@ export function OutputTypeResultTab({
   outputType,
   outputData,
   outputSchema,
+  dataTypeId,
+  dataTypeSchema: externalSchema,
+  validationStatus,
+  rawOutput,
+  dataTypeName,
 }: OutputTypeResultTabProps) {
   const { t } = useTranslation()
   const [schemaOpen, setSchemaOpen] = useState(false)
-  const badge = badgeForType(outputType, t)
+
+  // Fetch schema if dataTypeId provided but no external schema
+  const { data: fetchedSchema, isLoading: schemaLoading } = useDataType(
+    dataTypeId && !externalSchema ? dataTypeId : '',
+  )
+  const effectiveSchema = externalSchema ?? fetchedSchema ?? null
+
+  const badge = badgeForType(outputType, t, dataTypeName)
 
   // ── Markdown renderer ──
   const markdownHtml = useMemo(() => {
@@ -132,16 +167,29 @@ export function OutputTypeResultTab({
       (outputData['markdown'] as string | undefined) ??
       (outputData['result'] as string | undefined) ??
       JSON.stringify(outputData, null, 2)
-    // Simple markdown to HTML conversion for headings, lists, code, etc.
     return simpleMarkdownToHtml(mdSource)
   }, [outputType, outputData])
 
-  // ── Typed JSON tree ──
+  // ── Typed field values ──
+  // For typed outputs with schema, extract field_values from outputData
+  // or use outputData itself as the values map
+  const fieldValues = useMemo<Record<string, unknown>>(() => {
+    if (!outputData) return {}
+    // Check if outputData has a nested field_values key (from AgentOutputResponse)
+    if (typeof outputData['field_values'] === 'object' && outputData['field_values'] !== null) {
+      return outputData['field_values'] as Record<string, unknown>
+    }
+    return outputData
+  }, [outputData])
+
+  // ── Typed JSON tree (fallback for typed without schema) ──
   const jsonTreeHtml = useMemo(() => {
-    if (outputType !== 'typed' || !outputData) return ''
+    if (outputType !== 'typed') return ''
+    // Only render JSON tree if we have no schema (typed but without data type)
+    if (effectiveSchema) return ''
     jsonNodeCounter = 0
-    return renderJsonValue(outputData, 0, 'root')
-  }, [outputType, outputData])
+    return renderJsonValue(fieldValues, 0, 'root')
+  }, [outputType, fieldValues, effectiveSchema])
 
   // ── Schema tree ──
   const schemaTreeHtml = useMemo(() => {
@@ -150,6 +198,7 @@ export function OutputTypeResultTab({
     return renderJsonValue(outputSchema, 0, 'schema')
   }, [outputSchema])
 
+  // ── No data ──
   if (!outputData) {
     return (
       <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
@@ -159,6 +208,20 @@ export function OutputTypeResultTab({
       </Box>
     )
   }
+
+  // ── Loading schema ──
+  if (schemaLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress size={24} />
+      </Box>
+    )
+  }
+
+  // ── Show validation error ──
+  const showValidationError = validationStatus === 'validation_error' || outputData?.['validation_status'] === 'validation_error'
+  const effectiveRawOutput = rawOutput ?? (outputData?.['raw_output'] as string | undefined) ?? null
+  const fieldErrors = outputData?.['validation_errors'] as Array<{ field: string; message: string }> | undefined
 
   return (
     <Box sx={{ py: 2 }}>
@@ -180,14 +243,46 @@ export function OutputTypeResultTab({
             color: badge.color,
           }}
         />
-        {outputType === 'typed' && outputSchema && (
+        {outputType === 'typed' && outputSchema && !effectiveSchema && (
           <Chip
             label={t('executions.resultTab.validated', { defaultValue: 'Validated ✓' })}
             size="small"
             sx={{ fontSize: 11, bgcolor: '#F1F5F9', color: '#475569', fontWeight: 500 }}
           />
         )}
+        {showValidationError && (
+          <Chip
+            label={t('executionLog.result.validationError', { defaultValue: 'Validation Error' })}
+            size="small"
+            sx={{ fontSize: 11, bgcolor: '#FEF2F2', color: '#DC2626', fontWeight: 600 }}
+          />
+        )}
       </Box>
+
+      {/* ── Validation error banner ── */}
+      {showValidationError && (
+        <Box sx={{ mb: 2 }}>
+          <Alert severity="error" variant="outlined">
+            <Typography variant="body2" fontWeight={600}>
+              {t('executionLog.result.validationErrorTitle', { defaultValue: 'Output Validation Failed' })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {t('executionLog.result.validationErrorHint', {
+                defaultValue: 'The agent output did not match the expected schema. Raw output is shown below as fallback.',
+              })}
+            </Typography>
+            {fieldErrors && fieldErrors.length > 0 && (
+              <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2.5 }}>
+                {fieldErrors.map((fe, i) => (
+                  <Typography key={i} component="li" variant="caption" color="error">
+                    <strong>{fe.field}</strong>: {fe.message}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Alert>
+        </Box>
+      )}
 
       {/* ── Markdown Output ── */}
       {outputType === 'markdown' && (
@@ -211,8 +306,32 @@ export function OutputTypeResultTab({
         />
       )}
 
-      {/* ── Typed JSON Output ── */}
-      {outputType === 'typed' && (
+      {/* ── Typed Output (schema-based structured view) ── */}
+      {outputType === 'typed' && effectiveSchema && (
+        <Box>
+          <Typography
+            variant="caption"
+            sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.4, mb: 1, display: 'block' }}
+          >
+            {t('executions.resultTab.structuredOutput', { defaultValue: 'Structured Output' })}
+          </Typography>
+
+          <Box
+            sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <TypedOutputRenderer fields={effectiveSchema.fields} values={fieldValues} />
+          </Box>
+        </Box>
+      )}
+
+      {/* ── Typed JSON Output (fallback when no schema) ── */}
+      {outputType === 'typed' && !effectiveSchema && (
         <Box>
           <Typography
             variant="caption"
@@ -343,11 +462,43 @@ export function OutputTypeResultTab({
               m: 0,
               '& .ojt-hl-key': { color: '#1D4ED8' },
               '& .ojt-hl-str': { color: '#15803D' },
-              '& .ojt-hl-num': { color: '#C2410C' },
-              '& .ojt-hl-bool': { color: '#6D28D9' },
+              '& .ojt-num': { color: '#C2410C' },
+              '& .ojt-bool': { color: '#6D28D9' },
             }}
             dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(JSON.stringify(outputData, null, 2)) }}
           />
+        </Box>
+      )}
+
+      {/* ── Raw output fallback for validation errors ── */}
+      {showValidationError && effectiveRawOutput && (
+        <Box sx={{ mt: 2.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+          <Typography
+            variant="caption"
+            sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.4, mb: 1, display: 'block' }}
+          >
+            {t('executionLog.result.rawFallback', { defaultValue: 'Raw Output (Fallback)' })}
+          </Typography>
+          <Box
+            component="pre"
+            sx={{
+              bgcolor: '#FAFBFC',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 2.5,
+              fontFamily: 'monospace',
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: 'text.primary',
+              overflowX: 'auto',
+              whiteSpace: 'pre-wrap',
+              m: 0,
+              wordBreak: 'break-word',
+            }}
+          >
+            {effectiveRawOutput}
+          </Box>
         </Box>
       )}
     </Box>
@@ -384,9 +535,8 @@ function simpleMarkdownToHtml(md: string): string {
 
   // Ordered lists
   html = html.replace(/^\s*\d+\. (.+)$/gm, '<li>$1</li>')
-  // (Re-wrap any consecutive <li> elements not already wrapped)
   html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => {
-    if (match.includes('<ul>')) return match // already wrapped
+    if (match.includes('<ul>')) return match
     return `<ol>${match}</ol>`
   })
 
@@ -398,14 +548,13 @@ function simpleMarkdownToHtml(md: string): string {
   // Fix consecutive blockquotes
   html = html.replace(/<\/blockquote>\n<blockquote>/g, '<br>')
 
-  // Paragraphs: wrap remaining text lines in <p> (but not headings, lists, etc.)
+  // Paragraphs: wrap remaining text lines in <p>
   const blockTags = ['h2', 'h3', 'h4', 'ul', 'ol', 'li', 'pre', 'blockquote', 'hr', 'code']
   const parts = html.split('\n\n')
   html = parts
     .map((part) => {
       const trimmed = part.trim()
       if (!trimmed) return ''
-      // Check if it starts with a block-level tag
       const startsWithBlock = blockTags.some((tag) => {
         const regex = new RegExp(`^<${tag}[ >]`)
         return regex.test(trimmed)

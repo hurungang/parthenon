@@ -65,9 +65,9 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Component | Description |
 |-----------|-------------|
 | `AgentRoleListPage` | Table view of all agent roles; Name, SOP count chip, Skill count chip, Edit/Delete actions; launches `AgentRoleDialog` |
-| `AgentRoleDialog` | Create/edit form with SOP multi-select, Skill multi-select, real-time MCP tool preview panel (debounced 300 ms, edit mode only); assigned identities data table with Assign/Remove actions; assigned MCP sessions section with Assign/Remove actions; `maxWidth="lg"` |
+| `AgentRoleDialog` | **MODIFIED**: Create/edit form with SOP multi-select, Skill multi-select, real-time MCP tool preview panel (debounced 300 ms, edit mode only); assigned identities data table with Assign/Remove actions; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; each dropdown has a Refresh button; passthrough badge on server labels; uses `useQueries` batch for per-server session fetch; `maxWidth="lg"` |
 | `AssignIdentitiesToRoleDialog` | Multi-select dialog to bulk-assign identities to a role |
-| `AssignMcpSessionsToRoleDialog` | Multi-select dialog to assign MCP sessions to a role; filtered by servers whose tools the role uses; enforces one-session-per-server |
+| `AssignMcpSessionsToRoleDialog` | **REMOVED** — replaced by inline dropdowns in `AgentRoleDialog`; component file deleted |
 | `AgentIdentityListPage` | Table view of all agent identities; realm_name, realm_username, token status chip (Active/Expired), identity status chip; Refresh Token and Re-Authenticate actions per row |
 | `AgentIdentityDialog` | Create/edit form for `AgentIdentity`; realm_name and realm_username text fields; **"Sign In as Agent"** OAuth button that fetches the authorization URL and opens the agent realm sign-in in a popup; reflects updated token status after OAuth callback |
 | `AssignRolesToIdentityDialog` | Multi-select dialog to bulk-assign roles to an identity |
@@ -224,10 +224,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `ModelConfigRead` | Pydantic model | `id`, `provider_type`, `display_name`, `api_base_url`, `has_credentials: bool`, `enabled_models: list[str]`; no credential fields | `backend/app/schemas/agents.py` |
 | `WorkflowGenerationModelConfigRead` | Pydantic model | Response contract for selected workflow generation model and available options | `backend/app/schemas/agents.py` |
 | `WorkflowGenerationModelConfigUpdate` | Pydantic model | Request contract for updating selected workflow generation model | `backend/app/schemas/agents.py` |
-| `AgentTypeSopBindingCreate` | Pydantic model | `sop_id: uuid`, `order: int` | `backend/app/schemas/agents.py` |
-| `AgentTypeSopBindingResponse` | Pydantic model | `id`, `agent_type_id`, `sop_id`, `sop_name`, `order` | `backend/app/schemas/agents.py` |
-| `AgentTypeSkillBindingCreate` | Pydantic model | `skill_id: uuid`, `order: int` | `backend/app/schemas/agents.py` |
-| `AgentTypeSkillBindingResponse` | Pydantic model | `id`, `agent_type_id`, `skill_id`, `skill_name`, `order` | `backend/app/schemas/agents.py` |
+| `SopBindingCreate` | Pydantic model | `sop_id: uuid`, `order: int` | `backend/app/schemas/agent_type_bindings.py` |
+| `SopBindingResponse` | Pydantic model | `id`, `sop_id`, `sop_name`, `order`, `created_at` | `backend/app/schemas/agent_type_bindings.py` |
+| `SkillBindingCreate` | Pydantic model | `skill_id: uuid`, `order: int` | `backend/app/schemas/agent_type_bindings.py` |
+| `SkillBindingResponse` | Pydantic model | `id`, `skill_id`, `skill_name`, `order`, `created_at` | `backend/app/schemas/agent_type_bindings.py` |
 | `AgentTypeCreate` | Pydantic model | Modified — added `model_id: str`, `sop_bindings: list[AgentTypeSopBindingCreate]`, `skill_bindings: list[AgentTypeSkillBindingCreate]`; removed `model_config_id`, `model_name`, `llm_provider`, `llm_model`, `llm_api_key` | `backend/app/schemas/agents.py` |
 | `AgentTypeUpdate` | Pydantic model | Modified — same field changes as `AgentTypeCreate` | `backend/app/schemas/agents.py` |
 | `AgentTypeRead` | Pydantic model | Modified — exposes `model_id: str`, `sop_bindings: list[AgentTypeSopBindingResponse]`, `skill_bindings: list[AgentTypeSkillBindingResponse]`; gains `plan: AgentPlanRead \| None`; no `model_config_id` FK, no raw LLM credential fields | `backend/app/schemas/agents.py` |
@@ -321,14 +321,14 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `AgentRoleListPage` | component | Table view; Name, SOP count chip, Skill count chip, Edit/Delete actions | `frontend/src/pages/agents/AgentRoleListPage.tsx` |
-| `AgentRoleDialog` | component | Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); includes allowed target agent type slug preview derived from SOP `agent_delegation` policy mappings; assigned identities and MCP sessions with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
+| `AgentRoleDialog` | component | **MODIFIED**: Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); includes allowed target agent type slug preview derived from SOP `agent_delegation` policy mappings; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills, excluding system tools), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; uses `useQueries` batch for per-server session fetch; each dropdown has a Refresh button that preserves valid selections; passthrough badge on server labels; assigned identities with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
 | `AssignIdentitiesToRoleDialog` | component | Multi-select dialog to bulk-assign identities to a role | `frontend/src/pages/agents/AssignIdentitiesToRoleDialog.tsx` |
-| `AssignMcpSessionsToRoleDialog` | component | Multi-select dialog to assign MCP sessions to a role; filtered by servers whose tools the role uses; Passthrough chip shown for passthrough sessions; passthrough sessions may coexist with other sessions per server (no one-session-per-server enforcement for passthrough) | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` |
+| `AssignMcpSessionsToRoleDialog` | component | **REMOVED** — replaced by inline dropdowns in AgentRoleDialog | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` (deleted) |
 | `AgentIdentityListPage` | component | Table view; realm_name, realm_username, token status chip, identity status chip; Refresh Token and Re-Authenticate per row | `frontend/src/pages/agents/AgentIdentityListPage.tsx` |
 | `AgentIdentityDialog` | component | Create/edit; realm_name, realm_username; "Sign In as Agent" OAuth button opens agent realm popup; reflects token status after callback | `frontend/src/pages/agents/AgentIdentityDialog.tsx` |
 | `AssignRolesToIdentityDialog` | component | Multi-select dialog to bulk-assign roles to an identity | `frontend/src/pages/agents/AssignRolesToIdentityDialog.tsx` |
 | `AgentOAuthCallbackPage` | component | Loaded in OAuth popup; exchanges code via backend callback; postMessages result to opener; calls `window.close()` | `frontend/src/pages/agents/AgentOAuthCallbackPage.tsx` |
-| `AgentTypeForm` | component | Modified — fields: `identity_id`, `role_id`, `model_id` (string dropdown across all configs), `system_instruction`, `input_type`/`output_type` (+schemas); includes SOP/Skill binding list section with add/remove/reorder controls; binding picker filtered by role-accessible items; removed `model_config_id`, `model_name`, `llm_*`, `primary_sop_id`; validates identity is assigned to selected role; validates binding entries are role-accessible | `frontend/src/pages/agents/AgentTypeForm.tsx` |
+| `AgentTypeForm` | component | Modified — fields: `identity_id`, `role_id`, `model_id` (string dropdown across all configs), `system_instruction`, `input_type`/`output_type` (+schemas); includes SOP/Skill binding list section with add/remove/reorder controls; binding picker filtered by role-accessible items; orphan detection warning banner with "Remove All" button when role swap leaves stale bindings; per-item orphan visual (warning border); save button disabled when no bindings; empty state hint text; removed `model_config_id`, `model_name`, `llm_*`, `primary_sop_id`; validates identity is assigned to selected role; validates binding entries are role-accessible | `frontend/src/pages/agents/AgentTypeForm.tsx` |
 | `AgentJobLaunchDialog` | component | Dynamic input form per `input_type`; POSTs to `/agents/sessions`; shows returned session ID | `frontend/src/pages/agents/AgentJobLaunchDialog.tsx` |
 | `AgentJobPage` | component | Session metadata, status chip, 3 s polling (task agents), WebSocket chat UI (conversational agents), result panel; fetches `ExecutionLogEntry[]` inline and passes to `LogViewer`; optional `sessionId` prop for embedded dialog usage; conditionally hides back button when embedded; shows agent name + triggered-by user in session metadata grid | `frontend/src/pages/agents/AgentJobPage.tsx` |
 | `SessionExecutionLogsDialog` | component | Retained but no longer opened from `AgentJobPage`; "View Execution Logs" button removed from the job page | `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` |
@@ -388,7 +388,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `test_agent_runtime_executor` | test module | Unit tests for `AgentRuntimeExecutor`; 2 passthrough tests: proxy called with `agent_jwt`, error returned when no JWT available | `backend/tests/unit/test_agent_runtime_executor.py` |
 | `test_permission_manager` | test module | Unit tests for permission resolution and allow/deny behavior, including A2A delegation permission checks | `backend/tests/unit/test_permission_manager.py` |
-| `AssignMcpSessionsToRoleDialog.test` | test module | Component tests for `AssignMcpSessionsToRoleDialog`; 2 passthrough tests: Passthrough chip shown for passthrough session, chip absent for regular sessions | `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` |
+| `AssignMcpSessionsToRoleDialog.test` | test module | **REMOVED** — component deleted, tests migrated to `AgentRoleDialog.test` | `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` (deleted) |
+| `AgentRoleDialog.test` | test module | **UPDATED**: Inline dropdown rendering, server computation, pre-save validation, refresh, save integration, passthrough badge, error states, removal of old popup elements | `frontend/src/__tests__/AgentRoleDialog.test.tsx` |
 
 ### Frontend Components (`frontend/src/components/agents/`)
 
@@ -446,6 +447,24 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `noHistory` | i18n key | "No history" empty state for conversation history | `frontend/src/i18n/locales/en.json` |
 | `loading` | i18n key | "Loading" generic loading state | `frontend/src/i18n/locales/en.json` |
 | `noData` | i18n key | "No data" generic empty state | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionAssignment` | i18n key | "MCP Session Assignment" section title | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionAssignmentHint` | i18n key | Helper text explaining session assignment requirement | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionRequired` | i18n key | "Session required" label | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionMissing` | i18n key | "Missing session assignment for:" prefix | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionRefresh` | i18n key | Refresh button aria-label | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionLoadError` | i18n key | "Failed to load sessions" error message | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionRetry` | i18n key | "Retry" button label | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionNoSessions` | i18n key | "No sessions available for this server" empty state | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.mcpSessionLoading` | i18n key | "Loading sessions..." | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.assignedMcpSessions` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.assignMcpSessions` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.assignMcpSessionsTitle` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.assignMcpSessionsHint` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.noAssignedMcpSessions` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.noAvailableMcpSessions` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.removeMcpSession` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `agents.roles.selectedForServer` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+
 
 ### Tests
 
@@ -463,6 +482,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agent-navigation.spec.ts` | E2E test | Nav group expand/collapse, agent executions page, agent type filter dropdown, dialog open/close flows | `e2e/tests/agent-navigation.spec.ts` |
 | `test_agent_type_bindings_api` | backend integration test | 16 tests: binding CRUD via API, role-access validation (rejects invalid refs, duplicates), cascade delete on agent type, UUID→name resolution | `backend/tests/api/test_agent_type_bindings_api.py` |
 | `AgentTypeForm.test` | frontend component test | 32 tests: binding list renders, add/remove/reorder bindings, role-filtered picker, validation states, save payload includes bindings | `frontend/src/__tests__/AgentTypeForm.test.tsx` |
+| `AgentRoleDialog.test` | frontend component test | **UPDATED**: 18 tests covering inline dropdown rendering, server computation, pre-save validation, refresh behaviour, save integration, passthrough badge, error states, old popup removal | `frontend/src/__tests__/AgentRoleDialog.test.tsx` |
 | `agent-type-bindings-mocked.spec` | E2E test | 8 mocked E2E tests: binding section renders, add binding dialog, remove/reorder, save payload capture | `e2e/tests/agent-type-bindings-mocked.spec.ts` |
 | `agent-type-bindings.spec` | E2E test | 1 real-backend integration test: POST returns binding fields; skips gracefully when backend unavailable | `e2e/tests/agent-type-bindings.spec.ts` |
 | `test_intervene_service` | test suite | Backend unit tests for `InterveneRequestStore`: CRUD, status transitions, duplicate prevention, metrics aggregation, expiry logic | `backend/tests/services/test_intervene_service.py` |

@@ -360,6 +360,12 @@ export function AgentExecutionDetailsDialog({
   const outputType: AgentOutputType = (session?.output_data?.['__output_type'] as AgentOutputType) ?? 'auto'
   const outputSchema = (session?.output_data?.['__schema'] as Record<string, unknown> | undefined) ?? undefined
 
+  // Extract typed output data type info
+  const dataTypeId = (session?.output_data?.['__data_type_id'] as string | undefined) ?? null
+  const dataTypeName = (session?.output_data?.['__data_type_name'] as string | undefined) ?? null
+  const validationStatus = (session?.output_data?.['validation_status'] as 'valid' | 'validation_error' | undefined) ?? null
+  const rawOutput = (session?.output_data?.['raw_output'] as string | undefined) ?? null
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (<>
@@ -472,6 +478,10 @@ export function AgentExecutionDetailsDialog({
               outputType={outputType}
               outputData={session.output_data}
               outputSchema={outputSchema}
+              dataTypeId={dataTypeId}
+              dataTypeName={dataTypeName}
+              validationStatus={validationStatus}
+              rawOutput={rawOutput}
             />
           </Paper>
         )}

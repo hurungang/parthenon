@@ -32,6 +32,10 @@ _AR_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/data/sessions/{session_id}/log"),
     ("GET", "/api/v1/internal/data/mcp-sessions/{server_slug}"),
     ("POST", "/api/v1/internal/data/preflight/availability"),
+    # Typed output endpoints
+    ("POST", "/api/v1/internal/validate-output"),
+    ("POST", "/api/v1/internal/agent-outputs"),
+    ("GET", "/api/v1/internal/agent-outputs"),
 }
 
 _CH_ALLOWLIST: set[tuple[str, str]] = {

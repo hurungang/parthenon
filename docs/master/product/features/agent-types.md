@@ -27,6 +27,14 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - The binding list replaces the legacy single-primary-SOP field; existing entries are migrated automatically
 - System instruction generation and Agent Plan Mode use only the explicitly bound SOPs and skills; if no bindings are defined, they fall back to all role-assigned items (current behaviour)
 
+### Binding Validation & Enforcement
+- **Backend validation on every save**: Every agent type create or update calls `validate_bindings()` which checks each SOP and skill binding against the assigned role's granted permissions. Invalid references are rejected with per-entry error messages. Duplicate bindings are also rejected. Bindings cannot be set without an assigned role
+- **At-least-one requirement**: Agent types must specify at least one SOP or Skill binding — save is blocked with a clear error when both lists are empty
+- **Frontend orphan detection**: When the selected role changes and previously bound SOPs/skills are no longer accessible, the form displays a warning banner listing orphaned items with a "Remove All" button. Each orphaned row gets a warning border. This is advisory — the server enforces the check on save
+- **Save button disabled**: The save button is disabled when no bindings exist, preventing submission of an invalid configuration
+- **Role-scoped add dropdown**: The add-binding dropdown only shows SOPs/skills that are accessible through the currently selected role. Already-bound items are hidden from the picker. The add button is disabled when no role is selected
+- **Empty state hint**: When no bindings are defined, italic hint text shows "At least one SOP or Skill binding is required"
+
 ## Recursion and Dead-Loop Prevention
 - Agent Type create and update flows **validate recursive delegation risk** in SOP and delegation configuration
 - Recursion-prone configurations are **blocked before submission** with a clear user-visible error
@@ -43,7 +51,11 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - **Recursive delegation risk is validated during agent create and update, and invalid submissions are blocked**
 - **Recursion/dead-loop risk is validated during run initiation, and execution is prevented when risk conditions are detected**
 - **Agent Types support binding multiple SOPs and skills in an ordered list**
-- **Bound SOPs and skills must be accessible through the agent's assigned role; invalid bindings are rejected**
+- **Bound SOPs and skills must be accessible through the agent's assigned role; invalid bindings are rejected with 422 and per-entry error messages**
+- **At-least-one binding is enforced — save blocked with 400 when both lists are empty**
+- **Orphan detection warns when role swap leaves stale bindings; "Remove All" button clears them**
+- **Add-binding picker is role-scoped — only shows role-accessible SOPs/skills**
+- **Save button is disabled when no bindings are defined**
 - **System instruction generator and Agent Plan Mode use only explicitly bound SOPs and skills**
 - **Binding list is visible and editable in the Agent Type editor UI**
 

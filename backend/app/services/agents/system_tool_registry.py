@@ -265,11 +265,60 @@ SystemToolRegistry.register(SystemTool(
             },
             "prompt": {
                 "type": "string",
-                "description": (
-                    "Descriptive prompt when intervention_type is 'text'"
-                ),
+                "description": "Descriptive prompt when intervention_type is 'text'",
             },
         },
         "required": ["reason", "intervention_type"],
+    },
+))
+
+SystemToolRegistry.register(SystemTool(
+    name="query_result",
+    description=(
+        "Query past typed agent outputs by data type name. "
+        "Returns a list of typed results conforming to the requested schema. "
+        "Call this when you need to retrieve and analyze past outputs "
+        "produced by agents using the specified data type."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "data_type_name": {
+                "type": "string",
+                "description": (
+                    "Name or slug of the data type to query "
+                    "(e.g. 'incident_report' or 'Incident Report')"
+                ),
+            },
+            "filters": {
+                "type": "object",
+                "properties": {
+                    "date_from": {
+                        "type": "string",
+                        "description": (
+                            "ISO-8601 date string — filter results created "
+                            "on or after this date (e.g. '2025-01-01')"
+                        ),
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": (
+                            "ISO-8601 date string — filter results created "
+                            "on or before this date (e.g. '2025-12-31')"
+                        ),
+                    },
+                    "field_filters": {
+                        "type": "object",
+                        "description": (
+                            "Key-value pairs to filter by field values "
+                            "(e.g. {'severity': 'high', 'region': 'us-east'})"
+                        ),
+                        "additionalProperties": True,
+                    },
+                },
+                "description": "Optional filters to narrow results",
+            },
+        },
+        "required": ["data_type_name"],
     },
 ))

@@ -17,6 +17,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Supports creation and management of agent roles, with SOP/Skill permissions
 - Enables explicit, many-to-many assignment of agent identities to roles, managed through the UI
 - Provides guided forms for defining agent types, selecting identities, roles, models, and input/output options
+- Inline MCP session assignment in the Edit Agent Role dialog: when SOPs or Skills are selected, the dialog automatically computes required MCP servers from tool dependencies and renders inline session dropdowns per server; the Save action is blocked until every required server has a session assigned, guaranteeing every saved role is execution-ready; each dropdown includes a refresh button to reload available sessions without leaving the form
 - Manages agent identity authentication, token storage, refresh, and re-authentication flows
 - Centralizes model provider configuration and selection for agent types, backed by the [Model Configurations](./model-configurations.md) catalogue supporting twelve LLM providers across two dispatch families (OpenAI-compatible and native-API)
 - Enforces max-instance limits for each agent type
@@ -106,6 +107,11 @@ Agent Management enables organizations to define, configure, and govern AI agent
 	- Sessions are user-scoped (users only see their own sessions)
 	- Sessions list updates automatically after create/end/archive operations
 	- Conversation sessions show intervention requests from delegated agents and allow inline response without leaving the conversation view
+- Selecting SOPs or Skills in the Edit Agent Role dialog displays required MCP servers inline with session dropdowns per server
+- Session dropdowns update dynamically when SOPs/Skills are added or removed
+- Save is blocked (button disabled with inline validation message) when any required MCP server lacks a session assignment
+- Each server dropdown includes a refresh button that reloads available sessions; current selection is preserved if the session still exists
+- MCP servers configured with passthrough session type display a "Passthrough" badge next to the server name
 - All changes are observable in the UI without requiring a page reload
 - Error messages are clear and actionable if features fail
 
