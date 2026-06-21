@@ -602,8 +602,16 @@ export function AgentTypeDetailsDialog({
                       <Typography variant="caption" color="text.secondary" display="block">
                         {t('agents.types.outputType')}
                       </Typography>
-                      <Box mt={0.25}>
+                      <Box mt={0.25} display="flex" gap={0.5} flexWrap="wrap">
                         <Chip label={agentType.output_type} size="small" variant="outlined" />
+                        {agentType.output_data_type_name && (
+                          <Chip
+                            label={agentType.output_data_type_name}
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                          />
+                        )}
                       </Box>
                     </Box>
 

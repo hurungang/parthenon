@@ -1192,6 +1192,7 @@ async def list_agent_types(
         .order_by(AgentType.name)
         .options(
             selectinload(AgentType.plan),
+            selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
         )
@@ -1240,6 +1241,7 @@ async def create_agent_type(
         input_schema=body.input_schema,
         output_type=body.output_type,
         output_schema=body.output_schema,
+        output_data_type_id=body.output_data_type_id,
     )
     db.add(agent_type)
     await db.flush()
@@ -1291,6 +1293,7 @@ async def create_agent_type(
         .where(AgentType.id == agent_type.id)
         .options(
             selectinload(AgentType.plan),
+            selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
         )
@@ -1310,6 +1313,7 @@ async def get_agent_type(
         .where(AgentType.id == type_id)
         .options(
             selectinload(AgentType.plan),
+            selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
         )
@@ -1466,6 +1470,7 @@ async def update_agent_type(
         .where(AgentType.id == agent_type.id)
         .options(
             selectinload(AgentType.plan),
+            selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
         )

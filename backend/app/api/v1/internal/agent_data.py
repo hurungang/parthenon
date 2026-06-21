@@ -79,6 +79,10 @@ class AgentContextResponse(BaseModel):
     input_type: str
     output_type: str
     output_schema: dict | None
+    output_data_type_id: str | None  # UUID string; non-null for typed output agent types
+    output_data_type_name: str | None  # Resolved name of the assigned data type
+    output_schema_prompt: str | None  # Pre-formatted schema block for system instruction injection
+    output_json_schema: dict | None  # JSON Schema for provider-native structured output (response_format)
     primary_sop_id: uuid.UUID | None  # Deprecated — first bound SOP id, kept for backward compat
     is_active: bool
     identity_role_valid: bool  # False → execution should be refused
@@ -260,6 +264,77 @@ async def get_agent_plan(
     )
 
 
+def _build_output_json_schema(dt: Any) -> dict | None:
+    """Build a JSON Schema dict from data type fields for provider-native structured output."""
+    fields = dt.fields if isinstance(dt.fields, list) else []
+    if not fields:
+        return None
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {},
+    }
+    required: list[str] = []
+    for f in fields:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("name", "unknown")
+        ftype = f.get("type", "string")
+        description = f.get("description", "")
+        prop: dict[str, Any] = {}
+        if description:
+            prop["description"] = description
+        if ftype == "enum":
+            prop["type"] = "string"
+            if f.get("enum_values"):
+                prop["enum"] = f["enum_values"]
+        elif ftype == "date":
+            prop["type"] = "string"
+        elif ftype in ("string", "number", "boolean"):
+            prop["type"] = ftype
+        else:
+            prop["type"] = "string"
+        schema["properties"][name] = prop
+        if f.get("required"):
+            required.append(name)
+    if required:
+        schema["required"] = required
+    return schema
+
+
+def _build_output_schema_prompt(dt: Any) -> str | None:
+    """Build a structured prompt block describing the expected typed output schema."""
+    fields = dt.fields if isinstance(dt.fields, list) else []
+    if not fields:
+        return None
+    lines = [
+        "## Required Output Format",
+        "",
+        f"Your final result MUST be a JSON object matching the **{dt.name}** schema.",
+        "",
+    ]
+    for f in fields:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("name", "unknown")
+        ftype = f.get("type", "string")
+        required = f.get("required", False)
+        description = f.get("description", "")
+        enum_values = f.get("enum_values")
+        req_label = "**required**" if required else "optional"
+        type_detail = f"**{ftype}** ({req_label})"
+        if enum_values:
+            type_detail += f" — allowed values: {', '.join(str(v) for v in enum_values)}"
+        lines.append(f"- **{name}** ({type_detail})")
+        if description:
+            lines.append(f"  {description}")
+    lines.append("")
+    lines.append(
+        "Return your structured result using the save_result tool "
+        "with your JSON matching this schema exactly."
+    )
+    return "\n".join(lines)
+
+
 @InternalAgentDataRouter.get(
     "/agent-types/{agent_type_id}/context",
     response_model=AgentContextResponse,
@@ -297,7 +372,10 @@ async def get_agent_context(
     from app.db.models.mcp_hub import McpSession, McpTool
     from app.db.models.skills import Skill, SkillToolBinding, Sop, SopStep, SopStepType
 
-    agent_type = await db.get(AgentType, agent_type_id)
+    agent_type = await db.get(
+        AgentType, agent_type_id,
+        options=[selectinload(AgentType.output_data_type)],
+    )
     if agent_type is None:
         raise HTTPException(
             status_code=404, detail=f"AgentType {agent_type_id} not found"
@@ -641,6 +719,20 @@ async def get_agent_context(
         input_type=agent_type.input_type.value,
         output_type=agent_type.output_type.value,
         output_schema=agent_type.output_schema,
+        output_data_type_id=str(agent_type.output_data_type_id) if agent_type.output_data_type_id else None,
+        output_data_type_name=(
+            agent_type.output_data_type.name if agent_type.output_data_type_id and hasattr(agent_type, 'output_data_type') and agent_type.output_data_type else None
+        ),
+        output_schema_prompt=(
+            _build_output_schema_prompt(agent_type.output_data_type)
+            if agent_type.output_data_type_id and hasattr(agent_type, 'output_data_type') and agent_type.output_data_type
+            else None
+        ),
+        output_json_schema=(
+            _build_output_json_schema(agent_type.output_data_type)
+            if agent_type.output_data_type_id and hasattr(agent_type, 'output_data_type') and agent_type.output_data_type
+            else None
+        ),
         primary_sop_id=derived_primary_sop_id,
         is_active=agent_type.is_active,
         identity_role_valid=identity_role_valid,

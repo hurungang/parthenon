@@ -14,6 +14,16 @@
 - All dialogs follow Dialog Error Handling Standard (`dialogError` state, `PermissionDeniedAlert`, cleared on open/close)
 - i18n: all new strings use `t()` with keys under `agents.types.*`, `agents.instances.*`, `agents.sessions.*`
 
+### Agent Type Binding Validation (enforce-agent-type-bindings change)
+- `validate_bindings()` rejects SOP binding whose `sop_id` is not in the assigned role's permitted SOPs — returns 422 with `{"error": "binding_validation_failed", "messages": [...]}`
+- `validate_bindings()` rejects Skill binding whose `skill_id` is not in the assigned role's permitted skills — returns 422 with per-entry message
+- `validate_bindings()` rejects duplicate `sop_id` across multiple binding entries — returns 422
+- `validate_bindings()` rejects duplicate `skill_id` across multiple binding entries — returns 422
+- `validate_bindings()` rejects bindings when `role_id` is null — returns 422
+- Backend enforces at-least-one-binding requirement: create/update with empty `sop_bindings` and `skill_bindings` returns 400 "Agent types must specify at least one SOP or Skill binding"
+- Binding CASCADE delete: deleting an agent type removes associated binding rows
+- Binding data round-trip: POST create returns `sop_bindings[]` and `skill_bindings[]` in response; GET reads them back
+
 ### Agent Plan Mode (agent-plan-mode change)
 - `PlanGenerationService`: traverses role→SOP→Skill→Tool graph, constructs LLM prompt, invokes LLM, parses structured plan steps; upserts `AgentPlan` row on every save (no duplicate rows)
 - `PlanGenerationService`: non-blocking failure — LLM timeouts and parse errors written as `generation_status = failed`; no exception propagates to the API handler
@@ -189,5 +199,10 @@ These scenarios cover the engine-level dispatch path exercised by the LangChain 
 - `backend/tests/unit/test_model_config_service.py` — model resolution against the extended 12-provider catalogue.
 - `backend/tests/unit/test_agent_runtime_executor.py` — LangChain agent loop integration: dispatch, resolution, and error handling.
 - `e2e/tests/agent-runtime.spec.ts` — `Real Backend Integration - Model Configurations` block validates the dispatch path against a live backend.
+
+**Test files for the binding validation surface:**
+- `backend/tests/api/test_agent_type_bindings_api.py` — 16 integration tests: binding CRUD (create with SOP+Skill, skill-only, conversation without bindings, none-input without bindings, explicit empty lists, update, clear, GET includes bindings); validation (SOP not in role → 422, skill not in role → 422, duplicate SOP → 422, duplicate skill → 422, bindings without role → 422); at-least-one requirement (400); cascade delete on agent type removal
+- `e2e/tests/agent-type-bindings.spec.ts` — Real backend E2E: POST returns binding fields; skips gracefully when backend unavailable
+- `e2e/tests/agent-type-bindings-mocked.spec.ts` — Mocked E2E: binding section render, add/remove/reorder, save payload, orphan warning
 
 For agent role, identity, model config, execution log, LangChain execution, token management, and gateway routing coverage, see `agent-runtime-test-plan.md`.

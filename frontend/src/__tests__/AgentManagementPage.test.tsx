@@ -13,14 +13,19 @@ type MockAgentType = {
   role_id: string | null
   llm_provider: string
   llm_model: string
+  model_id: string | null
   system_instruction: string | null
   input_type: string
   input_schema: null
   output_type: string
   output_schema: null
+  output_data_type_id: string | null
+  output_data_type_name: string | null
   is_active: boolean
   created_at: string
   updated_at: string
+  sop_bindings?: Array<unknown>
+  skill_bindings?: Array<unknown>
 }
 
 vi.mock('react-i18next', () => ({
@@ -134,11 +139,16 @@ describe('AgentManagementPage', () => {
         role_id: null,
         llm_provider: 'openai',
         llm_model: 'gpt-4o',
+        model_id: null,
         system_instruction: null,
         input_type: 'typed',
         input_schema: null,
         output_type: 'markdown',
         output_schema: null,
+        output_data_type_id: null,
+        output_data_type_name: null,
+        sop_bindings: [],
+        skill_bindings: [],
         is_active: true,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -216,6 +226,11 @@ describe('AgentManagementPage', () => {
       id: 'at-conv',
       name: 'Chat Agent',
       input_type: 'conversation',
+      model_id: null,
+      output_data_type_id: null,
+      output_data_type_name: null,
+      sop_bindings: [],
+      skill_bindings: [],
     }
     mockAgentTypes = [conversationAgent]
 
@@ -262,11 +277,16 @@ describe('AgentManagementPage — post-save navigation', () => {
         role_id: null,
         llm_provider: 'openai',
         llm_model: 'gpt-4o',
+        model_id: null,
         system_instruction: null,
         input_type: 'typed',
         input_schema: null,
         output_type: 'markdown',
         output_schema: null,
+        output_data_type_id: null,
+        output_data_type_name: null,
+        sop_bindings: [],
+        skill_bindings: [],
         is_active: true,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -288,6 +308,8 @@ describe('AgentManagementPage — post-save navigation', () => {
       input_schema: null,
       output_type: 'markdown',
       output_schema: null,
+      output_data_type_id: null,
+      output_data_type_name: null,
       sop_bindings: [],
       skill_bindings: [],
       is_active: true,
@@ -337,6 +359,8 @@ describe('AgentManagementPage — post-save navigation', () => {
       input_schema: null,
       output_type: 'markdown',
       output_schema: null,
+      output_data_type_id: null,
+      output_data_type_name: null,
       sop_bindings: [],
       skill_bindings: [],
       is_active: true,
@@ -386,11 +410,16 @@ describe('AgentManagementPage — role and identity columns', () => {
         role_id: null,
         llm_provider: 'openai',
         llm_model: 'gpt-4o',
+        model_id: null,
         system_instruction: null,
         input_type: 'typed',
         input_schema: null,
         output_type: 'markdown',
         output_schema: null,
+        output_data_type_id: null,
+        output_data_type_name: null,
+        sop_bindings: [],
+        skill_bindings: [],
         is_active: true,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -417,6 +446,51 @@ describe('AgentManagementPage — role and identity columns', () => {
     const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
     render(<AgentManagementPage />, { wrapper })
     // Multiple '—' may appear (model, role, identity) — verify at least one
+    const dashes = screen.getAllByText('—')
+    expect(dashes.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders Data Type column header', async () => {
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    expect(screen.getByRole('columnheader', { name: 'agents.types.outputDataType' })).toBeDefined()
+  })
+
+  it('shows data type name in Data Type column when agent has one assigned', async () => {
+    mockAgentTypes = [
+      {
+        id: 'at-2',
+        name: 'Report Agent',
+        description: null,
+        identity_id: null,
+        role_id: null,
+        llm_provider: 'openai',
+        llm_model: 'gpt-4o',
+        model_id: null,
+        system_instruction: null,
+        input_type: 'typed',
+        input_schema: null,
+        output_type: 'typed',
+        output_schema: null,
+        output_data_type_id: 'dt-1',
+        output_data_type_name: 'Structured Report',
+        sop_bindings: [],
+        skill_bindings: [],
+        is_active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
+    expect(screen.getByText('Structured Report')).toBeDefined()
+  })
+
+  it('shows dash in Data Type column when no data type is assigned', async () => {
+    // mockAgentTypes[0] has output_data_type_name: null, so the cell shows '—'
+    const { AgentManagementPage } = await import('../pages/agents/AgentManagementPage')
+    render(<AgentManagementPage />, { wrapper })
     const dashes = screen.getAllByText('—')
     expect(dashes.length).toBeGreaterThanOrEqual(1)
   })
@@ -534,11 +608,16 @@ describe('AgentManagementPage — Default SOP field available for all input type
         role_id: null,
         llm_provider: 'openai',
         llm_model: 'gpt-4o',
+        model_id: null,
         system_instruction: null,
         input_type: 'typed',
         input_schema: null,
         output_type: 'markdown',
         output_schema: null,
+        output_data_type_id: null,
+        output_data_type_name: null,
+        sop_bindings: [],
+        skill_bindings: [],
         is_active: true,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',

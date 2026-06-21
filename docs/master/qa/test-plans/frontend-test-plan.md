@@ -84,7 +84,7 @@ Core pages and flows verified to render correctly:
 **Test files:**
 - [frontend/src/__tests__/McpSessionManager.test.tsx](../../../../frontend/src/__tests__/McpSessionManager.test.tsx) — credential field hiding, informational alert, passthrough chip, submit payload, auth type toggle
 - [frontend/src/__tests__/TestMcpToolDialog.test.tsx](../../../../frontend/src/__tests__/TestMcpToolDialog.test.tsx) — identity picker rendered for passthrough server; session picker absent; correct payload on submit
-- [frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx](../../../../frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx) — passthrough badge, session selectable, toggle constraint not shown
+- [frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx](../../../../frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx) — **REMOVED** — component deleted; passthrough tests migrated to `AgentRoleDialog.test.tsx`
 - [e2e/tests/passthrough-sessions.spec.ts](../../../../e2e/tests/passthrough-sessions.spec.ts) — mocked UI flow: admin creates passthrough session, chip displayed, identity picker shown in tool test dialog; `test.describe('Real Backend Integration')`: unauthenticated tool test returns correct status, passthrough+credentials rejected
 
 ---
@@ -125,3 +125,4 @@ Core pages and flows verified to render correctly:
 | passthrough-sessions | Added section 4: Passthrough Session UI (McpSessionManager, TestMcpToolDialog, AssignMcpSessionsToRoleDialog) | 2026-05-12 |
 | service-segregation-security-audit | Added section 5: Service Segregation Security Audit (UI boundary enforcement and deny-path integration checks) | 2026-05-22 |
 | reorg-navigation-menu | Updated sidebar navigation from "AI Agent" group + "Notifications" submenu to 3-group structure (Agents: 11 children, Integrations: 5 children, System: 3 children) + Dashboard standalone. AppShell test suite expanded from 5 to 34 tests covering the new structure. | 2026-06-04 |
+| improve-role-mcp-session-assignment | Removed `AssignMcpSessionsToRoleDialog.test.tsx` reference (component deleted); inline MCP session assignment tests in `AgentRoleDialog.test.tsx` | 2026-06-20 |

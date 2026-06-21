@@ -9,6 +9,7 @@ Provides MCP-like JSON-RPC endpoints for system tools:
 All endpoints require mTLS certificate authentication.
 These are called by Communication Hub when routing system tool calls.
 """
+import json
 import logging
 import uuid
 from datetime import UTC
@@ -98,8 +99,13 @@ async def save_result_tool(
 ) -> SystemToolResponse:
     """Save agent execution result to database.
 
-    Updates ``AgentJob.output_data`` for backward compatibility and also persists
-    a ``ResultRecord`` so the result appears in the Result Repository UI.
+    For typed agent types (those with ``output_data_type_id`` set on their
+    ``AgentType``), validates the output payload against the assigned data
+    type schema and persists an ``AgentOutput`` record with validation status.
+
+    For untyped agent types, falls back to the existing ``ResultRecord`` path
+    for backward compatibility. Also updates ``AgentJob.output_data``
+    regardless of the path taken.
 
     Args:
         body: Tool request with session ID and arguments
@@ -147,7 +153,74 @@ async def save_result_tool(
         )
         payload = _payload_from_tool_args(body.tool_args, content_type)
 
-        # Also persist to Result Repository so it appears in the UI
+        # Check if this agent type has a typed output data type assigned
+        if agent_type and agent_type.output_data_type_id:
+            # Typed output path: validate and persist via AgentOutput
+            from app.db.models.agent_data_type import AgentDataType
+            from app.services.outputs.service import OutputService
+            from app.services.validation.schema_validation_service import (
+                SchemaValidationService,
+            )
+
+            data_type = await db.get(
+                AgentDataType, agent_type.output_data_type_id
+            )
+            if data_type:
+                # Validate the payload against the data type schema
+                validator = SchemaValidationService()
+                fields = data_type.fields or []
+                validation_result = validator.validate(payload, fields)
+
+                # Determine validation status
+                if validation_result.valid:
+                    validation_status = "valid"
+                    field_values = payload
+                    raw_output = content
+                else:
+                    validation_status = "validation_error"
+                    field_values = None
+                    raw_output = json.dumps(payload) if isinstance(payload, dict) else str(content)
+
+                # Persist typed output
+                output_service = OutputService()
+                typed_output = await output_service.save_typed(
+                    db=db,
+                    data_type_id=agent_type.output_data_type_id,
+                    agent_type_id=job.agent_type_id,
+                    session_id=session_id,
+                    field_values=field_values,
+                    validation_status=validation_status,
+                    raw_output=raw_output,
+                )
+
+                await db.commit()
+
+                logger.info(
+                    "Typed output saved for session %s (output_id=%s, status=%s)",
+                    session_id, typed_output.id, validation_status,
+                )
+                return SystemToolResponse(
+                    result={
+                        "status": "saved",
+                        "session_id": str(session_id),
+                        "output_id": str(typed_output.id),
+                        "validation_status": validation_status,
+                        "validation_errors": (
+                            [e.model_dump() for e in validation_result.errors]
+                            if validation_result.errors
+                            else []
+                        ),
+                    }
+                )
+            else:
+                logger.warning(
+                    "Agent type %s has output_data_type_id=%s but data type not found, "
+                    "falling back to untyped path",
+                    job.agent_type_id,
+                    agent_type.output_data_type_id,
+                )
+
+        # Untyped path: persist to Result Repository
         store = ResultStore()
         await store.save(
             payload=payload,
@@ -166,6 +239,8 @@ async def save_result_tool(
     except ValueError as exc:
         logger.error("Invalid session ID: %s", exc)
         raise HTTPException(status_code=400, detail="Invalid session ID format")
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Failed to save result for session %s", body.session_id)
         raise HTTPException(status_code=500, detail=f"Failed to save result: {exc}")
@@ -530,4 +605,131 @@ async def human_intervene_tool(
         logger.exception("Failed to create intervene request")
         raise HTTPException(
             status_code=500, detail=f"Failed to create intervene request: {exc}"
+        )
+
+
+@router.post("/query-result", response_model=SystemToolResponse)
+async def query_result_tool(
+    body: SystemToolRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Query past typed agent outputs by data type name.
+
+    Resolves the ``data_type_name`` to an ``AgentDataType.id`` (by slug
+    first, then by name), then queries ``AgentOutput`` records matching
+    the optional filters.  Returns a list of matching output records
+    conforming to the requested data type schema.
+
+    Args:
+        body: Tool request with ``data_type_name`` and optional filters
+            (``date_from``, ``date_to``, ``field_filters``).
+        db: Database session.
+
+    Returns:
+        SystemToolResponse with matching results as a JSON array.
+
+    Raises:
+        HTTPException: 404 if data type not found.
+    """
+    logger.info(
+        "System tool: query_result — data_type_name=%s",
+        body.tool_args.get("data_type_name"),
+    )
+
+    try:
+        from app.db.models.agent_data_type import AgentDataType
+        from app.db.models.agent_output import AgentOutput
+        from app.schemas.agent_outputs import AgentOutputResponse as AgentOutputRespSchema
+        from app.services.outputs.service import OutputService
+
+        data_type_name = body.tool_args.get("data_type_name", "").strip()
+        if not data_type_name:
+            raise HTTPException(
+                status_code=400,
+                detail="data_type_name is required",
+            )
+
+        # Resolve data_type_name to AgentDataType.id
+        # Try slug first (exact match), then name (exact match)
+        result = await db.execute(
+            select(AgentDataType).where(AgentDataType.slug == data_type_name)
+        )
+        data_type = result.scalar_one_or_none()
+
+        if not data_type:
+            result = await db.execute(
+                select(AgentDataType).where(AgentDataType.name == data_type_name)
+            )
+            data_type = result.scalar_one_or_none()
+
+        if not data_type:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Data type '{data_type_name}' not found",
+            )
+
+        # Build filters from tool_args
+        filters_dict: dict[str, Any] = {
+            "data_type_id": data_type.id,
+            "page": 1,
+            "page_size": 100,  # Allow retrieving up to 100 results
+        }
+
+        tool_filters = body.tool_args.get("filters") or {}
+        if isinstance(tool_filters, dict):
+            date_from = tool_filters.get("date_from")
+            if date_from:
+                filters_dict["date_from"] = date_from
+            date_to = tool_filters.get("date_to")
+            if date_to:
+                filters_dict["date_to"] = date_to
+
+        # Query outputs using OutputService
+        output_service = OutputService()
+        items, total = await output_service.list_outputs(
+            db=db, filters=filters_dict
+        )
+
+        # Build response
+        results_list: list[dict[str, Any]] = []
+        for output in items:
+            data_type_name_resolved = (
+                output.data_type.name if output.data_type else None
+            )
+            agent_type_name_resolved = (
+                output.agent_type.name if output.agent_type else None
+            )
+
+            results_list.append({
+                "id": str(output.id),
+                "data_type_id": str(output.data_type_id),
+                "data_type_name": data_type_name_resolved,
+                "agent_type_id": str(output.agent_type_id),
+                "agent_type_name": agent_type_name_resolved,
+                "execution_session_id": str(output.execution_session_id),
+                "field_values": output.field_values,
+                "validation_status": output.validation_status.value,
+                "raw_output": output.raw_output,
+                "created_at": output.created_at.isoformat() if output.created_at else None,
+            })
+
+        return SystemToolResponse(
+            result={
+                "results": results_list,
+                "total": total,
+                "data_type_name": data_type.name,
+                "data_type_slug": data_type.slug,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Failed to query results for data type '%s'",
+            body.tool_args.get("data_type_name"),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to query results: {exc}",
         )

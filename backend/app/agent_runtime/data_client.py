@@ -260,6 +260,71 @@ class ControlCenterDataClient:
             body["vendor_model_config_id"] = str(vendor_model_config_id)
         return await self._post("/preflight/availability", body)
 
+        # ── Typed output methods ──────────────────────────────────────────────────
+
+    def _internal_url(self, path: str) -> str:
+        """Construct URL for internal endpoints (not under /data)."""
+        return f"{self._control_center_url}/api/v1/internal{path}"
+
+    async def _internal_post(
+        self, path: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """POST to an internal (non-data) endpoint with error handling."""
+        url = self._internal_url(path)
+        async with self._make_client() as client:
+            try:
+                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as exc:
+                raise ControlCenterDataError(
+                    f"CC internal POST {url} returned {exc.response.status_code}: "
+                    f"{exc.response.text[:200]}"
+                ) from exc
+            except Exception as exc:
+                raise ControlCenterDataError(
+                    f"CC internal POST {url} failed: {exc}"
+                ) from exc
+
+    async def validate_typed_output(
+        self, data_type_id: uuid.UUID, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Validate an agent output payload against a data type schema.
+
+        Calls ``POST /api/v1/internal/validate-output``.
+        Returns ``{"valid": bool, "errors": [...]}``.
+        """
+        return await self._internal_post(
+            "/validate-output",
+            {"data_type_id": str(data_type_id), "payload": payload},
+        )
+
+    async def persist_typed_output(
+        self,
+        data_type_id: uuid.UUID,
+        agent_type_id: uuid.UUID,
+        session_id: uuid.UUID,
+        field_values: dict[str, Any] | None,
+        validation_status: str,
+        raw_output: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist a typed agent output record to Control Center.
+
+        Calls ``POST /api/v1/internal/agent-outputs``.
+        Returns the created ``AgentOutput`` record as a dict.
+        """
+        body: dict[str, Any] = {
+            "data_type_id": str(data_type_id),
+            "agent_type_id": str(agent_type_id),
+            "execution_session_id": str(session_id),
+            "validation_status": validation_status,
+        }
+        if field_values is not None:
+            body["field_values"] = field_values
+        if raw_output is not None:
+            body["raw_output"] = raw_output
+        return await self._internal_post("/agent-outputs", body)
+
     # ── Session management ────────────────────────────────────────────────────
 
     async def get_session(self, session_id: uuid.UUID) -> dict[str, Any] | None:

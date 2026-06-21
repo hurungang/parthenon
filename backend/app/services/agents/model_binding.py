@@ -234,6 +234,7 @@ class ModelBindingLayer:
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4096,
+        response_format: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Send a chat completion request to the configured LLM provider.
@@ -241,11 +242,11 @@ class ModelBindingLayer:
         Args:
             agent_type: The AgentType that defines the model_id.
             model_config: The ModelConfig with provider type and encrypted credentials.
-                          If None the call will fail with ModelBindingError.
-                          Use resolve_model_config(agent_type.model_id, db) to obtain it.
             messages: List of chat messages (role + content).
             tools: Optional tool definitions for function calling.
             max_tokens: Maximum tokens in the response.
+            response_format: Optional structured output schema (JSON Schema format).
+                             Passed as ``response_format`` to OpenAI-compatible providers.
 
         Returns:
             Raw model response dict.
@@ -273,6 +274,7 @@ class ModelBindingLayer:
             messages=messages,
             tools=tools,
             max_tokens=max_tokens,
+            response_format=response_format,
         )
 
     async def _dispatch(
@@ -285,6 +287,7 @@ class ModelBindingLayer:
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None,
         max_tokens: int,
+        response_format: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Resolve a provider key via the registry and dispatch to the right caller.
 
@@ -329,6 +332,7 @@ class ModelBindingLayer:
                 messages=messages,
                 tools=tools,
                 max_tokens=max_tokens,
+                response_format=response_format,
             )
 
         # Native-API family: per-vendor request/response shape.
@@ -382,6 +386,7 @@ class ModelBindingLayer:
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None,
         max_tokens: int,
+        response_format: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Send a request to an OpenAI-compatible Chat Completions endpoint.
 
@@ -396,6 +401,14 @@ class ModelBindingLayer:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
+        if response_format:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "output_schema",
+                    "schema": response_format,
+                },
+            }
 
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:

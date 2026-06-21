@@ -476,6 +476,8 @@ export interface AgentType {
   input_schema: Record<string, unknown> | null
   output_type: AgentOutputType
   output_schema: Record<string, unknown> | null
+  output_data_type_id: string | null
+  output_data_type_name: string | null
   sop_bindings?: SopBinding[]
   skill_bindings?: SkillBinding[]
   guardrail_max_iterations?: number
@@ -763,6 +765,95 @@ export interface GatewayRequestResponse {
   instance_id: string
   session_handle: string
   has_question: boolean
+}
+
+// ── Agent Data Types ───────────────────────────────────────────────────────────
+
+export type DataTypeFieldType = 'string' | 'number' | 'boolean' | 'date' | 'enum'
+
+export interface AgentDataTypeField {
+  name: string
+  description?: string
+  type: DataTypeFieldType
+  enum_values?: string[] | null
+  required?: boolean
+  default?: string | number | boolean | null
+}
+
+export interface AgentDataType {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  fields: AgentDataTypeField[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ReferencingAgentType {
+  id: string
+  name: string
+}
+
+export interface DataTypeCreate {
+  name: string
+  slug: string
+  description?: string | null
+  fields: AgentDataTypeField[]
+}
+
+export interface DataTypeUpdate {
+  name?: string
+  slug?: string
+  description?: string | null
+  fields?: AgentDataTypeField[]
+}
+
+export interface DataTypeListResponse {
+  items: AgentDataType[]
+  total: number
+  page: number
+  page_size: number
+  usage?: Record<string, number>
+  referencing_agent_types?: Record<string, ReferencingAgentType[]>
+}
+
+// ── Agent Outputs ──────────────────────────────────────────────────────────────
+
+export interface AgentOutputResponse {
+  id: string
+  data_type_id: string
+  data_type_name: string
+  agent_type_id: string
+  agent_type_name: string
+  execution_session_id: string
+  field_values: Record<string, unknown> | null
+  validation_status: 'valid' | 'validation_error'
+  raw_output: string | null
+  created_at: string
+}
+
+export interface AgentOutputQueryParams {
+  data_type_id?: string
+  agent_type_id?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}
+
+export interface AgentOutputListResponse {
+  items: AgentOutputResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AgentOutputExportParams {
+  data_type_id?: string
+  agent_type_id?: string
+  date_from?: string
+  date_to?: string
 }
 
 // ── Auth State ─────────────────────────────────────────────────────────────────

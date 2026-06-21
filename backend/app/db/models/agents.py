@@ -517,6 +517,12 @@ class AgentType(Base):
     )
     output_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    # Typed output data type reference (non-conversational agents)
+    output_data_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_data_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Guardrail policy profile (owned by Control Center and resolved by runtime context)
     guardrail_max_iterations: Mapped[int] = mapped_column(
@@ -623,6 +629,9 @@ class AgentType(Base):
     )
     plan: Mapped["AgentPlan | None"] = relationship(
         "AgentPlan", back_populates="agent_type", uselist=False, cascade="all, delete-orphan"
+    )
+    output_data_type: Mapped["AgentDataType | None"] = relationship(
+        "AgentDataType", back_populates="agent_types", foreign_keys=[output_data_type_id]
     )
 
     def __repr__(self) -> str:
@@ -771,6 +780,12 @@ class AgentJob(Base):
     terminated_by_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("termination_requests.id", ondelete="SET NULL"), nullable=True
     )
+    # Convenience FK link to the typed output record for this session
+    output_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_outputs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     termination_category: Mapped[AgentTerminationCategory] = mapped_column(
         Enum(AgentTerminationCategory, name="agent_termination_category_enum"),
         nullable=False,
@@ -804,6 +819,9 @@ class AgentJob(Base):
 
     # Relationships
     agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="jobs")
+    output: Mapped["AgentOutput | None"] = relationship(
+        "AgentOutput", back_populates="agent_jobs", foreign_keys=[output_id]
+    )
     intervene_requests: Mapped[list["InterveneRequest"]] = relationship(
         "InterveneRequest", back_populates="agent_session", cascade="all, delete-orphan"
     )

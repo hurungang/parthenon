@@ -793,6 +793,7 @@ class AgentTypeCreate(BaseModel):
     input_schema: dict[str, Any] | None = None
     output_type: AgentOutputType = AgentOutputType.auto
     output_schema: dict[str, Any] | None = None
+    output_data_type_id: uuid.UUID | None = None
     sop_bindings: list[SopBindingCreate] = []
     skill_bindings: list[SkillBindingCreate] = []
     guardrail_max_iterations: int = 10
@@ -826,6 +827,14 @@ class AgentTypeCreate(BaseModel):
         )
         return self
 
+    @model_validator(mode="after")
+    def _validate_output_data_type(self) -> "AgentTypeCreate":
+        if self.input_type == AgentInputType.conversation and self.output_data_type_id is not None:
+            raise ValueError(
+                "output_data_type_id cannot be set when input_type is 'conversation'"
+            )
+        return self
+
 
 class AgentTypeUpdate(BaseModel):
     name: Annotated[
@@ -842,6 +851,7 @@ class AgentTypeUpdate(BaseModel):
     input_schema: dict[str, Any] | None = None
     output_type: AgentOutputType | None = None
     output_schema: dict[str, Any] | None = None
+    output_data_type_id: uuid.UUID | None = None
     sop_bindings: list[SopBindingCreate] | None = None
     skill_bindings: list[SkillBindingCreate] | None = None
     guardrail_max_iterations: int | None = None
@@ -853,6 +863,14 @@ class AgentTypeUpdate(BaseModel):
     guardrail_token_fallback_mode: GuardrailTokenFallbackMode | None = None
     guardrail_conversational_token_visibility_mode: GuardrailConversationalTokenVisibilityMode | None = None
     guardrail_conversational_continuation_policy: GuardrailConversationalContinuationPolicy | None = None
+
+    @model_validator(mode="after")
+    def _validate_output_data_type(self) -> "AgentTypeUpdate":
+        if self.input_type == AgentInputType.conversation and self.output_data_type_id is not None:
+            raise ValueError(
+                "output_data_type_id cannot be set when input_type is 'conversation'"
+            )
+        return self
 
 
 class AgentTypeRead(BaseModel):
@@ -870,6 +888,8 @@ class AgentTypeRead(BaseModel):
     input_schema: dict[str, Any] | None
     output_type: AgentOutputType
     output_schema: dict[str, Any] | None
+    output_data_type_id: uuid.UUID | None = None
+    output_data_type_name: str | None = None
     sop_bindings: list[SopBindingResponse] = []
     skill_bindings: list[SkillBindingResponse] = []
     guardrail_max_iterations: int
@@ -940,6 +960,13 @@ class AgentTypeRead(BaseModel):
                 "input_schema": obj.input_schema,
                 "output_type": obj.output_type,
                 "output_schema": obj.output_schema,
+                "output_data_type_id": obj.output_data_type_id,
+                "output_data_type_name": (
+                    obj.output_data_type.name
+                    if "output_data_type" not in insp.unloaded
+                    and obj.output_data_type is not None
+                    else None
+                ),
                 "sop_bindings": sop_bindings,
                 "skill_bindings": skill_bindings,
                 "guardrail_max_iterations": obj.guardrail_max_iterations,

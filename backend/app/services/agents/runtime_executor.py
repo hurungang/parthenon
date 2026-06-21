@@ -1161,6 +1161,74 @@ class AgentRuntimeExecutor:
                 output_data = await self._run_task_loop_ar(
                     job_data, context, data_client, response_value=response_value,
                 )
+
+                # Phase 4: Typed output persistence — if the agent type has an
+                # assigned output_data_type_id, validate and persist the output
+                # via Control Center internal endpoints before marking the session
+                # as completed.
+                output_data_type_id = context.get("output_data_type_id") if isinstance(context, dict) else None
+                typed_output_id: str | None = None
+                if output_data_type_id and isinstance(output_data, dict):
+                    try:
+                        data_type_id = uuid.UUID(output_data_type_id)
+                        # Extract payload from output_data (field_values)
+                        payload = output_data.get("field_values") or output_data.get("result") or output_data
+
+                        # Step 1: Validate the output against the data type schema
+                        validation_result = await data_client.validate_typed_output(
+                            data_type_id=data_type_id,
+                            payload=payload if isinstance(payload, dict) else {"value": payload},
+                        )
+
+                        is_valid = validation_result.get("valid", False)
+                        validation_errors = validation_result.get("errors", [])
+
+                        # Step 2: Persist the typed output (even if validation failed)
+                        raw_output = (
+                            str(payload) if not is_valid else None
+                        )
+                        typed_response = await data_client.persist_typed_output(
+                            data_type_id=data_type_id,
+                            agent_type_id=uuid.UUID(job_data["agent_type_id"]),
+                            session_id=session_id,
+                            field_values=payload if is_valid and isinstance(payload, dict) else None,
+                            validation_status="valid" if is_valid else "validation_error",
+                            raw_output=raw_output,
+                        )
+                        typed_output_id = typed_response.get("id")
+
+                        if typed_output_id:
+                            # Include output_id in output_data so it flows to
+                            # mark_session_completed and persists to AgentJob
+                            output_data["output_id"] = typed_output_id
+
+                        # Enrich output_data with typed metadata so the frontend
+                        # can detect and render typed outputs properly.
+                        data_type_name = context.get("output_data_type_name") if isinstance(context, dict) else None
+                        output_data["__output_type"] = "typed"
+                        output_data["__data_type_id"] = str(data_type_id)
+                        if data_type_name:
+                            output_data["__data_type_name"] = data_type_name
+                        output_data["validation_status"] = "valid" if is_valid else "validation_error"
+                        if not is_valid and raw_output:
+                            output_data["raw_output"] = raw_output
+                        # Merge actual field values into output_data at top level
+                        if isinstance(payload, dict) and is_valid:
+                            for key, val in payload.items():
+                                if not key.startswith("__") and key not in output_data:
+                                    output_data[key] = val
+
+                        logger.info(
+                            "Typed output for session %s: valid=%s output_id=%s",
+                            session_id, is_valid, typed_output_id,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Typed output persistence failed for session %s: %s — "
+                            "continuing with untyped completion",
+                            session_id, exc,
+                        )
+
                 await data_client.mark_session_completed(session_id, output_data)
                 span.set_attribute("status", "completed")
 
@@ -1902,7 +1970,7 @@ class AgentRuntimeExecutor:
                     })
 
                     raise HumanInterveneRequired()
-                elif bare_tool_name in ("send_notification", "get_recipient_group"):
+                elif bare_tool_name in ("send_notification", "get_recipient_group", "query_result"):
                     # System tools now route through Communication Hub
                     tool_result = await self._execute_mcp_tool_ar(
                         tool_name=bare_tool_name,

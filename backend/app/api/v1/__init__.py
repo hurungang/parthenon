@@ -21,6 +21,7 @@ from app.api.v1.internal.authorization import InternalAuthorizationRouter
 from app.api.v1.internal.bootstrap import InternalBootstrapRouter
 from app.api.v1.internal.certificates import InternalCertificatesRouter
 from app.api.v1.internal.mcp_proxy import InternalMcpProxyRouter
+from app.api.v1.internal.outputs import InternalOutputsRouter
 from app.api.v1.internal.session_data import InternalSessionDataRouter
 from app.api.v1.internal.system_tools import router as InternalSystemToolsRouter
 from app.api.v1.intervene import InterveneRouter
@@ -28,6 +29,8 @@ from app.api.v1.mcp_hub import McpOAuthRouter, McpServerRouter, McpSessionRouter
 from app.api.v1.notifications import NotificationRouter
 from app.api.v1.platform_users import PlatformUsersRouter
 from app.api.v1.policy import PolicyRouter
+from app.api.v1.agent_outputs import OutputRouter
+from app.api.v1.data_types import DataTypeRouter
 from app.api.v1.results import ResultRouter
 from app.api.v1.scheduling import ScheduleRouter
 from app.api.v1.setup import SetupRouter
@@ -54,6 +57,7 @@ router.include_router(InternalAuthorizationRouter)
 router.include_router(InternalAgentDataRouter)
 router.include_router(InternalSessionDataRouter)
 router.include_router(InternalSystemToolsRouter)
+router.include_router(InternalOutputsRouter)
 router.include_router(InternalMcpProxyRouter)
 
 # Identity & auth
@@ -82,6 +86,10 @@ router.include_router(ModelConfigRouter)
 router.include_router(ModelUsageGuardrailRouter)
 router.include_router(ModelAvailabilityRouter)
 router.include_router(RuntimeControlRouter)
+
+# Data Types & Agent Outputs
+router.include_router(DataTypeRouter)
+router.include_router(OutputRouter)
 
 # Supporting modules
 router.include_router(ScheduleRouter)

@@ -13,7 +13,13 @@ from __future__ import annotations
 
 #: Canonical bare names for all built-in system tools.
 SYSTEM_TOOL_NAMES: frozenset[str] = frozenset(
-    {"save_result", "send_notification", "get_recipient_group", "human_intervene"}
+    {
+        "save_result",
+        "send_notification",
+        "get_recipient_group",
+        "human_intervene",
+        "query_result",
+    }
 )
 
 #: Display names with the "system/" prefix — matches the ``name`` field returned by

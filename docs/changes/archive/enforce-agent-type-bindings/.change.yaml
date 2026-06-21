@@ -1,6 +1,6 @@
 name: enforce-agent-type-bindings
 created_at: 2026-06-15
-status: implemented
+status: master-updated
 scope:
   has_ui_changes: true
   has_architecture_changes: false

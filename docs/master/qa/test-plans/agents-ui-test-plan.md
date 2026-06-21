@@ -252,6 +252,35 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
+### 12. Agent Type Binding Enforcement UI
+
+**What is tested:**
+- Binding list section renders with type badges (SOP/Skill), order numbers, add/remove/reorder controls
+- Add-binding dropdown is role-scoped — only shows SOPs/skills accessible through the currently selected role; already-bound items hidden
+- Add button disabled when no role is selected
+- Save button disabled when no bindings exist
+- Empty state hint text visible when no bindings are defined
+- Orphan detection: switching role removes previously-bound items from role scope; warning banner appears listing orphaned items with "Remove All" button
+- Per-item orphan visual: each orphaned binding row shows a warning border
+- Duplicate binding prevention: attempting to add an already-bound SOP/Skill hides it from the dropdown
+- 422 error responses from binding validation are displayed in the dialog via `PermissionDeniedAlert`
+
+**Acceptance criteria:**
+- Add-binding dropdown shows only role-accessible SOPs/skills; already-bound items are excluded
+- Add button is disabled when role is null
+- Save button is disabled when `sop_bindings.length === 0 && skill_bindings.length === 0`
+- Empty state hint renders below the binding list when no entries exist
+- Orphan warning banner appears when role change creates stale bindings; lists orphan SOP and skill names; "Remove All" clears them in one click
+- Orphaned rows have a distinct visual treatment (warning border/background)
+- 422 binding validation errors are caught and shown inline in the dialog
+
+**Test files:**
+- [frontend/src/__tests__/AgentTypeForm.test.tsx](../../../../frontend/src/__tests__/AgentTypeForm.test.tsx) — binding list rendering, add/remove/reorder, role-scoped dropdown, orphan detection, save button disabled, empty state, duplicate prevention
+- [frontend/src/__tests__/AgentManagementPage.test.tsx](../../../../frontend/src/__tests__/AgentManagementPage.test.tsx) — 422 error display via dialog error handling
+- [e2e/tests/agent-type-bindings-mocked.spec.ts](../../../../e2e/tests/agent-type-bindings-mocked.spec.ts) — full binding interaction: render, add, remove, reorder, save payload, orphan warning
+
+---
+
 ## Manual Testing Requirements
 
 | Scenario | Why Manual |
@@ -288,3 +317,4 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 | add-agent-execution-guardrails | Added Agent Type guardrail profile UI coverage (collapsed editor behavior, input-type adaptation, and k-token rendering checks) | 2026-05-25 |
 | ai-assisted-workflow-authoring-for-sop-and-skill | Added Agent Type form Default SOP behavior coverage (label rename, visibility across input types, required-only-for-none validation, and payload preservation) | 2026-05-29 |
 | expand-model-config-providers | Added Model Configurations — Expanded Provider Dropdown coverage (12-provider dropdown, chip colour uniqueness, full CRUD lifecycle, dialog error pattern, i18n labels, reload-free parent table refresh) | 2026-06-03 |
+| improve-role-mcp-session-assignment | Added inline MCP session assignment coverage (dynamic server detection, inline dropdowns, pre-save validation, refresh, passthrough badges) | 2026-06-20 |

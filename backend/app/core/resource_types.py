@@ -21,6 +21,7 @@ RT_SKILL: Final[str] = "skill"
 RT_SCHEDULING: Final[str] = "scheduling"
 RT_NOTIFICATION: Final[str] = "notification"
 RT_RESULT: Final[str] = "result"
+RT_DATA_TYPE: Final[str] = "data_type"
 RT_INTERVENE: Final[str] = "intervene"
 
 # ── Manifest ──────────────────────────────────────────────────────────────────
@@ -64,6 +65,9 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     },
     RT_RESULT: {
         "actions": ["read"],
+    },
+    RT_DATA_TYPE: {
+        "actions": ["create", "read", "update", "delete", "manage"],
     },
     RT_INTERVENE: {
         "actions": ["view", "respond"],
