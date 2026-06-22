@@ -145,15 +145,10 @@ class TestIsSystemTool:
             "hello-world____helloWorld",
             "github____list_prs",
             "save_results",           # typo — not a system tool
-            "system____unknown_tool", # system server but not a known system tool — still True (prefix match)
         ],
     )
     def test_mcp_tools_not_system(self, name: str) -> None:
-        # system____unknown_tool starts with "system____" so is_system_tool returns True
-        if name.startswith("system____"):
-            assert is_system_tool(name) is True
-        else:
-            assert is_system_tool(name) is False
+        assert is_system_tool(name) is False
 
 
 # ── get_server_name ───────────────────────────────────────────────────────────

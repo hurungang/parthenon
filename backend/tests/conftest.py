@@ -23,6 +23,48 @@ from app.main import create_app
 # Use SQLite for unit tests to avoid needing Postgres
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
+# ── Dynamic test skipping ─────────────────────────────────────────────────
+
+_SERVICE_DEPENDENT_FILES = {
+    "tests/integration/test_nonconv_agent_mcp_tools.py",
+    "tests/integration/test_service_triggers.py",
+    "tests/integration/test_runtime_control_persistence.py",
+    "tests/integration/test_internal_auth_security.py",
+    "tests/integration/test_mcp_hub.py",
+    "tests/integration/test_mcp_session_identity_lookup.py",
+    "tests/integration/test_skill_system_tools.py",
+    "tests/integration/test_enhance_mcp_hub_skills_sops_db.py",
+    "tests/integration/test_startup_session_cleanup.py",
+    "tests/integration/test_agent_execution_with_logs.py",
+    "tests/integration/test_system_tool_schemas.py",
+    "tests/api/v1/test_model_availability_api.py",
+    "tests/api/v1/test_model_usage_guardrails_api.py",
+    "tests/api/v1/test_agent_runtime_controls_api.py",
+    "tests/api/v1/test_intervene.py",
+}
+
+
+def _is_service_available(port: int) -> bool:
+    import socket
+    try:
+        sock = socket.create_connection(("127.0.0.1", port), timeout=0.5)
+        sock.close()
+        return True
+    except OSError:
+        return False
+
+
+def pytest_collection_modifyitems(config, items):
+    skip_services = pytest.mark.skip(reason="Requires running services (CC, AR, or CH)")
+    services_running = all(
+        _is_service_available(p) for p in (8000, 8001, 8002)
+    )
+    for item in items:
+        rel_path = item.nodeid.split("::")[0]
+        norm = os.path.normpath(rel_path).replace(os.sep, "/")
+        if norm in _SERVICE_DEPENDENT_FILES and not services_running:
+            item.add_marker(skip_services)
+
 
 @pytest.fixture(scope="session")
 def event_loop():

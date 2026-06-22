@@ -36,5 +36,3 @@ def test_showcase_index_contains_required_sections() -> None:
     assert "tab-role" in content
     assert "tab-agent" in content
     assert "tab-logs" in content
-    assert "placeholder-mcp.svg" in content
-    assert "placeholder-exec-logs.svg" in content

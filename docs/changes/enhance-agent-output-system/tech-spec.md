@@ -6,6 +6,8 @@ The agent output system is enhanced by introducing a centralized **Agent Data Ty
 
 The design follows the existing service segregation: CC owns all new database tables and exposes both public REST endpoints (for UI) and internal mTLS-protected endpoints (for AR). AR has no direct database access — it calls CC internal endpoints for validation, output persistence, and output querying. CH routes the new `query_result` tool call using its existing tool-routing infrastructure.
 
+**Phase 9 (LangChain Migration)** replaces the custom direct-HTTP `ModelBindingLayer` and manual observe-reason-act loop with LangChain's deep agent framework (`create_agent`, LangGraph `AgentExecutor`). LangChain `ChatModel` subclasses replace the 12-provider dispatch facade. Custom `BaseTool` subclasses wrap Parthenon's `CommHubToolClient` to preserve mTLS, service segregation, and tool routing. Guardrails and execution event logging become LangChain `BaseCallbackHandler` callbacks. Structured output uses LangChain's `.with_structured_output()` with the JSON Schema from the AgentContextResponse. The migration deletes ~5,000 lines of custom dispatch and loop code while preserving all security boundaries, credential management, HITL support, and typed output validation.
+
 ---
 
 ## 2. Component Breakdown

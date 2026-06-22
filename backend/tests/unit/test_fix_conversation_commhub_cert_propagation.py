@@ -1,6 +1,6 @@
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,6 +18,9 @@ async def test_conversation_turn_propagates_cert_to_comm_hub_client() -> None:
     )
     conv_session_id = uuid.uuid4()
     db = AsyncMock()
+    _db_result = MagicMock()
+    _db_result.fetchall.return_value = []
+    db.execute.return_value = _db_result
 
     executor._permission_manager.calculate_allowed_tools = AsyncMock(return_value=set())
     executor._permission_manager.calculate_allowed_agent_types = AsyncMock(return_value=set())

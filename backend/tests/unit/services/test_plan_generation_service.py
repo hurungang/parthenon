@@ -479,16 +479,27 @@ def _make_db_for_resolve_graph(
     sops_result = MagicMock()
     sops_result.scalars.return_value = sops_scalars
 
-    # Call 5: select(AgentRoleSkill.skill_id) → .fetchall()
+    # Call 5: select(AgentTypeSopBinding.sop_id) → .fetchall() — called from _get_bound_sop_ids
+    #         Conditionally called only when system instruction doesn't mention SOPs
+    bind_sop_ids_result = MagicMock()
+    bind_sop_ids_result.fetchall.return_value = []
+
+    # Call 6: select(AgentRoleSkill.skill_id) → .fetchall()
     skills_result = MagicMock()
     skills_result.fetchall.return_value = []
+
+    # Call 7: select(AgentTypeSkillBinding.skill_id) → .fetchall()
+    bind_skills_result = MagicMock()
+    bind_skills_result.fetchall.return_value = []
 
     db.execute.side_effect = [
         role_result,
         sessions_result,
         sop_ids_result,
         sops_result,
+        bind_sop_ids_result,
         skills_result,
+        bind_skills_result,
     ]
     return db
 
@@ -540,8 +551,9 @@ async def test_resolve_graph_uses_default_sop_as_fallback():
 
     graph = await service._resolve_graph(at, db)
 
-    assert len(graph["sops"]) == 1
-    assert graph["sops"][0]["id"] == str(sop1_id)
+    # primary_sop_id was removed (replaced by AgentTypeSopBinding).
+    # When no SOPs are mentioned and no bindings exist, all role SOPs are kept.
+    assert len(graph["sops"]) == 2
 
 
 @pytest.mark.asyncio

@@ -36,6 +36,7 @@ def _make_guardrail_state(max_depth: int = 3, current_depth: int = 0) -> Runtime
         conversational_continuation_policy="allow",
         policy_snapshot_id="policy-1",
         delegation_depth=current_depth,
+        tree_depth=current_depth,
     )
 
 
@@ -192,7 +193,8 @@ class TestDelegationDepthBlockedEventActPath:
             output_type="auto",
             output_schema=None,
             input_data={},
-            delegation_depth=1,  # Already at depth 1
+            delegation_depth=1,
+            tree_depth=1,  # Already at depth 1 — triggers block on next delegation
             max_delegation_depth=1,  # Max depth is 1
         )
 
@@ -389,6 +391,7 @@ class TestDelegationDepthBlockedExecuteToolCalls:
             output_schema=None,
             input_data={},
             delegation_depth=1,
+            tree_depth=1,  # Block next delegation
             max_delegation_depth=1,
         )
 

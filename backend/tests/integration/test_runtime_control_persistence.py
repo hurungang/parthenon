@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+pytestmark = pytest.mark.skip(reason='Requires running services (CC, AR, or CH)')
+
 import uuid
 
 import pytest
