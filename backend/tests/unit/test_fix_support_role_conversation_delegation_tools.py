@@ -1,6 +1,6 @@
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -19,6 +19,9 @@ async def test_conversation_turn_includes_delegated_agent_tools_from_role_permis
     )
     conv_session_id = uuid.uuid4()
     db = AsyncMock()
+    _db_result = MagicMock()
+    _db_result.fetchall.return_value = []
+    db.execute.return_value = _db_result
 
     executor._permission_manager.calculate_allowed_tools = AsyncMock(return_value=set())
     executor._permission_manager.calculate_allowed_agent_types = AsyncMock(
@@ -52,6 +55,7 @@ async def test_conversation_turn_includes_delegated_agent_tools_from_role_permis
     executor._permission_manager.calculate_allowed_agent_types.assert_awaited_once_with(
         agent_type.role_id,
         db,
+        override_sop_ids=None,
     )
 
 
@@ -66,6 +70,9 @@ async def test_conversation_turn_delegation_waits_for_receiver_response() -> Non
     )
     conv_session_id = uuid.uuid4()
     db = AsyncMock()
+    _db_result = MagicMock()
+    _db_result.fetchall.return_value = []
+    db.execute.return_value = _db_result
 
     executor._permission_manager.calculate_allowed_tools = AsyncMock(return_value=set())
     executor._permission_manager.calculate_allowed_agent_types = AsyncMock(
@@ -131,4 +138,5 @@ async def test_conversation_turn_delegation_waits_for_receiver_response() -> Non
         session_link_id=None,
         wait_for_response=True,
         wait_timeout_seconds=45.0,
+        conv_session_id=str(conv_session_id),
     )

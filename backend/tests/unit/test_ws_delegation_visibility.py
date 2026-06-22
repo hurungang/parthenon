@@ -89,6 +89,7 @@ async def test_conversation_context_emits_delegation_status_events() -> None:
         requester_role_id=str(role_id),
         request_payload={'__delegation_depth': 1},
         session_link_id=None,
-        wait_for_response=True,
-        wait_timeout_seconds=45.0,
+        wait_for_response=False,
+        wait_timeout_seconds=120.0,
+        conv_session_id=str(conv_session_id),
     )

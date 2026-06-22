@@ -3,7 +3,10 @@ import pytest
 import uuid
 from pathlib import Path
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [
+    pytest.mark.skip(reason='Requires running services (CC, AR, or CH)'),
+    pytest.mark.asyncio,
+]
 
 
 async def test_mcp_session_endpoint_with_role(

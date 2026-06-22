@@ -22,6 +22,7 @@ def _resp(status_code: int, json_data=None, headers=None, text=""):
     """Build a mock httpx response."""
     r = MagicMock()
     r.status_code = status_code
+    r.is_success = 200 <= status_code < 400
     r.headers = dict(headers or {})
     r.text = text
     if json_data is not None:

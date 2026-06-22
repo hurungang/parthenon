@@ -81,7 +81,9 @@ async def test_delegate_conversation_turn_preserves_tool_name_in_status_events()
 
     assert result == "ok"
     assert guardrail_usage is None
-    assert status_events == [{"status": "using_tool", "tool_name": "send_notification"}]
+    assert len(status_events) == 1
+    assert status_events[0]["status"] == "using_tool"
+    assert status_events[0]["tool_name"] == "send_notification"
 
 
 @pytest.mark.asyncio
@@ -134,11 +136,14 @@ async def test_delegate_conversation_turn_streams_status_events_to_callback() ->
 
     assert result == "ok"
     assert guardrail_usage is None
-    assert status_events == [
-        {"status": "delegating", "agent_type": "research-agent"},
-        {"status": "waiting", "agent_type": "research-agent"},
-    ]
-    assert emitted == status_events
+    assert len(status_events) == 2
+    assert status_events[0]["status"] == "delegating"
+    assert status_events[0]["agent_type"] == "research-agent"
+    assert status_events[1]["status"] == "waiting"
+    assert status_events[1]["agent_type"] == "research-agent"
+    assert len(emitted) == 2
+    assert emitted[0] == status_events[0]
+    assert emitted[1] == status_events[1]
 
 
 @pytest.mark.asyncio

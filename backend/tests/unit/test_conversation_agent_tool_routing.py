@@ -121,6 +121,9 @@ async def test_conversation_turn_routes_tool_calls_through_comm_hub_client():
     agent_type.model_id = "gpt-4o"
 
     db = AsyncMock()
+    _db_result = MagicMock()
+    _db_result.fetchall.return_value = []
+    db.execute.return_value = _db_result
     conv_session_id = uuid.uuid4()
     messages = [{"role": "user", "content": "Call the hello-world tool for me"}]
 
@@ -184,6 +187,9 @@ async def test_conversation_turn_does_not_use_mcp_proxy_engine_directly():
     agent_type.model_id = "gpt-4o"
 
     db = AsyncMock()
+    _db_result = MagicMock()
+    _db_result.fetchall.return_value = []
+    db.execute.return_value = _db_result
     conv_session_id = uuid.uuid4()
     messages = [{"role": "user", "content": "Call the hello-world tool for me"}]
 

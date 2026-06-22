@@ -2,7 +2,7 @@
 
 ## Overview
 
-Introduce a centralized Agent Data Type registry where administrators define reusable typed schemas, link them to non-conversational agent types, validate and persist typed outputs at execution completion, render results schema-aware in the execution log UI, provide a dedicated Agent Outputs admin page with filtering and CSV export, and expose a `query_result` system tool for agents to query past typed results. The implementation proceeds in eight phases spanning backend model/API work through frontend pages and system tool registration.
+Introduce a centralized Agent Data Type registry where administrators define reusable typed schemas, link them to non-conversational agent types, validate and persist typed outputs at execution completion, render results schema-aware in the execution log UI, provide a dedicated Agent Outputs admin page with filtering and CSV export, expose a `query_result` system tool for agents to query past typed results, and migrate agent execution from custom direct-HTTP calls to LangChain's deep agent framework. The implementation proceeds in nine phases spanning backend model/API work through frontend pages, system tool registration, and a LangChain architecture migration.
 
 ---
 
@@ -452,6 +452,25 @@ Execute `npx vitest run` (or the project test runner). Fix any regressions.
 Run `npx tsc --noEmit` in the frontend directory. Fix any type errors.
 
 **Done when:** Zero TypeScript compilation errors.
+
+### Phase 9 — LangChain Agent Framework Migration
+- [ ] 9.1 — Create `LangChainModelFactory` replacing `ModelBindingLayer._dispatch()` and 12-provider `PROVIDER_REGISTRY` with LangChain `ChatModel` subclasses (`ChatOpenAI`, `ChatAnthropic`, `ChatGoogleGenerativeAI`, `ChatCohere`). Integrate `CredentialVault` for decrypted API key injection and `get_ssl_context()` for custom HTTP clients.
+- [ ] 9.2 — Create `LangChainToolWrapper` bridging Parthenon's `CommHubToolClient` to LangChain `BaseTool` / `StructuredTool`. Each MCP tool becomes a LangChain tool whose `_arun()` calls `CommHubToolClient.call_tool()` preserving mTLS, service segregation, and tool routing through Communication Hub.
+- [ ] 9.3 — Create `LangChainSystemTool` subclasses for all 5 system tools (`save_result`, `send_notification`, `get_recipient_group`, `human_intervene`, `query_result`) implementing `_arun()` with the existing system tool handlers.
+- [ ] 9.4 — Create `GuardrailCallback` (`BaseCallbackHandler`) enforcing all guardrail checks: iteration limits (`on_llm_start`), delegation depth (`on_tool_start`), token budget (`on_llm_end`), execution timeout. Preserve `GuardrailStop` exception and logging.
+- [ ] 9.5 — Create `ExecutionLoggingCallback` (`BaseCallbackHandler`) emitting Parthenon execution events (`llm_request`, `llm_response`, `tool_call`, `iteration_complete`, `session_completed`, `tools_resolved`) via `data_client.log_execution_event()`.
+- [ ] 9.6 — Replace `_run_task_loop` (CC/DB path, lines 3132-3256) with a LangChain `create_agent()` call using LangGraph `AgentExecutor`. Preserve SOP/Skill content injection, MCP context loading, and plan injection as pre-processing before agent creation.
+- [ ] 9.7 — Replace `_run_task_loop_ar` (AR path, lines 1353-2301) with the same LangChain agent executor, configured with `CommHubToolClient`-wrapped tools and mTLS certificate. Preserve HITL suspend/resume via LangGraph `interrupt()`/`Command(resume=...)`.
+- [ ] 9.8 — Wire `response_format` (structured output) via LangChain's `.with_structured_output()` using the JSON Schema from `AgentContextResponse.output_json_schema`. Remove the system instruction schema injection.
+- [ ] 9.9 — Preserve typed output validation post-processing: after LangChain agent returns, run `validate_typed_output()` and `persist_typed_output()` via `data_client`, enriching `output_data` with `__output_type`, `__data_type_id`, `__data_type_name`, `validation_status`, `raw_output`.
+- [ ] 9.10 — Preserve prompt logging: capture full system instruction and user prompt before first LLM call via `_capture_prompt_log()`.
+- [ ] 9.11 — Handle tool name sanitization: LangChain tools may mangle MCP tool names with `/`. Preserve `_sanitize_tool_name_for_openai`/`_restore_tool_name_from_openai` as tool wrappers.
+- [ ] 9.12 — Delete legacy code: `ModelBindingLayer._dispatch()`, `_call_openai_compat()`, `_call_anthropic()`, `_call_gemini()`, `_call_cohere()`, `PROVIDER_REGISTRY`, `extract_text()`, `extract_tool_calls()`, `extract_usage()`.
+- [ ] 9.13 — Delete legacy code: `_run_task_loop` (CC/DB path), `_run_task_loop_ar` (AR path), manual observe-reason-act loop iteration. Keep guardrail logic, context assembly, and event logging callbacks.
+- [ ] 9.14 — **Capture full-suite baseline before migration.** Run `pytest tests/unit/ tests/integration/ tests/api/ tests/communication_hub/ tests/security/ tests/agent_runtime/ tests/services/ --tb=no -q` and record the pass/fail/skip counts. **Current baseline: 1260 passed, 242 skipped, 0 failed** (as of 2026-06-22). All 1260 passing tests — not just unit tests — are the migration guardrail. Every one must still pass after migration. This includes the 27 previously-failing tests fixed during ramp-up (Patterns 1–12 documented in `test-plan.md`).
+- [ ] 9.15 — Add new unit tests for `LangChainModelFactory` (credential resolution, provider mapping), `LangChainToolWrapper` (mTLS, tool dispatch), `GuardrailCallback` (limit enforcement), and `ExecutionLoggingCallback` (event emission).
+- [ ] 9.16 — **Run full backend test suite after migration.** Same `pytest` command as 9.14. Compare counts: any regression (fewer passing, more failing, or new failures) must be resolved before proceeding. Document differences in `test-plan.md`.
+- [ ] 9.17 — **Run frontend test suite.** Execute `npx vitest run --reporter=json --outputFile=vitest_results.json` and verify zero regressions from baseline (119/125 pass; 6 pre-existing failures unrelated to this change).
 
 ---
 

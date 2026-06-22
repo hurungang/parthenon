@@ -3233,7 +3233,7 @@ class AgentRuntimeExecutor:
             while ctx.should_continue():
                 ctx = await self._observe(ctx, db)
                 ctx = await self._reason(ctx, agent_type, db)
-                ctx = await self._act(ctx, allowed_tools, db)
+                ctx = await self._act(ctx, allowed_tools, db, guardrail_state=guardrail_state)
                 ctx.iteration += 1
 
             output_data: dict[str, Any] = ctx.output_data or {
@@ -3577,6 +3577,7 @@ class AgentRuntimeExecutor:
         ctx: TaskAgentLoop,
         allowed_tools: set[str],
         db: AsyncSession,
+        guardrail_state: RuntimeGuardrailState | None = None,
     ) -> TaskAgentLoop:
         """Act: dispatch pending tool calls with permission enforcement.
 
@@ -3668,6 +3669,19 @@ class AgentRuntimeExecutor:
                         },
                     )
                 elif _extract_agent_delegation_target(tool_name) is not None:
+                    if guardrail_state is None:
+                        guardrail_state = RuntimeGuardrailState(
+                            max_iterations=10,
+                            max_delegation_depth=1,
+                            max_delegated_steps=20,
+                            execution_timeout_seconds=300,
+                            token_budget=None,
+                            token_enforcement_mode="observe",
+                            token_fallback_mode="observe_and_log",
+                            conversational_token_visibility_mode="enabled",
+                            conversational_continuation_policy="allow",
+                            policy_snapshot_id="unknown",
+                        )
                     target_slug = _extract_agent_delegation_target(tool_name)
                     next_depth = ctx.tree_depth + 1
 
