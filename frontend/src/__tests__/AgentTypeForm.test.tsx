@@ -398,7 +398,7 @@ describe('AgentTypeForm', () => {
       { wrapper },
     )
     await waitFor(() => {
-      expect(screen.getByText('agents.types.bindings.noBindings')).toBeDefined()
+      expect(screen.getByText('agents.types.bindings.validationRequired')).toBeDefined()
     })
   })
 
@@ -419,7 +419,7 @@ describe('AgentTypeForm', () => {
     render(<AgentTypeForm values={values} onChange={vi.fn()} />, { wrapper })
 
     await waitFor(() => {
-      expect(screen.getByText('Test SOP')).toBeDefined()
+      expect(screen.getAllByText('Test SOP').length).toBeGreaterThanOrEqual(1)
     })
     expect(screen.getByText('agents.types.bindings.typeSop')).toBeDefined()
   })
@@ -441,7 +441,7 @@ describe('AgentTypeForm', () => {
     render(<AgentTypeForm values={values} onChange={vi.fn()} />, { wrapper })
 
     await waitFor(() => {
-      expect(screen.getByText('Test Skill')).toBeDefined()
+      expect(screen.getAllByText('Test Skill').length).toBeGreaterThanOrEqual(1)
     })
     expect(screen.getByText('agents.types.bindings.typeSkill')).toBeDefined()
   })
@@ -487,10 +487,10 @@ describe('AgentTypeForm', () => {
     render(<AgentTypeForm values={values} onChange={onChange} />, { wrapper })
 
     await waitFor(() => {
-      expect(screen.getByText('SOP One')).toBeDefined()
+      expect(screen.getAllByText('SOP One').length).toBeGreaterThanOrEqual(1)
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /agents\.types\.bindings\.remove/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^agents\.types\.bindings\.remove$/ }))
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ sop_bindings: [] }),

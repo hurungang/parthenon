@@ -15,6 +15,15 @@ vi.mock('react-router-dom', async () => {
 // Default mock servers — mutable so tests can override
 let mockServers = [
   {
+    id: '00000000-0000-0000-0000-000000000001',
+    name: 'System',
+    slug: 'system',
+    base_url: 'http://mcp.system.local',
+    status: 'active',
+    description: '',
+    session_count: 0,
+  },
+  {
     id: 'srv-1',
     name: 'Server One',
     slug: 'server-one',
@@ -90,6 +99,15 @@ describe('McpHubPage', () => {
     // Reset mock servers to default with session counts
     mockServers.length = 0
     mockServers.push(
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'System',
+        slug: 'system',
+        base_url: 'http://mcp.system.local',
+        status: 'active',
+        description: '',
+        session_count: 0,
+      },
       {
         id: 'srv-1',
         name: 'Server One',
@@ -257,6 +275,17 @@ describe('McpHubPage — Sync button visibility based on session_count', () => {
   it('sync button is enabled when session_count > 0', async () => {
     // Server with sessions
     mockServers.length = 0
+    // Add System server (always disabled)
+    mockServers.push({
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'System',
+      slug: 'system',
+      base_url: 'http://mcp.system.local',
+      status: 'active',
+      description: '',
+      session_count: 0,
+    })
+    // Add server with sessions (should be enabled)
     mockServers.push({
       id: 'srv-one',
       name: 'Has Sessions Server',
@@ -294,6 +323,15 @@ describe('McpHubPage — sync button state (Issue 2 reproduction)', () => {
     mockSyncState.mutate = vi.fn()
     mockServers.length = 0
     mockServers.push(
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'System',
+        slug: 'system',
+        base_url: 'http://mcp.system.local',
+        status: 'active',
+        description: '',
+        session_count: 0,
+      },
       {
         id: 'srv-1',
         name: 'Server One',

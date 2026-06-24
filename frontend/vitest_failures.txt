@@ -1,0 +1,4118 @@
+
+ RUN  v4.1.6 C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend
+
+ Γ¥» src/__tests__/useInterveneRequests.test.tsx (8 tests | 1 failed) 831ms
+     ├ù polls periodically 40ms
+ Γ¥» src/__tests__/service-decomposition/github-pages-showcase.test.ts (2 tests | 1 failed) 35ms
+     ├ù references all five screenshot placeholders 21ms
+ Γ¥» src/__tests__/useChatSession.test.ts (13 tests | 2 failed) 1839ms
+     ├ù applies using_tool status from websocket events 28ms
+     ├ù streams execution log title snippets while delegation is active 1541ms
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=true when Yes is selected and submitted
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=false when No is selected and submitted
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > shows error alert when onSubmit throws
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ¥» src/__tests__/InterveneResponseDialog.test.tsx (11 tests | 3 failed) 2338ms
+     ├ù calls onSubmit with approval_value=true when Yes is selected and submitted 139ms
+     ├ù calls onSubmit with approval_value=false when No is selected and submitted 86ms
+     ├ù shows error alert when onSubmit throws 186ms
+stderr | src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > closes dialog after successful submit
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneRequestList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneRequestList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ¥» src/__tests__/InterveneRequestList.test.tsx (6 tests | 1 failed) 1065ms
+     ├ù closes dialog after successful submit 160ms
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx (13 tests | 4 failed) 17623ms
+     ├ù sync button is enabled when session_count > 0 198ms
+     ├ù FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2) 142ms
+     ├ù FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1) 139ms
+     ├ù when no sync is in-flight, only System entry sync is disabled 131ms
+ Γ¥» src/__tests__/ModelConfigListPage.workflow-generation.test.tsx (1 test | 1 failed) 1675ms
+     ├ù renders workflow generation model section and saves selection 1667ms
+stderr | src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ¥» src/__tests__/AgentExecutionDetailsDialog.test.tsx (2 tests | 1 failed) 1034ms
+     ├ù focuses execution logs tab by default when dialog opens 882ms
+ Γ¥» src/__tests__/SkillEditor.workflow-generation-preview.test.tsx (4 tests | 1 failed) 3473ms
+     ├ù shows missing-model error and does not overwrite manual workflow text 23ms
+ Γ¥» src/__tests__/McpSessionManager.test.tsx (23 tests | 4 failed | 3 skipped) 22313ms
+     ├ù oauth2 auth type does not show manual credential fields 2545ms
+     ├ù passthrough is included in auth type options 1831ms
+     ├ù selecting passthrough hides credential fields and shows info alert 2425ms
+     ├ù shows auto-default info alert when only one session exists (isAutoDefault) 133ms
+ Γ¥» src/__tests__/SkillEditor.test.tsx (16 tests | 2 failed) 7460ms
+     ├ù renders tool selection section grouped by server 1889ms
+     ├ù renders role assignment sidebar with loaded roles 1679ms
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx (21 tests | 3 failed) 23997ms
+     ├ù renders Details tab with correct field values 148ms
+     ├ù clicking role name opens AgentRoleViewDialog 933ms
+     ├ù clicking role name opens AgentRoleViewDialog (duplicate guard) 567ms
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx (23 tests | 10 failed) 20362ms
+     ├ù shows CircularProgress when tools are loading 2547ms
+     ├ù shows noToolsAvailable message when tools array is empty 1723ms
+     ├ù renders the Filter by Server Autocomplete label 1868ms
+     ├ù shows tools from ALL servers when no filter is selected 1845ms
+     ├ù shows both server slug chips in the tool list 1652ms
+     ├ù renders an Autocomplete input element for the server filter 1633ms
+     ├ù renders one checkbox per tool 1637ms
+     ├ù pre-checks tools that are in skill.tool_ids when editing 1662ms
+     ├ù toggling a tool checkbox changes its checked state 1627ms
+     ├ù tools are displayed grouped under their server slug chip 1619ms
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 34 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+TestingLibraryElementError: Unable to find an accessible element with the role "tab" and name "agents.executionLogs.title"
+
+Here are the accessible roles:
+
+  presentation:
+
+  Name "":
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  />
+
+  Name "":
+  <div
+    class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+    role="presentation"
+    style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    tabindex="-1"
+  />
+
+  --------------------------------------------------
+  dialog:
+
+  Name "agents.sessions.detailsTitle":
+  <div
+    aria-labelledby="_r_0_"
+    aria-modal="true"
+    class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"
+    role="dialog"
+    style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "agents.sessions.detailsTitle":
+  <h2
+    class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+    id="_r_0_"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "":
+  <button
+    class="MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"
+    tabindex="0"
+    type="button"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_0_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_0_"
+        >
+          <span
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            agents.sessions.detailsTitle
+          </span>
+          <button
+            class="MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+              data-testid="CloseIcon"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </button>
+        </h2>
+        <div
+          class="MuiDialogContent-root css-kw13he-MuiDialogContent-root"
+        >
+          <div
+            data-testid="log-viewer"
+          />
+          <div
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+    </div>
+    <div
+      data-testid="sentinelEnd"
+      tabindex="0"
+    />
+  </div>
+</body>
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/AgentExecutionDetailsDialog.test.tsx:85:33
+     83|     )
+     84|
+     85|     const executionTab = screen.getByRole('tab', { name: 'agents.execuΓÇª
+       |                                 ^
+     86|     const detailsTab = screen.getByRole('tab', { name: 'agents.sessionΓÇª
+     87|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/34]ΓÄ»
+
+ FAIL  src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > renders Details tab with correct field values
+TestingLibraryElementError: Unable to find an element with the text: 1000k tokens. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_c_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_c_"
+        >
+          <span
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            Research Agent
+          </span>
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <button
+              aria-label="app.edit"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="EditIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"
+                />
+              </svg>
+            </button>
+            <button
+              aria-label="app.close"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="CloseIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
+            </button>
+          </div>
+        </h2>
+        <div
+          class="MuiDialogContent-root MuiDialogContent-dividers css-1noi74-MuiDialogContent-root"
+        >
+          <div
+            class="MuiBox-root css-1yn5s25"
+          >
+            <div
+              class="MuiTabs-root css-jhczcq-MuiTabs-root"
+            >
+              <div
+                class="MuiTabs-scroller MuiTabs-fixed css-s2t35c-MuiTabs-scroller"
+                style="overflow: hidden; margin-bottom: 0px;"
+              >
+                <div
+                  aria-label="agents.types.dialogTitle"
+                  class="MuiTabs-list MuiTabs-flexContainer css-hzcega-MuiTabs-list"
+                  role="tablist"
+                >
+                  <button
+                    aria-controls="agent-details-tabpanel-0"
+                    aria-selected="true"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary Mui-selected css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-0"
+                    role="tab"
+                    tabindex="0"
+                    type="button"
+                  >
+                    agents.types.detailsTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-1"
+                    aria-selected="false"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-1"
+                    role="tab"
+                    tabindex="-1"
+                    type="button"
+                  >
+                    agents.types.agentPreviewTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-2"
+                    aria-selected="false"[...
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx:227:19
+    225|     expect(screen.getByText('You are a research assistant.')).toBeDefiΓÇª
+    226|     // Guardrail budget should render in k-token units with default faΓÇª
+    227|     expect(screen.getByText('1000k tokens')).toBeDefined()
+       |                   ^
+    228|   })
+    229|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/34]ΓÄ»
+
+ FAIL  src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > clicking role name opens AgentRoleViewDialog
+TestingLibraryElementError: Unable to find an element by: [data-testid="role-view-dialog"]
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    aria-hidden="true"
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_35_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_35_"
+        >
+          <span
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            Research Agent
+          </span>
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <button
+              aria-label="app.edit"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="EditIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"
+                />
+              </svg>
+            </button>
+            <button
+              aria-label="app.close"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="CloseIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
+            </button>
+          </div>
+        </h2>
+        <div
+          class="MuiDialogContent-root MuiDialogContent-dividers css-1noi74-MuiDialogContent-root"
+        >
+          <div
+            class="MuiBox-root css-1yn5s25"
+          >
+            <div
+              class="MuiTabs-root css-jhczcq-MuiTabs-root"
+            >
+              <div
+                class="MuiTabs-scroller MuiTabs-fixed css-s2t35c-MuiTabs-scroller"
+                style="overflow: hidden; margin-bottom: 0px;"
+              >
+                <div
+                  aria-label="agents.types.dialogTitle"
+                  class="MuiTabs-list MuiTabs-flexContainer css-hzcega-MuiTabs-list"
+                  role="tablist"
+                >
+                  <button
+                    aria-controls="agent-details-tabpanel-0"
+                    aria-selected="true"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary Mui-selected css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-0"
+                    role="tab"
+                    tabindex="0"
+                    type="button"
+                  >
+                    agents.types.detailsTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-1"
+                    aria-selected="false"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-1"
+                    role="tab"
+                    tabindex="-1"
+                    type="button"
+                  >
+                    agents.types.agentPreviewTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-2"
+             ...
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx:530:19
+    528|     })
+    529|
+    530|     expect(screen.getByTestId('role-view-dialog')).toBeDefined()
+       |                   ^
+    531|   })
+    532|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/34]ΓÄ»
+
+ FAIL  src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > clicking role name opens AgentRoleViewDialog (duplicate guard)
+TestingLibraryElementError: Unable to find an element by: [data-testid="role-view-dialog"]
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    aria-hidden="true"
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_3f_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_3f_"
+        >
+          <span
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            Research Agent
+          </span>
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <button
+              aria-label="app.edit"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="EditIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"
+                />
+              </svg>
+            </button>
+            <button
+              aria-label="app.close"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="CloseIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
+            </button>
+          </div>
+        </h2>
+        <div
+          class="MuiDialogContent-root MuiDialogContent-dividers css-1noi74-MuiDialogContent-root"
+        >
+          <div
+            class="MuiBox-root css-1yn5s25"
+          >
+            <div
+              class="MuiTabs-root css-jhczcq-MuiTabs-root"
+            >
+              <div
+                class="MuiTabs-scroller MuiTabs-fixed css-s2t35c-MuiTabs-scroller"
+                style="overflow: hidden; margin-bottom: 0px;"
+              >
+                <div
+                  aria-label="agents.types.dialogTitle"
+                  class="MuiTabs-list MuiTabs-flexContainer css-hzcega-MuiTabs-list"
+                  role="tablist"
+                >
+                  <button
+                    aria-controls="agent-details-tabpanel-0"
+                    aria-selected="true"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary Mui-selected css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-0"
+                    role="tab"
+                    tabindex="0"
+                    type="button"
+                  >
+                    agents.types.detailsTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-1"
+                    aria-selected="false"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-1"
+                    role="tab"
+                    tabindex="-1"
+                    type="button"
+                  >
+                    agents.types.agentPreviewTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-2"
+             ...
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx:551:19
+    549|     })
+    550|
+    551|     expect(screen.getByTestId('role-view-dialog')).toBeDefined()
+       |                   ^
+    552|   })
+    553|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/34]ΓÄ»
+
+ FAIL  src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > closes dialog after successful submit
+TestingLibraryElementError: Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  >
+    <div
+      class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 css-1gtchvp-MuiPaper-root"
+      style="--Paper-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12);"
+    >
+      <div
+        class="MuiTableContainer-root css-70zvr5-MuiTableContainer-root"
+      >
+        <table
+          class="MuiTable-root css-1xwxv7r-MuiTable-root"
+        >
+          <thead
+            class="MuiTableHead-root css-1a7iywq-MuiTableHead-root"
+          >
+            <tr
+              class="MuiTableRow-root MuiTableRow-head css-1xtozoh-MuiTableRow-root"
+            >
+              <th
+                class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                scope="col"
+              >
+                agents.sessions.sessionId
+              </th>
+              <th
+                class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                scope="col"
+              >
+                intervene.reason
+              </th>
+              <th
+                class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                scope="col"
+              >
+                intervene.type
+              </th>
+              <th
+                class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                scope="col"
+              >
+                app.createdAt
+              </th>
+              <th
+                class="MuiTableCell-root MuiTableCell-head MuiTableCell-alignRight MuiTableCell-sizeSmall css-1ais0ar-MuiTableCell-root"
+                scope="col"
+              >
+                app.actions
+              </th>
+            </tr>
+          </thead>
+          <tbody
+            class="MuiTableBody-root css-gmh7jj-MuiTableBody-root"
+          >
+            <tr
+              class="MuiTableRow-root MuiTableRow-hover css-1xtozoh-MuiTableRow-root"
+            >
+              <td
+                class="MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"
+              >
+                <p
+                  class="MuiTypography-root MuiTypography-body2 css-zn1hrw-MuiTypography-root"
+                >
+                  sess-abc
+                  ΓÇª
+                </p>
+              </td>
+              <td
+                class="MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"
+              >
+                <p
+                  class="MuiTypography-root MuiTypography-body2 css-151jtdr-MuiTypography-root"
+                >
+                  Test reason
+                </p>
+              </td>
+              <td
+                class="MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"
+              >
+                <div
+                  class="MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"
+                >
+                  <span
+                    class="MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"
+                  >
+                    intervene.typeApproval
+                  </span>
+                </div>
+              </td>
+              <td
+                class="MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"
+              >
+                <p
+                  class="MuiTypography-root MuiTypography-body2 css-7ctihp-MuiTypography-root"
+                >
+                  01/06/2026, 10:00:00 am
+                </p>
+              </td>
+              <td
+                class="MuiTableCell-root MuiTableCell-body MuiTableCell-alignRight MuiTableCell-sizeSmall css-17j8okc-MuiTableCell-root"
+              >
+                <button
+                  class="MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-sizeSmall MuiButton-outlinedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-sizeSmall MuiButton-outlinedSizeSmall MuiButton-colorPrimary css-wyro15-MuiButtonBase-root-MuiButton-root"
+                  tabindex="0"
+                  type="button"
+                >
+                  intervene.respond
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex[...
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/InterveneRequestList.test.tsx:108:28
+    106|     fireEvent.click(screen.getByText('intervene.respond'))
+    107|     fireEvent.click(screen.getByText('app.yes'))
+    108|     fireEvent.click(screen.getByText('intervene.submitResponse'))
+       |                            ^
+    109|     await waitFor(() => {
+    110|       expect(onSubmitResponse).toHaveBeenCalled()
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/34]ΓÄ»
+
+ FAIL  src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=true when Yes is selected and submitted
+TestingLibraryElementError: Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_f_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthSm MuiDialog-paperFullWidth css-16htz67-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_f_"
+        >
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <span
+              class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+            >
+              intervene.responseDialogTitle
+            </span>
+            <div
+              class="MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"
+            >
+              <span
+                class="MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"
+              >
+                intervene.typeApproval
+              </span>
+            </div>
+          </div>
+          <button
+            class="MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+              data-testid="CloseIcon"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </button>
+        </h2>
+        <div
+          class="MuiDialogContent-root css-kw13he-MuiDialogContent-root"
+        >
+          <p
+            class="MuiTypography-root MuiTypography-body2 css-19b5ozw-MuiTypography-root"
+          >
+            Please approve this action
+          </p>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-n7nmrt-MuiTypography-root"
+          >
+            intervene.sessionLabel
+            : 
+            sess-abc
+            ΓÇª
+          </span>
+          <div
+            class="MuiBox-root css-193o9je"
+          >
+            <button
+              class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess css-1bqkxtd-MuiButtonBase-root-MuiButton-root"
+              disabled=""
+              tabindex="-1"
+              type="button"
+            >
+              app.saving
+            </button>
+            <button
+              class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError css-p6sui3-MuiButtonBase-root-MuiButton-root"
+              disabled=""
+              tabindex="-1"
+              type="button"
+            >
+              app.saving
+            </button>
+          </div>
+          <span
+            class="MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-indeterminate css-1yatzro-MuiLinearProgress-root"
+            role="progressbar"
+          >
+            <span
+              class="MuiLinearProgress-bar MuiLinearProgress-bar1 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Indeterminate css-lcqqge-MuiLinearProgress-bar1"
+            />
+            <span
+              class="MuiLinearProgress-bar MuiLinearProgress-bar2 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar2Indeterminate css-lfb3c7-MuiLinearProgress-bar2"
+            />
+          </span>
+        </div>
+        <div
+          class="MuiDialogActions-root MuiDialogActions-spacing css-15fu35s-MuiDialogActions-root"
+        >
+          <div
+            class="MuiBox-root css-1rr4qq7"
+          />
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary css-1uent87-MuiButtonBase-root-MuiButton-root"
+            disabled=""
+            tabindex="-1"
+            type="button"
+          >
+            app.cancel
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      data-testid="sentinelEnd"
+      tabindex="0"
+    />
+  </div>
+</body>
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/InterveneResponseDialog.test.tsx:98:28
+     96|     )
+     97|     fireEvent.click(screen.getByText('app.yes'))
+     98|     fireEvent.click(screen.getByText('intervene.submitResponse'))
+       |                            ^
+     99|     await waitFor(() => {
+    100|       expect(onSubmit).toHaveBeenCalledWith('req-123', { approval_valuΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[6/34]ΓÄ»
+
+ FAIL  src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=false when No is selected and submitted
+TestingLibraryElementError: Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_k_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthSm MuiDialog-paperFullWidth css-16htz67-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_k_"
+        >
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <span
+              class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+            >
+              intervene.responseDialogTitle
+            </span>
+            <div
+              class="MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"
+            >
+              <span
+                class="MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"
+              >
+                intervene.typeApproval
+              </span>
+            </div>
+          </div>
+          <button
+            class="MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+              data-testid="CloseIcon"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </button>
+        </h2>
+        <div
+          class="MuiDialogContent-root css-kw13he-MuiDialogContent-root"
+        >
+          <p
+            class="MuiTypography-root MuiTypography-body2 css-19b5ozw-MuiTypography-root"
+          >
+            Please approve this action
+          </p>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-n7nmrt-MuiTypography-root"
+          >
+            intervene.sessionLabel
+            : 
+            sess-abc
+            ΓÇª
+          </span>
+          <div
+            class="MuiBox-root css-193o9je"
+          >
+            <button
+              class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess css-1bqkxtd-MuiButtonBase-root-MuiButton-root"
+              disabled=""
+              tabindex="-1"
+              type="button"
+            >
+              app.saving
+            </button>
+            <button
+              class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError css-p6sui3-MuiButtonBase-root-MuiButton-root"
+              disabled=""
+              tabindex="-1"
+              type="button"
+            >
+              app.saving
+            </button>
+          </div>
+          <span
+            class="MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-indeterminate css-1yatzro-MuiLinearProgress-root"
+            role="progressbar"
+          >
+            <span
+              class="MuiLinearProgress-bar MuiLinearProgress-bar1 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Indeterminate css-lcqqge-MuiLinearProgress-bar1"
+            />
+            <span
+              class="MuiLinearProgress-bar MuiLinearProgress-bar2 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar2Indeterminate css-lfb3c7-MuiLinearProgress-bar2"
+            />
+          </span>
+        </div>
+        <div
+          class="MuiDialogActions-root MuiDialogActions-spacing css-15fu35s-MuiDialogActions-root"
+        >
+          <div
+            class="MuiBox-root css-1rr4qq7"
+          />
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary css-1uent87-MuiButtonBase-root-MuiButton-root"
+            disabled=""
+            tabindex="-1"
+            type="button"
+          >
+            app.cancel
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      data-testid="sentinelEnd"
+      tabindex="0"
+    />
+  </div>
+</body>
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/InterveneResponseDialog.test.tsx:115:28
+    113|     )
+    114|     fireEvent.click(screen.getByText('app.no'))
+    115|     fireEvent.click(screen.getByText('intervene.submitResponse'))
+       |                            ^
+    116|     await waitFor(() => {
+    117|       expect(onSubmit).toHaveBeenCalledWith('req-123', { approval_valuΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[7/34]ΓÄ»
+
+ FAIL  src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > shows error alert when onSubmit throws
+TestingLibraryElementError: Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_18_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthSm MuiDialog-paperFullWidth css-16htz67-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_18_"
+        >
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <span
+              class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+            >
+              intervene.responseDialogTitle
+            </span>
+            <div
+              class="MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"
+            >
+              <span
+                class="MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"
+              >
+                intervene.typeApproval
+              </span>
+            </div>
+          </div>
+          <button
+            class="MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+              data-testid="CloseIcon"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+              />
+            </svg>
+          </button>
+        </h2>
+        <div
+          class="MuiDialogContent-root css-kw13he-MuiDialogContent-root"
+        >
+          <p
+            class="MuiTypography-root MuiTypography-body2 css-19b5ozw-MuiTypography-root"
+          >
+            Please approve this action
+          </p>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-n7nmrt-MuiTypography-root"
+          >
+            intervene.sessionLabel
+            : 
+            sess-abc
+            ΓÇª
+          </span>
+          <div
+            class="MuiBox-root css-193o9je"
+          >
+            <button
+              class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess css-1bqkxtd-MuiButtonBase-root-MuiButton-root"
+              disabled=""
+              tabindex="-1"
+              type="button"
+            >
+              app.saving
+            </button>
+            <button
+              class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError css-p6sui3-MuiButtonBase-root-MuiButton-root"
+              disabled=""
+              tabindex="-1"
+              type="button"
+            >
+              app.saving
+            </button>
+          </div>
+          <span
+            class="MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-indeterminate css-1yatzro-MuiLinearProgress-root"
+            role="progressbar"
+          >
+            <span
+              class="MuiLinearProgress-bar MuiLinearProgress-bar1 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Indeterminate css-lcqqge-MuiLinearProgress-bar1"
+            />
+            <span
+              class="MuiLinearProgress-bar MuiLinearProgress-bar2 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar2Indeterminate css-lfb3c7-MuiLinearProgress-bar2"
+            />
+          </span>
+        </div>
+        <div
+          class="MuiDialogActions-root MuiDialogActions-spacing css-15fu35s-MuiDialogActions-root"
+        >
+          <div
+            class="MuiBox-root css-1rr4qq7"
+          />
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary css-1uent87-MuiButtonBase-root-MuiButton-root"
+            disabled=""
+            tabindex="-1"
+            type="button"
+          >
+            app.cancel
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      data-testid="sentinelEnd"
+      tabindex="0"
+    />
+  </div>
+</body>
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/InterveneResponseDialog.test.tsx:191:28
+    189|     )
+    190|     fireEvent.click(screen.getByText('app.yes'))
+    191|     fireEvent.click(screen.getByText('intervene.submitResponse'))
+       |                            ^
+    192|     await waitFor(() => {
+    193|       expect(mockSetDialogError).toHaveBeenCalled()
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[8/34]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö Sync button visibility based on session_count > sync button is enabled when session_count > 0
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:288:36
+    286|     )
+    287|     // System entry sync is disabled = 1
+    288|     expect(disabledButtons.length).toBe(1)
+       |                                    ^
+    289|   })
+    290| })
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[9/34]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2)
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:333:32
+    331|
+    332|     // System entry + 2 servers = 3 sync icons
+    333|     expect(syncButtons.length).toBe(3)
+       |                                ^
+    334|
+    335|     const disabledSyncButtons = syncButtons.filter(
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[10/34]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1)
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:360:32
+    358|       .filter((btn): btn is HTMLButtonElement => btn !== null)
+    359|
+    360|     expect(syncButtons.length).toBe(3)
+       |                                ^
+    361|
+    362|     const disabledSyncButtons = syncButtons.filter(
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[11/34]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > when no sync is in-flight, only System entry sync is disabled
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:382:32
+    380|       .filter((btn): btn is HTMLButtonElement => btn !== null)
+    381|
+    382|     expect(syncButtons.length).toBe(3)
+       |                                ^
+    383|
+    384|     const disabledSyncButtons = syncButtons.filter((btn) => btn.hasAttΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[12/34]ΓÄ»
+
+ FAIL  src/__tests__/McpSessionManager.test.tsx > McpSessionManager ΓÇö OAuth UI > oauth2 auth type does not show manual credential fields
+AssertionError: expected [ <label ΓÇª(4)></label>, <span></span> ] to have a length of +0 but got 2
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    >
+      <div
+        class="MuiBox-root css-0"
+      >
+        <div
+          class="MuiBox-root css-1kw3y0a"
+        >
+          <h6
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            mcp.sessions.title
+          </h6>
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary css-tw6tsg-MuiButtonBase-root-MuiButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <span
+              class="MuiButton-icon MuiButton-startIcon MuiButton-iconSizeSmall css-d8i980-MuiButton-startIcon"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="AddIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+                />
+              </svg>
+            </span>
+            mcp.sessions.create
+          </button>
+        </div>
+        <div
+          class="MuiTableContainer-root css-70zvr5-MuiTableContainer-root"
+        >
+          <table
+            class="MuiTable-root css-1xwxv7r-MuiTable-root"
+          >
+            <thead
+              class="MuiTableHead-root css-1a7iywq-MuiTableHead-root"
+            >
+              <tr
+                class="MuiTableRow-root MuiTableRow-head css-1xtozoh-MuiTableRow-root"
+              >
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-29ut7y-MuiTableCell-root"
+                  scope="col"
+                />
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.name
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.authType
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.tokenStatus
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.status
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.actions
+                </th>
+              </tr>
+            </thead>
+            <tbody
+              class="MuiTableBody-root css-gmh7jj-MuiTableBody-root"
+            >
+              <tr
+                class="MuiTableRow-root css-1xtozoh-MuiTableRow-root"
+              >
+                <td
+                  class="MuiTableCell-root MuiTableCell-body MuiTableCell-alignCenter MuiTableCell-sizeSmall css-wsxt5g-MuiTableCell-root"
+                  colspan="6"
+                >
+                  app.noData
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          class="MuiBox-root css-xhfgrq"
+        >
+          <svg
+            aria-hidden="true"
+            class="MuiSvgIcon-root MuiSvgIcon-colorSecondary MuiSvgIcon-fontSizeSmall css-x4u0f7-MuiSvgIcon-root"
+            data-testid="StarIcon"
+            focusable="false"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+            />
+          </svg>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-1374baf-MuiTypography-root"
+          >
+            mcp.sessions.defaultFooterHint
+          </span>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-hidden="true"
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelSta...
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ Γ¥» waitFor.timeout src/__tests__/McpSessionManager.test.tsx:213:28
+    211|       // api_key field key should not appear
+    212|       const apiKeyFields = screen.queryAllByText('mcp.sessions.apiKey')
+    213|       expect(apiKeyFields).toHaveLength(0)
+       |                            ^
+    214|
+    215|       const bearerFields = screen.queryAllByText('mcp.sessions.bearerTΓÇª
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[13/34]ΓÄ»
+
+ FAIL  src/__tests__/McpSessionManager.test.tsx > McpSessionManager ΓÇö Passthrough auth type (Task 8.6) > passthrough is included in auth type options
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    >
+      <div
+        class="MuiBox-root css-0"
+      >
+        <div
+          class="MuiBox-root css-1kw3y0a"
+        >
+          <h6
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            mcp.sessions.title
+          </h6>
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary css-tw6tsg-MuiButtonBase-root-MuiButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <span
+              class="MuiButton-icon MuiButton-startIcon MuiButton-iconSizeSmall css-d8i980-MuiButton-startIcon"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="AddIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+                />
+              </svg>
+            </span>
+            mcp.sessions.create
+          </button>
+        </div>
+        <div
+          class="MuiTableContainer-root css-70zvr5-MuiTableContainer-root"
+        >
+          <table
+            class="MuiTable-root css-1xwxv7r-MuiTable-root"
+          >
+            <thead
+              class="MuiTableHead-root css-1a7iywq-MuiTableHead-root"
+            >
+              <tr
+                class="MuiTableRow-root MuiTableRow-head css-1xtozoh-MuiTableRow-root"
+              >
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-29ut7y-MuiTableCell-root"
+                  scope="col"
+                />
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.name
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.authType
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.tokenStatus
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.status
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.actions
+                </th>
+              </tr>
+            </thead>
+            <tbody
+              class="MuiTableBody-root css-gmh7jj-MuiTableBody-root"
+            >
+              <tr
+                class="MuiTableRow-root css-1xtozoh-MuiTableRow-root"
+              >
+                <td
+                  class="MuiTableCell-root MuiTableCell-body MuiTableCell-alignCenter MuiTableCell-sizeSmall css-wsxt5g-MuiTableCell-root"
+                  colspan="6"
+                >
+                  app.noData
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          class="MuiBox-root css-xhfgrq"
+        >
+          <svg
+            aria-hidden="true"
+            class="MuiSvgIcon-root MuiSvgIcon-colorSecondary MuiSvgIcon-fontSizeSmall css-x4u0f7-MuiSvgIcon-root"
+            data-testid="StarIcon"
+            focusable="false"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+            />
+          </svg>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-1374baf-MuiTypography-root"
+          >
+            mcp.sessions.defaultFooterHint
+          </span>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-hidden="true"
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelSta...
+ Γ¥» src/__tests__/McpSessionManager.test.tsx:347:55
+    345|       fireEvent.mouseDown(selects[0])
+    346|       await waitFor(() => {
+    347|         expect(screen.queryByText('passthrough')).not.toBeNull()
+       |                                                       ^
+    348|       })
+    349|     }
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[14/34]ΓÄ»
+
+ FAIL  src/__tests__/McpSessionManager.test.tsx > McpSessionManager ΓÇö Passthrough auth type (Task 8.6) > selecting passthrough hides credential fields and shows info alert
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    >
+      <div
+        class="MuiBox-root css-0"
+      >
+        <div
+          class="MuiBox-root css-1kw3y0a"
+        >
+          <h6
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            mcp.sessions.title
+          </h6>
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary css-tw6tsg-MuiButtonBase-root-MuiButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <span
+              class="MuiButton-icon MuiButton-startIcon MuiButton-iconSizeSmall css-d8i980-MuiButton-startIcon"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="AddIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+                />
+              </svg>
+            </span>
+            mcp.sessions.create
+          </button>
+        </div>
+        <div
+          class="MuiTableContainer-root css-70zvr5-MuiTableContainer-root"
+        >
+          <table
+            class="MuiTable-root css-1xwxv7r-MuiTable-root"
+          >
+            <thead
+              class="MuiTableHead-root css-1a7iywq-MuiTableHead-root"
+            >
+              <tr
+                class="MuiTableRow-root MuiTableRow-head css-1xtozoh-MuiTableRow-root"
+              >
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-29ut7y-MuiTableCell-root"
+                  scope="col"
+                />
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.name
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.authType
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.tokenStatus
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.status
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.actions
+                </th>
+              </tr>
+            </thead>
+            <tbody
+              class="MuiTableBody-root css-gmh7jj-MuiTableBody-root"
+            >
+              <tr
+                class="MuiTableRow-root css-1xtozoh-MuiTableRow-root"
+              >
+                <td
+                  class="MuiTableCell-root MuiTableCell-body MuiTableCell-alignCenter MuiTableCell-sizeSmall css-wsxt5g-MuiTableCell-root"
+                  colspan="6"
+                >
+                  app.noData
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          class="MuiBox-root css-xhfgrq"
+        >
+          <svg
+            aria-hidden="true"
+            class="MuiSvgIcon-root MuiSvgIcon-colorSecondary MuiSvgIcon-fontSizeSmall css-x4u0f7-MuiSvgIcon-root"
+            data-testid="StarIcon"
+            focusable="false"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+            />
+          </svg>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-1374baf-MuiTypography-root"
+          >
+            mcp.sessions.defaultFooterHint
+          </span>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-hidden="true"
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelSta...
+ Γ¥» waitFor.timeout src/__tests__/McpSessionManager.test.tsx:370:70
+    368|     await waitFor(() => {
+    369|       // Info alert text should be present
+    370|       expect(screen.queryByText('mcp.sessions.passthroughInfo')).not.tΓÇª
+       |                                                                      ^
+    371|       // Credential fields should NOT be present
+    372|       expect(screen.queryByText('mcp.sessions.apiKey')).toBeNull()
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[15/34]ΓÄ»
+
+ FAIL  src/__tests__/McpSessionManager.test.tsx > McpSessionManager ΓÇö Default session display > shows auto-default info alert when only one session exists (isAutoDefault)
+AssertionError: expected null not to be null
+ Γ¥» src/__tests__/McpSessionManager.test.tsx:616:34
+    614|     // Auto-default info alert should be present
+    615|     const autoDefaultAlert = screen.queryByText('mcp.sessions.autoDefaΓÇª
+    616|     expect(autoDefaultAlert).not.toBeNull()
+       |                                  ^
+    617|   })
+    618|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[16/34]ΓÄ»
+
+ FAIL  src/__tests__/ModelConfigListPage.workflow-generation.test.tsx > ModelConfigListPage workflow generation model config > renders workflow generation model section and saves selection
+TestingLibraryElementError: Unable to find an element with the text: agents.modelConfigs.workflowGenerationTitle. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="MuiBox-root css-0"
+    >
+      <div
+        class="MuiBox-root css-47o5ta"
+      >
+        <div
+          class="MuiBox-root css-0"
+        >
+          <h4
+            class="MuiTypography-root MuiTypography-h4 css-1648me2-MuiTypography-root"
+          >
+            agents.modelConfigs.title
+          </h4>
+          <p
+            class="MuiTypography-root MuiTypography-body2 css-1wle3ir-MuiTypography-root"
+          >
+            agents.modelConfigs.subtitle
+          </p>
+        </div>
+        <button
+          class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root"
+          tabindex="0"
+          type="button"
+        >
+          <span
+            class="MuiButton-icon MuiButton-startIcon MuiButton-iconSizeMedium css-1sh91j5-MuiButton-startIcon"
+          >
+            <svg
+              aria-hidden="true"
+              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+              data-testid="AddIcon"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+              />
+            </svg>
+          </span>
+          agents.modelConfigs.create
+        </button>
+      </div>
+      <div
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 css-1amh3sf-MuiPaper-root"
+        style="--Paper-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12);"
+      >
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-k16oju-MuiTypography-root"
+        >
+          agents.modelConfigs.empty
+        </p>
+      </div>
+      <div
+        class="MuiTablePagination-root css-7mt0f-MuiTablePagination-root"
+      >
+        <div
+          class="MuiToolbar-root MuiToolbar-gutters MuiToolbar-regular MuiTablePagination-toolbar css-1gak8h1-MuiToolbar-root-MuiTablePagination-toolbar"
+        >
+          <div
+            class="MuiTablePagination-spacer css-1wtxofq-MuiTablePagination-spacer"
+          />
+          <p
+            class="MuiTablePagination-selectLabel css-s09cke-MuiTablePagination-selectLabel"
+            id="_r_2_"
+          >
+            app.rowsPerPage
+          </p>
+          <div
+            class="MuiInputBase-root MuiInputBase-colorPrimary MuiTablePagination-select MuiSelect-root MuiTablePagination-input css-oegngy-MuiInputBase-root-MuiTablePagination-select"
+          >
+            <div
+              aria-expanded="false"
+              aria-haspopup="listbox"
+              aria-labelledby="_r_2_ _r_1_"
+              class="MuiSelect-select MuiTablePagination-select MuiSelect-standard MuiInputBase-input css-18zjd9i-MuiNativeSelect-root-MuiSelect-select-MuiInputBase-input"
+              id="_r_1_"
+              role="combobox"
+              tabindex="0"
+            >
+              25
+            </div>
+            <input
+              aria-hidden="true"
+              aria-invalid="false"
+              class="MuiSelect-nativeInput css-j0riat-MuiSelect-nativeInput"
+              tabindex="-1"
+              value="25"
+            />
+            <svg
+              aria-hidden="true"
+              class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium MuiSelect-icon MuiTablePagination-selectIcon MuiSelect-iconStandard css-ug7h84-MuiSvgIcon-root-MuiNativeSelect-root-MuiSelect-icon"
+              data-testid="ArrowDropDownIcon"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M7 10l5 5 5-5z"
+              />
+            </svg>
+          </div>
+          <p
+            class="MuiTablePagination-displayedRows css-11cfq65-MuiTablePagination-displayedRows"
+          >
+            1ΓÇô25 of more than 25
+          </p>
+          <div
+            class="MuiTablePaginationActions-root MuiTablePagination-actions css-sjsoon-MuiTablePaginationActions-root"
+          >
+            <button
+              aria-label="Go to previous page"
+              class="MuiButtonBase-root Mui-disabled MuiIconButton-root Mui-disabled MuiIconButton-colorInherit MuiIconButton-sizeMedium css-h7cjts-MuiButtonBase-root-MuiIconButton-root"
+              disabled=""
+              tabindex="-1"
+              title="Go to previous page"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="KeyboardArrowLeftIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M15.41 16.09l-4.58-4.59 4.58-4.59L14 5.5l-6 6 6 6z"
+                />
+              </svg>
+            </button>
+            <button
+              aria-label="Go to next page"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-colorInherit MuiIconButton-sizeMedium css-h7cjts-MuiButtonBase-root-MuiIconButton-root"
+              tabindex="0"
+              title="Go to next page"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="KeyboardArrowRightIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M8.59 16.34l4.58-4.59-4.58-4.59L10 5.75l6 6-6 6z"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 css-11rx91p-MuiPaper-root"
+        data-testid="vendor-model-guardrail-panel"
+        style="--Paper-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12);"
+      >
+        <div
+          class="MuiBox-root css-pcqfzb"
+        >
+          <h6
+            class="MuiTypography-root MuiTypography-h6 css-h9fkkg-MuiTypography-root"
+          >
+            agents.sessions.modelUsageHierarchyTitle
+          </h6>
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-sizeSmall MuiButton-outlinedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-sizeSmall MuiButton-outlinedSizeSmall MuiButton-colorPrimary css-wyro15-MuiButtonBase-root-MuiButton-root"
+            tabindex="0"
+            type="button"
+          >
+            app.refresh
+          </button>
+        </div>
+        <p
+          class="MuiTypography-root MuiTypography-body2 css-1nsv8f5-MuiTypography-root"
+        >
+          agents.sessions.modelUsageHierarchySubtitle
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body2 css-1wle3ir-MuiTypography-root"
+        >
+          agents.sessions.modelUsageHierarchyEmpty
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body>
+    <div>
+      <div
+        class="MuiBox-root css-0"
+      >
+        <div
+          class="MuiBox-root css-47o5ta"
+        >
+          <div
+            class="MuiBox-root css-0"
+          >
+            <h4
+              class="MuiTypography-root MuiTypography-h4 css-1648me2-MuiTypography-root"
+            >
+              agents.modelConfigs.title
+            </h4>
+            <p
+              class="MuiTypography-root MuiTypography-body2 css-1wle3ir-MuiTypography-root"
+            >
+              agents.modelConfigs.subtitle
+            </p>
+          </div>
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <span
+              class="MuiButton-icon MuiButton-startIcon MuiButton-iconSizeMedium css-1sh91j5-MuiButton-startIcon"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="AddIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+                />
+              </svg>
+            </span>
+            agents.modelConfigs.create
+          </button>
+        </div>
+        <div
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 css-1amh3sf-MuiPaper-root"
+          style="--Paper-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12);"
+        >
+          <p
+            class="MuiTypography-root MuiTypography-body1 css-k16oju-MuiTypography-root"
+          >
+            agents.modelConfigs.empty
+          </p>
+        </div>
+        <div
+          class="MuiTablePagination-root css-7mt0f-MuiTablePagination-root"
+        >
+          <div
+            class="MuiToolbar-root MuiToolbar-gutters MuiToolbar-regular MuiTablePagination-toolbar css-1gak8h1-MuiToolbar-root-MuiTablePagination-toolbar"
+          >
+            <div
+              class="MuiTablePagination-spacer css-1wtxofq-MuiTablePagination-spacer"
+            />
+            <p
+              class="MuiTablePagination-selectLabel css-s09cke-MuiTablePagination-selectLabel"
+              id="_r_2_"
+            >
+              app.rowsPerPage
+            </p>
+            <div
+              class="MuiInputBase-root MuiInputBase-colorPrimary MuiTablePagination-select MuiSelect-root MuiTablePagination-input css-oegngy-MuiInputBase-root-MuiTablePagination-select"
+            >
+              <div
+                aria-expanded="false"
+                aria-haspopup="listbox"
+                aria-labelledby="_r_2_ _r_1_"
+                class="MuiSelect-select MuiTablePagination-select MuiSelect-standard MuiInputBase-input css-18zjd9i-MuiNativeSelect-root-MuiSelect-select-MuiInputBase-input"
+                id="_r_1_"
+                role="combobox"
+                tabindex="0"
+              >
+                25
+              </div>
+              <input
+                aria-hidden="true"
+                aria-invalid="false"
+                class="MuiSelect-nativeInput css-j0riat-MuiSelect-nativeInput"
+                tabindex="-1"
+                value="25"
+              />
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium MuiSelect-icon MuiTablePagination-selectIcon MuiSelect-iconStandard css-ug7h84-MuiSvgIcon-root-MuiNativeSelect-root-MuiSelect-icon"
+                data-testid="ArrowDropDownIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M7 10l5 5 5-5z"
+                />
+              </svg>
+            </div>
+            <p
+              class="MuiTablePagination-displayedRows css-11cfq65-MuiTablePagination-displayedRows"
+            >
+              1ΓÇô25 of more than 25
+            </p>
+            <div
+              class="MuiTablePaginationActions-root MuiTablePagination-actions css-sjsoon-MuiTablePaginationActions-root"
+            >
+              <button
+                aria-label="Go to previous page"
+                class="MuiButtonBase-root Mui-disabled MuiIconButton-root Mui-disabled MuiIconButton-colorInherit MuiIconButton-sizeMedium css-h7cjts-MuiButtonBase-root-MuiIconButton-root"
+                disabled=""
+                tabindex="-1"
+                title="Go to previous page"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="KeyboardArrowLeftIcon"[3...
+ Γ¥» Proxy.waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ Γ¥» src/__tests__/ModelConfigListPage.workflow-generation.test.tsx:64:11
+     62|     render(<ModelConfigListPage />, { wrapper })
+     63|
+     64|     await waitFor(() => {
+       |           ^
+     65|       expect(screen.getByText('agents.modelConfigs.workflowGenerationTΓÇª
+     66|       expect(screen.getByText('gpt-4o-mini (OpenAI Prod)')).toBeDefineΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[17/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö loading state > shows CircularProgress when tools are loading
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_0_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_0_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_2_"
+                        id="_r_2_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_2_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_2_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                        [...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:82:27
+     80|       // MUI CircularProgress renders with role="progressbar"
+     81|       const spinner = document.querySelector('[role="progressbar"]')
+     82|       expect(spinner).not.toBeNull()
+       |                           ^
+     83|     })
+     84|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[18/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö empty tools state > shows noToolsAvailable message when tools array is empty
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_17_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_17_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_19_"
+                        id="_r_19_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_19_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_19_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:116:23
+    114|     await waitFor(() => {
+    115|       const msg = screen.queryByText('skills.editor.noToolsAvailable')
+    116|       expect(msg).not.toBeNull()
+       |                       ^
+    117|     })
+    118|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[19/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö MCP server filter > renders the Filter by Server Autocomplete label
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_2r_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_2r_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_2t_"
+                        id="_r_2t_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_2t_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_2t_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:161:29
+    159|       // MUI Autocomplete renders the label as both <label> and <span>ΓÇª
+    160|       const labels = screen.queryAllByText('skills.editor.filterByServΓÇª
+    161|       expect(labels.length).toBeGreaterThan(0)
+       |                             ^
+    162|     })
+    163|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[20/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö MCP server filter > shows tools from ALL servers when no filter is selected
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_38_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_38_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_3a_"
+                        id="_r_3a_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_3a_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_3a_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:168:48
+    166|     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSΓÇª
+    167|     await waitFor(() => {
+    168|       expect(screen.queryByText('search')).not.toBeNull()
+       |                                                ^
+    169|       expect(screen.queryByText('fetch_url')).not.toBeNull()
+    170|     })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[21/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö MCP server filter > shows both server slug chips in the tool list
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_3l_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_3l_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_3n_"
+                        id="_r_3n_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_3n_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_3n_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:178:36
+    176|       const internalChips = screen.queryAllByText('internal-tools')
+    177|       const webChips = screen.queryAllByText('web-tools')
+    178|       expect(internalChips.length).toBeGreaterThan(0)
+       |                                    ^
+    179|       expect(webChips.length).toBeGreaterThan(0)
+    180|     })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[22/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö MCP server filter > renders an Autocomplete input element for the server filter
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_42_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_42_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_44_"
+                        id="_r_44_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_44_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_44_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:188:25
+    186|       // Autocomplete renders with role="combobox" on its input
+    187|       const combo = document.querySelector('[role="combobox"]')
+    188|       expect(combo).not.toBeNull()
+       |                         ^
+    189|     })
+    190|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[23/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö tool selection > renders one checkbox per tool
+AssertionError: expected 0 to be greater than or equal to 2
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_4t_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_4t_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_4v_"
+                        id="_r_4v_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_4v_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_4v_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:250:33
+    248|     await waitFor(() => {
+    249|       const checkboxes = screen.queryAllByRole('checkbox')
+    250|       expect(checkboxes.length).toBeGreaterThanOrEqual(TOOLS_SRV1.lengΓÇª
+       |                                 ^
+    251|     })
+    252|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[24/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö tool selection > pre-checks tools that are in skill.tool_ids when editing
+AssertionError: expected 0 to be greater than or equal to 1
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_5n_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_5n_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.editSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-error MuiFormLabel-filled Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-sizeSmall MuiInputLabel-outlined css-hvjq6j-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="true"
+                        for="_r_5p_"
+                        id="_r_5p_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk Mui-error css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary Mui-error MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_5p_-helper-text"
+                          aria-invalid="true"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_5p_"
+                          required=""
+                          type="text"
+                         ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:281:30
+    279|       const checkboxes = screen.queryAllByRole('checkbox') as HTMLInpuΓÇª
+    280|       const checked = checkboxes.filter((cb) => cb.checked)
+    281|       expect(checked.length).toBeGreaterThanOrEqual(1)
+       |                              ^
+    282|     })
+    283|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[25/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö tool selection > toggling a tool checkbox changes its checked state
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_65_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_65_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_67_"
+                        id="_r_67_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_67_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_67_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:291:33
+    289|     await waitFor(() => {
+    290|       const checkboxes = screen.queryAllByRole('checkbox') as HTMLInpuΓÇª
+    291|       expect(checkboxes.length).toBeGreaterThan(0)
+       |                                 ^
+    292|       firstCheckbox = checkboxes[0]
+    293|     })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[26/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö tool selection > tools are displayed grouped under their server slug chip
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_6i_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_6i_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_6k_"
+                        id="_r_6k_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_6k_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_6k_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                    ...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:310:28
+    308|       // The server chip for 'internal-tools' should be present
+    309|       const chips = screen.queryAllByText('internal-tools')
+    310|       expect(chips.length).toBeGreaterThan(0)
+       |                            ^
+    311|
+    312|       // Tool names should also appear
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[27/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.test.tsx > SkillEditor ΓÇö new skill > renders tool selection section grouped by server
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_q_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_q_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_s_"
+                        id="_r_s_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_s_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_s_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                        [...
+ Γ¥» src/__tests__/SkillEditor.test.tsx:101:33
+     99|     await waitFor(() => {
+    100|       const checkboxes = screen.queryAllByRole('checkbox')
+    101|       expect(checkboxes.length).toBeGreaterThan(0)
+       |                                 ^
+    102|     })
+    103|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[28/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.test.tsx > SkillEditor ΓÇö editing existing skill > renders role assignment sidebar with loaded roles
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_2t_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_2t_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.editSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-error MuiFormLabel-filled Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-shrink MuiInputLabel-sizeSmall MuiInputLabel-outlined css-hvjq6j-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="true"
+                        for="_r_2v_"
+                        id="_r_2v_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk Mui-error css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary Mui-error MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_2v_-helper-text"
+                          aria-invalid="true"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_2v_"
+                          required=""
+                          type="text"
+                         ...
+ Γ¥» src/__tests__/SkillEditor.test.tsx:154:33
+    152|     await waitFor(() => {
+    153|       const checkboxes = screen.queryAllByRole('checkbox')
+    154|       expect(checkboxes.length).toBeGreaterThan(0)
+       |                                 ^
+    155|     })
+    156|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[29/34]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.workflow-generation-preview.test.tsx > SkillEditor workflow generation and preview > shows missing-model error and does not overwrite manual workflow text
+Error: No QueryClient set, use QueryClientProvider to set one
+ Γ¥» useQueryClient node_modules/@tanstack/react-query/src/QueryClientProvider.tsx:18:10
+ Γ¥» SkillEditor src/pages/skills/SkillEditor.tsx:93:23
+     91| export function SkillEditor({ open, skill, mode = 'create', onClose, oΓÇª
+     92|   const { t } = useTranslation()
+     93|   const queryClient = useQueryClient()
+       |                       ^
+     94|   const isSystemSkill = skill?.is_system ?? false
+     95|   const isViewMode = mode === 'view' || isSystemSkill
+ Γ¥» Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ Γ¥» renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ Γ¥» updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ Γ¥» beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ Γ¥» runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ Γ¥» performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ Γ¥» workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ Γ¥» renderRootSync node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[30/34]ΓÄ»
+
+ FAIL  src/__tests__/useChatSession.test.ts > useChatSession > applies using_tool status from websocket events
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ Γ¥» src/__tests__/useChatSession.test.ts:139:47
+    137|     expect(result.current.chatStatus?.kind).toBe('using_tool')
+    138|     expect(result.current.chatStatus?.toolName).toBe('send_notificatioΓÇª
+    139|     expect(result.current.delegationSnippets).toHaveLength(1)
+       |                                               ^
+    140|     expect(result.current.delegationSnippets[0]?.toolName).toBe('send_ΓÇª
+    141|   })
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[31/34]ΓÄ»
+
+ FAIL  src/__tests__/useChatSession.test.ts > useChatSession > streams execution log title snippets while delegation is active

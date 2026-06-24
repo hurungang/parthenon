@@ -170,6 +170,11 @@ async def save_result_tool(
                 validator = SchemaValidationService()
                 fields = data_type.fields or []
                 validation_result = validator.validate(payload, fields)
+                
+                logger.info(
+                    "Validating typed output for session %s: payload=%s fields=%s valid=%s",
+                    session_id, payload, list(fields) if fields else [], validation_result.valid,
+                )
 
                 # Determine validation status
                 if validation_result.valid:

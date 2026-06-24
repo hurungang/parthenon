@@ -53,10 +53,6 @@ describe('ConversationDialog - intervention state integration', () => {
   })
 
   it('useConversationIntervention returns expected interface', async () => {
-    vi.mock('../api/apiClient', () => ({
-      default: { get: vi.fn().mockResolvedValue({ data: [] }) },
-    }))
-
     const { useConversationIntervention } = await import('../hooks/useConversationIntervention')
     const { result } = renderHook(() => useConversationIntervention('test-session-int'))
 

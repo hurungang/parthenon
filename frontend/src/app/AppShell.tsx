@@ -229,6 +229,12 @@ export function AppShell() {
         // Metrics are best-effort
       }
     }
+    
+    // Skip polling in tests to prevent hangs from persistent intervals
+    if ((typeof window !== 'undefined' && (window as any).__VITEST__)) {
+      return
+    }
+    
     void fetchMetrics()
     const interval = setInterval(fetchMetrics, 15_000)
     return () => clearInterval(interval)

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Box,
+  CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
   IconButton,
+  Stack,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
@@ -13,9 +17,13 @@ import { useTranslation } from 'react-i18next'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { LogViewer } from '../../components/executions/LogViewer'
+import { OutputTypeResultTab } from '../../components/executions/OutputTypeResultTab'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
-import type { AgentJobStatus, ExecutionLogEntry } from '../../types'
+import type { AgentJobStatus, AgentJob, ExecutionLogEntry, AgentOutputResponse } from '../../types'
+
+const TAB_LOGS = 0
+const TAB_RESULT = 1
 
 function mergeLogEntries(existing: ExecutionLogEntry[], incoming: ExecutionLogEntry[]): ExecutionLogEntry[] {
   const map = new Map<string, ExecutionLogEntry>()
@@ -40,8 +48,235 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
   const { t } = useTranslation()
   const [logs, setLogs] = useState<ExecutionLogEntry[]>([])
   const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | undefined>(undefined)
+  const [outputId, setOutputId] = useState<string | undefined>(undefined)
+  const [typedOutput, setTypedOutput] = useState<AgentOutputResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [outputLoading, setOutputLoading] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
+  const [tabValue, setTabValue] = useState(TAB_LOGS)
+  // Track whether we've already auto-switched to the result tab, so a user
+  // switching back to the logs tab is not overridden.
+  const hasAutoSwitchedRef = useRef(false)
+
+  const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(sessionId)
+
+  const fetchLogs = async () => {
+    if (!sessionId) return
+    try {
+      setLoading(true)
+      setDialogError(null)
+      const { data } = await apiClient.get<ExecutionLogEntry[]>(
+        `/agents/sessions/${sessionId}/logs`
+      )
+      setLogs(data)
+      const statusResponse = await apiClient.get<AgentJob>(
+        `/agents/sessions/${sessionId}`
+      )
+      console.log('[SessionExecutionLogsDialog] fetchLogs response:', statusResponse.data)
+      setSessionStatus(statusResponse.data.status)
+      if (statusResponse.data.output_id) {
+        console.log('[SessionExecutionLogsDialog] Setting outputId:', statusResponse.data.output_id)
+        setOutputId(statusResponse.data.output_id)
+      } else {
+        console.log('[SessionExecutionLogsDialog] No output_id in response')
+      }
+    } catch (err) {
+      console.error('[SessionExecutionLogsDialog] fetchLogs error:', err)
+      setDialogError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchTypedOutput = async (id: string) => {
+    try {
+      setOutputLoading(true)
+      console.log('[SessionExecutionLogsDialog] Fetching typed output for id:', id)
+      const { data } = await apiClient.get<AgentOutputResponse>(`/agent-outputs/${id}`)
+      console.log('[SessionExecutionLogsDialog] Typed output fetched:', data)
+      setTypedOutput(data)
+    } catch (err) {
+      console.error('[SessionExecutionLogsDialog] Failed to fetch typed output:', err)
+    } finally {
+      setOutputLoading(false)
+    }
+  }
+
+  const { entries: streamedEntries } = useSessionExecutionLogStream({
+    sessionId,
+    enabled: open,
+    sessionStatus,
+    // When the stream signals completion, re-fetch session state to get output_id
+    onComplete: () => {
+      console.log('[SessionExecutionLogsDialog] Stream completed, fetching logs to get output_id')
+      void fetchLogs()
+    },
+  })
+
+  // Reset per-session state when dialog opens with a new session
+  useEffect(() => {
+    if (open && sessionId) {
+      setLogs([])
+      setTypedOutput(null)
+      setOutputId(undefined)
+      setSessionStatus(undefined)
+      setTabValue(TAB_LOGS)
+      hasAutoSwitchedRef.current = false
+      void fetchLogs()
+    }
+  }, [open, sessionId])
+
+  // Fetch typed output whenever output_id becomes available
+  useEffect(() => {
+    if (outputId) {
+      console.log('[SessionExecutionLogsDialog] outputId changed, fetching typed output:', outputId)
+      void fetchTypedOutput(outputId)
+    }
+  }, [outputId])
+
+  // Merge streamed log entries
+  useEffect(() => {
+    if (!streamedEntries.length) return
+    setLogs((prev) => mergeLogEntries(prev, streamedEntries))
+  }, [streamedEntries])
+
+  // Auto-switch to Result tab once typed output is loaded (only once per session)
+  useEffect(() => {
+    if (typedOutput && !hasAutoSwitchedRef.current) {
+      hasAutoSwitchedRef.current = true
+      setTabValue(TAB_RESULT)
+    }
+  }, [typedOutput])
+
+  const handleClose = () => {
+    setDialogError(null)
+    onClose()
+  }
+
+  const hasLogs = logs.length > 0 || execLogs.length > 0
+  const showTabs = hasLogs && outputId != null
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
+      <DialogTitle>
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6">{t('agents.sessions.executionLogs')}</Typography>
+          <Box>
+            <IconButton
+              onClick={() => void fetchLogs()}
+              disabled={loading}
+              aria-label={t('agents.sessions.refreshLogs')}
+            >
+              <RefreshIcon />
+            </IconButton>
+            <IconButton onClick={handleClose} aria-label={t('app.close')}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        {dialogError != null && (
+          <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+        )}
+        {loading && (
+          <Typography color="text.secondary">{t('app.loading')}</Typography>
+        )}
+        {!loading && !dialogError && !execLogsLoading && !hasLogs && !typedOutput && (
+          <Typography color="text.secondary">{t('agents.sessions.noLogsAvailable')}</Typography>
+        )}
+        {!loading && !dialogError && (hasLogs || typedOutput) && (
+          <Stack spacing={2}>
+            {showTabs && (
+              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs value={tabValue} onChange={(_, value: number) => setTabValue(value)}>
+                  <Tab
+                    label={t('agents.sessions.tabs.executionLogs')}
+                    id="tab-logs"
+                    aria-controls="tabpanel-logs"
+                  />
+                  <Tab
+                    label={t('agents.sessions.tabs.typedOutput')}
+                    id="tab-result"
+                    aria-controls="tabpanel-result"
+                  />
+                </Tabs>
+              </Box>
+            )}
+
+            {/* Execution logs panel */}
+            {(!showTabs || tabValue === TAB_LOGS) && hasLogs && !execLogsLoading && (
+              <Box role="tabpanel" id="tabpanel-logs" aria-labelledby="tab-logs">
+                <LogViewer
+                  executionLog={execLogs[0] ?? null}
+                  entries={logs}
+                  sessionStatus={sessionStatus}
+                />
+              </Box>
+            )}
+
+            {/* Result panel — only rendered when tabs are shown and Result tab is active */}
+            {showTabs && tabValue === TAB_RESULT && (
+              <Box role="tabpanel" id="tabpanel-result" aria-labelledby="tab-result">
+                {outputLoading && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                    <CircularProgress size={28} />
+                  </Box>
+                )}
+                {!outputLoading && typedOutput && (
+                  <OutputTypeResultTab
+                    outputType="typed"
+                    outputData={typedOutput.field_values}
+                    dataTypeId={typedOutput.data_type_id}
+                    validationStatus={typedOutput.validation_status}
+                    rawOutput={typedOutput.raw_output}
+                    dataTypeName={typedOutput.data_type_name}
+                  />
+                )}
+                {!outputLoading && !typedOutput && (
+                  <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                    {t('agents.sessions.typedOutput.noFields')}
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Stack>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function mergeLogEntries(existing: ExecutionLogEntry[], incoming: ExecutionLogEntry[]): ExecutionLogEntry[] {
+  const map = new Map<string, ExecutionLogEntry>()
+  for (const entry of existing) {
+    map.set(entry.id, entry)
+  }
+  for (const entry of incoming) {
+    map.set(entry.id, entry)
+  }
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  )
+}
+
+interface Props {
+  open: boolean
+  sessionId: string | null
+  onClose: () => void
+}
+
+export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) {
+  const { t } = useTranslation()
+  const [logs, setLogs] = useState<ExecutionLogEntry[]>([])
+  const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | undefined>(undefined)
+  const [outputId, setOutputId] = useState<string | undefined>(undefined)
+  const [typedOutput, setTypedOutput] = useState<AgentOutputResponse | null>(null)
+  const [outputFields, setOutputFields] = useState<AgentDataTypeField[]>([])
+  const [loading, setLoading] = useState(false)
+  const [outputLoading, setOutputLoading] = useState(false)
+  const [dialogError, setDialogError] = useState<unknown>(null)
+  const [tabValue, setTabValue] = useState(0)
   const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(sessionId)
 
   const { entries: streamedEntries } = useSessionExecutionLogStream({
@@ -59,12 +294,53 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
         `/agents/sessions/${sessionId}/logs`
       )
       setLogs(data)
-      const statusResponse = await apiClient.get<{ status: AgentJobStatus }>(`/agents/sessions/${sessionId}`)
+      const statusResponse = await apiClient.get<AgentJob>(
+        `/agents/sessions/${sessionId}`
+      )
       setSessionStatus(statusResponse.data.status)
+      if (statusResponse.data.output_id) {
+        setOutputId(statusResponse.data.output_id)
+      }
     } catch (err) {
       setDialogError(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchTypedOutput = async (outputId: string) => {
+    try {
+      setOutputLoading(true)
+      const { data } = await apiClient.get<AgentOutputResponse>(`/agent-outputs/${outputId}`)
+      setTypedOutput(data)
+      
+      // Fetch the data type schema to get real field definitions
+      if (data.data_type_id) {
+        try {
+          const dtResponse = await apiClient.get<{ fields?: AgentDataTypeField[] }>(
+            `/data-types/${data.data_type_id}`
+          )
+          if (dtResponse.data.fields) {
+            setOutputFields(dtResponse.data.fields)
+          }
+        } catch (dtErr) {
+          console.warn('Could not fetch data type schema, using placeholder fields:', dtErr)
+          // Fallback: reconstruct from field_values
+          if (data.field_values && typeof data.field_values === 'object') {
+            const fields: AgentDataTypeField[] = Object.entries(data.field_values).map(([name]) => ({
+              name,
+              type: 'string' as const,
+              required: false,
+              description: '',
+            }))
+            setOutputFields(fields)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch typed output:', err)
+    } finally {
+      setOutputLoading(false)
     }
   }
 
@@ -73,6 +349,12 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
       void fetchLogs()
     }
   }, [open, sessionId])
+
+  useEffect(() => {
+    if (outputId) {
+      void fetchTypedOutput(outputId)
+    }
+  }, [outputId])
 
   useEffect(() => {
     if (!streamedEntries.length) {
@@ -112,15 +394,47 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
         {loading && (
           <Typography color="text.secondary">{t('app.loading')}</Typography>
         )}
-        {!loading && !dialogError && !execLogsLoading && logs.length === 0 && execLogs.length === 0 && (
+        {!loading && !dialogError && !execLogsLoading && logs.length === 0 && execLogs.length === 0 && !typedOutput && (
           <Typography color="text.secondary">{t('agents.sessions.noLogsAvailable')}</Typography>
         )}
-        {!loading && !dialogError && !execLogsLoading && (logs.length > 0 || execLogs.length > 0) && (
-          <LogViewer
-            executionLog={execLogs[0] ?? null}
-            entries={logs}
-            sessionStatus={sessionStatus}
-          />
+        {!loading && !dialogError && (logs.length > 0 || execLogs.length > 0 || typedOutput) && (
+          <Stack spacing={2}>
+            {/* Tabs for execution logs and typed output */}
+            {(logs.length > 0 || execLogs.length > 0) && typedOutput && (
+              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs value={tabValue} onChange={(_, value) => setTabValue(value)}>
+                  <Tab label={t('agents.sessions.tabs.executionLogs')} id="tab-logs" />
+                  <Tab label={t('agents.sessions.tabs.typedOutput')} id="tab-output" />
+                </Tabs>
+              </Box>
+            )}
+
+            {/* Execution logs tab or default view */}
+            {(tabValue === 0 || !typedOutput) && (logs.length > 0 || execLogs.length > 0) && !execLogsLoading && (
+              <LogViewer
+                executionLog={execLogs[0] ?? null}
+                entries={logs}
+                sessionStatus={sessionStatus}
+              />
+            )}
+
+            {/* Typed output tab */}
+            {tabValue === 1 && typedOutput && (
+              <Box>
+                {outputLoading && (
+                  <Typography color="text.secondary">{t('app.loading')}</Typography>
+                )}
+                {!outputLoading && outputFields.length > 0 && (
+                  <TypedOutputRenderer fields={outputFields} values={typedOutput.field_values || {}} />
+                )}
+                {!outputLoading && outputFields.length === 0 && (
+                  <Typography color="text.secondary">
+                    {t('agents.sessions.typedOutput.noFields')}
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Stack>
         )}
       </DialogContent>
     </Dialog>

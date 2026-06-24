@@ -1342,3 +1342,97 @@ def test_token_usage_skipped_when_no_guardrail_usage():
         "Should remain unchanged when no guardrail_usage"
     )
 
+
+# ── Structured Output Extraction Tests ─────────────────────────────────────
+
+
+def test_extract_structured_output_from_direct_dict():
+    """_extract_structured_output handles dict with multiple keys directly."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    response = {"project_name": "my-project", "project_id": "123"}
+    result = _extract_structured_output(response)
+    
+    assert result == {"project_name": "my-project", "project_id": "123"}
+
+
+def test_extract_structured_output_ignores_single_result_key():
+    """_extract_structured_output ignores single {'result': '...'} dict."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    response = {"result": "some text response"}
+    result = _extract_structured_output(response)
+    
+    # Should return None because it's just a text response in {"result": ...} format
+    assert result is None
+
+
+def test_extract_structured_output_from_ai_message_with_dict_content():
+    """_extract_structured_output handles AIMessage with dict content."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    # Mock AIMessage
+    ai_message = MagicMock()
+    ai_message.content = {"title": "Report", "severity": "high"}
+    
+    result = _extract_structured_output(ai_message)
+    
+    assert result == {"title": "Report", "severity": "high"}
+
+
+def test_extract_structured_output_from_ai_message_with_pydantic_model():
+    """_extract_structured_output handles AIMessage with Pydantic model content."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    # Mock Pydantic model
+    mock_model = MagicMock()
+    mock_model.model_dump = MagicMock(return_value={"name": "Project", "id": "xyz"})
+    
+    # Mock AIMessage with model as content
+    ai_message = MagicMock()
+    ai_message.content = mock_model
+    
+    result = _extract_structured_output(ai_message)
+    
+    assert result == {"name": "Project", "id": "xyz"}
+    mock_model.model_dump.assert_called_once()
+
+
+def test_extract_structured_output_from_direct_pydantic_model():
+    """_extract_structured_output handles response that is a Pydantic model."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    # Create a simple object that has model_dump method
+    class PydanticModel:
+        def model_dump(self):
+            return {"status": "complete", "count": 42}
+    
+    model = PydanticModel()
+    result = _extract_structured_output(model)
+    
+    assert result == {"status": "complete", "count": 42}
+
+
+def test_extract_structured_output_returns_none_for_text_response():
+    """_extract_structured_output returns None for plain text response."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    # Create a simple object with just content attribute (like AIMessage)
+    class TextResponse:
+        def __init__(self):
+            self.content = "This is just a text response"
+    
+    ai_message = TextResponse()
+    result = _extract_structured_output(ai_message)
+    
+    assert result is None
+
+
+def test_extract_structured_output_returns_none_for_none_response():
+    """_extract_structured_output returns None for None input."""
+    from app.services.agents.runtime_executor import _extract_structured_output
+    
+    result = _extract_structured_output(None)
+    
+    assert result is None
+

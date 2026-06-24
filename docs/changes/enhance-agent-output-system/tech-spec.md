@@ -58,7 +58,7 @@ The design follows the existing service segregation: CC owns all new database ta
 | `OutputTypeResultTab` | Updated to detect typed outputs, fetch data type schema, render via `TypedOutputRenderer`, show data type name badge, display validation errors with raw fallback. Located at `frontend/src/components/executions/OutputTypeResultTab.tsx`. |
 | `AgentTypeForm` | Added "Output Data Type" selector (conditionally rendered for non-conversational agent types). Updated form values to include `output_data_type_id`. Located at `frontend/src/pages/agents/AgentTypeForm.tsx`. |
 | `AgentManagementPage` | Output type badge now displays assigned data type name when `output_data_type_id` is set. Located at `frontend/src/pages/agents/AgentManagementPage.tsx`. |
-| `SessionExecutionLogsDialog` | Fetch data type schema before rendering Result tab for typed sessions. Located at `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx`. |
+| `SessionExecutionLogsDialog` | Updated to fetch typed output when `output_id` is present on the session job; shows dual-tab layout (Execution Logs / Result) when a typed output is available; auto-switches to Result tab once output loads via `useEffect` + `hasAutoSwitchedRef` guard (prevents override if user manually switches back); uses `OutputTypeResultTab` for schema-aware rendering; `useSessionExecutionLogStream` `onComplete` callback triggers re-fetch of session state to pick up `output_id` after stream ends. Located at `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx`. |
 | `AgentTypeDetailsDialog` | Show assigned data type name in output type details section. Located at `frontend/src/components/agents/AgentTypeDetailsDialog.tsx`. |
 | `AppRouter` | Add new routes: `/admin/data-types`, `/admin/agent-outputs`. Located at `frontend/src/app/AppRouter.tsx`. |
 | `AppShell` (nav) | Add nav links for "Data Types" and "Agent Outputs" to the admin sidebar. Located at `frontend/src/app/AppShell.tsx`. |
@@ -226,8 +226,9 @@ CSV export reuses the same filtering logic but returns a `StreamingResponse` wit
 **Pattern:** Conditional branching based on `output_data_type_id` presence.
 
 All existing code paths are preserved:
-- `save_result` handler checks `session.agent_type.output_data_type_id`; if null, uses existing `ResultStore.save` path unchanged.
+- `save_result` is a **general-purpose system tool** any agent can use mid-execution to checkpoint results; it has no special relationship with typed output. Typed output is captured at session completion by the runtime, not via `save_result`.
 - Execution completion in `runtime_executor.py` checks `agent_type.output_data_type_id`; if null, uses existing completion flow.
+- When `output_data_type_id` is set, `_run_task_loop_ar` injects the `output_schema_prompt` (built by `_build_output_schema_prompt`) into the system instruction before execution, instructing the agent to return its final answer as a JSON object. The `save_result` tool is not involved.
 - `OutputTypeResultTab` checks for `data_type_id` in output data; if absent, renders via existing JSON tree view.
 - `AgentTypeForm` conditionally renders the data type selector only when `input_type !== 'conversation'`.
 
@@ -296,6 +297,7 @@ All new enum types (`AgentOutputValidationStatus`) must use `postgresql.ENUM(...
 |--------|------|-------------|------|
 | `AgentRouter` | APIRouter | **MODIFIED**: Accepts `output_data_type_id` in create/update AgentType payloads; returns `output_data_type_name` in responses | `backend/app/api/v1/agents.py` |
 | `InternalSystemToolsRouter` | router | **MODIFIED**: Enhanced `POST /save-result` for typed output persistence; added `POST /query-result` endpoint | `backend/app/api/v1/internal/system_tools.py` |
+| `get_agent_context` | endpoint | **MODIFIED (FIX-20260624-153000)**: Injects `system____save_result` into `allowed_tools` when `agent_type.output_data_type_id` is not `None`, so typed agents can call `save_result` | `backend/app/api/v1/internal/agent_data.py` |
 
 ### 6.7 Backend — New Internal Endpoints
 
@@ -310,7 +312,7 @@ All new enum types (`AgentOutputValidationStatus`) must use `postgresql.ENUM(...
 
 | Symbol | Kind | Description | File |
 |--------|------|-------------|------|
-| `runtime_executor.py` | module | **MODIFIED**: Execution completion checks `agent_type.output_data_type_id`, calls CC validation and output persistence for typed agents | `backend/app/services/agents/runtime_executor.py` |
+| `runtime_executor.py` | module | **MODIFIED**: (1) Injects `output_schema_prompt` into system instruction when `output_data_type_id` is set; (2) Execution completion validates and persists typed outputs via CC internal endpoints | `backend/app/services/agents/runtime_executor.py` |
 | `SystemToolRegistry` | class | **MODIFIED**: Registers `query_result` tool with input schema definition | `backend/app/services/agents/system_tool_registry.py` |
 | `system_tools.py` | module | **MODIFIED**: Added `"query_result"` to `SYSTEM_TOOL_NAMES` frozenset | `backend/app/services/system_tools.py` |
 | `ResultStore` | class | **Unchanged** — `save_result` enhancement is in `system_tools.py` handler, not in this class. Class remains backward-compatible | `backend/app/services/results/store.py` |

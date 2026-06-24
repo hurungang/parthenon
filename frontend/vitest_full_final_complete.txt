@@ -1,0 +1,1698 @@
+
+ RUN  v4.1.6 C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend
+
+ Γ¥» src/__tests__/useChatSession.test.ts (13 tests | 1 failed) 330ms
+     Γ£ô starts disconnected when sessionId is null 150ms
+     Γ£ô initializes with empty messages 7ms
+     Γ£ô sendMessage adds a user message to the queue 12ms
+     Γ£ô clearMessages resets messages array 8ms
+     Γ£ô applies delegating and waiting status from websocket events 18ms
+     ├ù applies using_tool status from websocket events 20ms
+     Γ£ô toggles folded delegation snippet state from true to false 5ms
+     Γ£ô preserves timeout_or_failed status after agent reply 5ms
+     Γ£ô clears non-terminal status after agent reply 8ms
+     Γ£ô streams execution log title snippets while delegation is active 73ms
+     Γ£ô starts a fresh delegation snippet cycle after a new user message 6ms
+     Γ£ô starts a fresh active delegation cycle after completion when user sends a new message 7ms
+     Γ£ô keeps rapid consecutive delegation statuses in a single cycle for one user turn 4ms
+ Γ£ô src/__tests__/LogPresenter.test.ts (116 tests) 154ms
+ Γ£ô src/__tests__/useChatSession.intervention.test.ts (9 tests) 270ms
+ Γ£ô src/__tests__/OutputTypeResultTab.test.tsx (17 tests) 850ms
+ Γ£ô src/__tests__/PlanPreviewModal.test.tsx (15 tests) 17613ms
+     Γ£ô renders plan steps when generation_status is success  16485ms
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > opens dialog when Create Agent Type is clicked
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/ConversationDelegationVisibility.test.tsx (6 tests) 2144ms
+     Γ£ô renders exact delegation label and waiting indicator  952ms
+ Γ£ô src/__tests__/InlineInterventionDialog.test.tsx (19 tests) 2032ms
+     Γ£ô renders approve and deny buttons for approval type  339ms
+     Γ£ô renders text input for text type  427ms
+ Γ£ô src/__tests__/AddGuardrailForm.test.tsx (6 tests) 18049ms
+     Γ£ô offers all four periods when the model has no guardrails  15275ms
+     Γ£ô filters the period select to only periods not yet configured on the model  333ms
+     Γ£ô submits a single per-period create call with terminate-default and k-default  773ms
+     Γ£ô shows a validation error when no period is selected  334ms
+     Γ£ô shows a validation error when no limit is entered  576ms
+     Γ£ô surfaces a 403 permission-denied error via PermissionDeniedAlert  749ms
+ Γ¥» src/__tests__/McpSessionManager.test.tsx (23 tests | 4 failed | 3 skipped) 23732ms
+     Γ£ô renders the session manager title  13336ms
+     Γ£ô renders create session button 28ms
+     Γ£ô opens create dialog when create button is clicked  720ms
+     Γ£ô credential field is not pre-populated when editing a session  584ms
+     Γ£ô shows session identity_binding field in dialog 194ms
+     Γ£ô shows session credential_config field in dialog 181ms
+     Γ£ô displays session list from API 102ms
+     Γ£ô renders without runtime errors 36ms
+     Γåô oauth2 auth type shows Authenticate with OAuth button in dialog
+     ├ù oauth2 auth type does not show manual credential fields 2535ms
+     Γåô OAuth button click calls oauth/authorize endpoint
+     Γåô OAuth success postMessage refreshes session list
+     ├ù passthrough is included in auth type options 1844ms
+     ├ù selecting passthrough hides credential fields and shows info alert 2499ms
+     Γ£ô passthrough session row shows Passthrough chip in table 171ms
+     Γ£ô shows token status chip for oauth2 sessions and dash for non-oauth2 284ms
+     Γ£ô shows green refresh button when oauth refresh token is valid 125ms
+     Γ£ô shows red reauth button when oauth refresh token is expired 137ms
+     Γ£ô renders Default chip next to a session marked is_default=true 105ms
+     Γ£ô shows radio-button indicator for each session 156ms
+     ├ù shows auto-default info alert when only one session exists (isAutoDefault) 112ms
+     Γ£ô shows Default chip for sole session even when is_default=false (auto-default logic) 98ms
+     Γ£ô shows blocking delete prompt when deleting default with siblings  475ms
+ Γ£ô src/__tests__/VendorModelGuardrailPanel.test.tsx (12 tests) 20034ms
+     Γ£ô renders one vendor row per vendor with the correct enabled count  14975ms
+     Γ£ô toggling the vendor switch calls useSetVendorDisabled with is_disabled=true  643ms
+     Γ£ô toggling a per-model switch calls useSetModelDisabled with the right args  442ms
+     Γ£ô toggling a per-guardrail switch calls the per-guardrail update mutation  481ms
+     Γ£ô removing a guardrail calls the delete mutation  463ms
+     Γ£ô the "Add guardrail" form only offers periods not yet configured on the model  1175ms
+     Γ£ô surfaces permission-denied errors via PermissionDeniedAlert when a mutation fails  627ms
+ Γ£ô src/__tests__/AgentSessionPage.test.tsx (10 tests) 17545ms
+     Γ£ô shows loading spinner initially  16128ms
+     Γ£ô renders chat interface for conversational agent session  338ms
+stderr | src/__tests__/RuntimeControlDashboardPage.test.tsx > RuntimeControlDashboardPage - sleep conversation gets "End session" instead of "Terminate" > shows the End Session button (not Terminate) when a sleep conversation is selected
+In HTML, <div> cannot be a descendant of <p>.
+This will cause a hydration error.
+
+  ...
+    <Box>
+      <Styled(div) as="div" ref={null} className="MuiBox-root" theme={{...}} sx={{}}>
+        <Insertion>
+        <div className="MuiBox-roo...">
+          <Paper variant="outlined" sx={{p:2}}>
+            <MuiPaper-root as="div" ownerState={{variant:"o...", ...}} className="MuiPaper-r..." ref={null} sx={{p:2}} ...>
+              <Insertion>
+              <div className="MuiPaper-r..." style={{}}>
+                <Typography>
+                <Grid spacing={0.5} mb={2}>
+                  <MuiStack-root as="div" ownerState={{...}} ref={null} className="MuiStack-root" sx={{mb:2}}>
+                    <Insertion>
+                    <div className="MuiStack-r...">
+                      <Row>
+                      <Row>
+                      <Row>
+                      <Row k="agents.ses...">
+                        <Box display="flex" gap={1} alignItems="center">
+                          <Styled(div) as="div" ref={null} className="MuiBox-root" theme={{...}} ...>
+                            <Insertion>
+                            <div className="MuiBox-roo...">
+                              <Typography>
+                              <Typography variant="body2">
+                                <MuiTypography-root as="p" ref={null} className="MuiTypogra..." sx={{...}} ...>
+                                  <Insertion>
+>                                 <p
+>                                   className="MuiTypography-root MuiTypography-body2 css-7ctihp-MuiTypography-root"
+>                                   style={{}}
+>                                 >
+                                    <Chip size="small" label="sleep" color="default">
+                                      <MuiChip-root as="div" onClick={function onClick} onKeyDown={function onKeyDown} ...>
+                                        <Insertion>
+>                                       <div
+>                                         onClick={function onClick}
+>                                         onKeyDown={function onKeyDown}
+>                                         onKeyUp={function onKeyUp}
+>                                         disabled={undefined}
+>                                         tabIndex={undefined}
+>                                         className="MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorDefaul..."
+>                                         ref={function}
+>                                       >
+                      ...
+                ...
+
+<p> cannot contain a nested <div>.
+See this log for the ancestor stack trace.
+
+ Γ£ô src/__tests__/RuntimeControlDashboardPage.test.tsx (4 tests) 18201ms
+     Γ£ô renders an SVG element with the parent and child nodes from topology data  15921ms
+     Γ£ô renders the guardrail panel as a read-only dashboard (no Add/Edit/Remove/switches)  523ms
+     Γ£ô shows the End Session button (not Terminate) when a sleep conversation is selected  1582ms
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö post-save navigation > opens AgentTypeDetailsDialog after successful create (agent has plan)
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/ModelConfigDialog.test.tsx (23 tests) 21778ms
+     Γ£ô renders provider type selector with all provider options  16138ms
+     Γ£ô shows PermissionDeniedAlert when save returns 403  435ms
+     Γ£ô calls available-models API when Fetch Models is clicked and renders checkboxes  437ms
+     Γ£ô checking a model includes its identifier in enabled_models payload on save  853ms
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx (21 tests | 3 failed) 24418ms
+     Γ£ô shows loading spinner when data is loading  18360ms
+     Γ£ô shows dialog title key when agent type is not loaded yet 70ms
+     Γ£ô renders agent type name in dialog title after loading  424ms
+     ├ù renders Details tab with correct field values 203ms
+     Γ£ô renders three tabs 177ms
+     Γ£ô keeps Start Chat action visible when switching tabs for conversation agents  588ms
+     Γ£ô shows no-plan placeholder on Agent Preview tab when plan is null 224ms
+     Γ£ô shows plan content on Agent Preview tab when plan is populated 185ms
+     Γ£ô shows regenerate plan button on Agent Preview tab 220ms
+     Γ£ô shows a stale plan warning when the role has newer updates  374ms
+     Γ£ô calls the regenerate-plan endpoint when the button is clicked  326ms
+     Γ£ô shows session list on Execution Logs tab  370ms
+     Γ£ô shows empty state on Execution Logs tab when no sessions  424ms
+     Γ£ô identity field shows dash when identity_id is null 147ms
+     Γ£ô clicking identity name opens AgentIdentityViewDialog 293ms
+     Γ£ô role field shows dash when role_id is null 132ms
+     ├ù clicking role name opens AgentRoleViewDialog 829ms
+     ├ù clicking role name opens AgentRoleViewDialog (duplicate guard) 432ms
+     Γ£ô shows PermissionDeniedAlert when agent type fetch fails 47ms
+     Γ£ô calls onClose when the close button is clicked 170ms
+     Γ£ô resets to Details tab when dialog re-opens  415ms
+stderr | src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > disables save button when required MCP server lacks session assignment
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+ Γ£ô src/__tests__/ConversationDialog.test.tsx (10 tests) 2997ms
+     Γ£ô waits for the WebSocket connection before sending the first message  1356ms
+     Γ£ô keeps conversational guardrail details hidden by default and opens floating hint on demand  368ms
+     Γ£ô restores guardrail hint values from resumed session payload  315ms
+ Γ£ô src/__tests__/AgentIdentityListPage.test.tsx (15 tests | 1 skipped) 20203ms
+     Γ£ô renders the page heading  16277ms
+     Γ£ô renders identity names from API data  542ms
+     Γ£ô renders realm_name column  399ms
+     Γ£ô renders status chips  405ms
+     Γ£ô opens AgentIdentityDialog when Add Identity is clicked  539ms
+     Γ£ô refresh button calls refresh-token endpoint  331ms
+     Γ£ô reauth button calls reauth-url endpoint and opens popup  507ms
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö post-save navigation > opens AgentTypeDetailsDialog after successful create (agent has plan)
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > displays passthrough badge for servers with passthrough sessions
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+ Γ¥» src/__tests__/SkillEditor.test.tsx (16 tests | 2 failed) 7598ms
+     Γ£ô renders the skill editor panel  1070ms
+     Γ£ô renders the instructions field 251ms
+     ├ù renders tool selection section grouped by server 1856ms
+     Γ£ô renders close button  327ms
+     Γ£ô renders save button 262ms
+     Γ£ô pre-populates the name field  399ms
+     Γ£ô pre-populates the instructions field 227ms
+     ├ù renders role assignment sidebar with loaded roles 1691ms
+     Γ£ô renders without runtime errors 212ms
+     Γ£ô renders Generated Tool Reference section label when editing an existing skill 235ms
+     Γ£ô does not render Generated Tool Reference section for new skill (null prop) 148ms
+     Γ£ô renders a collapsible toggle button next to the section label 244ms
+     Γ£ô section content area uses a pre element (read-only, not a textarea or input) 207ms
+     Γ£ô shows skills.noTools empty-state when skill has no tool section in instructions_with_tools 166ms
+     Γ£ô shows tool section content when instructions_with_tools has ## Tools marker 136ms
+     Γ£ô section is structurally distinct from the editable instructions textarea 155ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders name field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö post-save navigation > opens AgentTypeDetailsDialog after save even without a plan
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > enables save after selecting sessions for all required servers
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders system_instruction field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders identity_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > creates role and assigns sessions in create mode
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders role_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders input_type dropdown with all three options
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö post-save navigation > opens AgentTypeDetailsDialog after save even without a plan
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentRoleDialog.test.tsx (18 tests) 25766ms
+     Γ£ô renders create dialog title when editRole is null  16453ms
+     Γ£ô pre-populates name field when editing  332ms
+     Γ£ô clears dialogError on open  370ms
+     Γ£ô calls onSaved after successful create  537ms
+     Γ£ô shows PermissionDeniedAlert when API call fails with 403  395ms
+     Γ£ô renders allowed agent type preview chips for selected SOPs in edit mode  857ms
+     Γ£ô requests allowed agent types using the selected SOP ids  718ms
+     Γ£ô refreshes the allowed agent type preview when SOP selection changes  1332ms
+     Γ£ô disables save button when required MCP server lacks session assignment  800ms
+     Γ£ô displays passthrough badge for servers with passthrough sessions  736ms
+     Γ£ô enables save after selecting sessions for all required servers  960ms
+     Γ£ô creates role and assigns sessions in create mode  821ms
+     Γ£ô handles system tool exclusion in required servers computation  355ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders output_type dropdown for non-conversation agents
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render old mode field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render max_instances field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render sop_id field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows input schema field when input_type is typed
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö row click opens AgentTypeDetailsDialog > action buttons (Launch, Edit) do not open details dialog due to stopPropagation
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT show input schema field for input_type=none
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT show output_type field for input_type=conversation
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö Default SOP field available for all input types > SOP/Skill Bindings section is visible in create dialog for typed-input agent
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx (23 tests) 29034ms
+     Γ£ô renders the page heading  17179ms
+     Γ£ô renders Create Agent Type button  474ms
+     Γ£ô opens dialog when Create Agent Type is clicked  1910ms
+     Γ£ô opens AgentJobLaunchDialog when Launch is clicked  559ms
+     Γ£ô opens ConversationDialog when Launch is clicked for conversation agent  391ms
+     Γ£ô opens AgentTypeDetailsDialog after successful create (agent has plan)  2814ms
+     Γ£ô opens AgentTypeDetailsDialog after save even without a plan  2233ms
+     Γ£ô action buttons (Launch, Edit) do not open details dialog due to stopPropagation  588ms
+     Γ£ô SOP/Skill Bindings section is visible in create dialog for typed-input agent  640ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > keeps the guardrail editor collapsed by default
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AddStatementDialog.test.tsx (11 tests) 13965ms
+     Γ£ô resource type dropdown is populated from useResourceTypes data  12037ms
+     Γ£ô populates all form fields in edit mode from editingPolicy prop  330ms
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > switches the guardrail section copy for conversational agents
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+ Γ£ô src/__tests__/AppShell.test.tsx (32 tests) 26842ms
+     Γ£ô renders Dashboard as a standalone top-level entry (one per drawer, not inside any group)  16284ms
+     Γ£ô renders the three new group labels (Agents, Integrations, System)  586ms
+     Γ£ô does not render the legacy "AI Agent" group label  609ms
+     Γ£ô renders Agents child label "nav.agentRoles" under the Agents group  524ms
+     Γ£ô renders Agents child label "nav.agentIdentities" under the Agents group  388ms
+     Γ£ô renders Agents child label "nav.agentTypes" under the Agents group  377ms
+     Γ£ô renders Agents child label "nav.runtimeControl" under the Agents group  520ms
+     Γ£ô renders Agents child label "nav.skills" under the Agents group  402ms
+     Γ£ô renders Agents child label "nav.sops" under the Agents group  319ms
+     Γ£ô renders Agents child label "nav.modelConfigs" under the Agents group  336ms
+     Γ£ô renders Agents child label "nav.schedules" under the Agents group  333ms
+     Γ£ô renders Agents child label "nav.agentTrails" under the Agents group  310ms
+     Γ£ô renders Integrations child label "nav.notifications" under the Integrations group  330ms
+     Γ£ô renders System child label "nav.observability" under the System group  307ms
+     Γ£ô renders System child label "nav.permissions" under the System group  327ms
+     Γ£ô renders System child label "nav.systemConfig" under the System group  316ms
+     Γ£ô renders the Agents group with exactly 9 children (in declaration order)  387ms
+     Γ£ô renders the Integrations group with exactly 2 children (in declaration order)  356ms
+     Γ£ô clicking a child item calls navigate with the child path  318ms
+     Γ£ô the Integrations group is locked open ΓÇö clicking the header has no effect  504ms
+     Γ£ô clicking one group header does not collapse other groups (Integrations is locked open)  597ms
+     Γ£ô marks the active group header as selected when any child is active  305ms
+     Γ£ô auto-expands a group when navigated directly to a child route  367ms
+     Γ£ô clicking Dashboard (standalone) navigates to /dashboard  308ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows token enforcement controls for non-conversational agents
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders model_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > populates model_id dropdown from all model configs enabled_models
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows empty state hint when no models are enabled across any config
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render model_config_id field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render model_name sub-selector
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx (13 tests | 4 failed) 16577ms
+     Γ£ô renders the page heading  14462ms
+     Γ£ô renders the servers from mock data 126ms
+     Γ£ô renders server slugs 129ms
+     Γ£ô renders Register Server button  359ms
+     Γ£ô opens dialog when Register Server is clicked  509ms
+     Γ£ô renders System entry with Built-in chip 155ms
+     Γ£ô System entry shows disabled actions and system-managed text 133ms
+     Γ£ô System entry shows system slug and has no sync action enabled 123ms
+     Γ£ô sync button is disabled with tooltip when session_count === 0 98ms
+     ├ù sync button is enabled when session_count > 0 114ms
+     ├ù FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2) 120ms
+     ├ù FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1) 127ms
+     ├ù when no sync is in-flight, only System entry sync is disabled 113ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > aggregates enabled_models from multiple configs into a single flat list
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders identity selector before role selector in DOM order
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > calls onChange with empty role_id when identity selection changes
+MUI: You have provided an out-of-range value `id-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `role-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `id-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `role-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > calls onChange with empty role_id when identity selection changes
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > role dropdown reflects available roles (API call fires for roles)
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders bindings section title
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx (23 tests | 10 failed) 19934ms
+     ├ù shows CircularProgress when tools are loading 2298ms
+     Γ£ô does NOT show noToolsAvailable message while loading 189ms
+     Γ£ô does NOT show the server filter while loading 153ms
+     ├ù shows noToolsAvailable message when tools array is empty 1681ms
+     Γ£ô does NOT show CircularProgress when tools loaded but empty 167ms
+     Γ£ô does NOT show the server filter when tools array is empty 175ms
+     Γ£ô does NOT show any tool checkboxes when tools is empty 245ms
+     ├ù renders the Filter by Server Autocomplete label 1771ms
+     ├ù shows tools from ALL servers when no filter is selected 1732ms
+     ├ù shows both server slug chips in the tool list 1726ms
+     ├ù renders an Autocomplete input element for the server filter 1737ms
+     Γ£ô filter resets to empty when skill prop changes (useEffect)  455ms
+     ├ù renders one checkbox per tool 1676ms
+     Γ£ô all tool checkboxes start unchecked for a new skill 134ms
+     ├ù pre-checks tools that are in skill.tool_ids when editing 1645ms
+     ├ù toggling a tool checkbox changes its checked state 1637ms
+     ├ù tools are displayed grouped under their server slug chip 1652ms
+     Γ£ô renders the editor panel (not null) 147ms
+     Γ£ô shows createSkill title for new skill 116ms
+     Γ£ô shows editSkill title when editing an existing skill 131ms
+     Γ£ô calls onClose when the X (close) icon button is clicked 202ms
+     Γ£ô root element has a left border (panel separator) 111ms
+     Γ£ô renders Cancel and Save buttons 142ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows empty state when no bindings configured
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders SOP bindings in the list
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders skill bindings in the list
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > add binding button is disabled when no role selected
+MUI: You have provided an out-of-range value `role-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `role-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > add binding button is disabled when no role selected
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > remove binding handler fires onChange
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > reorder buttons work
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render old primary_sop_id field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders output data type selector dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders data type hint text
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does not show data type dropdown when output_type is auto (legacy)
+MUI: You have provided an out-of-range value `auto` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are `typed`, `markdown`.
+MUI: You have provided an out-of-range value `auto` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are `typed`, `markdown`.
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > clears output_data_type_id when switching from typed to markdown
+MUI: You have provided an out-of-range value `dt-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `dt-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+ Γ£ô src/__tests__/delegationHistory.test.ts (4 tests) 25ms
+ Γ£ô src/__tests__/useInterveneRequests.test.tsx (8 tests) 810ms
+ Γ£ô src/__tests__/AgentTypeForm.test.tsx (42 tests) 16349ms
+     Γ£ô renders name field  1192ms
+     Γ£ô renders system_instruction field  443ms
+     Γ£ô renders identity_id dropdown  319ms
+     Γ£ô renders role_id dropdown  373ms
+     Γ£ô renders input_type dropdown with all three options  333ms
+     Γ£ô does NOT render old mode field  320ms
+     Γ£ô does NOT render max_instances field  340ms
+     Γ£ô shows input schema field when input_type is typed  392ms
+     Γ£ô does NOT show input schema field for input_type=none  363ms
+     Γ£ô keeps the guardrail editor collapsed by default  506ms
+     Γ£ô switches the guardrail section copy for conversational agents  302ms
+     Γ£ô shows token enforcement controls for non-conversational agents  323ms
+     Γ£ô role dropdown reflects available roles (API call fires for roles)  307ms
+     Γ£ô renders SOP bindings in the list  567ms
+     Γ£ô renders skill bindings in the list  496ms
+     Γ£ô add binding button is disabled when no role selected  652ms
+     Γ£ô remove binding handler fires onChange  546ms
+     Γ£ô reorder buttons work  561ms
+     Γ£ô shows data type options and calls onChange when selected  634ms
+     Γ£ô default output_type is typed and data type dropdown is visible  371ms
+     Γ£ô hides data type dropdown when output_type is markdown  358ms
+     Γ£ô does not show data type dropdown when output_type is auto (legacy)  333ms
+     Γ£ô clears output_data_type_id when switching from typed to markdown  595ms
+     Γ£ô switching from markdown to typed shows data type dropdown  593ms
+     Γ£ô output type selector only shows typed and markdown options  448ms
+ Γ£ô src/__tests__/service-decomposition/issue-1-skill-deduplication.test.tsx (4 tests) 22ms
+ Γ£ô src/__tests__/AgentRoleViewDialog.test.tsx (9 tests) 12045ms
+     Γ£ô shows loading spinner while role is fetching  11199ms
+ Γ£ô src/__tests__/service-decomposition/issue-3-sop-skill-autoselect.test.tsx (4 tests) 14884ms
+     Γ£ô auto-checks required skill when its SOP is selected  13051ms
+     Γ£ô makes required skill checkbox disabled (read-only) when its SOP is selected  574ms
+     Γ£ô does NOT disable optional skills when a SOP is selected  593ms
+     Γ£ô un-checks and re-enables required skill when SOP is deselected  657ms
+ Γ¥» src/__tests__/SkillEditor.workflow-generation-preview.test.tsx (4 tests | 1 failed) 2673ms
+     Γ£ô generates workflow and updates the workflow field  1323ms
+     Γ£ô opens workflow preview with model header  603ms
+     Γ£ô sends latest unsaved workflow state to preview endpoint  708ms
+     ├ù shows missing-model error and does not overwrite manual workflow text 32ms
+ Γ£ô src/__tests__/notifications/ChannelListPage.test.tsx (7 tests) 14367ms
+     Γ£ô renders channel names from hook data  13376ms
+     Γ£ô renders add channel button  374ms
+ Γ£ô src/__tests__/WorkingStepsPanel.test.tsx (15 tests) 1606ms
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders all instances from the API in the table
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ Γ£ô src/__tests__/TopologyDiagramRenderer.test.tsx (12 tests) 14625ms
+     Γ£ô renders without throwing with a valid non-empty payload  14194ms
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders all instances from the API in the table
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders status chip for each instance row
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders status chip for each instance row
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders submitted timestamp column
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders submitted timestamp column
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders completedAt column header
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ Γ£ô src/__tests__/AgentIdentityViewDialog.test.tsx (7 tests) 14215ms
+     Γ£ô shows loading spinner while identity is fetching  13675ms
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders completedAt column header
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows status filter dropdown
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > passes status query param when status filter is set
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows time range filter inputs
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows empty state when no instances match filters
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows empty state when no instances match filters
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > clicking instance row navigates to detail page
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ Γ£ô src/__tests__/CloneRoleDialog.test.tsx (7 tests) 15559ms
+     Γ£ô pre-fills name with "Copy of {source name}"  14617ms
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > clicking instance row navigates to detail page
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > clicking instance row navigates to detail page
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > clicking instance row navigates to detail page
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > clicking instance row navigates to detail page
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows clear filters button when filters are active
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows clear filters button when filters are active
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > shows clear filters button when filters are active
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ Γ£ô src/__tests__/AgentInstanceDashboard.test.tsx (10 tests) 16597ms
+     Γ£ô renders all instances from the API in the table  14051ms
+     Γ£ô renders status chip for each instance row  306ms
+     Γ£ô renders submitted timestamp column  327ms
+     Γ£ô clicking instance row navigates to detail page  875ms
+     Γ£ô shows clear filters button when filters are active  343ms
+ Γ£ô src/__tests__/useConversationIntervention.test.ts (9 tests) 259ms
+ Γ£ô src/__tests__/ManageGroupRolesModal.test.tsx (10 tests) 15740ms
+     Γ£ô renders the dialog when open=true  14857ms
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=true when Yes is selected and submitted
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=false when No is selected and submitted
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ£ô src/__tests__/AgentOutputsPage.test.tsx (9 tests) 16948ms
+     Γ£ô renders the page title  15385ms
+     Γ£ô renders output entries with data type names  444ms
+ Γ£ô src/__tests__/LogSummaryPanel.test.tsx (17 tests) 743ms
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > shows error alert when onSubmit throws
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ¥» src/__tests__/InterveneResponseDialog.test.tsx (11 tests | 3 failed) 1812ms
+     Γ£ô renders approval dialog with Yes/No buttons  455ms
+     Γ£ô renders choice dialog with radio options 194ms
+     Γ£ô renders text dialog with text input 203ms
+     ├ù calls onSubmit with approval_value=true when Yes is selected and submitted 128ms
+     ├ù calls onSubmit with approval_value=false when No is selected and submitted 97ms
+     Γ£ô calls onSubmit with selected_choice when a choice is selected and submitted 262ms
+     Γ£ô disables submit for choice when no option selected 60ms
+     Γ£ô calls onSubmit with text_value when text is entered and submitted 297ms
+     ├ù shows error alert when onSubmit throws 66ms
+     Γ£ô returns null when request is null 5ms
+     Γ£ô closes dialog and clears error on cancel click 38ms
+ Γ£ô src/__tests__/ModelConfigListPage.test.tsx (10 tests) 16974ms
+     Γ£ô renders all model configs in the table  15144ms
+     Γ£ô opens create dialog when Add Config button is clicked  748ms
+     Γ£ô shows edit and delete action buttons per row  346ms
+stderr | src/__tests__/SopEditor.test.tsx > SopEditor ΓÇö editing existing SOP > pre-populates the name field
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+stderr | src/__tests__/SopEditor.test.tsx > SopEditor ΓÇö editing existing SOP > pre-populates the instructions field
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+stderr | src/__tests__/SopEditor.test.tsx > SopEditor ΓÇö editing existing SOP > renders existing steps
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+ Γ£ô src/__tests__/AccessRequestsPage.test.tsx (6 tests) 16712ms
+     Γ£ô renders without crashing  15016ms
+     Γ£ô renders informational alert (not group list) when useGroups returns empty array  475ms
+     Γ£ô renders "Unassigned" chip for a request with no group_id  322ms
+     Γ£ô approve dialog renders group dropdown when approveTarget.group_id is absent  444ms
+stderr | src/__tests__/SopEditor.test.tsx > SopEditor ΓÇö editing existing SOP > includes target_agent_type_id when step type is agent_delegation
+MUI: You have provided an out-of-range value `at-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `at-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+stderr | src/__tests__/SopEditor.test.tsx > SopEditor ΓÇö editing existing SOP > renders step type selectors for each step
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+stderr | src/__tests__/SopEditor.test.tsx > SopEditor ΓÇö editing existing SOP > renders without runtime errors
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `sk-1` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+ Γ£ô src/__tests__/SopEditor.test.tsx (11 tests) 3476ms
+     Γ£ô renders the SOP editor  812ms
+     Γ£ô pre-populates the name field  420ms
+     Γ£ô pre-populates the instructions field  324ms
+ Γ£ô src/__tests__/LogViewer.test.tsx (14 tests) 2675ms
+     Γ£ô renders the log viewer title  496ms
+     Γ£ô renders the RawLogToggle in the header  330ms
+     Γ£ô toggles back to friendly mode on second click  308ms
+ Γ£ô src/__tests__/notifications/RecipientGroupListPage.test.tsx (7 tests) 13588ms
+     Γ£ô renders group names from hook data  12781ms
+     Γ£ô renders add group button  337ms
+ Γ£ô src/__tests__/TaskInterventionDialog.test.tsx (13 tests) 959ms
+ Γ£ô src/__tests__/notifications/NotificationLogPage.test.tsx (7 tests) 13505ms
+     Γ£ô renders log entries from API  12655ms
+     Γ£ô opens detail drawer when a log row is clicked  414ms
+stderr | src/__tests__/PolicyEditor.test.tsx > PolicyEditor > Edit button opens AddStatementDialog with editingPolicy prop
+MUI: You have provided an out-of-range value `agent` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are "".
+MUI: You have provided an out-of-range value `env` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `prod` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `agent` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are "".
+MUI: You have provided an out-of-range value `env` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+MUI: You have provided an out-of-range value `prod` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``.
+
+ Γ£ô src/__tests__/PolicyEditor.test.tsx (7 tests) 14300ms
+     Γ£ô renders statement cards with correct resource type, effect, and actions  12909ms
+     Γ£ô Edit button opens AddStatementDialog with editingPolicy prop  879ms
+ Γ£ô src/__tests__/AgentSessionLaunchDialog.test.tsx (6 tests | 1 skipped) 7258ms
+     Γ£ô renders launch button for input_type=none (no input fields)  6831ms
+ Γ£ô src/__tests__/telemetry.test.ts (7 tests) 448ms
+     Γ£ô registers OTEL providers when traces_enabled=true  393ms
+ Γ£ô src/__tests__/AgentIdentityDialog.test.tsx (6 tests) 8393ms
+     Γ£ô renders create dialog title  7995ms
+ Γ£ô src/__tests__/permissionsApi.test.ts (16 tests) 47ms
+ Γ£ô src/__tests__/useModelAvailability.test.tsx (6 tests) 268ms
+ Γ£ô src/__tests__/DataTypesPage.test.tsx (10 tests) 12926ms
+     Γ£ô renders the page title  10121ms
+     Γ£ô renders data type names from API data  393ms
+     Γ£ô opens create dialog when create button clicked  1010ms
+     Γ£ô opens edit dialog when edit button clicked  570ms
+     Γ£ô opens delete confirmation when delete button clicked  364ms
+ Γ£ô src/__tests__/JSONViewModal.test.tsx (6 tests) 12300ms
+     Γ£ô renders JSON with correct structure: role_id, name, statements array  12021ms
+ Γ£ô src/__tests__/usePreflightAvailability.test.tsx (5 tests) 161ms
+ Γ£ô src/__tests__/TypedOutputRenderer.test.tsx (13 tests) 502ms
+ Γ£ô src/__tests__/ScheduleManagerPage.test.tsx (8 tests) 15746ms
+     Γ£ô renders the schedule list from API  14138ms
+     Γ£ô create dialog opens when button is clicked  634ms
+     Γ£ô save in dialog calls API and closes dialog  402ms
+ Γ£ô src/__tests__/DataTypeFormDialog.test.tsx (6 tests) 16339ms
+     Γ£ô renders create mode with empty fields  14262ms
+     Γ£ô renders edit mode with pre-populated data  339ms
+     Γ£ô adds a new field when Add Field is clicked  425ms
+     Γ£ô removes a field when remove button is clicked  418ms
+     Γ£ô calls onClose when dialog is closed after successful save  711ms
+ Γ£ô src/__tests__/ModelUsageGuardrailManagement.test.tsx (4 tests) 15348ms
+     Γ£ô renders the read-only dashboard title on the dedicated dashboard  14794ms
+ Γ£ô src/__tests__/SopEditor.workflow-generation-preview.test.tsx (4 tests) 3536ms
+     Γ£ô generates workflow and updates workflow field  1493ms
+     Γ£ô opens workflow preview with configured model in header  532ms
+     Γ£ô sends latest unsaved step/workflow state to preview endpoint  761ms
+     Γ£ô shows missing-model error and keeps manual SOP workflow text  744ms
+ Γ£ô src/__tests__/McpToolBrowser.test.tsx (9 tests) 16427ms
+     Γ£ô renders without crashing  14787ms
+     Γ£ô renders search input for filtering  398ms
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+ Γ£ô src/__tests__/ConversationSessionsTab.test.tsx (5 tests) 1014ms
+     Γ£ô renders session titles and status chips  563ms
+     Γ£ô Archive action shows confirmation dialog before mutating  332ms
+ Γ£ô src/__tests__/features/setup/SetupWizard.test.tsx (6 tests) 3043ms
+     Γ£ô renders provider selection step initially  381ms
+     Γ£ô advances to keycloak config step on Next  602ms
+     Γ£ô shows external OIDC form when Azure EntraID selected  302ms
+     Γ£ô submit triggers API call and navigates to completion on success  795ms
+     Γ£ô shows keycloak unreachable error on 502  734ms
+stderr | src/__tests__/features/slug-validation.test.tsx > Slug Validation > agent type name rejects uppercase characters
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/features/slug-validation.test.tsx > Slug Validation > agent type name rejects spaces
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/features/slug-validation.test.tsx > Slug Validation > agent type name accepts lowercase alphanumeric hyphen values
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentOAuthCallbackPage.test.tsx (5 tests) 14749ms
+     Γ£ô renders a loading spinner while processing  14553ms
+stderr | src/__tests__/RawLogToggle.test.tsx > RawLogToggle > calls clipboard.writeText with rawLogText on copy click
+An update to RawLogToggle inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ£ô src/__tests__/RawLogToggle.test.tsx (11 tests) 746ms
+     Γ£ô renders toggle switch  323ms
+ Γ£ô src/__tests__/InterventionPendingBanner.test.tsx (10 tests) 340ms
+stderr | src/__tests__/features/slug-validation.test.tsx > Slug Validation > agent type slug validation matches the backend pattern
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > shows loading progress before sessions request resolves
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > shows loading progress before sessions request resolves
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > shows permission error alert when sessions query fails
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > shows permission error alert when sessions query fails
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > renders conversation title column and opens execution details dialog
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ Γ£ô src/__tests__/features/slug-validation.test.tsx (6 tests) 4744ms
+     Γ£ô agent type name rejects uppercase characters  1239ms
+     Γ£ô agent type name rejects spaces  433ms
+     Γ£ô agent type name accepts lowercase alphanumeric hyphen values  435ms
+     Γ£ô agent type slug validation matches the backend pattern  1042ms
+     Γ£ô mcp server name validates the slug pattern  895ms
+     Γ£ô mcp server slug blocks save until the value is slug-safe  669ms
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > renders conversation title column and opens execution details dialog
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+stderr | src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx > AgentInstanceDashboardPage runtime-control scenarios > renders conversation title column and opens execution details dialog
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ Γ£ô src/__tests__/AgentInstanceDashboard.runtime-control.test.tsx (3 tests) 15948ms
+     Γ£ô shows loading progress before sessions request resolves  15103ms
+     Γ£ô shows permission error alert when sessions query fails  374ms
+     Γ£ô renders conversation title column and opens execution details dialog  463ms
+ Γ£ô src/__tests__/AgentRoleListPage.test.tsx (6 tests) 16263ms
+     Γ£ô renders the page heading  14498ms
+     Γ£ô renders role names from API data  337ms
+     Γ£ô opens AgentRoleDialog when Add Role is clicked  1078ms
+stderr | src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > closes dialog after successful submit
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneRequestList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneRequestList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ¥» src/__tests__/InterveneRequestList.test.tsx (6 tests | 1 failed) 838ms
+     Γ£ô shows empty state when no requests 108ms
+     Γ£ô returns null when loading 7ms
+     Γ£ô renders requests in a table 216ms
+     Γ£ô opens response dialog on respond button click  328ms
+     ├ù closes dialog after successful submit 148ms
+     Γ£ô shows session ID truncated to 8 chars 22ms
+stderr | src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ¥» src/__tests__/AgentExecutionDetailsDialog.test.tsx (2 tests | 1 failed) 567ms
+     ├ù focuses execution logs tab by default when dialog opens 481ms
+     Γ£ô auto-scrolls to latest execution log entry when stream appends 80ms
+ Γ£ô src/__tests__/TestMcpToolDialog.test.tsx (2 tests) 11728ms
+     Γ£ô shows agent identity picker instead of session picker for passthrough servers  11632ms
+ Γ£ô src/__tests__/AgentOutputDetailDrawer.test.tsx (5 tests) 637ms
+     Γ£ô renders output detail when open with valid output  388ms
+ Γ£ô src/__tests__/app/AppRouter.test.tsx (3 tests) 140ms
+ Γ£ô src/__tests__/SopEditor.simple.test.tsx (3 tests) 8121ms
+     Γ£ô renders without crashing  7825ms
+Warning: A vi.mock("../api/apiClient") call in "C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend/src/__tests__/ConversationDialog.intervention.test.tsx" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+stderr | src/__tests__/ConversationDialog.intervention.test.tsx > ConversationDialog - intervention state integration > useConversationIntervention returns expected interface
+An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ£ô src/__tests__/ConversationDialog.intervention.test.tsx (3 tests) 111ms
+ Γ£ô src/__tests__/RuntimeTopologyPanel.test.tsx (2 tests) 430ms
+ Γ£ô src/__tests__/useSessionExecutionLogStream.test.ts (2 tests) 221ms
+ Γ£ô src/__tests__/api/setupApi.test.ts (5 tests) 28ms
+ Γ£ô src/__tests__/service-segregation-security-audit.test.ts (3 tests) 510ms
+     Γ£ô builds websocket URL from configured ws base path and auth token only  490ms
+ Γ£ô src/__tests__/SkillEditor.generatedToolReference.test.ts (5 tests) 40ms
+ Γ£ô src/__tests__/SessionExecutionLogsDialog.test.tsx (1 test) 452ms
+     Γ£ô merges streamed entries with fetched logs and renders LogViewer  444ms
+ Γ£ô src/__tests__/theme.spec.tsx (8 tests) 21ms
+ Γ£ô src/__tests__/TagsPage.test.tsx (4 tests) 12465ms
+     Γ£ô renders tag table when data is loaded  11967ms
+ Γ£ô src/__tests__/NodeTerminationDialog.test.tsx (2 tests) 1304ms
+     Γ£ô submits node_only scope and reason from operator input  1075ms
+ Γ£ô src/__tests__/SetupWizard.test.tsx (5 tests) 13339ms
+     Γ£ô renders the setup title  12599ms
+     Γ£ô advances to step 2 when Next is clicked  474ms
+ Γ£ô src/__tests__/LoginPage.test.tsx (4 tests) 11858ms
+     Γ£ô renders the app title  11602ms
+ Γ¥» src/__tests__/ModelConfigListPage.workflow-generation.test.tsx (1 test | 1 failed) 1656ms
+     ├ù renders workflow generation model section and saves selection 1649ms
+stderr | src/__tests__/RolesPage.test.tsx > RolesPage > renders roles table when data is loaded
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `MuiTableBodyRoot`. It was passed a child from RolesPage. See https://react.dev/link/warning-keys for more information.
+
+ Γ£ô src/__tests__/PayloadEditor.test.tsx (6 tests) 575ms
+ Γ£ô src/__tests__/RolesPage.test.tsx (2 tests) 12436ms
+     Γ£ô renders roles table when data is loaded  12131ms
+ Γ£ô src/__tests__/InterventionPendingIndicator.test.tsx (5 tests) 215ms
+ Γ£ô src/__tests__/GroupsPage.test.tsx (2 tests) 11790ms
+     Γ£ô renders groups table when data is loaded  11473ms
+     Γ£ô renders Add Group button  309ms
+ Γ£ô src/__tests__/types.test.ts (5 tests) 20ms
+ Γ¥» src/__tests__/service-decomposition/github-pages-showcase.test.ts (2 tests | 1 failed) 36ms
+     Γ£ô contains architecture and walkthrough sections in site/index.html 7ms
+     ├ù references all five screenshot placeholders 21ms
+stderr | src/__tests__/UsersPage.test.tsx > UsersPage > renders users table when data is loaded
+MUI: You have provided an out-of-range value `20` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are `10`, `25`, `50`, `100`.
+MUI: You have provided an out-of-range value `20` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are `10`, `25`, `50`, `100`.
+
+stderr | src/__tests__/UsersPage.test.tsx > UsersPage > renders Manage Access button for each user
+MUI: You have provided an out-of-range value `20` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are `10`, `25`, `50`, `100`.
+MUI: You have provided an out-of-range value `20` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are `10`, `25`, `50`, `100`.
+
+ Γåô src/__tests__/ModelUsageGuardrailDialog.unit.test.tsx (4 tests | 4 skipped)
+ Γ£ô src/__tests__/UsersPage.test.tsx (2 tests) 11075ms
+     Γ£ô renders users table when data is loaded  10797ms
+ Γ£ô src/__tests__/features/setup/VerificationStep.test.tsx (4 tests) 235ms
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+ Γ£ô src/__tests__/ExecutionHistory.test.tsx (3 tests) 438ms
+     Γ£ô renders dialog when open=true  380ms
+ Γ£ô src/__tests__/api-config.test.ts (3 tests) 15ms
+ Γ£ô src/__tests__/features/setup/KeycloakConfigStep.test.tsx (3 tests) 439ms
+     Γ£ô renders all fields  312ms
+ Γ£ô src/__tests__/features/setup/ExternalOidcConfigStep.test.tsx (3 tests) 361ms
+ Γ£ô src/__tests__/features/setup/ProviderSelectionStep.test.tsx (2 tests) 169ms
+ Γ£ô src/__tests__/features/setup/CompletionStep.test.tsx (2 tests) 222ms
+ Γ£ô src/__tests__/SkillEditor.minimal.test.tsx (1 test) 5273ms
+     Γ£ô can import the component without errors  5266ms
+ Γ£ô src/__tests__/CronEditor.test.tsx (1 test) 110ms

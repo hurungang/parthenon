@@ -1,15 +1,11 @@
-"""Model Binding Layer — resolves LLM provider config from ModelConfig and sends prompts."""
+"""Model Binding Layer — resolves LLM provider config from ModelConfig and dispatches via LangChain."""
 import json
 import logging
-from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
-import httpx
 from sqlalchemy import select
 
 from app.core.credential_vault import get_vault
-from app.core.ssl_context import get_ssl_context
 from app.db.models.agents import AgentType, ModelConfig, ModelProvider
 
 if TYPE_CHECKING:
@@ -17,131 +13,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default endpoints per provider
-OPENAI_DEFAULT_ENDPOINT = "https://api.openai.com/v1/chat/completions"
-ANTHROPIC_DEFAULT_ENDPOINT = "https://api.anthropic.com/v1/messages"
-GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-COHERE_DEFAULT_ENDPOINT = "https://api.cohere.com/v1/chat"
 
+def _convert_to_lc_messages(messages: list[dict[str, Any]]) -> list[Any]:
+    """Convert dict-format messages to LangChain BaseMessage objects.
 
-# ── Provider registry facade ──────────────────────────────────────────────────
-
-
-class DispatchFamily(str, Enum):
-    """Dispatch family tag used by the provider-registry facade."""
-
-    OPENAI_COMPAT = "openai_compat"
-    NATIVE = "native"
-
-
-@dataclass(frozen=True)
-class DispatchSpec:
-    """Per-provider dispatch metadata used by the provider-registry facade.
-
-    Attributes:
-        family: Which dispatch family the provider belongs to.
-        default_api_base_url: Default API base URL (when the operator does not
-            provide an explicit ``api_base_url`` in the model config).
-        url_style: How the per-request URL is composed:
-            * ``"openai_chat_completions"`` — append ``/chat/completions``
-            * ``"azure_openai_deployment"`` — compose
-              ``{base}/openai/deployments/{model}/chat/completions?api-version=2024-02-01``
-            * ``"anthropic_messages"`` — POST to the Anthropic Messages API
-            * ``"gemini_generate_content"`` — POST to
-              ``{base}/models/{model}:generateContent``
-            * ``"cohere_chat"`` — POST to ``{base}/chat``
-        credential_header: HTTP header used to carry the API key.  The header
-            value is always the API key directly (bearer for OpenAI-compat and
-            Cohere; literal key for Anthropic and Gemini).
+    LangChain's ainvoke() also accepts raw dicts, so this is a convenience
+    wrapper used internally by ModelBindingLayer.complete() and
+    complete_from_context().
     """
-
-    family: DispatchFamily
-    default_api_base_url: str | None
-    url_style: str
-    credential_header: str
-
-
-# Per-provider registry — the single source of truth for the dispatcher.
-# Adding a new provider means adding one entry here, one Pydantic enum
-# member, and one Alembic migration; nothing else needs to change.
-PROVIDER_REGISTRY: dict[str, DispatchSpec] = {
-    ModelProvider.openai.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.openai.com/v1",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.litellm_proxy.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url=None,  # operator must configure
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.azure_openai.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url=None,  # operator must configure
-        url_style="azure_openai_deployment",
-        credential_header="Authorization",
-    ),
-    ModelProvider.mistral.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.mistral.ai/v1",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.groq.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.groq.com/openai/v1",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.together.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.together.xyz/v1",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.fireworks.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.fireworks.ai/inference/v1",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.perplexity.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.perplexity.ai",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.deepseek.value: DispatchSpec(
-        family=DispatchFamily.OPENAI_COMPAT,
-        default_api_base_url="https://api.deepseek.com/v1",
-        url_style="openai_chat_completions",
-        credential_header="Authorization",
-    ),
-    ModelProvider.anthropic.value: DispatchSpec(
-        family=DispatchFamily.NATIVE,
-        default_api_base_url="https://api.anthropic.com/v1",
-        url_style="anthropic_messages",
-        credential_header="x-api-key",
-    ),
-    ModelProvider.gemini.value: DispatchSpec(
-        family=DispatchFamily.NATIVE,
-        default_api_base_url="https://generativelanguage.googleapis.com/v1beta",
-        url_style="gemini_generate_content",
-        credential_header="x-goog-api-key",
-    ),
-    ModelProvider.cohere.value: DispatchSpec(
-        family=DispatchFamily.NATIVE,
-        default_api_base_url="https://api.cohere.com/v1",
-        url_style="cohere_chat",
-        credential_header="Authorization",
-    ),
-}
+    try:
+        from langchain_core.messages import convert_to_messages
+        return convert_to_messages(messages)  # type: ignore[arg-type]
+    except Exception:
+        # Fallback: pass dicts through — LangChain handles them natively
+        return messages  # type: ignore[return-value]
 
 
-# Call signature shared by all _call_* private methods.
-CallFn = Callable[..., Coroutine[Any, Any, dict[str, Any]]]
 
 
 class ModelBindingError(Exception):
@@ -200,10 +87,14 @@ class ModelBindingLayer:
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4096,
-    ) -> dict[str, Any]:
+        callbacks: list[Any] | None = None,
+        output_json_schema: dict[str, Any] | None = None,
+    ) -> Any:
         """Send a chat completion using context dicts from the CC data API.
 
-        Used by Agent Runtime where there are no ORM objects.
+        Used by Agent Runtime where there are no ORM objects.  Returns a
+        LangChain AIMessage (or a raw dict when the provider raises and the
+        caller has already provided a fallback mock — see extract_* methods).
 
         Args:
             model_id: The model identifier string (e.g. "gpt-4o").
@@ -212,20 +103,31 @@ class ModelBindingLayer:
             messages: Chat messages.
             tools: Optional tool definitions.
             max_tokens: Maximum tokens in the response.
+            callbacks: Optional LangChain callbacks (e.g. GuardrailCallback,
+                ExecutionLoggingCallback).
+            output_json_schema: Optional JSON Schema for structured output via
+                LangChain's .with_structured_output(). When set, structured
+                output replaces the plain text response.
         """
-        provider = model_config_dict.get("provider_type")
-        base_url = model_config_dict.get("api_base_url")
-        api_key = model_config_dict.get("api_key")  # already decrypted by CC
+        from app.services.agents.langchain_model_factory import LangChainModelFactory
 
-        return await self._dispatch(
-            provider_key=provider,
-            api_key=api_key,
-            base_url=base_url,
-            model=model_id,
-            messages=messages,
-            tools=tools,
+        factory = LangChainModelFactory()
+        llm = factory.get_model_from_config_dict(
+            model_id=model_id,
+            model_config_dict=model_config_dict,
             max_tokens=max_tokens,
+            output_json_schema=output_json_schema,
         )
+
+        if tools:
+            llm = llm.bind_tools(tools)  # type: ignore[assignment]
+
+        lc_messages = _convert_to_lc_messages(messages)
+        invoke_config: dict[str, Any] = {}
+        if callbacks:
+            invoke_config["callbacks"] = callbacks
+
+        return await llm.ainvoke(lc_messages, config=invoke_config or None)
 
     async def complete(
         self,
@@ -235,9 +137,10 @@ class ModelBindingLayer:
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4096,
         response_format: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        callbacks: list[Any] | None = None,
+    ) -> Any:
         """
-        Send a chat completion request to the configured LLM provider.
+        Send a chat completion request to the configured LLM provider via LangChain.
 
         Args:
             agent_type: The AgentType that defines the model_id.
@@ -245,12 +148,15 @@ class ModelBindingLayer:
             messages: List of chat messages (role + content).
             tools: Optional tool definitions for function calling.
             max_tokens: Maximum tokens in the response.
-            response_format: Optional structured output schema (JSON Schema format).
-                             Passed as ``response_format`` to OpenAI-compatible providers.
+            response_format: Optional JSON Schema for structured output
+                (wired via LangChain .with_structured_output()).
+            callbacks: Optional LangChain callbacks.
 
         Returns:
-            Raw model response dict.
+            LangChain AIMessage (or structured-output dict when response_format set).
         """
+        from app.services.agents.langchain_model_factory import LangChainModelFactory
+
         if model_config is None:
             raise ModelBindingError(
                 f"AgentType '{agent_type.name}' has no model configuration assigned"
@@ -264,106 +170,29 @@ class ModelBindingLayer:
 
         api_key = self._resolve_api_key(model_config)
         provider = model_config.provider_type
+        provider_key = provider.value if isinstance(provider, ModelProvider) else str(provider)
         base_url = model_config.api_base_url
 
-        return await self._dispatch(
-            provider_key=provider.value if isinstance(provider, ModelProvider) else provider,
+        factory = LangChainModelFactory()
+        llm = factory.get_model(
+            provider_key=provider_key,
+            model_id=model_name,
             api_key=api_key,
             base_url=base_url,
-            model=model_name,
-            messages=messages,
-            tools=tools,
             max_tokens=max_tokens,
-            response_format=response_format,
+            output_json_schema=response_format,
         )
 
-    async def _dispatch(
-        self,
-        *,
-        provider_key: str | None,
-        api_key: str | None,
-        base_url: str | None,
-        model: str,
-        messages: list[dict[str, str]],
-        tools: list[dict[str, Any]] | None,
-        max_tokens: int,
-        response_format: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Resolve a provider key via the registry and dispatch to the right caller.
+        if tools:
+            llm = llm.bind_tools(tools)  # type: ignore[assignment]
 
-        All 12 provider keys are routed through this single function.  Adding a
-        new provider means adding one ``DispatchSpec`` entry in
-        ``PROVIDER_REGISTRY`` (and for native providers, one ``_call_*`` method
-        that knows the vendor's request/response shape).
-        """
-        spec = PROVIDER_REGISTRY.get(provider_key or "")
-        if spec is None:
-            logger.error(
-                "ModelBindingLayer._dispatch: unsupported provider '%s' (known: %s)",
-                provider_key,
-                ", ".join(sorted(PROVIDER_REGISTRY.keys())),
-            )
-            raise ModelBindingError(f"Unsupported provider: {provider_key}")
+        lc_messages = _convert_to_lc_messages(messages)
+        invoke_config: dict[str, Any] = {}
+        if callbacks:
+            invoke_config["callbacks"] = callbacks
 
-        # OpenAI-compatible family: all nine providers (the 3 incumbent
-        # + 6 new) share the same /chat/completions shape.
-        if spec.family is DispatchFamily.OPENAI_COMPAT:
-            if spec.url_style == "azure_openai_deployment":
-                if not base_url:
-                    raise ModelBindingError(
-                        "azure_openai provider requires api_base_url"
-                    )
-                endpoint = (
-                    f"{base_url.rstrip('/')}/openai/deployments/{model}"
-                    f"/chat/completions?api-version=2024-02-01"
-                )
-            else:
-                effective_base = base_url or spec.default_api_base_url
-                if not effective_base:
-                    raise ModelBindingError(
-                        f"Provider '{provider_key}' requires api_base_url"
-                    )
-                endpoint = f"{effective_base.rstrip('/')}/chat/completions"
+        return await llm.ainvoke(lc_messages, config=invoke_config or None)
 
-            return await self._call_openai_compat(
-                api_key=api_key,
-                model=model,
-                endpoint=endpoint,
-                messages=messages,
-                tools=tools,
-                max_tokens=max_tokens,
-                response_format=response_format,
-            )
-
-        # Native-API family: per-vendor request/response shape.
-        if spec.url_style == "anthropic_messages":
-            return await self._call_anthropic(
-                api_key=api_key,
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens,
-            )
-        if spec.url_style == "gemini_generate_content":
-            effective_base = base_url or spec.default_api_base_url
-            return await self._call_gemini(
-                api_key=api_key,
-                model=model,
-                base_url=effective_base,
-                messages=messages,
-                max_tokens=max_tokens,
-            )
-        if spec.url_style == "cohere_chat":
-            return await self._call_cohere(
-                api_key=api_key,
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens,
-            )
-
-        # Should never happen — registry and dispatch are out of sync.
-        raise ModelBindingError(
-            f"Provider '{provider_key}' has unrecognised url_style '{spec.url_style}'"
-        )
 
     def _resolve_api_key(self, model_config: ModelConfig) -> str | None:
         """Decrypt the API key from stored credentials (returns None if not set)."""
@@ -378,230 +207,36 @@ class ModelBindingLayer:
             logger.warning("Failed to decrypt credentials for ModelConfig %s: %s", model_config.id, exc)
             return None
 
-    async def _call_openai_compat(
-        self,
-        api_key: str | None,
-        model: str,
-        endpoint: str,
-        messages: list[dict[str, str]],
-        tools: list[dict[str, Any]] | None,
-        max_tokens: int,
-        response_format: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Send a request to an OpenAI-compatible Chat Completions endpoint.
-
-        Reused by all 9 OpenAI-compatible providers (openai, litellm_proxy,
-        azure_openai, mistral, groq, together, fireworks, perplexity, deepseek).
-        """
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-        if response_format:
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "output_schema",
-                    "schema": response_format,
-                },
-            }
-
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        async with httpx.AsyncClient(timeout=120.0, verify=get_ssl_context()) as client:
-            response = await client.post(endpoint, json=payload, headers=headers)
-            if response.status_code >= 400:
-                self._log_4xx("openai_compat", model, response)
-            response.raise_for_status()
-            return response.json()
-
-    async def _call_anthropic(
-        self,
-        api_key: str | None,
-        model: str,
-        messages: list[dict[str, str]],
-        max_tokens: int,
-    ) -> dict[str, Any]:
-        """Send a request to the Anthropic Messages API."""
-        system_msg = ""
-        user_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_msg = msg["content"]
-            else:
-                user_messages.append(msg)
-
-        payload: dict[str, Any] = {
-            "model": model,
-            "messages": user_messages,
-            "max_tokens": max_tokens,
-        }
-        if system_msg:
-            payload["system"] = system_msg
-
-        headers: dict[str, str] = {
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        }
-        if api_key:
-            headers["x-api-key"] = api_key
-
-        async with httpx.AsyncClient(timeout=120.0, verify=get_ssl_context()) as client:
-            response = await client.post(ANTHROPIC_DEFAULT_ENDPOINT, json=payload, headers=headers)
-            if response.status_code >= 400:
-                self._log_4xx("anthropic", model, response)
-            response.raise_for_status()
-            return response.json()
-
-    async def _call_gemini(
-        self,
-        api_key: str | None,
-        model: str,
-        base_url: str,
-        messages: list[dict[str, str]],
-        max_tokens: int,
-    ) -> dict[str, Any]:
-        """Send a request to the Google Gemini native generateContent endpoint.
-
-        Translates Parthenon's open-ended ``messages`` list into Gemini's
-        ``contents`` shape and reads the response back into a dict.  The
-        response envelope is recognised by ``extract_text`` / ``extract_tool_calls``
-        / ``extract_usage`` (which return ``""`` / ``[]`` / ``None`` on fields
-        Gemini does not expose).
-        """
-        contents: list[dict[str, Any]] = []
-        system_parts: list[dict[str, Any]] = []
-        for msg in messages:
-            role = msg.get("role")
-            text = msg.get("content", "")
-            if role == "system":
-                system_parts.append({"text": text})
-            elif role == "assistant":
-                contents.append({"role": "model", "parts": [{"text": text}]})
-            else:  # user / tool / default
-                contents.append({"role": "user", "parts": [{"text": text}]})
-
-        payload: dict[str, Any] = {
-            "contents": contents,
-            "generationConfig": {"maxOutputTokens": max_tokens},
-        }
-        if system_parts:
-            payload["systemInstruction"] = {"parts": system_parts}
-
-        endpoint = f"{base_url.rstrip('/')}/models/{model}:generateContent"
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if api_key:
-            headers["x-goog-api-key"] = api_key
-
-        async with httpx.AsyncClient(timeout=120.0, verify=get_ssl_context()) as client:
-            response = await client.post(endpoint, json=payload, headers=headers)
-            if response.status_code >= 400:
-                self._log_4xx("gemini", model, response)
-            response.raise_for_status()
-            return response.json()
-
-    async def _call_cohere(
-        self,
-        api_key: str | None,
-        model: str,
-        messages: list[dict[str, str]],
-        max_tokens: int,
-    ) -> dict[str, Any]:
-        """Send a request to the Cohere native /v1/chat endpoint.
-
-        Translates Parthenon's open-ended ``messages`` list into Cohere's
-        ``chat_history`` shape and reads the response back into a dict.
-        """
-        chat_history: list[dict[str, str]] = []
-        preamble: str | None = None
-        for msg in messages:
-            role = msg.get("role")
-            text = msg.get("content", "")
-            if role == "system":
-                preamble = text
-            elif role == "assistant":
-                chat_history.append({"role": "CHATBOT", "message": text})
-            else:  # user / default
-                chat_history.append({"role": "USER", "message": text})
-
-        # The final user message is the implicit ``message`` field; everything
-        # earlier is part of ``chat_history``.
-        if chat_history and chat_history[-1]["role"] == "USER":
-            message = chat_history.pop(-1)["message"]
-        else:
-            message = ""
-
-        payload: dict[str, Any] = {
-            "model": model,
-            "message": message,
-            "chat_history": chat_history,
-            "max_tokens": max_tokens,
-        }
-        if preamble:
-            payload["preamble"] = preamble
-
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        async with httpx.AsyncClient(timeout=120.0, verify=get_ssl_context()) as client:
-            response = await client.post(COHERE_DEFAULT_ENDPOINT, json=payload, headers=headers)
-            if response.status_code >= 400:
-                self._log_4xx("cohere", model, response)
-            response.raise_for_status()
-            return response.json()
-
     @staticmethod
-    def _log_4xx(provider: str, model: str, response: httpx.Response) -> None:
-        """Structured log line for any non-2xx response.
+    def extract_text(response, provider) -> str:
+        """Extract the assistant\'s text response from a model response.
 
-        The provider key is always the first token in the message so operators
-        can route on it (``grep gemini`` vs ``grep openai``).
+        Accepts either a LangChain AIMessage (from the LangChain dispatch path)
+        or a raw provider response dict (for backward compat with mocked tests).
+        Returns \"\" when the response is empty or unrecognised.
         """
-        try:
-            error_body = response.json()
-            error_msg = (
-                error_body.get("error", {}).get("message")
-                if isinstance(error_body, dict)
-                else None
-            )
-            if not error_msg:
-                error_msg = response.text[:500]
-        except Exception:
-            error_msg = response.text[:500]
-        logger.error(
-            "%s API error %d (model=%s): %s",
-            provider,
-            response.status_code,
-            model,
-            error_msg,
-        )
+        # LangChain AIMessage path (new)
+        if hasattr(response, "content"):
+            content = response.content
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        return block.get("text", "")
+                    if isinstance(block, str):
+                        return block
+            return ""
 
-    @staticmethod
-    def extract_text(response: dict[str, Any], provider: ModelProvider | str) -> str:
-        """Extract the assistant's text response from a model response dict.
+        # Raw dict path (backward compat / test mocks)
+        if not isinstance(response, dict):
+            return ""
 
-        Recognises the response envelope for all 12 supported providers.  An
-        unrecognised envelope or an absent text field returns ``""``.
-        """
         provider_str = provider.value if isinstance(provider, ModelProvider) else provider
 
         if provider_str in (
-            "openai",
-            "litellm_proxy",
-            "azure_openai",
-            "mistral",
-            "groq",
-            "together",
-            "fireworks",
-            "perplexity",
-            "deepseek",
+            "openai", "litellm_proxy", "azure_openai", "mistral", "groq",
+            "together", "fireworks", "perplexity", "deepseek",
         ):
             choices = response.get("choices", [])
             if choices:
@@ -610,7 +245,7 @@ class ModelBindingLayer:
         if provider_str == "anthropic":
             content = response.get("content", [])
             for block in content:
-                if block.get("type") == "text":
+                if isinstance(block, dict) and block.get("type") == "text":
                     return block.get("text", "")
 
         if provider_str == "gemini":
@@ -627,19 +262,43 @@ class ModelBindingLayer:
 
         return ""
 
+
     @staticmethod
     def extract_tool_calls(
-        response: dict[str, Any], provider: ModelProvider | str
+        response: Any, provider: ModelProvider | str
     ) -> list[dict[str, Any]]:
-        """Extract tool call requests from a model response dict.
+        """Extract tool call requests from a model response.
 
-        Cohere and Gemini native envelopes do not currently expose normalised
-        tool-call structures; the call returns ``[]`` for those providers.  If
-        a vendor adds tool calling later, extend this function to recognise
-        the new envelope — the public surface (a list of dicts with the
-        OpenAI ``{"id", "type", "function": {"name", "arguments"}}`` shape)
-        stays the same.
+        Accepts either a LangChain AIMessage (new dispatch path) or a raw
+        provider response dict (backward compat).  Always returns a list of
+        dicts in the OpenAI ``{"id", "type", "function": {"name", "arguments"}}``
+        shape so the caller does not need to branch on response type.
         """
+        # ── LangChain AIMessage path (new) ─────────────────────────────────
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            result: list[dict[str, Any]] = []
+            for tc in response.tool_calls:
+                if not isinstance(tc, dict):
+                    continue
+                result.append({
+                    "id": tc.get("id", ""),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("name", ""),
+                        "arguments": json.dumps(tc.get("args", {})),
+                    },
+                })
+            return result
+        # Fallback: raw additional_kwargs.tool_calls (some LangChain providers)
+        if hasattr(response, "additional_kwargs"):
+            raw = response.additional_kwargs.get("tool_calls") or []
+            if raw:
+                return raw
+
+        # ── Raw dict path (backward compat / test mocks) ──────────────────────
+        if not isinstance(response, dict):
+            return []
+
         provider_str = provider.value if isinstance(provider, ModelProvider) else provider
 
         if provider_str in (
@@ -663,14 +322,32 @@ class ModelBindingLayer:
 
     @staticmethod
     def extract_usage(
-        response: dict[str, Any], provider: ModelProvider | str
+        response: Any, provider: ModelProvider | str
     ) -> dict[str, Any] | None:
         """Extract normalised token usage from provider response when available.
 
-        Returns ``None`` (rather than raising) when the provider does not
-        report usage — the agent runtime treats ``None`` as "usage unavailable"
-        and continues the loop.
+        Accepts either a LangChain AIMessage (new dispatch path) or a raw
+        provider response dict (backward compat).  Returns ``None`` when usage
+        info is unavailable — the agent runtime treats ``None`` as "usage
+        unavailable" and continues the loop.
         """
+        # ── LangChain AIMessage path (new) ─────────────────────────────────
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            meta = response.usage_metadata
+            if isinstance(meta, dict):
+                input_tok = meta.get("input_tokens", 0)
+                output_tok = meta.get("output_tokens", 0)
+                total_tok = meta.get("total_tokens") or (input_tok + output_tok)
+                return {
+                    "prompt_tokens": max(0, int(input_tok or 0)),
+                    "completion_tokens": max(0, int(output_tok or 0)),
+                    "total_tokens": max(0, int(total_tok or 0)),
+                }
+
+        # ── Raw dict path (backward compat / test mocks) ──────────────────────
+        if not isinstance(response, dict):
+            return None
+
         provider_str = provider.value if isinstance(provider, ModelProvider) else provider
 
         # OpenAI-compat family: ``usage.prompt_tokens / completion_tokens / total_tokens``

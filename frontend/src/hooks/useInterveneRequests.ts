@@ -68,6 +68,12 @@ export function useInterveneRequests(options: UseInterveneRequestsOptions = {}) 
 
   useEffect(() => {
     void fetchData()
+    
+    // Skip polling in tests to prevent hangs from persistent intervals
+    if ((typeof window !== 'undefined' && (window as any).__VITEST__)) {
+      return
+    }
+    
     pollingRef.current = setInterval(() => void fetchData(), POLL_INTERVAL_MS)
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)

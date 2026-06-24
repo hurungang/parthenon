@@ -1,0 +1,149 @@
+
+ RUN  v4.1.6 C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend
+
+ Γ¥» src/__tests__/useChatSession.test.ts (13 tests | 1 failed) 215ms
+     Γ£ô starts disconnected when sessionId is null 93ms
+     Γ£ô initializes with empty messages 3ms
+     Γ£ô sendMessage adds a user message to the queue 5ms
+     Γ£ô clearMessages resets messages array 4ms
+     Γ£ô applies delegating and waiting status from websocket events 8ms
+     ├ù applies using_tool status from websocket events 10ms
+     Γ£ô toggles folded delegation snippet state from true to false 2ms
+     Γ£ô preserves timeout_or_failed status after agent reply 2ms
+     Γ£ô clears non-terminal status after agent reply 5ms
+     Γ£ô streams execution log title snippets while delegation is active 73ms
+     Γ£ô starts a fresh delegation snippet cycle after a new user message 3ms
+     Γ£ô starts a fresh active delegation cycle after completion when user sends a new message 3ms
+     Γ£ô keeps rapid consecutive delegation statuses in a single cycle for one user turn 2ms
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx (13 tests | 4 failed) 4174ms
+     Γ£ô renders the page heading  3344ms
+     Γ£ô renders the servers from mock data 44ms
+     Γ£ô renders server slugs 46ms
+     Γ£ô renders Register Server button 127ms
+     Γ£ô opens dialog when Register Server is clicked 201ms
+     Γ£ô renders System entry with Built-in chip 66ms
+     Γ£ô System entry shows disabled actions and system-managed text 42ms
+     Γ£ô System entry shows system slug and has no sync action enabled 39ms
+     Γ£ô sync button is disabled with tooltip when session_count === 0 50ms
+     ├ù sync button is enabled when session_count > 0 69ms
+     ├ù FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2) 50ms
+     ├ù FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1) 43ms
+     ├ù when no sync is in-flight, only System entry sync is disabled 46ms
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 5 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö Sync button visibility based on session_count > sync button is enabled when session_count > 0
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:288:36
+    286|     )
+    287|     // System entry sync is disabled = 1
+    288|     expect(disabledButtons.length).toBe(1)
+       |                                    ^
+    289|   })
+    290| })
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/5]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2)
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:333:32
+    331|
+    332|     // System entry + 2 servers = 3 sync icons
+    333|     expect(syncButtons.length).toBe(3)
+       |                                ^
+    334|
+    335|     const disabledSyncButtons = syncButtons.filter(
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/5]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1)
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:360:32
+    358|       .filter((btn): btn is HTMLButtonElement => btn !== null)
+    359|
+    360|     expect(syncButtons.length).toBe(3)
+       |                                ^
+    361|
+    362|     const disabledSyncButtons = syncButtons.filter(
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/5]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > when no sync is in-flight, only System entry sync is disabled
+AssertionError: expected 2 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 2
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:382:32
+    380|       .filter((btn): btn is HTMLButtonElement => btn !== null)
+    381|
+    382|     expect(syncButtons.length).toBe(3)
+       |                                ^
+    383|
+    384|     const disabledSyncButtons = syncButtons.filter((btn) => btn.hasAttΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/5]ΓÄ»
+
+ FAIL  src/__tests__/useChatSession.test.ts > useChatSession > applies using_tool status from websocket events
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ Γ¥» src/__tests__/useChatSession.test.ts:139:47
+    137|     expect(result.current.chatStatus?.kind).toBe('using_tool')
+    138|     expect(result.current.chatStatus?.toolName).toBe('send_notificatioΓÇª
+    139|     expect(result.current.delegationSnippets).toHaveLength(1)
+       |                                               ^
+    140|     expect(result.current.delegationSnippets[0]?.toolName).toBe('send_ΓÇª
+    141|   })
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/5]ΓÄ»
+
+
+ Test Files  2 failed (2)
+      Tests  5 failed | 21 passed (26)
+   Start at  15:19:53
+   Duration  8.07s (transform 574ms, setup 1.54s, import 572ms, tests 4.39s, environment 4.46s)
+

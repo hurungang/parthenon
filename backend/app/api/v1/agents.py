@@ -703,6 +703,10 @@ async def get_agent_session_status(
     job = await _session_service.get_session(session_id, db)
     if not job:
         raise HTTPException(status_code=404, detail="Session not found")
+    logger.info(
+        "Returning session status for %s: status=%s output_id=%s",
+        session_id, job.status, job.output_id,
+    )
     return job
 
 

@@ -76,10 +76,16 @@ class OutputService:
         if job:
             job.output_id = output.id
             await db.flush()
+            logger.info(
+                "Linked output %s to session %s (job.output_id=%s)",
+                output.id, session_id, job.output_id,
+            )
+        else:
+            logger.warning("Could not find AgentJob for session %s", session_id)
 
         logger.info(
-            "Saved typed output %s for session %s (status=%s)",
-            output.id, session_id, validation_status,
+            "Saved typed output %s for session %s (status=%s, fields=%s)",
+            output.id, session_id, validation_status, list(output.field_values.keys()) if output.field_values else None,
         )
         return output
 

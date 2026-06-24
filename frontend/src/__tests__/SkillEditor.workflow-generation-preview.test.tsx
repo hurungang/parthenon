@@ -227,7 +227,8 @@ describe('SkillEditor workflow generation and preview', () => {
         mode="edit"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
+      { wrapper }
     )
 
     // Wait for the workflow to update

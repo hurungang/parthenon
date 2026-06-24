@@ -87,6 +87,18 @@ class AgentSessionService:
             job.status = AgentJobStatus.completed
             job.completed_at = datetime.now(timezone.utc)
             job.output_data = output_data
+            
+            # Extract output_id from output_data if present (set by typed output persistence)
+            if isinstance(output_data, dict) and "output_id" in output_data:
+                output_id_str = output_data["output_id"]
+                if isinstance(output_id_str, str):
+                    try:
+                        job.output_id = uuid.UUID(output_id_str)
+                    except ValueError:
+                        logger.warning("Invalid output_id format: %s", output_id_str)
+                elif isinstance(output_id_str, uuid.UUID):
+                    job.output_id = output_id_str
+            
             await db.flush()
             await db.refresh(job)
             logger.info("Session %s completed successfully", session_id)

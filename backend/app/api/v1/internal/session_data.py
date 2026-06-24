@@ -604,6 +604,16 @@ async def update_session_status(
         job.completed_at = now
         if body.output_data is not None:
             job.output_data = body.output_data
+            # Extract output_id from output_data if present (set by typed output persistence)
+            if isinstance(body.output_data, dict) and "output_id" in body.output_data:
+                output_id_str = body.output_data["output_id"]
+                if isinstance(output_id_str, str):
+                    try:
+                        job.output_id = uuid.UUID(output_id_str)
+                    except ValueError:
+                        logger.warning("Invalid output_id format in output_data: %s", output_id_str)
+                elif isinstance(output_id_str, uuid.UUID):
+                    job.output_id = output_id_str
         # Only clear stop fields if there is no prior termination
         # attribution — otherwise we'd be erasing the operator's
         # intent (the call above already returned early when the

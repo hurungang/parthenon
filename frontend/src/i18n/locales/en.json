@@ -692,6 +692,13 @@
       "viewExecutionLogs": "View Execution Logs",
       "noLogsAvailable": "No execution logs available",
       "refreshLogs": "Refresh Logs",
+      "tabs": {
+        "executionLogs": "Execution Logs",
+        "typedOutput": "Typed Output"
+      },
+      "typedOutput": {
+        "noFields": "No output fields available"
+      },
       "executionLog": {
         "title": "Execution Log",
         "empty": "No execution log captured yet.",

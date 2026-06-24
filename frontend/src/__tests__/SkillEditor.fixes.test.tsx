@@ -30,13 +30,7 @@ vi.mock('../hooks/useSkills', () => ({
   useSkillRoles: vi.fn(),
 }))
 
-vi.mock('../api/apiClient', () => ({
-  default: {
-    get: vi.fn().mockResolvedValue({ data: [] }),
-    post: vi.fn().mockResolvedValue({ data: { id: 'sk-new' } }),
-    put: vi.fn().mockResolvedValue({ data: {} }),
-  },
-}))
+// Note: apiClient is mocked globally in setup.ts
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -76,6 +70,9 @@ describe('SkillEditor — loading state', () => {
 
   it('shows CircularProgress when tools are loading', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       // MUI CircularProgress renders with role="progressbar"
       const spinner = document.querySelector('[role="progressbar"]')
@@ -85,6 +82,9 @@ describe('SkillEditor — loading state', () => {
 
   it('does NOT show noToolsAvailable message while loading', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const msg = screen.queryByText('skills.editor.noToolsAvailable')
       expect(msg).toBeNull()
@@ -93,6 +93,9 @@ describe('SkillEditor — loading state', () => {
 
   it('does NOT show the server filter while loading', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const filterLabel = screen.queryByText('skills.editor.filterByServer')
       expect(filterLabel).toBeNull()
@@ -111,6 +114,9 @@ describe('SkillEditor — empty tools state', () => {
 
   it('shows noToolsAvailable message when tools array is empty', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const msg = screen.queryByText('skills.editor.noToolsAvailable')
       expect(msg).not.toBeNull()
@@ -119,6 +125,9 @@ describe('SkillEditor — empty tools state', () => {
 
   it('does NOT show CircularProgress when tools loaded but empty', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const spinner = document.querySelector('[role="progressbar"]')
       expect(spinner).toBeNull()
@@ -127,6 +136,9 @@ describe('SkillEditor — empty tools state', () => {
 
   it('does NOT show the server filter when tools array is empty', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const filterLabel = screen.queryByText('skills.editor.filterByServer')
       expect(filterLabel).toBeNull()
@@ -135,6 +147,9 @@ describe('SkillEditor — empty tools state', () => {
 
   it('does NOT show any tool checkboxes when tools is empty', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       // With empty tools and no roles, no checkboxes should appear
       const checkboxes = screen.queryAllByRole('checkbox')
@@ -154,6 +169,9 @@ describe('SkillEditor — MCP server filter', () => {
 
   it('renders the Filter by Server Autocomplete label', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       // i18n mock returns the key as-is: "skills.editor.filterByServer"
       // MUI Autocomplete renders the label as both <label> and <span>, so queryAllByText is used
@@ -164,6 +182,9 @@ describe('SkillEditor — MCP server filter', () => {
 
   it('shows tools from ALL servers when no filter is selected', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       expect(screen.queryByText('search')).not.toBeNull()
       expect(screen.queryByText('fetch_url')).not.toBeNull()
@@ -172,6 +193,9 @@ describe('SkillEditor — MCP server filter', () => {
 
   it('shows both server slug chips in the tool list', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const internalChips = screen.queryAllByText('internal-tools')
       const webChips = screen.queryAllByText('web-tools')
@@ -182,6 +206,9 @@ describe('SkillEditor — MCP server filter', () => {
 
   it('renders an Autocomplete input element for the server filter', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       // Autocomplete renders with role="combobox" on its input
       const combo = document.querySelector('[role="combobox"]')
@@ -245,6 +272,8 @@ describe('SkillEditor — tool selection', () => {
 
   it('renders one checkbox per tool', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const checkboxes = screen.queryAllByRole('checkbox')
       expect(checkboxes.length).toBeGreaterThanOrEqual(TOOLS_SRV1.length)
@@ -253,6 +282,8 @@ describe('SkillEditor — tool selection', () => {
 
   it('all tool checkboxes start unchecked for a new skill', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const checkboxes = screen.queryAllByRole('checkbox') as HTMLInputElement[]
       const unchecked = checkboxes.filter((cb) => !cb.checked)
@@ -275,6 +306,8 @@ describe('SkillEditor — tool selection', () => {
       <SkillEditor open={true} skill={editSkill as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
     )
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       const checkboxes = screen.queryAllByRole('checkbox') as HTMLInputElement[]
       const checked = checkboxes.filter((cb) => cb.checked)
@@ -284,6 +317,8 @@ describe('SkillEditor — tool selection', () => {
 
   it('toggling a tool checkbox changes its checked state', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
 
     let firstCheckbox: HTMLInputElement | null = null
     await waitFor(() => {
@@ -304,6 +339,9 @@ describe('SkillEditor — tool selection', () => {
 
   it('tools are displayed grouped under their server slug chip', async () => {
     render(<SkillEditor open={true} skill={null} onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    // Click "Select Tools" button to open the tool selector dialog
+    const selectToolsBtn = screen.queryByText('skills.editor.selectTools')
+    if (selectToolsBtn) fireEvent.click(selectToolsBtn)
     await waitFor(() => {
       // The server chip for 'internal-tools' should be present
       const chips = screen.queryAllByText('internal-tools')

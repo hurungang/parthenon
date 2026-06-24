@@ -269,8 +269,13 @@ def _build_output_json_schema(dt: Any) -> dict | None:
     fields = dt.fields if isinstance(dt.fields, list) else []
     if not fields:
         return None
+    
+    # Data type name for the schema title (required by OpenAI for structured output)
+    dt_name = dt.name if hasattr(dt, 'name') else 'AgentOutput'
+    
     schema: dict[str, Any] = {
         "type": "object",
+        "title": dt_name,  # Required by OpenAI structured output
         "properties": {},
     }
     required: list[str] = []
@@ -329,8 +334,10 @@ def _build_output_schema_prompt(dt: Any) -> str | None:
             lines.append(f"  {description}")
     lines.append("")
     lines.append(
-        "Return your structured result using the save_result tool "
-        "with your JSON matching this schema exactly."
+        "When you have finished reasoning and have all the information needed, "
+        "respond with ONLY a valid JSON object matching this schema exactly. "
+        "Do not include any explanation, markdown fences, or additional text — "
+        "your entire final response must be the JSON object."
     )
     return "\n".join(lines)
 

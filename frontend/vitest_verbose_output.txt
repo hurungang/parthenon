@@ -1,0 +1,1666 @@
+
+ RUN  v4.1.6 C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend
+
+ Γ£ô src/__tests__/service-decomposition/github-pages-showcase.test.ts > GitHub Pages showcase static content > contains architecture and walkthrough sections in site/index.html 6ms
+ ├ù src/__tests__/service-decomposition/github-pages-showcase.test.ts > GitHub Pages showcase static content > references all five screenshot placeholders 23ms
+   ΓåÆ expected '<!doctype html>\r\n<html lang="en">\rΓÇª' to contain '/images/placeholder-mcp.svg'
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > starts disconnected when sessionId is null 829ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > initializes with empty messages 5ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > sendMessage adds a user message to the queue 11ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > clearMessages resets messages array 7ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > applies delegating and waiting status from websocket events 15ms
+ ├ù src/__tests__/useChatSession.test.ts > useChatSession > applies using_tool status from websocket events 22ms
+   ΓåÆ expected [] to have a length of 1 but got +0
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > toggles folded delegation snippet state from true to false 5ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > preserves timeout_or_failed status after agent reply 5ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > clears non-terminal status after agent reply 9ms
+ Γ£ô src/__tests__/McpSessionManager.test.tsx > McpSessionManager > renders the session manager title 12848ms
+ Γ£ô src/__tests__/McpSessionManager.test.tsx > McpSessionManager > renders create session button 24ms
+ Γ£ô src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > renders approval dialog with Yes/No buttons 408ms
+ Γ£ô src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > renders choice dialog with radio options 191ms
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=true when Yes is selected and submitted
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ£ô src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > renders text dialog with text input 288ms
+stderr | src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=false when No is selected and submitted
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ├ù src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=true when Yes is selected and submitted 118ms
+   ΓåÆ Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"padding-right: 1024px; overflow: hidden;"[39m
+[36m>[39m
+  [36m<div[39m
+    [33maria-hidden[39m=[32m"true"[39m
+  [36m/>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelStart"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+      [33mrole[39m=[32m"presentation"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-labelledby[39m=[32m"_r_f_"[39m
+        [33maria-modal[39m=[32m"true"[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthSm MuiDialog-paperFullWidth css-16htz67-MuiPaper-root-MuiDialog-paper"[39m
+        [33mrole[39m=[32m"dialog"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"[39m
+          [33mid[39m=[32m"_r_f_"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-axw7ok"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"[39m
+            [36m>[39m
+              [0mintervene.responseDialogTitle[0m
+            [36m</span>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"[39m
+              [36m>[39m
+                [0mintervene.typeApproval[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"[39m
+            [33mtabindex[39m=[32m"0"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+              [33mdata-testid[39m=[32m"CloseIcon"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogContent-root css-kw13he-MuiDialogContent-root"[39m
+        [36m>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-19b5ozw-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlease approve this action[0m
+          [36m</p>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-n7nmrt-MuiTypography-root"[39m
+          [36m>[39m
+            [0mintervene.sessionLabel[0m
+            [0m: [0m
+            [0msess-abc[0m
+            [0mΓÇª[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-193o9je"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess css-1bqkxtd-MuiButtonBase-root-MuiButton-root"[39m
+              [33mdisabled[39m=[32m""[39m
+              [33mtabindex[39m=[32m"-1"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mapp.saving[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError css-p6sui3-MuiButtonBase-root-MuiButton-root"[39m
+              [33mdisabled[39m=[32m""[39m
+              [33mtabindex[39m=[32m"-1"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mapp.saving[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-indeterminate css-1yatzro-MuiLinearProgress-root"[39m
+            [33mrole[39m=[32m"progressbar"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiLinearProgress-bar MuiLinearProgress-bar1 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Indeterminate css-lcqqge-MuiLinearProgress-bar1"[39m
+            [36m/>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiLinearProgress-bar MuiLinearProgress-bar2 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar2Indeterminate css-lfb3c7-MuiLinearProgress-bar2"[39m
+            [36m/>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogActions-root MuiDialogActions-spacing css-15fu35s-MuiDialogActions-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1rr4qq7"[39m
+          [36m/>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary css-1uent87-MuiButtonBase-root-MuiButton-root"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtabindex[39m=[32m"-1"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mapp.cancel[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelEnd"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ├ù src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with approval_value=false when No is selected and submitted 75ms
+   ΓåÆ Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"padding-right: 1024px; overflow: hidden;"[39m
+[36m>[39m
+  [36m<div[39m
+    [33maria-hidden[39m=[32m"true"[39m
+  [36m/>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelStart"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+      [33mrole[39m=[32m"presentation"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-labelledby[39m=[32m"_r_k_"[39m
+        [33maria-modal[39m=[32m"true"[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthSm MuiDialog-paperFullWidth css-16htz67-MuiPaper-root-MuiDialog-paper"[39m
+        [33mrole[39m=[32m"dialog"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"[39m
+          [33mid[39m=[32m"_r_k_"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-axw7ok"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"[39m
+            [36m>[39m
+              [0mintervene.responseDialogTitle[0m
+            [36m</span>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"[39m
+              [36m>[39m
+                [0mintervene.typeApproval[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"[39m
+            [33mtabindex[39m=[32m"0"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+              [33mdata-testid[39m=[32m"CloseIcon"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogContent-root css-kw13he-MuiDialogContent-root"[39m
+        [36m>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-19b5ozw-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlease approve this action[0m
+          [36m</p>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-n7nmrt-MuiTypography-root"[39m
+          [36m>[39m
+            [0mintervene.sessionLabel[0m
+            [0m: [0m
+            [0msess-abc[0m
+            [0mΓÇª[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-193o9je"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess css-1bqkxtd-MuiButtonBase-root-MuiButton-root"[39m
+              [33mdisabled[39m=[32m""[39m
+              [33mtabindex[39m=[32m"-1"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mapp.saving[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError css-p6sui3-MuiButtonBase-root-MuiButton-root"[39m
+              [33mdisabled[39m=[32m""[39m
+              [33mtabindex[39m=[32m"-1"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mapp.saving[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-indeterminate css-1yatzro-MuiLinearProgress-root"[39m
+            [33mrole[39m=[32m"progressbar"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiLinearProgress-bar MuiLinearProgress-bar1 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Indeterminate css-lcqqge-MuiLinearProgress-bar1"[39m
+            [36m/>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiLinearProgress-bar MuiLinearProgress-bar2 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar2Indeterminate css-lfb3c7-MuiLinearProgress-bar2"[39m
+            [36m/>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogActions-root MuiDialogActions-spacing css-15fu35s-MuiDialogActions-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1rr4qq7"[39m
+          [36m/>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary css-1uent87-MuiButtonBase-root-MuiButton-root"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtabindex[39m=[32m"-1"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mapp.cancel[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelEnd"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage > renders the page heading 14334ms
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage > renders the servers from mock data 194ms
+ Γ£ô src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > shows empty state when no requests 111ms
+ Γ£ô src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > returns null when loading 7ms
+stderr | src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens
+An update to AgentExecutionDetailsDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage > renders server slugs 203ms
+ ├ù src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > focuses execution logs tab by default when dialog opens 623ms
+   ΓåÆ Unable to find an accessible element with the role "tab" and name "agents.executionLogs.title"
+
+Here are the accessible roles:
+
+  presentation:
+
+  Name "":
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+    [33mrole[39m=[32m"presentation"[39m
+    [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [33mtabindex[39m=[32m"-1"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  dialog:
+
+  Name "agents.sessions.detailsTitle":
+  [36m<div[39m
+    [33maria-labelledby[39m=[32m"_r_0_"[39m
+    [33maria-modal[39m=[32m"true"[39m
+    [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"[39m
+    [33mrole[39m=[32m"dialog"[39m
+    [33mstyle[39m=[32m"--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "agents.sessions.detailsTitle":
+  [36m<h2[39m
+    [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"[39m
+    [33mid[39m=[32m"_r_0_"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "":
+  [36m<button[39m
+    [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"[39m
+    [33mtabindex[39m=[32m"0"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"padding-right: 1024px; overflow: hidden;"[39m
+[36m>[39m
+  [36m<div[39m
+    [33maria-hidden[39m=[32m"true"[39m
+  [36m/>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelStart"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+      [33mrole[39m=[32m"presentation"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-labelledby[39m=[32m"_r_0_"[39m
+        [33maria-modal[39m=[32m"true"[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"[39m
+        [33mrole[39m=[32m"dialog"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"[39m
+          [33mid[39m=[32m"_r_0_"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"[39m
+          [36m>[39m
+            [0magents.sessions.detailsTitle[0m
+          [36m</span>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"[39m
+            [33mtabindex[39m=[32m"0"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+              [33mdata-testid[39m=[32m"CloseIcon"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogContent-root css-kw13he-MuiDialogContent-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mdata-testid[39m=[32m"log-viewer"[39m
+          [36m/>[39m
+          [36m<div[39m
+            [33maria-hidden[39m=[32m"true"[39m
+          [36m/>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelEnd"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ Γ£ô src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > renders requests in a table 260ms
+stderr | src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > closes dialog after successful submit
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneRequestList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneRequestList inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to InterveneResponseDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ Γ£ô src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > opens response dialog on respond button click 396ms
+ ├ù src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > closes dialog after successful submit 178ms
+   ΓåÆ Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"padding-right: 1024px; overflow: hidden;"[39m
+[36m>[39m
+  [36m<div[39m
+    [33maria-hidden[39m=[32m"true"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 css-1gtchvp-MuiPaper-root"[39m
+      [33mstyle[39m=[32m"--Paper-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 1px 0px rgba(0,0,0,0.14),0px 1px 3px 0px rgba(0,0,0,0.12);"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"MuiTableContainer-root css-70zvr5-MuiTableContainer-root"[39m
+      [36m>[39m
+        [36m<table[39m
+          [33mclass[39m=[32m"MuiTable-root css-1xwxv7r-MuiTable-root"[39m
+        [36m>[39m
+          [36m<thead[39m
+            [33mclass[39m=[32m"MuiTableHead-root css-1a7iywq-MuiTableHead-root"[39m
+          [36m>[39m
+            [36m<tr[39m
+              [33mclass[39m=[32m"MuiTableRow-root MuiTableRow-head css-1xtozoh-MuiTableRow-root"[39m
+            [36m>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"[39m
+                [33mscope[39m=[32m"col"[39m
+              [36m>[39m
+                [0magents.sessions.sessionId[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"[39m
+                [33mscope[39m=[32m"col"[39m
+              [36m>[39m
+                [0mintervene.reason[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"[39m
+                [33mscope[39m=[32m"col"[39m
+              [36m>[39m
+                [0mintervene.type[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"[39m
+                [33mscope[39m=[32m"col"[39m
+              [36m>[39m
+                [0mapp.createdAt[0m
+              [36m</th>[39m
+              [36m<th[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-head MuiTableCell-alignRight MuiTableCell-sizeSmall css-1ais0ar-MuiTableCell-root"[39m
+                [33mscope[39m=[32m"col"[39m
+              [36m>[39m
+                [0mapp.actions[0m
+              [36m</th>[39m
+            [36m</tr>[39m
+          [36m</thead>[39m
+          [36m<tbody[39m
+            [33mclass[39m=[32m"MuiTableBody-root css-gmh7jj-MuiTableBody-root"[39m
+          [36m>[39m
+            [36m<tr[39m
+              [33mclass[39m=[32m"MuiTableRow-root MuiTableRow-hover css-1xtozoh-MuiTableRow-root"[39m
+            [36m>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"[39m
+              [36m>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-zn1hrw-MuiTypography-root"[39m
+                [36m>[39m
+                  [0msess-abc[0m
+                  [0mΓÇª[0m
+                [36m</p>[39m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"[39m
+              [36m>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-151jtdr-MuiTypography-root"[39m
+                [36m>[39m
+                  [0mTest reason[0m
+                [36m</p>[39m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"[39m
+                  [36m>[39m
+                    [0mintervene.typeApproval[0m
+                  [36m</span>[39m
+                [36m</div>[39m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-jiabcu-MuiTableCell-root"[39m
+              [36m>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-7ctihp-MuiTypography-root"[39m
+                [36m>[39m
+                  [0m01/06/2026, 10:00:00 am[0m
+                [36m</p>[39m
+              [36m</td>[39m
+              [36m<td[39m
+                [33mclass[39m=[32m"MuiTableCell-root MuiTableCell-body MuiTableCell-alignRight MuiTableCell-sizeSmall css-17j8okc-MuiTableCell-root"[39m
+              [36m>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-sizeSmall MuiButton-outlinedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-sizeSmall MuiButton-outlinedSizeSmall MuiButton-colorPrimary css-wyro15-MuiButtonBase-root-MuiButton-root"[39m
+                  [33mtabindex[39m=[32m"0"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mintervene.respond[0m
+                [36m</button>[39m
+              [36m</td>[39m
+            [36m</tr>[39m
+          [36m</tbody>[39m
+        [36m</table>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelStart"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+      [33mrole[39m=[32m"presentation"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+      [33mtabindex[...
+ Γ£ô src/__tests__/InterveneRequestList.test.tsx > InterveneRequestList > shows session ID truncated to 8 chars 23ms
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage > renders Register Server button 481ms
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage > opens dialog when Register Server is clicked 724ms
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö System Entry > renders System entry with Built-in chip 153ms
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows loading spinner when data is loading 16314ms
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows dialog title key when agent type is not loaded yet 47ms
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö System Entry > System entry shows disabled actions and system-managed text 125ms
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > renders agent type name in dialog title after loading 248ms
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö System Entry > System entry shows system slug and has no sync action enabled 138ms
+ ├ù src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > renders Details tab with correct field values 165ms
+   ΓåÆ Unable to find an element with the text: 1000k tokens. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"padding-right: 1024px; overflow: hidden;"[39m
+[36m>[39m
+  [36m<div[39m
+    [33maria-hidden[39m=[32m"true"[39m
+  [36m/>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelStart"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+      [33mrole[39m=[32m"presentation"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-labelledby[39m=[32m"_r_c_"[39m
+        [33maria-modal[39m=[32m"true"[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"[39m
+        [33mrole[39m=[32m"dialog"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"[39m
+          [33mid[39m=[32m"_r_c_"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"[39m
+          [36m>[39m
+            [0mResearch Agent[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-axw7ok"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-label[39m=[32m"app.edit"[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"[39m
+              [33mdata-mui-internal-clone-element[39m=[32m"true"[39m
+              [33mtabindex[39m=[32m"0"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+                [33mdata-testid[39m=[32m"EditIcon"[39m
+                [33mfocusable[39m=[32m"false"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33maria-label[39m=[32m"app.close"[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"[39m
+              [33mdata-mui-internal-clone-element[39m=[32m"true"[39m
+              [33mtabindex[39m=[32m"0"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+                [33mdata-testid[39m=[32m"CloseIcon"[39m
+                [33mfocusable[39m=[32m"false"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogContent-root MuiDialogContent-dividers css-1noi74-MuiDialogContent-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1yn5s25"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"MuiTabs-root css-jhczcq-MuiTabs-root"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"MuiTabs-scroller MuiTabs-fixed css-s2t35c-MuiTabs-scroller"[39m
+                [33mstyle[39m=[32m"overflow: hidden; margin-bottom: 0px;"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33maria-label[39m=[32m"agents.types.dialogTitle"[39m
+                  [33mclass[39m=[32m"MuiTabs-list MuiTabs-flexContainer css-hzcega-MuiTabs-list"[39m
+                  [33mrole[39m=[32m"tablist"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33maria-controls[39m=[32m"agent-details-tabpanel-0"[39m
+                    [33maria-selected[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary Mui-selected css-1usuzwp-MuiButtonBase-root-MuiTab-root"[39m
+                    [33mid[39m=[32m"agent-details-tab-0"[39m
+                    [33mrole[39m=[32m"tab"[39m
+                    [33mtabindex[39m=[32m"0"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0magents.types.detailsTab[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-controls[39m=[32m"agent-details-tabpanel-1"[39m
+                    [33maria-selected[39m=[32m"false"[39m
+                    [33mclass[39m=[32m"MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1usuzwp-MuiButtonBase-root-MuiTab-root"[39m
+                    [33mid[39m=[32m"agent-details-tab-1"[39m
+                    [33mrole[39m=[32m"tab"[39m
+                    [33mtabindex[39m=[32m"-1"[39m
+                    [33mtype[39m=[32m"button"[39m
+                  [36m>[39m
+                    [0magents.types.agentPreviewTab[0m
+                  [36m</button>[39m
+                  [36m<button[39m
+                    [33maria-controls[39m=[32m"agent-details-tabpanel-2"[39m
+                    [33maria-selected[39m=[32m"false"[...
+ Γ£ô src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö Sync button visibility based on session_count > sync button is disabled with tooltip when session_count === 0 101ms
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+ ├ù src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö Sync button visibility based on session_count > sync button is enabled when session_count > 0 119ms
+   ΓåÆ expected +0 to be 1 // Object.is equality
+stderr | src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1)
+MUI: You are providing a disabled `button` child to the Tooltip component.
+A disabled element does not fire events.
+Tooltip needs to listen to the child element's events to display the title.
+
+Add a simple wrapper element, such as a `span`.
+
+ ├ù src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-1 is syncing, only srv-1 sync button should be disabled (not srv-2) 138ms
+   ΓåÆ expected 2 to be 3 // Object.is equality
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > renders three tabs 126ms
+ ├ù src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > FAILING: when srv-2 is syncing, only srv-2 sync button should be disabled (not srv-1) 151ms
+   ΓåÆ expected 2 to be 3 // Object.is equality
+ ├ù src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö sync button state (Issue 2 reproduction) > when no sync is in-flight, only System entry sync is disabled 120ms
+   ΓåÆ expected 2 to be 3 // Object.is equality
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > keeps Start Chat action visible when switching tabs for conversation agents 402ms
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows no-plan placeholder on Agent Preview tab when plan is null 175ms
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows plan content on Agent Preview tab when plan is populated 175ms
+ Γ£ô src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows regenerate plan button on Agent Preview tab 219ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders name field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders system_instruction field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders name field 1080ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > renders the page heading 14605ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > renders the agent type from mock data 76ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > renders input_type chip for agent type 75ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > does not render old mode or max_instances fields 64ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Dashboard as a standalone top-level entry (one per drawer, not inside any group) 14187ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders the three new group labels (Agents, Integrations, System) 230ms
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > opens dialog when Create Agent Type is clicked
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > renders Create Agent Type button 192ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > does not render the legacy "AI Agent" group label 200ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.agentRoles" under the Agents group 169ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > opens dialog when Create Agent Type is clicked 659ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > renders Launch (PlayArrow) button per agent type row 86ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.agentIdentities" under the Agents group 175ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.agentTypes" under the Agents group 138ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.runtimeControl" under the Agents group 132ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.skills" under the Agents group 128ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.sops" under the Agents group 107ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.modelConfigs" under the Agents group 67ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.schedules" under the Agents group 65ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Agents child label "nav.agentTrails" under the Agents group 83ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Integrations child label "nav.mcpHub" under the Integrations group 97ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders Integrations child label "nav.notifications" under the Integrations group 105ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders System child label "nav.observability" under the System group 117ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders System child label "nav.permissions" under the System group 125ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders System child label "nav.systemConfig" under the System group 99ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders the Agents group with exactly 9 children (in declaration order) 73ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders the Integrations group with exactly 2 children (in declaration order) 54ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar structure > renders the System group with exactly 3 children (in declaration order) 57ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö i18n catalog > defines the three new group-label keys in en.json 0ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö i18n catalog > does not contain the legacy "nav.aiAgent" key 0ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö i18n catalog > defines every labelKey referenced by NAV_GROUPS and STANDALONE_ITEMS 0ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö app bar & outlet > renders the app bar title 61ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö app bar & outlet > renders the outlet placeholder 52ms
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar interactions > clicking a child item calls navigate with the child path 61ms
+ ├ù src/__tests__/useChatSession.test.ts > useChatSession > streams execution log title snippets while delegation is active 30009ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > starts a fresh delegation snippet cycle after a new user message 4ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > starts a fresh active delegation cycle after completion when user sends a new message 3ms
+ Γ£ô src/__tests__/useChatSession.test.ts > useChatSession > keeps rapid consecutive delegation statuses in a single cycle for one user turn 1ms
+ ├ù src/__tests__/VendorModelGuardrailPanel.test.tsx > VendorModelGuardrailPanel - hierarchy rendering > renders one vendor row per vendor with the correct enabled count 30019ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AddGuardrailForm.test.tsx > AddGuardrailForm - period filter > offers all four periods when the model has no guardrails 30016ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/ModelConfigDialog.test.tsx > ModelConfigDialog > renders provider type selector with all provider options 30017ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentIdentityListPage.test.tsx > AgentIdentityListPage > renders the page heading 30022ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AddStatementDialog.test.tsx > AddStatementDialog > resource type dropdown is populated from useResourceTypes data 30019ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/McpSessionManager.test.tsx > McpSessionManager > opens create dialog when create button is clicked 30014ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö loading state > shows CircularProgress when tools are loading 30019ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.workflow-generation-preview.test.tsx > SkillEditor workflow generation and preview > generates workflow and updates the workflow field 30013ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with selected_choice when a choice is selected and submitted 30007ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ Γ£ô src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > disables submit for choice when no option selected 25ms
+ ├ù src/__tests__/SkillEditor.test.tsx > SkillEditor ΓÇö new skill > renders the skill editor panel 30022ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentExecutionDetailsDialog.test.tsx > AgentExecutionDetailsDialog > auto-scrolls to latest execution log entry when stream appends 30007ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/ModelConfigListPage.workflow-generation.test.tsx > ModelConfigListPage workflow generation model config > renders workflow generation model section and saves selection 30027ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows a stale plan warning when the role has newer updates 30017ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders identity_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ ├ù src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders system_instruction field 30018ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > opens AgentJobLaunchDialog when Launch is clicked 30014ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders all instances from the API in the table
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ ├ù src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar interactions > the Integrations group is locked open ΓÇö clicking the header has no effect 30024ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+ ├ù src/__tests__/DataTypesPage.test.tsx > DataTypesPage > renders the page title 30022ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentOutputsPage.test.tsx > AgentOutputsPage > renders the page title 30025ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/VendorModelGuardrailPanel.test.tsx > VendorModelGuardrailPanel - hierarchy rendering > expands a vendor row on click to show its models 30008ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/ModelConfigDialog.test.tsx > ModelConfigDialog > shows API key field for openai provider 30011ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AddGuardrailForm.test.tsx > AddGuardrailForm - period filter > filters the period select to only periods not yet configured on the model 30012ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > renders create dialog title when editRole is null 30026ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > renders edit dialog title when editRole is provided 30009ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentIdentityListPage.test.tsx > AgentIdentityListPage > renders identity names from API data 30015ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AddStatementDialog.test.tsx > AddStatementDialog > Effect dropdown contains Allow and Deny options 30011ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentRoleListPage.test.tsx > AgentRoleListPage > renders the page heading 30020ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/McpSessionManager.test.tsx > McpSessionManager > credential field is not pre-populated when editing a session 30010ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/service-decomposition/issue-3-sop-skill-autoselect.test.tsx > Issue 3 ΓÇö AgentRoleDialog: SOPΓåÆSkill Auto-Selection (FIX-20260518-140000) > auto-checks required skill when its SOP is selected 30026ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö loading state > does NOT show noToolsAvailable message while loading 30008ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/service-decomposition/issue-3-sop-skill-autoselect.test.tsx > Issue 3 ΓÇö AgentRoleDialog: SOPΓåÆSkill Auto-Selection (FIX-20260518-140000) > makes required skill checkbox disabled (read-only) when its SOP is selected 30008ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.workflow-generation-preview.test.tsx > SkillEditor workflow generation and preview > opens workflow preview with model header 30010ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > calls onSubmit with text_value when text is entered and submitted 30003ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > shows error alert when onSubmit throws 32ms
+   ΓåÆ Unable to find an element with the text: intervene.submitResponse. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body[39m
+  [33mstyle[39m=[32m"padding-right: 1024px; overflow: hidden;"[39m
+[36m>[39m
+  [36m<div[39m
+    [33maria-hidden[39m=[32m"true"[39m
+  [36m/>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"[39m
+    [33mrole[39m=[32m"presentation"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelStart"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"[39m
+      [33mrole[39m=[32m"presentation"[39m
+      [33mstyle[39m=[32m"opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"[39m
+      [33mtabindex[39m=[32m"-1"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-labelledby[39m=[32m"_r_18_"[39m
+        [33maria-modal[39m=[32m"true"[39m
+        [33mclass[39m=[32m"MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthSm MuiDialog-paperFullWidth css-16htz67-MuiPaper-root-MuiDialog-paper"[39m
+        [33mrole[39m=[32m"dialog"[39m
+        [33mstyle[39m=[32m"--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"[39m
+          [33mid[39m=[32m"_r_18_"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-axw7ok"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"[39m
+            [36m>[39m
+              [0mintervene.responseDialogTitle[0m
+            [36m</span>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorWarning MuiChip-filledWarning css-6f6bgo-MuiChip-root"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"MuiChip-label MuiChip-labelSmall css-eccknh-MuiChip-label"[39m
+              [36m>[39m
+                [0mintervene.typeApproval[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd MuiIconButton-sizeSmall css-1eswsun-MuiButtonBase-root-MuiIconButton-root"[39m
+            [33mtabindex[39m=[32m"0"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"[39m
+              [33mdata-testid[39m=[32m"CloseIcon"[39m
+              [33mfocusable[39m=[32m"false"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</h2>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogContent-root css-kw13he-MuiDialogContent-root"[39m
+        [36m>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-body2 css-19b5ozw-MuiTypography-root"[39m
+          [36m>[39m
+            [0mPlease approve this action[0m
+          [36m</p>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiTypography-root MuiTypography-caption css-n7nmrt-MuiTypography-root"[39m
+          [36m>[39m
+            [0mintervene.sessionLabel[0m
+            [0m: [0m
+            [0msess-abc[0m
+            [0mΓÇª[0m
+          [36m</span>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-193o9je"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedSuccess MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorSuccess css-1bqkxtd-MuiButtonBase-root-MuiButton-root"[39m
+              [33mdisabled[39m=[32m""[39m
+              [33mtabindex[39m=[32m"-1"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mapp.saving[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError Mui-disabled MuiButton-root MuiButton-contained MuiButton-containedError MuiButton-sizeMedium MuiButton-containedSizeMedium MuiButton-colorError css-p6sui3-MuiButtonBase-root-MuiButton-root"[39m
+              [33mdisabled[39m=[32m""[39m
+              [33mtabindex[39m=[32m"-1"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [0mapp.saving[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"MuiLinearProgress-root MuiLinearProgress-colorPrimary MuiLinearProgress-indeterminate css-1yatzro-MuiLinearProgress-root"[39m
+            [33mrole[39m=[32m"progressbar"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiLinearProgress-bar MuiLinearProgress-bar1 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar1Indeterminate css-lcqqge-MuiLinearProgress-bar1"[39m
+            [36m/>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"MuiLinearProgress-bar MuiLinearProgress-bar2 MuiLinearProgress-barColorPrimary MuiLinearProgress-bar2Indeterminate css-lfb3c7-MuiLinearProgress-bar2"[39m
+            [36m/>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"MuiDialogActions-root MuiDialogActions-spacing css-15fu35s-MuiDialogActions-root"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"MuiBox-root css-1rr4qq7"[39m
+          [36m/>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeMedium MuiButton-textSizeMedium MuiButton-colorPrimary css-1uent87-MuiButtonBase-root-MuiButton-root"[39m
+            [33mdisabled[39m=[32m""[39m
+            [33mtabindex[39m=[32m"-1"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [0mapp.cancel[0m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mdata-testid[39m=[32m"sentinelEnd"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m/>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ Γ£ô src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > returns null when request is null 1ms
+ Γ£ô src/__tests__/InterveneResponseDialog.test.tsx > InterveneResponseDialog > closes dialog and clears error on cancel click 16ms
+ ├ù src/__tests__/SkillEditor.test.tsx > SkillEditor ΓÇö new skill > renders the instructions field 30018ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > calls the regenerate-plan endpoint when the button is clicked 30005ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+stderr | src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders status chip for each instance row
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+MUI: You have provided an out-of-range value `undefined` for the select component.
+Consider providing a value that matches one of the available options or ''.
+The available values are ``, `queued`, `running`, `waiting_for_human`, `completed`, `failed`.
+
+ ├ù src/__tests__/AgentInstanceDashboard.test.tsx > AgentInstanceDashboardPage > renders all instances from the API in the table 30018ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders role_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ ├ù src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders identity_id dropdown 30015ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/ModelConfigListPage.test.tsx > ModelConfigListPage > renders all model configs in the table 30026ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage ΓÇö post-save navigation > opens AgentTypeDetailsDialog after successful create (agent has plan)
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ ├ù src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > opens ConversationDialog when Launch is clicked for conversation agent 30015ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > renders Edit button per agent type row 63ms
+ ├ù src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar interactions > clicking one group header does not collapse other groups (Integrations is locked open) 30014ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar interactions > marks the active child item with the MUI selected class 103ms
+ Γ£ô src/__tests__/AppShell.test.tsx > AppShell ΓÇö sidebar interactions > marks the active group header as selected when any child is active 91ms
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+Error: AggregateError
+    at Object.dispatchError (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\xhr-utils.js:63:19)
+    at Request.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\xhr\XMLHttpRequest-impl.js:655:18)
+    at Request.emit (node:events:530:35)
+    at ClientRequest.<anonymous> (C:\Users\rhu\source\personal\coding-workspace\Parthenon\frontend\node_modules\jsdom\lib\jsdom\living\helpers\http-request.js:127:14)
+    at ClientRequest.emit (node:events:518:28)
+    at emitErrorEvent (node:_http_client:104:11)
+    at Socket.socketErrorListener (node:_http_client:518:5)
+    at Socket.emit (node:events:518:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3) undefined
+ ├ù src/__tests__/DataTypesPage.test.tsx > DataTypesPage > renders data type names from API data 30009ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentOutputsPage.test.tsx > AgentOutputsPage > renders export CSV button 30010ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/VendorModelGuardrailPanel.test.tsx > VendorModelGuardrailPanel - hierarchy rendering > expands a model row on click to show its guardrails 30014ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/ModelConfigDialog.test.tsx > ModelConfigDialog > shows endpoint URL field in create mode 30011ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AddGuardrailForm.test.tsx > AddGuardrailForm - submit behaviour > submits a single per-period create call with terminate-default and k-default 30010ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > pre-populates name field when editing 30017ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ Γ£ô src/__tests__/AgentRoleDialog.test.tsx > AgentRoleDialog > clears dialogError on open 56ms
+ ├ù src/__tests__/AgentIdentityListPage.test.tsx > AgentIdentityListPage > renders realm_name column 30015ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AddStatementDialog.test.tsx > AddStatementDialog > Save button is disabled when resource type or actions are empty 30018ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/AgentRoleListPage.test.tsx > AgentRoleListPage > renders role names from API data 30005ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/McpSessionManager.test.tsx > McpSessionManager > shows session identity_binding field in dialog 30016ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö loading state > does NOT show the server filter while loading 30017ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/service-decomposition/issue-3-sop-skill-autoselect.test.tsx > Issue 3 ΓÇö AgentRoleDialog: SOPΓåÆSkill Auto-Selection (FIX-20260518-140000) > does NOT disable optional skills when a SOP is selected 30017ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.workflow-generation-preview.test.tsx > SkillEditor workflow generation and preview > sends latest unsaved workflow state to preview endpoint 30017ms
+   ΓåÆ Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ├ù src/__tests__/SkillEditor.workflow-generation-preview.test.tsx > SkillEditor workflow generation and preview > shows missing-model error and does not overwrite manual workflow text 6ms
+   ΓåÆ No QueryClient set, use QueryClientProvider to set one
