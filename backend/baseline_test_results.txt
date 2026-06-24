@@ -1,0 +1,168 @@
+........................................................................ [  4%]
+........................................................................ [  9%]
+........sss.........sss.................ssss............................ [ 14%]
+........................................................................ [ 19%]
+........................................................................ [ 24%]
+........................................................................ [ 29%]
+........................................................................ [ 34%]
+.......................s................................................ [ 39%]
+........................................................................ [ 43%]
+....................................ssss......s...sss..sssssssssssssssss [ 48%]
+sssssss.....s..................................sss.s....s............... [ 53%]
+......................sssssss.............................ssssssssssssss [ 58%]
+sssssssssssss.s.s..s..s...............ssssssssss........................ [ 63%]
+............ssssssssssssss..............sss............................. [ 68%]
+...........sss.ssssssss.ssssssssssssssssssssssssssssssssssssssssss...... [ 73%]
+................ssss..sss....ss...s.........sss......................... [ 78%]
+..........sssssssssssssssssssssssssssssssss............................. [ 82%]
+ssssssssssssssssssssssssss.......................................s...... [ 87%]
+...........ss........................................................... [ 92%]
+........................................................................ [ 97%]
+....................................                                     [100%]
+============================== warnings summary ===============================
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547: DeprecationWarning: `LoggingHandler` in `opentelemetry-sdk` is deprecated. Use the handler from `opentelemetry-instrumentation-logging` instead.
+    warnings.warn(
+
+app\main.py:230
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\main.py:230: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+app\main.py:246
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\main.py:246: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests\fixtures\test_service_certificate.py:34
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\fixtures\test_service_certificate.py:34: PytestCollectionWarning: cannot collect test class 'TestServiceBootstrapError' because it has a __init__ constructor (from: tests/integration/test_service_auth.py)
+    class TestServiceBootstrapError(Exception):
+
+tests\fixtures\test_service_certificate.py:38
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\fixtures\test_service_certificate.py:38: PytestCollectionWarning: cannot collect test class 'TestServiceCertificateManager' because it has a __init__ constructor (from: tests/integration/test_service_auth.py)
+    class TestServiceCertificateManager:
+
+tests/unit/services/test_plan_generation_service.py::test_generate_plan_no_role_completes_without_crash
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\agents\plan_generation_service.py:115: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    return plan
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_agent_instance_manager.py::TestAgentInstanceManager::test_spawn_creates_instance
+tests/unit/test_agent_instance_manager.py::TestAgentInstanceManager::test_spawn_creates_instance_when_under_limit
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\agents\instance_manager.py:52: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(instance)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_agent_runtime_executor.py::test_run_skips_when_job_not_found
+tests/unit/test_agent_runtime_executor.py::test_run_skips_when_status_not_running
+tests/services/test_termination_orchestrator.py::test_request_termination_calls_agent_runtime_per_session
+tests/services/test_termination_orchestrator.py::test_request_termination_records_terminated_outcome
+tests/services/test_termination_orchestrator.py::test_request_termination_404_from_runtime_is_success
+tests/services/test_termination_orchestrator.py::test_request_termination_runtime_error_still_persists_db
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\stash.py:108: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    del self._storage[key]
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_agent_runtime_executor.py::test_capture_prompt_log_writes_agent_prompt_log
+tests/unit/test_agent_runtime_executor.py::test_capture_prompt_log_does_not_raise_on_db_failure
+tests/unit/test_execution_log.py::test_capture_prompt_log_accepts_none_fields
+tests/unit/test_execution_log.py::test_capture_prompt_log_swallows_flush_error
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\agents\runtime_executor.py:736: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(entry)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_mcp_hub.py::test_toolsyncservice_adds_new_tools
+tests/unit/test_mcp_hub.py::test_toolsyncservice_uses_oauth2_session_credentials
+tests/unit/test_mcp_hub.py::test_sync_resilience_initialize_fails_but_tools_list_succeeds
+tests/unit/test_mcp_hub.py::test_sync_updates_last_synced_at_on_success
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\mcp\tool_sync.py:365: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(new_tool)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_model_binding.py::test_extract_text_gemini_response_envelope
+  tests\unit\test_model_binding.py:226: PytestWarning: The test <Function test_extract_text_gemini_response_envelope> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    @pytest.mark.asyncio
+
+tests/unit/test_user_cache_service.py::test_creates_new_user_on_first_call
+tests/services/permissions/test_user_cache_service.py::test_upsert_user_creates_new_record_when_missing
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\permissions\user_cache_service.py:40: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow()
+
+tests/unit/test_user_cache_service.py::test_updates_last_seen_at_only_on_subsequent_call
+tests/services/permissions/test_user_cache_service.py::test_upsert_user_refreshes_last_seen_on_existing_record
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\permissions\user_cache_service.py:51: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    user.last_seen_at = datetime.utcnow()
+
+tests/integration/test_internal_intervene_respond.py: 14 warnings
+tests/api/v1/test_policy_endpoints.py: 7 warnings
+tests/services/permissions/test_access_request_service.py: 17 warnings
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+
+tests/integration/test_internal_intervene_respond.py::TestInternalRespondRequiresServiceCert::test_internal_respond_requires_service_cert
+tests/integration/test_intervention_api_integration.py::TestExistingEndpointsReturnNewFields::test_resume_returns_intervene_request_id
+tests/integration/test_non_conversational_regression.py::TestNonConversationalFlowPreservation::test_mixed_conversational_and_non_conv
+tests/api/v1/test_sops_api.py::test_get_sop_with_real_db_triggers_missing_greenlet
+tests/services/test_tool_sync.py::test_sync_handles_jsonrpc_error_response
+  <sys>:0: SAWarning: Can't sort tables for DROP; an unresolvable foreign key dependency exists between tables: agent_jobs, agent_outputs, termination_requests; and backend does not support ALTER.  To restore at least a partial sort, apply use_alter=True to ForeignKey and ForeignKeyConstraint objects involved in the cycle to mark these as known cycles that will be ignored.
+
+tests/api/v1/test_access_requests_api.py::TestSubmitAccessRequestEmptyGroups::test_empty_group_ids_returns_201_with_null_group
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\api\v1\test_access_requests_api.py:82: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow()
+
+tests/api/v1/test_access_requests_api.py::TestApproveRequestWithGroupAssignment::test_approve_with_group_id_returns_200_with_group_assigned
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\api\v1\test_access_requests_api.py:147: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow()
+
+tests/api/v1/test_roles_api.py::test_create_role_as_admin_returns_201
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\api\v1\test_roles_api.py:109: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = dt.utcnow()
+
+tests/api/v1/test_tags_api.py::test_create_tag_definition_as_admin_returns_201
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\api\v1\test_tags_api.py:114: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = dt.utcnow()
+
+tests/api/v1/test_tags_api.py::test_create_tag_definition_with_allowed_values_returns_201
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\api\v1\test_tags_api.py:188: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = dt.utcnow()
+
+tests/api/v1/test_tags_api.py::test_update_tag_definition_add_values_returns_200
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\tests\api\v1\test_tags_api.py:242: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = dt.utcnow()
+
+tests/services/test_mcp_oauth_service.py::test_callback_token_exchange_200_succeeds
+tests/services/test_mcp_oauth_service.py::test_callback_token_exchange_201_succeeds
+tests/services/test_mcp_oauth_service.py::test_callback_token_exchange_204_succeeds
+tests/services/test_mcp_oauth_service.py::test_callback_tool_sync_success_returns_counts
+tests/services/test_mcp_oauth_service.py::test_callback_tool_sync_failure_handled_gracefully
+tests/services/test_mcp_oauth_service.py::test_callback_tool_sync_skipped_when_server_not_found
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\services\mcp_oauth_service.py:837: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(session)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1234 passed, 242 skipped, 84 warnings in 270.98s (0:04:30)

@@ -208,7 +208,7 @@ export function McpHubPage() {
                           <Tooltip title={t('mcp.system.systemManaged')}>
                             <span>
                               <IconButton size="small" disabled>
-                                <SyncIcon />
+                                <SyncIcon data-testid="SyncIcon" />
                               </IconButton>
                             </span>
                           </Tooltip>
@@ -216,7 +216,7 @@ export function McpHubPage() {
                           <Tooltip title={t('mcp.sync.noSessions')}>
                             <span>
                               <IconButton size="small" disabled>
-                                <SyncIcon />
+                                <SyncIcon data-testid="SyncIcon" />
                               </IconButton>
                             </span>
                           </Tooltip>
@@ -236,7 +236,7 @@ export function McpHubPage() {
                               }}
                               disabled={syncServer.isPending && syncServer.variables === server.id}
                             >
-                              <SyncIcon />
+                              <SyncIcon data-testid="SyncIcon" />
                             </IconButton>
                           </Tooltip>
                         )}

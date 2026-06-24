@@ -99,6 +99,43 @@ async def list_agent_outputs(
     )
 
 
+@OutputRouter.get("/{output_id}", response_model=AgentOutputResponse)
+async def get_agent_output(
+    output_id: uuid.UUID,
+    db: DbSession,
+    _: dict = Depends(require_permission(RT_RESULT, "read")),
+) -> AgentOutputResponse:
+    """Get a single typed agent output by ID.
+
+    Includes resolved data type and agent type names for display.
+    """
+    logger.info("Getting agent output: output_id=%s", output_id)
+
+    output = await _output_service.get_output(db=db, output_id=output_id)
+    if not output:
+        raise HTTPException(status_code=404, detail=f"AgentOutput {output_id} not found")
+
+    data_type_name = None
+    agent_type_name = None
+    if output.data_type:
+        data_type_name = output.data_type.name
+    if output.agent_type:
+        agent_type_name = output.agent_type.name
+
+    return AgentOutputResponse(
+        id=output.id,
+        data_type_id=output.data_type_id,
+        agent_type_id=output.agent_type_id,
+        execution_session_id=output.execution_session_id,
+        field_values=output.field_values,
+        validation_status=output.validation_status.value,
+        raw_output=output.raw_output,
+        created_at=output.created_at,
+        data_type_name=data_type_name,
+        agent_type_name=agent_type_name,
+    )
+
+
 @OutputRouter.get("/export")
 async def export_agent_outputs_csv(
     db: DbSession,

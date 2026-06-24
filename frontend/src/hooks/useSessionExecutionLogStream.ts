@@ -12,9 +12,12 @@ export type ExecutionLogStreamConnectionState =
 interface UseSessionExecutionLogStreamOptions {
   sessionId: string | null
   enabled: boolean
-  sessionStatus?: AgentJobStatus
   reconnectAttempts?: number
   reconnectDelayMs?: number
+  /** Called when the stream receives a stream_completed event (execution finished) */
+  onComplete?: (status: AgentJobStatus) => void
+  /** Called when the stream receives a human_intervene event (waiting for intervention) */
+  onWaitingForHuman?: (event: HumanInterveneEvent) => void
 }
 
 interface StreamLogEntryEvent {
@@ -39,10 +42,6 @@ export interface HumanInterveneEvent {
 
 type StreamEvent = StreamLogEntryEvent | StreamCompletedEvent | HumanInterveneEvent
 
-function isTerminalStatus(status: AgentJobStatus | undefined): boolean {
-  return status === 'completed' || status === 'failed' || status === 'terminated'
-}
-
 function toAbsoluteUrl(path: string): string {
   if (API_CONFIG.BASE_URL.startsWith('http://') || API_CONFIG.BASE_URL.startsWith('https://')) {
     return `${API_CONFIG.BASE_URL}${path}`
@@ -56,10 +55,15 @@ function toAbsoluteUrl(path: string): string {
 export function useSessionExecutionLogStream({
   sessionId,
   enabled,
-  sessionStatus,
   reconnectAttempts = 2,
   reconnectDelayMs = 1000,
+  onComplete,
+  onWaitingForHuman,
 }: UseSessionExecutionLogStreamOptions) {
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+  const onWaitingForHumanRef = useRef(onWaitingForHuman)
+  onWaitingForHumanRef.current = onWaitingForHuman
   const [entries, setEntries] = useState<ExecutionLogEntry[]>([])
   const [connectionState, setConnectionState] = useState<ExecutionLogStreamConnectionState>('idle')
   const [humanInterveneEvent, setHumanInterveneEvent] = useState<HumanInterveneEvent | null>(null)
@@ -73,7 +77,7 @@ export function useSessionExecutionLogStream({
   }, [sessionId])
 
   useEffect(() => {
-    if (!sessionId || !enabled || isTerminalStatus(sessionStatus)) {
+    if (!sessionId || !enabled) {
       setConnectionState('idle')
       return
     }
@@ -152,24 +156,25 @@ export function useSessionExecutionLogStream({
 
             if (event.type === 'human_intervene') {
               setHumanInterveneEvent(event)
+              onWaitingForHumanRef.current?.(event)
               continue
             }
 
             if (event.type === 'stream_completed') {
               setConnectionState('idle')
+              onCompleteRef.current?.(event.session_status as AgentJobStatus)
               return
             }
           }
         }
 
-        if (!cancelled && !isTerminalStatus(sessionStatus)) {
+        if (!cancelled) {
           throw new Error('Stream closed before terminal marker')
         }
       } catch {
         if (cancelled) {
           return
         }
-
         if (attempt < reconnectAttempts) {
           reconnectTimerRef.current = setTimeout(() => {
             void connect(attempt + 1)
@@ -190,7 +195,7 @@ export function useSessionExecutionLogStream({
         clearTimeout(reconnectTimerRef.current)
       }
     }
-  }, [enabled, reconnectAttempts, reconnectDelayMs, sessionId, sessionStatus])
+  }, [enabled, reconnectAttempts, reconnectDelayMs, sessionId])
 
   const clearHumanInterveneEvent = useCallback(() => {
     setHumanInterveneEvent(null)

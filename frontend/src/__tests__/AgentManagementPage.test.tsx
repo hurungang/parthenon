@@ -55,7 +55,7 @@ vi.mock('../pages/agents/AgentTypeForm', async () => {
   )
   return {
     ...actual,
-    defaultAgentTypeFormValues: { ...actual.defaultAgentTypeFormValues, input_type: 'typed' },
+    defaultAgentTypeFormValues: { ...actual.defaultAgentTypeFormValues, input_type: 'typed', sop_bindings: [{ sop_id: 'sop-preset', order: 0 }] },
   }
 })
 

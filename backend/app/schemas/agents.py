@@ -381,6 +381,7 @@ class AgentJobStatusRead(BaseModel):
     created_at: datetime
     agent_type_name: str | None = None
     triggered_by_user_name: str | None = None
+    output_id: uuid.UUID | None = None  # FK to AgentOutput for typed outputs
 
 
 class AgentJobRead(BaseModel):
@@ -402,6 +403,7 @@ class AgentJobRead(BaseModel):
     created_at: datetime
     agent_type_name: str | None = None
     triggered_by_user_name: str | None = None
+    output_id: uuid.UUID | None = None  # FK to AgentOutput for typed outputs
 
 
 # ── A2A (Agent-to-Agent) Communication Schemas ────────────────────────────────

@@ -262,6 +262,7 @@ export interface AgentJob {
   created_at: string
   agent_type_name?: string
   triggered_by_user_name?: string
+  output_id?: string | null // FK to AgentOutput for typed outputs
 }
 
 export interface RuntimeTopologyNode {

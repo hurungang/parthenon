@@ -1,0 +1,65 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.3, pluggy-1.5.0 -- C:\Users\rhu\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend
+configfile: pyproject.toml
+plugins: anyio-4.9.0, devtools-0.12.2, Faker-40.15.0, langsmith-0.8.2, asyncio-1.3.0, cov-7.1.0, env-1.1.3, mock-3.14.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+backend\tests\integration\test_save_result_typed_output_bug.py::test_get_agent_context_with_typed_output_missing_save_result FAILED [100%]
+
+================================== FAILURES ===================================
+________ test_get_agent_context_with_typed_output_missing_save_result _________
+backend\tests\integration\test_save_result_typed_output_bug.py:134: in test_get_agent_context_with_typed_output_missing_save_result
+    assert "system____save_result" in context.allowed_tools, (
+E   AssertionError: BUG FIX-20260624-153000: save_result SHOULD be in allowed_tools when agent type has output_data_type_id configured.
+E     
+E     Expected: 'system____save_result' in allowed_tools
+E     Actual: allowed_tools = []
+E     
+E     ROOT CAUSE: The get_agent_context endpoint doesn't add save_result to allowed_tools when output_data_type_id is set. This prevents typed agents from calling save_result to persist their typed outputs.
+E   assert 'system____save_result' in []
+E    +  where [] = AgentContextResponse(agent_type_id=UUID('1cb5a165-2571-42c6-a168-0ab0a329526b'), system_instruction=None, model_id=None, model_config_id=None, role_id=None, role_name=None, identity_name=None, input_type='typed', output_type='typed', output_schema=None, output_data_type_id='2c5b55cd-a2af-41bb-9812-da3ffe1d9286', output_data_type_name='incident-report-output', output_schema_prompt='## Required Output Format\n\nYour final result MUST be a JSON object matching the **incident-report-output** schema.\n\n- **incident_id** (**string** (**required**))\n  Unique incident identifier\n- **severity** (**enum** (**required**) ù allowed values: critical, high, medium, low)\n  Incident severity level\n- **description** (**string** (**required**))\n  Incident description\n\nReturn your structured result using the save_result tool with your JSON matching this schema exactly.', output_json_schema={'type': 'object', 'properties': {'incident_id': {'description': 'Unique incident identifier', 'type': 'string'}, 'severity': {'description': 'Incident severity level', 'type': 'string', 'enum': ['critical', 'high', 'medium', 'low']}, 'description': {'description': 'Incident description', 'type': 'string'}}, 'required': ['incident_id', 'severity', 'description']}, primary_sop_id=None, is_active=True, identity_role_valid=True, allowed_tools=[], sop_content=None, mcp_session_context=None, tool_definitions=[], tool_name_map={}, role_mcp_sessions={}, allowed_agent_types=[], bound_sop_ids=[], bound_skill_ids=[], sops=[], skills=[], guardrail_policy={'policy_snapshot_id': '1cb5a165-2571-42c6-a168-0ab0a329526b', 'max_iterations': 10, 'max_delegation_depth': 3, 'max_delegated_steps': 20, 'execution_timeout_seconds': 300, 'token_budget': None, 'token_enforcement_mode': 'observe', 'token_fallback_mode': 'observe_and_log', 'conversational_token_visibility_mode': 'enabled', 'conversational_continuation_policy': 'allow'}).allowed_tools
+---------------------------- Captured stdout call -----------------------------
+\n================================================================================\nTEST: get_agent_context missing save_result for typed output\nBug: FIX-20260624-153000\n================================================================================\n\n[STEP 1] Creating AgentDataType...\n\u2713 Created AgentDataType: 2c5b55cd-a2af-41bb-9812-da3ffe1d9286\n  - name: incident-report-output\n  - fields: 3 fields\n\n[STEP 2] Creating AgentType with output_data_type_id...\n\u2713 Created AgentType with typed output\n  - name: incident-analyzer-agent\n  - output_type: AgentOutputType.typed\n  - output_data_type_id: 2c5b55cd-a2af-41bb-9812-da3ffe1d9286\n\n[STEP 3] Calling get_agent_context()...\n\u2713 get_agent_context returned successfully\n  - output_type: typed\n  - output_data_type_id: 2c5b55cd-a2af-41bb-9812-da3ffe1d9286\n  - output_data_type_name: incident-report-output\n  - allowed_tools: []\n\n================================================================================\nASSERTION CHECKS\n================================================================================\n\u2713 Assertion 1 PASSED: output_data_type_id is present: 2c5b55cd-a2af-41bb-9812-da3ffe1d9286\n\nAssertion 2: Checking if 'system____save_result' is in allowed_tools...\n  allowed_tools: []\n  \u26a0 This assertion will FAIL if the bug exists (save_result missing from allowed_tools)
+============================== warnings summary ===============================
+..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547: DeprecationWarning: `LoggingHandler` in `opentelemetry-sdk` is deprecated. Use the handler from `opentelemetry-instrumentation-logging` instead.
+    warnings.warn(
+
+backend\app\main.py:230
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\main.py:230: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495
+..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+backend\app\main.py:246
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\main.py:246: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/integration/test_save_result_typed_output_bug.py::test_get_agent_context_with_typed_output_missing_save_result
+  <sys>:0: SAWarning: Can't sort tables for DROP; an unresolvable foreign key dependency exists between tables: agent_jobs, agent_outputs, termination_requests; and backend does not support ALTER.  To restore at least a partial sort, apply use_alter=True to ForeignKey and ForeignKeyConstraint objects involved in the cycle to mark these as known cycles that will be ignored.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED backend\tests\integration\test_save_result_typed_output_bug.py::test_get_agent_context_with_typed_output_missing_save_result
+======================== 1 failed, 6 warnings in 2.15s ========================

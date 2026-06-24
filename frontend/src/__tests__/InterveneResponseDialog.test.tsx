@@ -95,7 +95,6 @@ describe('InterveneResponseDialog', () => {
       />,
     )
     fireEvent.click(screen.getByText('app.yes'))
-    fireEvent.click(screen.getByText('intervene.submitResponse'))
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith('req-123', { approval_value: true })
     })
@@ -112,7 +111,6 @@ describe('InterveneResponseDialog', () => {
       />,
     )
     fireEvent.click(screen.getByText('app.no'))
-    fireEvent.click(screen.getByText('intervene.submitResponse'))
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith('req-123', { approval_value: false })
     })
@@ -188,7 +186,6 @@ describe('InterveneResponseDialog', () => {
       />,
     )
     fireEvent.click(screen.getByText('app.yes'))
-    fireEvent.click(screen.getByText('intervene.submitResponse'))
     await waitFor(() => {
       expect(mockSetDialogError).toHaveBeenCalled()
     })

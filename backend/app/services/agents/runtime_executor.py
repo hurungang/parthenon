@@ -202,6 +202,182 @@ def _extract_sop_name_from_fallback_content(sop_content: str | None) -> str | No
     return sop_name or None
 
 
+def _extract_ai_message_response(
+    response: Any,
+) -> tuple[str, list[dict[str, Any]], dict[str, Any] | None]:
+    """Extract text, tool calls, and usage from a LangChain AIMessage.
+
+    Returns a 3-tuple ``(response_text, raw_tool_calls, usage)``:
+
+    * ``response_text`` — plain text content (empty string if absent).
+    * ``raw_tool_calls`` — list of OpenAI-shaped dicts:
+      ``{"id": ..., "type": "function", "function": {"name": ..., "arguments": ...}}``.
+    * ``usage`` — token dict with ``prompt_tokens``, ``completion_tokens``, ``total_tokens``
+      (``None`` when unavailable).
+    """
+    # ── Response text ─────────────────────────────────────────────────────
+    response_text = ""
+    if hasattr(response, "content"):
+        content = response.content
+        if isinstance(content, str):
+            response_text = content
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    response_text = block.get("text", "")
+                    break
+                if isinstance(block, str):
+                    response_text = block
+                    break
+
+    # ── Tool calls ────────────────────────────────────────────────────────
+    raw_tool_calls: list[dict[str, Any]] = []
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        for tc in response.tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            raw_tool_calls.append({
+                "id": tc.get("id", ""),
+                "type": "function",
+                "function": {
+                    "name": tc.get("name", ""),
+                    "arguments": json.dumps(tc.get("args", {})),
+                },
+            })
+    if not raw_tool_calls and hasattr(response, "additional_kwargs"):
+        # Fallback: some providers emit tool_calls via additional_kwargs
+        raw_tool_calls = list(response.additional_kwargs.get("tool_calls") or [])
+
+    # ── Token usage ───────────────────────────────────────────────────────
+    usage: dict[str, Any] | None = None
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        meta = response.usage_metadata
+        if isinstance(meta, dict):
+            input_tok = max(0, int(meta.get("input_tokens") or 0))
+            output_tok = max(0, int(meta.get("output_tokens") or 0))
+            total_tok = max(0, int(meta.get("total_tokens") or (input_tok + output_tok)))
+            usage = {
+                "prompt_tokens": input_tok,
+                "completion_tokens": output_tok,
+                "total_tokens": total_tok,
+            }
+
+    return response_text, raw_tool_calls, usage
+
+
+def _extract_structured_output(
+    raw_response: Any,
+) -> dict[str, Any] | None:
+    """Extract structured output (Pydantic model or dict) from LangChain response.
+    
+    When using with_structured_output(), LangChain may return the parsed data
+    in various forms:
+    * AIMessage.content as dict/model (Anthropic or other formats)
+    * AIMessage as Pydantic model directly
+    * Direct dict response
+    
+    Returns the dict if found, None if response appears to be text-only or AIMessage without structure.
+    """
+    if raw_response is None:
+        return None
+    
+    # Check if response has content attribute (AIMessage-like) FIRST
+    # This must come before isinstance(dict) check because AIMessage might have dict-like behavior
+    if hasattr(raw_response, "content") and hasattr(raw_response, "tool_calls"):
+        # This is an AIMessage - extract from its content field only
+        content = raw_response.content
+        
+        # Check if content is a dict (structured output parsed by LangChain)
+        if isinstance(content, dict):
+            # If it has multiple keys or at least one non-"result" key, it's structured output
+            if len(content) > 1 or (
+                len(content) == 1 and "result" not in content
+            ):
+                logger.info(
+                    "Extracted structured output from AIMessage.content: keys=%s",
+                    list(content.keys()),
+                )
+                return content
+        
+        # Check if content is a Pydantic model instance
+        if hasattr(content, "model_dump") and callable(content.model_dump):
+            try:
+                model_dict = content.model_dump()
+                if model_dict:  # Only return if not empty
+                    logger.info(
+                        "Extracted structured output from AIMessage.content (Pydantic): keys=%s",
+                        list(model_dict.keys()),
+                    )
+                    return model_dict
+            except Exception as exc:
+                logger.debug("Failed to dump Pydantic model from content: %s", exc)
+        
+        # Check if content is a string - try to parse as JSON (for raw model responses without with_structured_output)
+        if isinstance(content, str):
+            try:
+                import json
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    # If it has multiple keys or at least one non-"result" key, it's structured output
+                    if len(parsed) > 1 or (
+                        len(parsed) == 1 and "result" not in parsed
+                    ):
+                        logger.info(
+                            "Extracted structured output from JSON string in AIMessage.content: keys=%s",
+                            list(parsed.keys()),
+                        )
+                        return parsed
+            except (json.JSONDecodeError, ValueError):
+                # Not valid JSON, skip
+                pass
+        
+        # AIMessage but no structured output found in content
+        return None
+    
+    # NEVER treat AIMessage or other objects as dicts directly
+    # Only process if explicitly isinstance(dict)
+    if isinstance(raw_response, dict):
+        # Direct dict responses (multiple keys or single non-"result" key)
+        if len(raw_response) > 1 or (
+            len(raw_response) == 1 and "result" not in raw_response
+        ):
+            return raw_response
+        return None
+    
+    # Check if response itself is a Pydantic model (not an AIMessage)
+    if hasattr(raw_response, "model_dump") and callable(raw_response.model_dump):
+        # But NOT if it has tool_calls (that would be AIMessage)
+        if not hasattr(raw_response, "tool_calls"):
+            try:
+                model_dict = raw_response.model_dump()
+                if model_dict:  # Only return if not empty
+                    logger.info(
+                        "Extracted structured output from Pydantic model response: keys=%s",
+                        list(model_dict.keys()),
+                    )
+                    return model_dict
+            except Exception as exc:
+                logger.debug("Failed to dump Pydantic model response: %s", exc)
+    
+    # Check additional_kwargs for parsed response (some providers put it there)
+    if hasattr(raw_response, "additional_kwargs"):
+        kwargs = raw_response.additional_kwargs
+        if isinstance(kwargs, dict):
+            # Look for any structured result
+            for key in ["result", "output", "data", "parsed"]:
+                if key in kwargs and isinstance(kwargs[key], dict):
+                    result_dict = kwargs[key]
+                    if len(result_dict) > 1 or (
+                        len(result_dict) == 1 and "result" not in result_dict
+                    ):
+                        logger.info(
+                            "Extracted structured output from additional_kwargs[%s]: keys=%s",
+                            key,
+                            list(result_dict.keys()),
+                        )
+                        return result_dict
+    
+    return None
 
 
 def _build_dynamic_agent_tool_definition(
@@ -1171,8 +1347,28 @@ class AgentRuntimeExecutor:
                 if output_data_type_id and isinstance(output_data, dict):
                     try:
                         data_type_id = uuid.UUID(output_data_type_id)
-                        # Extract payload from output_data (field_values)
-                        payload = output_data.get("field_values") or output_data.get("result") or output_data
+                        # Extract payload from output_data.
+                        # Priority: explicit field_values dict > structured output dict (excluding
+                        # runtime-only keys) > JSON-parse the plain-text result string.
+                        raw_result = output_data.get("result")
+                        if output_data.get("field_values") and isinstance(output_data["field_values"], dict):
+                            payload: Any = output_data["field_values"]
+                        elif raw_result is None and len(output_data) > 1:
+                            # output_data itself is the structured output (from _extract_structured_output)
+                            # Strip runtime-injected keys before validation
+                            payload = {k: v for k, v in output_data.items() if k not in ("model_id", "output_id")}
+                        elif isinstance(raw_result, str):
+                            # Agent returned plain text — try to parse as JSON first
+                            import json as _json
+                            try:
+                                parsed = _json.loads(raw_result)
+                                payload = parsed if isinstance(parsed, dict) else {"value": raw_result}
+                            except (_json.JSONDecodeError, ValueError):
+                                payload = {"value": raw_result}
+                        elif isinstance(raw_result, dict):
+                            payload = raw_result
+                        else:
+                            payload = output_data
 
                         # Step 1: Validate the output against the data type schema
                         validation_result = await data_client.validate_typed_output(
@@ -1367,7 +1563,6 @@ class AgentRuntimeExecutor:
         response) and all logging flows through ``data_client``.
         """
         from app.services.agents.agent_loop import TaskAgentLoop, ConversationalAgentLoop
-        from app.services.agents.model_binding import ModelBindingLayer, ModelBindingError
 
         session_id = uuid.UUID(job_data["id"])
         agent_type_id = job_data["agent_type_id"]
@@ -1469,6 +1664,22 @@ class AgentRuntimeExecutor:
                         "total_instruction_length": len(system_instruction),
                     },
                 )
+
+        # ── Inject typed output schema prompt (if agent has a typed output schema) ──
+        output_schema_prompt: str | None = context.get("output_schema_prompt") if isinstance(context, dict) else None
+        if output_schema_prompt:
+            base = system_instruction or ""
+            system_instruction = f"{base}\n\n{output_schema_prompt}".strip()
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="output_schema_injected",
+                message="Typed output schema prompt injected into system instruction",
+                data={
+                    "output_data_type_id": context.get("output_data_type_id"),
+                    "output_data_type_name": context.get("output_data_type_name"),
+                    "total_instruction_length": len(system_instruction),
+                },
+            )
 
         # ── Build tool definitions from context ───────────────────────────────
         tool_definitions: list[dict[str, Any]] = context.get("tool_definitions") or list(SystemToolRegistry.get_all_schemas())
@@ -1665,8 +1876,35 @@ class AgentRuntimeExecutor:
         output_data: dict[str, Any] = {}
         max_iterations = max(1, guardrail_state.max_iterations)
 
+        # ── Build LangChain callbacks for this session ────────────────────────
+        from app.services.agents.guardrail_callback import GuardrailCallback
+        from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+        iteration_ref = [0]
+        lc_callbacks: list[Any] = [
+            GuardrailCallback(
+                guardrail_state=guardrail_state,
+                session_id=str(session_id),
+                data_client=data_client,
+                execution_mode=execution_mode,
+            ),
+            ExecutionLoggingCallback(
+                session_id=str(session_id),
+                data_client=data_client,
+                iteration_ref=iteration_ref,
+            ),
+        ]
+
+        # Structured output schema from agent context (task 9.8)
+        output_json_schema: dict[str, Any] | None = None
+        if isinstance(context, dict):
+            schema = context.get("output_json_schema")
+            if isinstance(schema, dict):
+                output_json_schema = schema
+
         for iteration in range(max_iterations):
             guardrail_state.cumulative_iterations += 1
+            iteration_ref[0] = iteration
             self._check_runtime_limits_or_raise(guardrail_state)
 
             await data_client.log_execution_event(
@@ -1724,16 +1962,21 @@ class AgentRuntimeExecutor:
                 data_client=data_client,
             )
 
-            raw_response: dict[str, Any] = {}
+            raw_response: Any = None
             llm_success = False
             if _LANGCHAIN_AVAILABLE and model_config_dict:
                 try:
-                    binding = ModelBindingLayer()
-                    raw_response = await binding.complete_from_context(
+                    from app.services.agents.langchain_model_factory import LangChainModelFactory
+                    _factory = LangChainModelFactory()
+                    _llm = _factory.get_model_from_config_dict(
                         model_id=model_id,
                         model_config_dict=model_config_dict,
-                        messages=full_messages,
-                        tools=tool_definitions if tool_definitions else None,
+                        output_json_schema=output_json_schema,
+                    )
+                    if tool_definitions:
+                        _llm = _llm.bind_tools(tool_definitions)
+                    raw_response = await _llm.ainvoke(
+                        full_messages, config={"callbacks": lc_callbacks}
                     )
                     llm_success = True
                 except Exception as exc:
@@ -1758,12 +2001,8 @@ class AgentRuntimeExecutor:
                 }
                 break
 
-            # Extract text and tool calls from LLM response
-            provider = (model_config_dict.get("provider_type") or "openai")
-            from app.services.agents.model_binding import ModelBindingLayer as _MBL
-            response_text = _MBL.extract_text(raw_response, provider)
-            raw_tool_calls = _MBL.extract_tool_calls(raw_response, provider)
-            usage = _MBL.extract_usage(raw_response, provider)
+            # Extract text, tool calls, and usage from LangChain AIMessage response
+            response_text, raw_tool_calls, usage = _extract_ai_message_response(raw_response)
             iteration_tokens = extract_total_tokens_from_usage(usage)
             if iteration_tokens > 0:
                 guardrail_state.token_usage_current_session += iteration_tokens
@@ -1858,7 +2097,24 @@ class AgentRuntimeExecutor:
 
             if not raw_tool_calls:
                 # Final answer — no more tool calls
-                output_data = {"result": response_text or "", "model_id": model_id}
+                # First try to extract structured output (Pydantic model fields)
+                structured_output = _extract_structured_output(raw_response)
+                if structured_output:
+                    # Structured output found - use its fields
+                    output_data = structured_output
+                    output_data.setdefault("model_id", model_id)
+                    logger.info(
+                        "Extracted structured output for session %s: keys=%s",
+                        session_id,
+                        list(structured_output.keys()),
+                    )
+                else:
+                    # Fallback to text response
+                    output_data = {"result": response_text or "", "model_id": model_id}
+                    logger.info(
+                        "No structured output found for session %s, using text response",
+                        session_id,
+                    )
                 break
 
             # Append assistant message with tool calls
@@ -1914,9 +2170,13 @@ class AgentRuntimeExecutor:
                     bare_tool_name = parsed[1]
 
                 if bare_tool_name == "save_result":
+                    # Extract structured output from 'data' parameter (contains field_values)
+                    # Fallback to 'content' if 'data' is not provided
+                    structured_data = args.get("data") or {}
                     output_data = {
                         "result": args.get("content", ""),
                         "title": args.get("title", ""),
+                        **structured_data,  # Merge structured field values
                     }
                     await data_client.submit_result(session_id, output_data)
                     tool_result = {"status": "saved"}
@@ -1927,7 +2187,7 @@ class AgentRuntimeExecutor:
                         session_id=session_id,
                         event_type="save_result",
                         message="save_result: result submitted to Control Center",
-                        data={"title": args.get("title", ""), "output_keys": list(args.keys())},
+                        data={"title": args.get("title", ""), "output_keys": list(args.keys()), "data_keys": list(structured_data.keys()) if structured_data else []},
                         data_client=data_client,
                     )
                     messages.append({
@@ -2369,11 +2629,11 @@ class AgentRuntimeExecutor:
 
         Returns the final text response from the agent.
         """
-        from app.services.agents.model_binding import ModelBindingLayer
         from app.db.models.agents import AgentTypeSopBinding, AgentTypeSkillBinding
-
+        from app.services.agents.model_binding import ModelBindingLayer
         from sqlalchemy import select as _sel
 
+        # Resolve model config via ModelBindingLayer seam (enables patching in tests)
         binding = ModelBindingLayer()
         model_config = await binding.resolve_model_config(agent_type.model_id, db)
 
@@ -2511,10 +2771,10 @@ class AgentRuntimeExecutor:
             )
 
             raw_response = await binding.complete(
-                agent_type=agent_type,
-                model_config=model_config,
-                messages=local_messages,
-                tools=tool_definitions if tool_definitions else None,
+                agent_type,
+                model_config,
+                local_messages,
+                tool_definitions or None,
             )
 
             response_text = ModelBindingLayer.extract_text(raw_response, model_config.provider_type)
@@ -3230,11 +3490,32 @@ class AgentRuntimeExecutor:
             )
 
             # ── Observe-Reason-Act loop ────────────────────────────────────────
+            from app.services.agents.guardrails import RuntimeGuardrailState
+            from app.services.agents.guardrail_callback import GuardrailCallback
+            from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
+
+            # Build a minimal guardrail state for the CC path (no context dict available)
+            guardrail_state = RuntimeGuardrailState()
+            iteration_ref = [0]
+            lc_callbacks: list[Any] = [
+                GuardrailCallback(
+                    guardrail_state=guardrail_state,
+                    session_id=str(job.id),
+                    execution_mode="task",
+                ),
+                ExecutionLoggingCallback(
+                    session_id=str(job.id),
+                    data_client=None,  # CC path uses _log_execution_event directly
+                    iteration_ref=iteration_ref,
+                ),
+            ]
+
             while ctx.should_continue():
                 ctx = await self._observe(ctx, db)
-                ctx = await self._reason(ctx, agent_type, db)
+                ctx = await self._reason(ctx, agent_type, db, callbacks=lc_callbacks)
                 ctx = await self._act(ctx, allowed_tools, db, guardrail_state=guardrail_state)
                 ctx.iteration += 1
+                iteration_ref[0] = ctx.iteration
 
             output_data: dict[str, Any] = ctx.output_data or {
                 "tool_results": ctx.tool_results,
@@ -3366,6 +3647,7 @@ class AgentRuntimeExecutor:
         ctx: TaskAgentLoop,
         agent_type: Any,
         db: AsyncSession,
+        callbacks: list[Any] | None = None,
     ) -> TaskAgentLoop:
         """Reason: call the LLM to decide the next action.
 
@@ -3421,22 +3703,56 @@ class AgentRuntimeExecutor:
             llm_success = False
             if _LANGCHAIN_AVAILABLE:
                 try:
-                    from app.services.agents.model_binding import (
-                        ModelBindingLayer,
-                        ModelBindingError,
-                    )
-                    binding = ModelBindingLayer()
-                    model_config = await binding.resolve_model_config(agent_type.model_id, db)
-                    raw_response = await binding.complete(
-                        agent_type=agent_type,
-                        model_config=model_config,
-                        messages=full_messages,
-                        tools=tool_defs if tool_defs else None,
-                    )
+                    from app.services.agents.langchain_model_factory import LangChainModelFactory
+                    from app.db.models.agents import ModelConfig as _ModelConfig
+                    from sqlalchemy import select as _sel_mc
+                    from app.core.credential_vault import get_vault as _get_vault
 
-                    provider = model_config.provider_type
-                    response_text = ModelBindingLayer.extract_text(raw_response, provider)
-                    raw_tool_calls = ModelBindingLayer.extract_tool_calls(raw_response, provider)
+                    # Resolve model config from DB
+                    _mc_result = await db.execute(_sel_mc(_ModelConfig))
+                    _mc_configs = list(_mc_result.scalars().all())
+                    model_config = None
+                    for _mc in _mc_configs:
+                        if agent_type.model_id in (_mc.enabled_models or []):
+                            model_config = _mc
+                            break
+                    if model_config is None:
+                        raise RuntimeError(
+                            f"No ModelConfig found with model '{agent_type.model_id}' "
+                            "in its enabled_models list"
+                        )
+
+                    # Resolve API key from encrypted credentials
+                    _api_key: str | None = None
+                    if model_config.encrypted_api_key:
+                        try:
+                            _vault = _get_vault()
+                            _creds = json.loads(_vault.decrypt(model_config.encrypted_api_key))
+                            _api_key = _creds.get("api_key")
+                        except Exception as _key_exc:
+                            logger.warning(
+                                "Failed to decrypt model config credentials: %s", _key_exc
+                            )
+
+                    _provider_key = (
+                        model_config.provider_type.value
+                        if hasattr(model_config.provider_type, "value")
+                        else str(model_config.provider_type)
+                    )
+                    _factory = LangChainModelFactory()
+                    _llm = _factory.get_model(
+                        provider_key=_provider_key,
+                        model_id=agent_type.model_id,
+                        api_key=_api_key,
+                        base_url=model_config.api_base_url,
+                    )
+                    if tool_defs:
+                        _llm = _llm.bind_tools(tool_defs)
+                    _invoke_config = {"callbacks": callbacks} if callbacks else {}
+                    raw_response = await _llm.ainvoke(
+                        full_messages, config=_invoke_config or None
+                    )
+                    response_text, raw_tool_calls, _ = _extract_ai_message_response(raw_response)
 
                     # Normalise to internal format: [{id, name, args}]
                     # Restore original tool names from sanitized OpenAI names

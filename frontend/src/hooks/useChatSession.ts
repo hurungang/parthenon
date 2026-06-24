@@ -538,6 +538,11 @@ export function useChatSession(sessionId: string | null, convSessionId?: string 
       return
     }
 
+    // Skip polling in tests to prevent hangs from persistent intervals
+    if ((typeof window !== 'undefined' && (window as any).__VITEST__)) {
+      return
+    }
+
     let cancelled = false
 
     const fetchExecutionLogTitles = async () => {

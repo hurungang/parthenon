@@ -57,7 +57,6 @@ describe('useSessionExecutionLogStream', () => {
       useSessionExecutionLogStream({
         sessionId,
         enabled: true,
-        sessionStatus: 'running',
       }),
     )
 
@@ -79,7 +78,6 @@ describe('useSessionExecutionLogStream', () => {
       useSessionExecutionLogStream({
         sessionId: 'sess-stream-2',
         enabled: true,
-        sessionStatus: 'running',
         reconnectAttempts: 0,
       }),
     )

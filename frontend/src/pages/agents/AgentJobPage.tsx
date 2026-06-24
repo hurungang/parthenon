@@ -18,8 +18,10 @@ import apiClient from '../../api/apiClient'
 import { useChatSession } from '../../hooks/useChatSession'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
+import { useTypedOutput } from '../../hooks/useTypedOutput'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { LogViewer } from '../../components/executions/LogViewer'
+import { OutputTypeResultTab } from '../../components/executions/OutputTypeResultTab'
 import { InterveneRequestList } from '../../components/agents/InterveneRequestList'
 import { InterveneResponseDialog } from '../../components/agents/InterveneResponseDialog'
 import * as interveneApi from '../../api/interveneApi'
@@ -101,6 +103,9 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
   const hasRefetchedLogsRef = useRef(false)
   const autoDialogShownRef = useRef<string | null>(null)
 
+  // Typed output management
+  const { outputId, typedOutput, outputLoading, extractAndSetOutputId, fetchTypedOutput } = useTypedOutput(session)
+
   // Execution logs (system instruction + user prompt) via dedicated hook
   const { logs: execLogs, loading: execLogsLoading, refetch: refetchExecLogs } = useExecutionLogs(id ?? null)
 
@@ -126,7 +131,9 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
   } = useSessionExecutionLogStream({
     sessionId: id ?? null,
     enabled: shouldStreamLogs,
-    sessionStatus: session?.status,
+    onComplete: () => {
+      void fetchSession()
+    },
   })
 
   // WebSocket chat — only active for conversational agents
@@ -260,6 +267,18 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
       if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
     }
   }, [session, refetchExecLogs, fetchLogEntries])
+
+  // Extract output_id from session when it changes
+  useEffect(() => {
+    extractAndSetOutputId(session)
+  }, [session, extractAndSetOutputId])
+
+  // Fetch typed output whenever output_id becomes available
+  useEffect(() => {
+    if (outputId) {
+      void fetchTypedOutput(outputId)
+    }
+  }, [outputId, fetchTypedOutput])
 
   // Auto-popup intervene dialog when stream emits a human_intervene event
   useEffect(() => {
@@ -562,7 +581,19 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
       {!hideResults && !isConversational && session.status === 'completed' && session.output_data && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" mb={2}>{t('agents.sessions.result')}</Typography>
-          {typeof session.output_data === 'object' &&
+          {/* Display typed output if available, otherwise fall back to raw output_data */}
+          {outputLoading ? (
+            <CircularProgress size={24} />
+          ) : typedOutput ? (
+            <OutputTypeResultTab
+              outputType="typed"
+              outputData={typedOutput.field_values}
+              dataTypeId={typedOutput.data_type_id}
+              validationStatus={typedOutput.validation_status}
+              rawOutput={typedOutput.raw_output}
+              dataTypeName={typedOutput.data_type_name}
+            />
+          ) : typeof session.output_data === 'object' &&
           'markdown' in session.output_data &&
           typeof session.output_data.markdown === 'string' ? (
             <Box

@@ -9,6 +9,7 @@ import { OutputTypeResultTab } from '../executions/OutputTypeResultTab'
 import { InterveneResponseDialog } from './InterveneResponseDialog'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
+import { useTypedOutput } from '../../hooks/useTypedOutput'
 import * as interveneApi from '../../api/interveneApi'
 import apiClient from '../../api/apiClient'
 import type { AgentJob, AgentJobStatus, AgentOutputType, ExecutionLogEntry, InterveneRequest } from '../../types'
@@ -41,6 +42,8 @@ export function AgentExecutionDetailsDialog({
   sessionId,
 }: AgentExecutionDetailsDialogProps) {
   const { t } = useTranslation()
+  
+  // ── All state declarations first (React Rules of Hooks) ─────────────────────
   const [activeTab, setActiveTab] = useState(0)
   const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
   const [session, setSession] = useState<AgentJob | null>(null)
@@ -48,14 +51,27 @@ export function AgentExecutionDetailsDialog({
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: string; content: string }> | null>(null)
   const [loading, setLoading] = useState(true)
   const [subAgentDialogSessionId, setSubAgentDialogSessionId] = useState<string | null>(null)
+  const [inlineInterventionRequest, setInlineInterventionRequest] = useState<InterveneRequest | null>(null)
+  const [inlineDialogDismissed, setInlineDialogDismissed] = useState(false)
+  const [autoDialogOpen, setAutoDialogOpen] = useState(false)
+  const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
+
+  // ── Typed output management hook ──────────────────────────────────────────
+  const { outputId, typedOutput, outputLoading, extractAndSetOutputId, fetchTypedOutput, reset: resetTypedOutput } = useTypedOutput(session)
+
+  // ── Ref declarations ──────────────────────────────────────────────────────
   const logEndRef = useRef<HTMLDivElement | null>(null)
   const prevLogCountRef = useRef(0)
   const interventionRef = useRef<HTMLDivElement | null>(null)
+  const inlineDialogShownRef = useRef<string | null>(null)
+  const autoDialogShownRef = useRef<string | null>(null)
+
+  // ── Callback declarations ─────────────────────────────────────────────────
   const handleViewSubAgentExecution = useCallback((sid: string) => {
     setSubAgentDialogSessionId(sid)
   }, [])
 
-  // Fetch execution logs (system instruction + user prompt)
+  // ── Custom hooks ──────────────────────────────────────────────────────────
   const { logs: execLogs, loading: execLogsLoading } = useExecutionLogs(sessionId)
 
   const {
@@ -65,7 +81,10 @@ export function AgentExecutionDetailsDialog({
   } = useSessionExecutionLogStream({
     sessionId,
     enabled: open,
-    sessionStatus,
+    onComplete: () => {
+      void fetchSession()
+      void fetchLogEntries()
+    },
   })
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -123,6 +142,7 @@ export function AgentExecutionDetailsDialog({
       setInlineInterventionRequest(null)
       setAutoDialogOpen(false)
       setAutoDialogRequest(null)
+      resetTypedOutput()
       autoDialogShownRef.current = null
       Promise.all([
         fetchLogEntries(),
@@ -130,7 +150,7 @@ export function AgentExecutionDetailsDialog({
         fetchConversationHistory(),
       ]).finally(() => setLoading(false))
     }
-  }, [open, sessionId, fetchLogEntries, fetchSession, fetchConversationHistory])
+  }, [open, sessionId, fetchLogEntries, fetchSession, fetchConversationHistory, resetTypedOutput])
 
   // Poll session status while non-terminal for live updates
   useEffect(() => {
@@ -138,16 +158,43 @@ export function AgentExecutionDetailsDialog({
     if (sessionStatus && TERMINAL_STATUSES.includes(sessionStatus)) return
     const pollHandle = window.setInterval(() => {
       void apiClient
-        .get<{ status: AgentJobStatus }>(`/agents/sessions/${sessionId}`)
+        .get<AgentJob>(`/agents/sessions/${sessionId}`)
         .then(({ data }) => {
           setSessionStatus(data.status)
+          if (TERMINAL_STATUSES.includes(data.status)) {
+            setSession(data)
+            void fetchLogEntries()
+          }
         })
         .catch(() => {})
     }, 3000)
     return () => {
       window.clearInterval(pollHandle)
     }
-  }, [open, sessionId, sessionStatus])
+  }, [open, sessionId, sessionStatus, fetchLogEntries])
+
+  // Stream → human intervention handler (instead of polling for pending interventions)
+  useEffect(() => {
+    if (!humanInterveneEvent) return
+    const handleStreamIntervention = async () => {
+      try {
+        const request = await interveneApi.getInterveneRequest(humanInterveneEvent.request_id)
+        if (request && request.status === 'pending') {
+          autoDialogShownRef.current = request.id
+          setInlineInterventionRequest(request)
+          setInlineDialogDismissed(false)
+          inlineDialogShownRef.current = request.id
+          setAutoDialogRequest(request)
+          setAutoDialogOpen(true)
+        }
+      } catch {
+        // Best-effort
+      } finally {
+        clearHumanInterveneEvent()
+      }
+    }
+    void handleStreamIntervention()
+  }, [humanInterveneEvent, clearHumanInterveneEvent])
 
   useEffect(() => {
     if (!streamedEntries.length) return
@@ -170,16 +217,25 @@ export function AgentExecutionDetailsDialog({
     logEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [open, logEntries.length])
 
+  // Extract output_id from session when it changes
+  useEffect(() => {
+    extractAndSetOutputId(session)
+  }, [session, extractAndSetOutputId])
+
+  // Fetch typed output whenever output_id becomes available
+  useEffect(() => {
+    if (outputId) {
+      void fetchTypedOutput(outputId)
+    }
+  }, [outputId, fetchTypedOutput])
+
   // ── Determine available tabs ─────────────────────────────────────────────────
 
-  const hasExecutionLogs = logEntries.length > 0 || execLogs.length > 0
   const hasResult = !!session && TERMINAL_STATUSES.includes(session.status)
+  // Always show execution tab when there are logs, or when result is shown (so user can inspect logs after completion)
+  const hasExecutionLogs = logEntries.length > 0 || execLogs.length > 0 || hasResult
   const hasConversationHistory = !!conversationHistory && conversationHistory.length > 0
-
   const allTabs: TabDef[] = []
-  if (hasExecutionLogs) {
-    allTabs.push({ key: 'execution', label: t('agents.executionLogs.title', { defaultValue: 'Execution' }) })
-  }
   if (hasResult) {
     const outputType = session?.output_data?.['__output_type'] as AgentOutputType | undefined
     const label = outputType
@@ -187,79 +243,35 @@ export function AgentExecutionDetailsDialog({
       : t('agents.sessions.result', { defaultValue: 'Result' })
     allTabs.push({ key: 'result', label, badge: outputType })
   }
+  if (hasExecutionLogs) {
+    allTabs.push({ key: 'execution', label: t('agents.executionLogs.title', { defaultValue: 'Execution' }) })
+  }
   if (hasConversationHistory) {
     allTabs.push({ key: 'history', label: t('agents.sessions.conversationHistory', { defaultValue: 'Conversation History' }) })
   }
 
+  // Auto-switch to result tab when it first becomes available
+  useEffect(() => {
+    if (hasResult) {
+      const resultIndex = allTabs.findIndex((tab) => tab.key === 'result')
+      if (resultIndex >= 0) {
+        setActiveTab(resultIndex)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasResult])
+
   const safeActiveTab = allTabs.length > 0 ? Math.min(activeTab, allTabs.length - 1) : 0
-
-  // ── Inline intervention dialog state (for execution tab) ────────────────────
-
-  const [inlineInterventionRequest, setInlineInterventionRequest] = useState<InterveneRequest | null>(null)
-  const [inlineDialogDismissed, setInlineDialogDismissed] = useState(false)
-  const inlineDialogShownRef = useRef<string | null>(null)
 
   // ── Auto-popup modal intervene dialog ───────────────────────────────────────
 
-  const [autoDialogOpen, setAutoDialogOpen] = useState(false)
-  const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
-  const autoDialogShownRef = useRef<string | null>(null)
-
-  // ── Stream event → show inline or modal dialog ─────────────────────────────
-
-  useEffect(() => {
-    if (!humanInterveneEvent) return
-    const showDialog = async () => {
-      try {
-        const request = await interveneApi.getInterveneRequest(humanInterveneEvent.request_id)
-        if (request && request.status === 'pending') {
-          autoDialogShownRef.current = request.id
-          // Show as inline dialog if we're on the execution tab
-          setInlineInterventionRequest(request)
-          setInlineDialogDismissed(false)
-          inlineDialogShownRef.current = request.id
-          setAutoDialogRequest(request)
-          setAutoDialogOpen(true)
-        }
-      } catch {
-        // Best-effort
-      } finally {
-        clearHumanInterveneEvent()
-      }
-    }
-    void showDialog()
-  }, [humanInterveneEvent, clearHumanInterveneEvent])
-
-  // ── Session status waiting_for_human → fetch pending interventions ──────────
-
-  useEffect(() => {
-    if (sessionStatus !== 'waiting_for_human') return
-    const fetchAndShow = async () => {
-      try {
-        const pending = await interveneApi.getPendingInterventionForSession(sessionId)
-        if (pending && pending.status === 'pending') {
-          if (autoDialogShownRef.current !== pending.id && inlineDialogShownRef.current !== pending.id) {
-            autoDialogShownRef.current = pending.id
-            inlineDialogShownRef.current = pending.id
-            setAutoDialogRequest(pending)
-            setAutoDialogOpen(true)
-            setInlineInterventionRequest(pending)
-            setInlineDialogDismissed(false)
-          }
-        }
-      } catch {
-        // Best-effort
-      }
-    }
-    void fetchAndShow()
-  }, [sessionStatus, sessionId])
-
-  // ── Pending intervention check on dialog open ───────────────────────────────
-
+  // Remove old polling-based intervention check on initial open (now handled by stream)
+  // Keeping only the session-status-change handler for completeness, but the stream should be primary
   useEffect(() => {
     if (!open) return
-    const checkPending = async () => {
+    const checkInitialPending = async () => {
       try {
+        // Only check on initial open; stream will handle ongoing events
         const pending = await interveneApi.getPendingInterventionForSession(sessionId)
         if (pending && pending.status === 'pending') {
           if (autoDialogShownRef.current !== pending.id && inlineDialogShownRef.current !== pending.id) {
@@ -272,10 +284,10 @@ export function AgentExecutionDetailsDialog({
           }
         }
       } catch {
-        // Best-effort
+        // Best-effort — stream is primary, this is just a fallback
       }
     }
-    void checkPending()
+    void checkInitialPending()
     // Only run on initial open, not on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -311,37 +323,6 @@ export function AgentExecutionDetailsDialog({
     },
     [handleAutoDialogClose],
   )
-
-  const handleInlineSubmit = useCallback(
-    async (requestId: string, value: {
-      approval_value?: boolean
-      selected_choice?: string
-      text_value?: string
-    }) => {
-      await interveneApi.submitInterveneResponse(requestId, {
-        request_id: requestId,
-        ...value,
-      })
-      // Update local state to reflect responded status so the pending banner hides
-      setInlineInterventionRequest((prev) =>
-        prev && prev.id === requestId
-          ? { ...prev, status: 'responded' }
-          : prev,
-      )
-      setAutoDialogRequest((prev) =>
-        prev && prev.id === requestId
-          ? { ...prev, status: 'responded' }
-          : prev,
-      )
-      // Close the modal dialog if open
-      setAutoDialogOpen(false)
-    },
-    [],
-  )
-
-  const handleInlineDismiss = useCallback(() => {
-    setInlineDialogDismissed(true)
-  }, [])
 
   const handleRespondNow = useCallback(() => {
     setInlineDialogDismissed(false)
@@ -474,15 +455,32 @@ export function AgentExecutionDetailsDialog({
         {/* ═══════════════════════════════ Result tab ══════════════════════════ */}
         {allTabs[safeActiveTab]?.key === 'result' && session && (
           <Paper sx={{ p: 3, mt: 1 }}>
-            <OutputTypeResultTab
-              outputType={outputType}
-              outputData={session.output_data}
-              outputSchema={outputSchema}
-              dataTypeId={dataTypeId}
-              dataTypeName={dataTypeName}
-              validationStatus={validationStatus}
-              rawOutput={rawOutput}
-            />
+            {outputLoading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+                <Typography variant="body2" color="text.secondary">
+                  Loading typed output...
+                </Typography>
+              </Box>
+            ) : typedOutput ? (
+              <OutputTypeResultTab
+                outputType="typed"
+                outputData={typedOutput.field_values}
+                dataTypeId={typedOutput.data_type_id}
+                dataTypeName={typedOutput.data_type_name}
+                validationStatus={typedOutput.validation_status}
+                rawOutput={typedOutput.raw_output}
+              />
+            ) : (
+              <OutputTypeResultTab
+                outputType={outputType}
+                outputData={session.output_data}
+                outputSchema={outputSchema}
+                dataTypeId={dataTypeId}
+                dataTypeName={dataTypeName}
+                validationStatus={validationStatus}
+                rawOutput={rawOutput}
+              />
+            )}
           </Paper>
         )}
 

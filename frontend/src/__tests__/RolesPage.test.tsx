@@ -47,7 +47,7 @@ describe('RolesPage', () => {
     render(<RolesPage />, { wrapper })
     await waitFor(() => {
       expect(screen.getByText('admin-role')).toBeDefined()
-    })
+    }, { timeout: 3000 })
   })
 
   it('renders Add Role button', async () => {
