@@ -133,6 +133,9 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
     enabled: shouldStreamLogs,
     onComplete: () => {
       void fetchSession()
+      // Re-fetch intervention requests so stale "pending" state from responded
+      // interventions is cleared once the parent execution completes.
+      void fetchInterveneRequests()
     },
   })
 

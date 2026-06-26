@@ -202,3 +202,170 @@ async def test_arun_returns_error_json_on_exception():
     result = json.loads(result_str)
     assert "error" in result
     assert "connection failed" in result["error"]
+
+
+# ── _extract_delegation_target_slug ───────────────────────────────────────────
+
+
+def test_extract_delegation_target_canonical():
+    from app.services.agents.langchain_tool_wrapper import _extract_delegation_target_slug
+    assert _extract_delegation_target_slug("agent____analyst") == "analyst"
+
+
+def test_extract_delegation_target_sanitized():
+    from app.services.agents.langchain_tool_wrapper import _extract_delegation_target_slug
+    assert _extract_delegation_target_slug("agent__analyst") == "analyst"
+
+
+def test_extract_delegation_target_returns_none_for_mcp():
+    from app.services.agents.langchain_tool_wrapper import _extract_delegation_target_slug
+    assert _extract_delegation_target_slug("server__my_tool") is None
+
+
+def test_extract_delegation_target_returns_none_for_system():
+    from app.services.agents.langchain_tool_wrapper import _extract_delegation_target_slug
+    assert _extract_delegation_target_slug("system____save_result") is None
+
+
+# ── Delegation tool routing (AR path) ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_delegation_tool_calls_a2a_not_call_tool():
+    """Agent delegation tools must route via call_a2a_request, NOT call_tool."""
+    from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+    mock_comm = AsyncMock()
+    mock_comm.call_a2a_request = AsyncMock(return_value={"status": "completed"})
+    mock_comm.call_tool = AsyncMock(return_value={"should": "not be called"})
+
+    mock_data = AsyncMock()
+    mock_data.log_execution_event = AsyncMock(return_value=None)
+
+    defs = [
+        {
+            "type": "function",
+            "function": {
+                "name": "agent__analyst",
+                "description": "Delegate to analyst agent",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"task": {"type": "string"}},
+                },
+            },
+        }
+    ]
+    tools = build_langchain_tools_for_ar_path(
+        tool_definitions=defs,
+        comm_hub_client=mock_comm,
+        data_client=mock_data,
+        session_id="00000000-0000-0000-0000-000000000001",
+        agent_type_id="at-1",
+        role_id="role-1",
+    )
+    assert len(tools) == 1
+    result_str = await tools[0].arun({"task": "analyse the data"})
+
+    # Must use A2A, never the generic call_tool path
+    mock_comm.call_a2a_request.assert_called_once()
+    mock_comm.call_tool.assert_not_called()
+
+    call_kwargs = mock_comm.call_a2a_request.call_args
+    assert call_kwargs.kwargs["target_agent_type_slug"] == "analyst"
+    assert call_kwargs.kwargs["requester_role_id"] == "role-1"
+
+    result = json.loads(result_str)
+    assert result["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_delegation_tool_logs_started_and_resumed():
+    """Delegation tool must log delegation_started and delegation_resumed events."""
+    from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+    mock_comm = AsyncMock()
+    mock_comm.call_a2a_request = AsyncMock(return_value={"result": "ok"})
+
+    logged_events: list[str] = []
+
+    async def log_event(session_id, event_type, message, data, **_):
+        logged_events.append(event_type)
+
+    mock_data = AsyncMock()
+    mock_data.log_execution_event = log_event
+
+    defs = [
+        {"type": "function", "function": {"name": "agent__researcher", "description": "Researcher"}},
+    ]
+    tools = build_langchain_tools_for_ar_path(
+        tool_definitions=defs,
+        comm_hub_client=mock_comm,
+        data_client=mock_data,
+        session_id="00000000-0000-0000-0000-000000000002",
+        agent_type_id="at-1",
+    )
+    await tools[0].arun({})
+
+    assert "delegation_started" in logged_events
+    assert "delegation_resumed" in logged_events
+
+
+@pytest.mark.asyncio
+async def test_delegation_tool_logs_failed_on_error():
+    """Delegation tool must log delegation_failed when call_a2a_request raises."""
+    from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+    mock_comm = AsyncMock()
+    mock_comm.call_a2a_request = AsyncMock(side_effect=RuntimeError("timeout"))
+
+    logged_events: list[str] = []
+
+    async def log_event(session_id, event_type, message, data, **_):
+        logged_events.append(event_type)
+
+    mock_data = AsyncMock()
+    mock_data.log_execution_event = log_event
+
+    defs = [
+        {"type": "function", "function": {"name": "agent__worker", "description": "Worker"}},
+    ]
+    tools = build_langchain_tools_for_ar_path(
+        tool_definitions=defs,
+        comm_hub_client=mock_comm,
+        data_client=mock_data,
+        session_id="00000000-0000-0000-0000-000000000003",
+        agent_type_id="at-1",
+    )
+    result_str = await tools[0].arun({})
+
+    assert "delegation_failed" in logged_events
+    result = json.loads(result_str)
+    assert "error" in result
+
+
+@pytest.mark.asyncio
+async def test_regular_tool_still_uses_call_tool():
+    """Non-delegation tools must still use call_tool (not a2a)."""
+    from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+    mock_comm = AsyncMock()
+    mock_comm.call_tool = AsyncMock(return_value={"data": "value"})
+    mock_comm.call_a2a_request = AsyncMock()
+
+    mock_data = AsyncMock()
+    mock_data.log_execution_event = AsyncMock(return_value=None)
+
+    defs = [
+        {"type": "function", "function": {"name": "server__search", "description": "Search tool"}},
+    ]
+    tools = build_langchain_tools_for_ar_path(
+        tool_definitions=defs,
+        comm_hub_client=mock_comm,
+        data_client=mock_data,
+        session_id="00000000-0000-0000-0000-000000000004",
+        agent_type_id="at-1",
+    )
+    await tools[0].arun({"query": "test"})
+
+    mock_comm.call_tool.assert_called_once()
+    mock_comm.call_a2a_request.assert_not_called()

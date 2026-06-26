@@ -530,24 +530,14 @@ class PlanGenerationService:
         )
         return text
 
-    def _extract_text_from_response(self, response: dict[str, Any]) -> str:
-        """Extract text content from a provider-agnostic LLM response dict."""
-        # OpenAI / LiteLLM / Azure format
-        choices = response.get("choices")
-        if choices and isinstance(choices, list) and choices:
-            message = choices[0].get("message", {})
-            content = message.get("content", "")
-            if content:
-                return content
-
-        # Anthropic format
-        content_blocks = response.get("content")
-        if content_blocks and isinstance(content_blocks, list):
-            for block in content_blocks:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    return block.get("text", "")
-
-        return str(response)
+    def _extract_text_from_response(self, response: Any) -> str:
+        """Extract text content from a LangChain AIMessage via ModelBindingLayer."""
+        from app.services.agents.model_binding import ModelBindingLayer
+        # Provider is not needed — AIMessage path in extract_text is provider-agnostic.
+        # Pass a placeholder so the signature is satisfied; the AIMessage branch
+        # always fires first and returns before any provider branching.
+        text = ModelBindingLayer.extract_text(response, "openai")
+        return text if text else str(response)
 
     def _parse_plan_steps(self, raw_response: str) -> list[dict[str, Any]]:
         """Parse LLM response into a list of plan step dicts."""

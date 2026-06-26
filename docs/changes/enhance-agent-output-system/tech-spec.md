@@ -6,7 +6,7 @@ The agent output system is enhanced by introducing a centralized **Agent Data Ty
 
 The design follows the existing service segregation: CC owns all new database tables and exposes both public REST endpoints (for UI) and internal mTLS-protected endpoints (for AR). AR has no direct database access — it calls CC internal endpoints for validation, output persistence, and output querying. CH routes the new `query_result` tool call using its existing tool-routing infrastructure.
 
-**Phase 9 (LangChain Migration)** replaces the custom direct-HTTP `ModelBindingLayer` and manual observe-reason-act loop with LangChain's deep agent framework (`create_agent`, LangGraph `AgentExecutor`). LangChain `ChatModel` subclasses replace the 12-provider dispatch facade. Custom `BaseTool` subclasses wrap Parthenon's `CommHubToolClient` to preserve mTLS, service segregation, and tool routing. Guardrails and execution event logging become LangChain `BaseCallbackHandler` callbacks. Structured output uses LangChain's `.with_structured_output()` with the JSON Schema from the AgentContextResponse. The migration deletes ~5,000 lines of custom dispatch and loop code while preserving all security boundaries, credential management, HITL support, and typed output validation.
+**Phase 9 (LangChain Migration)** replaces the custom direct-HTTP `ModelBindingLayer` and manual observe-reason-act loop with LangChain's deep agent framework (`create_agent`, LangGraph `AgentExecutor`). LangChain `ChatModel` subclasses replace the 12-provider dispatch facade. Custom `BaseTool` subclasses wrap Parthenon's `CommHubToolClient` to preserve mTLS, service segregation, and tool routing. Guardrails and execution event logging become LangChain `BaseCallbackHandler` callbacks. Structured output uses `create_agent(response_format=ToolStrategy(schema=output_json_schema))` — `ToolStrategy` uses tool calling universally; LangChain auto-promotes to `ProviderStrategy` for models whose capability profile reports native structured-output support. The migration deletes ~5,000 lines of custom dispatch and loop code while preserving all security boundaries, credential management, HITL support, and typed output validation.
 
 ---
 
@@ -228,7 +228,7 @@ CSV export reuses the same filtering logic but returns a `StreamingResponse` wit
 All existing code paths are preserved:
 - `save_result` is a **general-purpose system tool** any agent can use mid-execution to checkpoint results; it has no special relationship with typed output. Typed output is captured at session completion by the runtime, not via `save_result`.
 - Execution completion in `runtime_executor.py` checks `agent_type.output_data_type_id`; if null, uses existing completion flow.
-- When `output_data_type_id` is set, `_run_task_loop_ar` injects the `output_schema_prompt` (built by `_build_output_schema_prompt`) into the system instruction before execution, instructing the agent to return its final answer as a JSON object. The `save_result` tool is not involved.
+- When `output_data_type_id` is set, `_run_task_loop_ar` passes `ToolStrategy(schema=output_json_schema)` as `response_format` to `create_agent()`. LangChain enforces structured output natively via tool calling (or provider-native JSON mode when the model profile supports it). No system instruction injection is used. The `save_result` tool is not involved.
 - `OutputTypeResultTab` checks for `data_type_id` in output data; if absent, renders via existing JSON tree view.
 - `AgentTypeForm` conditionally renders the data type selector only when `input_type !== 'conversation'`.
 
@@ -312,7 +312,7 @@ All new enum types (`AgentOutputValidationStatus`) must use `postgresql.ENUM(...
 
 | Symbol | Kind | Description | File |
 |--------|------|-------------|------|
-| `runtime_executor.py` | module | **MODIFIED**: (1) Injects `output_schema_prompt` into system instruction when `output_data_type_id` is set; (2) Execution completion validates and persists typed outputs via CC internal endpoints | `backend/app/services/agents/runtime_executor.py` |
+| `runtime_executor.py` | module | **MODIFIED**: (1) Passes `ToolStrategy(schema=output_json_schema)` as `response_format` to `create_agent()` when `output_data_type_id` is set — LangChain handles structured output natively, no system instruction injection; (2) Execution completion validates and persists typed outputs via CC internal endpoints | `backend/app/services/agents/runtime_executor.py` |
 | `SystemToolRegistry` | class | **MODIFIED**: Registers `query_result` tool with input schema definition | `backend/app/services/agents/system_tool_registry.py` |
 | `system_tools.py` | module | **MODIFIED**: Added `"query_result"` to `SYSTEM_TOOL_NAMES` frozenset | `backend/app/services/system_tools.py` |
 | `ResultStore` | class | **Unchanged** — `save_result` enhancement is in `system_tools.py` handler, not in this class. Class remains backward-compatible | `backend/app/services/results/store.py` |

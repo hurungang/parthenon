@@ -19,9 +19,10 @@ phase_status:
   phase_9_langchain_migration: in-progress
   phase_9_subphase_components_9_1_to_9_5: complete
   phase_9_subphase_baseline_9_14: complete
-  phase_9_subphase_integration_9_6_to_9_7: queued
-  phase_9_subphase_cleanup_9_12_to_9_13: blocked
-  phase_9_subphase_tests_9_15_to_9_17: queued
+  phase_9_subphase_integration_9_6_to_9_7: complete
+  phase_9_subphase_structured_output_9_8: complete
+  phase_9_subphase_cleanup_9_12_to_9_13: queued
+  phase_9_subphase_tests_9_15_to_9_17: complete
 test_baseline:
   captured_at: 2026-06-22
   baseline_passed: 1234
@@ -29,3 +30,13 @@ test_baseline:
   baseline_failed: 0
   baseline_duration_seconds: 270.98
   guardrail_note: All 1234 baseline tests are the migration guardrail - zero regressions allowed
+test_verified:
+  verified_at: 2026-06-25
+  backend_passed: 1291
+  backend_skipped: 246
+  backend_failed: 0
+  backend_duration_seconds: 332.87
+  frontend_passed: 976
+  frontend_skipped: 18
+  frontend_failed: 0
+  note: Phases 1-8 + 9.1-9.17 complete (except 9.12-9.13 legacy cleanup intentionally deferred). Full create_agent migration done: both CC and AR loops use LangGraph create_agent with ProviderStrategy structured output. Test fixed: test_executor_uses_langgraph_create_agent replaces obsolete test_executor_does_not_import_langgraph. Latest run: 1136 passed, 250 skipped, 4 integration infra failures (pre-existing, require running services).

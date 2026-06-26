@@ -99,6 +99,7 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
     ) -> None:
         """Emit llm_request event when a chat model call begins."""
         self._llm_start_time = time.monotonic()
+        self.iteration_ref[0] += 1  # Each model call = one iteration
         model_name = (
             serialized.get("kwargs", {}).get("model_name")
             or serialized.get("name", "unknown")
@@ -186,7 +187,7 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
 
     async def on_tool_end(
         self,
-        output: str,
+        output: Any,
         **kwargs: Any,
     ) -> None:
         """Emit tool_response event when a tool call completes."""
@@ -195,7 +196,9 @@ class ExecutionLoggingCallback(AsyncCallbackHandler):
         if run_id in self._tool_start_times:
             elapsed = time.monotonic() - self._tool_start_times.pop(run_id)
 
-        logged_output = output[:500] if len(output) > 500 else output
+        # LangChain may pass a ToolMessage object or a plain string
+        output_str = output.content if hasattr(output, "content") else str(output)
+        logged_output = output_str[:500] if len(output_str) > 500 else output_str
 
         await self._safe_log(
             event_type="tool_response",

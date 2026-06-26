@@ -15,35 +15,38 @@ from app.db.session import AsyncSession
 logger = logging.getLogger(__name__)
 
 
-# ── Curated static model lists (no public listing endpoint) ──────────────────
+# ── Fallback curated model lists (used when live API call fails) ────────────
 #
-# Reviewed against each vendor's "generally available" model catalogue at
-# release time.  Sorted ascending by the alphabetic ordering applied by
-# ``list_models_for_config``; no per-list re-sorting is needed.
+# These are used only as a last resort when the provider's live API is
+# unreachable or returns an error.  Kept minimal and up-to-date.
 
-# Curated list of well-known Google Gemini model identifiers.  Source:
-# Google's official "generally available" Gemini model documentation.
-GEMINI_CURATED_MODELS: list[str] = sorted(
+# Fallback for Google Gemini — stable GA models only (1.5-series is deprecated).
+GEMINI_FALLBACK_MODELS: list[str] = sorted(
     [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-pro",
         "gemini-2.0-flash",
-        "gemini-2.0-flash-exp",
         "gemini-2.5-flash",
         "gemini-2.5-pro",
     ]
 )
 
-# Curated list of well-known Cohere model identifiers.  Source: Cohere's
-# official "generally available" model documentation for the Command family.
-COHERE_CURATED_MODELS: list[str] = sorted(
+# Fallback for Cohere — current Command family.
+COHERE_FALLBACK_MODELS: list[str] = sorted(
     [
-        "command",
-        "command-light",
         "command-r",
         "command-r-plus",
         "command-r7b",
+        "command-a-03-2025",
+    ]
+)
+
+# Fallback for Anthropic — current Claude models.
+ANTHROPIC_FALLBACK_MODELS: list[str] = sorted(
+    [
+        "claude-3-5-haiku-latest",
+        "claude-3-5-sonnet-latest",
+        "claude-3-7-sonnet-latest",
+        "claude-opus-4-5",
+        "claude-sonnet-4-5",
     ]
 )
 
@@ -200,14 +203,7 @@ class ModelConfigService:
             if provider == ModelProvider.openai:
                 models = await self._list_openai_models(api_key, base_url)
             elif provider == ModelProvider.anthropic:
-                # Anthropic doesn't have a public models endpoint — return well-known models
-                models = [
-                    "claude-opus-4-5",
-                    "claude-sonnet-4-5",
-                    "claude-haiku-4-5",
-                    "claude-3-5-sonnet-latest",
-                    "claude-3-5-haiku-latest",
-                ]
+                models = await self._list_anthropic_models(api_key, base_url)
             elif provider == ModelProvider.azure_openai:
                 models = await self._list_azure_models(api_key, base_url)
             elif provider == ModelProvider.litellm_proxy:
@@ -215,7 +211,7 @@ class ModelConfigService:
             elif provider == ModelProvider.gemini:
                 models = await self._list_gemini_models(api_key, base_url)
             elif provider == ModelProvider.cohere:
-                models = await self._list_cohere_models(api_key, base_url)
+                models = await self._list_cohere_models(api_key, base_url)  # type: ignore[assignment]
             elif provider_value in {
                 "mistral",
                 "groq",
@@ -286,36 +282,106 @@ class ModelConfigService:
             data = resp.json()
             return [m["id"] for m in data.get("data", []) if isinstance(m.get("id"), str)]
 
+    async def _list_anthropic_models(
+        self, api_key: str | None, base_url: str | None
+    ) -> list[str]:
+        """Fetch model list from the Anthropic models API.
+
+        Anthropic exposes GET /v1/models (added 2024) which returns a paginated
+        list in the same ``{data: [{id, ...}]}`` shape as OpenAI.  Falls back
+        to ANTHROPIC_FALLBACK_MODELS when the API is unreachable or no key is
+        configured.
+        """
+        effective_base = (base_url or "https://api.anthropic.com/v1").rstrip("/")
+        url = f"{effective_base}/models"
+        headers: dict[str, str] = {"anthropic-version": "2023-06-01"}
+        if api_key:
+            headers["x-api-key"] = api_key
+        else:
+            return list(ANTHROPIC_FALLBACK_MODELS)
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                ids = [m["id"] for m in data.get("data", []) if isinstance(m.get("id"), str)]
+                return ids if ids else list(ANTHROPIC_FALLBACK_MODELS)
+        except Exception as exc:
+            logger.warning("Anthropic models API unavailable, using fallback list: %s", exc)
+            return list(ANTHROPIC_FALLBACK_MODELS)
+
     async def _list_azure_models(
         self, api_key: str | None, base_url: str | None
     ) -> list[str]:
-        """Return static list of common Azure OpenAI deployment names."""
+        """Return static list of common Azure OpenAI deployment names.
+
+        Azure OpenAI uses user-defined deployment names that don't map to a
+        discoverable API, so a representative static list is the best option.
+        """
         return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-35-turbo"]
 
     async def _list_gemini_models(
         self, api_key: str | None, base_url: str | None
     ) -> list[str]:
-        """Return the curated list of well-known Google Gemini model identifiers.
+        """Fetch model list from the Google Generative Language API.
 
-        Gemini does not expose a stable public listing endpoint that returns
-        the full catalogue in a single response, so the list is curated from
-        Google's official "generally available" documentation.  An empty or
-        missing ``api_key`` does not prevent the curated list from being
-        returned (the operator will be able to choose any of these when
-        creating the configuration).
+        Calls GET /v1beta/models?key={api_key} and filters to models that
+        support the ``generateContent`` method (i.e. chat/completion models).
+        Falls back to GEMINI_FALLBACK_MODELS when the API is unreachable or
+        no key is configured.
         """
-        del api_key, base_url  # curated list does not depend on credentials
-        return list(GEMINI_CURATED_MODELS)
+        if not api_key:
+            return list(GEMINI_FALLBACK_MODELS)
+
+        effective_base = (base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        url = f"{effective_base}/models"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
+                resp = await client.get(url, params={"key": api_key})
+                resp.raise_for_status()
+                data = resp.json()
+                ids = [
+                    # Strip "models/" prefix that Gemini API returns
+                    m["name"].removeprefix("models/")
+                    for m in data.get("models", [])
+                    if "generateContent" in m.get("supportedGenerationMethods", [])
+                    and isinstance(m.get("name"), str)
+                ]
+                return ids if ids else list(GEMINI_FALLBACK_MODELS)
+        except Exception as exc:
+            logger.warning("Gemini models API unavailable, using fallback list: %s", exc)
+            return list(GEMINI_FALLBACK_MODELS)
 
     async def _list_cohere_models(
         self, api_key: str | None, base_url: str | None
     ) -> list[str]:
-        """Return the curated list of well-known Cohere model identifiers.
+        """Fetch model list from the Cohere models API.
 
-        Cohere does not expose a stable public listing endpoint that returns
-        the full catalogue, so the list is curated from Cohere's official
-        "generally available" documentation.  An empty or missing
-        ``api_key`` does not prevent the curated list from being returned.
+        Calls GET /v2/models and filters to models that have a ``chat`` or
+        ``generate`` endpoint.  Falls back to COHERE_FALLBACK_MODELS when the
+        API is unreachable or no key is configured.
         """
-        del api_key, base_url  # curated list does not depend on credentials
-        return list(COHERE_CURATED_MODELS)
+        if not api_key:
+            return list(COHERE_FALLBACK_MODELS)
+
+        effective_base = (base_url or "https://api.cohere.com/v2").rstrip("/")
+        url = f"{effective_base}/models"
+        headers: dict[str, str] = {"Authorization": f"Bearer {api_key}"}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                ids = [
+                    m["name"]
+                    for m in data.get("models", [])
+                    if isinstance(m.get("name"), str)
+                    and any(ep in m.get("endpoints", []) for ep in ("chat", "generate"))
+                ]
+                return ids if ids else list(COHERE_FALLBACK_MODELS)
+        except Exception as exc:
+            logger.warning("Cohere models API unavailable, using fallback list: %s", exc)
+            return list(COHERE_FALLBACK_MODELS)

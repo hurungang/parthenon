@@ -108,12 +108,9 @@ class SessionAutoNamer:
                 max_tokens=32,
             )
 
-            # Extract the text from the response (OpenAI-compat format)
-            choices = response.get("choices") or []
-            if choices:
-                raw_title = (choices[0].get("message") or {}).get("content", "").strip()
-                if raw_title:
-                    return raw_title[:_TITLE_MAX_CHARS]
+            raw_title = ModelBindingLayer.extract_text(response, model_config.provider_type).strip()
+            if raw_title:
+                return raw_title[:_TITLE_MAX_CHARS]
         except Exception as exc:
             logger.warning(
                 "SessionAutoNamer: LLM title generation failed for session, falling back: %s", exc

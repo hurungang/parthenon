@@ -4,7 +4,6 @@ import CloseIcon from '@mui/icons-material/Close'
 import { useTranslation } from 'react-i18next'
 import { LogViewer } from '../executions/LogViewer'
 
-import { InterventionPendingBanner } from '../executions/InterventionPendingBanner'
 import { OutputTypeResultTab } from '../executions/OutputTypeResultTab'
 import { InterveneResponseDialog } from './InterveneResponseDialog'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
@@ -324,20 +323,7 @@ export function AgentExecutionDetailsDialog({
     [handleAutoDialogClose],
   )
 
-  const handleRespondNow = useCallback(() => {
-    setInlineDialogDismissed(false)
-    // Scroll to the inline intervention dialog after a brief delay for re-render
-    setTimeout(() => {
-      interventionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 100)
-  }, [])
-
-  // ── Computed state for pending banner ───────────────────────────────────────
-
-  const isInterventionPending = !!inlineInterventionRequest && inlineInterventionRequest.status === 'pending'
-  const showPendingBanner = isInterventionPending && (inlineDialogDismissed || safeActiveTab !== 0)
-
-  // Extract output_type from session data
+  // ── Computed state ─────────────────────────────────────────────────────────
   const outputType: AgentOutputType = (session?.output_data?.['__output_type'] as AgentOutputType) ?? 'auto'
   const outputSchema = (session?.output_data?.['__schema'] as Record<string, unknown> | undefined) ?? undefined
 
@@ -358,9 +344,16 @@ export function AgentExecutionDetailsDialog({
       PaperProps={{ sx: { width: { xs: '100%', sm: '90%', lg: '95%' } } }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h6" component="span">
-          {t('agents.sessions.detailsTitle')}
-        </Typography>
+        <Box>
+          <Typography variant="h6" component="span">
+            {t('agents.sessions.detailsTitle')}
+          </Typography>
+          {session?.agent_type_name && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+              {session.agent_type_name}
+            </Typography>
+          )}
+        </Box>
         <IconButton edge="end" onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
@@ -427,15 +420,6 @@ export function AgentExecutionDetailsDialog({
         {/* ═══════════════════════════════ Execution tab ═══════════════════════ */}
         {allTabs[safeActiveTab]?.key === 'execution' && !execLogsLoading && (
           <>
-            {/* Pending intervention banner (shown when modal is dismissed) */}
-            <InterventionPendingBanner
-              pending={showPendingBanner}
-              subAgentName={inlineInterventionRequest?.agent_name ?? ''}
-              interventionType={inlineInterventionRequest?.intervention_type ?? ''}
-              pendingSince={inlineInterventionRequest?.created_at ?? ''}
-              onRespond={handleRespondNow}
-            />
-
             {/* Main LogViewer */}
             <LogViewer
               executionLog={execLogs[0] ?? null}

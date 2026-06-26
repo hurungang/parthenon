@@ -42,9 +42,17 @@ const PREPARATION_EVENT_TYPES = new Set([
   'sops_skills_loaded',
   'sop_loaded',
   'mcp_context_loaded',
+  'binding_content_loaded',
   'plan_injected',
   'prompt_captured',
+  'agent_initialized',
 ])
+
+// ── Preparation group sets (for 4-step collapsing) ─────────────────────────
+const PREP_GROUP_SESSION = new Set(['session_started'])
+const PREP_GROUP_CHECK = new Set(['tools_resolved', 'sops_skills_loaded', 'sop_loaded'])
+const PREP_GROUP_INIT = new Set(['mcp_context_loaded', 'binding_content_loaded', 'plan_injected', 'prompt_captured'])
+const PREP_GROUP_READY = new Set(['agent_initialized'])
 
 /** Event types that belong to the Completion span. */
 const COMPLETION_EVENT_TYPES = new Set([
@@ -383,7 +391,60 @@ function buildSummary(
 }
 
 // ── Span building ──────────────────────────────────────────────────────────────
+/**
+ * Collapse a group of preparation events into a single synthetic summary step.
+ */
+function makePrepSummaryStep(
+  id: string,
+  label: string,
+  events: ExecutionLogEntry[]
+): WorkingStep {
+  const first = events[0]
+  const aggregated: Record<string, unknown> = { _event_types: events.map((e) => e.event_type) }
+  for (const e of events) {
+    Object.assign(aggregated, e.data)
+  }
+  return {
+    id,
+    iconType: 'info',
+    message: label,
+    timestamp: first.timestamp,
+    detail: {
+      label,
+      content: JSON.stringify(aggregated, null, 2),
+      eventType: events.map((e) => e.event_type).join(', '),
+    },
+  }
+}
 
+/**
+ * Collapse raw preparation events into 4 logical summary steps:
+ *   1. Preparation (session_started)
+ *   2. Pre-checking (tools, SOPs, skills)
+ *   3. Initializing (MCP context, bindings, plan, prompt)
+ *   4. Initialized (agent_initialized)
+ */
+function buildPreparationSteps(prepEvents: ExecutionLogEntry[]): WorkingStep[] {
+  if (prepEvents.length === 0) return []
+
+  const g1 = prepEvents.filter((e) => PREP_GROUP_SESSION.has(e.event_type.toLowerCase()))
+  const g2 = prepEvents.filter((e) => PREP_GROUP_CHECK.has(e.event_type.toLowerCase()))
+  const g3 = prepEvents.filter((e) => PREP_GROUP_INIT.has(e.event_type.toLowerCase()))
+  const g4 = prepEvents.filter((e) => PREP_GROUP_READY.has(e.event_type.toLowerCase()))
+
+  // Catch-all: any prep events not in the four groups (edge cases / future event types)
+  const knownGroups = new Set([...PREP_GROUP_SESSION, ...PREP_GROUP_CHECK, ...PREP_GROUP_INIT, ...PREP_GROUP_READY])
+  const ungrouped = prepEvents.filter((e) => !knownGroups.has(e.event_type.toLowerCase()))
+
+  const steps: WorkingStep[] = []
+  if (g1.length > 0) steps.push(makePrepSummaryStep('prep-g1', 'Preparing agent data', g1))
+  if (g2.length > 0) steps.push(makePrepSummaryStep('prep-g2', 'Loading tools and skills', g2))
+  if (g3.length > 0) steps.push(makePrepSummaryStep('prep-g3', 'Setting up context', g3))
+  if (g4.length > 0) steps.push(makePrepSummaryStep('prep-g4', 'Agent ready', g4))
+  // Preserve ungrouped prep events as individual steps (backward compat)
+  for (const e of ungrouped) steps.push(entryToWorkingStep(e))
+  return steps
+}
 function makeIterationSpan(number: number, steps: WorkingStep[]): WorkingStepSpan {
   return {
     id: `iteration-${number}`,
@@ -424,7 +485,7 @@ function extractIterationNumber(entry: ExecutionLogEntry): number | null {
 function buildSpans(entries: ExecutionLogEntry[]): WorkingStepSpan[] {
   const mergedEntries = mergeDelegationEntries(entries)
 
-  const prepSteps: WorkingStep[] = []
+  const prepEvents: ExecutionLogEntry[] = []
   const iterationSpans: WorkingStepSpan[] = []
   const completionSteps: WorkingStep[] = []
 
@@ -438,63 +499,73 @@ function buildSpans(entries: ExecutionLogEntry[]): WorkingStepSpan[] {
     const step = entryToWorkingStep(entry)
 
     if (PREPARATION_EVENT_TYPES.has(et)) {
-      prepSteps.push(step)
+      prepEvents.push(entry)
     } else if (COMPLETION_EVENT_TYPES.has(et)) {
       // Close any open iteration before adding completion steps
       if (currentIterSteps && currentIterSteps.length > 0 && currentIterNumber !== null) {
-        iterationSpans.push(makeIterationSpan(currentIterNumber + 1, currentIterSteps))
+        iterationSpans.push(makeIterationSpan(currentIterNumber, currentIterSteps))
         currentIterSteps = null
         currentIterNumber = null
       }
       completionSteps.push(step)
-    } else if (et === 'observe') {
-      // Each observe event marks the start of a new iteration
-      // Close previous iteration if any
-      if (currentIterSteps && currentIterSteps.length > 0 && currentIterNumber !== null) {
-        iterationSpans.push(makeIterationSpan(currentIterNumber + 1, currentIterSteps))
-      }
-      
-      // Start new iteration - extract iteration number from event
+    } else if (et === 'llm_request') {
+      // LangChain AR path: each llm_request with a new data.iteration starts a new iteration
       const iterNum = extractIterationNumber(entry)
-      currentIterNumber = iterNum !== null ? iterNum : (currentIterNumber !== null ? currentIterNumber + 1 : 0)
+      const isNewIter = currentIterSteps === null || (iterNum !== null && iterNum !== currentIterNumber)
+      if (isNewIter) {
+        if (currentIterSteps && currentIterSteps.length > 0 && currentIterNumber !== null) {
+          iterationSpans.push(makeIterationSpan(currentIterNumber, currentIterSteps))
+        }
+        currentIterNumber = iterNum ?? (currentIterNumber !== null ? currentIterNumber + 1 : 1)
+        currentIterSteps = [step]
+      } else {
+        currentIterSteps!.push(step)
+      }
+    } else if (et === 'observe') {
+      // Legacy CC-path observe event — marks the start of a new iteration
+      if (currentIterSteps && currentIterSteps.length > 0 && currentIterNumber !== null) {
+        iterationSpans.push(makeIterationSpan(currentIterNumber, currentIterSteps))
+      }
+      const iterNum = extractIterationNumber(entry)
+      currentIterNumber = iterNum !== null ? iterNum : (currentIterNumber !== null ? currentIterNumber + 1 : 1)
       currentIterSteps = [step]
     } else if (et === 'iteration_complete') {
       // iteration_complete closes the current iteration
       if (currentIterSteps !== null) {
         currentIterSteps.push(step)
-        // Close this iteration
         if (currentIterNumber !== null) {
-          iterationSpans.push(makeIterationSpan(currentIterNumber + 1, currentIterSteps))
+          iterationSpans.push(makeIterationSpan(currentIterNumber, currentIterSteps))
         }
         currentIterSteps = null
         currentIterNumber = null
       } else {
-        // Edge case: iteration_complete without an open iteration - skip or add to completion
         completionSteps.push(step)
       }
     } else if (ITERATION_EVENT_TYPES.has(et)) {
-      // llm_request, llm_response, tool_call
+      // llm_response, tool_call, delegation_* etc.
       if (currentIterSteps !== null) {
         currentIterSteps.push(step)
       } else {
-        // No iteration started yet (edge case) — put in preparation
-        prepSteps.push(step)
+        // No iteration open yet — start one implicitly
+        currentIterNumber = currentIterNumber !== null ? currentIterNumber + 1 : 1
+        currentIterSteps = [step]
       }
     } else {
-      // Unknown event type — put in preparation if no iteration started, else current iteration
+      // Unknown event type — add to current iteration or defer to ungrouped prep
       if (currentIterSteps !== null) {
         currentIterSteps.push(step)
       } else {
-        prepSteps.push(step)
+        prepEvents.push(entry)
       }
     }
   }
 
   // Close last open iteration if any
   if (currentIterSteps && currentIterSteps.length > 0 && currentIterNumber !== null) {
-    iterationSpans.push(makeIterationSpan(currentIterNumber + 1, currentIterSteps))
+    iterationSpans.push(makeIterationSpan(currentIterNumber, currentIterSteps))
   }
 
+  const prepSteps = buildPreparationSteps(prepEvents)
   const spans: WorkingStepSpan[] = []
 
   if (prepSteps.length > 0) {
@@ -545,66 +616,75 @@ const DELEGATION_LIFECYCLE_TYPES = new Set([
 ])
 
 /**
- * Merge consecutive delegation events for the same target into a single
+ * Merge delegation lifecycle events for the same target into a single
  * `delegation_merged` entry so the UI renders one consolidated block.
+ *
+ * Unlike the previous consecutive-only approach, this scans the full list and
+ * groups events by target slug, so parallel delegations (agent fires two agent
+ * tools simultaneously) are handled correctly: each target's events are merged
+ * regardless of position interleaving with other targets' events.
  */
 function mergeDelegationEntries(entries: ExecutionLogEntry[]): ExecutionLogEntry[] {
-  const result: ExecutionLogEntry[] = []
-  let i = 0
-  while (i < entries.length) {
-    const entry = entries[i]
-    if (entry.event_type === 'delegation_started') {
-      const group: ExecutionLogEntry[] = [entry]
-      const target = entry.data?.['delegation_target'] as string | undefined
-      let j = i + 1
-      while (j < entries.length) {
-        const next = entries[j]
-        // human_intervene entries use agent_type instead of delegation_target
-        const nextTarget = next.event_type === 'human_intervene'
-          ? (next.data?.['agent_type'] as string | undefined)
-          : (next.data?.['delegation_target'] as string | undefined)
-        if (DELEGATION_LIFECYCLE_TYPES.has(next.event_type) && nextTarget === target) {
-          group.push(next)
-          j++
-        } else {
-          break
-        }
-      }
+  // 1. Group all delegation lifecycle events by target slug (preserving order)
+  const byTarget = new Map<string, ExecutionLogEntry[]>()
+  for (const e of entries) {
+    if (!DELEGATION_LIFECYCLE_TYPES.has(e.event_type) && e.event_type !== 'delegation_started') continue
+    const target: string | undefined =
+      e.event_type === 'human_intervene'
+        ? (e.data?.['agent_type'] as string | undefined)
+        : (e.data?.['delegation_target'] as string | undefined)
+    if (!target) continue
+    if (!byTarget.has(target)) byTarget.set(target, [])
+    byTarget.get(target)!.push(e)
+  }
 
-      if (group.length >= 2) {
-        const lastEvent = group[group.length - 1]
-        // Carry receiver_session_id from the terminal event first,
-        // then fall back to delegation_waiting (legacy).
-        const receiverSessionId =
-          (lastEvent.data?.['receiver_session_id'] as string | undefined) ??
-          (group.find((e) => e.event_type === 'delegation_waiting')
-            ?.data?.['receiver_session_id'] as string | undefined)
+  // 2. For targets with 2+ events, build a merged replacement for the
+  //    delegation_started entry and mark subsequent lifecycle entries for removal.
+  const replacements = new Map<string, ExecutionLogEntry>()
+  const toRemove = new Set<string>()
 
-        const merged: ExecutionLogEntry = {
-          id: entry.id,
-          timestamp: entry.timestamp,
-          log_level: entry.log_level,
-          event_type: 'delegation_merged',
-          message: entry.message,
-          data: {
-            ...entry.data,
-            ...(receiverSessionId ? { receiver_session_id: receiverSessionId } : {}),
-            delegation_events: group.map((e) => ({
-              event_type: e.event_type,
-              message: e.message,
-              timestamp: e.timestamp,
-            })),
-            delegation_final_event_type: lastEvent.event_type,
-            delegation_final_message: lastEvent.message,
-          },
-        }
-        result.push(merged)
-        i = j
-        continue
-      }
+  for (const [, group] of byTarget) {
+    if (group.length < 2) continue
+    const startEvent = group.find((e) => e.event_type === 'delegation_started')
+    if (!startEvent) continue
+
+    const lastEvent = group[group.length - 1]
+    const receiverSessionId =
+      (lastEvent.data?.['receiver_session_id'] as string | undefined) ??
+      (group
+        .find((e) => e.event_type === 'delegation_waiting')
+        ?.data?.['receiver_session_id'] as string | undefined)
+
+    const merged: ExecutionLogEntry = {
+      id: startEvent.id,
+      timestamp: startEvent.timestamp,
+      log_level: startEvent.log_level,
+      event_type: 'delegation_merged',
+      message: startEvent.message,
+      data: {
+        ...startEvent.data,
+        ...(receiverSessionId ? { receiver_session_id: receiverSessionId } : {}),
+        delegation_events: group.map((e) => ({
+          event_type: e.event_type,
+          message: e.message,
+          timestamp: e.timestamp,
+        })),
+        delegation_final_event_type: lastEvent.event_type,
+        delegation_final_message: lastEvent.message,
+      },
     }
-    result.push(entry)
-    i++
+
+    replacements.set(startEvent.id, merged)
+    for (const e of group) {
+      if (e.id !== startEvent.id) toRemove.add(e.id)
+    }
+  }
+
+  // 3. Build result — replace start entries, skip removed entries.
+  const result: ExecutionLogEntry[] = []
+  for (const entry of entries) {
+    if (toRemove.has(entry.id)) continue
+    result.push(replacements.get(entry.id) ?? entry)
   }
   return result
 }
