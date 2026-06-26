@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  Alert,
   Box,
   CircularProgress,
   Dialog,
@@ -154,7 +155,22 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
   }
 
   const hasLogs = logs.length > 0 || execLogs.length > 0
-  const showTabs = hasLogs && outputId != null
+  const isErrorSession = sessionStatus === 'failed' || sessionStatus === 'terminated'
+  const showTabs = hasLogs && (outputId != null || isErrorSession)
+
+  // Extract the most recent error message from execution logs for error sessions
+  const errorMessage: string | null = isErrorSession
+    ? ([
+        ...logs.filter(
+          (e) =>
+            e.event_type === 'error' ||
+            e.log_level.toUpperCase() === 'ERROR' ||
+            e.log_level.toUpperCase() === 'CRITICAL',
+        ),
+      ]
+        .map((e) => e.message)
+        .at(-1) ?? null)
+    : null
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
@@ -233,7 +249,21 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
                     dataTypeName={typedOutput.data_type_name}
                   />
                 )}
-                {!outputLoading && !typedOutput && (
+                {!outputLoading && !typedOutput && isErrorSession && (
+                  <Box sx={{ py: 2 }}>
+                    <Alert severity={sessionStatus === 'terminated' ? 'warning' : 'error'} sx={{ mb: 1 }}>
+                      {sessionStatus === 'terminated'
+                        ? t('agents.sessions.terminatedUnexpectedly', { defaultValue: 'Session was terminated before completing.' })
+                        : t('agents.sessions.failedUnexpectedly', { defaultValue: 'Session failed before completing.' })}
+                      {errorMessage && (
+                        <Box component="div" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {errorMessage}
+                        </Box>
+                      )}
+                    </Alert>
+                  </Box>
+                )}
+                {!outputLoading && !typedOutput && !isErrorSession && (
                   <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                     {t('agents.sessions.typedOutput.noFields')}
                   </Typography>

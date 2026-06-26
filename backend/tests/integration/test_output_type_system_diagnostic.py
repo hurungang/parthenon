@@ -162,9 +162,9 @@ async def test_output_type_system_end_to_end(db_session: AsyncSession):
     print("\n[STEP 7] Verifying typed output was persisted...")
     if "output_id" in response.result:
         output_service = OutputService()
-        typed_output = await output_service.get(
+        typed_output = await output_service.get_output(
             db=db,
-            id=uuid.UUID(response.result["output_id"])
+            output_id=uuid.UUID(response.result["output_id"])
         )
         
         if typed_output:

@@ -52,27 +52,24 @@ def test_executor_has_session_service():
     assert isinstance(executor._session_service, AgentSessionService)
 
 
-def test_executor_does_not_import_langgraph():
-    """runtime_executor must not import langgraph — LangChain deep agent is used instead."""
+def test_executor_uses_langgraph_create_agent():
+    """runtime_executor uses LangGraph create_agent (tasks 9.6-9.8 migration complete)."""
     import importlib.util
-    import sys
-
-    # Remove cached module so we can inspect a fresh import
-    for key in list(sys.modules.keys()):
-        if "runtime_executor" in key:
-            del sys.modules[key]
 
     spec = importlib.util.spec_from_file_location(
         "runtime_executor",
         "app/services/agents/runtime_executor.py",
     )
-    # The module source should not reference langgraph
     if spec and spec.origin:
         with open(spec.origin, encoding="utf-8") as f:
             source = f.read()
-        assert "langgraph" not in source, (
-            "runtime_executor.py must not reference langgraph — "
-            "LangChain deep agent framework is required"
+        assert "langgraph" in source, (
+            "runtime_executor.py must reference langgraph — "
+            "create_agent migration (tasks 9.6-9.8) should be complete"
+        )
+        assert "create_agent" in source, (
+            "runtime_executor.py must use create_agent — "
+            "LangGraph-backed agent loop is required"
         )
 
 

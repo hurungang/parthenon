@@ -641,9 +641,16 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
   }
 
   // Standard non-delegation step row
+  const isError = step.iconType === 'error'
   return (
-    <Box>
-      <Box display="flex" alignItems="center" gap={1} py={0.75}>
+    <Box
+      sx={
+        isError
+          ? { bgcolor: '#FFF5F5', borderLeft: '3px solid #C62828', borderRadius: '0 4px 4px 0', mb: 0.25 }
+          : undefined
+      }
+    >
+      <Box display="flex" alignItems="center" gap={1} py={0.75} px={isError ? 1 : 0}>
         <StepIcon iconType={step.iconType} />
         <Typography
           variant="caption"

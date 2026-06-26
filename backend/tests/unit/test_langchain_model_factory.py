@@ -73,12 +73,14 @@ def test_openai_compat_returns_chat_openai():
     assert isinstance(model, ChatOpenAI)
 
 
-def test_anthropic_returns_custom_model():
-    """Anthropic provider returns the custom _AnthropicChatModel."""
-    from app.services.agents.langchain_model_factory import (
-        LangChainModelFactory,
-        _AnthropicChatModel,
-    )
+def test_anthropic_returns_native_model():
+    """Anthropic provider returns ChatAnthropic from langchain-anthropic."""
+    from app.services.agents.langchain_model_factory import LangChainModelFactory
+
+    try:
+        from langchain_anthropic import ChatAnthropic
+    except ImportError:
+        pytest.skip("langchain-anthropic not installed")
 
     factory = LangChainModelFactory()
     model = factory.get_model(
@@ -86,15 +88,17 @@ def test_anthropic_returns_custom_model():
         model_id="claude-3-5-haiku-20241022",
         api_key="test-key",
     )
-    assert isinstance(model, _AnthropicChatModel)
+    assert isinstance(model, ChatAnthropic)
 
 
-def test_gemini_returns_custom_model():
-    """Gemini provider returns the custom _GeminiChatModel."""
-    from app.services.agents.langchain_model_factory import (
-        LangChainModelFactory,
-        _GeminiChatModel,
-    )
+def test_gemini_returns_native_model():
+    """Gemini provider returns ChatGoogleGenerativeAI from langchain-google-genai."""
+    from app.services.agents.langchain_model_factory import LangChainModelFactory
+
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+    except ImportError:
+        pytest.skip("langchain-google-genai not installed")
 
     factory = LangChainModelFactory()
     model = factory.get_model(
@@ -102,15 +106,17 @@ def test_gemini_returns_custom_model():
         model_id="gemini-2.0-flash",
         api_key="test-key",
     )
-    assert isinstance(model, _GeminiChatModel)
+    assert isinstance(model, ChatGoogleGenerativeAI)
 
 
-def test_cohere_returns_custom_model():
-    """Cohere provider returns the custom _CohereChatModel."""
-    from app.services.agents.langchain_model_factory import (
-        LangChainModelFactory,
-        _CohereChatModel,
-    )
+def test_cohere_returns_native_model():
+    """Cohere provider returns ChatCohere from langchain-cohere."""
+    from app.services.agents.langchain_model_factory import LangChainModelFactory
+
+    try:
+        from langchain_cohere import ChatCohere
+    except ImportError:
+        pytest.skip("langchain-cohere not installed")
 
     factory = LangChainModelFactory()
     model = factory.get_model(
@@ -118,7 +124,7 @@ def test_cohere_returns_custom_model():
         model_id="command-r-plus-08-2024",
         api_key="test-key",
     )
-    assert isinstance(model, _CohereChatModel)
+    assert isinstance(model, ChatCohere)
 
 
 def test_azure_openai_requires_base_url():
@@ -164,11 +170,13 @@ def test_get_model_from_config_dict_openai():
 
 
 def test_get_model_from_config_dict_anthropic():
-    """get_model_from_config_dict creates the custom Anthropic model from dict."""
-    from app.services.agents.langchain_model_factory import (
-        LangChainModelFactory,
-        _AnthropicChatModel,
-    )
+    """get_model_from_config_dict creates ChatAnthropic from dict."""
+    from app.services.agents.langchain_model_factory import LangChainModelFactory
+
+    try:
+        from langchain_anthropic import ChatAnthropic
+    except ImportError:
+        pytest.skip("langchain-anthropic not installed")
 
     factory = LangChainModelFactory()
     config_dict = {
@@ -180,7 +188,7 @@ def test_get_model_from_config_dict_anthropic():
         model_id="claude-sonnet-4-5",
         model_config_dict=config_dict,
     )
-    assert isinstance(model, _AnthropicChatModel)
+    assert isinstance(model, ChatAnthropic)
 
 
 def test_structured_output_applied_for_openai():

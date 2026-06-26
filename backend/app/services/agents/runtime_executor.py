@@ -380,6 +380,15 @@ def _extract_structured_output(
     return None
 
 
+def _messages_to_dicts(messages: list[Any]) -> list[dict[str, Any]]:
+    """Convert LangChain BaseMessage objects to serialisable dicts for CC DB storage.
+
+    Delegates to langchain_core.messages.messages_to_dict (native LangChain).
+    """
+    from langchain_core.messages import messages_to_dict
+    return messages_to_dict(messages)
+
+
 def _build_dynamic_agent_tool_definition(
     target_agent_type_slug: str,
     target_description: str | None,
@@ -1571,6 +1580,12 @@ class AgentRuntimeExecutor:
         # Extract conversation session ID for delegation context
         self._conv_session_id: str | None = input_data.get("__conv_session_id")
 
+        logger.info("Session %s: agent initializing (model=%s%s)",
+            session_id,
+            context.get("model_id", "unknown"),
+            " [resume]" if response_value else "",
+        )
+
         # ── Log session_started ───────────────────────────────────────────────
         await data_client.log_execution_event(
             session_id=session_id,
@@ -1598,7 +1613,7 @@ class AgentRuntimeExecutor:
             message=f"Resolved {len(allowed_tools)} allowed tool(s)",
             data={
                 "allowed_tools": allowed_tool_names,
-                "role_id": context.get("role_id"),
+                "role_name": context.get("role_name"),
             },
         )
 
@@ -1665,22 +1680,6 @@ class AgentRuntimeExecutor:
                     },
                 )
 
-        # ── Inject typed output schema prompt (if agent has a typed output schema) ──
-        output_schema_prompt: str | None = context.get("output_schema_prompt") if isinstance(context, dict) else None
-        if output_schema_prompt:
-            base = system_instruction or ""
-            system_instruction = f"{base}\n\n{output_schema_prompt}".strip()
-            await data_client.log_execution_event(
-                session_id=session_id,
-                event_type="output_schema_injected",
-                message="Typed output schema prompt injected into system instruction",
-                data={
-                    "output_data_type_id": context.get("output_data_type_id"),
-                    "output_data_type_name": context.get("output_data_type_name"),
-                    "total_instruction_length": len(system_instruction),
-                },
-            )
-
         # ── Build tool definitions from context ───────────────────────────────
         tool_definitions: list[dict[str, Any]] = context.get("tool_definitions") or list(SystemToolRegistry.get_all_schemas())
         tool_name_map: dict[str, str] = context.get("tool_name_map") or {}
@@ -1695,7 +1694,7 @@ class AgentRuntimeExecutor:
         # Configure mTLS certificate for authentication with Communication Hub
         # Get certificate paths from the CertificateManager via data_client
         cert_manager = getattr(data_client, "_cert_manager", None)
-        logger.info(
+        logger.debug(
             "Session %s: Configuring CommHubToolClient - cert_manager=%s",
             session_id,
             "available" if cert_manager else "None",
@@ -1704,7 +1703,7 @@ class AgentRuntimeExecutor:
         if cert_manager:
             cert_path = cert_manager.cert_path
             key_path = cert_manager.key_path
-            logger.info(
+            logger.debug(
                 "Session %s: Certificate paths - cert_path=%s, key_path=%s",
                 session_id,
                 cert_path,
@@ -1715,7 +1714,7 @@ class AgentRuntimeExecutor:
                 cert_path_str = str(cert_path)
                 key_path_str = str(key_path)
                 comm_hub_client.set_certificate(cert_path_str, key_path_str)
-                logger.info(
+                logger.debug(
                     "Session %s: CommHubToolClient configured with mTLS certificate from CertificateManager",
                     session_id,
                 )
@@ -1755,8 +1754,8 @@ class AgentRuntimeExecutor:
         }
         await self._log_execution_event(
             session_id=session_id,
-            event_type="runtime_context_loaded",
-            message="Runtime context prepared for task execution",
+            event_type="agent_initialized",
+            message="Agent initialized and ready for execution",
             data={
                 "tools": tool_def_names,
                 "tool_count": len(tool_def_names),
@@ -1764,19 +1763,19 @@ class AgentRuntimeExecutor:
                 "tool_definitions": sorted(tool_def_names),
                 "tool_routes": route_summary,
                 "has_send_notification_tool": build_tool_name("system", "send_notification") in tool_def_names,
+                "model_id": context.get("model_id"),
+                "sops": [s.get("name") for s in (context.get("sops") or []) if isinstance(s, dict)],
+                "skills": [s.get("name") for s in (context.get("skills") or []) if isinstance(s, dict)],
+                "has_plan": bool(plan_data),
+                "has_output_schema": bool(context.get("output_json_schema") if isinstance(context, dict) else None),
+                "output_data_type_name": context.get("output_data_type_name"),
+                "is_resume": bool(response_value),
                 "system_instruction": system_instruction,
                 "system_instruction_length": len(system_instruction or ""),
                 "user_prompt": user_prompt,
                 "user_prompt_length": len(user_prompt or ""),
             },
             data_client=data_client,
-        )
-
-        # ── Capture prompt log ────────────────────────────────────────────────
-        await data_client.log_prompt(
-            session_id=session_id,
-            system_instruction=system_instruction,
-            user_prompt=user_prompt,
         )
 
         # ── Fetch model config ────────────────────────────────────────────────
@@ -1792,41 +1791,52 @@ class AgentRuntimeExecutor:
         guardrail_state = self._build_guardrail_state(context, job_data)
         execution_mode = "non_conversational"
 
-        # ── Observe-Reason-Act loop ───────────────────────────────────────────
-        messages: list[dict[str, Any]] = []
+        # ── Build conversation history using native LangChain message types ───
+        from langchain_core.messages import (
+            AIMessage, HumanMessage, ToolMessage,
+            messages_from_dict, convert_to_messages,
+        )
 
-        # ── Restore conversation history for resumed sessions ──────────────────
+        messages: list[Any] = []
+
         saved_history = job_data.get("conversation_history")
         if saved_history and isinstance(saved_history, list) and len(saved_history) > 0:
-            messages = saved_history
+            # Restore saved state as proper LangChain message objects.
+            # conversation_history is stored by _messages_to_dicts() which uses
+            # messages_to_dict() → {"type": "human", "data": {...}} format.
+            # Use messages_from_dict() to deserialize, not convert_to_messages()
+            # which only handles OpenAI {"role": "...", "content": "..."} format.
+            first = saved_history[0]
+            if isinstance(first, dict) and "data" in first and "type" in first:
+                messages = list(messages_from_dict(saved_history))
+            else:
+                # Fallback: OpenAI-format or already coercible by LangChain
+                messages = convert_to_messages(saved_history)
             if response_value:
-                # Find the last human_intervene tool call_id and append the
-                # human response as a proper ToolMessage so the LLM sees the
-                # tool call as resolved.
+                # Find the last human_intervene tool call id in the saved history
                 call_id: str | None = None
                 for msg in reversed(messages):
-                    if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                        for tc in msg["tool_calls"]:
-                            if tc.get("function", {}).get("name") == "human_intervene":
-                                call_id = tc.get("id")
+                    if isinstance(msg, AIMessage) and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
+                            if name == "human_intervene":
+                                call_id = tc.get("id", "") if isinstance(tc, dict) else getattr(tc, "id", "")
                                 break
                     if call_id:
                         break
                 if call_id:
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": json.dumps(response_value),
-                    })
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        f"Human intervention has been resolved. "
-                        f"Your plan's human_intervene step is now COMPLETE. "
-                        f"Move to the NEXT step in your plan immediately. "
-                        f"Do NOT call human_intervene again."
-                    ),
-                })
+                    messages.append(ToolMessage(
+                        content=json.dumps(response_value),
+                        tool_call_id=call_id,
+                    ))
+                messages.append(HumanMessage(
+                    content=(
+                        "Human intervention has been resolved. "
+                        "Your plan's human_intervene step is now COMPLETE. "
+                        "Move to the NEXT step in your plan immediately. "
+                        "Do NOT call human_intervene again."
+                    )
+                ))
                 await data_client.log_execution_event(
                     session_id=session_id,
                     event_type="human_response_injected",
@@ -1834,35 +1844,28 @@ class AgentRuntimeExecutor:
                     data={"response_value": response_value},
                 )
         elif response_value:
-            # Legacy path: no saved conversation history — build synthetic
-            # tool-call context so the LLM can continue.
+            # Legacy path: no saved history — build synthetic tool-call context
             formatted = json.dumps(response_value)
-            messages.append({
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [{
+            messages.append(AIMessage(
+                content="",
+                tool_calls=[{
                     "id": "call_resume_context",
-                    "type": "function",
-                    "function": {
-                        "name": "human_intervene",
-                        "arguments": json.dumps({"intervention_type": "approval", "reason": "Requested human input"}),
-                    },
+                    "name": "human_intervene",
+                    "args": {"intervention_type": "approval", "reason": "Requested human input"},
                 }],
-            })
-            messages.append({
-                "role": "tool",
-                "tool_call_id": "call_resume_context",
-                "content": formatted,
-            })
-            messages.append({
-                "role": "user",
-                "content": (
-                    f"Human intervention has been resolved. "
-                    f"Your plan's human_intervene step is now COMPLETE. "
-                    f"Move to the NEXT step in your plan immediately. "
-                    f"Do NOT call human_intervene again."
-                ),
-            })
+            ))
+            messages.append(ToolMessage(
+                content=formatted,
+                tool_call_id="call_resume_context",
+            ))
+            messages.append(HumanMessage(
+                content=(
+                    "Human intervention has been resolved. "
+                    "Your plan's human_intervene step is now COMPLETE. "
+                    "Move to the NEXT step in your plan immediately. "
+                    "Do NOT call human_intervene again."
+                )
+            ))
             await data_client.log_execution_event(
                 session_id=session_id,
                 event_type="human_response_injected",
@@ -1871,12 +1874,9 @@ class AgentRuntimeExecutor:
             )
         else:
             if user_prompt:
-                messages.append({"role": "user", "content": user_prompt})
+                messages.append(HumanMessage(content=user_prompt))
 
-        output_data: dict[str, Any] = {}
-        max_iterations = max(1, guardrail_state.max_iterations)
-
-        # ── Build LangChain callbacks for this session ────────────────────────
+        # ── Build LangChain callbacks ─────────────────────────────────────────
         from app.services.agents.guardrail_callback import GuardrailCallback
         from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
 
@@ -1895,661 +1895,220 @@ class AgentRuntimeExecutor:
             ),
         ]
 
-        # Structured output schema from agent context (task 9.8)
+        # ── Build structured output schema (task 9.8) ─────────────────────────
         output_json_schema: dict[str, Any] | None = None
         if isinstance(context, dict):
             schema = context.get("output_json_schema")
             if isinstance(schema, dict):
                 output_json_schema = schema
 
-        for iteration in range(max_iterations):
-            guardrail_state.cumulative_iterations += 1
-            iteration_ref[0] = iteration
-            self._check_runtime_limits_or_raise(guardrail_state)
-
+        # ── Stub mode (LangChain unavailable) ─────────────────────────────────
+        if not _LANGCHAIN_AVAILABLE or not model_config_dict:
             await data_client.log_execution_event(
                 session_id=session_id,
-                event_type="guardrail.runtime.snapshot",
-                message=f"Guardrail snapshot before iteration {iteration + 1}",
-                data={
-                    "guardrail_reason": "runtime_snapshot",
-                    "execution_mode": execution_mode,
-                    "current_value": {
-                        "cumulative_iterations": guardrail_state.cumulative_iterations,
-                        "delegation_depth": guardrail_state.delegation_depth,
-                        "delegated_steps": guardrail_state.delegated_steps,
-                        "elapsed_seconds": guardrail_state.elapsed_seconds(),
-                        "token_usage_current_session": guardrail_state.token_usage_current_session,
-                    },
-                    "threshold_value": {
-                        "max_iterations": guardrail_state.max_iterations,
-                        "max_delegation_depth": guardrail_state.max_delegation_depth,
-                        "max_delegated_steps": guardrail_state.max_delegated_steps,
-                        "execution_timeout_seconds": guardrail_state.execution_timeout_seconds,
-                        "token_budget": guardrail_state.token_budget,
-                    },
-                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                },
-            )
-
-            # ── Observe ───────────────────────────────────────────────────────
-            await self._log_execution_event(
-                session_id=session_id,
-                event_type="observe",
-                message=f"Observe phase — iteration {iteration}",
-                data={
-                    "message_count": len(messages),
-                    "is_complete": False,
-                },
-                data_client=data_client,
-            )
-
-            # ── Reason ────────────────────────────────────────────────────────
-            full_messages: list[dict[str, Any]] = []
-            if system_instruction:
-                full_messages.append({"role": "system", "content": system_instruction})
-            full_messages.extend(messages)
-
-            await self._log_execution_event(
-                session_id=session_id,
-                event_type="llm_request",
-                message=f"LLM request — iteration {iteration + 1}",
-                data={
-                    "model_id": model_id,
-                    "message_count": len(full_messages),
-                    "tool_count": len(tool_definitions),
-                },
-                data_client=data_client,
-            )
-
-            raw_response: Any = None
-            llm_success = False
-            if _LANGCHAIN_AVAILABLE and model_config_dict:
-                try:
-                    from app.services.agents.langchain_model_factory import LangChainModelFactory
-                    _factory = LangChainModelFactory()
-                    _llm = _factory.get_model_from_config_dict(
-                        model_id=model_id,
-                        model_config_dict=model_config_dict,
-                        output_json_schema=output_json_schema,
-                    )
-                    if tool_definitions:
-                        _llm = _llm.bind_tools(tool_definitions)
-                    raw_response = await _llm.ainvoke(
-                        full_messages, config={"callbacks": lc_callbacks}
-                    )
-                    llm_success = True
-                except Exception as exc:
-                    logger.error(
-                        "LLM call failed for session %s: %s — using stub", session_id, exc
-                    )
-
-            if not llm_success:
-                # Stub response: emit save_result and complete
-                await self._log_execution_event(
-                    session_id=session_id,
-                    event_type="llm_response",
-                    message=f"LLM response (stub) — iteration {iteration + 1}",
-                    log_level="WARN",
-                    data={"stub": True, "langchain_available": _LANGCHAIN_AVAILABLE},
-                    data_client=data_client,
-                )
-                output_data = {
-                    "result": "Task completed (stub executor)",
-                    "session_id": str(session_id),
-                    "iterations": iteration + 1,
-                }
-                break
-
-            # Extract text, tool calls, and usage from LangChain AIMessage response
-            response_text, raw_tool_calls, usage = _extract_ai_message_response(raw_response)
-            iteration_tokens = extract_total_tokens_from_usage(usage)
-            if iteration_tokens > 0:
-                guardrail_state.token_usage_current_session += iteration_tokens
-
-            token_budget = guardrail_state.token_budget
-            token_threshold_hit = (
-                token_budget is not None
-                and token_budget > 0
-                and guardrail_state.token_usage_current_session >= token_budget
-            )
-
-            if token_threshold_hit:
-                guardrail_state.token_threshold_reached = True
-                provider_supported = usage is not None
-
-                if (
-                    guardrail_state.token_enforcement_mode == "enforce"
-                    and provider_supported
-                ):
-                    raise GuardrailStop(
-                        reason=GuardrailStopReason.TOKEN_BUDGET_EXCEEDED_NON_CONVERSATIONAL,
-                        message="Token budget exceeded for non-conversational execution",
-                        details={
-                            "current_value": guardrail_state.token_usage_current_session,
-                            "threshold_value": token_budget,
-                            "execution_mode": execution_mode,
-                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                            "provider": provider,
-                        },
-                    )
-
-                if guardrail_state.token_enforcement_mode == "enforce" and not provider_supported:
-                    await data_client.log_execution_event(
-                        session_id=session_id,
-                        event_type="guardrail.runtime.token_fallback_applied",
-                        message="Token fallback mode applied due to unsupported provider usage accounting",
-                        data={
-                            "guardrail_reason": GuardrailStopReason.TOKEN_GUARDRAIL_FALLBACK_APPLIED,
-                            "execution_mode": execution_mode,
-                            "provider": provider,
-                            "fallback_mode": guardrail_state.token_fallback_mode,
-                            "current_value": guardrail_state.token_usage_current_session,
-                            "threshold_value": token_budget,
-                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                        },
-                    )
-
-                if guardrail_state.token_enforcement_mode != "enforce":
-                    # Observe-only mode: emit structured guardrail threshold alert
-                    await data_client.log_execution_event(
-                        session_id=session_id,
-                        event_type="guardrail.token_budget.threshold_reached",
-                        log_level="WARNING",
-                        message=(
-                            f"Token budget threshold reached (observe mode) — "
-                            f"{guardrail_state.token_usage_current_session} / {token_budget} tokens used"
-                        ),
-                        data={
-                            "guardrail_reason": GuardrailInfoReason.TOKEN_THRESHOLD_OBSERVED,
-                            "enforcement_mode": guardrail_state.token_enforcement_mode,
-                            "current_value": guardrail_state.token_usage_current_session,
-                            "threshold_value": token_budget,
-                            "execution_mode": execution_mode,
-                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                        },
-                        event_category="guardrail",
-                    )
-
-            await self._log_execution_event(
-                session_id=session_id,
                 event_type="llm_response",
-                message=f"LLM response — iteration {iteration + 1}",
-                data={
-                    "response_text": (response_text or "")[:500],
-                    "has_tool_calls": bool(raw_tool_calls),
-                    "token_usage": usage,
-                    "token_usage_current_session": guardrail_state.token_usage_current_session,
-                    "selected_tools": [
-                        _canonicalize_tool_name_for_log(
-                            _restore_tool_name_from_openai(
-                                tc.get("function", {}).get("name", ""),
-                                tool_name_map,
-                            ),
-                            tool_name_map,
-                        )
-                        for tc in (raw_tool_calls or [])
-                    ],
-                    "finish_reason": "tool_calls" if raw_tool_calls else "stop",
-                },
-                data_client=data_client,
+                message="LLM response (stub) — LangChain not available",
+                log_level="WARN",
+                data={"stub": True, "langchain_available": _LANGCHAIN_AVAILABLE},
             )
-
-            if not raw_tool_calls:
-                # Final answer — no more tool calls
-                # First try to extract structured output (Pydantic model fields)
-                structured_output = _extract_structured_output(raw_response)
-                if structured_output:
-                    # Structured output found - use its fields
-                    output_data = structured_output
-                    output_data.setdefault("model_id", model_id)
-                    logger.info(
-                        "Extracted structured output for session %s: keys=%s",
-                        session_id,
-                        list(structured_output.keys()),
-                    )
-                else:
-                    # Fallback to text response
-                    output_data = {"result": response_text or "", "model_id": model_id}
-                    logger.info(
-                        "No structured output found for session %s, using text response",
-                        session_id,
-                    )
-                break
-
-            # Append assistant message with tool calls
-            messages.append({
-                "role": "assistant",
-                "content": response_text or "",
-                "tool_calls": raw_tool_calls,
-            })
-
-            # ── Act ───────────────────────────────────────────────────────────
-            role_id_str = context.get("role_id") or ""
-            role_id = uuid.UUID(role_id_str) if role_id_str else uuid.uuid4()
-
-            save_requested = False
-            save_output_data: dict[str, Any] | None = None
-
-            for tc in raw_tool_calls:
-                sanitized_name = tc.get("function", {}).get("name", "")
-                original_name = _restore_tool_name_from_openai(sanitized_name, tool_name_map)
-                canonical_name = _canonicalize_tool_name_for_log(original_name, tool_name_map)
-                args_raw = tc.get("function", {}).get("arguments", "{}")
-                args: dict[str, Any] = (
-                    json.loads(args_raw)
-                    if isinstance(args_raw, str)
-                    else (args_raw if isinstance(args_raw, dict) else {})
-                )
-                call_id = tc.get("id", "")
-
-                try:
-                    self._permission_manager.check_tool_allowed(
-                        original_name, allowed_tools, role_id
-                    )
-                except PermissionDeniedError as exc:
-                    tool_result: Any = {"error": f"Permission denied: {exc}"}
-                    messages.append({
-                        "role": "tool",
-                        "content": str(tool_result),
-                        "tool_call_id": call_id,
-                    })
-                    continue
-
-                await self._log_execution_event(
-                    session_id=session_id,
-                    event_type="tool_call",
-                    message=f"Tool call: {canonical_name}",
-                    data={"tool": canonical_name, "args": args, "call_id": call_id},
-                    data_client=data_client,
-                )
-
-                bare_tool_name: str | None = None
-                parsed = SystemToolRegistry.parse_name(original_name)
-                if parsed is not None:
-                    bare_tool_name = parsed[1]
-
-                if bare_tool_name == "save_result":
-                    # Extract structured output from 'data' parameter (contains field_values)
-                    # Fallback to 'content' if 'data' is not provided
-                    structured_data = args.get("data") or {}
-                    output_data = {
-                        "result": args.get("content", ""),
-                        "title": args.get("title", ""),
-                        **structured_data,  # Merge structured field values
-                    }
-                    await data_client.submit_result(session_id, output_data)
-                    tool_result = {"status": "saved"}
-                    save_requested = True
-                    save_output_data = output_data
-
-                    await self._log_execution_event(
-                        session_id=session_id,
-                        event_type="save_result",
-                        message="save_result: result submitted to Control Center",
-                        data={"title": args.get("title", ""), "output_keys": list(args.keys()), "data_keys": list(structured_data.keys()) if structured_data else []},
-                        data_client=data_client,
-                    )
-                    messages.append({
-                        "role": "tool",
-                        "content": str(tool_result),
-                        "tool_call_id": call_id,
-                    })
-                elif bare_tool_name == "human_intervene":
-                    intervention_type = args.get("intervention_type")
-                    reason = args.get("reason", "")
-                    choices = args.get("choices")
-                    prompt = args.get("prompt")
-
-                    intervene_result = await comm_hub_client.call_human_intervene(
-                        session_id=str(session_id),
-                        intervention_type=intervention_type,
-                        reason=reason,
-                        choices=choices,
-                        prompt=prompt,
-                        conv_session_id=getattr(self, "_conv_session_id", None),
-                    )
-                    request_id = intervene_result.get("request_id")
-
-                    # Save conversation history BEFORE appending the pending
-                    # tool result, so that on resume we only append ONE ToolMessage
-                    # (the real response) instead of two (pending + response).
-                    await data_client.mark_session_waiting_for_human(
-                        session_id, request_id,
-                        conversation_history=messages,
-                    )
-
-                    # Append pending tool result for completeness, but this is
-                    # NOT saved to history — the real response will replace it
-                    # on resume.
-                    tool_result = {"request_id": request_id, "status": "pending"}
-                    messages.append({
-                        "role": "tool",
-                        "content": json.dumps(tool_result),
-                        "tool_call_id": call_id,
-                    })
-
-                    raise HumanInterveneRequired()
-                elif bare_tool_name in ("send_notification", "get_recipient_group", "query_result"):
-                    # System tools now route through Communication Hub
-                    tool_result = await self._execute_mcp_tool_ar(
-                        tool_name=bare_tool_name,
-                        tool_args=args,
-                        role_mcp_sessions=role_mcp_sessions,
-                        agent_type_id=agent_type_id,
-                        session_id=str(session_id),
-                        comm_hub_client=comm_hub_client,
-                    )
-                else:
-                    delegated_target_slug = _extract_agent_delegation_target(original_name)
-                    if delegated_target_slug is not None:
-                        guardrail_state.delegated_steps += 1
-                        next_depth = guardrail_state.tree_depth + 1
-
-                        # Phase 1.1: Delegation depth guard — emit blocked outcome
-                        # instead of raising GuardrailStop, so the agent can continue
-                        # with other actions after the blocked delegation attempt.
-                        if next_depth > guardrail_state.max_delegation_depth:
-                            await self._log_execution_event(
-                                session_id=session_id,
-                                event_type="delegation_depth_blocked",
-                                message=(
-                                    f"Delegation depth limit reached: "
-                                    f"depth={guardrail_state.tree_depth} "
-                                    f"next={next_depth} > max={guardrail_state.max_delegation_depth}"
-                                ),
-                                data={
-                                    "delegation_target": delegated_target_slug,
-                                    "current_depth": guardrail_state.tree_depth,
-                                    "next_depth": next_depth,
-                                    "max_depth": guardrail_state.max_delegation_depth,
-                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                },
-                                data_client=data_client,
-                            )
-                            tool_result = {
-                                "blocked": True,
-                                "reason": (
-                                    f"Delegation depth limit reached "
-                                    f"(depth={guardrail_state.tree_depth}, "
-                                    f"next={next_depth} > max={guardrail_state.max_delegation_depth}). "
-                                    f"Non-conversational agents are limited to "
-                                    f"1 level of delegation."
-                                ),
-                            }
-                        elif guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
-                            raise GuardrailStop(
-                                reason=GuardrailStopReason.DELEGATED_STEPS_EXCEEDED,
-                                message="Delegated-step limit exceeded before dispatch",
-                                details={
-                                    "current_value": guardrail_state.delegated_steps,
-                                    "threshold_value": guardrail_state.max_delegated_steps,
-                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                },
-                            )
-                        elif (
-                            allowed_agent_types
-                            and delegated_target_slug not in allowed_agent_types
-                        ):
-                            tool_result = {
-                                "error": (
-                                    f"Delegation target '{delegated_target_slug}' is not allowed for this requester. "
-                                    f"Allowed targets: {sorted(allowed_agent_types)}"
-                                )
-                            }
-                        else:
-                            delegation_payload = _build_delegation_request_payload(args)
-                            delegation_payload["__delegation_depth"] = next_depth
-                            guardrail_state.delegation_depth = next_depth
-
-                            # Phase 1.2: Emit delegation_started before dispatch
-                            await self._log_execution_event(
-                                session_id=session_id,
-                                event_type="delegation_started",
-                                message=f"Delegating to agent '{delegated_target_slug}'",
-                                data={
-                                    "delegation_target": delegated_target_slug,
-                                    "delegation_depth": next_depth,
-                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                },
-                                data_client=data_client,
-                            )
-
-                            # Dispatch A2A request (non-waiting to get receiver session)
-                            try:
-                                a2a_response = await comm_hub_client.call_a2a_request(
-                                    target_agent_type_slug=delegated_target_slug,
-                                    session_id=str(session_id),
-                                    requester_role_id=context.get("role_id"),
-                                    request_payload=delegation_payload,
-                                    session_link_id=args.get("session_link_id"),
-                                )
-                            except Exception as a2a_exc:
-                                # Phase 1.2: Emit delegation_failed on dispatch error
-                                await self._log_execution_event(
-                                    session_id=session_id,
-                                    event_type="delegation_failed",
-                                    message=f"Delegation dispatch failed for '{delegated_target_slug}': {a2a_exc}",
-                                    data={
-                                        "delegation_target": delegated_target_slug,
-                                        "error": str(a2a_exc),
-                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                    },
-                                    data_client=data_client,
-                                )
-                                tool_result = {"error": str(a2a_exc), "blocked": False}
-                            else:
-                                # Phase 1.2: Emit delegation_waiting after dispatch
-                                delegated_session_id = None
-                                if isinstance(a2a_response, dict):
-                                    rsid = a2a_response.get("receiver_session_id")
-                                    if isinstance(rsid, str) and rsid.strip():
-                                        delegated_session_id = rsid.strip()
-
-                                await self._log_execution_event(
-                                    session_id=session_id,
-                                    event_type="delegation_waiting",
-                                    message=f"Waiting for delegated agent '{delegated_target_slug}'",
-                                    data={
-                                        "delegation_target": delegated_target_slug,
-                                        "receiver_session_id": delegated_session_id,
-                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                    },
-                                    data_client=data_client,
-                                )
-
-                                if delegated_session_id:
-                                    # Wait for response with HITL-aware timeout
-                                    try:
-                                        wait_payload = await comm_hub_client.wait_for_a2a_response(
-                                            receiver_session_id=delegated_session_id,
-                                            timeout_seconds=float(
-                                                guardrail_state.execution_timeout_seconds
-                                            ),
-                                        )
-                                    except Exception as wait_exc:
-                                        wait_err = str(wait_exc)
-                                        # Phase 1.2/1.3: Check for timeout vs other failure
-                                        if "timeout" in wait_err.lower():
-                                            await self._log_execution_event(
-                                                session_id=session_id,
-                                                event_type="delegation_timeout",
-                                                message=f"Delegated agent '{delegated_target_slug}' timed out",
-                                                data={
-                                                    "delegation_target": delegated_target_slug,
-                                                    "error": wait_err,
-                                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                                },
-                                                data_client=data_client,
-                                            )
-                                        else:
-                                            await self._log_execution_event(
-                                                session_id=session_id,
-                                                event_type="delegation_failed",
-                                                message=f"Delegated agent '{delegated_target_slug}' failed: {wait_err}",
-                                                data={
-                                                    "delegation_target": delegated_target_slug,
-                                                    "error": wait_err,
-                                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                                },
-                                                data_client=data_client,
-                                            )
-                                        tool_result = {
-                                            "error": wait_err,
-                                            "blocked": False,
-                                        }
-                                    else:
-                                        # Phase 1.2: Check exit condition from wait_payload
-                                        exit_condition = "completed"
-                                        if isinstance(wait_payload, dict):
-                                            wait_status = wait_payload.get("status", "")
-                                            if wait_status == "timeout":
-                                                exit_condition = "timeout"
-                                                await self._log_execution_event(
-                                                    session_id=session_id,
-                                                    event_type="delegation_timeout",
-                                                    message=f"Delegated agent '{delegated_target_slug}' timed out",
-                                                    data={
-                                                        "delegation_target": delegated_target_slug,
-                                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                                    },
-                                                    data_client=data_client,
-                                                )
-                                            elif wait_status == "failed":
-                                                exit_condition = "failed"
-                                                await self._log_execution_event(
-                                                    session_id=session_id,
-                                                    event_type="delegation_failed",
-                                                    message=f"Delegated agent '{delegated_target_slug}' failed",
-                                                    data={
-                                                        "delegation_target": delegated_target_slug,
-                                                        "wait_payload": wait_payload,
-                                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                                    },
-                                                    data_client=data_client,
-                                                )
-
-                                        # Phase 1.3: Check for HITL waiting_for_human
-                                        if isinstance(wait_payload, dict) and (
-                                            wait_payload.get("waiting_for_human")
-                                            or wait_status == "waiting_for_human"
-                                        ):
-                                            await data_client.mark_session_waiting_for_human(
-                                                session_id=session_id,
-                                                request_id=wait_payload.get("request_id", ""),
-                                            )
-                                            await self._log_execution_event(
-                                                session_id=session_id,
-                                                event_type="intervention_required",
-                                                message=f"Delegated agent '{delegated_target_slug}' requires human intervention",
-                                                data={
-                                                    "delegation_target": delegated_target_slug,
-                                                    "intervention_type": wait_payload.get("intervention_type"),
-                                                    "reason": wait_payload.get("reason"),
-                                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                                },
-                                                data_client=data_client,
-                                            )
-
-                                        # Phase 1.2: Emit delegation_resumed with exit condition
-                                        await self._log_execution_event(
-                                            session_id=session_id,
-                                            event_type="delegation_resumed",
-                                            message=(
-                                                f"Delegation from '{delegated_target_slug}' "
-                                                f"resumed — exit condition: {exit_condition}"
-                                            ),
-                                            data={
-                                                "delegation_target": delegated_target_slug,
-                                                "exit_condition": exit_condition,
-                                                "receiver_session_id": delegated_session_id,
-                                                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                            },
-                                            data_client=data_client,
-                                        )
-
-                                        tool_result = wait_payload
-
-                                        # Accumulate child's token usage into parent's guardrail state
-                                        if isinstance(wait_payload, dict):
-                                            child_usage = (
-                                                wait_payload
-                                                .get("output_data", {})
-                                                .get("guardrail_usage", {})
-                                                .get("token_usage_current_session", 0)
-                                            )
-                                            if isinstance(child_usage, (int, float)) and child_usage > 0:
-                                                guardrail_state.token_usage_current_session += int(child_usage)
-                                else:
-                                    # No delegated session ID — use raw A2A response
-                                    tool_result = a2a_response
-                    else:
-                        # MCP tool via Communication Hub
-                        tool_result = await self._execute_mcp_tool_ar(
-                            tool_name=original_name,
-                            tool_args=args,
-                            role_mcp_sessions=role_mcp_sessions,
-                            agent_type_id=agent_type_id,
-                            session_id=str(session_id),
-                            comm_hub_client=comm_hub_client,
-                        )
-
-                messages.append({
-                    "role": "tool",
-                    "content": str(tool_result),
-                    "tool_call_id": call_id,
-                })
-
-            # save_result signals task completion, but only after all tool calls
-            # from the same model turn have been executed.
-            if save_requested:
-                await self._log_execution_event(
-                    session_id=session_id,
-                    event_type="task_loop_completed",
-                    message="Task loop completed",
-                    data={"iterations": iteration + 1},
-                    data_client=data_client,
-                )
-                return save_output_data or output_data
-
-            await self._log_execution_event(
-                session_id=session_id,
-                event_type="iteration_complete",
-                message=f"Iteration {iteration + 1} complete",
-                data={"iteration": iteration + 1, "tool_calls": len(raw_tool_calls)},
-                data_client=data_client,
-            )
-        else:
-            # Max iterations exceeded
-            logger.warning("Session %s exceeded max iterations", session_id)
-            raise GuardrailStop(
-                reason=GuardrailStopReason.ITERATION_LIMIT_EXCEEDED,
-                message="Task did not complete within max iterations",
-                details={
-                    "current_value": guardrail_state.cumulative_iterations,
-                    "threshold_value": guardrail_state.max_iterations,
+            return {
+                "result": "Task completed (stub executor — LangChain unavailable)",
+                "session_id": str(session_id),
+                "guardrail_usage": {
                     "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                    "cumulative_iterations": 0,
+                    "token_usage_current_session": 0,
                 },
-            )
+            }
 
-        await self._log_execution_event(
+        # ── Build LangChain model ─────────────────────────────────────────────
+        from app.services.agents.langchain_model_factory import LangChainModelFactory
+
+        try:
+            _factory = LangChainModelFactory()
+            _llm = _factory.get_model_from_config_dict(
+                model_id=model_id,
+                model_config_dict=model_config_dict,
+            )
+        except Exception as _model_exc:
+            logger.error(
+                "Failed to create LangChain model for AR session %s: %s", session_id, _model_exc
+            )
+            return {
+                "result": f"Failed to initialise model: {_model_exc}",
+                "session_id": str(session_id),
+                "error": str(_model_exc),
+            }
+
+        # ── Build response_format for structured output ────────────────────────
+        # ToolStrategy uses tool calling — works on any model that supports tools.
+        # LangChain auto-promotes to ProviderStrategy when the model capability
+        # profile reports native structured-output support.
+        from langchain.agents.structured_output import ToolStrategy
+
+        response_format: Any = ToolStrategy(schema=output_json_schema) if output_json_schema else None
+
+        # ── Capture prompt log (after final system instruction is known) ──────
+        await data_client.log_prompt(
             session_id=session_id,
-            event_type="task_loop_completed",
-            message="Task loop completed",
-            data={
-                "output_keys": list(output_data.keys()),
-                "guardrail": {
-                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                    "cumulative_iterations": guardrail_state.cumulative_iterations,
-                    "delegated_steps": guardrail_state.delegated_steps,
-                    "delegation_depth": guardrail_state.delegation_depth,
-                    "tree_depth": guardrail_state.tree_depth,
-                    "elapsed_seconds": guardrail_state.elapsed_seconds(),
-                    "token_usage_current_session": guardrail_state.token_usage_current_session,
-                },
-            },
-            data_client=data_client,
+            system_instruction=system_instruction,
+            user_prompt=user_prompt,
         )
+
+        # ── Build LangChain tools (task 9.7) ─────────────────────────────────
+        from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+        save_result_output: dict[str, Any] = {}
+        lc_tools = build_langchain_tools_for_ar_path(
+            tool_definitions=tool_definitions,
+            comm_hub_client=comm_hub_client,
+            data_client=data_client,
+            session_id=str(session_id),
+            agent_type_id=agent_type_id or "",
+            conv_session_id=getattr(self, "_conv_session_id", None),
+            save_result_output=save_result_output,
+            tool_name_map=tool_name_map,
+            role_id=str(context.get("role_id") or ""),
+        )
+
+        # ── Create agent (task 9.6/9.7) ───────────────────────────────────────
+        from langchain.agents import create_agent
+        from langgraph.checkpoint.memory import MemorySaver
+
+        _checkpointer = MemorySaver()
+        _recursion_limit = max(1, guardrail_state.max_iterations) * 3 + 1
+
+        _agent = create_agent(
+            model=_llm,
+            tools=lc_tools,
+            system_prompt=system_instruction or None,
+            response_format=response_format,
+            checkpointer=_checkpointer,
+        )
+        _config: dict[str, Any] = {
+            "configurable": {"thread_id": str(session_id)},
+            "callbacks": lc_callbacks,
+            "recursion_limit": _recursion_limit,
+        }
+
+        # ── Invoke agent ──────────────────────────────────────────────────────
+        # LangGraph 1.1.10 behaviour: when interrupt() is called inside a tool,
+        # ainvoke() does NOT raise GraphInterrupt — it returns the state dict
+        # with a "__interrupt__" key containing a list of Interrupt objects.
+        # We keep the except GraphInterrupt clause as a legacy fallback, but
+        # the primary HITL detection is a post-return check on _result.
+        from langgraph.errors import GraphInterrupt
+
+        try:
+            _result = await _agent.ainvoke(
+                {"messages": messages},
+                config=_config,
+            )
+        except GraphInterrupt as _gi:
+            # Fallback: older LangGraph versions that raise instead of returning
+            _pending_interrupts: list[Any] = getattr(_gi, "interrupts", [])
+            _interrupt_payload: dict[str, Any] = (
+                _pending_interrupts[0].value if _pending_interrupts else {}
+            )
+            _request_id = _interrupt_payload.get("request_id") or None
+
+            try:
+                _agent_state = await _agent.aget_state(_config)
+                _conv_history = _messages_to_dicts(
+                    _agent_state.values.get("messages", [])
+                )
+            except Exception as _state_exc:
+                logger.warning(
+                    "Could not extract agent state after interrupt for session %s: %s",
+                    session_id, _state_exc,
+                )
+                _conv_history = messages
+
+            await data_client.mark_session_waiting_for_human(
+                session_id,
+                _request_id,
+                conversation_history=_conv_history,
+            )
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="human_intervene_requested",
+                message="Human intervention requested — session paused",
+                data={"request_id": _request_id, "payload": _interrupt_payload},
+            )
+            raise HumanInterveneRequired()
+
+        except GuardrailStop:
+            raise
+
+        # ── LangGraph 1.1.10: detect interrupt from return value ─────────────
+        # ainvoke() returns {"__interrupt__": [Interrupt(...)], "messages": [...]}
+        # when interrupt() was called inside a tool node.
+        _pending_interrupts_in_result: list[Any] = (
+            _result.get("__interrupt__", []) if isinstance(_result, dict) else []
+        )
+        if _pending_interrupts_in_result:
+            _intr_obj = _pending_interrupts_in_result[0]
+            _interrupt_payload = (
+                _intr_obj.value if hasattr(_intr_obj, "value") else {}
+            )
+            _request_id = (
+                _interrupt_payload.get("request_id", "")
+                if isinstance(_interrupt_payload, dict) else ""
+            ) or None  # send None rather than "" to avoid UUID parse errors in CC
+            logger.info(
+                "Session %s interrupted (LangGraph return-based): request_id=%s",
+                session_id, _request_id,
+            )
+
+            try:
+                _agent_state = await _agent.aget_state(_config)
+                _conv_history = _messages_to_dicts(
+                    _agent_state.values.get("messages", [])
+                )
+            except Exception as _state_exc:
+                logger.warning(
+                    "Could not extract agent state after interrupt for session %s: %s",
+                    session_id, _state_exc,
+                )
+                _conv_history = messages
+
+            await data_client.mark_session_waiting_for_human(
+                session_id,
+                _request_id,
+                conversation_history=_conv_history,
+            )
+            await data_client.log_execution_event(
+                session_id=session_id,
+                event_type="human_intervene_requested",
+                message="Human intervention requested — session paused",
+                data={"request_id": _request_id, "payload": _interrupt_payload},
+            )
+            raise HumanInterveneRequired()
+
+        # ── Extract output_data ───────────────────────────────────────────────
+        _structured_response = _result.get("structured_response")
+        _final_messages: list[Any] = _result.get("messages", [])
+
+        if save_result_output:
+            # save_result was called — use captured args as output_data
+            output_data: dict[str, Any] = {**save_result_output}
+        elif _structured_response is not None:
+            # Typed structured output from response_format (task 9.8)
+            if hasattr(_structured_response, "model_dump"):
+                output_data = _structured_response.model_dump()
+            elif isinstance(_structured_response, dict):
+                output_data = _structured_response
+            else:
+                output_data = {"result": str(_structured_response)}
+        else:
+            # Extract text from final message
+            _last_msg = _final_messages[-1] if _final_messages else None
+            _content = (
+                getattr(_last_msg, "content", "") if _last_msg else ""
+            ) or ""
+            output_data = {"result": _content}
+
+        # Attach guardrail usage
         output_data.setdefault("guardrail_usage", {
             "policy_snapshot_id": guardrail_state.policy_snapshot_id,
             "cumulative_iterations": guardrail_state.cumulative_iterations,
@@ -2558,7 +2117,18 @@ class AgentRuntimeExecutor:
             "elapsed_seconds": guardrail_state.elapsed_seconds(),
             "token_usage_current_session": guardrail_state.token_usage_current_session,
         })
+
+        await data_client.log_execution_event(
+            session_id=session_id,
+            event_type="task_loop_completed",
+            message="Task loop completed via create_agent",
+            data={
+                "output_keys": list(output_data.keys()),
+                "guardrail": output_data.get("guardrail_usage", {}),
+            },
+        )
         return output_data
+
 
     async def _execute_mcp_tool_ar(
         self,
@@ -3306,6 +2876,7 @@ class AgentRuntimeExecutor:
             message="Session execution started",
             data={
                 "agent_type_id": str(job.agent_type_id),
+                "agent_type_name": agent_type.name,
                 "model_id": agent_type.model_id,
                 "input_type": agent_type.input_type.value,
                 "system_instruction_length": len(agent_type.system_instruction or ""),
@@ -3376,7 +2947,7 @@ class AgentRuntimeExecutor:
             message=f"Resolved {len(allowed_tools)} allowed tool(s)",
             data={
                 "allowed_tools": _canonicalize_tool_list_for_log(allowed_tools),
-                "role_id": str(agent_type.role_id) if agent_type.role_id else None,
+                "role_name": role_name,
             },
         )
 
@@ -3494,44 +3065,219 @@ class AgentRuntimeExecutor:
             from app.services.agents.guardrail_callback import GuardrailCallback
             from app.services.agents.execution_logging_callback import ExecutionLoggingCallback
 
-            # Build a minimal guardrail state for the CC path (no context dict available)
+            # ── Build LangChain model and tools for CC path (task 9.6) ──────────
+            from app.services.agents.langchain_model_factory import LangChainModelFactory
+            from app.services.agents.langchain_tool_wrapper import (
+                _sanitize_tool_name, _schema_to_pydantic,
+            )
+            from langchain_core.tools import StructuredTool as _StructuredTool
+
             guardrail_state = RuntimeGuardrailState()
-            iteration_ref = [0]
-            lc_callbacks: list[Any] = [
-                GuardrailCallback(
-                    guardrail_state=guardrail_state,
-                    session_id=str(job.id),
-                    execution_mode="task",
-                ),
+            _iteration_ref = [0]
+            _lc_callbacks: list[Any] = [
                 ExecutionLoggingCallback(
                     session_id=str(job.id),
-                    data_client=None,  # CC path uses _log_execution_event directly
-                    iteration_ref=iteration_ref,
+                    data_client=None,
+                    iteration_ref=_iteration_ref,
                 ),
             ]
 
-            while ctx.should_continue():
-                ctx = await self._observe(ctx, db)
-                ctx = await self._reason(ctx, agent_type, db, callbacks=lc_callbacks)
-                ctx = await self._act(ctx, allowed_tools, db, guardrail_state=guardrail_state)
-                ctx.iteration += 1
-                iteration_ref[0] = ctx.iteration
+            # Build tools from ctx.tool_definitions (CC/DB routing)
+            _save_result_holder: dict[str, Any] = {}
 
-            output_data: dict[str, Any] = ctx.output_data or {
-                "tool_results": ctx.tool_results,
-                "message": "Task completed",
-                "iterations": ctx.iteration,
-            }
+            def _make_cc_tool(orig_name: str) -> tuple:
+                async def _arun(**kwargs: Any) -> str:
+                    from app.services.agents.runtime_executor import SystemToolRegistry
+                    import uuid as _uuid_mod
+
+                    try:
+                        _parsed = SystemToolRegistry.parse_name(orig_name)
+                        _bare = _parsed[1] if _parsed else None
+
+                        if _bare == "save_result":
+                            from app.db.models.results import ResultRecord
+
+                            _structured = kwargs.get("data") or {}
+                            _record = ResultRecord(
+                                agent_type_id=_uuid_mod.UUID(ctx.agent_type_id) if ctx.agent_type_id else None,
+                                payload=kwargs.get("data") or kwargs,
+                                content_type=self._resolve_content_type(ctx.output_type),
+                                title=kwargs.get("title", f"Session {ctx.session_id} result"),
+                                tags=["agent_session"],
+                            )
+                            db.add(_record)
+                            await db.flush()
+                            _rid = str(_record.id)
+                            _out = {
+                                "result": kwargs.get("content", ""),
+                                "title": kwargs.get("title", ""),
+                                "result_id": _rid,
+                                **_structured,
+                            }
+                            _save_result_holder.update(_out)
+                            await self._log_execution_event(
+                                session_id=job.id,
+                                event_type="save_result",
+                                message="save_result: ResultRecord persisted",
+                                data={"result_id": _rid, "title": kwargs.get("title", "")},
+                            )
+                            return json.dumps({"status": "saved", "result_id": _rid})
+
+                        elif _extract_agent_delegation_target(orig_name) is not None:
+                            from app.agent_runtime.comm_hub_client import CommHubToolClient as _CH
+                            _ch = _CH()
+                            _target = _extract_agent_delegation_target(orig_name)
+                            _a2a = await _ch.call_a2a_request(
+                                target_agent_type_slug=_target,
+                                session_id=ctx.session_id,
+                                requester_role_id=ctx.role_id,
+                                request_payload=kwargs,
+                                wait_for_response=True,
+                                wait_timeout_seconds=float(guardrail_state.execution_timeout_seconds),
+                            )
+                            return json.dumps(_a2a) if isinstance(_a2a, (dict, list)) else str(_a2a)
+
+                        else:
+                            _role_uuid = _uuid_mod.UUID(ctx.role_id) if ctx.role_id else _uuid_mod.UUID(int=0)
+                            _rms = await self._load_role_mcp_session_map(_role_uuid, db)
+                            _res = await self._execute_mcp_tool(
+                                orig_name, kwargs, db, _rms, agent_type_id=ctx.agent_type_id
+                            )
+                            return json.dumps(_res) if isinstance(_res, (dict, list)) else str(_res)
+
+                    except Exception as _exc:
+                        logger.warning("CC tool %s failed: %s", orig_name, _exc)
+                        return json.dumps({"error": str(_exc), "tool": orig_name})
+
+                def _run(**kwargs: Any) -> str:
+                    import asyncio as _aio
+                    try:
+                        return _aio.get_event_loop().run_until_complete(_arun(**kwargs))
+                    except Exception as _exc:
+                        return json.dumps({"error": str(_exc)})
+
+                return _run, _arun
+
+            _lc_tools: list[Any] = []
+            for _td in (ctx.tool_definitions or []):
+                _f = _td.get("function") or {}
+                _on = _f.get("name", "")
+                if not _on:
+                    continue
+                _sn = _sanitize_tool_name(_on)
+                _sync, _async = _make_cc_tool(_on)
+                _t = _StructuredTool.from_function(
+                    func=_sync,
+                    coroutine=_async,
+                    name=_sn,
+                    description=_f.get("description", "") or f"Call {_on}.",
+                    args_schema=_schema_to_pydantic(
+                        _sn, _f.get("parameters") or {"type": "object", "properties": {}}
+                    ),
+                )
+                _t.metadata = {"original_name": _on}
+                _lc_tools.append(_t)
+
+            # Build model
+            _cc_llm = None
+            if _LANGCHAIN_AVAILABLE:
+                try:
+                    from app.db.models.agents import ModelConfig as _MCfg
+                    from sqlalchemy import select as _selmc
+                    from app.core.credential_vault import get_vault as _gv
+
+                    _mc_rows = (await db.execute(_selmc(_MCfg))).scalars().all()
+                    _mc = next(
+                        (_r for _r in _mc_rows if agent_type.model_id in (_r.enabled_models or [])),
+                        None,
+                    )
+                    _ak: str | None = None
+                    if _mc and _mc.encrypted_api_key:
+                        try:
+                            _ak = json.loads(_gv().decrypt(_mc.encrypted_api_key)).get("api_key")
+                        except Exception:
+                            pass
+                    _pk = (
+                        _mc.provider_type.value
+                        if _mc and hasattr(_mc.provider_type, "value")
+                        else "openai"
+                    )
+                    _cc_llm = LangChainModelFactory().get_model(
+                        provider_key=_pk,
+                        model_id=agent_type.model_id,
+                        api_key=_ak,
+                        base_url=getattr(_mc, "api_base_url", None),
+                    )
+                except Exception as _mex:
+                    logger.error("CC path: failed to build model: %s", _mex)
+
+            # Build response_format (task 9.8)
+            # Skip for Gemini/Cohere — ToolStrategy conflicts with tool use.
+            _CC_PROVIDER_STRATEGY_KEYS: frozenset[str] = frozenset({
+                "openai", "azure_openai", "litellm_proxy",
+                "mistral", "groq", "together", "fireworks",
+                "perplexity", "deepseek", "anthropic",
+            })
+            _cc_rf: Any = (
+                agent_type.output_schema
+                if (_pk in _CC_PROVIDER_STRATEGY_KEYS and agent_type.output_schema)
+                else None
+            )
+
+            if _cc_llm is None:
+                # Stub fallback
+                output_data: dict[str, Any] = {
+                    "result": "Task completed (stub — model unavailable)",
+                    "stub": True,
+                }
+            else:
+                from langchain.agents import create_agent
+                from langgraph.checkpoint.memory import MemorySaver
+                from langgraph.errors import GraphInterrupt
+
+                _cc_checkpointer = MemorySaver()
+                _cc_agent = create_agent(
+                    model=_cc_llm,
+                    tools=_lc_tools,
+                    system_prompt=ctx.system_instruction or None,
+                    response_format=_cc_rf,
+                    checkpointer=_cc_checkpointer,
+                )
+                _cc_cfg: dict[str, Any] = {
+                    "configurable": {"thread_id": str(job.id)},
+                    "callbacks": _lc_callbacks,
+                    "recursion_limit": 50,
+                }
+
+                try:
+                    _cc_result = await _cc_agent.ainvoke(
+                        {"messages": ctx.messages},
+                        config=_cc_cfg,
+                    )
+                    _cc_sr = _cc_result.get("structured_response")
+                    if _save_result_holder:
+                        output_data = {**_save_result_holder}
+                    elif _cc_sr is not None:
+                        output_data = (
+                            _cc_sr.model_dump()
+                            if hasattr(_cc_sr, "model_dump")
+                            else (_cc_sr if isinstance(_cc_sr, dict) else {"result": str(_cc_sr)})
+                        )
+                    else:
+                        _cc_msgs = _cc_result.get("messages", [])
+                        _cc_last = _cc_msgs[-1] if _cc_msgs else None
+                        output_data = {
+                            "result": (getattr(_cc_last, "content", "") or "") if _cc_last else ""
+                        }
+                except GraphInterrupt:
+                    logger.warning("Unexpected HITL interrupt in CC task loop for session %s", job.id)
+                    output_data = {"result": "Task paused — unexpected human intervention requested"}
 
             await self._log_execution_event(
                 session_id=job.id,
                 event_type="task_loop_completed",
-                message="Task loop completed",
-                data={
-                    "iterations": ctx.iteration,
-                    "tool_results_count": len(ctx.tool_results),
-                    "output_keys": list(output_data.keys()),
-                },
+                message="Task loop completed via create_agent",
+                data={"output_keys": list(output_data.keys())},
             )
 
             return output_data

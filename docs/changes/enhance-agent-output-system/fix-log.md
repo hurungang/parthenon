@@ -4,6 +4,36 @@ This document tracks all bug fixes and issues resolved for this change.
 
 ---
 
+## FIX-20260626-113000
+
+**Created:** 2026-06-26T11:30:00Z
+**Status:** Resolved
+**Issue:** Structured output used system instruction injection instead of LangChain-native strategy
+
+### Observed Behavior
+- AR passed `output_json_schema` to `create_agent(response_format=...)` only for a hardcoded `_PROVIDER_STRATEGY_KEYS` set (OpenAI, Anthropic, etc.)
+- For providers outside the list (Gemini, Cohere), `response_format` was `None` and the schema was injected as a text block (`output_schema_prompt`) into the system instruction — a fragile text-prompt workaround
+- `output_schema_prompt` was always injected regardless of whether `response_format` was also being used (redundant for providers in the key set)
+
+### Expected Behavior
+- All providers use LangChain-native structured output strategy
+- `ToolStrategy` (tool calling) works universally and LangChain auto-promotes to `ProviderStrategy` (native JSON mode) when the model's capability profile reports native support
+- No manual provider list required; no system instruction injection
+
+### Fix
+**Files modified:** `backend/app/services/agents/runtime_executor.py`
+
+1. Removed `_PROVIDER_STRATEGY_KEYS` frozenset and the conditional `_provider_key in ...` guard
+2. Removed `output_schema_prompt` variable assignment and all injection logic (both the early assignment and the deferred `if output_schema_prompt and response_format is None:` block)
+3. Replaced with a single line: `response_format = ToolStrategy(schema=output_json_schema) if output_json_schema else None`
+
+### Result
+- All providers use `ToolStrategy` via `create_agent(response_format=ToolStrategy(schema=output_json_schema))`
+- No system instruction schema injection for any provider
+- `_build_output_schema_prompt()` in CC's `agent_data.py` is no longer consumed by the AR (the field remains in the context payload for backward compatibility but is ignored)
+
+---
+
 ## FIX-20260624-183000
 
 **Created:** 2026-06-24T18:30:00Z

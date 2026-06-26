@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional, Type
+from typing import Any, List, Literal, Optional, Type
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -44,8 +44,10 @@ class _GetRecipientGroupArgs(BaseModel):
 
 
 class _HumanInterveneArgs(BaseModel):
-    message: str = Field(description="Message to display to the human reviewer.")
-    context: Optional[dict] = Field(default=None, description="Additional context for the reviewer.")
+    intervention_type: Literal["approval", "choice", "text"] = Field(description="Type of intervention: 'approval' (yes/no), 'choice' (pick from list), or 'text' (free-form input).")
+    reason: str = Field(description="Reason why human intervention is needed.")
+    choices: Optional[List[str]] = Field(default=None, description="Optional list of choices for the human (used with 'choice' type).")
+    prompt: Optional[str] = Field(default=None, description="Optional prompt text to display to the human.")
 
 
 class _QueryResultArgs(BaseModel):
@@ -181,57 +183,90 @@ class LangChainGetRecipientGroupTool(BaseTool):
 
 
 class LangChainHumanInterveneTool(BaseTool):
-    """LangChain tool that requests human intervention (HITL).
+    """LangChain tool that requests human intervention (HITL) via LangGraph interrupt().
 
-    Raises HumanInterveneRequired exception to halt agent execution and
-    wait for human input, identical to the existing HITL mechanism in
-    runtime_executor.py.
+    Calls CommHub to register the intervention, then raises LangGraph interrupt()
+    to pause agent execution. The calling code catches GraphInterrupt, extracts
+    the conversation state, and saves it to the Control Center DB.
     """
 
     name: str = "human_intervene"
     description: str = (
-        "Request human intervention. Use this when you need human input, "
-        "approval, or clarification to proceed with the task."
+        "Request human intervention. Use when you need human approval, input, or "
+        "confirmation to proceed. Execution pauses until the human responds."
     )
     args_schema: Type[BaseModel] = _HumanInterveneArgs
 
     comm_hub_client: Any = Field(exclude=True)
-    data_client: Any = Field(exclude=True)
     session_id: str = Field(exclude=True)
     agent_type_id: str = Field(exclude=True, default="")
+    conv_session_id: Optional[str] = Field(default=None, exclude=True)
 
     class Config:
         arbitrary_types_allowed = True
 
-    def _run(self, message: str, context: Optional[dict] = None) -> str:
+    def _run(
+        self,
+        intervention_type: str,
+        reason: str,
+        choices: Optional[list] = None,
+        prompt: Optional[str] = None,
+    ) -> str:
         import asyncio
         try:
             loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self._arun(message=message, context=context))
+            return loop.run_until_complete(
+                self._arun(
+                    intervention_type=intervention_type,
+                    reason=reason,
+                    choices=choices,
+                    prompt=prompt,
+                )
+            )
         except Exception as exc:
             return json.dumps({"error": str(exc)})
 
-    async def _arun(self, message: str, context: Optional[dict] = None) -> str:
-        """Request HITL — marks session as waiting and raises HumanInterveneRequired."""
-        try:
-            # Import from existing HITL module to reuse the established exception
-            from app.services.agents.runtime_executor import HumanInterveneRequired  # type: ignore
-        except ImportError:
-            # Fallback exception if import fails (e.g. in unit tests)
-            class HumanInterveneRequired(Exception):  # type: ignore
-                pass
+    async def _arun(
+        self,
+        intervention_type: str,
+        reason: str,
+        choices: Optional[list] = None,
+        prompt: Optional[str] = None,
+    ) -> str:
+        """Register intervention with CommHub then interrupt agent via LangGraph."""
+        from langgraph.types import interrupt
 
+        request_id = ""
         try:
-            # Mark the session as waiting for human intervention
-            await self.data_client.mark_session_waiting_for_human(
+            result = await self.comm_hub_client.call_human_intervene(
                 session_id=self.session_id,
-                message=message,
-                context=context or {},
+                intervention_type=intervention_type,
+                reason=reason,
+                choices=choices,
+                prompt=prompt,
+                conv_session_id=self.conv_session_id,
+            )
+            # CommHub wraps CC's SystemToolResponse, which itself has a 'result' key.
+            # This can create double-nesting: {"result": {"request_id": ...}}.
+            # Try top-level first, then nested 'result' key as fallback.
+            request_id = (
+                result.get("request_id")
+                or result.get("result", {}).get("request_id", "")
+                or ""
             )
         except Exception as exc:
-            logger.error("Failed to mark session as waiting for human: %s", exc)
+            logger.error("LangChainHumanInterveneTool: CommHub call failed: %s", exc)
+            # Registration failed — do NOT interrupt; return error so the model
+            # can decide how to proceed (retry, skip, or complete without HITL).
+            return json.dumps({"error": str(exc)})
 
-        raise HumanInterveneRequired(message)
+        # CommHub registration succeeded — pause the agent.
+        # GraphInterrupt is caught by _run_task_loop_ar, which extracts
+        # conversation state from the checkpointer and saves it to CC DB.
+        interrupt({"request_id": request_id, "intervention_type": intervention_type, "reason": reason})
+
+        # Reached only if resumed via Command(resume=...) — not used in current impl.
+        return json.dumps({"status": "pending", "request_id": request_id})
 
 
 class LangChainQueryResultTool(BaseTool):

@@ -43,33 +43,10 @@ async def generate_workflow_text(*, model_id: str, system_prompt: str, user_prom
     except Exception as exc:
         raise WorkflowAuthoringError(f"Workflow generation failed: {exc}") from exc
 
-    text = extract_text_from_model_response(response).strip()
+    text = ModelBindingLayer.extract_text(response, model_config.provider_type).strip()
     if not text:
         raise WorkflowAuthoringError("Workflow generation returned an empty response")
     return text
-
-
-def extract_text_from_model_response(response: dict[str, Any]) -> str:
-    """Extract plain text from provider-specific model responses."""
-    choices = response.get("choices")
-    if choices and isinstance(choices, list) and choices:
-        message = choices[0].get("message", {})
-        content = message.get("content", "")
-        if isinstance(content, str) and content:
-            return content
-
-    content_blocks = response.get("content")
-    if content_blocks and isinstance(content_blocks, list):
-        parts: list[str] = []
-        for block in content_blocks:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
-                if isinstance(text, str) and text:
-                    parts.append(text)
-        if parts:
-            return "\n".join(parts)
-
-    return ""
 
 
 def build_skill_instruction_file(*, workflow: str, tools: list[dict[str, Any]]) -> str:
