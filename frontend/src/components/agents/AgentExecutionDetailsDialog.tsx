@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Box, Dialog, DialogContent, DialogTitle, IconButton, Paper, Tab, Tabs, Typography } from '@mui/material'
+import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton, Paper, Tab, Tabs, Typography } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useTranslation } from 'react-i18next'
 import { LogViewer } from '../executions/LogViewer'
@@ -54,6 +54,7 @@ export function AgentExecutionDetailsDialog({
   const [inlineDialogDismissed, setInlineDialogDismissed] = useState(false)
   const [autoDialogOpen, setAutoDialogOpen] = useState(false)
   const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
+  const [terminating, setTerminating] = useState(false)
 
   // ── Typed output management hook ──────────────────────────────────────────
   const { outputId, typedOutput, outputLoading, extractAndSetOutputId, fetchTypedOutput, reset: resetTypedOutput } = useTypedOutput(session)
@@ -231,6 +232,18 @@ export function AgentExecutionDetailsDialog({
   // ── Determine available tabs ─────────────────────────────────────────────────
 
   const hasResult = !!session && TERMINAL_STATUSES.includes(session.status)
+  const isErrorSession = session?.status === 'failed' || session?.status === 'terminated'
+  // Extract the most recent error message from execution logs for error sessions
+  const errorMessage: string | null = isErrorSession
+    ? ([...logEntries].filter(
+        (e) =>
+          e.event_type === 'error' ||
+          e.log_level.toUpperCase() === 'ERROR' ||
+          e.log_level.toUpperCase() === 'CRITICAL',
+      )
+        .map((e) => e.message)
+        .at(-1) ?? null)
+    : null
   // Always show execution tab when there are logs, or when result is shown (so user can inspect logs after completion)
   const hasExecutionLogs = logEntries.length > 0 || execLogs.length > 0 || hasResult
   const hasConversationHistory = !!conversationHistory && conversationHistory.length > 0
@@ -323,6 +336,15 @@ export function AgentExecutionDetailsDialog({
     [handleAutoDialogClose],
   )
 
+  const handleTerminateFromHeader = useCallback(async () => {
+    setTerminating(true)
+    try {
+      await interveneApi.terminateSession(sessionId, 'Operator terminated from execution dialog header')
+    } finally {
+      setTerminating(false)
+    }
+  }, [sessionId])
+
   // ── Computed state ─────────────────────────────────────────────────────────
   const outputType: AgentOutputType = (session?.output_data?.['__output_type'] as AgentOutputType) ?? 'auto'
   const outputSchema = (session?.output_data?.['__schema'] as Record<string, unknown> | undefined) ?? undefined
@@ -354,9 +376,24 @@ export function AgentExecutionDetailsDialog({
             </Typography>
           )}
         </Box>
-        <IconButton edge="end" onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
+        <Box display="flex" alignItems="center" gap={1}>
+          {sessionStatus && !TERMINAL_STATUSES.includes(sessionStatus) && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              disabled={terminating}
+              onClick={() => void handleTerminateFromHeader()}
+              startIcon={terminating ? <CircularProgress size={14} color="error" /> : undefined}
+              sx={{ fontSize: 12 }}
+            >
+              {terminating ? 'Terminating…' : 'Terminate'}
+            </Button>
+          )}
+          <IconButton edge="end" onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </DialogTitle>
       {allTabs.length > 1 && (
         <Tabs
@@ -411,7 +448,28 @@ export function AgentExecutionDetailsDialog({
             {t('agents.sessions.loading', { defaultValue: 'Loading session data…' })}
           </Typography>
         )}
-        {!loading && allTabs.length === 0 && (
+        {!loading && allTabs.length === 0 && (sessionStatus === 'queued' || sessionStatus === 'running') && (
+          <Box display="flex" flexDirection="column" alignItems="center" gap={2} py={5}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                border: '3px solid',
+                borderColor: 'primary.light',
+                borderTopColor: 'primary.main',
+                animation: 'spin 0.9s linear infinite',
+                '@keyframes spin': { to: { transform: 'rotate(360deg)' } },
+              }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {sessionStatus === 'queued'
+                ? t('agents.sessions.startingAgent', { defaultValue: 'Starting agent…' })
+                : t('agents.sessions.waitingForLogs', { defaultValue: 'Agent is running, waiting for activity…' })}
+            </Typography>
+          </Box>
+        )}
+        {!loading && allTabs.length === 0 && sessionStatus !== 'queued' && sessionStatus !== 'running' && (
           <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
             {t('agents.sessions.noData', { defaultValue: 'No data available for this session.' })}
           </Typography>
@@ -454,6 +512,19 @@ export function AgentExecutionDetailsDialog({
                 validationStatus={typedOutput.validation_status}
                 rawOutput={typedOutput.raw_output}
               />
+            ) : isErrorSession ? (
+              <Box>
+                <Alert severity={session.status === 'terminated' ? 'warning' : 'error'} sx={{ mb: 1 }}>
+                  {session.status === 'terminated'
+                    ? t('agents.sessions.terminatedUnexpectedly', { defaultValue: 'Session was terminated before completing.' })
+                    : t('agents.sessions.failedUnexpectedly', { defaultValue: 'Session failed before completing.' })}
+                  {errorMessage && (
+                    <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      {errorMessage}
+                    </Typography>
+                  )}
+                </Alert>
+              </Box>
             ) : (
               <OutputTypeResultTab
                 outputType={outputType}

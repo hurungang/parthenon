@@ -489,6 +489,18 @@ Run `npx tsc --noEmit` in the frontend directory. Fix any type errors.
 
 - [x] 10.7 — Update unit tests: extend `test_langchain_tool_wrapper.py` to verify delegation tools call `call_a2a_request()` not `call_tool()`; update frontend `LogPresenter` tests for revised iteration grouping and 4-step preparation collapsing.
 
+### Phase 10 — Second-Round Refinements (post-review)
+
+- [x] 10.8 — Remove `InterventionPendingBanner` entirely from `AgentExecutionDetailsDialog.tsx` (replaced by inline intervention dialog; banner was showing stale after completion). File: `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx`
+
+- [x] 10.9 — Fix non-consecutive parallel delegation merge in `LogPresenter.ts`: replaced consecutive-scan algorithm with full-list grouping by target slug so interleaved delegation events from parallel sub-agents merge correctly. File: `frontend/src/services/LogPresenter.ts`
+
+- [x] 10.10 — Improve preparation step labels in `LogPresenter.ts`: "Preparing agent data", "Loading tools and skills", "Setting up context", "Agent ready". File: `frontend/src/services/LogPresenter.ts`
+
+- [x] 10.11 — Show agent type name as subtitle in `AgentExecutionDetailsDialog.tsx` dialog title for immediate context identification. File: `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx`
+
+- [x] 10.12 — Replace opaque IDs with human-readable names in execution log events: add `agent_type_name` to CC-path `session_started`; add `agent_type_slug` to AR-path `session_started`; use `role_name` instead of `role_id` in both `tools_resolved` events. Files: `backend/app/services/agents/runtime_executor.py`
+
 ---
 
 ## Completion Checklist

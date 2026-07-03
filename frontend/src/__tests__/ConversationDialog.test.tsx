@@ -372,7 +372,7 @@ describe('ConversationDialog', () => {
     expect(within(screen.getByTestId('conversation-dialog-chat-status-indicator')).getByText('conversations.sessions.statusWaiting')).toBeDefined()
   })
 
-  it('renders folded delegation snippet preview in dialog chat area', () => {
+  it('renders delegation log block in dialog chat area when delegation is active', () => {
     connectedState = true
     chatStatusState = {
       kind: 'waiting',
@@ -406,7 +406,6 @@ describe('ConversationDialog', () => {
     )
 
     expect(screen.getByTestId('conversation-dialog-delegation-snippets')).toBeDefined()
-    expect(screen.getByTestId('conversation-dialog-snippet-preview')).toBeDefined()
   })
 
   it('renders using_tool status in the dialog chat area', () => {

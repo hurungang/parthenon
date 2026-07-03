@@ -11,10 +11,6 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import require_permission
 from app.api.v1.mcp_hub import (
     SYSTEM_TOOL_IDS,
-    SYSTEM_TOOL_SAVE_RESULT_ID,
-    SYSTEM_TOOL_SEND_NOTIFICATION_ID,
-    SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
-    SYSTEM_TOOL_HUMAN_INTERVENE_ID,
 )
 from app.core.resource_types import RT_SKILL
 from app.db.session import DbSession
@@ -51,93 +47,18 @@ class _ToolRecord:
 
 
 def _get_system_tool_record(tool_id: uuid.UUID) -> _ToolRecord | None:
-    """Return a _ToolRecord for a system tool ID, or None if not a system tool."""
-    if tool_id == SYSTEM_TOOL_SAVE_RESULT_ID:
-        return _ToolRecord(
-            name="system____save_result",
-            description=(
-                "Save the final result of agent execution. Always provide a clear title. "
-                "Use content format that matches the agent output_type "
-                "(markdown -> markdown text, typed -> structured JSON)."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Human-readable result title (required)"},
-                    "content": {
-                        "description": "Result body. Use markdown text when output_type=markdown; use structured JSON value when output_type=typed.",
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "object"},
-                            {"type": "array"},
-                            {"type": "number"},
-                            {"type": "boolean"},
-                        ],
-                    },
-                    "content_type": {
-                        "type": "string",
-                        "enum": ["text", "markdown", "json"],
-                        "description": "Optional explicit format override. If omitted, the system uses the agent output_type to infer format.",
-                    },
-                },
-                "required": ["title", "content"],
-            },
-        )
-    elif tool_id == SYSTEM_TOOL_SEND_NOTIFICATION_ID:
-        return _ToolRecord(
-            name="system____send_notification",
-            description="Send a notification to specified channels",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "group_slug": {"type": "string", "description": "Slug of the recipient group to send the notification to"},
-                    "channel": {
-                        "type": "string",
-                        "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
-                    },
-                    "subject": {"type": "string", "description": "Notification subject / title"},
-                    "body": {"type": "string", "description": "Notification body content"},
-                },
-                "required": ["group_slug", "body"],
-            },
-        )
-    elif tool_id == SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID:
-        return _ToolRecord(
-            name="system____get_recipient_group",
-            description="Retrieve recipient group information including channels and properties",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Name of the recipient group to retrieve"},
-                },
-                "required": ["name"],
-            },
-        )
-    elif tool_id == SYSTEM_TOOL_HUMAN_INTERVENE_ID:
-        return _ToolRecord(
-            name="system____human_intervene",
-            description="Create a human intervene request. Pauses the agent and requests operator input.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "intervention_type": {
-                        "type": "string",
-                        "enum": ["approval", "choice", "text"],
-                        "description": "Type of intervention required",
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": "Reason for the intervention request",
-                    },
-                    "choices": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Options for choice-type intervention",
-                    },
-                },
-                "required": ["intervention_type", "reason"],
-            },
-        )
+    """Return a _ToolRecord for a system tool ID, or None if not a system tool.
+
+    Data is derived from SystemToolRegistry — no hardcoded tool data here.
+    """
+    from app.services.agents.system_tool_registry import SystemToolRegistry
+    for entry in SystemToolRegistry.get_mcp_hub_entries():
+        if entry["id"] == tool_id:
+            return _ToolRecord(
+                name=entry["name"],
+                description=entry["description"],
+                input_schema=entry["input_schema"],
+            )
     return None
 
 

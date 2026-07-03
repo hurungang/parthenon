@@ -37,6 +37,8 @@ const SKIP_EVENT_TYPES = new Set([
 
 /** Event types that belong to the Preparation span. */
 const PREPARATION_EVENT_TYPES = new Set([
+  'guardrail.precheck.allowed',
+  'guardrail.precheck.blocked_cycle',
   'session_started',
   'tools_resolved',
   'sops_skills_loaded',
@@ -49,6 +51,7 @@ const PREPARATION_EVENT_TYPES = new Set([
 ])
 
 // ── Preparation group sets (for 4-step collapsing) ─────────────────────────
+const PREP_GROUP_GUARDRAIL = new Set(['guardrail.precheck.allowed', 'guardrail.precheck.blocked_cycle'])
 const PREP_GROUP_SESSION = new Set(['session_started'])
 const PREP_GROUP_CHECK = new Set(['tools_resolved', 'sops_skills_loaded', 'sop_loaded'])
 const PREP_GROUP_INIT = new Set(['mcp_context_loaded', 'binding_content_loaded', 'plan_injected', 'prompt_captured'])
@@ -69,6 +72,7 @@ const ITERATION_EVENT_TYPES = new Set([
   'llm_request',
   'llm_response',
   'tool_call',
+  'tool_response',
   'delegation_started',
   'delegation_waiting',
   'delegation_resumed',
@@ -201,14 +205,14 @@ function extractGuardrailCurrentPayload(entry: ExecutionLogEntry | undefined): R
     return null
   }
 
-  const directPayload = extractGuardrailPayload(entry)
-  if (entry.event_type === 'task_loop_completed' && directPayload) {
-    return directPayload
-  }
-
   const currentValue = toRecord(entry.data?.['current_value'])
   if (currentValue) {
     return currentValue
+  }
+
+  const directPayload = extractGuardrailPayload(entry)
+  if (entry.event_type === 'task_loop_completed' && directPayload) {
+    return directPayload
   }
 
   return directPayload
@@ -236,8 +240,10 @@ function extractGuardrailUsage(entries: ExecutionLogEntry[]): GuardrailUsage | n
     )
 
   const currentPayload =
-    extractGuardrailCurrentPayload(latestCompletionEntry) ?? extractGuardrailCurrentPayload(latestSnapshotEntry)
-  const thresholdPayload = extractGuardrailThresholdPayload(latestSnapshotEntry)
+    extractGuardrailCurrentPayload(latestSnapshotEntry) ?? extractGuardrailCurrentPayload(latestCompletionEntry)
+  // Read thresholds from snapshot entry first, fall back to task_loop_completed's threshold_value
+  const thresholdPayload =
+    extractGuardrailThresholdPayload(latestSnapshotEntry) ?? extractGuardrailThresholdPayload(latestCompletionEntry)
   const payload =
     extractGuardrailPayload(latestCompletionEntry) ??
     extractGuardrailPayload(latestSnapshotEntry) ??
@@ -432,11 +438,14 @@ function buildPreparationSteps(prepEvents: ExecutionLogEntry[]): WorkingStep[] {
   const g3 = prepEvents.filter((e) => PREP_GROUP_INIT.has(e.event_type.toLowerCase()))
   const g4 = prepEvents.filter((e) => PREP_GROUP_READY.has(e.event_type.toLowerCase()))
 
+
   // Catch-all: any prep events not in the four groups (edge cases / future event types)
-  const knownGroups = new Set([...PREP_GROUP_SESSION, ...PREP_GROUP_CHECK, ...PREP_GROUP_INIT, ...PREP_GROUP_READY])
+  const knownGroups = new Set([...PREP_GROUP_GUARDRAIL, ...PREP_GROUP_SESSION, ...PREP_GROUP_CHECK, ...PREP_GROUP_INIT, ...PREP_GROUP_READY])
   const ungrouped = prepEvents.filter((e) => !knownGroups.has(e.event_type.toLowerCase()))
 
+  const g0 = prepEvents.filter((e) => PREP_GROUP_GUARDRAIL.has(e.event_type.toLowerCase()))
   const steps: WorkingStep[] = []
+  if (g0.length > 0) steps.push(makePrepSummaryStep('prep-g0', 'Validating delegation graph', g0))
   if (g1.length > 0) steps.push(makePrepSummaryStep('prep-g1', 'Preparing agent data', g1))
   if (g2.length > 0) steps.push(makePrepSummaryStep('prep-g2', 'Loading tools and skills', g2))
   if (g3.length > 0) steps.push(makePrepSummaryStep('prep-g3', 'Setting up context', g3))
@@ -625,8 +634,19 @@ const DELEGATION_LIFECYCLE_TYPES = new Set([
  * regardless of position interleaving with other targets' events.
  */
 function mergeDelegationEntries(entries: ExecutionLogEntry[]): ExecutionLogEntry[] {
-  // 1. Group all delegation lifecycle events by target slug (preserving order)
-  const byTarget = new Map<string, ExecutionLogEntry[]>()
+  // Group delegation lifecycle events by delegation_started event ID so that
+  // two delegations to the same agent type (e.g. in iteration 1 and iteration 2)
+  // each get their own independent block in the UI.
+  //
+  // Algorithm: walk events in order.
+  //   - delegation_started → open a new group (keyed by event.id) for that target.
+  //   - subsequent lifecycle events → append to the OLDEST open group for that target.
+  //   - delegation_resumed / delegation_failed / delegation_timeout → close the group.
+
+  const groupsByStartId = new Map<string, ExecutionLogEntry[]>()
+  // Per-target FIFO queue of open group start IDs (oldest first)
+  const openQueuePerTarget = new Map<string, string[]>()
+
   for (const e of entries) {
     if (!DELEGATION_LIFECYCLE_TYPES.has(e.event_type) && e.event_type !== 'delegation_started') continue
     const target: string | undefined =
@@ -634,29 +654,43 @@ function mergeDelegationEntries(entries: ExecutionLogEntry[]): ExecutionLogEntry
         ? (e.data?.['agent_type'] as string | undefined)
         : (e.data?.['delegation_target'] as string | undefined)
     if (!target) continue
-    if (!byTarget.has(target)) byTarget.set(target, [])
-    byTarget.get(target)!.push(e)
+
+    if (e.event_type === 'delegation_started') {
+      groupsByStartId.set(e.id, [e])
+      if (!openQueuePerTarget.has(target)) openQueuePerTarget.set(target, [])
+      openQueuePerTarget.get(target)!.push(e.id)
+    } else {
+      const queue = openQueuePerTarget.get(target)
+      if (queue && queue.length > 0) {
+        const startId = queue[0] // oldest open group
+        groupsByStartId.get(startId)!.push(e)
+        // Terminal events close the group
+        if (
+          e.event_type === 'delegation_resumed' ||
+          e.event_type === 'delegation_failed' ||
+          e.event_type === 'delegation_timeout'
+        ) {
+          queue.shift()
+          if (queue.length === 0) openQueuePerTarget.delete(target)
+        }
+      }
+    }
   }
 
-  // 2. For targets with 2+ events, build a merged replacement for the
-  //    delegation_started entry and mark subsequent lifecycle entries for removal.
   const replacements = new Map<string, ExecutionLogEntry>()
   const toRemove = new Set<string>()
 
-  for (const [, group] of byTarget) {
+  for (const [startId, group] of groupsByStartId) {
     if (group.length < 2) continue
-    const startEvent = group.find((e) => e.event_type === 'delegation_started')
-    if (!startEvent) continue
-
+    const startEvent = group[0] // always delegation_started
     const lastEvent = group[group.length - 1]
     const receiverSessionId =
-      (lastEvent.data?.['receiver_session_id'] as string | undefined) ??
-      (group
-        .find((e) => e.event_type === 'delegation_waiting')
-        ?.data?.['receiver_session_id'] as string | undefined)
+      (group.find((e) => e.event_type === 'delegation_waiting')
+        ?.data?.['receiver_session_id'] as string | undefined) ??
+      (lastEvent.data?.['receiver_session_id'] as string | undefined)
 
     const merged: ExecutionLogEntry = {
-      id: startEvent.id,
+      id: startId,
       timestamp: startEvent.timestamp,
       log_level: startEvent.log_level,
       event_type: 'delegation_merged',
@@ -674,13 +708,12 @@ function mergeDelegationEntries(entries: ExecutionLogEntry[]): ExecutionLogEntry
       },
     }
 
-    replacements.set(startEvent.id, merged)
+    replacements.set(startId, merged)
     for (const e of group) {
-      if (e.id !== startEvent.id) toRemove.add(e.id)
+      if (e.id !== startId) toRemove.add(e.id)
     }
   }
 
-  // 3. Build result — replace start entries, skip removed entries.
   const result: ExecutionLogEntry[] = []
   for (const entry of entries) {
     if (toRemove.has(entry.id)) continue

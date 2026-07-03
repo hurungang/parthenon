@@ -21,9 +21,10 @@ interface Props {
   sessionStatus?: AgentJobStatus
   onViewSubAgentExecution?: (sessionId: string) => void
   pendingInterventionsByChildSession?: Record<string, InterveneRequest>
+  onOpenIntervention?: (request: InterveneRequest) => void
 }
 
-export function LogViewer({ executionLog, entries, sessionStatus, onViewSubAgentExecution, pendingInterventionsByChildSession }: Props) {
+export function LogViewer({ executionLog, entries, sessionStatus, onViewSubAgentExecution, pendingInterventionsByChildSession, onOpenIntervention }: Props) {
   const resolvedLog = executionLog ?? EMPTY_EXECUTION_LOG
   const { t } = useTranslation()
   const [rawMode, setRawMode] = useState(false)
@@ -53,7 +54,7 @@ export function LogViewer({ executionLog, entries, sessionStatus, onViewSubAgent
       {!rawMode && (
         <Box>
           <LogSummaryPanel summary={structured.summary} />
-          <WorkingStepsPanel spans={structured.spans} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} />
+          <WorkingStepsPanel spans={structured.spans} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} onOpenIntervention={onOpenIntervention} />
         </Box>
       )}
 

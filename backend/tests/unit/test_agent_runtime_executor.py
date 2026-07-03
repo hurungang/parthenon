@@ -963,7 +963,7 @@ def _build_ar_job_context_and_client() -> tuple[dict, dict, AsyncMock]:
     data_client.get_agent_plan = AsyncMock(return_value=None)
     data_client.log_execution_event = AsyncMock()
     data_client.log_prompt = AsyncMock()
-    data_client.submit_result = AsyncMock()
+    data_client.save_output = AsyncMock()
     return job_data, context, data_client
 
 

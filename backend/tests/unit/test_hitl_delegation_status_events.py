@@ -21,6 +21,24 @@ import pytest
 from app.services.agents.runtime_executor import AgentRuntimeExecutor
 from app.services.agents.tool_naming import build_tool_name
 
+# ── Fake model helper ─────────────────────────────────────────────────
+
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+
+
+class _FakeDelegationModel(GenericFakeChatModel):
+    """Fake LangChain chat model for delegation testing.
+
+    Overrides ``bind_tools`` (not implemented in GenericFakeChatModel) to
+    return self, making it compatible with LangGraph’s create_agent.
+    """
+
+    def bind_tools(self, tools, **kwargs):  # type: ignore[override]
+        return self
+
+    def model_copy(self, **kwargs):  # type: ignore[override]
+        return self
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,33 +106,29 @@ async def test_delegation_with_hitl_emits_waiting_for_human_and_resumed_events()
     agent_context = _build_agent_context(role_id, "approval-agent")
     model_config = {"provider_type": "openai"}
 
+    # Fake model: first call emits delegation tool call, second returns final text
+    fake_model = _FakeDelegationModel(
+        messages=iter([
+            AIMessage(
+                content="",
+                tool_calls=[{
+                    "id": "call-1",
+                    "name": "agent__approval_agent",
+                    "args": {},
+                    "type": "tool_call",
+                }],
+            ),
+            AIMessage(content="delegation completed successfully."),
+        ])
+    )
+
     with patch(
-        "app.services.agents.model_binding.ModelBindingLayer"
-    ) as model_binding_cls, patch(
+        "app.services.agents.langchain_model_factory.LangChainModelFactory"
+    ) as mock_factory_cls, patch(
         "app.agent_runtime.comm_hub_client.CommHubToolClient"
     ) as comm_hub_client_cls:
 
-        binding = model_binding_cls.return_value
-        binding.complete_from_context = AsyncMock(
-            side_effect=[{"step": 1}, {"step": 2}]
-        )
-        model_binding_cls.extract_text.side_effect = [
-            "",
-            "delegation completed successfully.",
-        ]
-        model_binding_cls.extract_tool_calls.side_effect = [
-            [
-                {
-                    "id": "call-1",
-                    "function": {
-                        "name": "agent__approval-agent",
-                        "arguments": '{}',
-                    },
-                }
-            ],
-            [],
-        ]
-        model_binding_cls.extract_usage.return_value = None
+        mock_factory_cls.return_value.get_model_from_config_dict.return_value = fake_model
 
         comm_hub_client = comm_hub_client_cls.return_value
 
@@ -186,7 +200,7 @@ async def test_delegation_with_hitl_emits_waiting_for_human_and_resumed_events()
     comm_hub_client.wait_for_a2a_response.assert_awaited_once()
     wait_kwargs = comm_hub_client.wait_for_a2a_response.await_args.kwargs
     assert wait_kwargs["receiver_session_id"] == receiver_session_id
-    assert wait_kwargs["timeout_seconds"] == 120.0
+    assert wait_kwargs["timeout_seconds"] == 90.0
 
 
 @pytest.mark.asyncio
@@ -210,33 +224,29 @@ async def test_delegation_hitl_status_sequence_order_is_correct() -> None:
     agent_context = _build_agent_context(role_id, "review-agent")
     model_config = {"provider_type": "openai"}
 
+    # Fake model: first call emits delegation tool call, second returns final text
+    fake_model = _FakeDelegationModel(
+        messages=iter([
+            AIMessage(
+                content="",
+                tool_calls=[{
+                    "id": "call-1",
+                    "name": "agent__review_agent",
+                    "args": {},
+                    "type": "tool_call",
+                }],
+            ),
+            AIMessage(content="Review delegation finished."),
+        ])
+    )
+
     with patch(
-        "app.services.agents.model_binding.ModelBindingLayer"
-    ) as model_binding_cls, patch(
+        "app.services.agents.langchain_model_factory.LangChainModelFactory"
+    ) as mock_factory_cls, patch(
         "app.agent_runtime.comm_hub_client.CommHubToolClient"
     ) as comm_hub_client_cls:
 
-        binding = model_binding_cls.return_value
-        binding.complete_from_context = AsyncMock(
-            side_effect=[{"step": 1}, {"step": 2}]
-        )
-        model_binding_cls.extract_text.side_effect = [
-            "",
-            "Review delegation finished.",
-        ]
-        model_binding_cls.extract_tool_calls.side_effect = [
-            [
-                {
-                    "id": "call-1",
-                    "function": {
-                        "name": "agent__review-agent",
-                        "arguments": '{}',
-                    },
-                }
-            ],
-            [],
-        ]
-        model_binding_cls.extract_usage.return_value = None
+        mock_factory_cls.return_value.get_model_from_config_dict.return_value = fake_model
 
         comm_hub_client = comm_hub_client_cls.return_value
         comm_hub_client.call_a2a_request = AsyncMock(

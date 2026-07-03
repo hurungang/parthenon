@@ -556,7 +556,7 @@ describe('AgentTypeForm', () => {
   it('renders output data type selector dropdown', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
-      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      <AgentTypeForm values={{ ...defaultAgentTypeFormValues, output_type: 'typed' }} onChange={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -567,7 +567,7 @@ describe('AgentTypeForm', () => {
   it('renders data type hint text', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
-      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      <AgentTypeForm values={{ ...defaultAgentTypeFormValues, output_type: 'typed' }} onChange={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
@@ -594,7 +594,7 @@ describe('AgentTypeForm', () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     const onChange = vi.fn()
     render(
-      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={onChange} />,
+      <AgentTypeForm values={{ ...defaultAgentTypeFormValues, output_type: 'typed' }} onChange={onChange} />,
       { wrapper },
     )
 
@@ -632,22 +632,22 @@ describe('AgentTypeForm', () => {
 
   // ── Output Type Behaviour ─────────────────────────────────────────────────
 
-  it('default output_type is typed and data type dropdown is visible', async () => {
+  it('default output_type is auto and data type dropdown is hidden', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
       <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
       { wrapper },
     )
     await waitFor(() => {
-      expect(screen.getByText('agents.types.outputDataType', { selector: 'label' })).toBeDefined()
+      expect(screen.queryByText('agents.types.outputDataType', { selector: 'label' })).toBeNull()
     })
   })
 
-  it('hides data type dropdown when output_type is markdown', async () => {
+  it('hides data type dropdown when output_type is auto', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
       <AgentTypeForm
-        values={{ ...defaultAgentTypeFormValues, output_type: 'markdown' }}
+        values={{ ...defaultAgentTypeFormValues, output_type: 'auto' }}
         onChange={vi.fn()}
       />,
       { wrapper },
@@ -657,11 +657,11 @@ describe('AgentTypeForm', () => {
     })
   })
 
-  it('does not show data type dropdown when output_type is auto (legacy)', async () => {
+  it('hides data type dropdown when output_type is markdown (legacy backward compat)', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
       <AgentTypeForm
-        values={{ ...defaultAgentTypeFormValues, output_type: 'auto' }}
+        values={{ ...defaultAgentTypeFormValues, output_type: 'markdown' }}
         onChange={vi.fn()}
       />,
       { wrapper },
@@ -686,7 +686,7 @@ describe('AgentTypeForm', () => {
     })
   })
 
-  it('clears output_data_type_id when switching from typed to markdown', async () => {
+  it('clears output_data_type_id when switching from typed to auto', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     const onChange = vi.fn()
     render(
@@ -703,26 +703,26 @@ describe('AgentTypeForm', () => {
     const outputTypeTrigger = outputTypeControl.querySelector('[role="combobox"]') as HTMLElement
     fireEvent.mouseDown(outputTypeTrigger)
 
-    // Select markdown
+    // Select auto
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'agents.types.outputMarkdown' })).toBeDefined()
+      expect(screen.getByRole('option', { name: /auto/i })).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('option', { name: 'agents.types.outputMarkdown' }))
+    fireEvent.click(screen.getByRole('option', { name: /auto/i }))
 
     // onChange should be called with cleared output_data_type_id
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({ output_type: 'markdown', output_data_type_id: '' })
+        expect.objectContaining({ output_type: 'auto', output_data_type_id: '' })
       )
     })
   })
 
-  it('switching from markdown to typed shows data type dropdown', async () => {
+  it('switching from auto to typed shows data type dropdown', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     const onChange = vi.fn()
     render(
       <AgentTypeForm
-        values={{ ...defaultAgentTypeFormValues, output_type: 'markdown', output_data_type_id: '' }}
+        values={{ ...defaultAgentTypeFormValues, output_type: 'auto', output_data_type_id: '' }}
         onChange={onChange}
       />,
       { wrapper },
@@ -751,10 +751,10 @@ describe('AgentTypeForm', () => {
     })
   })
 
-  it('output type selector only shows typed and markdown options', async () => {
+  it('output type selector only shows typed and auto options', async () => {
     const { AgentTypeForm } = await import('../pages/agents/AgentTypeForm')
     render(
-      <AgentTypeForm values={defaultAgentTypeFormValues} onChange={vi.fn()} />,
+      <AgentTypeForm values={{ ...defaultAgentTypeFormValues, output_type: 'typed' }} onChange={vi.fn()} />,
       { wrapper },
     )
 
@@ -765,8 +765,8 @@ describe('AgentTypeForm', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('option', { name: 'agents.types.outputTyped' })).toBeDefined()
-      expect(screen.getByRole('option', { name: 'agents.types.outputMarkdown' })).toBeDefined()
-      expect(screen.queryByRole('option', { name: 'agents.types.outputAuto' })).toBeNull()
+      expect(screen.getByRole('option', { name: /auto/i })).toBeDefined()
+      expect(screen.queryByRole('option', { name: 'agents.types.outputMarkdown' })).toBeNull()
     })
   })
 })

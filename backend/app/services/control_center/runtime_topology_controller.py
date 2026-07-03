@@ -384,7 +384,7 @@ class RuntimeTopologyController:
     ) -> list[uuid.UUID]:
         """Return all session IDs in the subtree rooted at root_session_id (inclusive).
 
-        Traverses AgentRunRelationship edges breadth-first to collect descendants.
+        Traverses AgentJob.parent_job_id edges breadth-first to collect descendants.
         """
         visited: list[uuid.UUID] = [root_session_id]
         frontier: list[uuid.UUID] = [root_session_id]
@@ -392,8 +392,8 @@ class RuntimeTopologyController:
 
         while frontier and depth < max_depth:
             children_result = await db.execute(
-                select(AgentRunRelationship.child_agent_job_id).where(
-                    AgentRunRelationship.parent_agent_job_id.in_(frontier)
+                select(AgentJob.id).where(
+                    AgentJob.parent_job_id.in_(frontier)
                 )
             )
             child_ids = [row[0] for row in children_result.fetchall()]

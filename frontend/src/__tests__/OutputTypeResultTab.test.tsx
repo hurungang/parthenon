@@ -280,4 +280,102 @@ describe('OutputTypeResultTab', () => {
     // Should still render without crashing
     expect(screen.getByText('Structured Output')).toBeDefined()
   })
+
+  // ── FIX-20260703-110000: Markdown output_data.result rendering ──
+
+  it('renders markdown content from output_data.result key (save_result format)', () => {
+    // save_result stores: {"result": "<markdown_string>", "title": "..."}
+    render(
+      <OutputTypeResultTab
+        outputType="markdown"
+        outputData={{ result: '## Report Title\n\nSome **bold** text.' }}
+      />,
+    )
+    // Markdown badge should appear
+    expect(screen.getByText('Markdown')).toBeDefined()
+    // Rendered heading should be visible
+    expect(screen.getByText(/Report Title/)).toBeDefined()
+  })
+
+  it('prefers outputData.markdown over outputData.result for markdown output', () => {
+    render(
+      <OutputTypeResultTab
+        outputType="markdown"
+        outputData={{ markdown: '## From markdown key', result: '## From result key' }}
+      />,
+    )
+    expect(screen.getByText(/From markdown key/)).toBeDefined()
+  })
+
+  it('falls back to JSON serialization when markdown output has no text keys', () => {
+    render(
+      <OutputTypeResultTab
+        outputType="markdown"
+        outputData={{ someOtherKey: 'value' }}
+      />,
+    )
+    // Should still render without crashing
+    expect(screen.getByText('Markdown')).toBeDefined()
+  })
+
+  // ── FIX-20260703-110000b: Claude content blocks extraction ──
+
+  it('extracts text from Claude content blocks for markdown output type', () => {
+    // LangChain/Claude returns result as [{type:'text', text:'...'}, ...]
+    render(
+      <OutputTypeResultTab
+        outputType="markdown"
+        outputData={{
+          result: [
+            { type: 'text', text: '## Roles Report\n\n1. **admin** — full access', extras: { signature: 'abc' } },
+          ],
+          guardrail_usage: { cumulative_iterations: 2 },
+        }}
+      />,
+    )
+    expect(screen.getByText('Markdown')).toBeDefined()
+    expect(screen.getByText(/Roles Report/)).toBeDefined()
+  })
+
+  it('extracts text from Claude content blocks for auto output type', () => {
+    render(
+      <OutputTypeResultTab
+        outputType="auto"
+        outputData={{
+          result: [
+            { type: 'text', text: '## Auto Report\n\nSome result text here.' },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText('Auto')).toBeDefined()
+    expect(screen.getByText(/Auto Report/)).toBeDefined()
+  })
+
+  it('joins multiple text blocks with double newline for markdown', () => {
+    render(
+      <OutputTypeResultTab
+        outputType="markdown"
+        outputData={{
+          result: [
+            { type: 'text', text: '## Section 1\n\nFirst part.' },
+            { type: 'text', text: '## Section 2\n\nSecond part.' },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByText(/Section 1/)).toBeDefined()
+    expect(screen.getByText(/Section 2/)).toBeDefined()
+  })
+
+  it('falls back to JSON tree for auto when result is not text/content-blocks', () => {
+    render(
+      <OutputTypeResultTab
+        outputType="auto"
+        outputData={{ someComplexObject: { nested: true }, count: 42 }}
+      />,
+    )
+    expect(screen.getByText('Auto')).toBeDefined()
+    // JSON tree is rendered — badge present, no crash
+  })
 })

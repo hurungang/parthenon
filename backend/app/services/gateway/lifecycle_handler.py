@@ -158,7 +158,7 @@ class GatewayLifecycleHandler:
         rely fully on skill instructions rather than tool introspection.
         Only the tool name (mcp_slug/tool_name) is returned.
 
-        Always includes the save_result system tool.
+        Always includes the save_data system tool.
         """
         from sqlalchemy import select
         from app.db.models.agents import AgentType
@@ -168,8 +168,8 @@ class GatewayLifecycleHandler:
         )
         agent_type = result.scalar_one_or_none()
         if not agent_type or not agent_type.role_id:
-            # No role — only the save_result pseudo-tool is exposed
-            return [{"name": "save_result"}]
+            # No role — only the save_data pseudo-tool is exposed
+            return [{"name": "save_data"}]
 
         allowed_tools = await self._permission_manager.calculate_allowed_tools(
             agent_type.role_id, db
@@ -244,7 +244,7 @@ class GatewayLifecycleHandler:
         
         # Trigger immediate execution via Communication Hub
         # This replaces the 30-second polling delay with instant execution
-        await self._trigger_execution_via_comm_hub(job.id, agent_type_id, input_data)
+        await self._trigger_execution_via_comm_hub(job.id, agent_type_id, input_data, db=db)
         
         return {"session_id": str(job.id)}
 
@@ -253,6 +253,7 @@ class GatewayLifecycleHandler:
         session_id: uuid.UUID,
         agent_type_id: uuid.UUID,
         input_data: dict[str, Any] | None,
+        db: AsyncSession | None = None,
     ) -> None:
         """Trigger immediate agent execution via Communication Hub.
         
@@ -286,13 +287,35 @@ class GatewayLifecycleHandler:
                 session_id,
             )
         except CommunicationHubClientError as exc:
-            # Log error but don't fail the launch - SessionDispatcher polling is fallback
+            # Mark the session as failed so users see a clear error in the UI
+            # instead of the session hanging in 'queued' state forever.
+            error_msg = f"Failed to start agent: {exc}"
             logger.error(
-                "Failed to trigger execution via Communication Hub (session=%s): %s. "
-                "Falling back to SessionDispatcher polling (30s delay).",
+                "Failed to trigger execution via Communication Hub (session=%s): %s",
                 session_id,
                 exc,
             )
+            if db is not None:
+                try:
+                    from app.db.models.agents import AgentJob, AgentJobStatus
+                    from app.db.models.session_logs import ExecutionLogEntry
+                    import datetime
+                    job = await db.get(AgentJob, session_id)
+                    if job and job.status == AgentJobStatus.queued:
+                        job.status = AgentJobStatus.failed
+                        log_entry = ExecutionLogEntry(
+                            session_id=session_id,
+                            log_level="ERROR",
+                            event_type="error",
+                            message=error_msg,
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            data={"exception_type": type(exc).__name__},
+                        )
+                        db.add(log_entry)
+                        await db.commit()
+                        logger.info("Marked session %s as failed after CH trigger error", session_id)
+                except Exception as db_exc:
+                    logger.warning("Could not mark session %s as failed in DB: %s", session_id, db_exc)
 
     # ── Legacy init/request/close path ────────────────────────────────────────
 

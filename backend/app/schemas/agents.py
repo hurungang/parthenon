@@ -377,11 +377,13 @@ class AgentJobStatusRead(BaseModel):
     stop_details: dict[str, Any] | None = None
     started_at: datetime | None
     completed_at: datetime | None
+    output_data: dict[str, Any] | None = None
     error_message: str | None
     created_at: datetime
     agent_type_name: str | None = None
     triggered_by_user_name: str | None = None
     output_id: uuid.UUID | None = None  # FK to AgentOutput for typed outputs
+    output_type: AgentOutputType | None = None  # Resolved from AgentType; None for legacy records
 
 
 class AgentJobRead(BaseModel):

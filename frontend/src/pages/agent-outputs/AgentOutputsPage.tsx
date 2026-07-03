@@ -9,6 +9,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Tab,
   Table,
   TableBody,
   TableCell,
@@ -16,6 +17,7 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  Tabs,
   TextField,
   Typography,
   Chip,
@@ -26,7 +28,7 @@ import ErrorIcon from '@mui/icons-material/Error'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useDataTypes } from '../../hooks/useDataTypes'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
-import { useAgentOutputs, useExportAgentOutputs } from '../../hooks/useAgentOutputs'
+import { useAgentOutputs, useAutoOutputs, useExportAgentOutputs } from '../../hooks/useAgentOutputs'
 import { usePagination } from '../../hooks/usePagination'
 import { renderFieldValue } from '../../components/executions/TypedFieldRenderers'
 import { AgentOutputDetailDrawer } from './AgentOutputDetailDrawer'
@@ -48,6 +50,10 @@ import type {
 export function AgentOutputsPage() {
   const { t } = useTranslation()
   const pag = usePagination()
+  const autoPag = usePagination()
+
+  // ── Tab state ─────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'typed' | 'auto'>('typed')
 
   // ── Filters ───────────────────────────────────────────────────────────────
   const [selectedDataTypeId, setSelectedDataTypeId] = useState<string>('')
@@ -86,6 +92,21 @@ export function AgentOutputsPage() {
     isLoading,
     error,
   } = useAgentOutputs(queryParams)
+
+  // ── Auto outputs query ────────────────────────────────────────────────────
+  const autoQueryParams = useMemo(() => ({
+    agent_type_id: selectedAgentTypeId || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    page: autoPag.page + 1,
+    page_size: autoPag.rowsPerPage,
+  }), [selectedAgentTypeId, dateFrom, dateTo, autoPag.page, autoPag.rowsPerPage])
+
+  const {
+    data: autoOutputsResponse,
+    isLoading: autoLoading,
+    error: autoError,
+  } = useAutoOutputs(autoQueryParams)
 
   const exportMutation = useExportAgentOutputs()
 
@@ -134,48 +155,62 @@ export function AgentOutputsPage() {
         <Typography variant="h4" fontWeight={700}>
           {t('admin.agentOutputs.title')}
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<DownloadIcon />}
-          onClick={handleExportCsv}
-          disabled={exportMutation.isPending}
-        >
-          {exportMutation.isPending
-            ? t('app.saving', { defaultValue: 'Exporting…' })
-            : t('admin.agentOutputs.exportCsv')}
-        </Button>
+        {activeTab === 'typed' && (
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportCsv}
+            disabled={exportMutation.isPending}
+          >
+            {exportMutation.isPending
+              ? t('app.saving', { defaultValue: 'Exporting…' })
+              : t('admin.agentOutputs.exportCsv')}
+          </Button>
+        )}
       </Box>
 
       {/* Error state */}
-      {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
+      {(error || autoError) && (
+        <PermissionDeniedAlert error={error ?? autoError} fallbackMessage={t('app.error')} />
+      )}
+
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => { setActiveTab(v as 'typed' | 'auto'); pag.resetPage(); autoPag.resetPage() }}
+        sx={{ mb: 2 }}
+      >
+        <Tab value="typed" label={t('admin.agentOutputs.tabTyped', { defaultValue: 'Typed Outputs' })} />
+        <Tab value="auto" label={t('admin.agentOutputs.tabAuto', { defaultValue: 'Auto Outputs' })} />
+      </Tabs>
 
       {/* Filter bar */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box display="flex" gap={2} flexWrap="wrap" alignItems="flex-end">
-          {/* Data type selector */}
-          <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel id="data-type-filter-label">
-              {t('admin.agentOutputs.filterDataType')}
-            </InputLabel>
-            <Select
-              labelId="data-type-filter-label"
-              value={selectedDataTypeId}
-              label={t('admin.agentOutputs.filterDataType')}
-              onChange={(e) => handleFilterChange(setSelectedDataTypeId)(e.target.value)}
-              disabled={dataTypesLoading}
-            >
-              <MenuItem value="">
-                <em>{t('admin.agentOutputs.allDataTypes', { defaultValue: 'All Data Types' })}</em>
-              </MenuItem>
-              {(dataTypesResponse?.items ?? []).map((dt) => (
-                <MenuItem key={dt.id} value={dt.id}>
-                  {dt.name}
+          {/* Data type selector — only for typed tab */}
+          {activeTab === 'typed' && (
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel id="data-type-filter-label">
+                {t('admin.agentOutputs.filterDataType')}
+              </InputLabel>
+              <Select
+                labelId="data-type-filter-label"
+                value={selectedDataTypeId}
+                label={t('admin.agentOutputs.filterDataType')}
+                onChange={(e) => handleFilterChange(setSelectedDataTypeId)(e.target.value)}
+                disabled={dataTypesLoading}
+              >
+                <MenuItem value="">
+                  <em>{t('admin.agentOutputs.allDataTypes', { defaultValue: 'All Data Types' })}</em>
                 </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {/* Agent type selector */}
+                {(dataTypesResponse?.items ?? []).map((dt) => (
+                  <MenuItem key={dt.id} value={dt.id}>
+                    {dt.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
           <FormControl size="small" sx={{ minWidth: 220 }}>
             <InputLabel id="agent-type-filter-label">
               {t('admin.agentOutputs.filterAgentType')}
@@ -223,11 +258,11 @@ export function AgentOutputsPage() {
       </Paper>
 
       {/* Loading state */}
-      {isLoading ? (
+      {(activeTab === 'typed' ? isLoading : autoLoading) ? (
         <Box display="flex" justifyContent="center" py={4}>
           <CircularProgress />
         </Box>
-      ) : (
+      ) : activeTab === 'typed' ? (
         <Box>
           <TableContainer component={Paper}>
             <Table size="small">
@@ -247,10 +282,7 @@ export function AgentOutputsPage() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={4 + dynamicFields.length}
-                      align="center"
-                    >
+                    <TableCell colSpan={4 + dynamicFields.length} align="center">
                       {t('admin.agentOutputs.noResults')}
                     </TableCell>
                   </TableRow>
@@ -316,6 +348,70 @@ export function AgentOutputsPage() {
             rowsPerPage={pag.rowsPerPage}
             onRowsPerPageChange={pag.onRowsPerPageChange}
             rowsPerPageOptions={pag.rowsPerPageOptions}
+            labelRowsPerPage={t('app.rowsPerPage')}
+          />
+        </Box>
+      ) : (
+        /* ── Auto Outputs Tab ─────────────────────────────────────────────── */
+        <Box>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('admin.agentOutputs.columnTimestamp')}</TableCell>
+                  <TableCell>{t('admin.agentOutputs.columnAgentType')}</TableCell>
+                  <TableCell>{t('admin.agentOutputs.columnPreview', { defaultValue: 'Result Preview' })}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(autoOutputsResponse?.items ?? []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      {t('admin.agentOutputs.noResults')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (autoOutputsResponse?.items ?? []).map((item) => (
+                    <TableRow key={item.session_id} hover>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {new Date(item.created_at).toLocaleString()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {item.agent_type_name ?? item.agent_type_id.slice(0, 8)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            maxWidth: 480,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            color: item.output_preview ? 'text.primary' : 'text.disabled',
+                          }}
+                          title={item.output_preview ?? ''}
+                        >
+                          {item.output_preview ?? t('admin.agentOutputs.noPreview', { defaultValue: '—' })}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={autoOutputsResponse?.total ?? 0}
+            page={autoPag.page}
+            onPageChange={autoPag.onPageChange}
+            rowsPerPage={autoPag.rowsPerPage}
+            onRowsPerPageChange={autoPag.onRowsPerPageChange}
+            rowsPerPageOptions={autoPag.rowsPerPageOptions}
             labelRowsPerPage={t('app.rowsPerPage')}
           />
         </Box>

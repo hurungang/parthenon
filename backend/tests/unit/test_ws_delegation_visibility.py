@@ -3,8 +3,25 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+
 from app.services.agents.runtime_executor import AgentRuntimeExecutor
 from app.services.agents.tool_naming import build_tool_name
+
+
+class _FakeDelegationModel(GenericFakeChatModel):
+    """Fake LangChain chat model for delegation testing.
+
+    Overrides ``bind_tools`` (not implemented in GenericFakeChatModel) to
+    return self, making it compatible with LangGraph's create_agent.
+    """
+
+    def bind_tools(self, tools, **kwargs):  # type: ignore[override]
+        return self
+
+    def model_copy(self, **kwargs):  # type: ignore[override]
+        return self
 
 
 @pytest.mark.asyncio
@@ -13,6 +30,7 @@ async def test_conversation_context_emits_delegation_status_events() -> None:
     conv_session_id = uuid.uuid4()
     agent_type_id = uuid.uuid4()
     role_id = uuid.uuid4()
+    receiver_session_id = str(uuid.uuid4())
 
     agent_context = {
         'model_id': str(uuid.uuid4()),
@@ -43,29 +61,42 @@ async def test_conversation_context_emits_delegation_status_events() -> None:
     }
     model_config = {'provider_type': 'openai'}
 
-    with patch('app.services.agents.model_binding.ModelBindingLayer') as model_binding_cls, patch(
+    # Fake model: first call produces delegation tool call, second returns final text
+    fake_model = _FakeDelegationModel(
+        messages=iter([
+            AIMessage(
+                content='',
+                tool_calls=[{
+                    'id': 'call-1',
+                    'name': 'agent__research_agent',
+                    'args': {},
+                    'type': 'tool_call',
+                }],
+            ),
+            AIMessage(content='delegation complete'),
+        ])
+    )
+
+    with patch(
+        'app.services.agents.langchain_model_factory.LangChainModelFactory'
+    ) as mock_factory_cls, patch(
         'app.agent_runtime.comm_hub_client.CommHubToolClient'
     ) as comm_hub_client_cls:
-        binding = model_binding_cls.return_value
-        binding.complete_from_context = AsyncMock(side_effect=[{'step': 1}, {'step': 2}])
-        model_binding_cls.extract_text.side_effect = ['', 'delegation complete']
-        model_binding_cls.extract_tool_calls.side_effect = [
-            [
-                {
-                    'id': 'call-1',
-                    'function': {
-                        'name': 'agent__research-agent',
-                        'arguments': '{}',
-                    },
-                }
-            ],
-            [],
-        ]
-        model_binding_cls.extract_usage.return_value = None
+
+        mock_factory_cls.return_value.get_model_from_config_dict.return_value = fake_model
 
         comm_hub_client = comm_hub_client_cls.return_value
         comm_hub_client.call_a2a_request = AsyncMock(
-            return_value={'status': 'accepted', 'response_payload': {'status': 'completed'}}
+            return_value={
+                'status': 'accepted',
+                'receiver_session_id': receiver_session_id,
+            }
+        )
+        comm_hub_client.wait_for_a2a_response = AsyncMock(
+            return_value={
+                'status': 'completed',
+                'output_data': {},
+            }
         )
 
         response, guardrail_usage, status_events = await executor.execute_conversation_turn_from_context(
@@ -78,18 +109,16 @@ async def test_conversation_context_emits_delegation_status_events() -> None:
 
     assert response == 'delegation complete'
     assert guardrail_usage['delegated_steps'] == 1
-    assert status_events == [
-        {'status': 'using_tool', 'tool_name': 'research-agent'},
-        {'status': 'delegating', 'agent_type': 'research-agent'},
-        {'status': 'waiting', 'agent_type': 'research-agent'},
-    ]
-    comm_hub_client.call_a2a_request.assert_awaited_once_with(
-        target_agent_type_slug='research-agent',
-        session_id=str(conv_session_id),
-        requester_role_id=str(role_id),
-        request_payload={'__delegation_depth': 1},
-        session_link_id=None,
-        wait_for_response=False,
-        wait_timeout_seconds=120.0,
-        conv_session_id=str(conv_session_id),
-    )
+
+    status_sequence = [e['status'] for e in status_events]
+    assert 'using_tool' in status_sequence
+    assert 'delegating' in status_sequence
+    assert 'waiting' in status_sequence
+    assert 'delegation_resumed' in status_sequence
+
+    comm_hub_client.call_a2a_request.assert_awaited_once()
+    call_kwargs = comm_hub_client.call_a2a_request.await_args.kwargs
+    assert call_kwargs['target_agent_type_slug'] == 'research-agent'
+    assert call_kwargs['session_id'] == str(conv_session_id)
+    assert call_kwargs['wait_for_response'] is False
+

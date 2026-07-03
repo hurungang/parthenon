@@ -4,6 +4,263 @@ This document tracks all bug fixes and issues resolved for this change.
 
 ---
 
+## FIX-20260703-110000
+
+**Created:** 2026-07-03T11:00:00Z
+**Status:** Resolved
+**Issue:** Markdown output type results are not displayed in the Result tab of the agent execution detail dialog.
+
+### Observed Behavior
+When an agent type is configured with `output_type = 'markdown'`, the Result tab never appears in `SessionExecutionLogsDialog` after execution completes. The markdown result is silently stored in `AgentJob.output_data` but never surfaced in the UI.
+
+### Expected Behavior
+After a markdown agent completes, a Result tab should appear in the execution detail dialog showing the rendered markdown content via `OutputTypeResultTab` with `outputType="markdown"`.
+
+### Analysis
+- **Affected components:**
+  - `backend/app/schemas/agents.py` — `AgentJobStatusRead` does not include `output_type` or `output_data` fields, so the dialog has no way to know a markdown result is available
+  - `backend/app/services/agents/session_service.py` — `_populate_agent_job_names()` doesn't set `output_type` from the agent type
+  - `frontend/src/types/index.ts` — `AgentJob` interface is missing the `output_type` field
+  - `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` — `showTabs` only checks `output_id` (which is only set for typed outputs); Result tab is hardcoded to render typed output only
+- **Root cause hypothesis:** The Phase 5 implementation only wired up the typed output path (`output_id` → `AgentOutput` entity). The markdown path (`output_data.result` on `AgentJob`) was never connected to the Result tab in the dialog.
+- **Documentation impact:** `tech-spec.md` Code Reference Map (modified frontend components section)
+
+### Fix Tasks
+- [x] **Reproduce** — Create test case that demonstrates the issue
+- [x] **Fix** — Implement the fix in code
+- [x] **Verify** — Run all tests (backend, frontend, E2E)
+- [x] **Document** — Update affected documentation
+
+### Test Cases Added/Modified
+- **Backend:** `backend/tests/api/v1/test_session_status_output_type.py` (new — 4 tests verifying `AgentJobStatusRead` exposes `output_type` and `output_data`)
+- **Frontend:** `frontend/src/__tests__/OutputTypeResultTab.test.tsx` (3 new tests for markdown rendering via `output_data.result` key)
+- **All new tests:** Passing ✓
+
+### Code Changes
+**Modified by:** developer (direct fix)
+**Timestamp:** 2026-07-03T11:30:00Z
+
+1. `backend/app/schemas/agents.py` — Added `output_data: dict[str, Any] | None = None` and `output_type: AgentOutputType | None = None` to `AgentJobStatusRead`. These fields are now included in `GET /agents/sessions/{id}` responses.
+
+2. `backend/app/services/agents/session_service.py` — Added `job.output_type = job.agent_type.output_type if job.agent_type else None` to `_populate_agent_job_names()` so the dynamically-set attribute is populated alongside `agent_type_name`.
+
+3. `frontend/src/types/index.ts` — Added `output_type?: AgentOutputType | null` to the `AgentJob` interface.
+
+4. `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` — Major update:
+   - Added `outputType` and `markdownOutputData` state
+   - `fetchLogs()` now reads `output_type` and `output_data` from the job status response; when `output_type` is `markdown` or `auto` and `output_data` is present, sets `markdownOutputData` state
+   - `showTabs` now uses `hasResult = outputId != null || markdownOutputData != null`
+   - Auto-switch `useEffect` now triggers on `typedOutput || markdownOutputData`
+   - Result panel now renders `<OutputTypeResultTab outputType={...} outputData={markdownOutputData} />` for non-typed outputs
+   - Reset logic clears `outputType` and `markdownOutputData` on dialog open
+
+### Documentation Updates
+Updated `tech-spec.md` Code Reference Map for modified components.
+
+### Verification Results
+**Verified by:** direct test run
+**Timestamp:** 2026-07-03T11:30:00Z
+
+- **Backend tests (new):** ✓ 4/4 passing — `test_session_status_output_type.py`
+- **Frontend tests (new):** ✓ 3/3 passing — `OutputTypeResultTab.test.tsx` (FIX tests)
+- **Frontend tests (full):** 979/1001 passing (2 pre-existing failures in `ConversationDelegationVisibility` from FIX-20260702-231300, and 2 pre-existing test-isolation failures in `ManageGroupRolesModal` that pass when run in isolation — all unrelated to this fix)
+- **AgentTypeForm tests:** ✓ 42/42 passing — updated for `markdown`→`auto` rename
+- **Backend tests (full, excl. pre-existing):** 1161 passing (7 pre-existing failures in service-decomposition and auth middleware tests, unrelated to this fix)
+
+**Status:** Resolved
+
+---
+
+## FIX-20260702-231300
+
+**Created:** 2026-07-02T23:13:00Z
+**Status:** In Progress
+**Issue:** Conversational agent delegation crashes with FK violation — `parent_job_id` set to `conv_session_id` which is not an `agent_job.id`. Additionally, conversational agent uses a custom loop instead of the LangGraph/`create_agent`/`GuardrailCallback` framework used by non-conversational agents.
+
+### Observed Behavior
+- Sending a message in the conversational chat that triggers sub-agent delegation results in `RuntimeError: Agent Runtime streaming error` in `_delegate_conversation_turn_to_agent_runtime` (chat.py:643).
+- Root error in backend logs: `sqlalchemy.exc.IntegrityError: ForeignKeyViolationError — insert on agent_jobs violates FK agent_jobs_parent_job_id_fkey. Key (parent_job_id)=(d561ed1b-...) is not present in table "agent_jobs"`.
+- The conversational agent's custom manual loop does not use `GuardrailCallback` or `create_agent` — diverging from the non-conversational (task) agent framework established in Phase 9.
+
+### Expected Behavior
+- Conversational agent delegation to sub-agents succeeds without FK violations.
+- Conversational agent uses the same `create_agent` + `GuardrailCallback` + `LangChainModelFactory` framework as non-conversational agents.
+- Only the input/output differs: conversation history in → last assistant text out (vs. user prompt in → structured output_data out).
+
+### Analysis
+- **Affected components:**
+  - `backend/app/api/v1/internal/session_data.py` — A2A handler uses `requester_instance_id` directly as `parent_job_id` without validating it is an existing `agent_job.id`. Conversational agents pass `conv_session_id` as `requester_instance_id`.
+  - `backend/app/services/agents/runtime_executor.py` — `execute_conversation_turn_from_context` (lines 2511–2864) uses legacy `ModelBindingLayer` and a manual observe-reason-act loop instead of `create_agent` + `GuardrailCallback`.
+  - `backend/app/services/agents/langchain_tool_wrapper.py` — `build_langchain_tools_for_ar_path` has no `status_event_callback` hook, so delegation status events (using_tool, delegating, waiting, delegation_resumed) cannot be streamed back to the WebSocket consumer.
+- **Root cause hypothesis:**
+  1. Phase 9 LangChain migration migrated non-conversational (task) agents to `create_agent` but left `execute_conversation_turn_from_context` on the legacy custom loop.
+  2. The custom loop passes `conv_session_id` as `session_id` to A2A delegation, which the CC A2A handler interprets as `parent_job_id` — a FK into `agent_jobs` that `conv_session_id` doesn't satisfy.
+- **Documentation impact:** `tech-spec.md` Code Reference Map (conversational execution path), `test-plan.md` (new delegation test scenario)
+
+### Fix Tasks
+- [x] **Reproduce** — Added failing backend pytest reproduction and confirmed FK failure
+- [ ] **Fix** — Implement the fix in code
+- [ ] **Verify** — Run all tests (backend, frontend, E2E)
+- [ ] **Document** — Update affected documentation
+
+### Test Cases Added/Modified
+- **Added:** `backend/tests/api/v1/internal/test_a2a_parent_job_id_fk.py`
+- **Purpose:** Reproduces conversational delegation crash when `requester_instance_id` is a valid UUID that does not exist in `agent_jobs`; expected behavior asserts successful enqueue with `parent_job_id = None`.
+- **Command:** `c:/Users/rhu/source/personal/coding-workspace/Parthenon/.venv/Scripts/python.exe -m pytest tests/api/v1/internal/test_a2a_parent_job_id_fk.py -q --maxfail=1`
+- **Observed failure excerpt:**
+  - `ERROR app.main:main.py:113 Internal server error (500): method=POST path=/api/v1/internal/data/a2a/request`
+  - `sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) FOREIGN KEY constraint failed`
+  - `SQL: INSERT INTO agent_jobs (...) parent_job_id ...`
+  - `session_data.py:774 in prepare_a2a_request -> session_service.py:53 in enqueue -> await db.flush()`
+
+### Code Changes
+<!-- Will be updated by developer -->
+
+### Documentation Updates
+<!-- Will be updated as docs are revised -->
+
+### Verification Results
+<!-- Will be updated after verification -->
+
+---
+
+## FIX-20260702-150000
+
+**Created:** 2026-07-02T15:00:00Z
+**Status:** Resolved
+**Issue:** Guardrail panel only shows after completion; limits all say "not configured"; only iteration count works, other values show 0
+
+### Observed Behavior
+1. Guardrail section in execution detail only appears after execution completes (not during iteration start as expected)
+2. Panel shows policy snapshot ID correctly but every limit (max iterations, delegation depth, token budget, etc.) says "not configured"
+3. Only `cumulative_iterations` shows a real value; all other guardrail data (delegated steps, delegation depth, token usage) are 0
+
+### Expected Behavior
+1. Guardrail section appears as soon as the first iteration starts (before completion)
+2. All configured limits from the policy snapshot are displayed (max iterations, delegation depth, etc.)
+3. All live counters update correctly as execution progresses
+
+### Analysis
+- **Affected components:**
+  - `backend/app/services/agents/guardrail_callback.py` — `GuardrailCallback.on_chat_model_start` never emits `guardrail.runtime.snapshot` events; `on_llm_end` updates `tokens_used` (wrong field) instead of `token_usage_current_session`; `_check_token_budget` reads `max_tokens_total`/`tokens_used` (wrong fields)
+  - `backend/app/services/agents/runtime_executor.py` — `task_loop_completed` guardrail dict (AR path) has only current values, no max/limit values; CC task loop calls `RuntimeGuardrailState()` with no args (would TypeError)
+  - `frontend/src/services/LogPresenter.ts` `extractGuardrailUsage` — reads limits only from `thresholdPayload` of snapshot entries; does not fall back to `task_loop_completed`'s `threshold_value`; priority order for current payload puts completion entry before snapshot entry
+- **Root cause:**
+  1. Phase 9 LangChain migration replaced the old ORA loop but did not port per-iteration `guardrail.runtime.snapshot` event emission
+  2. `on_llm_end` token tracking used legacy field names (`tokens_used`/`max_tokens_total`) that don't exist on `RuntimeGuardrailState`
+  3. The `task_loop_completed` event was designed to carry a flat guardrail dict (current values only) without limit/threshold values; no `threshold_value` nested key was ever added
+  4. CC task loop (`_run_task_loop`) creates `RuntimeGuardrailState()` with no required args — oversight from when the dataclass gained required fields
+- **Documentation impact:** fix-log.md, test-plan.md (new test scenario)
+
+### Fix Tasks
+- [x] **Reproduce** — Pre-existing failing tests (3 in `test_guardrail_callback.py`) confirmed wrong field names; new snapshot tests confirm missing emission
+- [x] **Fix** — Implement code fixes (guardrail_callback.py + runtime_executor.py + LogPresenter.ts)
+- [x] **Verify** — Backend: 19/19 guardrail tests pass; Frontend: 976/976 Vitest tests pass
+- [x] **Document** — Fix log updated
+
+### Test Cases Added/Modified
+- **File:** `backend/tests/unit/test_guardrail_callback.py`
+- **Pre-existing fixed:** `test_on_llm_start_raises_when_iteration_limit_exceeded`, `test_on_llm_start_no_raise_when_within_limit`, `test_on_chat_model_start_raises_when_iteration_limit_exceeded` — updated to use `cumulative_iterations` (correct field)
+- **Token tests updated:** `test_on_llm_end_raises_when_token_budget_exceeded`, `test_on_llm_end_no_raise_when_within_budget`, `test_no_token_check_when_max_tokens_is_none` — updated to use `token_budget`/`token_usage_current_session`
+- **New tests added:** `test_on_llm_end_updates_token_usage_current_session`, `test_snapshot_emitted_on_chat_model_start`, `test_snapshot_emitted_on_llm_start`, `test_snapshot_not_emitted_when_no_data_client`, `test_snapshot_failure_does_not_block_execution`
+
+### Code Changes
+**Modified by:** developer agent  
+**Timestamp:** 2026-07-02T19:30:00Z
+
+1. **`backend/app/services/agents/guardrail_callback.py`**
+   - `on_llm_start` / `on_chat_model_start`: Added `await self._emit_guardrail_snapshot()` after limit checks
+   - New `_emit_guardrail_snapshot()` method: calls `data_client.log_execution_event` with `guardrail.runtime.snapshot` event containing nested `current_value` and `threshold_value` dicts; non-critical (failure silently ignored)
+   - `on_llm_end`: Fixed token tracking — now updates `token_usage_current_session` (not `tokens_used`); added fallback to `usage_metadata` on LangChain chat model generations
+   - `_check_token_budget`: Fixed field reads — now uses `token_budget` (not `max_tokens_total`) and `token_usage_current_session` (not `tokens_used`)
+
+2. **`backend/app/services/agents/runtime_executor.py`**
+   - AR path `_run_task_loop_create_agent`: `task_loop_completed` now emits `current_value` and `threshold_value` nested keys alongside flat guardrail dict
+   - CC path `_run_task_loop`: Fixed `RuntimeGuardrailState()` no-args call to use proper defaults; `task_loop_completed` now also emits nested guardrail structure
+
+3. **`frontend/src/services/LogPresenter.ts`**
+   - `extractGuardrailCurrentPayload`: Prioritizes `current_value` nested key before falling back to flat payload for `task_loop_completed`
+   - `extractGuardrailUsage`: Snapshot entry preferred over completion entry for current values; `thresholdPayload` now falls back to `task_loop_completed`'s `threshold_value` when no snapshot exists
+
+### Verification Results
+**Verified by:** developer agent  
+**Timestamp:** 2026-07-02T19:30:00Z
+
+- **Backend guardrail tests:** ✓ 19/19 passing (19 tests, 0 failed)
+- **Frontend tests:** ✓ 976/976 passing (0 failed, 18 skipped)
+- **Reproduction test:** ✓ New snapshot tests confirm correct behavior
+
+---
+
+## FIX-20260701-120000
+
+**Created:** 2026-07-01T12:00:00Z
+**Status:** Resolved
+**Issue:** Three delegation/output issues in non-conversational agent execution
+
+### Observed Behavior
+1. Sub-agent execution log not shown/streamed in the delegation block (shows placeholder while running, no activity dots during delegation)
+2. Output type and result not visible in the execution log completion step — only the message text mentions output type; result preview buried in expandable detail
+3. "View Execution Logs" button in completed delegation blocks does nothing in `AgentJobPage` (non-conversational task agents)
+
+### Expected Behavior
+1. Delegation block shows live sub-agent execution activity (tool calls, LLM steps) in real-time using SSE streaming instead of slow 4s polling
+2. The `session_completed` execution log step shows the output type as a chip and the result preview as inline text — visible without expanding the detail panel
+3. Clicking "View Execution Logs" in `AgentJobPage` opens `AgentExecutionDetailsDialog` for the sub-agent session
+
+### Analysis
+- **Affected components:**
+  1. `frontend/src/components/executions/WorkingStepsPanel.tsx` — `StepRow` uses REST polling (4s) instead of SSE streaming; `session_completed` step does not render `output_type`/`result_preview` inline
+  2. `frontend/src/pages/agents/AgentJobPage.tsx` — does not pass `onViewSubAgentExecution` to `LogViewer`
+  3. `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` — already handles sub-agent dialogs correctly (no fix needed)
+- **Root cause:**
+  1. Phase 10 refactoring moved delegation entries from a collapsed detail panel to always-visible, but kept REST polling (4s) instead of upgrading to SSE streaming. The `useSessionExecutionLogStream` hook is already imported and used by the parent `AgentJobPage` but not inside `StepRow`.
+  2. `session_completed` event data now has `output_type` and `result_preview` fields (added in Phase 10.12 backend changes) but `StepRow` does not render them inline — only shows the message text.
+  3. `AgentJobPage` never added `onViewSubAgentExecution` prop to its `LogViewer` call — the button in `WorkingStepsPanel` calls `onViewSubAgentExecution?.()` which is always undefined in `AgentJobPage`.
+
+### Fix Tasks
+- [x] **Fix 1** — Replace 4s REST polling in `StepRow` with `useSessionExecutionLogStream` for active delegations
+- [x] **Fix 2** — Show `output_type` chip and `result_preview` inline in `session_completed` step row
+- [x] **Fix 3** — Add `onViewSubAgentExecution` support to `AgentJobPage` + render `AgentExecutionDetailsDialog`
+- [x] **Verify** — Vitest: 976 passed / 0 failed (18 pre-existing pending, no regressions)
+
+### Expected Files
+- `frontend/src/components/executions/WorkingStepsPanel.tsx` — Fixes 1 and 2
+- `frontend/src/pages/agents/AgentJobPage.tsx` — Fix 3
+- `frontend/src/__tests__/AgentSessionPage.test.tsx` — New test for sub-agent dialog
+
+---
+
+## FIX-20260702-090000
+
+**Created:** 2026-07-02T09:00:00Z
+**Status:** Resolved
+**Issue:** LangChain delegation path missing `receiver_session_id`; guardrail iteration limit bypassed; Fix 2 layout conflict
+
+### Observed Behavior
+1. "View Execution Logs" button never appeared for completed delegations in LangChain (task) agents — investigation from previous session showed root cause was backend
+2. Sub-agent execution log not streaming (same root cause)
+3. `max_iterations` guardrail had no effect in the LangChain agent path — agents ran unlimited iterations
+4. Output type chip + result preview (Fix 2) was squeezed/competing with step message due to layout conflict
+
+### Root Causes
+1. **`langchain_tool_wrapper.py`**: `call_a2a_request(wait_for_response=True)` returns an `A2AResponse` dict that includes `receiver_session_id`, but `delegation_resumed` event was logged without it. `LogPresenter.mergeDelegationEntries()` extracts `receiver_session_id` from the last delegation event — since it was absent, the merged entry had `receiver_session_id: undefined`, so the button condition (`actualReceiverSessionId && !isDelegationActive`) was never true.
+2. **`guardrail_callback.py`**: `_check_iteration_limit()` reads `guardrail_state.iteration_count` via `getattr(..., 0)` but `RuntimeGuardrailState` only has `cumulative_iterations`. So `getattr` always returned 0, guardrail never fired. Additionally, `cumulative_iterations` was never incremented in the LangChain path (the old conversational loop increments it separately).
+3. **`WorkingStepsPanel.tsx`**: The `session_completed` output block was inside `<Box display="flex" alignItems="center">`, with `flex: 1` on both the message Typography and the output Box, causing layout competition.
+
+### Fix Tasks
+- [x] **Fix A** — `langchain_tool_wrapper.py`: extract `receiver_session_id` from `call_a2a_request` result, add to `delegation_resumed` event data
+- [x] **Fix B** — `guardrail_callback.py`: increment `cumulative_iterations` in `on_llm_start`/`on_chat_model_start`; change `_check_iteration_limit` to read `cumulative_iterations` (fallback `iteration_count`), use `>` instead of `>=`
+- [x] **Fix C** — `WorkingStepsPanel.tsx`: move output_type/result_preview block from inside flex row to after `</Box>`, use `pl: 6, pb: 0.5` instead of `ml: 0.5, flex: 1`
+- [x] **Verify** — Vitest: 976 passed / 0 failed (18 skipped, no regressions)
+
+### Expected Files
+- `backend/app/services/agents/langchain_tool_wrapper.py` — Fix A
+- `backend/app/services/agents/guardrail_callback.py` — Fix B
+- `frontend/src/components/executions/WorkingStepsPanel.tsx` — Fix C
+
+---
+
 ## FIX-20260626-113000
 
 **Created:** 2026-06-26T11:30:00Z

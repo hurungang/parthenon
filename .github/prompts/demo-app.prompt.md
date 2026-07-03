@@ -49,6 +49,7 @@ Available scenarios (from `e2e/tests/`):
 - `observability` — metrics and traces
 - `permissions` — user permission management (tags, roles, groups, users, access requests)
 - `conversational-agent-intervention` — inline intervention dialogs during conversational agent delegation (approval/choice/text)
+- `agent-save-data-get-tools` — save_data/get_data/get_output system tools: multi-record saves, query guardrails, output history retrieval
 
 ---
 

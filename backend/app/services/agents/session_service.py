@@ -32,6 +32,7 @@ class AgentSessionService:
         input_data: dict[str, Any] | None,
         user_id: uuid.UUID | None,
         db: AsyncSession,
+        parent_job_id: uuid.UUID | None = None,
     ) -> AgentJob:
         """Create a new AgentJob with status=queued and return it immediately."""
         with tracer.start_as_current_span(
@@ -46,6 +47,7 @@ class AgentSessionService:
                 triggered_by_user_id=user_id,
                 input_data=input_data,
                 status=AgentJobStatus.queued,
+                parent_job_id=parent_job_id,
             )
             db.add(job)
             await db.flush()
@@ -144,8 +146,9 @@ class AgentSessionService:
     async def _populate_agent_job_names(
         self, job: AgentJob, db: AsyncSession
     ) -> None:
-        """Set agent_type_name and triggered_by_user_name on a single AgentJob."""
+        """Set agent_type_name, triggered_by_user_name, and output_type on a single AgentJob."""
         job.agent_type_name = job.agent_type.name if job.agent_type else None
+        job.output_type = job.agent_type.output_type if job.agent_type else None
         if job.triggered_by_user_id:
             identity_stmt = select(Identity).where(Identity.id == job.triggered_by_user_id)
             identity_result = await db.execute(identity_stmt)

@@ -69,6 +69,25 @@ class AgentOutputListResponse(BaseModel):
     page_size: int
 
 
+class AutoOutputItem(BaseModel):
+    """A single auto-type agent output (stored in AgentJob.output_data)."""
+
+    session_id: uuid.UUID
+    agent_type_id: uuid.UUID
+    agent_type_name: str | None
+    output_preview: str | None  # First 200 chars of output_data['result']
+    created_at: datetime
+
+
+class AutoOutputListResponse(BaseModel):
+    """Paginated list response for auto-type agent outputs."""
+
+    items: list[AutoOutputItem]
+    total: int
+    page: int
+    page_size: int
+
+
 class ValidateOutputRequest(BaseModel):
     """Request body for the internal validation endpoint."""
 

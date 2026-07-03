@@ -397,7 +397,6 @@ def _build_dynamic_agent_tool_definition(
 ) -> dict[str, Any]:
     """Build dynamic delegation tool schema for ``agent____<slug>``."""
     canonical_name = build_tool_name("agent", target_agent_type_slug)
-    sanitized_name = canonical_name.replace("____", "__")
 
     description_parts = [f"Delegate work to agent type '{target_agent_type_slug}'."]
     if target_description:
@@ -464,36 +463,12 @@ def _build_dynamic_agent_tool_definition(
     return {
         "type": "function",
         "function": {
-            "name": sanitized_name,
+            "name": canonical_name,
             "description": " ".join(description_parts),
             "parameters": parameters,
         },
     }
 
-
-# Save-result pseudo-tool definition injected into every agent's tool set
-_SAVE_RESULT_TOOL_DEF: dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "save_result",
-        "description": (
-            "Persist the final output to the Result Repository. "
-            "Call this when the task is complete and you have a result to save."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Short title for the result"},
-                "content": {"type": "string", "description": "Summary or text of the result"},
-                "data": {
-                    "type": "object",
-                    "description": "Structured payload to persist",
-                },
-            },
-            "required": ["content"],
-        },
-    },
-}
 
 # send_notification system tool definition
 _SEND_NOTIFICATION_TOOL_DEF: dict[str, Any] = {
@@ -1437,11 +1412,32 @@ class AgentRuntimeExecutor:
                 await data_client.mark_session_completed(session_id, output_data)
                 span.set_attribute("status", "completed")
 
+                _out_type_name = (
+                    output_data.get("__data_type_name")
+                    or (context.get("output_data_type_name") if isinstance(context, dict) else None)
+                ) if output_data else None
+                _result_text = (
+                    output_data.get("result") or output_data.get("content") or output_data.get("output")
+                ) if output_data else None
+                _result_preview = (
+                    str(_result_text)[:200].strip() + ("\u2026" if len(str(_result_text)) > 200 else "")
+                ) if isinstance(_result_text, str) and _result_text.strip() else None
+                _completion_msg = "Session completed successfully"
+                if _out_type_name:
+                    _completion_msg = f"Session completed \u2014 output type: {_out_type_name}"
                 await data_client.log_execution_event(
                     session_id=session_id,
                     event_type="session_completed",
-                    message="Session completed successfully",
-                    data={"output_keys": list(output_data.keys()) if output_data else []},
+                    message=_completion_msg,
+                    data={
+                        "output_keys": list(output_data.keys()) if output_data else [],
+                        **({
+                            "output_type": _out_type_name,
+                            **({
+                                "result_preview": _result_preview,
+                            } if _result_preview else {}),
+                        } if _out_type_name else {}),
+                    },
                 )
             except HumanInterveneRequired:
                 logger.info("Session %s paused for human intervention", session_id)
@@ -1538,13 +1534,15 @@ class AgentRuntimeExecutor:
                 )
                 span.set_attribute("status", "permission_denied")
             except Exception as exc:
-                error_msg = str(exc)
+                exc_type = type(exc).__name__
+                exc_str = str(exc).strip()
+                error_msg = f"{exc_type}: {exc_str}" if exc_str else exc_type
                 logger.exception("Session %s execution error: %s", session_id, exc)
                 await data_client.log_execution_event(
                     session_id=session_id,
                     event_type="error",
                     message=error_msg,
-                    data={"exception_type": type(exc).__name__},
+                    data={"exception_type": exc_type},
                     log_level="ERROR",
                 )
                 await data_client.mark_session_failed(
@@ -1958,7 +1956,6 @@ class AgentRuntimeExecutor:
         # ── Build LangChain tools (task 9.7) ─────────────────────────────────
         from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
 
-        save_result_output: dict[str, Any] = {}
         lc_tools = build_langchain_tools_for_ar_path(
             tool_definitions=tool_definitions,
             comm_hub_client=comm_hub_client,
@@ -1966,9 +1963,9 @@ class AgentRuntimeExecutor:
             session_id=str(session_id),
             agent_type_id=agent_type_id or "",
             conv_session_id=getattr(self, "_conv_session_id", None),
-            save_result_output=save_result_output,
             tool_name_map=tool_name_map,
             role_id=str(context.get("role_id") or ""),
+            guardrail_state=guardrail_state,
         )
 
         # ── Create agent (task 9.6/9.7) ───────────────────────────────────────
@@ -1977,6 +1974,31 @@ class AgentRuntimeExecutor:
 
         _checkpointer = MemorySaver()
         _recursion_limit = max(1, guardrail_state.max_iterations) * 3 + 1
+
+        # Disable parallel tool calls when delegation tools are present so the LLM
+        # executes agent delegation tools one at a time (sequential, as SOPs require).
+        # NOTE: _llm.bind(parallel_tool_calls=False) does NOT work here — create_agent()
+        # internally calls model.bind_tools() which creates a new _ChatModelBinding that
+        # REPLACES the .bind() wrapper, losing the setting. The correct approach is to bake
+        # parallel_tool_calls=False into the model's model_kwargs via model_copy() so it
+        # survives any subsequent bind_tools() call.
+        # Note: sanitized tool names replace '-' with '_' but preserve the 4-underscore
+        # agent____ prefix, so startswith("agent____") correctly identifies delegation tools.
+        _has_delegation_tools = any(t.name.startswith("agent____") for t in lc_tools)
+        if _has_delegation_tools:
+            try:
+                _existing_mk = dict(getattr(_llm, 'model_kwargs', None) or {})
+                _existing_mk['parallel_tool_calls'] = False
+                _llm = _llm.model_copy(update={'model_kwargs': _existing_mk})
+                logger.info(
+                    "Session %s: parallel_tool_calls=False set via model_kwargs (delegation tools present)",
+                    session_id,
+                )
+            except Exception as _bind_exc:
+                logger.warning(
+                    "Session %s: could not set parallel_tool_calls=False: %s",
+                    session_id, _bind_exc,
+                )
 
         _agent = create_agent(
             model=_llm,
@@ -2089,10 +2111,7 @@ class AgentRuntimeExecutor:
         _structured_response = _result.get("structured_response")
         _final_messages: list[Any] = _result.get("messages", [])
 
-        if save_result_output:
-            # save_result was called — use captured args as output_data
-            output_data: dict[str, Any] = {**save_result_output}
-        elif _structured_response is not None:
+        if _structured_response is not None:
             # Typed structured output from response_format (task 9.8)
             if hasattr(_structured_response, "model_dump"):
                 output_data = _structured_response.model_dump()
@@ -2103,12 +2122,22 @@ class AgentRuntimeExecutor:
         else:
             # Extract text from final message
             _last_msg = _final_messages[-1] if _final_messages else None
-            _content = (
+            _content: Any = (
                 getattr(_last_msg, "content", "") if _last_msg else ""
             ) or ""
+            # Normalize to a plain string: Anthropic and some other providers return
+            # content as a list of content blocks ([{"type":"text","text":"..."},...])
+            # rather than a plain string. Extract text blocks and join them.
+            if isinstance(_content, list):
+                _text_parts = [
+                    block.get("text", "")
+                    for block in _content
+                    if isinstance(block, dict) and block.get("type") == "text"
+                ]
+                _content = "\n\n".join(part for part in _text_parts if part)
             output_data = {"result": _content}
 
-        # Attach guardrail usage
+        # Attach guardrail usage (current counters + configured limits)
         output_data.setdefault("guardrail_usage", {
             "policy_snapshot_id": guardrail_state.policy_snapshot_id,
             "cumulative_iterations": guardrail_state.cumulative_iterations,
@@ -2118,13 +2147,31 @@ class AgentRuntimeExecutor:
             "token_usage_current_session": guardrail_state.token_usage_current_session,
         })
 
+        _guardrail_log = {
+            **output_data.get("guardrail_usage", {}),
+            "current_value": {
+                "cumulative_iterations": guardrail_state.cumulative_iterations,
+                "delegated_steps": guardrail_state.delegated_steps,
+                "delegation_depth": guardrail_state.delegation_depth,
+                "elapsed_seconds": guardrail_state.elapsed_seconds(),
+                "token_usage_current_session": guardrail_state.token_usage_current_session,
+            },
+            "threshold_value": {
+                "max_iterations": guardrail_state.max_iterations,
+                "max_delegation_depth": guardrail_state.max_delegation_depth,
+                "max_delegated_steps": guardrail_state.max_delegated_steps,
+                "token_budget": guardrail_state.token_budget,
+                "execution_timeout_seconds": guardrail_state.execution_timeout_seconds,
+            },
+        }
+
         await data_client.log_execution_event(
             session_id=session_id,
             event_type="task_loop_completed",
             message="Task loop completed via create_agent",
             data={
                 "output_keys": list(output_data.keys()),
-                "guardrail": output_data.get("guardrail_usage", {}),
+                "guardrail": _guardrail_log,
             },
         )
         return output_data
@@ -2453,91 +2500,41 @@ class AgentRuntimeExecutor:
         key_path: str | None = None,
         status_event_callback: Callable[[dict[str, str]], Awaitable[None]] | None = None,
     ) -> tuple[str, dict[str, Any], list[dict[str, str]]]:
-        """Execute one conversation turn using Control Center context only.
-
-        This is the Agent Runtime DB-free path: all execution context and model
-        credentials are fetched from Control Center internal data APIs.
+        """Execute one conversation turn using the same LangGraph/create_agent framework
+        as non-conversational agents. Only input/output differ:
+          - Input: full conversation message history (not a single user prompt)
+          - Output: last assistant message text (not structured output_data)
         """
-        from app.services.agents.model_binding import ModelBindingLayer
-
-        binding = ModelBindingLayer()
-
-        model_id = agent_context.get("model_id")
-        if not model_id:
-            raise ValueError("Agent context missing model_id")
-
-        provider_type = model_config.get("provider_type")
-        if not provider_type:
-            raise ValueError("Model config missing provider_type")
-
+        # 1. Extract tool context
         allowed_tools = self._permission_manager.get_allowed_tools_from_context(
             agent_context.get("allowed_tools", [])
         )
         tool_definitions = list(agent_context.get("tool_definitions", []))
-        tool_name_map: dict[str, str] = dict(agent_context.get("tool_name_map", {}))
-        role_mcp_sessions: dict[str, dict[str, str]] = dict(
-            agent_context.get("role_mcp_sessions", {})
-        )
+        tool_name_map = dict(agent_context.get("tool_name_map", {}))
         role_id_raw = agent_context.get("role_id")
-        role_id = uuid.UUID(str(role_id_raw)) if role_id_raw else uuid.UUID(int=0)
 
-        system_instruction: str | None = None
-        last_user_prompt: str | None = None
-        user_message_count = 0
-        assistant_message_count = 0
+        # 2. Extract system_instruction
+        system_instruction = None
         for msg in messages:
-            role = msg.get("role")
-            content = msg.get("content")
-            if role == "system" and isinstance(content, str):
-                system_instruction = content
-            elif role == "user" and isinstance(content, str):
-                user_message_count += 1
-                last_user_prompt = content
-            elif role == "assistant":
-                assistant_message_count += 1
+            if msg.get("role") == "system":
+                system_instruction = msg.get("content")
+                break
 
+        # 3. CommHub client (mTLS)
         from app.agent_runtime.comm_hub_client import CommHubToolClient
-
         comm_hub_client = CommHubToolClient()
         if cert_path and key_path:
             comm_hub_client.set_certificate(cert_path, key_path)
 
-        conv_tool_names = _canonicalize_tool_list_for_log(
-            _tool_names_from_definitions(tool_definitions),
-            tool_name_map,
-        )
-        allowed_tool_names = _canonicalize_tool_list_for_log(allowed_tools)
-        logger.debug(
-            "Conversation runtime initialized (from context): session=%s agent=%s role=%s",
-            conv_session_id,
-            agent_type_id,
-            role_id_raw,
-            extra={
-                "data": {
-                    "tools": conv_tool_names,
-                    "tool_count": len(conv_tool_names),
-                    "allowed_tools": allowed_tool_names,
-                    "tool_definitions": sorted(conv_tool_names),
-                    "tool_routes": {
-                        "system": sorted([t for t in conv_tool_names if _tool_route_type(t) == "system"]),
-                        "agent": sorted([t for t in conv_tool_names if _tool_route_type(t) == "agent"]),
-                        "mcp": sorted([t for t in conv_tool_names if _tool_route_type(t) == "mcp"]),
-                    },
-                    "sops": agent_context.get("sops", []),
-                    "skills": agent_context.get("skills", []),
-                    "system_instruction": system_instruction,
-                    "system_instruction_length": len(system_instruction or ""),
-                    "user_prompt": last_user_prompt,
-                    "user_prompt_length": len(last_user_prompt or ""),
-                    "message_count": len(messages),
-                    "user_message_count": user_message_count,
-                    "assistant_message_count": assistant_message_count,
-                    "has_send_notification_tool": build_tool_name("system", "send_notification") in conv_tool_names,
-                }
-            },
-        )
+        # 4. Status events accumulator
+        status_events: list[dict[str, str]] = []
 
-        local_messages = list(messages)
+        async def emit_status_event(event: dict[str, str]) -> None:
+            status_events.append(event)
+            if status_event_callback is not None:
+                await status_event_callback(event)
+
+        # 5. Guardrail state (same _build_guardrail_state as non-conv path)
         guardrail_state = self._build_guardrail_state(
             agent_context,
             {"input_data": {"__delegation_depth": 0}},
@@ -2556,246 +2553,136 @@ class AgentRuntimeExecutor:
                 "max_delegation_depth": guardrail_state.max_delegation_depth,
             }
 
-        max_iterations = max(1, guardrail_state.max_iterations)
-        status_events: list[dict[str, str]] = []
+        # 6. Build LangChain model
+        model_id = agent_context.get("model_id")
+        provider_type = model_config.get("provider_type")
+        if not model_id:
+            raise ValueError("Agent context missing model_id")
+        if not provider_type:
+            raise ValueError("Model config missing provider_type")
 
-        async def emit_status_event(event: dict[str, str]) -> None:
-            status_events.append(event)
-            if status_event_callback is not None:
-                await status_event_callback(event)
-
-        for iteration in range(max_iterations):
-            guardrail_state.cumulative_iterations += 1
-            try:
-                self._check_runtime_limits_or_raise(guardrail_state)
-            except GuardrailStop as exc:
-                logger.warning(
-                    "Conversation guardrail stop (from context): session=%s reason=%s",
-                    conv_session_id,
-                    exc.reason,
-                )
-                return exc.message, build_conversation_guardrail_usage(), status_events
-
-            raw_response = await binding.complete_from_context(
+        from app.services.agents.langchain_model_factory import LangChainModelFactory
+        try:
+            _llm = LangChainModelFactory().get_model_from_config_dict(
                 model_id=str(model_id),
                 model_config_dict=model_config,
-                messages=local_messages,
-                tools=tool_definitions if tool_definitions else None,
             )
+        except Exception as _model_exc:
+            raise ValueError(f"Failed to initialise model: {_model_exc}") from _model_exc
 
-            response_text = ModelBindingLayer.extract_text(raw_response, provider_type)
-            raw_tool_calls = ModelBindingLayer.extract_tool_calls(raw_response, provider_type)
-            usage = ModelBindingLayer.extract_usage(raw_response, provider_type)
-            guardrail_state.token_usage_current_session += extract_total_tokens_from_usage(usage)
+        # 7. Build LangChain callbacks (GuardrailCallback — same as non-conv path)
+        from app.services.agents.guardrail_callback import GuardrailCallback
+        lc_callbacks: list[Any] = [
+            GuardrailCallback(
+                guardrail_state=guardrail_state,
+                session_id=str(conv_session_id),
+                data_client=None,  # No agent_job for conversation turns; skip execution logging
+                execution_mode="conversation",
+            ),
+        ]
 
-            token_budget = guardrail_state.token_budget
-            token_threshold_hit = (
-                token_budget is not None
-                and token_budget > 0
-                and guardrail_state.token_usage_current_session >= token_budget
-            )
-            if (
-                token_threshold_hit
-                and guardrail_state.conversational_token_visibility_mode == "enabled"
-            ):
-                logger.info(
-                    "guardrail.runtime.conversational_token_usage_snapshot",
-                    extra={
-                        "data": {
-                            "guardrail_reason": GuardrailInfoReason.CONVERSATIONAL_TOKEN_THRESHOLD_OBSERVED,
-                            "execution_mode": "conversational",
-                            "token_usage_current_session": guardrail_state.token_usage_current_session,
-                            "threshold_value": token_budget,
-                            "continuation_allowed": True,
-                            "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                            "provider": provider_type,
-                        }
-                    },
-                )
-
-            logger.info(
-                "Conversation LLM response (from context): session=%s iteration=%d has_tool_calls=%s selected_tools=%s",
-                conv_session_id,
-                iteration + 1,
-                bool(raw_tool_calls),
-                [
-                    _canonicalize_tool_name_for_log(
-                        _restore_tool_name_from_openai(
-                            tc.get("function", {}).get("name", ""),
-                            tool_name_map,
-                        ),
-                        tool_name_map,
-                    )
-                    for tc in (raw_tool_calls or [])
-                ],
-            )
-
-            if not raw_tool_calls:
-                return (
-                    response_text or "I processed your message but received an empty response.",
-                    build_conversation_guardrail_usage(),
-                    status_events,
-                )
-
-            local_messages.append(
-                {
-                    "role": "assistant",
-                    "content": response_text or "",
-                    "tool_calls": raw_tool_calls,
-                }
-            )
-
-            for tc in raw_tool_calls:
-                sanitized_name = tc.get("function", {}).get("name", "")
-                original_name = _restore_tool_name_from_openai(sanitized_name, tool_name_map)
-                tool_display_name = original_name
-                try:
-                    server_name, bare_tool_name = parse_tool_name(original_name)
-                    if bare_tool_name:
-                        tool_display_name = bare_tool_name
-                    elif server_name:
-                        tool_display_name = server_name
-                except ValueError:
-                    # Keep original_name when not parseable by canonical parser.
-                    pass
-
-                await emit_status_event(
-                    {
-                        "status": "using_tool",
-                        "tool_name": tool_display_name,
-                    }
-                )
-                args_raw = tc.get("function", {}).get("arguments", "{}")
-                args: dict[str, Any] = (
-                    json.loads(args_raw)
-                    if isinstance(args_raw, str)
-                    else (args_raw if isinstance(args_raw, dict) else {})
-                )
-                call_id = tc.get("id", "")
-
-                try:
-                    self._permission_manager.check_tool_allowed(
-                        original_name,
-                        allowed_tools,
-                        role_id,
-                    )
-                except PermissionDeniedError as exc:
-                    tool_result: Any = {"error": f"Permission denied: {exc}"}
-                    logger.warning(
-                        "Conversation tool denied (from context): session=%s tool=%s error=%s",
-                        conv_session_id,
-                        original_name,
-                        exc,
-                    )
-                else:
-                    delegated_target_slug = _extract_agent_delegation_target(original_name)
-                    if delegated_target_slug is not None:
-                        await emit_status_event(
-                            {
-                                "status": "delegating",
-                                "agent_type": delegated_target_slug,
-                            }
-                        )
-                        await emit_status_event(
-                            {
-                                "status": "waiting",
-                                "agent_type": delegated_target_slug,
-                            }
-                        )
-                        guardrail_state.delegated_steps += 1
-                        next_depth = guardrail_state.tree_depth + 1
-                        if next_depth > guardrail_state.max_delegation_depth:
-                            return (
-                                "Delegation depth limit exceeded.",
-                                build_conversation_guardrail_usage(),
-                                status_events,
-                            )
-                        if guardrail_state.delegated_steps > guardrail_state.max_delegated_steps:
-                            return (
-                                "Delegated-step budget exceeded.",
-                                build_conversation_guardrail_usage(),
-                                status_events,
-                            )
-
-                        delegation_payload = _build_delegation_request_payload(args)
-                        delegation_payload["__delegation_depth"] = next_depth
-                        guardrail_state.delegation_depth = next_depth
-                        tool_result = await comm_hub_client.call_a2a_request(
-                            target_agent_type_slug=delegated_target_slug,
-                            session_id=str(conv_session_id),
-                            requester_role_id=(str(role_id_raw) if role_id_raw else None),
-                            request_payload=delegation_payload,
-                            session_link_id=args.get("session_link_id"),
-                            wait_for_response=False,
-                            wait_timeout_seconds=120.0,
-                            conv_session_id=str(conv_session_id),
-                        )
-
-                        # Extract receiver_session_id and wait with HITL awareness
-                        delegated_session_id = None
-                        if isinstance(tool_result, dict):
-                            rsid = tool_result.get("receiver_session_id")
-                            if isinstance(rsid, str) and rsid.strip():
-                                delegated_session_id = rsid.strip()
-
-                        if delegated_session_id:
-                            await emit_status_event({
-                                "status": "waiting",
-                                "agent_type": delegated_target_slug,
-                                "receiver_session_id": delegated_session_id,
-                            })
-                            wait_payload = await comm_hub_client.wait_for_a2a_response(
-                                receiver_session_id=delegated_session_id,
-                                timeout_seconds=120.0,
-                            )
-
-                            # Accumulate child's token usage into parent's guardrail state
-                            if isinstance(wait_payload, dict):
-                                child_usage = (
-                                    wait_payload
-                                    .get("output_data", {})
-                                    .get("guardrail_usage", {})
-                                    .get("token_usage_current_session", 0)
-                                )
-                                if isinstance(child_usage, (int, float)) and child_usage > 0:
-                                    guardrail_state.token_usage_current_session += int(child_usage)
-
-                            await emit_status_event({
-                                "status": "delegation_resumed",
-                                "agent_type": delegated_target_slug,
-                            })
-                            if isinstance(tool_result, dict):
-                                tool_result["response_payload"] = wait_payload
-
-                    else:
-                        logger.info(
-                            "Conversation tool dispatch (from context): session=%s tool=%s route_type=%s",
-                            conv_session_id,
-                            original_name,
-                            _tool_route_type(original_name),
-                        )
-                        tool_result = await self._execute_mcp_tool_ar(
-                            original_name,
-                            args,
-                            role_mcp_sessions,
-                            str(agent_type_id),
-                            str(conv_session_id),
-                            comm_hub_client,
-                        )
-
-                local_messages.append(
-                    {
-                        "role": "tool",
-                        "content": str(tool_result),
-                        "tool_call_id": call_id,
-                    }
-                )
-
-        return (
-            "I was unable to complete the task within the allowed number of steps.",
-            build_conversation_guardrail_usage(),
-            status_events,
+        # 8. Build LangChain tools (same build_langchain_tools_for_ar_path as non-conv path)
+        from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+        lc_tools = build_langchain_tools_for_ar_path(
+            tool_definitions=tool_definitions,
+            comm_hub_client=comm_hub_client,
+            data_client=None,  # No agent_job for conversation turns
+            session_id=str(conv_session_id),
+            agent_type_id=str(agent_type_id),
+            conv_session_id=str(conv_session_id),
+            tool_name_map=tool_name_map,
+            role_id=str(role_id_raw) if role_id_raw else "",
+            guardrail_state=guardrail_state,
+            status_event_callback=emit_status_event,
         )
+
+        # 9. Disable parallel tool calls when delegation tools present (same as non-conv path)
+        _has_delegation_tools = any(t.name.startswith("agent____") for t in lc_tools)
+        if _has_delegation_tools:
+            try:
+                _existing_mk = dict(getattr(_llm, "model_kwargs", None) or {})
+                _existing_mk["parallel_tool_calls"] = False
+                _llm = _llm.model_copy(update={"model_kwargs": _existing_mk})
+            except Exception:
+                pass
+
+        # 10. Create agent (same create_agent as non-conv; no response_format for conv)
+        from langchain.agents import create_agent
+        from langgraph.checkpoint.memory import MemorySaver
+        from langgraph.errors import GraphInterrupt
+
+        _checkpointer = MemorySaver()
+        _recursion_limit = max(1, guardrail_state.max_iterations) * 3 + 1
+        _agent = create_agent(
+            model=_llm,
+            tools=lc_tools,
+            system_prompt=system_instruction or None,
+            response_format=None,  # Conversational: plain text response, no typed output
+            checkpointer=_checkpointer,
+        )
+        _config: dict[str, Any] = {
+            "configurable": {"thread_id": str(conv_session_id)},
+            "callbacks": lc_callbacks,
+            "recursion_limit": _recursion_limit,
+        }
+
+        # 11. Filter system messages — passed via system_prompt above
+        input_messages = [m for m in messages if m.get("role") != "system"]
+
+        # 12. Invoke agent
+        try:
+            _result = await _agent.ainvoke(
+                {"messages": input_messages},
+                config=_config,
+            )
+        except GraphInterrupt:
+            # HITL not supported for conversational turns (user input comes via WebSocket)
+            logger.warning("Conversation turn %s received unexpected GraphInterrupt", conv_session_id)
+            return (
+                "I need more information to continue. Please provide additional details.",
+                build_conversation_guardrail_usage(),
+                status_events,
+            )
+        except GuardrailStop as exc:
+            logger.warning(
+                "Conversation guardrail stop (LangGraph): session=%s reason=%s",
+                conv_session_id, exc.reason,
+            )
+            return exc.message, build_conversation_guardrail_usage(), status_events
+
+        # 13. LangGraph 1.1.10: detect interrupt from return value
+        _pending_interrupts: list[Any] = (
+            _result.get("__interrupt__", []) if isinstance(_result, dict) else []
+        )
+        if _pending_interrupts:
+            logger.warning("Conversation turn %s interrupted (LangGraph return-based) — not supported", conv_session_id)
+            return (
+                "I need more information to continue. Please provide additional details.",
+                build_conversation_guardrail_usage(),
+                status_events,
+            )
+
+        # 14. Extract response text from last AI message
+        _final_messages: list[Any] = _result.get("messages", []) if isinstance(_result, dict) else []
+        response_text = ""
+        for msg in reversed(_final_messages):
+            _content: Any = getattr(msg, "content", "") or ""
+            if _content and getattr(msg, "type", "") in ("ai", "assistant"):
+                # Normalize content blocks ([{"type":"text","text":"..."}]) to plain string
+                if isinstance(_content, list):
+                    _text_parts = [
+                        block.get("text", "")
+                        for block in _content
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    ]
+                    response_text = "\n\n".join(part for part in _text_parts if part)
+                else:
+                    response_text = str(_content)
+                break
+        if not response_text:
+            response_text = "I processed your message but received an empty response."
+
+        return response_text, build_conversation_guardrail_usage(), status_events
 
     async def _save_result_for_conversation(
         self,
@@ -2929,10 +2816,10 @@ class AgentRuntimeExecutor:
                 )
         else:
             logger.warning(
-                "AgentType %s has no role — no tools permitted beyond save_result",
+                "AgentType %s has no role — no tools permitted beyond save_data",
                 agent_type.id,
             )
-            allowed_tools = {"save_result"}
+            allowed_tools = {"save_data"}
 
         logger.info(
             "Session %s: %d tools permitted for role %s",
@@ -3072,7 +2959,18 @@ class AgentRuntimeExecutor:
             )
             from langchain_core.tools import StructuredTool as _StructuredTool
 
-            guardrail_state = RuntimeGuardrailState()
+            guardrail_state = RuntimeGuardrailState(
+                max_iterations=10,
+                max_delegation_depth=1,
+                max_delegated_steps=20,
+                execution_timeout_seconds=300,
+                token_budget=None,
+                token_enforcement_mode="observe",
+                token_fallback_mode="observe_and_log",
+                conversational_token_visibility_mode="enabled",
+                conversational_continuation_policy="allow",
+                policy_snapshot_id="unknown",
+            )
             _iteration_ref = [0]
             _lc_callbacks: list[Any] = [
                 ExecutionLoggingCallback(
@@ -3082,48 +2980,12 @@ class AgentRuntimeExecutor:
                 ),
             ]
 
-            # Build tools from ctx.tool_definitions (CC/DB routing)
-            _save_result_holder: dict[str, Any] = {}
+            # Build tools from ctx.tool_definitions (CommHub routing)
 
             def _make_cc_tool(orig_name: str) -> tuple:
                 async def _arun(**kwargs: Any) -> str:
-                    from app.services.agents.runtime_executor import SystemToolRegistry
-                    import uuid as _uuid_mod
-
                     try:
-                        _parsed = SystemToolRegistry.parse_name(orig_name)
-                        _bare = _parsed[1] if _parsed else None
-
-                        if _bare == "save_result":
-                            from app.db.models.results import ResultRecord
-
-                            _structured = kwargs.get("data") or {}
-                            _record = ResultRecord(
-                                agent_type_id=_uuid_mod.UUID(ctx.agent_type_id) if ctx.agent_type_id else None,
-                                payload=kwargs.get("data") or kwargs,
-                                content_type=self._resolve_content_type(ctx.output_type),
-                                title=kwargs.get("title", f"Session {ctx.session_id} result"),
-                                tags=["agent_session"],
-                            )
-                            db.add(_record)
-                            await db.flush()
-                            _rid = str(_record.id)
-                            _out = {
-                                "result": kwargs.get("content", ""),
-                                "title": kwargs.get("title", ""),
-                                "result_id": _rid,
-                                **_structured,
-                            }
-                            _save_result_holder.update(_out)
-                            await self._log_execution_event(
-                                session_id=job.id,
-                                event_type="save_result",
-                                message="save_result: ResultRecord persisted",
-                                data={"result_id": _rid, "title": kwargs.get("title", "")},
-                            )
-                            return json.dumps({"status": "saved", "result_id": _rid})
-
-                        elif _extract_agent_delegation_target(orig_name) is not None:
+                        if _extract_agent_delegation_target(orig_name) is not None:
                             from app.agent_runtime.comm_hub_client import CommHubToolClient as _CH
                             _ch = _CH()
                             _target = _extract_agent_delegation_target(orig_name)
@@ -3138,12 +3000,16 @@ class AgentRuntimeExecutor:
                             return json.dumps(_a2a) if isinstance(_a2a, (dict, list)) else str(_a2a)
 
                         else:
-                            _role_uuid = _uuid_mod.UUID(ctx.role_id) if ctx.role_id else _uuid_mod.UUID(int=0)
-                            _rms = await self._load_role_mcp_session_map(_role_uuid, db)
-                            _res = await self._execute_mcp_tool(
-                                orig_name, kwargs, db, _rms, agent_type_id=ctx.agent_type_id
+                            # All tools (system or MCP) route through CommHub — no hardcoded name dispatch.
+                            from app.agent_runtime.comm_hub_client import CommHubToolClient as _CH
+                            _ch = _CH()
+                            _result = await _ch.call_tool(
+                                tool_name=orig_name,
+                                tool_args=kwargs,
+                                session_id=ctx.session_id,
+                                agent_type_id=ctx.agent_type_id,
                             )
-                            return json.dumps(_res) if isinstance(_res, (dict, list)) else str(_res)
+                            return json.dumps(_result) if isinstance(_result, (dict, list)) else str(_result)
 
                     except Exception as _exc:
                         logger.warning("CC tool %s failed: %s", orig_name, _exc)
@@ -3277,7 +3143,26 @@ class AgentRuntimeExecutor:
                 session_id=job.id,
                 event_type="task_loop_completed",
                 message="Task loop completed via create_agent",
-                data={"output_keys": list(output_data.keys())},
+                data={
+                    "output_keys": list(output_data.keys()),
+                    "guardrail": {
+                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                        "current_value": {
+                            "cumulative_iterations": guardrail_state.cumulative_iterations,
+                            "delegated_steps": guardrail_state.delegated_steps,
+                            "delegation_depth": guardrail_state.delegation_depth,
+                            "elapsed_seconds": guardrail_state.elapsed_seconds(),
+                            "token_usage_current_session": guardrail_state.token_usage_current_session,
+                        },
+                        "threshold_value": {
+                            "max_iterations": guardrail_state.max_iterations,
+                            "max_delegation_depth": guardrail_state.max_delegation_depth,
+                            "max_delegated_steps": guardrail_state.max_delegated_steps,
+                            "token_budget": guardrail_state.token_budget,
+                            "execution_timeout_seconds": guardrail_state.execution_timeout_seconds,
+                        },
+                    },
+                },
             )
 
             return output_data
@@ -3787,7 +3672,28 @@ class AgentRuntimeExecutor:
                             },
                         )
 
-                        # Phase 1.2: Emit delegation_waiting before blocking wait
+                        # Dispatch A2A request without blocking so receiver_session_id
+                        # is available immediately for streaming in the execution log.
+                        _a2a_dispatch_result: dict[str, Any] | None = None
+                        _a2a_dispatch_err: str | None = None
+                        try:
+                            _a2a_dispatch_result = await comm_hub_client.call_a2a_request(
+                                target_agent_type_slug=target_slug or "",
+                                session_id=ctx.session_id,
+                                requester_role_id=ctx.role_id,
+                                request_payload=_build_delegation_request_payload(tool_args),
+                                session_link_id=tool_args.get("session_link_id"),
+                                wait_for_response=False,
+                            )
+                        except Exception as _dispatch_exc:
+                            _a2a_dispatch_err = str(_dispatch_exc)
+
+                        # receiver_session_id is now known — log delegation_waiting with it
+                        _rsid_early = (
+                            _a2a_dispatch_result.get("receiver_session_id")
+                            if isinstance(_a2a_dispatch_result, dict)
+                            else None
+                        )
                         await self._log_execution_event(
                             session_id=uuid.UUID(ctx.session_id),
                             event_type="delegation_waiting",
@@ -3796,95 +3702,125 @@ class AgentRuntimeExecutor:
                                 "delegation_target": target_slug,
                                 "delegation_depth": next_depth,
                                 "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                **({
+                                    "receiver_session_id": _rsid_early
+                                } if _rsid_early else {}),
                             },
                         )
 
-                        # Dispatch A2A request (blocking with wait_for_response=True)
-                        try:
-                            a2a_result = await comm_hub_client.call_a2a_request(
-                                target_agent_type_slug=target_slug or "",
-                                session_id=ctx.session_id,
-                                requester_role_id=ctx.role_id,
-                                request_payload=_build_delegation_request_payload(tool_args),
-                                session_link_id=tool_args.get("session_link_id"),
-                                wait_for_response=True,
-                                wait_timeout_seconds=45.0,
+                        if _a2a_dispatch_err or _a2a_dispatch_result is None:
+                            err_msg = _a2a_dispatch_err or "A2A dispatch returned no result"
+                            _is_timeout = "timeout" in err_msg.lower()
+                            _dispatch_event_type = "delegation_timeout" if _is_timeout else "delegation_failed"
+                            _dispatch_msg = (
+                                f"Delegated agent '{target_slug}' timed out: {err_msg}"
+                                if _is_timeout else
+                                f"Delegated agent '{target_slug}' failed: {err_msg}"
                             )
-                        except Exception as a2a_exc:
-                            err_msg = str(a2a_exc)
-                            if "timeout" in err_msg.lower():
-                                await self._log_execution_event(
-                                    session_id=uuid.UUID(ctx.session_id),
-                                    event_type="delegation_timeout",
-                                    message=f"Delegated agent '{target_slug}' timed out",
-                                    data={
-                                        "delegation_target": target_slug,
-                                        "error": err_msg,
-                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                    },
-                                )
-                            else:
-                                await self._log_execution_event(
-                                    session_id=uuid.UUID(ctx.session_id),
-                                    event_type="delegation_failed",
-                                    message=f"Delegated agent '{target_slug}' failed: {err_msg}",
-                                    data={
-                                        "delegation_target": target_slug,
-                                        "error": err_msg,
-                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                    },
-                                )
+                            await self._log_execution_event(
+                                session_id=uuid.UUID(ctx.session_id),
+                                event_type=_dispatch_event_type,
+                                message=_dispatch_msg,
+                                data={
+                                    "delegation_target": target_slug,
+                                    "error": err_msg,
+                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                },
+                            )
                             result = {"error": err_msg, "blocked": False}
                         else:
-                            # Phase 1.2: Determine exit condition from response
-                            exit_condition = "completed"
-                            if isinstance(a2a_result, dict):
-                                resp_status = a2a_result.get("status", "")
-                                if resp_status == "timeout":
-                                    exit_condition = "timeout"
-                                    rsid = a2a_result.get("receiver_session_id")
+                            # Wait for the delegated agent to finish
+                            try:
+                                if _rsid_early:
+                                    _wait_result = await comm_hub_client.wait_for_a2a_response(
+                                        receiver_session_id=_rsid_early,
+                                        timeout_seconds=45.0,
+                                    )
+                                    a2a_result: dict[str, Any] = {
+                                        **_wait_result,
+                                        "receiver_session_id": _rsid_early,
+                                        "session_link_id": _a2a_dispatch_result.get("session_link_id"),
+                                        "receiver_instance_id": _a2a_dispatch_result.get("receiver_instance_id"),
+                                    }
+                                else:
+                                    a2a_result = {
+                                        "status": "failed",
+                                        "error": "No receiver session ID returned by dispatch",
+                                    }
+                            except Exception as a2a_exc:
+                                err_msg = str(a2a_exc)
+                                if "timeout" in err_msg.lower():
                                     await self._log_execution_event(
                                         session_id=uuid.UUID(ctx.session_id),
                                         event_type="delegation_timeout",
                                         message=f"Delegated agent '{target_slug}' timed out",
                                         data={
                                             "delegation_target": target_slug,
-                                            "receiver_session_id": rsid,
+                                            "receiver_session_id": _rsid_early,
+                                            "error": err_msg,
                                             "policy_snapshot_id": guardrail_state.policy_snapshot_id,
                                         },
                                     )
-                                elif resp_status == "failed":
-                                    exit_condition = "failed"
-                                    rsid = a2a_result.get("receiver_session_id")
+                                else:
                                     await self._log_execution_event(
                                         session_id=uuid.UUID(ctx.session_id),
                                         event_type="delegation_failed",
-                                        message=f"Delegated agent '{target_slug}' failed",
+                                        message=f"Delegated agent '{target_slug}' failed: {err_msg}",
                                         data={
                                             "delegation_target": target_slug,
-                                            "receiver_session_id": rsid,
+                                            "receiver_session_id": _rsid_early,
+                                            "error": err_msg,
                                             "policy_snapshot_id": guardrail_state.policy_snapshot_id,
                                         },
                                     )
+                                result = {"error": err_msg, "blocked": False}
+                            else:
+                                # Determine exit condition from wait result status
+                                exit_condition = "completed"
+                                if isinstance(a2a_result, dict):
+                                    resp_status = a2a_result.get("status", "")
+                                    if resp_status == "timeout":
+                                        exit_condition = "timeout"
+                                        await self._log_execution_event(
+                                            session_id=uuid.UUID(ctx.session_id),
+                                            event_type="delegation_timeout",
+                                            message=f"Delegated agent '{target_slug}' timed out",
+                                            data={
+                                                "delegation_target": target_slug,
+                                                "receiver_session_id": _rsid_early,
+                                                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                            },
+                                        )
+                                    elif resp_status in ("failed", "expired"):
+                                        exit_condition = "failed"
+                                        await self._log_execution_event(
+                                            session_id=uuid.UUID(ctx.session_id),
+                                            event_type="delegation_failed",
+                                            message=f"Delegated agent '{target_slug}' failed",
+                                            data={
+                                                "delegation_target": target_slug,
+                                                "receiver_session_id": _rsid_early,
+                                                "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                            },
+                                        )
 
-                            # Phase 1.2: Emit delegation_resumed with exit condition
-                            rsid = a2a_result.get("receiver_session_id")
-                            await self._log_execution_event(
-                                session_id=uuid.UUID(ctx.session_id),
-                                event_type="delegation_resumed",
-                                message=(
-                                    f"Delegation from '{target_slug}' "
-                                    f"resumed — exit condition: {exit_condition}"
-                                ),
-                                data={
-                                    "delegation_target": target_slug,
-                                    "exit_condition": exit_condition,
-                                    "receiver_session_id": rsid,
-                                    "policy_snapshot_id": guardrail_state.policy_snapshot_id,
-                                },
-                            )
+                                rsid = a2a_result.get("receiver_session_id")
+                                await self._log_execution_event(
+                                    session_id=uuid.UUID(ctx.session_id),
+                                    event_type="delegation_resumed",
+                                    message=(
+                                        f"Delegation from '{target_slug}' "
+                                        f"resumed — exit condition: {exit_condition}"
+                                    ),
+                                    data={
+                                        "delegation_target": target_slug,
+                                        "exit_condition": exit_condition,
+                                        "receiver_session_id": rsid,
+                                        "policy_snapshot_id": guardrail_state.policy_snapshot_id,
+                                    },
+                                )
 
-                            result = a2a_result
+                                result = a2a_result
                 else:
                     result = await self._execute_mcp_tool(
                         tool_name, tool_args, db, role_mcp_sessions,

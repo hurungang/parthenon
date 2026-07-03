@@ -12,13 +12,27 @@ Key design points:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from langchain_core.tools import StructuredTool
 
 logger = logging.getLogger(__name__)
+
+# Per-session delegation lock — ensures delegation tool calls execute one-at-a-time
+# regardless of LLM provider.  OpenAI supports parallel_tool_calls=False natively,
+# but other models (e.g. Gemini) ignore that flag and may issue multiple delegation
+# tool calls in a single response.  This lock serialises them at the execution layer.
+_delegation_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_delegation_lock(sid: str) -> asyncio.Lock:
+    """Return (creating if needed) the delegation serialisation lock for *sid*."""
+    if sid not in _delegation_locks:
+        _delegation_locks[sid] = asyncio.Lock()
+    return _delegation_locks[sid]
 
 
 def _sanitize_tool_name(name: str) -> str:
@@ -199,41 +213,40 @@ def build_langchain_tools_for_ar_path(
     session_id: str,
     agent_type_id: str,
     conv_session_id: str | None = None,
-    save_result_output: dict[str, Any] | None = None,
+    save_result_output: dict[str, Any] | None = None,  # kept for call-site compat; unused
     tool_name_map: dict[str, str] | None = None,
     role_id: str | None = None,
+    guardrail_state: Any | None = None,
+    status_event_callback: Callable[..., Awaitable[None]] | None = None,
 ) -> list[Any]:
     """Build LangChain tools for the Agent Runtime path.
 
-    All tools are routed through CommHubToolClient (which handles permission
-    checking and routing server-side) with three special cases:
+    All tools are routed through CommHubToolClient, which handles permission
+    checking and routing server-side.  Two special cases exist:
 
-    - ``human_intervene``: Uses LangGraph ``interrupt()`` to pause agent execution.
-    - ``save_result`` variants: Captures output data into ``save_result_output``
-      *and* submits result to Control Center via ``data_client``.
-    - ``agent____<slug>`` delegation tools: Routes via CommHub A2A endpoint
-      (``/internal/a2a/request``) instead of the generic tool route.
+    - ``human_intervene``: Uses LangGraph ``interrupt()`` to pause execution.
+    - ``agent____<slug>`` delegation tools: Routes via CommHub A2A endpoint.
+
+    Every other tool — including all system tools (``save_data``, ``get_data``,
+    ``get_output``, etc.) — falls through to the generic CommHub route.
+    No hardcoded handling per tool name is needed or wanted.
 
     Args:
         tool_definitions: OpenAI-format tool definition list from context.
         comm_hub_client: CommHubToolClient instance (mTLS-configured).
-        data_client: ControlCenterDataClient for submitting results.
+        data_client: ControlCenterDataClient (kept for call-site compat).
         session_id: Agent session UUID as string.
         role_id: Requester role ID for A2A delegation authorization.
         agent_type_id: Agent type UUID as string.
         conv_session_id: Parent conversation session ID (for HITL context).
-        save_result_output: Mutable dict updated when save_result is called.
+        save_result_output: Ignored — kept only so existing call sites compile.
         tool_name_map: Optional mapping of OpenAI-sanitised (2-underscore) tool
-            names to their canonical (4-underscore) equivalents.  CommHub
-            expects the canonical format; this map performs the reverse lookup.
+            names to their canonical (4-underscore) equivalents.
 
     Returns:
         List of LangChain StructuredTool / BaseTool instances.
     """
     from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
-
-    if save_result_output is None:
-        save_result_output = {}
 
     tools: list[Any] = []
 
@@ -250,7 +263,7 @@ def build_langchain_tools_for_ar_path(
             logger.warning("Skipping tool definition with no name: %s", tool_def)
             continue
 
-        # ── human_intervene: special HITL tool with LangGraph interrupt() ────
+        # ── human_intervene: must use LangGraph interrupt() to suspend execution
         if original_name == "human_intervene":
             tool = LangChainHumanInterveneTool(
                 comm_hub_client=comm_hub_client,
@@ -258,55 +271,6 @@ def build_langchain_tools_for_ar_path(
                 agent_type_id=agent_type_id,
                 conv_session_id=conv_session_id,
             )
-            tools.append(tool)
-            continue
-
-        # ── save_result variants: capture output + submit to CC ────────────────
-        if _is_save_result_tool(original_name):
-            sanitized_name = _sanitize_tool_name(original_name)
-            captured = save_result_output  # closure reference
-
-            def _make_save_result_tool(orig: str, san: str) -> tuple:
-                async def _arun(**kwargs: Any) -> str:
-                    try:
-                        structured_data: dict[str, Any] = kwargs.get("data") or {}
-                        output = {
-                            "result": kwargs.get("content", ""),
-                            "title": kwargs.get("title", ""),
-                            **structured_data,
-                        }
-                        captured.update(output)
-                        # Submit to Control Center
-                        import uuid as _uuid
-                        await data_client.submit_result(
-                            _uuid.UUID(session_id) if session_id else None,
-                            output,
-                        )
-                        return json.dumps({"status": "saved"})
-                    except Exception as exc:
-                        logger.error("save_result tool failed for session %s: %s", session_id, exc)
-                        return json.dumps({"error": str(exc)})
-
-                def _run(**kwargs: Any) -> str:
-                    import asyncio
-                    try:
-                        return asyncio.get_event_loop().run_until_complete(_arun(**kwargs))
-                    except Exception as exc:
-                        return json.dumps({"error": str(exc)})
-
-                return _run, _arun
-
-            sync_fn, async_fn = _make_save_result_tool(original_name, sanitized_name)
-            tool = StructuredTool.from_function(
-                func=sync_fn,
-                coroutine=async_fn,
-                name=sanitized_name,
-                description=description or "Save the final result of the task.",
-                args_schema=_schema_to_pydantic(sanitized_name, parameters),
-                return_direct=False,
-            )
-            tool.metadata = tool.metadata or {}
-            tool.metadata["original_name"] = original_name
             tools.append(tool)
             continue
 
@@ -318,6 +282,7 @@ def build_langchain_tools_for_ar_path(
             def _make_delegation_tool(slug: str, orig_name: str) -> tuple:
                 async def _arun(**kwargs: Any) -> str:
                     import uuid as _uuid
+                    import time as _time
                     try:
                         request_payload: dict[str, Any] = {}
                         rp = kwargs.get("request_payload")
@@ -344,35 +309,153 @@ def build_langchain_tools_for_ar_path(
                         except Exception:
                             pass
 
-                        result = await comm_hub_client.call_a2a_request(
+                        # Emit status events for WebSocket consumers
+                        try:
+                            if status_event_callback is not None:
+                                await status_event_callback({"status": "using_tool", "tool_name": slug})
+                                await status_event_callback({"status": "delegating", "agent_type": slug})
+                        except Exception:
+                            pass
+
+                        # Emit initial waiting event (before dispatch — no receiver_session_id yet)
+                        # so the frontend knows delegation is starting.
+                        try:
+                            if status_event_callback is not None:
+                                await status_event_callback({"status": "waiting", "agent_type": slug})
+                        except Exception:
+                            pass
+
+                        # Non-blocking dispatch: get receiver_session_id immediately so
+                        # the frontend can start SSE streaming while the sub-agent runs.
+                        _dispatch = await comm_hub_client.call_a2a_request(
                             target_agent_type_slug=slug,
                             session_id=session_id,
                             requester_role_id=role_id,
                             request_payload=request_payload,
                             session_link_id=session_link_id,
-                            wait_for_response=True,
-                            wait_timeout_seconds=1800.0,
+                            wait_for_response=False,
                             conv_session_id=conv_session_id,
                         )
+                        _receiver_session_id = _dispatch.get("receiver_session_id") if isinstance(_dispatch, dict) else None
 
-                        # Log delegation_resumed
+                        # Emit second waiting event WITH receiver_session_id for SSE log streaming.
+                        # Frontend uses this receiver_session_id to start polling execution logs.
+                        if _receiver_session_id:
+                            try:
+                                if status_event_callback is not None:
+                                    await status_event_callback({"status": "waiting", "agent_type": slug, "receiver_session_id": _receiver_session_id})
+                            except Exception:
+                                pass
+
+                        # Log delegation_waiting WITH receiver_session_id — enables SSE streaming
                         try:
                             await data_client.log_execution_event(
                                 session_id=_uuid.UUID(session_id),
-                                event_type="delegation_resumed",
-                                message=f"Delegation to {slug} completed",
+                                event_type="delegation_waiting",
+                                message=f"Waiting for agent: {slug}",
                                 data={
                                     "delegation_target": slug,
                                     "sub_agent": slug,
-                                    "state": "completed",
+                                    "receiver_session_id": _receiver_session_id,
                                 },
                             )
                         except Exception:
                             pass
 
-                        if isinstance(result, (dict, list)):
-                            return json.dumps(result)
-                        return str(result)
+                        # Increment delegated_steps counter and track delegation depth
+                        # before the sub-agent call so guardrail checks stay current.
+                        if guardrail_state is not None:
+                            guardrail_state.delegated_steps += 1
+                            _next_depth = getattr(guardrail_state, "tree_depth", 0) + 1
+                            guardrail_state.delegation_depth = max(
+                                getattr(guardrail_state, "delegation_depth", 0),
+                                _next_depth,
+                            )
+
+                        # Poll for sub-agent completion.
+                        # CH wait endpoint caps at 120 s per call; loop until done.
+                        _wait_result: dict[str, Any] = {"status": "error", "error": "No receiver session ID"}
+                        if _receiver_session_id:
+                            _total_timeout = 1800.0
+                            _poll_interval = 90.0
+                            _deadline = _time.monotonic() + _total_timeout
+                            while _time.monotonic() < _deadline:
+                                _remaining = _deadline - _time.monotonic()
+                                _per_call = min(_poll_interval, max(_remaining, 1.0))
+                                _wait_result = await comm_hub_client.wait_for_a2a_response(
+                                    receiver_session_id=_receiver_session_id, timeout_seconds=_per_call
+                                )
+                                if _wait_result.get("status") in ("completed", "failed", "expired"):
+                                    break
+                                # status == "timeout" means sub-agent still running; loop again
+                            else:
+                                _wait_result = {"status": "timeout", "error": "Total delegation timeout exceeded"}
+
+                        # Log delegation_resumed WITH receiver_session_id
+                        try:
+                            _resumed_data: dict[str, Any] = {
+                                "delegation_target": slug,
+                                "sub_agent": slug,
+                                "state": _wait_result.get("status", "completed"),
+                            }
+                            if _receiver_session_id:
+                                _resumed_data["receiver_session_id"] = _receiver_session_id
+                            await data_client.log_execution_event(
+                                session_id=_uuid.UUID(session_id),
+                                event_type="delegation_resumed",
+                                message=f"Delegation to {slug} completed",
+                                data=_resumed_data,
+                            )
+                        except Exception:
+                            pass
+
+                        # Emit delegation_resumed status event for WebSocket consumers
+                        try:
+                            if status_event_callback is not None:
+                                await status_event_callback({"status": "delegation_resumed", "agent_type": slug})
+                        except Exception:
+                            pass
+
+                        # Accumulate child token usage into parent guardrail state.
+                        if guardrail_state is not None and _wait_result.get("status") == "completed":
+                            _child_usage = (
+                                _wait_result
+                                .get("output_data", {})
+                                .get("guardrail_usage", {})
+                                .get("token_usage_current_session", 0)
+                            )
+                            if isinstance(_child_usage, (int, float)) and _child_usage > 0:
+                                guardrail_state.token_usage_current_session += int(_child_usage)
+
+                        # Return only the sub-agent's clean output_data to the LLM
+                        _final_status = _wait_result.get("status", "")
+                        _output = _wait_result.get("output_data") or {}
+                        if _final_status == "completed":
+                            _tool_response = json.dumps(_output) if isinstance(_output, (dict, list)) else str(_output)
+                        else:
+                            _tool_response = json.dumps({"error": _wait_result.get("error", f"Delegation {_final_status}"), "status": _final_status})
+
+                        # Log the exact string being returned to the parent LLM so we can
+                        # distinguish LLM re-delegation decisions from response delivery failures.
+                        logger.info(
+                            "Delegation '%s' -> tool_response to parent (session=%s): status=%s response=%s",
+                            slug, session_id, _final_status, _tool_response[:500],
+                        )
+                        try:
+                            await data_client.log_execution_event(
+                                session_id=_uuid.UUID(session_id),
+                                event_type="tool_response",
+                                message=f"Delegation '{slug}' response to parent LLM: status={_final_status}",
+                                data={
+                                    "delegation_target": slug,
+                                    "status": _final_status,
+                                    "response_preview": _tool_response[:1000],
+                                },
+                            )
+                        except Exception:
+                            pass
+
+                        return _tool_response
 
                     except Exception as exc:
                         import uuid as _uuid2
@@ -424,6 +507,13 @@ def build_langchain_tools_for_ar_path(
         def _make_commhub_tool(orig_name: str, comm_name: str) -> tuple:
             async def _arun(**kwargs: Any) -> str:
                 try:
+                    # Emit using_tool status event for WebSocket consumers
+                    try:
+                        if status_event_callback is not None:
+                            _bare = orig_name.split("/")[-1] if "/" in orig_name else orig_name
+                            await status_event_callback({"status": "using_tool", "tool_name": _bare})
+                    except Exception:
+                        pass
                     result = await comm_hub_client.call_tool(
                         tool_name=comm_name,
                         tool_args=kwargs,

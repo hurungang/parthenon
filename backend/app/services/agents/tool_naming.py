@@ -3,8 +3,9 @@
 All tool names use the canonical ``server____tool`` format with four underscores
 as the separator:
 
-  - System tools: ``system____save_result``, ``system____send_notification``,
-                  ``system____get_recipient_group``
+  - System tools: ``system____save_data``, ``system____send_notification``,
+                  ``system____get_recipient_group``, ``system____get_data``,
+                  ``system____get_output``
   - MCP tools:    ``hello-world____helloWorld``, ``github____list_prs``, etc.
 
 The OpenAI API requires tool names to match ``^[a-zA-Z0-9_-]+$``.  The ``____``
@@ -34,15 +35,15 @@ def build_tool_name(server: str, tool: str) -> str:
 
     Args:
         server: Server slug (e.g. ``"system"``, ``"hello-world"``).
-        tool:   Bare tool name (e.g. ``"save_result"``, ``"helloWorld"``).
+        tool:   Bare tool name (e.g. ``"save_data"``, ``"helloWorld"``).
 
     Returns:
         Canonical tool name in ``server____tool`` format.
 
     Example::
 
-        >>> build_tool_name("system", "save_result")
-        'system____save_result'
+        >>> build_tool_name("system", "save_data")
+        'system____save_data'
     """
     return f"{server}{TOOL_SEPARATOR}{tool}"
 
@@ -51,8 +52,8 @@ def parse_tool_name(name: str) -> tuple[str, str]:
     """Split a canonical tool name into ``(server, tool)`` parts.
 
     Accepts the canonical ``server____tool`` format.  For backward-compatibility,
-    bare legacy names like ``"save_result"`` are treated as system tools (i.e.
-    they return ``("system", "save_result")``).
+    bare legacy names like ``"save_data"`` are treated as system tools (i.e.
+    they return ``("system", "save_data")``).
 
     Args:
         name: Tool name to parse.
@@ -66,12 +67,12 @@ def parse_tool_name(name: str) -> tuple[str, str]:
 
     Examples::
 
-        >>> parse_tool_name("system____save_result")
-        ('system', 'save_result')
+        >>> parse_tool_name("system____save_data")
+        ('system', 'save_data')
         >>> parse_tool_name("hello-world____helloWorld")
         ('hello-world', 'helloWorld')
-        >>> parse_tool_name("save_result")  # legacy bare name
-        ('system', 'save_result')
+        >>> parse_tool_name("save_data")  # legacy bare name
+        ('system', 'save_data')
     """
     if TOOL_SEPARATOR in name:
         parts = name.split(TOOL_SEPARATOR)

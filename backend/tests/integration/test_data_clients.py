@@ -196,12 +196,12 @@ class TestARDataClientModelConfig:
         assert f"/internal/data/model-configs/{model_id}" in url
 
 
-class TestARDataClientSubmitResult:
-    """Tests for ControlCenterDataClient.submit_result."""
+class TestARDataClientSaveOutput:
+    """Tests for ControlCenterDataClient.save_output."""
 
     @pytest.mark.asyncio
-    async def test_submit_result_posts_to_correct_endpoint(self):
-        """submit_result POSTs to /api/v1/internal/data/sessions/{id}/result."""
+    async def test_save_output_posts_to_correct_endpoint(self):
+        """save_output POSTs to /api/v1/internal/data/sessions/{id}/result."""
         client = _make_ar_client()
         session_id = uuid.uuid4()
         result_data = {"output": "Agent completed task", "status": "completed"}
@@ -216,9 +216,9 @@ class TestARDataClientSubmitResult:
             mock_instance.post = AsyncMock(return_value=mock_resp)
             mock_class.return_value = mock_instance
 
-            result = await client.submit_result(session_id, result_data)
+            result = await client.save_output(session_id, result_data)
 
-        # submit_result is fire-and-forget: returns None
+        # save_output is fire-and-forget: returns None
         assert result is None
         call_args = mock_instance.post.call_args
         url = call_args[0][0]

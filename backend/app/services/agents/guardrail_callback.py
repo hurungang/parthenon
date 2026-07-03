@@ -37,8 +37,9 @@ class GuardrailCallback(AsyncCallbackHandler):
     """LangChain AsyncCallbackHandler that enforces Parthenon execution guardrails.
 
     Checks the following on each LLM call:
-    - Iteration limit (max_iterations): Stops if iteration_count >= max_iterations
-    - Token budget (max_tokens_total): Stops if cumulative tokens >= max_tokens_total
+    - Iteration limit (max_iterations): Stops if iteration_count > max_iterations
+    - Token budget (token_budget): Stops if cumulative tokens > token_budget
+    - Delegation depth (max_delegation_depth): Stops if delegation_depth > max_delegation_depth
     - Wall-clock timeout (timeout_seconds): Stops if elapsed time >= timeout_seconds
 
     Designed to work alongside the existing inline guardrail checks in
@@ -97,8 +98,11 @@ class GuardrailCallback(AsyncCallbackHandler):
         **kwargs: Any,
     ) -> None:
         """Check iteration limit and timeout before each LLM call."""
+        if hasattr(self.guardrail_state, "cumulative_iterations"):
+            self.guardrail_state.cumulative_iterations += 1
         self._check_iteration_limit()
         self._check_timeout()
+        await self._emit_guardrail_snapshot()
 
     async def on_chat_model_start(
         self,
@@ -107,22 +111,36 @@ class GuardrailCallback(AsyncCallbackHandler):
         **kwargs: Any,
     ) -> None:
         """Check iteration limit and timeout before each chat model call."""
+        if hasattr(self.guardrail_state, "cumulative_iterations"):
+            self.guardrail_state.cumulative_iterations += 1
         self._check_iteration_limit()
         self._check_timeout()
+        await self._emit_guardrail_snapshot()
 
     async def on_llm_end(
         self,
         response: LLMResult,
         **kwargs: Any,
     ) -> None:
-        """Check token budget after each LLM call completes."""
-        # Update token count from response if available
+        """Update token counter and check budget after each LLM call completes."""
+        tokens_used = 0
+        # Primary path: llm_output dict (OpenAI-style)
         if response.llm_output:
             token_usage = response.llm_output.get("token_usage") or {}
-            tokens_used = token_usage.get("total_tokens", 0)
-            if tokens_used > 0:
-                if hasattr(self.guardrail_state, "tokens_used"):
-                    self.guardrail_state.tokens_used += tokens_used
+            tokens_used = token_usage.get("total_tokens", 0) or 0
+        # Fallback: usage_metadata on generation messages (LangChain chat models)
+        if not tokens_used and response.generations:
+            for gen_list in response.generations:
+                for gen in gen_list:
+                    if hasattr(gen, "message") and hasattr(gen.message, "usage_metadata"):
+                        meta = gen.message.usage_metadata or {}
+                        tokens_used = meta.get("total_tokens", 0) or 0
+                        if tokens_used:
+                            break
+                if tokens_used:
+                    break
+        if tokens_used > 0 and hasattr(self.guardrail_state, "token_usage_current_session"):
+            self.guardrail_state.token_usage_current_session += tokens_used
         self._check_token_budget()
 
     async def on_tool_start(
@@ -134,6 +152,44 @@ class GuardrailCallback(AsyncCallbackHandler):
         """Check delegation depth before tool execution."""
         self._check_delegation_depth()
 
+    # ── Private helpers ───────────────────────────────────────────────────────
+
+    async def _emit_guardrail_snapshot(self) -> None:
+        """Emit a guardrail.runtime.snapshot event with current counters and limits.
+
+        Allows the frontend LogSummaryPanel to display live guardrail usage
+        during execution (not just after task_loop_completed).
+        """
+        if self.data_client is None:
+            return
+        gs = self.guardrail_state
+        try:
+            iteration = getattr(gs, "cumulative_iterations", 0)
+            await self.data_client.log_execution_event(
+                session_id=self.session_id,
+                event_type="guardrail.runtime.snapshot",
+                message=f"Guardrail state — iteration {iteration}",
+                data={
+                    "policy_snapshot_id": str(getattr(gs, "policy_snapshot_id", "unknown")),
+                    "current_value": {
+                        "cumulative_iterations": iteration,
+                        "delegated_steps": getattr(gs, "delegated_steps", 0),
+                        "delegation_depth": getattr(gs, "delegation_depth", 0),
+                        "elapsed_seconds": gs.elapsed_seconds() if callable(getattr(gs, "elapsed_seconds", None)) else 0.0,
+                        "token_usage_current_session": getattr(gs, "token_usage_current_session", 0),
+                    },
+                    "threshold_value": {
+                        "max_iterations": getattr(gs, "max_iterations", None),
+                        "max_delegation_depth": getattr(gs, "max_delegation_depth", None),
+                        "max_delegated_steps": getattr(gs, "max_delegated_steps", None),
+                        "token_budget": getattr(gs, "token_budget", None),
+                        "execution_timeout_seconds": getattr(gs, "execution_timeout_seconds", None),
+                    },
+                },
+            )
+        except Exception:  # noqa: BLE001 — snapshot is non-critical; never block execution
+            pass
+
     # ── Private guard checks ──────────────────────────────────────────────────
 
     def _check_iteration_limit(self) -> None:
@@ -141,8 +197,12 @@ class GuardrailCallback(AsyncCallbackHandler):
         max_iter = getattr(self.guardrail_state, "max_iterations", None)
         if max_iter is None:
             return
-        current_iter = getattr(self.guardrail_state, "iteration_count", 0)
-        if current_iter >= max_iter:
+        current_iter = getattr(
+            self.guardrail_state,
+            "cumulative_iterations",
+            getattr(self.guardrail_state, "iteration_count", 0),
+        )
+        if current_iter > max_iter:
             msg = (
                 f"Iteration limit reached: {current_iter}/{max_iter} "
                 f"(session={self.session_id})"
@@ -159,11 +219,13 @@ class GuardrailCallback(AsyncCallbackHandler):
 
     def _check_token_budget(self) -> None:
         """Raise GuardrailStop if token budget exceeded."""
-        max_tokens = getattr(self.guardrail_state, "max_tokens_total", None)
+        max_tokens = getattr(self.guardrail_state, "token_budget", None) or getattr(self.guardrail_state, "max_tokens_total", None)
         if max_tokens is None:
             return
-        tokens_used = getattr(self.guardrail_state, "tokens_used", 0)
-        if tokens_used >= max_tokens:
+        tokens_used = getattr(self.guardrail_state, "token_usage_current_session", None)
+        if tokens_used is None:
+            tokens_used = getattr(self.guardrail_state, "tokens_used", 0)
+        if tokens_used > max_tokens:
             msg = (
                 f"Token budget exceeded: {tokens_used}/{max_tokens} "
                 f"(session={self.session_id})"
@@ -206,7 +268,7 @@ class GuardrailCallback(AsyncCallbackHandler):
         if max_depth is None:
             return
         current_depth = getattr(self.guardrail_state, "delegation_depth", 0)
-        if current_depth >= max_depth:
+        if current_depth > max_depth:
             msg = (
                 f"Delegation depth limit reached: {current_depth}/{max_depth} "
                 f"(session={self.session_id})"

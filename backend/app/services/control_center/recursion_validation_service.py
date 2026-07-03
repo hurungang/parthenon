@@ -219,7 +219,7 @@ class RecursionValidationService:
             except (ValueError, Exception):
                 name_map[node] = node
         named_path = [name_map[n] for n in cycle_path]
-        path_sig = " → ".join(named_path)
+        path_sig = " -> ".join(named_path)
 
         findings: list[RecursionFinding] = []
         for i, node in enumerate(cycle_path[:-1]):
