@@ -22,6 +22,7 @@ import { useTypedOutput } from '../../hooks/useTypedOutput'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { LogViewer } from '../../components/executions/LogViewer'
 import { OutputTypeResultTab } from '../../components/executions/OutputTypeResultTab'
+import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
 import { InterveneRequestList } from '../../components/agents/InterveneRequestList'
 import { InterveneResponseDialog } from '../../components/agents/InterveneResponseDialog'
 import * as interveneApi from '../../api/interveneApi'
@@ -94,6 +95,7 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
   const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
   const [interveneRequests, setInterveneRequests] = useState<InterveneRequest[]>([])
   const [pendingInterventionsByChildSession, setPendingInterventionsByChildSession] = useState<Record<string, InterveneRequest>>({})
+  const [subAgentDialogSessionId, setSubAgentDialogSessionId] = useState<string | null>(null)
   const [interveneLoading, setInterveneLoading] = useState(false)
   const [autoDialogOpen, setAutoDialogOpen] = useState(false)
   const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
@@ -336,6 +338,10 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
   const handleAutoDialogClose = useCallback(() => {
     setAutoDialogOpen(false)
     setAutoDialogRequest(null)
+  }, [])
+
+  const handleViewSubAgentExecution = useCallback((sid: string) => {
+    setSubAgentDialogSessionId(sid)
   }, [])
 
   const handleAutoDialogSubmit = useCallback(
@@ -717,6 +723,20 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
           entries={logEntries}
           sessionStatus={session.status}
           pendingInterventionsByChildSession={pendingInterventionsByChildSession}
+          onViewSubAgentExecution={handleViewSubAgentExecution}
+          onOpenIntervention={(req) => {
+            setAutoDialogRequest(req)
+            setAutoDialogOpen(true)
+          }}
+        />
+      )}
+
+      {/* Sub-agent execution details dialog (opened via delegation block "View Execution Logs" button) */}
+      {subAgentDialogSessionId && (
+        <AgentExecutionDetailsDialog
+          open
+          onClose={() => setSubAgentDialogSessionId(null)}
+          sessionId={subAgentDialogSessionId}
         />
       )}
     </Box>

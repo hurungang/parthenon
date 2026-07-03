@@ -78,6 +78,9 @@ class TestSuccessfulDelegationLifecycle:
                 with patch("app.agent_runtime.comm_hub_client.CommHubToolClient") as mcc:
                     mock_comm = mcc.return_value
                     mock_comm.call_a2a_request = AsyncMock(
+                        return_value={"receiver_session_id": "rcv-1", "status": "accepted"}
+                    )
+                    mock_comm.wait_for_a2a_response = AsyncMock(
                         return_value={"status": "completed", "output": "analysis result"}
                     )
 
@@ -285,6 +288,9 @@ class TestDelegationTimeout:
                 with patch("app.agent_runtime.comm_hub_client.CommHubToolClient") as mcc:
                     mock_comm = mcc.return_value
                     mock_comm.call_a2a_request = AsyncMock(
+                        return_value={"receiver_session_id": "rcv-1", "status": "accepted"}
+                    )
+                    mock_comm.wait_for_a2a_response = AsyncMock(
                         return_value={"status": "timeout", "error": "timed out"}
                     )
 

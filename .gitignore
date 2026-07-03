@@ -23,6 +23,7 @@ wheels/
 venv/
 env/
 ENV/
+graphify-out/
 .env
 .env.*
 !.env.example

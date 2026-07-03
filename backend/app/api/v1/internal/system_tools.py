@@ -738,3 +738,234 @@ async def query_result_tool(
             status_code=500,
             detail=f"Failed to query results: {exc}",
         )
+
+
+@router.post("/save-data", response_model=SystemToolResponse)
+async def save_data_tool(
+    body: SystemToolRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Save a named AgentData record on behalf of an agent session.
+
+    Called by CommHub when routing a ``save_data`` system tool call from
+    Agent Runtime.  Persists one ``AgentData`` record and returns the
+    saved record's id and timestamp.
+
+    Args:
+        body: Tool request with session_id and tool_args containing
+            ``data_name``, ``data_value``, optional ``agent_type_id``
+            and ``data_type`` (default "json").
+        db: Database session.
+
+    Returns:
+        SystemToolResponse with saved record id, data_name, and created_at.
+
+    Raises:
+        HTTPException: 400 if required fields are missing, 500 on failure.
+    """
+    logger.info("System tool: save_data for session %s", body.session_id)
+
+    try:
+        from app.services.agent_data.service import AgentDataService
+
+        session_id_str = body.session_id
+        data_name = body.tool_args.get("data_name")
+        data_value = body.tool_args.get("data_value")
+        agent_type_id_raw = body.tool_args.get("agent_type_id")
+        data_type = body.tool_args.get("data_type", "json")
+
+        if not session_id_str:
+            raise HTTPException(status_code=400, detail="session_id is required")
+        if not data_name:
+            raise HTTPException(status_code=400, detail="data_name is required")
+        if data_value is None:
+            raise HTTPException(status_code=400, detail="data_value is required")
+
+        service = AgentDataService()
+        record = await service.save(
+            db=db,
+            session_id=uuid.UUID(session_id_str),
+            data_name=data_name,
+            data_value=data_value,
+            agent_type_id=uuid.UUID(agent_type_id_raw) if agent_type_id_raw else None,
+            data_type=data_type,
+        )
+        await db.commit()
+
+        logger.info(
+            "AgentData saved: id=%s, data_name=%s, session=%s",
+            record.id,
+            data_name,
+            session_id_str,
+        )
+        return SystemToolResponse(
+            result={
+                "id": str(record.id),
+                "data_name": record.data_name,
+                "data_type": record.data_type,
+                "session_id": str(record.session_id),
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        logger.error("Invalid UUID in save_data: %s", exc)
+        raise HTTPException(status_code=400, detail=f"Invalid UUID: {exc}")
+    except Exception as exc:
+        logger.exception("Failed to save data for session %s", body.session_id)
+        raise HTTPException(status_code=500, detail=f"Failed to save data: {exc}")
+
+
+@router.post("/get-data", response_model=SystemToolResponse)
+async def get_data_tool(
+    body: SystemToolRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Query AgentData records for an agent session or type.
+
+    Called by CommHub when routing a ``get_data`` system tool call.
+    At least one filter (data_name, agent_type_id, session_id) must be
+    provided; returns 400 if all filters are absent.
+
+    Args:
+        body: Tool request with tool_args containing optional ``data_name``,
+            ``agent_type_id``, ``session_id``, ``limit``, and ``offset``.
+        db: Database session.
+
+    Returns:
+        SystemToolResponse with list of matching AgentData records.
+
+    Raises:
+        HTTPException: 400 if no filters provided, 500 on failure.
+    """
+    logger.info("System tool: get_data for session %s", body.session_id)
+
+    try:
+        from app.services.agent_data.service import AgentDataService
+
+        data_name = body.tool_args.get("data_name")
+        agent_type_id_raw = body.tool_args.get("agent_type_id")
+        session_id_raw = body.tool_args.get("session_id")
+        limit = int(body.tool_args.get("limit", 50))
+        offset = int(body.tool_args.get("offset", 0))
+
+        if not data_name and not agent_type_id_raw and not session_id_raw:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "At least one filter (data_name, agent_type_id, or session_id) "
+                    "must be provided."
+                ),
+            )
+
+        service = AgentDataService()
+        records = await service.query_by_filters(
+            db=db,
+            data_name=data_name,
+            agent_type_id=uuid.UUID(agent_type_id_raw) if agent_type_id_raw else None,
+            session_id=uuid.UUID(session_id_raw) if session_id_raw else None,
+            limit=limit,
+            offset=offset,
+        )
+
+        return SystemToolResponse(
+            result={
+                "records": [
+                    {
+                        "id": str(r.id),
+                        "data_name": r.data_name,
+                        "data_value": r.data_value,
+                        "data_type": r.data_type,
+                        "session_id": str(r.session_id) if r.session_id else None,
+                        "agent_type_id": str(r.agent_type_id) if r.agent_type_id else None,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in records
+                ],
+                "count": len(records),
+            }
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        logger.error("Invalid filter value in get_data: %s", exc)
+        raise HTTPException(status_code=400, detail=f"Invalid filter value: {exc}")
+    except Exception as exc:
+        logger.exception("Failed to get data for session %s", body.session_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get data: {exc}")
+
+
+@router.post("/get-output", response_model=SystemToolResponse)
+async def get_output_tool(
+    body: SystemToolRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemToolResponse:
+    """Query AgentOutput records for an agent session or type.
+
+    Called by CommHub when routing a ``get_output`` system tool call.
+    All filters are optional; results are ordered by created_at descending.
+
+    Args:
+        body: Tool request with tool_args containing optional ``agent_type_id``,
+            ``session_id``, ``date_from``, ``date_to``, ``limit``, ``offset``.
+        db: Database session.
+
+    Returns:
+        SystemToolResponse with list of matching AgentOutput records.
+
+    Raises:
+        HTTPException: 500 on failure.
+    """
+    logger.info("System tool: get_output for session %s", body.session_id)
+
+    try:
+        from app.services.outputs.service import OutputService
+
+        agent_type_id_raw = body.tool_args.get("agent_type_id")
+        session_id_raw = body.tool_args.get("session_id")
+        date_from_raw = body.tool_args.get("date_from")
+        date_to_raw = body.tool_args.get("date_to")
+        limit = int(body.tool_args.get("limit", 50))
+        offset = int(body.tool_args.get("offset", 0))
+
+        output_service = OutputService()
+        records = await output_service.query_output_history(
+            db=db,
+            agent_type_id=uuid.UUID(agent_type_id_raw) if agent_type_id_raw else None,
+            session_id=uuid.UUID(session_id_raw) if session_id_raw else None,
+            date_from=date_from_raw,
+            date_to=date_to_raw,
+            limit=limit,
+            offset=offset,
+        )
+
+        return SystemToolResponse(
+            result={
+                "records": [
+                    {
+                        "id": str(r.id),
+                        "agent_type_id": str(r.agent_type_id) if r.agent_type_id else None,
+                        "execution_session_id": str(r.execution_session_id) if r.execution_session_id else None,
+                        "data_type_id": str(r.data_type_id) if r.data_type_id else None,
+                        "field_values": r.field_values,
+                        "validation_status": r.validation_status.value if r.validation_status else None,
+                        "raw_output": r.raw_output,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in records
+                ],
+                "count": len(records),
+            }
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        logger.error("Invalid filter value in get_output: %s", exc)
+        raise HTTPException(status_code=400, detail=f"Invalid filter value: {exc}")
+    except Exception as exc:
+        logger.exception("Failed to get output for session %s", body.session_id)
+        raise HTTPException(status_code=500, detail=f"Failed to get output: {exc}")

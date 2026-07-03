@@ -267,7 +267,11 @@ export function AgentManagementPage() {
                     <Chip label={at.input_type} size="small" variant="outlined" />
                   </TableCell>
                   <TableCell>
-                    <Chip label={at.output_type} size="small" variant="outlined" />
+                    <Chip
+                      label={at.input_type === 'conversation' ? 'conversation' : at.output_type}
+                      size="small"
+                      variant="outlined"
+                    />
                   </TableCell>
                   <TableCell>
                     {at.output_data_type_name

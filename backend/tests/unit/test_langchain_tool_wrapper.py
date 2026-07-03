@@ -236,7 +236,12 @@ async def test_delegation_tool_calls_a2a_not_call_tool():
     from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
 
     mock_comm = AsyncMock()
-    mock_comm.call_a2a_request = AsyncMock(return_value={"status": "completed"})
+    mock_comm.call_a2a_request = AsyncMock(
+        return_value={"status": "accepted", "receiver_session_id": "rcv-analyst-1"}
+    )
+    mock_comm.wait_for_a2a_response = AsyncMock(
+        return_value={"status": "completed", "output_data": {"status": "completed", "result": "analysis done"}}
+    )
     mock_comm.call_tool = AsyncMock(return_value={"should": "not be called"})
 
     mock_data = AsyncMock()

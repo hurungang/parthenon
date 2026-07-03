@@ -406,7 +406,7 @@ class ControlCenterDataClient:
             payload["stop_details"] = stop_details
         await self._patch(f"/sessions/{session_id}/status", payload)
 
-    async def submit_result(
+    async def save_output(
         self, session_id: uuid.UUID, output_data: dict[str, Any]
     ) -> None:
         """Submit execution result to Control Center.

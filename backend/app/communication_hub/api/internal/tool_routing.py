@@ -203,15 +203,11 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
         },
     )
 
-    # Map bare tool name to Control Center endpoint
+    # Map bare tool name to Control Center endpoint — derived from SystemToolRegistry.
+    # Do NOT add new entries here; register new system tools in system_tool_registry.py.
     cc_base = settings.control_center_url or "http://localhost:8000"
-    endpoint_map = {
-        "save_result": f"{cc_base}/api/v1/internal/system-tools/save-result",
-        "send_notification": f"{cc_base}/api/v1/internal/system-tools/send-notification",
-        "get_recipient_group": f"{cc_base}/api/v1/internal/system-tools/get-recipient-group",
-        "human_intervene": f"{cc_base}/api/v1/internal/system-tools/human-intervene",
-        "query_result": f"{cc_base}/api/v1/internal/system-tools/query-result",
-    }
+    from app.services.agents.system_tool_registry import SystemToolRegistry
+    endpoint_map = SystemToolRegistry.get_cc_endpoint_map(cc_base)
 
     endpoint = endpoint_map.get(bare_name)
     if not endpoint:

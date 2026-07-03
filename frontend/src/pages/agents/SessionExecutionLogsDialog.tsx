@@ -21,7 +21,7 @@ import { LogViewer } from '../../components/executions/LogViewer'
 import { OutputTypeResultTab } from '../../components/executions/OutputTypeResultTab'
 import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
-import type { AgentJobStatus, AgentJob, ExecutionLogEntry, AgentOutputResponse } from '../../types'
+import type { AgentJobStatus, AgentJob, AgentOutputType, ExecutionLogEntry, AgentOutputResponse } from '../../types'
 
 const TAB_LOGS = 0
 const TAB_RESULT = 1
@@ -50,6 +50,8 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
   const [logs, setLogs] = useState<ExecutionLogEntry[]>([])
   const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | undefined>(undefined)
   const [outputId, setOutputId] = useState<string | undefined>(undefined)
+  const [outputType, setOutputType] = useState<AgentOutputType | null>(null)
+  const [markdownOutputData, setMarkdownOutputData] = useState<Record<string, unknown> | null>(null)
   const [typedOutput, setTypedOutput] = useState<AgentOutputResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [outputLoading, setOutputLoading] = useState(false)
@@ -75,9 +77,20 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
       )
       console.log('[SessionExecutionLogsDialog] fetchLogs response:', statusResponse.data)
       setSessionStatus(statusResponse.data.status)
+      const jobOutputType = statusResponse.data.output_type ?? null
+      setOutputType(jobOutputType)
       if (statusResponse.data.output_id) {
         console.log('[SessionExecutionLogsDialog] Setting outputId:', statusResponse.data.output_id)
         setOutputId(statusResponse.data.output_id)
+      } else if (jobOutputType === 'markdown' || jobOutputType === 'auto') {
+        // Non-typed outputs: result lives in output_data on the job
+        const jobOutputData = statusResponse.data.output_data ?? null
+        if (jobOutputData) {
+          console.log('[SessionExecutionLogsDialog] Markdown/auto output_data found')
+          setMarkdownOutputData(jobOutputData)
+        } else {
+          console.log('[SessionExecutionLogsDialog] No output_id and no output_data in response')
+        }
       } else {
         console.log('[SessionExecutionLogsDialog] No output_id in response')
       }
@@ -120,6 +133,8 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
       setLogs([])
       setTypedOutput(null)
       setOutputId(undefined)
+      setOutputType(null)
+      setMarkdownOutputData(null)
       setSessionStatus(undefined)
       setTabValue(TAB_LOGS)
       hasAutoSwitchedRef.current = false
@@ -141,13 +156,13 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
     setLogs((prev) => mergeLogEntries(prev, streamedEntries))
   }, [streamedEntries])
 
-  // Auto-switch to Result tab once typed output is loaded (only once per session)
+  // Auto-switch to Result tab once typed or markdown output is loaded (only once per session)
   useEffect(() => {
-    if (typedOutput && !hasAutoSwitchedRef.current) {
+    if ((typedOutput || markdownOutputData) && !hasAutoSwitchedRef.current) {
       hasAutoSwitchedRef.current = true
       setTabValue(TAB_RESULT)
     }
-  }, [typedOutput])
+  }, [typedOutput, markdownOutputData])
 
   const handleClose = () => {
     setDialogError(null)
@@ -156,7 +171,8 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
 
   const hasLogs = logs.length > 0 || execLogs.length > 0
   const isErrorSession = sessionStatus === 'failed' || sessionStatus === 'terminated'
-  const showTabs = hasLogs && (outputId != null || isErrorSession)
+  const hasResult = outputId != null || markdownOutputData != null
+  const showTabs = hasLogs && (hasResult || isErrorSession)
 
   // Extract the most recent error message from execution logs for error sessions
   const errorMessage: string | null = isErrorSession
@@ -198,10 +214,10 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
         {loading && (
           <Typography color="text.secondary">{t('app.loading')}</Typography>
         )}
-        {!loading && !dialogError && !execLogsLoading && !hasLogs && !typedOutput && (
+        {!loading && !dialogError && !execLogsLoading && !hasLogs && !typedOutput && !markdownOutputData && (
           <Typography color="text.secondary">{t('agents.sessions.noLogsAvailable')}</Typography>
         )}
-        {!loading && !dialogError && (hasLogs || typedOutput) && (
+        {!loading && !dialogError && (hasLogs || typedOutput || markdownOutputData) && (
           <Stack spacing={2}>
             {showTabs && (
               <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -247,6 +263,12 @@ export function SessionExecutionLogsDialog({ open, sessionId, onClose }: Props) 
                     validationStatus={typedOutput.validation_status}
                     rawOutput={typedOutput.raw_output}
                     dataTypeName={typedOutput.data_type_name}
+                  />
+                )}
+                {!outputLoading && !typedOutput && markdownOutputData && (
+                  <OutputTypeResultTab
+                    outputType={outputType === 'markdown' ? 'markdown' : 'auto'}
+                    outputData={markdownOutputData}
                   />
                 )}
                 {!outputLoading && !typedOutput && isErrorSession && (

@@ -263,6 +263,7 @@ export interface AgentJob {
   agent_type_name?: string
   triggered_by_user_name?: string
   output_id?: string | null // FK to AgentOutput for typed outputs
+  output_type?: AgentOutputType | null // Resolved from AgentType
 }
 
 export interface RuntimeTopologyNode {
@@ -855,6 +856,23 @@ export interface AgentOutputExportParams {
   agent_type_id?: string
   date_from?: string
   date_to?: string
+}
+
+// ── Auto Outputs (auto/markdown output_type, stored in AgentJob.output_data) ──
+
+export interface AutoOutputItem {
+  session_id: string
+  agent_type_id: string
+  agent_type_name: string | null
+  output_preview: string | null
+  created_at: string
+}
+
+export interface AutoOutputListResponse {
+  items: AutoOutputItem[]
+  total: number
+  page: number
+  page_size: number
 }
 
 // ── Auth State ─────────────────────────────────────────────────────────────────

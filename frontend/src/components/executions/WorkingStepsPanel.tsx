@@ -23,13 +23,15 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import LaunchIcon from '@mui/icons-material/Launch'
 import { useTranslation } from 'react-i18next'
 import apiClient from '../../api/apiClient'
+import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import { isWorkingStepSpan } from '../../services/LogPresenter'
-import type { ExecutionLogEntry, InterveneRequest, WorkingStep, WorkingStepSpan, WorkingStepIconType } from '../../types'
+import type { AgentJob, AgentJobStatus, ExecutionLogEntry, InterveneRequest, WorkingStep, WorkingStepSpan, WorkingStepIconType } from '../../types'
 
 interface Props {
   spans: WorkingStepSpan[]
   onViewSubAgentExecution?: (sessionId: string) => void
   pendingInterventionsByChildSession?: Record<string, InterveneRequest>
+  onOpenIntervention?: (request: InterveneRequest) => void
 }
 
 function StepIcon({ iconType }: { iconType: WorkingStepIconType }) {
@@ -143,10 +145,11 @@ function delegationEventLabel(eventType: string, t: ReturnType<typeof useTransla
   return map[eventType] ?? eventType.toUpperCase()
 }
 
-function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSession }: {
+function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSession, onOpenIntervention }: {
   step: WorkingStep
   onViewSubAgentExecution?: (sessionId: string) => void
   pendingInterventionsByChildSession?: Record<string, InterveneRequest>
+  onOpenIntervention?: (request: InterveneRequest) => void
 }) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -207,12 +210,52 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
     ? (delegationData?.['delegation_events'] as Array<{ event_type: string; message: string; timestamp: string }> | undefined) ?? []
     : []
 
-  // Sub-agent execution log entries (fetched for merged delegation)
+  // Sub-agent execution log entries (fetched for merged/active delegation)
   const [subAgentEntries, setSubAgentEntries] = useState<ExecutionLogEntry[]>([])
   const [subAgentEntriesLoading, setSubAgentEntriesLoading] = useState(false)
-  const actualReceiverSessionId = delegationEventType === 'delegation_merged'
-    ? (delegationData?.['receiver_session_id'] as string | undefined) ?? null
+  const [resolvedSessionStatus, setResolvedSessionStatus] = useState<AgentJobStatus | null>(null)
+  // receiver_session_id is included in delegation_waiting/delegation_started (from backend dispatch)
+  // as well as in delegation_merged (completed). Read it from delegationData regardless of type.
+  const actualReceiverSessionId = delegationData
+    ? (delegationData['receiver_session_id'] as string | undefined) ?? null
     : null
+
+  // Fetch real session status once we have the sub-agent session ID.
+  // This ensures terminated/completed sessions are reflected correctly even if
+  // local status events were missed.
+  useEffect(() => {
+    if (!actualReceiverSessionId) { setResolvedSessionStatus(null); return }
+    apiClient.get<AgentJob>(`/agents/sessions/${actualReceiverSessionId}`)
+      .then(({ data }) => setResolvedSessionStatus(data.status))
+      .catch(() => {})
+  }, [actualReceiverSessionId])
+
+  // Override event-type-derived active flag with real backend session status
+  const effectiveIsDelegationActive = isDelegationActive && (
+    resolvedSessionStatus === null ||
+    resolvedSessionStatus === 'running' ||
+    resolvedSessionStatus === 'queued' ||
+    resolvedSessionStatus === 'waiting_for_human'
+  )
+  const effectiveSubAgentState: AgentJobStatus | null = resolvedSessionStatus ?? subAgentState
+
+  // SSE streaming for live sub-agent activity when delegation is active
+  const { entries: subAgentStreamedEntries } = useSessionExecutionLogStream({
+    sessionId: actualReceiverSessionId,
+    enabled: effectiveIsDelegationActive && !!actualReceiverSessionId,
+    onComplete: (status) => setResolvedSessionStatus(status),
+  })
+
+  // Merge REST-fetched entries (initial load / completed) with SSE-streamed entries (live)
+  const allSubAgentEntries = useMemo(() => {
+    if (subAgentStreamedEntries.length === 0) return subAgentEntries
+    const merged = new Map<string, ExecutionLogEntry>()
+    for (const e of subAgentEntries) merged.set(e.id, e)
+    for (const e of subAgentStreamedEntries) merged.set(e.id, e)
+    return Array.from(merged.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    )
+  }, [subAgentEntries, subAgentStreamedEntries])
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -229,32 +272,49 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
       })
   }, [])
 
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
-    if (!actualReceiverSessionId || !detailOpen) {
+    if (!actualReceiverSessionId) {
       setSubAgentEntries([])
       if (pollRef.current) {
         clearInterval(pollRef.current)
         pollRef.current = null
       }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
       return
     }
 
+    // Always do an initial REST fetch to populate any existing entries
     fetchSubAgentEntries(actualReceiverSessionId, true)
 
-    if (isDelegationActive) {
-      pollRef.current = setInterval(
-        () => fetchSubAgentEntries(actualReceiverSessionId, false),
-        4000,
-      )
-    }
+    // Delayed re-fetch after 12s to catch early events (agent_initialized, etc.) that
+    // may have been missed if the SSE connection was established after they fired.
+    // This handles the race condition where simultaneous delegations cause sub-agent 2's
+    // SSE stream to connect just after its agent_initialized event is logged.
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+    retryTimerRef.current = setTimeout(() => {
+      fetchSubAgentEntries(actualReceiverSessionId, false)
+      retryTimerRef.current = null
+    }, 12000)
+
+    // For completed delegations, no polling needed — REST fetch is sufficient.
+    // For active delegations, live updates come via the SSE stream above.
 
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current)
         pollRef.current = null
       }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
     }
-  }, [actualReceiverSessionId, detailOpen, isDelegationActive, fetchSubAgentEntries])
+  }, [actualReceiverSessionId, fetchSubAgentEntries])
 
   const formattedTime = new Date(step.timestamp).toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -278,7 +338,7 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
             position: 'relative',
             transition: 'background 0.2s ease',
             '&:hover': { bgcolor: 'action.hover' },
-            bgcolor: isDelegationActive ? 'action.hover' : 'transparent',
+            bgcolor: effectiveIsDelegationActive ? 'action.hover' : 'transparent',
           }}
         >
           {/* Timestamp */}
@@ -309,7 +369,7 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
               color: colours.iconFg,
               flexShrink: 0,
               mt: 0.25,
-              animation: isDelegationActive ? 'dtPulse 1.5s infinite' : undefined,
+              animation: effectiveIsDelegationActive ? 'dtPulse 1.5s infinite' : undefined,
               '@keyframes dtPulse': {
                 '0%, 80%, 100%': { opacity: 0.3 },
                 '40%': { opacity: 1 },
@@ -350,7 +410,7 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
                 ? (delegationData?.['receiver_session_id'] as string | undefined)
                 : null
               const pendingIntervention = childSessionId && pendingInterventionsByChildSession?.[childSessionId]
-              return pendingIntervention && subAgentState === 'running'
+              return pendingIntervention && effectiveSubAgentState === 'running'
                 ? (
                   <Box
                     sx={{
@@ -401,11 +461,29 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
                         sx={{ fontSize: 11, fontWeight: 600, height: 22, bgcolor: '#FEF3C7', color: '#92400E' }}
                       />
                     </Box>
-                    {/* Intervention reason */}
-                    <Box sx={{ px: 1.25, pb: 1.25 }}>
-                      <Typography variant="caption" sx={{ fontSize: 12, color: '#78350F', lineHeight: 1.5, display: 'block' }}>
+                    {/* Intervention reason + re-open button */}
+                    <Box sx={{ px: 1.25, pb: 1.25, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <Typography variant="caption" sx={{ fontSize: 12, color: '#78350F', lineHeight: 1.5, flex: 1 }}>
                         {pendingIntervention.reason}
                       </Typography>
+                      {onOpenIntervention && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => onOpenIntervention(pendingIntervention)}
+                          sx={{
+                            flexShrink: 0,
+                            fontSize: 11,
+                            py: 0.25,
+                            px: 1,
+                            minWidth: 0,
+                            bgcolor: '#D97706',
+                            '&:hover': { bgcolor: '#B45309' },
+                          }}
+                        >
+                          Respond
+                        </Button>
+                      )}
                     </Box>
                   </Box>
                 )
@@ -444,39 +522,29 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
                         {subAgentName}
                       </Typography>
                       <Typography variant="caption" sx={{ fontSize: 11, color: colours.iconFg }}>
-                        {subAgentState === 'running'
-                          ? t('executions.delegationTimeline.subAgentExecuting', { defaultValue: 'Sub-agent executing...' })
-                          : subAgentState === 'completed'
-                            ? t('executions.delegationTimeline.subAgentCompleted', { defaultValue: 'Sub-agent completed' })
-                            : subAgentState === 'failed'
-                              ? t('executions.delegationTimeline.subAgentFailed', { defaultValue: 'Sub-agent failed' })
-                              : ''}
+                        {effectiveSubAgentState
+                          ? t(`agents.sessions.status${effectiveSubAgentState.replace(/^./, (c) => c.toUpperCase())}`, { defaultValue: effectiveSubAgentState })
+                          : ''}
                       </Typography>
                     </Box>
-                    {subAgentState && (
+                    {effectiveSubAgentState && (
                       <Chip
-                        label={
-                          subAgentState === 'running'
-                            ? t('executions.delegationTimeline.stateRunning', { defaultValue: 'Running' })
-                            : subAgentState === 'completed'
-                              ? t('executions.delegationTimeline.stateCompleted', { defaultValue: 'Completed' })
-                              : t('executions.delegationTimeline.stateFailed', { defaultValue: 'Failed' })
-                        }
+                        label={t(`agents.sessions.status${effectiveSubAgentState.replace(/^./, (c) => c.toUpperCase())}`, { defaultValue: effectiveSubAgentState })}
                         size="small"
                         sx={{
                           fontSize: 11,
                           fontWeight: 600,
                           height: 22,
-                          bgcolor: subAgentState === 'running'
-                            ? '#EDE9FE'
-                            : subAgentState === 'completed'
-                              ? '#DCFCE7'
-                              : '#FEE2E2',
-                          color: subAgentState === 'running'
-                            ? '#6D28D9'
-                            : subAgentState === 'completed'
-                              ? '#15803D'
-                              : '#B91C1C',
+                          bgcolor:
+                            effectiveSubAgentState === 'completed' ? '#DCFCE7'
+                            : effectiveSubAgentState === 'terminated' ? '#FEF3C7'
+                            : effectiveSubAgentState === 'failed' ? '#FEE2E2'
+                            : '#EDE9FE',
+                          color:
+                            effectiveSubAgentState === 'completed' ? '#15803D'
+                            : effectiveSubAgentState === 'terminated' ? '#92400E'
+                            : effectiveSubAgentState === 'failed' ? '#B91C1C'
+                            : '#6D28D9',
                         }}
                       />
                     )}
@@ -484,34 +552,78 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
                 )
             })()}
 
-            {/* For merged entries, show expand icon to view delegation timeline */}
+            {/* Delegation mini-timeline — always visible */}
             {isMerged && mergedEvents.length > 0 && (
+              <Box sx={{ mt: 1, pl: 0.5 }}>
+                {mergedEvents.map((evt, idx) => {
+                  const evtColours = DELEGATION_COLOURS[evt.event_type]
+                  const evtTime = new Date(evt.timestamp).toLocaleTimeString('en-US', {
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                  } as Intl.DateTimeFormatOptions)
+                  return (
+                    <Box key={idx} sx={{ display: 'flex', gap: 1, py: 0.2, alignItems: 'center' }}>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.disabled', minWidth: 60 }}>
+                        {evtTime}
+                      </Typography>
+                      <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: evtColours?.iconFg ?? '#ccc', flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ fontSize: 11, color: evtColours?.labelColour ?? 'text.secondary' }}>
+                        {evt.message}
+                      </Typography>
+                    </Box>
+                  )
+                })}
+              </Box>
+            )}
+
+            {/* Sub-agent streaming entries — always visible, last 5 (uses SSE stream when active, REST when completed) */}
+            {!subAgentEntriesLoading && allSubAgentEntries.length > 0 && (
+              <Box sx={{ mt: 1, pl: 0.5 }}>
+                {allSubAgentEntries
+                  .filter(e => ['agent_initialized', 'tool_call', 'tool_response', 'llm_request', 'llm_response', 'observe', 'session_completed'].includes(e.event_type))
+                  .slice(-5)
+                  .map((entry) => {
+                    const entryTime = new Date(entry.timestamp).toLocaleTimeString('en-US', {
+                      hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    } as Intl.DateTimeFormatOptions)
+                    return (
+                      <Box key={entry.id} sx={{ display: 'flex', gap: 1, py: 0.2, alignItems: 'center' }}>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.disabled', minWidth: 60 }}>
+                          {entryTime}
+                        </Typography>
+                        <Box sx={{
+                          width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                          bgcolor: entry.event_type === 'tool_call' ? '#0288d1'
+                            : entry.event_type === 'tool_response' ? '#0288d1'
+                            : entry.event_type === 'llm_request' ? '#7c4dff'
+                            : entry.event_type === 'llm_response' ? '#7c4dff'
+                            : '#757575',
+                        }} />
+                        <Typography variant="caption" sx={{ fontSize: 11, color: 'text.secondary' }}>
+                          {entry.message}
+                        </Typography>
+                      </Box>
+                    )
+                  })}
+              </Box>
+            )}
+
+            {/* View Full Execution Log — always visible when session available and not active */}
+            {actualReceiverSessionId && !effectiveIsDelegationActive && (
               <Box sx={{ mt: 1 }}>
-                <Tooltip title={detailOpen ? 'Collapse delegation timeline' : 'View delegation timeline'}>
-                  <IconButton
-                    size="small"
-                    onClick={() => setDetailOpen((v) => !v)}
-                    aria-expanded={detailOpen}
-                    aria-label={detailOpen ? 'Collapse delegation timeline' : 'View delegation timeline'}
-                    sx={{ fontSize: 12, color: 'text.secondary' }}
-                  >
-                    <Typography variant="caption" sx={{ mr: 0.5, fontSize: 11 }}>
-                      {detailOpen ? 'Hide timeline' : 'Show timeline'}
-                    </Typography>
-                    <ExpandMoreIcon
-                      fontSize="small"
-                      sx={{
-                        transform: detailOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.2s',
-                      }}
-                    />
-                  </IconButton>
-                </Tooltip>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => onViewSubAgentExecution?.(actualReceiverSessionId)}
+                  endIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
+                  sx={{ fontSize: 12, textTransform: 'none' }}
+                >
+                  View Execution Logs
+                </Button>
               </Box>
             )}
 
             {/* Animated loading bar for delegating/waiting */}
-            {isDelegationActive && (
+            {effectiveIsDelegationActive && (
               <Box
                 sx={{
                   height: 2,
@@ -540,102 +652,7 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
           </Box>
         </Box>
 
-        {/* Delegation timeline (expanded) for merged entries */}
-        {isMerged && (
-          <Collapse in={detailOpen}>
-            <Box sx={{ ml: 9.5, mb: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-              <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.75, color: 'text.secondary' }}>
-                Delegation timeline
-              </Typography>
-              {mergedEvents.map((evt, idx) => {
-                const evtColours = DELEGATION_COLOURS[evt.event_type]
-                const evtTime = new Date(evt.timestamp).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                } as Intl.DateTimeFormatOptions)
-                return (
-                  <Box key={idx} sx={{ display: 'flex', gap: 1, py: 0.25, alignItems: 'center' }}>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.disabled', minWidth: 60 }}>
-                      {evtTime}
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: evtColours?.iconFg ?? '#ccc',
-                        flexShrink: 0,
-                      }}
-                    />
-                    <Typography variant="caption" sx={{ fontSize: 11, color: evtColours?.labelColour ?? 'text.secondary' }}>
-                      {evt.message}
-                    </Typography>
-                  </Box>
-                )
-              })}
 
-              {/* Sub-agent high-level execution entries */}
-              {subAgentEntriesLoading && (
-                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary', fontStyle: 'italic' }}>
-                  Loading sub-agent execution log...
-                </Typography>
-              )}
-              {!subAgentEntriesLoading && subAgentEntries.length > 0 && (
-                <Box sx={{ mt: 1.5 }}>
-                  <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5, color: 'text.secondary' }}>
-                    Sub-agent execution
-                  </Typography>
-                  {subAgentEntries
-                    .filter(e => ['tool_call', 'llm_request', 'llm_response', 'observe'].includes(e.event_type))
-                    .slice(-10)
-                    .map((entry) => {
-                      const entryTime = new Date(entry.timestamp).toLocaleTimeString('en-US', {
-                        hour: '2-digit', minute: '2-digit', second: '2-digit',
-                      } as Intl.DateTimeFormatOptions)
-                      const toolName = entry.data?.['tool_name'] as string | undefined
-                      const tool = entry.data?.['tool'] as string | undefined
-                      const toolLabel = toolName ?? tool ?? ''
-                      return (
-                        <Box key={entry.id} sx={{ display: 'flex', gap: 1, py: 0.25, alignItems: 'center' }}>
-                          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.disabled', minWidth: 60 }}>
-                            {entryTime}
-                          </Typography>
-                          <Box sx={{
-                            width: 8, height: 8, borderRadius: '50%',
-                            bgcolor: entry.event_type === 'tool_call' ? '#0288d1' : entry.event_type === 'llm_request' ? '#7c4dff' : '#757575',
-                            flexShrink: 0,
-                          }} />
-                          <Typography variant="caption" sx={{ fontSize: 11, color: 'text.secondary' }}>
-                            {entry.event_type === 'tool_call'
-                              ? `Using tool${toolLabel ? `: ${toolLabel}` : ''}`
-                              : entry.event_type === 'llm_request' ? 'Thinking...'
-                              : entry.event_type === 'llm_response' ? 'Got response'
-                              : entry.message}
-                          </Typography>
-                        </Box>
-                      )
-                    })}
-                </Box>
-              )}
-
-              {/* View Full Execution Log button */}
-              {actualReceiverSessionId && !subAgentEntriesLoading && (
-                <Box sx={{ mt: 1.5 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => onViewSubAgentExecution?.(actualReceiverSessionId)}
-                    endIcon={<LaunchIcon sx={{ fontSize: 14 }} />}
-                    sx={{ fontSize: 12, textTransform: 'none' }}
-                  >
-                    View Full Execution Log
-                  </Button>
-                </Box>
-              )}
-            </Box>
-          </Collapse>
-        )}
       </Box>
     )
   }
@@ -681,6 +698,60 @@ function StepRow({ step, onViewSubAgentExecution, pendingInterventionsByChildSes
           </Tooltip>
         )}
       </Box>
+      {/* Fix 2: Show output_type chip + result_preview below the step row for session_completed steps */}
+      {step.detail?.eventType === 'tool_response' && (() => {
+        try {
+          const responseData = JSON.parse(step.detail!.content) as Record<string, unknown>
+          const preview = responseData?.response_preview as string | undefined
+          if (!preview) return null
+          const truncated = preview.length > 250 ? preview.slice(0, 250) + '…' : preview
+          return (
+            <Box sx={{ pl: 6, pb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: 11, color: 'text.secondary', fontFamily: 'monospace',
+                      display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                      bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider',
+                      borderRadius: 1, px: 1, py: 0.5, lineHeight: 1.5 }}
+              >
+                {truncated}
+              </Typography>
+            </Box>
+          )
+        } catch {
+          return null
+        }
+      })()}
+      {step.detail?.eventType === 'session_completed' && (() => {
+        try {
+          const completionData = JSON.parse(step.detail!.content) as Record<string, unknown>
+          const outputType = completionData?.output_type as string | undefined
+          const resultPreview = completionData?.result_preview as string | undefined
+          if (!outputType && !resultPreview) return null
+          return (
+            <Box sx={{ pl: 6, display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start', pb: 0.5 }}>
+              {outputType && (
+                <Chip
+                  label={`Output type: ${outputType}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontSize: 11, height: 20, color: '#7c4dff', borderColor: '#7c4dff' }}
+                />
+              )}
+              {resultPreview && (
+                <Typography
+                  variant="caption"
+                  sx={{ fontSize: 11, color: 'text.secondary', fontStyle: 'italic', lineHeight: 1.4 }}
+                >
+                  {resultPreview}
+                </Typography>
+              )}
+            </Box>
+          )
+        } catch {
+          return null
+        }
+      })()}
       {step.detail && (
         <Collapse in={detailOpen}>
           <Box ml={4} mb={1}>
@@ -722,11 +793,13 @@ function SpanSection({
   depth = 0,
   onViewSubAgentExecution,
   pendingInterventionsByChildSession,
+  onOpenIntervention,
 }: {
   span: WorkingStepSpan
   depth?: number
   onViewSubAgentExecution?: (sessionId: string) => void
   pendingInterventionsByChildSession?: Record<string, InterveneRequest>
+  onOpenIntervention?: (request: InterveneRequest) => void
 }) {
   const [collapsed, setCollapsed] = useState(span.collapsed)
 
@@ -784,9 +857,9 @@ function SpanSection({
           <Stack divider={<Divider />}>
             {span.children.map((child) =>
               isWorkingStepSpan(child) ? (
-                <SpanSection key={child.id} span={child} depth={depth + 1} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} />
+                <SpanSection key={child.id} span={child} depth={depth + 1} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} onOpenIntervention={onOpenIntervention} />
               ) : (
-                <StepRow key={child.id} step={child} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} />
+                <StepRow key={child.id} step={child} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} onOpenIntervention={onOpenIntervention} />
               )
             )}
           </Stack>
@@ -796,7 +869,7 @@ function SpanSection({
   )
 }
 
-export function WorkingStepsPanel({ spans, onViewSubAgentExecution, pendingInterventionsByChildSession }: Props) {
+export function WorkingStepsPanel({ spans, onViewSubAgentExecution, pendingInterventionsByChildSession, onOpenIntervention }: Props) {
   const { t } = useTranslation()
   const [sectionCollapsed, setSectionCollapsed] = useState(false)
 
@@ -851,7 +924,7 @@ export function WorkingStepsPanel({ spans, onViewSubAgentExecution, pendingInter
         <Collapse in={!sectionCollapsed}>
           <Stack divider={<Divider />}>
             {spans.map((span) => (
-              <SpanSection key={span.id} span={span} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} />
+              <SpanSection key={span.id} span={span} onViewSubAgentExecution={onViewSubAgentExecution} pendingInterventionsByChildSession={pendingInterventionsByChildSession} onOpenIntervention={onOpenIntervention} />
             ))}
           </Stack>
         </Collapse>

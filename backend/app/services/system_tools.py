@@ -1,43 +1,27 @@
-"""Centralized system tool naming module.
+"""Centralized system tool naming module — thin facade over SystemToolRegistry.
 
-Defines the canonical set of built-in system tools and helper functions
-for consistent name resolution across all consumers (mcp_hub, agent_data,
-runtime_executor).
-
-Canonical form: bare name without prefix — e.g. ``"save_result"``
-Display form:   prefixed name with server slug — e.g. ``"system/save_result"``
-
-All consumers should import from this module to avoid naming drift.
+All canonical data lives in ``SystemToolRegistry`` (system_tool_registry.py).
+This module re-exports the names and helpers for backward-compatible imports
+across the codebase.  Do not add new tool names here; register them in
+``system_tool_registry.py`` instead.
 """
 from __future__ import annotations
 
-#: Canonical bare names for all built-in system tools.
-SYSTEM_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "save_result",
-        "send_notification",
-        "get_recipient_group",
-        "human_intervene",
-        "query_result",
-    }
-)
+from app.services.agents.system_tool_registry import SystemToolRegistry
 
-#: Display names with the "system/" prefix — matches the ``name`` field returned by
-#: ``_system_tool_reads()`` in mcp_hub.py and stored in the seeded DB rows.
+#: Canonical bare names for all built-in system tools — derived from registry.
+#: Never edit this directly; update ``SystemToolRegistry`` registrations instead.
+SYSTEM_TOOL_NAMES: frozenset[str] = SystemToolRegistry.get_names()
+
+#: Display names with the "system/" prefix.
 SYSTEM_TOOL_DISPLAY_NAMES: frozenset[str] = frozenset(
     f"system/{n}" for n in SYSTEM_TOOL_NAMES
 )
 
 
 def is_system_tool(name: str) -> bool:
-    """Return True if *name* refers to a built-in system tool.
-
-    Accepts both canonical bare names (``"save_result"``) and the prefixed
-    display names (``"system/save_result"``) for backward compatibility.
-    Also handles OpenAI-sanitised names where ``/`` is replaced with ``_``
-    (e.g. ``"system_save_result"``).
-    """
-    return get_canonical_name(name) in SYSTEM_TOOL_NAMES
+    """Return True if *name* refers to a built-in system tool (any naming format)."""
+    return SystemToolRegistry.is_system_tool(name)
 
 
 def get_canonical_name(name: str) -> str:
@@ -52,3 +36,4 @@ def get_canonical_name(name: str) -> str:
 def get_display_name(name: str) -> str:
     """Return the ``"system/{name}"`` display form used in the API and UI."""
     return f"system/{get_canonical_name(name)}"
+

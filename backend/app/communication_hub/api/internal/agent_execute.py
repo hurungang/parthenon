@@ -76,31 +76,51 @@ async def trigger_agent_execution(
     ar_base = settings.agent_runtime_url or "http://localhost:8001"
     ar_endpoint = f"{ar_base}/execute"
     
-    # Get Communication Hub certificate for authenticating to Agent Runtime
+    # Get Communication Hub certificate for authenticating to Agent Runtime.
+    # If the certificate manager is absent or the cert was not bootstrapped on startup
+    # (e.g. CC was unavailable when CH started), attempt an on-demand reload.
     cert_manager = getattr(request.app.state, "certificate_manager", None)
-    client_kwargs = {
+    if cert_manager is None or not cert_manager.is_loaded:
+        logger.warning(
+            "Certificate not ready for session=%s — attempting on-demand re-bootstrap",
+            body.session_id,
+        )
+        try:
+            from app.communication_hub.main import _load_certificate
+            await _load_certificate()
+            cert_manager = getattr(request.app.state, "certificate_manager", None)
+            if cert_manager and cert_manager.is_loaded:
+                # Update app state so future requests benefit too
+                request.app.state.certificate_manager = cert_manager
+                logger.info("On-demand cert re-bootstrap succeeded for session=%s", body.session_id)
+            else:
+                logger.warning("On-demand cert re-bootstrap did not produce a loaded cert")
+        except Exception as exc:
+            logger.warning("On-demand cert re-bootstrap failed: %s", exc)
+
+    client_kwargs: dict = {
         "timeout": 30.0,
         "verify": get_ssl_context(),
     }
-    
-    # Add certificate authentication
-    headers = {}
-    if cert_manager and cert_manager.cert_path and cert_manager.key_path:
-        if ar_base.startswith("https://"):
-            # Production: Use TLS client certificate
-            client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))
-            logger.debug("Using mTLS certificate for Agent Runtime communication")
+
+    def _build_headers() -> dict:
+        """Build request headers with current cert (re-read on each retry for freshness)."""
+        hdrs: dict = {}
+        mgr = getattr(request.app.state, "certificate_manager", None)
+        if mgr and mgr.cert_path and mgr.key_path:
+            if ar_base.startswith("https://"):
+                client_kwargs["cert"] = (str(mgr.cert_path), str(mgr.key_path))
+            else:
+                from pathlib import Path
+                try:
+                    cert_content = Path(mgr.cert_path).read_text()
+                    hdrs["X-Client-Certificate"] = cert_content.replace("\n", "\\n")
+                except OSError as e:
+                    logger.warning("Could not read cert file for AR request: %s", e)
         else:
-            # Development (HTTP): Send cert as header with escaped newlines
-            # Replace actual newlines with literal \n to make it valid for HTTP headers
-            from pathlib import Path
-            cert_content = Path(cert_manager.cert_path).read_text()
-            cert_header_value = cert_content.replace("\n", "\\n")
-            headers["X-Client-Certificate"] = cert_header_value
-            logger.debug("Using X-Client-Certificate header for Agent Runtime communication")
-    else:
-        logger.warning("No certificate manager available - Agent Runtime call may fail authentication")
-    
+            logger.warning("No certificate available — Agent Runtime may reject request")
+        return hdrs
+
     # Forward request to Agent Runtime with retry logic
     payload = {
         "session_id": str(body.session_id),
@@ -108,9 +128,9 @@ async def trigger_agent_execution(
         "input_data": body.input_data,
     }
     
-    # Retry configuration: 3 attempts with exponential backoff (0s, 2s, 4s)
+    # Retry configuration: 3 attempts with exponential backoff (0s, 3s, 6s)
     max_retries = 3
-    retry_delays = [0, 2, 4]  # seconds
+    retry_delays = [0, 3, 6]  # seconds
     last_error = None
     
     for attempt in range(max_retries):
@@ -126,6 +146,7 @@ async def trigger_agent_execution(
                 )
                 await asyncio.sleep(delay)
             
+            headers = _build_headers()
             async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.post(
                     ar_endpoint,
@@ -150,25 +171,39 @@ async def trigger_agent_execution(
         
         except httpx.HTTPStatusError as exc:
             last_error = exc
-            # Non-retriable errors (4xx) - fail immediately
-            if exc.response.status_code < 500:
-                error_msg = f"Agent Runtime rejected execution: HTTP {exc.response.status_code}"
+            status = exc.response.status_code
+            # 401 means AR rejected our cert — try to re-bootstrap cert and retry
+            if status == 401:
+                logger.warning(
+                    "Agent Runtime rejected cert (401) on attempt %d/%d — attempting cert re-bootstrap: session=%s",
+                    attempt + 1,
+                    max_retries,
+                    body.session_id,
+                )
+                try:
+                    from app.communication_hub.main import _load_certificate
+                    await _load_certificate()
+                    request.app.state.certificate_manager = getattr(request.app.state, "certificate_manager", None)
+                    logger.info("Cert re-bootstrap completed after 401; will retry AR call")
+                except Exception as bootstrap_exc:
+                    logger.warning("Cert re-bootstrap after 401 failed: %s", bootstrap_exc)
+                continue  # retry with refreshed cert
+
+            # Other 4xx errors are not retriable
+            if status < 500:
+                error_msg = f"Agent Runtime rejected execution: HTTP {status}"
                 logger.error("%s - %s", error_msg, exc.response.text[:200])
                 raise HTTPException(status_code=502, detail=error_msg)
-            # Retriable errors (5xx) - continue retry loop
+            # 5xx errors — continue retry loop
             logger.warning(
                 "Agent Runtime returned HTTP %d (attempt %d/%d): %s",
-                exc.response.status_code,
+                status,
                 attempt + 1,
                 max_retries,
                 exc.response.text[:200],
             )
 
         except httpx.TimeoutException as exc:
-            # Catches ReadTimeout, ConnectTimeout, WriteTimeout, PoolTimeout.
-            # Treat as retriable and as a transient availability issue (503)
-            # once retries are exhausted — Agent Runtime is reachable but
-            # slow / unresponsive, which is distinct from a hard rejection (502).
             last_error = exc
             logger.warning(
                 "Agent Runtime timeout (attempt %d/%d): %s",

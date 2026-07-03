@@ -15,11 +15,47 @@ streaming out of the box.
 from __future__ import annotations
 
 import logging
+import os
+from functools import lru_cache
 from typing import Any
 
+import httpx
 from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _shared_async_http_client() -> httpx.AsyncClient | None:
+    """Return a shared httpx.AsyncClient that trusts the corporate firewall CA.
+
+    Strategy (in order):
+    1. truststore — uses the OS native cert store (Windows SChannel / macOS
+       SecureTransport / Linux NSS).  Preferred on Python 3.12+ because it
+       bypasses the stricter AKI / chain-building requirements added to the
+       built-in ssl module and uses the same trust decisions as the OS browser.
+       Corporate CAs pushed via GPO are automatically available here.
+    2. REQUESTS_CA_BUNDLE / SSL_CERT_FILE env var — falls back to an explicit
+       PEM bundle (e.g. ca-bundle.crt) when truststore is not installed.
+    3. None — let each LangChain library use its own default SSL context.
+
+    Result is cached so the same client instance is reused across all model
+    creations rather than spawning a new client per session.
+    """
+    try:
+        import ssl
+        import truststore  # type: ignore[import]
+        ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        logger.debug("LangChain httpx client: using OS trust store via truststore")
+        return httpx.AsyncClient(verify=ctx)
+    except ImportError:
+        pass
+
+    ca_bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE")
+    if not ca_bundle:
+        return None
+    logger.debug("LangChain httpx client: using CA bundle %s", ca_bundle)
+    return httpx.AsyncClient(verify=ca_bundle)
 
 # Default API base URLs per provider
 _PROVIDER_DEFAULTS: dict[str, str] = {
@@ -190,6 +226,10 @@ class LangChainModelFactory:
             "max_tokens": max_tokens,
         }
 
+        async_client = _shared_async_http_client()
+        if async_client is not None:
+            kwargs["http_async_client"] = async_client
+
         return ChatOpenAI(**kwargs)
 
     def _create_azure_openai(
@@ -208,13 +248,18 @@ class LangChainModelFactory:
 
         from langchain_openai import AzureChatOpenAI
 
-        return AzureChatOpenAI(
-            azure_endpoint=base_url,
-            azure_deployment=model_id,
-            api_key=api_key or "placeholder",
-            api_version="2024-02-01",
-            max_tokens=max_tokens,
-        )
+        azure_kwargs: dict[str, Any] = {
+            "azure_endpoint": base_url,
+            "azure_deployment": model_id,
+            "api_key": api_key or "placeholder",
+            "api_version": "2024-02-01",
+            "max_tokens": max_tokens,
+        }
+        async_client = _shared_async_http_client()
+        if async_client is not None:
+            azure_kwargs["http_async_client"] = async_client
+
+        return AzureChatOpenAI(**azure_kwargs)
 
     def _create_anthropic(
         self,
@@ -234,6 +279,9 @@ class LangChainModelFactory:
             kwargs["api_key"] = api_key
         if base_url:
             kwargs["base_url"] = base_url
+        async_client = _shared_async_http_client()
+        if async_client is not None:
+            kwargs["http_async_client"] = async_client
         return ChatAnthropic(**kwargs)
 
     def _create_gemini(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -29,9 +29,8 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import apiClient from '../../api/apiClient'
+import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { InlineInterventionDialog } from '../conversations/InlineInterventionDialog'
@@ -42,11 +41,10 @@ import {
   type ChatMessage,
   type DelegationCycle,
   type ConversationalGuardrailUsage,
-  type DelegationSnippetLine,
 } from '../../hooks/useChatSession'
 import { useEndConversationSession } from '../../hooks/useConversationSessions'
 import { buildDelegationHistoryFromTurns, buildHistoryMessagesFromTurns } from '../../utils/delegationHistory'
-import type { ConversationSessionDetail } from '../../types'
+import type { AgentJob, AgentJobStatus, ConversationSessionDetail, ExecutionLogEntry } from '../../types'
 
 interface ConversationDialogProps {
   open: boolean
@@ -99,6 +97,105 @@ function parsePersistedGuardrailUsage(value: unknown): ConversationalGuardrailUs
   }
 }
 
+const DELEGATION_LOG_EVENT_TYPES = new Set([
+  'agent_initialized', 'tool_call', 'tool_response',
+  'llm_request', 'llm_response', 'observe', 'session_completed',
+])
+
+function DelegationMiniLog({
+  receiverSessionId,
+  isActive,
+}: {
+  receiverSessionId: string | null
+  isActive: boolean
+}) {
+  const [entries, setEntries] = useState<ExecutionLogEntry[]>([])
+  const [sessionStatus, setSessionStatus] = useState<AgentJobStatus | null>(null)
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch real session status when receiver session ID is known — overrides local isActive
+  // to correctly reflect terminated/completed state even if status events were missed
+  useEffect(() => {
+    if (!receiverSessionId) { setSessionStatus(null); return }
+    apiClient.get<AgentJob>(`/agents/sessions/${receiverSessionId}`)
+      .then(({ data }) => setSessionStatus(data.status))
+      .catch(() => {})
+  }, [receiverSessionId])
+
+  const effectiveIsActive = isActive && (
+    sessionStatus === null || sessionStatus === 'running' || sessionStatus === 'queued' || sessionStatus === 'waiting_for_human'
+  )
+
+  const fetchEntries = useCallback((sessionId: string) => {
+    apiClient.get<ExecutionLogEntry[]>(`/agents/sessions/${sessionId}/logs`)
+      .then(({ data }) => setEntries(data))
+      .catch(() => setEntries([]))
+  }, [])
+
+  useEffect(() => {
+    if (!receiverSessionId) { setEntries([]); return }
+    fetchEntries(receiverSessionId)
+    retryRef.current = setTimeout(() => fetchEntries(receiverSessionId), 12000)
+    return () => {
+      if (retryRef.current) clearTimeout(retryRef.current)
+    }
+  }, [receiverSessionId, fetchEntries])
+
+  const { entries: streamedEntries } = useSessionExecutionLogStream({
+    sessionId: receiverSessionId,
+    enabled: effectiveIsActive && !!receiverSessionId,
+    onComplete: (status) => setSessionStatus(status),
+  })
+
+  const allEntries = useMemo(() => {
+    if (streamedEntries.length === 0) return entries
+    const merged = new Map<string, ExecutionLogEntry>()
+    for (const e of entries) merged.set(e.id, e)
+    for (const e of streamedEntries) merged.set(e.id, e)
+    return Array.from(merged.values()).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    )
+  }, [entries, streamedEntries])
+
+  const filtered = allEntries
+    .filter(e => DELEGATION_LOG_EVENT_TYPES.has(e.event_type))
+    .slice(-5)
+
+  if (!receiverSessionId) return null
+  if (filtered.length === 0) {
+    return effectiveIsActive ? (
+      <Typography variant="caption" color="text.disabled" sx={{ fontSize: 11 }}>Connecting...</Typography>
+    ) : null
+  }
+
+  return (
+    <Box sx={{ mt: 0.5 }}>
+      {filtered.map((entry) => {
+        const entryTime = new Date(entry.timestamp).toLocaleTimeString('en-US', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        } as Intl.DateTimeFormatOptions)
+        return (
+          <Box key={entry.id} sx={{ display: 'flex', gap: 1, py: 0.2, alignItems: 'center' }}>
+            <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.disabled', minWidth: 60 }}>
+              {entryTime}
+            </Typography>
+            <Box sx={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              bgcolor:
+                entry.event_type === 'tool_call' || entry.event_type === 'tool_response' ? '#0288d1'
+                : entry.event_type === 'llm_request' || entry.event_type === 'llm_response' ? '#7c4dff'
+                : '#757575',
+            }} />
+            <Typography variant="caption" sx={{ fontSize: 11, color: 'text.secondary' }}>
+              {entry.message}
+            </Typography>
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
 /**
  * Full-screen capable conversation dialog for real-time chat with agents.
  * Handles session resume, WebSocket connection, and session end.
@@ -132,22 +229,6 @@ export function ConversationDialog({
 
   const endSession = useEndConversationSession(agentTypeId)
   const testId = (suffix: string) => `${testIdPrefix}-${suffix}`
-
-  const formatSnippetLine = (snippet: DelegationSnippetLine): string => {
-    if (snippet.kind === 'delegating' && snippet.agentType) {
-      return t('conversations.sessions.statusDelegatingToAgent', { agentType: snippet.agentType })
-    }
-    if (snippet.kind === 'waiting') {
-      return t('conversations.sessions.statusWaiting')
-    }
-    if (snippet.kind === 'using_tool' && snippet.toolName) {
-      return t('conversations.sessions.statusUsingTool', { toolName: snippet.toolName })
-    }
-    if (snippet.kind === 'log_title' && snippet.logTitle) {
-      return snippet.logTitle
-    }
-    return t('conversations.sessions.snippetPanelEmpty')
-  }
 
   const formatDateTime = (value: string | null | undefined): string => {
     if (!value) {
@@ -255,7 +336,6 @@ export function ConversationDialog({
     delegationCompleted,
     delegationExecutionLogAvailable,
     delegationExecutionSessionId,
-    toggleDelegationSnippetsCollapsed,
     hydrateDelegationFromHistory,
     sendMessage,
     interventionRequest,
@@ -650,13 +730,6 @@ export function ConversationDialog({
                           chatStatus.kind !== 'thinking' &&
                           chatStatus.kind !== 'timeout_or_failed',
                       )
-                      const displaySnippets = cycle.snippets
-                      const displaySnippet = displaySnippets[displaySnippets.length - 1]
-                      const previewSnippet =
-                        displaySnippets.length > 1 || displaySnippet?.kind === 'log_title'
-                          ? displaySnippet
-                          : null
-
                       return (
                         <Box
                           key={entry.id}
@@ -684,47 +757,11 @@ export function ConversationDialog({
                               )}
 
                               <Box data-testid={isActiveCycle ? testId('delegation-snippets') : testId('delegation-snippets-history')}>
-                                <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
-                                  <Typography variant="subtitle2" fontWeight={600}>
-                                    {t('conversations.sessions.snippetPanelTitle')}
-                                  </Typography>
-                                  {isActiveCycle && displaySnippets.length > 0 ? (
-                                    <Button
-                                      size="small"
-                                      onClick={toggleDelegationSnippetsCollapsed}
-                                      endIcon={cycle.snippetsCollapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-                                    >
-                                      {cycle.snippetsCollapsed
-                                        ? t('conversations.sessions.snippetPanelExpand')
-                                        : t('conversations.sessions.snippetPanelCollapse')}
-                                    </Button>
-                                  ) : null}
-                                </Box>
-
-                                {cycle.snippetsCollapsed ? (
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    data-testid={isActiveCycle ? testId('snippet-preview') : testId('snippet-preview-history')}
-                                  >
-                                    {previewSnippet ? formatSnippetLine(previewSnippet) : t('conversations.sessions.snippetPanelEmpty')}
-                                  </Typography>
-                                ) : (
-                                  <Box
-                                    display="flex"
-                                    flexDirection="column"
-                                    gap={0.5}
-                                    data-testid={isActiveCycle ? testId('snippet-expanded') : testId('snippet-expanded-history')}
-                                  >
-                                    {displaySnippets.map((snippet) => (
-                                      <Typography key={snippet.id} variant="caption" color="text.secondary">
-                                        {formatSnippetLine(snippet)}
-                                      </Typography>
-                                    ))}
-                                  </Box>
-                                )}
-
-                                {cycle.completed && cycle.executionLogAvailable && cycle.executionSessionId && (
+                                <DelegationMiniLog
+                                  receiverSessionId={cycle.executionSessionId}
+                                  isActive={isActiveCycle && !cycle.completed}
+                                />
+                                {cycle.executionSessionId && cycle.completed && (
                                   <Box mt={1}>
                                     <Button
                                       size="small"

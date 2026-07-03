@@ -21,7 +21,12 @@ from fastapi.responses import StreamingResponse
 from app.api.deps import require_permission
 from app.core.resource_types import RT_RESULT
 from app.db.session import DbSession
-from app.schemas.agent_outputs import AgentOutputListResponse, AgentOutputResponse
+from app.schemas.agent_outputs import (
+    AgentOutputListResponse,
+    AgentOutputResponse,
+    AutoOutputItem,
+    AutoOutputListResponse,
+)
 from app.services.outputs.service import OutputService
 
 logger = logging.getLogger(__name__)
@@ -99,9 +104,75 @@ async def list_agent_outputs(
     )
 
 
+@OutputRouter.get("/auto", response_model=AutoOutputListResponse)
+async def list_auto_agent_outputs(
+    db: DbSession,
+    agent_type_id: uuid.UUID | None = Query(None, description="Filter by agent type ID"),
+    date_from: str | None = Query(None, description="Filter outputs created on or after this date (ISO format)"),
+    date_to: str | None = Query(None, description="Filter outputs created on or before this date (ISO format)"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    _: dict = Depends(require_permission(RT_RESULT, "read")),
+) -> AutoOutputListResponse:
+    """List completed auto-type agent jobs that have saved output_data.
+
+    Returns jobs where the agent type's output_type is 'auto' or 'markdown'
+    and a result was stored automatically after execution. Each item includes
+    a short text preview of the result.
+    """
+    logger.info(
+        "Listing auto agent outputs: agent_type=%s page=%d",
+        agent_type_id, page,
+    )
+
+    filters = {
+        "agent_type_id": agent_type_id,
+        "date_from": date_from,
+        "date_to": date_to,
+        "page": page,
+        "page_size": page_size,
+    }
+
+    jobs, total = await _output_service.list_auto_outputs(db=db, filters=filters)
+
+    _PREVIEW_LEN = 200
+    items = []
+    for job in jobs:
+        agent_type_name = job.agent_type.name if job.agent_type else None
+        output_preview: str | None = None
+        if isinstance(job.output_data, dict):
+            result = job.output_data.get("result")
+            if isinstance(result, str) and result:
+                output_preview = result[:_PREVIEW_LEN]
+            elif isinstance(result, list):
+                # Handle content-block arrays (Anthropic format)
+                parts = [
+                    b.get("text", "")
+                    for b in result
+                    if isinstance(b, dict) and b.get("type") == "text"
+                ]
+                text = "\n\n".join(p for p in parts if p)
+                output_preview = text[:_PREVIEW_LEN] if text else None
+        items.append(
+            AutoOutputItem(
+                session_id=job.id,
+                agent_type_id=job.agent_type_id,
+                agent_type_name=agent_type_name,
+                output_preview=output_preview,
+                created_at=job.created_at,
+            )
+        )
+
+    return AutoOutputListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @OutputRouter.get("/{output_id}", response_model=AgentOutputResponse)
-async def get_agent_output(
-    output_id: uuid.UUID,
+async def get_agent_output(    output_id: uuid.UUID,
     db: DbSession,
     _: dict = Depends(require_permission(RT_RESULT, "read")),
 ) -> AgentOutputResponse:

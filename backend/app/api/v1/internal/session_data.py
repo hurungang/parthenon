@@ -689,6 +689,7 @@ async def prepare_a2a_request(
     from app.db.models.agents import (
         A2ASessionStatus,
         AgentA2ASession,
+        AgentJob,
         AgentType,
     )
     from app.services.agents.session_service import AgentSessionService
@@ -759,6 +760,18 @@ async def prepare_a2a_request(
     db.add(a2a_session)
     await db.flush()
 
+    # Parse parent job ID only when requester_instance_id is an existing agent_job.
+    # Conversational agents pass conv_session_id as requester_instance_id, which lives in
+    # conversation_sessions (not agent_jobs) and would violate the FK constraint.
+    parent_job_id: uuid.UUID | None = None
+    try:
+        _candidate = uuid.UUID(str(body.requester_instance_id))
+        _exists = await db.scalar(select(AgentJob.id).where(AgentJob.id == _candidate).limit(1))
+        if _exists is not None:
+            parent_job_id = _candidate
+    except (ValueError, AttributeError):
+        pass
+
     session_service = AgentSessionService()
     enqueue_input = body.request_payload.copy() if body.request_payload else {}
     if body.conv_session_id:
@@ -769,6 +782,7 @@ async def prepare_a2a_request(
         input_data=enqueue_input,
         user_id=None,
         db=db,
+        parent_job_id=parent_job_id,
     )
     await db.commit()
 

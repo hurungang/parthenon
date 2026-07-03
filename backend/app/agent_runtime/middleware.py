@@ -126,6 +126,25 @@ class ControlCenterCertificateMiddleware(BaseHTTPMiddleware):
         # 2. Load CA cert for local validation (no DB / network needed for this step)
         ca_cert_pem = _load_ca_cert_pem()
         if not ca_cert_pem:
+            # CA cert file missing — AR bootstrap likely failed at startup (CC wasn't ready).
+            # Attempt on-demand bootstrap to recover without requiring a service restart.
+            logger.warning(
+                "AR inbound: CA cert missing — attempting on-demand bootstrap for %s %s",
+                request.method,
+                request.url.path,
+            )
+            try:
+                from app.agent_runtime.certificate_manager import CertificateManager
+                cert_mgr = CertificateManager()
+                await cert_mgr.load_certificate()
+                request.app.state.certificate_manager = cert_mgr
+                ca_cert_pem = _load_ca_cert_pem()
+                if ca_cert_pem:
+                    logger.info("AR inbound: on-demand bootstrap succeeded — CA cert now available")
+            except Exception as bootstrap_exc:
+                logger.warning("AR inbound: on-demand bootstrap failed: %s", bootstrap_exc)
+
+        if not ca_cert_pem:
             logger.error(
                 "AR inbound: CA_CERT_PATH not configured — cannot validate certificates"
             )

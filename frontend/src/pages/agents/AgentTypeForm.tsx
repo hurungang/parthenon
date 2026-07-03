@@ -67,7 +67,7 @@ export const defaultAgentTypeFormValues: AgentTypeFormValues = {
   system_instruction: '',
   input_type: 'none',
   input_schema: '',
-  output_type: 'typed',
+  output_type: 'auto',
   output_schema: '',
   output_data_type_id: '',
   sop_bindings: [],
@@ -560,7 +560,7 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
               }}
             >
               <MenuItem value="typed">{t('agents.types.outputTyped')}</MenuItem>
-              <MenuItem value="markdown">{t('agents.types.outputMarkdown')}</MenuItem>
+              <MenuItem value="auto">{t('agents.types.outputAuto', { defaultValue: 'Auto' })}</MenuItem>
             </Select>
           </FormControl>
 
@@ -568,7 +568,7 @@ export function AgentTypeForm({ values, onChange }: AgentTypeFormProps) {
             <FormControl fullWidth>
               <InputLabel>{t('agents.types.outputDataType')}</InputLabel>
               <Select
-                value={values.output_data_type_id}
+                value={dataTypes !== undefined ? values.output_data_type_id : ''}
                 label={t('agents.types.outputDataType')}
                 onChange={(e) => set('output_data_type_id', e.target.value)}
               >

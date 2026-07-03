@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.models.agent_output import AgentOutput, AgentOutputValidationStatus
-from app.db.models.agents import AgentJob, AgentType
+from app.db.models.agents import AgentJob, AgentJobStatus, AgentOutputType, AgentType
 
 logger = logging.getLogger(__name__)
 
@@ -257,3 +257,118 @@ class OutputService:
         csv_str = output.getvalue()
         output.close()
         return csv_str
+
+    async def list_auto_outputs(
+        self,
+        db: AsyncSession,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[list[AgentJob], int]:
+        """List completed auto/markdown type agent jobs that have output_data.
+
+        Returns AgentJob records where the agent type's output_type is 'auto'
+        or 'markdown' and output_data is not null, ordered by newest first.
+
+        Args:
+            db: Database session.
+            filters: Dict of filter parameters (agent_type_id, date_from,
+                date_to, page, page_size).
+
+        Returns:
+            Tuple of (items, total_count).
+        """
+        filters = filters or {}
+
+        query = (
+            select(AgentJob)
+            .join(AgentType, AgentJob.agent_type_id == AgentType.id)
+            .where(AgentType.output_type.in_([AgentOutputType.auto, AgentOutputType.markdown]))
+            .where(AgentJob.status == AgentJobStatus.completed)
+            .where(AgentJob.output_data.isnot(None))
+            .options(selectinload(AgentJob.agent_type))
+        )
+
+        if filters.get("agent_type_id"):
+            query = query.where(AgentJob.agent_type_id == filters["agent_type_id"])
+        if filters.get("date_from"):
+            date_from = filters["date_from"]
+            if isinstance(date_from, str):
+                date_from = datetime.fromisoformat(date_from)
+            query = query.where(AgentJob.created_at >= date_from)
+        if filters.get("date_to"):
+            date_to = filters["date_to"]
+            if isinstance(date_to, str):
+                date_to = datetime.fromisoformat(date_to)
+            query = query.where(AgentJob.created_at <= date_to)
+
+        count_query = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_query)
+        total = count_result.scalar_one()
+
+        page = filters.get("page", 1)
+        page_size = filters.get("page_size", 20)
+        query = (
+            query.order_by(AgentJob.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        result = await db.execute(query)
+        items = list(result.scalars().all())
+        return items, total
+
+    async def query_output_history(
+        self,
+        db: AsyncSession,
+        agent_type_id: uuid.UUID | str | None = None,
+        session_id: uuid.UUID | str | None = None,
+        date_from: datetime | str | None = None,
+        date_to: datetime | str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[AgentOutput]:
+        """Query AgentOutput records for agent tool use (get_output tool path).
+
+        All parameters are optional. Results are ordered by created_at descending.
+        This method is intentionally separate from list_outputs to maintain a
+        clean boundary between agent tool API and operator API semantics.
+
+        Args:
+            db: Database session.
+            agent_type_id: Optional filter by agent type ID.
+            session_id: Optional filter by execution session ID.
+            date_from: Optional ISO string or datetime — include records on or after.
+            date_to: Optional ISO string or datetime — include records on or before.
+            limit: Maximum number of records to return (default 50).
+            offset: Number of records to skip (default 0).
+
+        Returns:
+            List of matching AgentOutput records ordered by created_at desc.
+        """
+        if isinstance(agent_type_id, str):
+            agent_type_id = uuid.UUID(agent_type_id)
+        if isinstance(session_id, str):
+            session_id = uuid.UUID(session_id)
+        if isinstance(date_from, str):
+            date_from = datetime.fromisoformat(date_from)
+        if isinstance(date_to, str):
+            date_to = datetime.fromisoformat(date_to)
+
+        query = select(AgentOutput)
+
+        if agent_type_id is not None:
+            query = query.where(AgentOutput.agent_type_id == agent_type_id)
+        if session_id is not None:
+            query = query.where(AgentOutput.execution_session_id == session_id)
+        if date_from is not None:
+            query = query.where(AgentOutput.created_at >= date_from)
+        if date_to is not None:
+            query = query.where(AgentOutput.created_at <= date_to)
+
+        query = (
+            query.order_by(AgentOutput.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        result = await db.execute(query)
+        return list(result.scalars().all())

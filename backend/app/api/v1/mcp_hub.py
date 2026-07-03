@@ -43,18 +43,11 @@ logger = logging.getLogger(__name__)
 
 # ── System (virtual) server constants ─────────────────────────────────────────
 SYSTEM_SERVER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-SYSTEM_TOOL_SAVE_RESULT_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
-SYSTEM_TOOL_SEND_NOTIFICATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000003")
-SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID = uuid.UUID("00000000-0000-0000-0000-000000000004")
-SYSTEM_TOOL_HUMAN_INTERVENE_ID = uuid.UUID("00000000-0000-0000-0000-000000000005")
 
-# Set of all system tool IDs for validation
-SYSTEM_TOOL_IDS = {
-    SYSTEM_TOOL_SAVE_RESULT_ID,
-    SYSTEM_TOOL_SEND_NOTIFICATION_ID,
-    SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
-    SYSTEM_TOOL_HUMAN_INTERVENE_ID,
-}
+# System tool IDs — derived from SystemToolRegistry at module load time.
+# Do NOT add hardcoded UUID constants here; register tools in system_tool_registry.py.
+from app.services.agents.system_tool_registry import SystemToolRegistry as _STR
+SYSTEM_TOOL_IDS: set[uuid.UUID] = _STR.get_mcp_hub_ids()
 
 
 async def _resolve_default_session(server_id: uuid.UUID, db: AsyncSession) -> McpSession:
@@ -131,154 +124,41 @@ def _system_server_read() -> McpServerRead:
     )
 
 def _system_tool_reads() -> list[McpToolRead]:
-    """Return virtual McpToolRead objects for built-in system tools."""
+    """Return virtual McpToolRead objects for all built-in system tools.
+
+    Derived entirely from ``SystemToolRegistry`` — no hardcoded tool data here.
+    To add or rename a system tool, update ``system_tool_registry.py``.
+    """
+    from app.services.agents.system_tool_registry import SystemToolRegistry
     now = datetime.now(timezone.utc)
     return [
         McpToolRead(
-            id=SYSTEM_TOOL_SAVE_RESULT_ID,
+            id=entry["id"],
             server_id=SYSTEM_SERVER_ID,
             server_slug="system",
             server_name="System",
-            name="system____save_result",
-            original_name="save_result",
-            description=(
-                "Save the final result of agent execution. Always provide a clear title. "
-                "Use content format that matches the agent output_type "
-                "(markdown -> markdown text, typed -> structured JSON)."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "Human-readable result title (required)",
-                    },
-                    "content": {
-                        "description": (
-                            "Result body. Use markdown text when output_type=markdown; "
-                            "use structured JSON value when output_type=typed."
-                        ),
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "object"},
-                            {"type": "array"},
-                            {"type": "number"},
-                            {"type": "boolean"},
-                        ],
-                    },
-                    "content_type": {
-                        "type": "string",
-                        "enum": ["text", "markdown", "json"],
-                        "description": (
-                            "Optional explicit format override. If omitted, the system uses "
-                            "the agent output_type to infer format."
-                        ),
-                    },
-                },
-                "required": ["title", "content"],
-            },
+            name=entry["name"],
+            original_name=entry["original_name"],
+            description=entry["description"],
+            input_schema=entry["input_schema"],
             is_active=True,
             created_at=now,
             updated_at=now,
-        ),
-        McpToolRead(
-            id=SYSTEM_TOOL_SEND_NOTIFICATION_ID,
-            server_id=SYSTEM_SERVER_ID,
-            server_slug="system",
-            server_name="System",
-            name="system____send_notification",
-            original_name="send_notification",
-            description="Send a notification to specified channels",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "group_slug": {
-                        "type": "string",
-                        "description": "Slug of the recipient group to send the notification to",
-                    },
-                    "channel": {
-                        "type": "string",
-                        "description": "Optional channel selector within the recipient group (channel name, channel type, or channel ID).",
-                    },
-                    "subject": {
-                        "type": "string",
-                        "description": "Notification subject / title",
-                    },
-                    "body": {
-                        "type": "string",
-                        "description": "Notification body content",
-                    },
-                },
-                "required": ["group_slug", "body"],
-            },
-            is_active=True,
-            created_at=now,
-            updated_at=now,
-        ),
-        McpToolRead(
-            id=SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
-            server_id=SYSTEM_SERVER_ID,
-            server_slug="system",
-            server_name="System",
-            name="system____get_recipient_group",
-            original_name="get_recipient_group",
-            description="Retrieve recipient group information including channels and properties",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the recipient group to retrieve",
-                    },
-                },
-                "required": ["name"],
-            },
-            is_active=True,
-            created_at=now,
-            updated_at=now,
-        ),
-        McpToolRead(
-            id=SYSTEM_TOOL_HUMAN_INTERVENE_ID,
-            server_id=SYSTEM_SERVER_ID,
-            server_slug="system",
-            server_name="System",
-            name="system____human_intervene",
-            original_name="human_intervene",
-            description="Create a human intervene request. Pauses the agent and requests operator input.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "intervention_type": {
-                        "type": "string",
-                        "enum": ["approval", "choice", "text"],
-                        "description": "Type of intervention required",
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": "Reason for the intervention request",
-                    },
-                    "choices": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Options for choice-type intervention",
-                    },
-                },
-                "required": ["intervention_type", "reason"],
-            },
-            is_active=True,
-            created_at=now,
-            updated_at=now,
-        ),
+        )
+        for entry in SystemToolRegistry.get_mcp_hub_entries()
     ]
 
 
 async def seed_system_tools(db: "AsyncSession") -> None:
     """Idempotently seed the system server and its built-in tools into the database.
 
-    Safe to call multiple times — uses INSERT OR IGNORE / upsert-style logic so
-    re-runs on startup don't duplicate rows or raise integrity errors.
+    All tool data is derived from ``SystemToolRegistry`` — no hardcoded tool rows
+    here.  Adding a new system tool only requires updating ``system_tool_registry.py``.
+
+    Migration note: if an existing row has ``original_name='save_result'`` it is
+    updated in-place to ``save_data`` (same UUID, renamed).
     """
-    from sqlalchemy.ext.asyncio import AsyncSession  # local import avoids circular refs
+    from app.services.agents.system_tool_registry import SystemToolRegistry
 
     # ── Seed system server ────────────────────────────────────────────────────
     existing_server = await db.get(McpServer, SYSTEM_SERVER_ID)
@@ -295,48 +175,31 @@ async def seed_system_tools(db: "AsyncSession") -> None:
         await db.flush()
         logger.info("System server seeded (id=%s)", SYSTEM_SERVER_ID)
 
-    # ── Seed system tools ─────────────────────────────────────────────────────
-    _system_tools_to_seed = [
-        (
-            SYSTEM_TOOL_SAVE_RESULT_ID,
-            "system____save_result",
-            "save_result",
-            "Save the final result of agent execution",
-        ),
-        (
-            SYSTEM_TOOL_SEND_NOTIFICATION_ID,
-            "system____send_notification",
-            "send_notification",
-            "Send a notification to specified channels",
-        ),
-        (
-            SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
-            "system____get_recipient_group",
-            "get_recipient_group",
-            "Retrieve recipient group information including channels and properties",
-        ),
-        (
-            SYSTEM_TOOL_HUMAN_INTERVENE_ID,
-            "system____human_intervene",
-            "human_intervene",
-            "Create a human intervene request for an agent session",
-        ),
-    ]
+    # ── Migrate legacy save_result row → save_data ────────────────────────────
+    save_data_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
+    legacy_row = await db.get(McpTool, save_data_id)
+    if legacy_row and legacy_row.original_name == "save_result":
+        legacy_row.name = "system____save_data"
+        legacy_row.original_name = "save_data"
+        legacy_row.description = "Save named intermediate data during execution for later retrieval."
+        await db.flush()
+        logger.info("Migrated system tool save_result → save_data (id=%s)", save_data_id)
 
-    for tool_id, name, original_name, description in _system_tools_to_seed:
-        existing_tool = await db.get(McpTool, tool_id)
+    # ── Seed / upsert all registry tools ─────────────────────────────────────
+    for entry in SystemToolRegistry.get_mcp_hub_entries():
+        existing_tool = await db.get(McpTool, entry["id"])
         if not existing_tool:
             tool = McpTool(
-                id=tool_id,
+                id=entry["id"],
                 server_id=SYSTEM_SERVER_ID,
-                name=name,
-                original_name=original_name,
-                description=description,
+                name=entry["name"],
+                original_name=entry["original_name"],
+                description=entry["description"],
                 input_schema=None,
                 is_active=True,
             )
             db.add(tool)
-            logger.info("System tool seeded: %s (id=%s)", name, tool_id)
+            logger.info("System tool seeded: %s (id=%s)", entry["name"], entry["id"])
 
     await db.flush()
     await db.commit()

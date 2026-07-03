@@ -101,6 +101,31 @@ $Script:ProjectRoot = $PSScriptRoot
 $Script:BackendDir = Join-Path $ProjectRoot "backend"
 $Script:FrontendDir = Join-Path $ProjectRoot "frontend"
 
+# Set SSL CA bundle env vars so every spawned service process inherits them.
+# Must be called before any Start-Process for backend services.
+function Set-SslCaBundle {
+    $caBundlePath = Join-Path $Script:ProjectRoot "ca-bundle.crt"
+    $cacertPath   = Join-Path $Script:ProjectRoot "cacert.pem"
+    if (Test-Path -Path $caBundlePath) {
+        Write-Host "  SSL: using ca-bundle.crt" -ForegroundColor Cyan
+        $env:REQUESTS_CA_BUNDLE = $caBundlePath
+        $env:SSL_CERT_FILE      = $caBundlePath
+        $env:CURL_CA_BUNDLE     = $caBundlePath
+    } elseif (Test-Path -Path $cacertPath) {
+        Write-Host "  SSL: using cacert.pem" -ForegroundColor Cyan
+        $env:REQUESTS_CA_BUNDLE = $cacertPath
+        $env:SSL_CERT_FILE      = $cacertPath
+        $env:CURL_CA_BUNDLE     = $cacertPath
+    } elseif ($env:REQUESTS_CA_BUNDLE) {
+        Write-Host "  SSL: using existing REQUESTS_CA_BUNDLE=$env:REQUESTS_CA_BUNDLE" -ForegroundColor Cyan
+        $env:SSL_CERT_FILE  = $env:REQUESTS_CA_BUNDLE
+        $env:CURL_CA_BUNDLE = $env:REQUESTS_CA_BUNDLE
+    } else {
+        Write-Host "  SSL: no CA bundle found — corporate firewall certs may cause SSL errors" -ForegroundColor Yellow
+        Write-Host "       Copy ca-bundle.crt to the project root or set REQUESTS_CA_BUNDLE" -ForegroundColor DarkYellow
+    }
+}
+
 # Service definitions
 $Script:ServiceConfig = @{
     infra = @{
@@ -144,28 +169,6 @@ $Script:ServiceConfig = @{
             Write-Host "Starting Control Center (port 8000)..." -ForegroundColor Cyan
             $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
             $logPath = Join-Path $Script:ProjectRoot "backend\logs\control-center.log"
-            
-            # Set SSL certificate bundle for corporate firewall CA
-            $caBundlePath = Join-Path $Script:ProjectRoot "ca-bundle.crt"
-            $cacertPath   = Join-Path $Script:ProjectRoot "cacert.pem"
-            if (Test-Path -Path $caBundlePath) {
-                Write-Host "  SSL: using ca-bundle.crt" -ForegroundColor Cyan
-                $env:REQUESTS_CA_BUNDLE = $caBundlePath
-                $env:SSL_CERT_FILE      = $caBundlePath
-                $env:CURL_CA_BUNDLE     = $caBundlePath
-            } elseif (Test-Path -Path $cacertPath) {
-                Write-Host "  SSL: using cacert.pem" -ForegroundColor Cyan
-                $env:REQUESTS_CA_BUNDLE = $cacertPath
-                $env:SSL_CERT_FILE      = $cacertPath
-                $env:CURL_CA_BUNDLE     = $cacertPath
-            } elseif ($env:REQUESTS_CA_BUNDLE) {
-                Write-Host "  SSL: using existing REQUESTS_CA_BUNDLE=$env:REQUESTS_CA_BUNDLE" -ForegroundColor Cyan
-                $env:SSL_CERT_FILE  = $env:REQUESTS_CA_BUNDLE
-                $env:CURL_CA_BUNDLE = $env:REQUESTS_CA_BUNDLE
-            } else {
-                Write-Host "  SSL: no CA bundle found — corporate firewall certs may cause SSL errors" -ForegroundColor Yellow
-                Write-Host "       Copy ca-bundle.crt to the project root or set REQUESTS_CA_BUNDLE" -ForegroundColor DarkYellow
-            }
 
             # Start using helper script
             Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "control-center", "-LogLevel", "$LogLevel"
@@ -688,6 +691,8 @@ switch ($Action) {
     'start' {
         Write-Host "Starting services: $($serviceList -join ', ')" -ForegroundColor Cyan
         Write-Host ""
+        Set-SslCaBundle
+        Write-Host ""
         
         # Start in dependency order: infra -> control-center -> agent-runtime -> communication-hub -> frontend
         $orderedServices = @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend') | Where-Object { $_ -in $serviceList }
@@ -719,6 +724,8 @@ switch ($Action) {
     
     'restart' {
         Write-Host "Restarting services: $($serviceList -join ', ')" -ForegroundColor Cyan
+        Write-Host ""
+        Set-SslCaBundle
         Write-Host ""
         
         # Stop in reverse order

@@ -73,7 +73,7 @@ async def _wait_for_receiver_result(
                                 _terminal_status = status
                                 _terminal_at = asyncio.get_running_loop().time()
                                 logger.info(
-                                    "A2A session %s → %s "
+                                    "A2A session %s -> %s "
                                     "(grace=%.1fs, data_client available=%s)",
                                     receiver_session_id, status,
                                     grace_period, data_client is not None,

@@ -4,6 +4,7 @@ import type {
   AgentOutputListResponse,
   AgentOutputQueryParams,
   AgentOutputExportParams,
+  AutoOutputListResponse,
 } from '../types'
 
 const AGENT_OUTPUTS_KEY = ['agent-outputs'] as const
@@ -61,6 +62,38 @@ export function useExportAgentOutputs() {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
+    },
+  })
+}
+
+export interface AutoOutputQueryParams {
+  agent_type_id?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}
+
+/**
+ * React Query hook: paginated auto-type agent outputs list.
+ * Calls GET /api/v1/agent-outputs/auto — returns completed jobs whose
+ * agent type uses auto/markdown output_type and have output_data saved.
+ */
+export function useAutoOutputs(params?: AutoOutputQueryParams) {
+  return useQuery<AutoOutputListResponse>({
+    queryKey: ['auto-outputs', params ?? {}],
+    queryFn: async () => {
+      const queryParams: Record<string, string | number> = {}
+      if (params?.agent_type_id) queryParams.agent_type_id = params.agent_type_id
+      if (params?.date_from) queryParams.date_from = params.date_from
+      if (params?.date_to) queryParams.date_to = params.date_to
+      if (params?.page !== undefined) queryParams.page = params.page
+      if (params?.page_size !== undefined) queryParams.page_size = params.page_size
+      const { data } = await apiClient.get<AutoOutputListResponse>(
+        '/agent-outputs/auto',
+        { params: queryParams },
+      )
+      return data
     },
   })
 }

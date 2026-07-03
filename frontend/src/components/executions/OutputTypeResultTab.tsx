@@ -137,6 +137,34 @@ function syntaxHighlightJson(json: string): string {
   )
 }
 
+// ── Content block extraction ──────────────────────────────────────────────────
+
+/**
+ * Extracts a plain text string from a result value that may be:
+ *   - A plain string (returned as-is)
+ *   - A Claude/LangChain content blocks array: [{type:'text', text:'...'}, ...]
+ *     (text blocks are concatenated with double newlines)
+ * Returns null if no usable text could be extracted.
+ */
+function extractResultText(value: unknown): string | null {
+  if (typeof value === 'string' && value.length > 0) return value
+  if (Array.isArray(value)) {
+    const parts: string[] = []
+    for (const block of value) {
+      if (
+        block !== null &&
+        typeof block === 'object' &&
+        (block as Record<string, unknown>)['type'] === 'text' &&
+        typeof (block as Record<string, unknown>)['text'] === 'string'
+      ) {
+        parts.push((block as Record<string, unknown>)['text'] as string)
+      }
+    }
+    return parts.length > 0 ? parts.join('\n\n') : null
+  }
+  return null
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function OutputTypeResultTab({
@@ -164,10 +192,17 @@ export function OutputTypeResultTab({
   const markdownHtml = useMemo(() => {
     if (outputType !== 'markdown' || !outputData) return ''
     const mdSource =
-      (outputData['markdown'] as string | undefined) ??
-      (outputData['result'] as string | undefined) ??
+      extractResultText(outputData['markdown']) ??
+      extractResultText(outputData['result']) ??
       JSON.stringify(outputData, null, 2)
     return simpleMarkdownToHtml(mdSource)
+  }, [outputType, outputData])
+
+  // ── Auto output text extraction (Claude content blocks or plain text) ──
+  // When result is content blocks or a plain string, render that text instead of raw JSON tree.
+  const autoExtractedText = useMemo(() => {
+    if (outputType !== 'auto' || !outputData) return null
+    return extractResultText(outputData['result']) ?? extractResultText(outputData['content']) ?? null
   }, [outputType, outputData])
 
   // ── Typed field values ──
@@ -445,28 +480,50 @@ export function OutputTypeResultTab({
           >
             {t('executions.resultTab.agentOutput', { defaultValue: 'Agent Output' })}
           </Typography>
-          <Box
-            component="pre"
-            sx={{
-              bgcolor: '#FAFBFC',
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-              p: 2.5,
-              fontFamily: 'monospace',
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: 'text.primary',
-              overflowX: 'auto',
-              whiteSpace: 'pre',
-              m: 0,
-              '& .ojt-hl-key': { color: '#1D4ED8' },
-              '& .ojt-hl-str': { color: '#15803D' },
-              '& .ojt-num': { color: '#C2410C' },
-              '& .ojt-bool': { color: '#6D28D9' },
-            }}
-            dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(JSON.stringify(outputData, null, 2)) }}
-          />
+          {autoExtractedText ? (
+            // Render extracted text (plain string or from Claude content blocks) as markdown
+            <Box
+              className="result-markdown"
+              sx={{
+                '& h2': { fontSize: 20, fontWeight: 700, color: 'text.primary', mb: 1.5, pb: 1, borderBottom: 2, borderColor: 'divider' },
+                '& h3': { fontSize: 16, fontWeight: 600, color: 'text.primary', mt: 2.5, mb: 1 },
+                '& h4': { fontSize: 14, fontWeight: 600, color: 'text.primary', mt: 2, mb: 1 },
+                '& p': { fontSize: 14, lineHeight: 1.65, mb: 1.25, color: 'text.primary' },
+                '& strong': { fontWeight: 700 },
+                '& ul, & ol': { pl: 3, mb: 1.5 },
+                '& li': { fontSize: 14, lineHeight: 1.65, mb: 0.5 },
+                '& code': { bgcolor: '#F1F5F9', px: 0.75, borderRadius: 0.5, fontSize: 13, fontFamily: 'monospace', color: '#C2410C' },
+                '& pre': { bgcolor: '#1E293B', color: '#E2E8F0', p: 2, borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.5, mb: 1.5, '& code': { bgcolor: 'transparent', color: 'inherit', p: 0, fontSize: 13 } },
+                '& em': { fontStyle: 'italic', color: 'text.secondary' },
+                '& blockquote': { borderLeft: 4, borderColor: 'primary.main', pl: 2, py: 1, my: 1.5, bgcolor: '#EFF6FF', borderRadius: '0 4px 4px 0', fontStyle: 'italic', color: 'text.secondary' },
+                '& hr': { border: 'none', borderTop: 1, borderColor: 'divider', my: 2.5 },
+              }}
+              dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(autoExtractedText) }}
+            />
+          ) : (
+            <Box
+              component="pre"
+              sx={{
+                bgcolor: '#FAFBFC',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2.5,
+                fontFamily: 'monospace',
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: 'text.primary',
+                overflowX: 'auto',
+                whiteSpace: 'pre',
+                m: 0,
+                '& .ojt-hl-key': { color: '#1D4ED8' },
+                '& .ojt-hl-str': { color: '#15803D' },
+                '& .ojt-num': { color: '#C2410C' },
+                '& .ojt-bool': { color: '#6D28D9' },
+              }}
+              dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(JSON.stringify(outputData, null, 2)) }}
+            />
+          )}
         </Box>
       )}
 

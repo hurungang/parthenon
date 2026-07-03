@@ -97,18 +97,25 @@ export function InterveneResponseDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Typography variant="h6" component="span">
-            {t('intervene.responseDialogTitle', 'Human Intervention Required')}
-          </Typography>
-          <Chip
-            label={interventionTypeLabel(request.intervention_type)}
-            size="small"
-            color="warning"
-          />
+      <DialogTitle sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', pb: 1 }}>
+        <Box>
+          <Box display="flex" alignItems="center" gap={1} mb={request.agent_name ? 0.5 : 0}>
+            <Typography variant="h6" component="span">
+              {t('intervene.responseDialogTitle', 'Human Intervention Required')}
+            </Typography>
+            <Chip
+              label={interventionTypeLabel(request.intervention_type)}
+              size="small"
+              color="warning"
+            />
+          </Box>
+          {request.agent_name && (
+            <Typography variant="body2" color="text.secondary">
+              {t('intervene.viaAgent', 'via')} <strong>{request.agent_name}</strong>
+            </Typography>
+          )}
         </Box>
-        <IconButton edge="end" onClick={handleClose} size="small">
+        <IconButton edge="end" onClick={handleClose} size="small" sx={{ mt: -0.5 }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -116,11 +123,23 @@ export function InterveneResponseDialog({
         {!!dialogError && (
           <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
         )}
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {request.reason}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-          {t('intervene.sessionLabel', 'Session')}: {request.agent_session_id.slice(0, 8)}…
+        <Box
+          sx={{
+            bgcolor: 'action.hover',
+            borderLeft: 3,
+            borderColor: 'warning.main',
+            borderRadius: 1,
+            px: 2,
+            py: 1.5,
+            mb: 2,
+          }}
+        >
+          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+            {request.reason}
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          {t('intervene.sessionLabel', 'Session')}: {request.agent_session_id}
         </Typography>
 
         {request.intervention_type === 'approval' && (
