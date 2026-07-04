@@ -48,7 +48,7 @@ from app.db.models.agents import (
 from app.db.session import Base, get_db
 from app.main import create_app
 from app.services.agents.plan_generation_service import PlanGenerationService
-from app.core.resource_types import RT_AGENT
+from app.core.resource_types import RT_AGENT_MANAGEMENT
 
 
 # ── Fixture: shared SQLite engine (reuses integration conftest's engine) ───────
@@ -365,7 +365,7 @@ async def authed_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
 
     # Override all require_permission variants (read, create, update, delete)
     for action in ("read", "create", "update", "delete", "execute"):
-        dep = require_permission(RT_AGENT, action)
+        dep = require_permission(RT_AGENT_MANAGEMENT, action)
         app.dependency_overrides[dep] = no_op_permission
 
     with patch("app.middleware.auth.get_oidc_client", return_value=mock_oidc):

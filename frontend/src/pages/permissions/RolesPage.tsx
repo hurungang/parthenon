@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   CircularProgress,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,16 +25,13 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ExpandLessIcon from '@mui/icons-material/ExpandLess'
-import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import EditIcon from '@mui/icons-material/Edit'
 import { usePagination } from '../../hooks/usePagination'
 import { useRoles, useCreateRole, useDeleteRole } from '../../hooks/usePermissions'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import PolicyEditor from '../../components/permissions/PolicyEditor'
-import JSONViewModal from '../../components/permissions/JSONViewModal'
 import CloneRoleDialog from '../../components/permissions/CloneRoleDialog'
+import RolePolicyDialog from '../../components/permissions/RolePolicyDialog'
 import type { Role } from '../../types/permissions'
 
 export function RolesPage() {
@@ -48,14 +44,15 @@ export function RolesPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [addDialogError, setAddDialogError] = useState<unknown>(null)
   const [roleForm, setRoleForm] = useState({ name: '', description: '' })
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null)
   const [forceDelete, setForceDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  // JSON view and clone dialog state
-  const [jsonViewRole, setJsonViewRole] = useState<Role | null>(null)
+  // Clone dialog state
   const [cloneTargetRole, setCloneTargetRole] = useState<Role | null>(null)
+
+  // RolePolicyDialog state
+  const [policyDialogRole, setPolicyDialogRole] = useState<Role | null>(null)
 
   const handleSaveRole = async () => {
     try {
@@ -108,55 +105,36 @@ export function RolesPage() {
           </TableHead>
           <TableBody>
             {(roles ?? []).map((role) => (
-              <>
-                <TableRow key={role.id}>
-                  <TableCell>
+              <TableRow key={role.id}>
+                <TableCell />
+                <TableCell>{role.name}</TableCell>
+                <TableCell>{role.description ?? '—'}</TableCell>
+                <TableCell>{role.policy_count}</TableCell>
+                <TableCell>
+                  <Tooltip title={t('permissions.roles.editPolicy')}>
+                    <IconButton size="small" onClick={() => setPolicyDialogRole(role)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('permissions.roles.cloneRole')}>
+                    <IconButton size="small" onClick={() => setCloneTargetRole(role)}>
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('app.delete')}>
                     <IconButton
                       size="small"
-                      aria-label={expandedId === role.id ? t('app.collapse') : t('app.expand')}
-                      onClick={() => setExpandedId(expandedId === role.id ? null : role.id)}
+                      onClick={() => {
+                        setDeleteTarget(role)
+                        setDeleteError(null)
+                        setForceDelete(false)
+                      }}
                     >
-                      {expandedId === role.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
-                  </TableCell>
-                  <TableCell>{role.name}</TableCell>
-                  <TableCell>{role.description ?? '—'}</TableCell>
-                  <TableCell>{role.policy_count}</TableCell>
-                  <TableCell>
-                    <Tooltip title={t('permissions.roles.jsonView')}>
-                      <IconButton size="small" onClick={() => setJsonViewRole(role)}>
-                        <CodeIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('permissions.roles.cloneRole')}>
-                      <IconButton size="small" onClick={() => setCloneTargetRole(role)}>
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('app.delete')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setDeleteTarget(role)
-                          setDeleteError(null)
-                          setForceDelete(false)
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-                {expandedId === role.id && (
-                  <TableRow key={`${role.id}-expand`}>
-                    <TableCell colSpan={5}>
-                      <Collapse in>
-                        <PolicyEditor roleId={role.id} />
-                      </Collapse>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
             ))}
           </TableBody>
         </Table>
@@ -256,22 +234,23 @@ export function RolesPage() {
         </DialogActions>
       </Dialog>
 
-      {/* JSON View modal */}
-      {jsonViewRole && (
-        <JSONViewModal
-          open={!!jsonViewRole}
-          roleId={jsonViewRole.id}
-          roleName={jsonViewRole.name}
-          onClose={() => setJsonViewRole(null)}
-        />
-      )}
-
       {/* Clone Role dialog */}
       <CloneRoleDialog
         open={!!cloneTargetRole}
         sourceRole={cloneTargetRole}
         onClose={() => setCloneTargetRole(null)}
       />
+
+      {/* Role Policy dialog */}
+      {policyDialogRole && (
+        <RolePolicyDialog
+          open={!!policyDialogRole}
+          roleId={policyDialogRole.id}
+          roleName={policyDialogRole.name}
+          onClose={() => setPolicyDialogRole(null)}
+          onSaved={() => {}}
+        />
+      )}
     </Box>
   )
 }

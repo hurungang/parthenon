@@ -7,7 +7,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_SKILL
+from app.core.resource_types import RT_AGENT_SOPS
 from app.db.session import DbSession
 from app.db.models.skills import Skill, Sop, SopStep
 from app.db.models.agents import AgentRoleSOP, AgentType
@@ -45,7 +45,7 @@ def _require_workflow_model_id() -> str:
 @SopRouter.get("", response_model=list[SopRead])
 async def list_sops(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[Sop]:
@@ -64,7 +64,7 @@ async def list_sops(
 async def create_sop(
     body: SopCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "create")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "create")),
 ) -> Sop:
     sop = Sop(**body.model_dump())
     db.add(sop)
@@ -77,7 +77,7 @@ async def create_sop(
 async def get_sop(
     sop_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "read")),
 ) -> Sop:
     result = await db.execute(
         select(Sop).where(Sop.id == sop_id).options(selectinload(Sop.steps))
@@ -93,7 +93,7 @@ async def update_sop(
     sop_id: uuid.UUID,
     body: SopUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "update")),
 ) -> Sop:
     sop = await db.get(Sop, sop_id)
     if not sop:
@@ -110,7 +110,7 @@ async def update_sop(
 async def generate_sop_workflow(
     body: SopWorkflowGenerateRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "update")),
 ) -> SopWorkflowGenerateResponse:
     if not body.description.strip():
         raise HTTPException(status_code=422, detail="Description is required to generate workflow")
@@ -178,7 +178,7 @@ async def generate_sop_workflow(
 async def preview_sop_workflow(
     body: SopWorkflowPreviewRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "read")),
 ) -> SopWorkflowPreviewResponse:
     model_id = _require_workflow_model_id()
     try:
@@ -201,7 +201,7 @@ async def preview_sop_workflow(
 async def delete_sop(
     sop_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "delete")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "delete")),
 ) -> None:
     sop = await db.get(Sop, sop_id)
     if not sop:
@@ -213,7 +213,7 @@ async def delete_sop(
 async def list_sop_steps(
     sop_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "read")),
 ) -> list[SopStep]:
     sop = await db.get(Sop, sop_id)
     if not sop:
@@ -229,7 +229,7 @@ async def replace_sop_steps(
     sop_id: uuid.UUID,
     body: list[SopStepCreate],
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "update")),
 ) -> list[SopStep]:
     """Replace the full ordered step list for a SOP."""
     sop = await db.get(Sop, sop_id)
@@ -285,7 +285,7 @@ async def replace_sop_steps(
 async def get_sop_roles(
     sop_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "read")),
 ) -> list[uuid.UUID]:
     sop = await db.get(Sop, sop_id)
     if not sop:
@@ -301,7 +301,7 @@ async def set_sop_roles(
     sop_id: uuid.UUID,
     body: dict,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SOPS, "update")),
 ) -> list[uuid.UUID]:
     sop = await db.get(Sop, sop_id)
     if not sop:

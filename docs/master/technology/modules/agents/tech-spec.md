@@ -26,7 +26,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 |-----------|-------------|
 | `AgentSessionService` | Enqueues sessions (`INSERT` with `status = queued`), manages state transitions (`queued → running → waiting_for_human → completed / failed`), persists results; tracks `conversation_history` for conversational agents; joins `AgentType` and `Identity` to populate `agent_type_name` and `triggered_by_user_name` on session reads |
 | `SessionDispatcher` | Background worker; polls `queued` sessions using `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor`; manages concurrency |
-| `AgentRuntimeExecutor` | Orchestrates agent execution using the LangChain deep agent observe-reason-act loop; validates that the agent identity is assigned to the agent role via `agent_role_identities` before execution; raises `PermissionDeniedError` if not; captures `ExecutionLogEntry` (system instruction + user prompt) before first LLM call; loads MCP session context from role's assigned sessions and injects pre-configured parameters into the system instruction; detects passthrough sessions and retrieves the executing agent's identity JWT via `_get_agent_identity_jwt()`; persists result via `save_result` |
+| `AgentRuntimeExecutor` | Orchestrates agent execution using the LangChain deep agent observe-reason-act loop; validates that the agent identity is assigned to the agent role via `agent_role_identities` before execution; raises `PermissionDeniedError` if not; captures `ExecutionLogEntry` (system instruction + user prompt) before first LLM call; loads MCP session context from role's assigned sessions and injects pre-configured parameters into the system instruction; detects passthrough sessions and retrieves the executing agent's identity JWT via `_get_agent_identity_jwt()`; persists final output via `ControlCenterDataClient.save_output()`; intermediate named saves use `save_data` system tool |
 | `TaskAgentLoop` | LangChain deep agent loop for task-based agents; observe-reason-act context producing a single structured or markdown result | 
 | `ConversationalAgentLoop` | LangChain deep agent loop for conversational agents; multi-turn observe-reason-act loop with `conversation_history` state |
 | `ModelBindingLayer` | Resolves `AgentType.model_id` string to a matching `ModelConfig` (scans `enabled_models`; falls back to provider-prefix matching); instantiates the correct LangChain/LiteLLM client; sends chat completion requests |
@@ -194,6 +194,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentInputType` | str enum | `none`, `typed`, `conversation` | `backend/app/db/models/agents.py` |
 | `AgentOutputType` | str enum | `auto`, `typed`, `markdown` | `backend/app/db/models/agents.py` |
 | `AgentInstance` | model | Session handle tracking; lifecycle status and timing metadata; unchanged | `backend/app/db/models/agents.py` |
+| `AgentData` | model | Intermediate named agent save record; `agent_type_id` (nullable FK), `session_id` (nullable FK), `data_name`, `data_value` (JSON), `data_type`, `is_active`, `created_at`; indexed on `(agent_type_id, data_name)` and `(session_id, data_name)` (table: `agent_data`) | `backend/app/db/models/agent_data.py` |
 | `AgentPlanStatus` | str enum | `pending \| success \| failed` | `backend/app/db/models/agents.py` |
 | `AgentPlan` | model | Persists generated plan and topology for an agent type; `plan_steps` and `topology` JSON, `generation_status`, `generation_error`, `agent_config_hash`; unique FK → `agent_types` with CASCADE delete | `backend/app/db/models/agents.py` |
 | `InterveneRequestStatus` | str enum | `pending`, `responded`, `cancelled`, `expired` | `backend/app/db/models/intervene.py` |
@@ -277,6 +278,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `TopologyBuilderService` | class | Converts binding-filtered role→SOP→Skill→Tool graph to `nodes`/`edges` topology dict; deterministic node IDs for stable rendering; only bound entries appear when SOP scope is narrowed | `backend/app/services/agents/topology_builder_service.py` |
 | `validate_bindings` | function | Validates SOP/skill binding entries against role-granted permissions; rejects references outside the role's assigned SOPs/skills with per-entry error messages; prevents duplicate references; invoked on agent type create and update | `backend/app/services/agents/binding_validation.py` |
 | `AgentRuntimeLoader` | class | Loads saved plan from `agent_plans` on session init; injects plan into system context for execution guidance; graceful degradation when no plan exists | `backend/app/services/agents/runtime_loader.py` |
+| `AgentDataService` | class | Control Center service for saving and querying AgentData records; `save()` creates a record; `query_by_filters()` retrieves records matching `data_name`, `agent_type_id`, and/or `session_id`; enforces at least one filter to prevent full-table scans | `backend/app/services/agent_data/service.py` |
+| `OutputService.query_output_history` | method | New agent-facing query on existing `OutputService`; filters `AgentOutput` rows by `agent_type_id`, `session_id`, `date_from`, `date_to`; used by the `get_output` system tool | `backend/app/services/outputs/service.py` |
 | `InterveneRequestStore` | service | CRUD + metrics for intervene requests; `create_request` accepts optional `conversation_session_id` and `delegation_depth`; `list_pending_for_conversation(session_id)` returns pending requests filtered by conversation session; `submit_response` auto-creates `ConversationTurn` of type `intervene_response` when `conversation_session_id` is present; `list_requests()` eager loads `agent_session.agent_type` and Identity for user names; `get_metrics()` returns pending count, avg response time, resolution rate | `backend/app/services/agents/intervene_service.py` |
 | `SopAgentExecutor` | class | **Superseded** — retained in codebase but not invoked by job-queue flow; execution handled by `AgentRuntimeExecutor` | `backend/app/services/agents/sop_executor.py` |
 | `SkillfulAgentExecutor` | class | **Superseded** — retained in codebase but not invoked by job-queue flow; execution handled by `AgentRuntimeExecutor` | `backend/app/services/agents/skillful_executor.py` |
@@ -309,6 +312,48 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agent_data` | module | Internal API surface for agent-specific data operations and A2A routing metadata | `backend/app/api/v1/internal/agent_data.py` |
 | `get_agent_context` | endpoint | Returns runtime context including SOP content and role-derived SOP summaries for system-instruction assembly | `backend/app/api/v1/internal/agent_data.py` |
 | `session_data` | module | Internal API surface for session-bound state and lifecycle transitions used by A2A flows | `backend/app/api/v1/internal/session_data.py` |
+| `system_tools` (router) | router | Internal system tool dispatch router; mounts `POST /save-data`, `/get-data`, `/get-output` handlers with mTLS service certificate auth; delegates to `AgentDataService` and `OutputService` | `backend/app/api/v1/internal/system_tools.py` |
+| `save_data_tool` | endpoint | `POST /api/v1/internal/system-tools/save-data` — saves one `AgentData` record; called by CommHub when routing a `save_data` tool call | `backend/app/api/v1/internal/system_tools.py` |
+| `get_data_tool` | endpoint | `POST /api/v1/internal/system-tools/get-data` — queries `AgentData` records by filter; at least one filter required | `backend/app/api/v1/internal/system_tools.py` |
+| `get_output_tool` | endpoint | `POST /api/v1/internal/system-tools/get-output` — queries `AgentOutput` records ordered by `created_at` descending | `backend/app/api/v1/internal/system_tools.py` |
+| `InternalOutputsRouter` | router | Existing router for typed output validation and persistence | `backend/app/api/v1/internal/outputs.py` |
+
+### System Tool Registry & Names (`backend/app/services/agents/system_tool_registry.py` & `backend/app/services/system_tools.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `SystemToolRegistry` | class | Single source of truth for all registered system tool names and schemas; consumers (context builder, runtime executor, mTLS tool dispatcher) derive tool lists from its `get_all_schemas()` | `backend/app/services/agents/system_tool_registry.py` |
+| `SystemTool` | class | Descriptor for a single built-in system tool entry in the registry; holds name, description, and OpenAI function schema | `backend/app/services/agents/system_tool_registry.py` |
+| `SYSTEM_TOOL_NAMES` | constant | Frozenset of canonical bare system tool names (`save_data`, `get_data`, `get_output`, `send_notification`, `human_intervene`, `get_recipient_group`, ...) | `backend/app/services/system_tools.py` |
+| `SYSTEM_TOOL_DISPLAY_NAMES` | constant | Frozenset of prefixed display names (`system____*`) derived from `SYSTEM_TOOL_NAMES` | `backend/app/services/system_tools.py` |
+| `is_system_tool` | function | Returns True if a tool name refers to a registered system tool | `backend/app/services/system_tools.py` |
+| `get_canonical_name` | function | Strips `system/` or `system_` prefix from a tool name | `backend/app/services/system_tools.py` |
+
+### LangChain System Tools (`backend/app/services/agents/langchain_system_tools.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `LangChainSaveDataTool` | class | LangChain `BaseTool` subclass for `save_data`; holds `comm_hub_client` injected at session construction; `_arun` calls `comm_hub_client.call_tool("save_data", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
+| `LangChainGetDataTool` | class | LangChain `BaseTool` subclass for `get_data`; `_arun` calls `comm_hub_client.call_tool("get_data", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
+| `LangChainGetOutputTool` | class | LangChain `BaseTool` subclass for `get_output`; `_arun` calls `comm_hub_client.call_tool("get_output", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
+| `build_langchain_tools_for_ar_path` | function | Assembles LangChain tools for AR execution path; now includes `save_data`, `get_data`, `get_output`; removed `save_result` binding | `backend/app/services/agents/langchain_tool_wrapper.py` |
+
+### Agent Runtime Tool Clients (`backend/app/agent_runtime/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `CommHubToolClient` | class | Agent Runtime client that routes all system tool calls through Communication Hub; mTLS-authenticated | `backend/app/agent_runtime/comm_hub_client.py` |
+| `call_tool` | method | Sends a tool call to CommHub `/internal/tools/call` with mTLS; returns JSON result | `backend/app/agent_runtime/comm_hub_client.py` |
+| `ControlCenterDataClient` | class | Agent Runtime HTTP client for all Control Center data calls | `backend/app/agent_runtime/data_client.py` |
+| `save_output` | method | Saves the final session output to Control Center (renamed from `submit_result`) | `backend/app/agent_runtime/data_client.py` |
+| `persist_typed_output` | method | Existing method on `ControlCenterDataClient` for typed output persistence | `backend/app/agent_runtime/data_client.py` |
+
+### Communication Hub Tool Routing (`backend/app/communication_hub/api/internal/tool_routing.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `_route_to_system_tool` | function | Maps bare tool name to Control Center system-tool internal endpoint URL; uses `endpoint_map` dict | `backend/app/communication_hub/api/internal/tool_routing.py` |
+| `endpoint_map` | dict | Mapping of bare tool names (`save_data`, `get_data`, `get_output`, ...) to Control Center internal URLs | `backend/app/communication_hub/api/internal/tool_routing.py` |
 
 ### Alembic Migrations
 
@@ -487,6 +532,99 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agent-type-bindings.spec` | E2E test | 1 real-backend integration test: POST returns binding fields; skips gracefully when backend unavailable | `e2e/tests/agent-type-bindings.spec.ts` |
 | `test_intervene_service` | test suite | Backend unit tests for `InterveneRequestStore`: CRUD, status transitions, duplicate prevention, metrics aggregation, expiry logic | `backend/tests/services/test_intervene_service.py` |
 | `test_intervene_api` | test suite | Backend integration tests for intervene endpoints: request lifecycle, state machine, authorization, constraint validation | `backend/tests/api/v1/test_intervene.py` |
+| `test_agent_data_service` | unit test | Tests for `AgentDataService.save()` and `query_by_filters()`; validates filter enforcement, indexing, and null-handling | `backend/tests/unit/test_agent_data_service.py` |
+| `test_agent_save_data_tools` | unit test | Tests for `LangChainSaveDataTool`, `LangChainGetDataTool`, `LangChainGetOutputTool`; validates mTLS routing through CommHub | `backend/tests/unit/test_agent_save_data_tools.py` |
+| `test_system_tool_endpoints` | integration test | Tests for the `save-data`, `get-data`, `get-output` internal CC endpoints; validates mTLS, request/response contracts | `backend/tests/integration/test_system_tool_endpoints.py` |
+| `agent-save-data-get-tools.spec.ts` | E2E test | End-to-end tests for save_data, get_data, and get_output tool flows through agent execution | `e2e/tests/agent-save-data-get-tools.spec.ts` |
+| `agent-outputs-query.spec.ts` | E2E test | End-to-end tests for querying AgentOutput records via the get_output tool | `e2e/tests/agent-outputs-query.spec.ts` |
+
+### Data Type & Output Models (`backend/app/db/models/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `AgentDataType` | model | SQLAlchemy model for the data type registry: `id`, `name` (unique), `slug` (unique), `description`, `fields` (JSONB array of field definitions with name/type/enum_values/required/default), `created_at`, `updated_at` | `backend/app/db/models/agent_data_type.py` |
+| `AgentOutput` | model | SQLAlchemy model for typed execution results: `id`, `data_type_id` FK → `agent_data_types`, `agent_type_id` FK → `agent_types`, `execution_session_id` FK → `agent_jobs`, `field_values` (JSONB), `validation_status` (enum), `raw_output` (Text), `created_at` | `backend/app/db/models/agent_output.py` |
+| `AgentOutputValidationStatus` | enum | Python StrEnum: `valid`, `validation_error` | `backend/app/db/models/agent_output.py` |
+
+### Backend Models — Modified FK Columns (`backend/app/db/models/agents.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `AgentType.output_data_type_id` | column | **MODIFIED**: Nullable FK to `agent_data_types.id`; links agent type to a typed output schema from the Data Type Registry; assigned when `output_type = typed`; null for untyped/markdown agents | `backend/app/db/models/agents.py` |
+| `AgentType.output_data_type` | relationship | **MODIFIED**: ORM relationship to `AgentDataType` for eager-loading data type name in responses | `backend/app/db/models/agents.py` |
+| `AgentJob.output_id` | column | **MODIFIED**: Nullable FK to `agent_outputs.id`; links a completed session to its persisted typed output record for convenience retrieval | `backend/app/db/models/agents.py` |
+| `AgentJob.output` | relationship | **MODIFIED**: ORM convenience relationship to `AgentOutput` | `backend/app/db/models/agents.py` |
+
+### Data Type & Output Services (`backend/app/services/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `DataTypeService` | class | CRUD operations for `AgentDataType`: `create()` (rejects duplicate name/slug), `get()`, `get_by_slug()`, `update()`, `delete()` (blocked if referenced by agent types — returns referencing agent type IDs), `list()` (paginated, searchable by name/slug), `count_usage()` (returns agent type count per data type) | `backend/app/services/data_types/service.py` |
+| `DataTypeNotFoundError` | exception | Raised when a data type ID or slug is not found (404) | `backend/app/services/data_types/service.py` |
+| `DataTypeConflictError` | exception | Raised when deletion is blocked by one or more referencing agent types (409) | `backend/app/services/data_types/service.py` |
+| `DataTypeDuplicateError` | exception | Raised when creating/updating with a duplicate name or slug (409) | `backend/app/services/data_types/service.py` |
+| `OutputService` | class | Typed output persistence and query: `save_typed()` creates `AgentOutput` row and links to `AgentJob.output_id`; `list_outputs()` with filters (data_type_id, agent_type_id, date_from, date_to, page/page_size) and eager-loaded name resolution; `get_output()` by ID; `export_csv()` returns StreamingResponse with schema-derived columns | `backend/app/services/outputs/service.py` |
+| `SchemaValidationService` | class | Payload validation against `AgentDataType.fields` schema: checks required field presence, field type conformance (string/number/boolean/date/enum), enum value membership; returns `ValidationResult` with `{valid: bool, errors: list[FieldError]}` | `backend/app/services/validation/schema_validation_service.py` |
+
+### Public Data Type & Output API Routers (`backend/app/api/v1/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `DataTypeRouter` | APIRouter | Public JWT-protected CRUD router: `GET /api/v1/data-types` (paginated, `?usage=true` returns referencing agent type counts), `POST /api/v1/data-types` (creates data type), `GET /api/v1/data-types/{id}`, `PUT /api/v1/data-types/{id}`, `DELETE /api/v1/data-types/{id}` (returns 409 with referencing types if in use); all endpoints guarded by `require_permission(RT_DATA_TYPE, ...)` | `backend/app/api/v1/data_types.py` |
+| `OutputRouter` (public) | APIRouter | Public JWT-protected query router: `GET /api/v1/agent-outputs` (paginated, filtered by data_type_id/agent_type_id/date_from/date_to), `GET /api/v1/agent-outputs/export` (CSV StreamingResponse with same filters, no pagination); guarded by `require_permission(RT_RESULT, "read")`; registered via `router.include_router()` in `__init__.py` | `backend/app/api/v1/agent_outputs.py` |
+
+### Internal Output Validation & Persistence Endpoints (`backend/app/api/v1/internal/outputs.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `InternalOutputsRouter` | APIRouter | mTLS-protected router (prefix `/internal`); mounts validation, persistence, and query endpoints for Agent Runtime consumption | `backend/app/api/v1/internal/outputs.py` |
+| `validate_output` | endpoint | `POST /api/v1/internal/validate-output` — accepts `{data_type_id, payload}`; fetches `AgentDataType` schema; returns `ValidationResult` with field-level errors; 404 if data type not found | `backend/app/api/v1/internal/outputs.py` |
+| `create_internal_output` | endpoint | `POST /api/v1/internal/agent-outputs` — persists typed output record via `OutputService.save_typed()`; verifies data type and agent type exist (404 if not); returns `AgentOutputResponse` with resolved names (201) | `backend/app/api/v1/internal/outputs.py` |
+| `query_internal_outputs` | endpoint | `GET /api/v1/internal/agent-outputs` — queries typed outputs with optional filters (data_type_id, agent_type_id, date_from, date_to) and pagination; resolves data_type_name and agent_type_name per result; used by `query_result` system tool | `backend/app/api/v1/internal/outputs.py` |
+
+### Query Result System Tool (`backend/app/api/v1/internal/system_tools.py` & `backend/app/services/agents/system_tool_registry.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `query_result_tool` | endpoint | `POST /api/v1/internal/system-tools/query-result` — mTLS-protected; accepts `{data_type_name: string, filters?: {...}}`; resolves name to `AgentDataType` (by slug first, then name); calls `OutputService.list_outputs()` with resolved `data_type_id`; returns matching outputs; 404 if data type name not found | `backend/app/api/v1/internal/system_tools.py` |
+| `query_result` (SystemTool) | registry entry | Registered in `SystemToolRegistry` with name `query_result`, description, and OpenAI function schema (input: `data_type_name`, optional `filters`); `cc_endpoint_path = "/api/v1/internal/system-tools/query-result"`; CommHub routing resolves via `SystemToolRegistry.get_cc_endpoint_map()` | `backend/app/services/agents/system_tool_registry.py` |
+
+### LangChain Migration Components (`backend/app/services/agents/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `LangChainModelFactory` | class | Factory that resolves an `AgentType.model_id` string to a LangChain `BaseChatModel` instance; scans `ModelConfig` records, matches provider type to LangChain chat model subclass; instantiates with encrypted credentials decrypted at call time; raises `LangChainModelFactoryError` on resolution failure | `backend/app/services/agents/langchain_model_factory.py` |
+| `LangChainModelFactoryError` | exception | Raised when model resolution fails (unknown model_id, missing config, or incompatible provider) | `backend/app/services/agents/langchain_model_factory.py` |
+| `LangChainToolWrapper` | class | Custom `BaseTool` subclass wrapping Parthenon's `CommHubToolClient`; preserves mTLS and service segregation by routing tool calls through Communication Hub; `_arun()` serialises input, calls `comm_hub_client.call_tool()`, and returns JSON string | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `build_langchain_tools_from_definitions` | function | Constructs `LangChainToolWrapper` instances from tool definition dicts (name, description, schema); used for MCP tools synced from the Hub | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `GuardrailCallback` | class | LangChain `AsyncCallbackHandler` that evaluates model usage guardrails (per-period limits, vendor/model disabled state) before every LLM call; raises `GuardrailStop` to block execution when guardrails are breached; emits `GuardrailThresholdEvent` records for observability | `backend/app/services/agents/guardrail_callback.py` |
+| `GuardrailStop` | exception | Raised by `GuardrailCallback` to halt agent execution when a guardrail breach is detected; caught by `AgentRuntimeExecutor` to transition session to a guardrail-blocked state | `backend/app/services/agents/guardrail_callback.py` |
+| `ExecutionLoggingCallback` | class | LangChain `AsyncCallbackHandler` that emits structured `ExecutionLogEntry` records for every LLM start/end, tool start/end, and chain event; powers the live execution log stream consumed by the frontend `LogViewer` | `backend/app/services/agents/execution_logging_callback.py` |
+
+### Runtime Executor — Structured Output Integration (`backend/app/services/agents/runtime_executor.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `AgentRuntimeExecutor` (structured output) | class | **MODIFIED**: When `agent_type.output_data_type_id` is set, passes `ToolStrategy(schema=output_json_schema)` as `response_format` to `create_agent()` — LangChain enforces structured output natively via tool calling (or provider-native JSON mode when model profile supports it); no system instruction injection | `backend/app/services/agents/runtime_executor.py` |
+| `AgentRuntimeExecutor` (completion flow) | class | **MODIFIED**: After agent completes, if `output_data_type_id` is set: (1) calls `POST /internal/validate-output` to validate payload against schema, (2) calls `POST /internal/agent-outputs` to persist typed output, (3) wires returned `output_id` back to `AgentJob.output_id`; if `output_data_type_id` is null, uses existing untyped completion flow | `backend/app/services/agents/runtime_executor.py` |
+
+### Data Type & Output Test Files
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_data_types_api.py` | test | Backend tests for DataTypeService and DataTypeController: create (201), duplicate name (409), get by id (200/404), update (200/404/409), delete unreferenced (204), delete referenced (409), empty fields (422), invalid field type (422), pagination, search | `backend/tests/test_data_types_api.py` |
+| `test_output_validation.py` | test | Backend tests for SchemaValidationService: required field validation, type checking (string/number/boolean/date/enum), enum membership, nested field scenarios | `backend/tests/test_output_validation.py` |
+| `test_agent_outputs_api.py` | test | Backend tests for OutputService and internal/public endpoints: typed persistence, filtered query, pagination, CSV export, name resolution | `backend/tests/test_agent_outputs_api.py` |
+| `test_query_result_tool.py` | test | Backend integration tests for query_result tool flow: data type name resolution, filter application, pagination, 404 for unknown type | `backend/tests/test_query_result_tool.py` |
+
+### Data Type Alembic Migrations
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `a69529d1090f` | migration | Creates `agent_data_types` table: id (UUID PK), name (unique), slug (unique), description, fields (JSONB), created_at, updated_at | `backend/alembic/versions/a69529d1090f_add_agent_data_types_table.py` |
+| `3131c85e74e0` | migration | Creates `agent_outputs` table and `agent_output_validation_status` enum; adds `output_id` FK column to `agent_jobs` | `backend/alembic/versions/3131c85e74e0_add_agent_outputs_table_and_output_id_.py` |
+| `76078a3ecff2` | migration | Adds `output_data_type_id` nullable FK column to `agent_types` referencing `agent_data_types.id` | `backend/alembic/versions/76078a3ecff2_add_output_data_type_id_to_agent_types.py` |
+| `a1d4e8f2b3c5` | migration | Data migration: backfills `output_data_type_id` for existing agent types with `output_type = typed` based on their `output_schema` matching | `backend/alembic/versions/a1d4e8f2b3c5_migrate_existing_typed_agent_types.py` |
 
 ## Runtime Control & Model Guardrail Hierarchy
 

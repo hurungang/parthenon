@@ -4,6 +4,11 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Paper,
   Table,
   TableBody,
@@ -15,9 +20,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import DeleteIcon from '@mui/icons-material/Delete'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import { usePagination } from '../../hooks/usePagination'
-import { usePlatformUsers } from '../../hooks/usePermissions'
+import { usePlatformUsers, useDeletePlatformUser } from '../../hooks/usePermissions'
 import { ManageAccessModal } from '../../components/permissions/ManageAccessModal'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { PlatformUser } from '../../types/permissions'
@@ -26,8 +32,10 @@ export function UsersPage() {
   const { t } = useTranslation()
   const pag = usePagination({ initialRowsPerPage: 20 })
   const { data: users, isLoading, error } = usePlatformUsers(pag.page + 1, pag.rowsPerPage)
+  const deleteUser = useDeletePlatformUser()
   const [search, setSearch] = useState('')
   const [manageUser, setManageUser] = useState<PlatformUser | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PlatformUser | null>(null)
 
   const filtered = (users ?? []).filter(
     (u) =>
@@ -81,6 +89,15 @@ export function UsersPage() {
                   >
                     {t('permissions.users.manageAccess')}
                   </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => setDeleteTarget(user)}
+                    sx={{ ml: 0.5 }}
+                  >
+                    {t('app.delete')}
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -107,6 +124,36 @@ export function UsersPage() {
           onClose={() => setManageUser(null)}
         />
       )}
+
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+      >
+        <DialogTitle>{t('permissions.users.deleteUserTitle')}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t('permissions.users.deleteUserConfirm', { name: deleteTarget?.display_name ?? '' })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>
+            {t('app.cancel')}
+          </Button>
+          <Button
+            color="error"
+            disabled={deleteUser.isPending}
+            onClick={() => {
+              if (deleteTarget) {
+                deleteUser.mutate(deleteTarget.id, {
+                  onSuccess: () => setDeleteTarget(null),
+                })
+              }
+            }}
+          >
+            {deleteUser.isPending ? t('app.deleting') : t('app.delete')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

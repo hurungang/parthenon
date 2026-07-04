@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
-from app.core.resource_types import RT_MCP_SERVER
+from app.core.resource_types import RT_INTEGRATION_MCP_HUB
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission, McpSessionAuthType, McpServerStatus
 from app.db.models.skills import Skill, SkillToolBinding
@@ -211,7 +211,7 @@ McpServerRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Servers"])
 @McpServerRouter.get("", response_model=list[McpServerRead])
 async def list_mcp_servers(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list:
@@ -240,7 +240,7 @@ async def list_mcp_servers(
 async def create_mcp_server(
     body: McpServerCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "create")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "create")),
 ) -> McpServer:
     # Reject reserved slugs — "system" is used for built-in system tools
     if body.slug == "system":
@@ -264,7 +264,7 @@ async def create_mcp_server(
 async def get_mcp_server(
     server_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
 ) -> McpServer:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -277,7 +277,7 @@ async def update_mcp_server(
     server_id: uuid.UUID,
     body: McpServerUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "update")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "update")),
 ) -> McpServer:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -293,7 +293,7 @@ async def update_mcp_server(
 async def delete_mcp_server(
     server_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "delete")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "delete")),
 ) -> None:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -305,7 +305,7 @@ async def delete_mcp_server(
 async def sync_mcp_server(
     server_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "execute")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "execute")),
 ) -> SyncResult:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -361,7 +361,7 @@ async def sync_mcp_server(
 async def list_server_tools(
     server_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
 ) -> list[McpTool]:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -379,7 +379,7 @@ async def get_oauth_authorization_url(
     server_id: uuid.UUID,
     db: DbSession,
     body: OAuthInitiateRequest | None = None,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> dict:
     """
     Get OAuth authorization URL for an MCP server.
@@ -463,7 +463,7 @@ McpSessionRouter = APIRouter(prefix="/mcp/servers", tags=["MCP Hub — Sessions"
 async def list_mcp_sessions(
     server_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> list[McpSession]:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -482,7 +482,7 @@ async def create_mcp_session(
     server_id: uuid.UUID,
     body: McpSessionCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> dict:
     server = await db.get(McpServer, server_id)
     if not server:
@@ -564,7 +564,7 @@ async def update_mcp_session(
     session_id: uuid.UUID,
     body: McpSessionUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> McpSession:
     result = await db.execute(
         select(McpSession).where(
@@ -605,7 +605,7 @@ async def delete_mcp_session(
     server_id: uuid.UUID,
     session_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> None:
     result = await db.execute(
         select(McpSession).where(
@@ -642,7 +642,7 @@ async def refresh_oauth_token(
     server_id: uuid.UUID,
     session_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> McpSession:
     """
     Manually refresh OAuth access token for a session.
@@ -703,7 +703,7 @@ McpToolRouter = APIRouter(prefix="/mcp/tools", tags=["MCP Hub — Tools"])
 @McpToolRouter.get("", response_model=list[McpToolRead])
 async def list_all_tools(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[McpToolRead]:
@@ -739,7 +739,7 @@ async def list_all_tools(
 async def list_tool_skills(
     tool_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
 ) -> list[Skill]:
     tool = await db.get(McpTool, tool_id)
     if not tool:
@@ -757,7 +757,7 @@ async def list_tool_skills(
 async def list_tool_permissions(
     tool_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> list[ToolPermission]:
     tool = await db.get(McpTool, tool_id)
     if not tool:
@@ -777,7 +777,7 @@ async def grant_tool_permission(
     tool_id: uuid.UUID,
     body: ToolPermissionCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> ToolPermission:
     tool = await db.get(McpTool, tool_id)
     if not tool:
@@ -808,7 +808,7 @@ async def revoke_tool_permission(
     tool_id: uuid.UUID,
     permission_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> None:
     tp = await db.get(ToolPermission, permission_id)
     if not tp or tp.tool_id != tool_id:
@@ -822,7 +822,7 @@ async def test_mcp_tool(
     body: TestToolRequest,
     db: DbSession,
     http_request: Request,
-    _: dict = Depends(require_permission(RT_MCP_SERVER, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "read")),
 ) -> TestToolResponse:
     """Test an MCP tool invocation with a specific session."""
     from app.services.mcp.proxy import McpProxyEngine, McpProxyError

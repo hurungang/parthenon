@@ -180,14 +180,6 @@ def _json_type_to_python(json_type: str) -> type:
     return mapping.get(json_type, str)
 
 
-def _is_save_result_tool(tool_name: str) -> bool:
-    """Return True if this tool name is a save_result variant (canonicalized)."""
-    bare = tool_name
-    for prefix in ("system____", "system/", "system\\"):
-        bare = bare.replace(prefix, "")
-    return bare == "save_result"
-
-
 def _extract_delegation_target_slug(tool_name: str) -> str | None:
     """Return the target agent slug if tool_name is an agent delegation tool, else None.
 
@@ -213,7 +205,6 @@ def build_langchain_tools_for_ar_path(
     session_id: str,
     agent_type_id: str,
     conv_session_id: str | None = None,
-    save_result_output: dict[str, Any] | None = None,  # kept for call-site compat; unused
     tool_name_map: dict[str, str] | None = None,
     role_id: str | None = None,
     guardrail_state: Any | None = None,
@@ -239,7 +230,6 @@ def build_langchain_tools_for_ar_path(
         role_id: Requester role ID for A2A delegation authorization.
         agent_type_id: Agent type UUID as string.
         conv_session_id: Parent conversation session ID (for HITL context).
-        save_result_output: Ignored — kept only so existing call sites compile.
         tool_name_map: Optional mapping of OpenAI-sanitised (2-underscore) tool
             names to their canonical (4-underscore) equivalents.
 

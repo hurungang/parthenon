@@ -23,6 +23,7 @@ source:
   frontend: frontend/src
   backend: backend/app
   schema: backend/app/db/models/
+  showcase: site/
   tests:
     - backend/tests/
     - frontend/src/__tests__/
@@ -111,3 +112,9 @@ domain:
   - "Schedule management: cron-based scheduling for prompts and SOPs; managed via the admin UI; backed by a persistent job store"
   - "Conversation history: every interaction (user→agent, agent→agent, agent→tool) is persisted to the conversation store for audit and replay"
   - "Agent Plan Mode: when an Agent Type is saved, an LLM automatically generates a step-by-step implementation plan based on the agent's instruction, role, SOPs, and skills; the plan is displayed in a preview modal with a visual topology diagram showing agent→identity→role→SOP→skill→tool relationships; the saved plan is loaded during agent execution and injected into the agent's system context to guide compliant, predictable behavior"
+  - "Agent Data Type Registry: a centralized catalogue of reusable typed output schemas (AgentDataType model). Administrators define data types with typed fields (string, number, boolean, date, enum). Data types are assigned to non-conversational agent types via output_data_type_id; conversational agent types do not support typed outputs. Data types cannot be deleted while referenced by agent types."
+  - "Agent Outputs: typed, schema-validated execution results (AgentOutput model). Each output links to a data type schema, the agent type, and the execution session. Outputs have a validation_status (valid or validation_error) with raw_output fallback. The Agent Outputs admin page provides filtering by data type, agent type, and date range with CSV export."
+  - "System Tools — save_data: replaces legacy save_result. Agents use save_data for intermediate named data saves (zero or more per session). Each record has data_name, data_value, and is linked to agent type and session via FKs. Separate from final output which is singular per session."
+  - "System Tools — get_data/get_output: agent retrieval tools. get_data queries AgentData records by data_name, agent_type_id, or session_id with at least one filter required. get_output queries AgentOutput records by agent_type_id, session_id, date_from, and date_to."
+  - "System Tools — query_result: system tool allowing agents to query past typed outputs by data type name with optional date range and field filters. Routes through Communication Hub to Control Center. Resolves data type by slug first, then name."
+  - "GitHub Pages Showcase: a fully static Vite + TypeScript project showcase website at site/. Builds to docs/site/ and auto-publishes to GitHub Pages on push to main via .github/workflows/deploy-github-pages.yml. No backend dependency. Uses Mermaid for architecture diagrams. Screenshots are placeholder SVGs."

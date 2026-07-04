@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_RESULT
+from app.core.resource_types import RT_AGENT_OUTPUTS
 from app.db.session import DbSession
 from app.schemas.agent_outputs import (
     AgentOutputListResponse,
@@ -48,7 +48,7 @@ async def list_agent_outputs(
     date_to: str | None = Query(None, description="Filter outputs created on or before this date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    _: dict = Depends(require_permission(RT_RESULT, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_OUTPUTS, "read")),
 ) -> AgentOutputListResponse:
     """Query typed agent outputs with optional filters and pagination.
 
@@ -112,7 +112,7 @@ async def list_auto_agent_outputs(
     date_to: str | None = Query(None, description="Filter outputs created on or before this date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    _: dict = Depends(require_permission(RT_RESULT, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_OUTPUTS, "read")),
 ) -> AutoOutputListResponse:
     """List completed auto-type agent jobs that have saved output_data.
 
@@ -174,7 +174,7 @@ async def list_auto_agent_outputs(
 @OutputRouter.get("/{output_id}", response_model=AgentOutputResponse)
 async def get_agent_output(    output_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_RESULT, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_OUTPUTS, "read")),
 ) -> AgentOutputResponse:
     """Get a single typed agent output by ID.
 
@@ -214,7 +214,7 @@ async def export_agent_outputs_csv(
     agent_type_id: uuid.UUID | None = Query(None, description="Filter by agent type ID"),
     date_from: str | None = Query(None, description="Filter outputs created on or after this date (ISO format)"),
     date_to: str | None = Query(None, description="Filter outputs created on or before this date (ISO format)"),
-    _: dict = Depends(require_permission(RT_RESULT, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_OUTPUTS, "read")),
 ) -> StreamingResponse:
     """Export filtered agent outputs as a CSV file.
 

@@ -23,7 +23,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import create_app
 from app.db.session import get_db
 from app.api.deps import require_permission
-from app.core.resource_types import RT_AGENT
+from app.core.resource_types import RT_AGENT_MODEL_CONFIGS
 from app.middleware.auth import JWTAuthMiddleware
 
 
@@ -195,7 +195,7 @@ async def test_list_models_requires_agent_read_permission():
     _, db_dep = _db_returning(return_value=MagicMock())
     app = create_app()
     app.dependency_overrides[get_db] = db_dep
-    app.dependency_overrides[require_permission(RT_AGENT, "read")] = _deny_permission_override()
+    app.dependency_overrides[require_permission(RT_AGENT_MODEL_CONFIGS, "read")] = _deny_permission_override()
 
     with _bypass_auth():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

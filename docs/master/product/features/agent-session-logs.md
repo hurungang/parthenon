@@ -36,7 +36,9 @@ For active non-conversation runs, execution progress is visible live so users an
 - As an operator, I want the log stream to resume automatically after I respond to an intervene request, so that I can continue monitoring execution without manual refresh
 - As a **platform operator**, I want to see delegation lifecycle events (`delegating`, `waiting`, `delegation_resumed`) in the non-conversational execution log stream, so that I can follow delegation progress without manual refresh
 - As an **SOP author**, I want non-conversational agents to respect their configured output type when generating results, so that downstream processes receive output in the expected format (markdown documents, structured JSON, or free-form text)
-- As a **platform operator**, I want the execution log to display agent output formatted according to the agent's output type definition (markdown rendered as rich text, typed JSON shown as structured data, auto shown as raw), so that I can review results in the intended presentation format
+- As a **platform operator**, I want the execution log to display agent output formatted according to the agent's output type definition (markdown rendered as rich text, typed output shown as a structured field-by-field view following its data type schema, auto shown as raw), so that I can review results in the intended presentation format
+- As a **platform operator**, I want the Result tab to show the assigned data type name as a badge for typed-output agents, so that I immediately know which schema governs the result
+- As a **platform operator**, I want schema validation errors displayed prominently in the Result tab with a raw-output fallback, so that I can identify and review outputs that did not conform to their expected schema
 
 
 ## Acceptance Criteria
@@ -63,8 +65,9 @@ For active non-conversation runs, execution progress is visible live so users an
 - **A persistent banner at the top of the execution log indicates the session is waiting for human input when the popup is dismissed or the operator navigates away**
 - **Delegation lifecycle events (`delegation_started`, `delegation_waiting`, `delegation_resumed`) appear as live progress updates in non-conversational execution log streams without manual refresh**
 - **Delegation exit conditions (timeout, failure, depth-blocked, termination) produce distinct, clearly labelled status events in the execution log**
-- **The execution log viewer's Result tab renders agent output formatted per the agent's `output_type`: markdown as rich HTML, typed JSON as a structured tree, auto as raw text**
-- **The Result tab label includes the output type badge (e.g., "Result [Markdown]") for operator awareness**
+- **The execution log viewer's Result tab renders agent output formatted per the agent's `output_type`: markdown as rich HTML, typed output as a structured field-by-field view following its assigned data type schema (each field labeled with its name and value formatted by type — booleans as toggle indicators, dates as formatted dates, enums as chips), auto as raw text**
+- **The Result tab label includes the output type badge; for typed-output agents this shows the data type name (e.g., "Result [IncidentReport]")**
+- **If schema validation failed for a typed output, a prominent validation error message is displayed in the Result tab with the raw output shown as fallback**
 - **The Result tab is visible immediately when the agent session completes — no additional navigation required**
 - **Previously emitted delegation status events are still visible in the log timeline after stream reconnect**
 

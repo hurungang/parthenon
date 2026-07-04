@@ -224,7 +224,7 @@ def test_extract_delegation_target_returns_none_for_mcp():
 
 def test_extract_delegation_target_returns_none_for_system():
     from app.services.agents.langchain_tool_wrapper import _extract_delegation_target_slug
-    assert _extract_delegation_target_slug("system____save_result") is None
+    assert _extract_delegation_target_slug("system____save_data") is None
 
 
 # ── Delegation tool routing (AR path) ─────────────────────────────────────────

@@ -81,7 +81,7 @@ def test_agent_loop_module_available():
         session_id="sess-1",
         agent_type_id="at-1",
         role_id=None,
-        allowed_tools=["save_result"],
+        allowed_tools=["save_data"],
         system_instruction="You are helpful",
         output_type="auto",
         output_schema=None,
@@ -450,7 +450,7 @@ async def test_observe_phase_increments_no_state():
         session_id=str(uuid.uuid4()),
         agent_type_id=str(uuid.uuid4()),
         role_id=None,
-        allowed_tools=["save_result"],
+        allowed_tools=["save_data"],
         system_instruction="Test",
         output_type="auto",
         output_schema=None,
@@ -465,8 +465,8 @@ async def test_observe_phase_increments_no_state():
 async def test_reason_phase_stub_marks_complete():
     """_reason() with stub (no LangChain binding) marks is_complete=True.
 
-    Patches _LANGCHAIN_AVAILABLE=False to force the stub path, ensuring the
-    test exercises the synthetic save_result tool call rather than a real LLM call.
+    Patches _LANGCHAIN_AVAILABLE=False to force the stub path.
+    The stub marks the context as complete without queuing tool calls.
     """
     from app.services.agents.runtime_executor import AgentRuntimeExecutor
     from app.services.agents.agent_loop import TaskAgentLoop
@@ -496,14 +496,10 @@ async def test_reason_phase_stub_marks_complete():
     with patch("app.services.agents.runtime_executor._LANGCHAIN_AVAILABLE", False):
         result = await executor._reason(ctx, agent_type, db)
 
-    # Stub reasoning marks the context as complete and queues a save_result tool call.
-    # output_data is populated later when _act() executes the save_result tool.
+    # Stub reasoning marks the context as complete without queuing tool calls.
     assert result.is_complete is True
     pending = getattr(result, "_pending_tool_calls", [])
-    assert len(pending) >= 1, "Stub must queue a save_result tool call"
-    assert pending[0]["name"] == "save_result", (
-        f"Expected save_result tool call, got: {pending[0]}"
-    )
+    assert len(pending) == 0, "Stub should NOT queue tool calls"
 
 
 @pytest.mark.asyncio
@@ -830,7 +826,7 @@ async def test_execute_job_succeeds_when_identity_assigned_to_role():
     executor._log_execution_event = AsyncMock()
     executor._log_sops_skills = AsyncMock()
     executor._permission_manager.calculate_allowed_tools = AsyncMock(
-        return_value={"save_result"}
+        return_value={"save_data"}
     )
 
     result = await executor._execute_job(job, db)

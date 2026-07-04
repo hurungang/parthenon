@@ -248,3 +248,60 @@ Use this checklist immediately after deploying the `add-agent-execution-guardrai
 - All guardrail stop classes are produced and persisted as expected.
 - No metadata loss is observed across direct or delegated routing paths.
 - No unexpected hard stops occur on known-good conversational workloads.
+
+---
+
+## 9. Keycloak Group Membership Mapper — Reprovisioning for Existing Installations
+
+Use this runbook to add the Group Membership protocol mapper to an existing bundled Keycloak installation that was provisioned before this capability was introduced. This is a one-time operation to enable group-based permission inheritance via the JWT `groups` claim.
+
+### When to use this runbook
+
+Apply this runbook when:
+- The Parthenon instance was provisioned before the group membership mapper was added to the provisioning flow
+- Users who are members of Keycloak groups are not receiving the expected Parthenon group roles on login
+- The JWT access token issued by Keycloak does not contain a `groups` claim
+
+### Background
+
+Prior to the addition of automatic group membership mapper creation, the `parthenon-api-ui` Keycloak client lacked a "Group Membership" protocol mapper. The `GroupClaimMapper` and `JWTAuthMiddleware` were designed to auto-assign users to Parthenon groups by matching JWT `groups` claims, but the claim was never present in tokens because the mapper was missing.
+
+### Procedure
+
+Reprovision the identity provider with the `force_reconfigure` flag set to `true`. This re-runs the bootstrap flow, which:
+1. Detects the existing realm and client (no duplication or re-creation)
+2. Adds the Group Membership protocol mapper to the `parthenon-api-ui` client
+3. Is idempotent — running multiple times will not create duplicate mappers
+
+**Via the CLI (headless):**
+
+Run inside the `platform-api` container:
+```bash
+python -m app.cli provision-identity --force-reconfigure
+```
+The CLI uses the existing identity provider configuration stored in the database and re-provisions without prompting for credentials.
+
+**Via the API directly:**
+
+Call `POST /api/v1/setup/identity` with `"force_reconfigure": true` in the request body, supplying the same provider credentials used during initial provisioning.
+
+> **Note:** The `POST /setup/identity` endpoint returns HTTP 409 when setup is already configured and `force_reconfigure` is not set to `true`. Always include the `force_reconfigure` flag when reprovisioning.
+
+### Verification
+
+After reprovisioning:
+
+1. Check the Platform API logs for a confirmation message indicating the Group Membership mapper was created (or that an existing mapper was detected and skipped)
+2. Log in as a user who is a member of at least one Keycloak group that has a corresponding Parthenon group with a matching `idp_claim_value`
+3. Decode the user's JWT access token (e.g., via the browser developer tools or a JWT debugger) and confirm the `groups` claim is present and contains the expected Keycloak group names
+4. Verify that the user's Parthenon group memberships and inherited roles are reflected in the admin UI under the user's permission profile
+
+### Rollback
+
+No rollback is needed for this operation. The Group Membership mapper is additive — it does not modify any existing client configuration. If the mapper should be removed for any reason, delete it manually in the Keycloak Admin Console (`Clients` → `parthenon-api-ui` → `Client scopes` → `parthenon-api-ui-dedicated` → `Mappers`).
+
+### Compatibility
+
+- Works with all existing Parthenon group configurations — no changes to `idp_claim_value` or group-to-role mappings are needed
+- Does not affect users who are not members of any Keycloak groups — their tokens will include an empty `groups` claim
+- Applies only to the bundled Keycloak provider (`IDENTITY_PROVIDER_TYPE=keycloak_bundled`). External providers must be configured separately

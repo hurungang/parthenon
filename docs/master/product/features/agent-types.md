@@ -19,6 +19,7 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - The model picker in the Agent Type form is sourced from the centrally managed [Model Configurations](./model-configurations.md) catalogue and grows automatically as new providers and models are configured
 - The configured `output_type` (`auto`, `markdown`, `typed`) is actively enforced for non-conversational agents via system prompt injection — markdown agents receive formatting instructions, typed agents receive schema-driven JSON instructions, auto agents receive no extra guidance
 - Supports binding multiple SOPs and skills to an Agent Type as an ordered list of entries, where each entry references either an SOP or a skill; bindings define the curated capability set used for system instruction generation and Agent Plan Mode
+- Non-conversational agent types can optionally be assigned an output data type from the [Agent Data Type Registry](./agent-data-types.md). When a data type is selected, the agent type's output is validated against that schema at execution time, stored with the schema reference, and rendered as a structured field-by-field view in execution logs. Conversational agent types do not support data type assignment
 
 ## SOP & Skill Binding
 - Agent Types store an ordered list of binding entries, each referencing either an SOP or a skill
@@ -58,6 +59,10 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - **Save button is disabled when no bindings are defined**
 - **System instruction generator and Agent Plan Mode use only explicitly bound SOPs and skills**
 - **Binding list is visible and editable in the Agent Type editor UI**
+- **Non-conversational agent types include an output data type selector sourced from the Agent Data Type Registry**
+- **Conversational agent types do not show the output data type field**
+- **When an output data type is assigned, the agent type's output type badge in list views displays the data type name**
+- **After selecting a data type, the output type is set to `typed` and the schema is linked for validation at execution time**
 
 ## Out of Scope
 - Technical implementation design or service internals
@@ -70,3 +75,5 @@ Agent Types define how organizations standardize agent behavior, governance, and
 - Recursion validation depends on a stable SOP and delegation step graph; configuration changes that would create cycles must be rejected at create/update and again at run initiation
 - SOP/skill binding validation depends on accurate role-permission resolution
 - Binding UI must be keyboard-accessible and internationalised
+- The output data type selector depends on the [Agent Data Type Registry](./agent-data-types.md); data types must exist before they can be assigned to agent types
+- Only non-conversational agent types support output data type assignment; conversational types are excluded by design

@@ -112,11 +112,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     )
                     request.state.platform_user_id = platform_user.id
 
-                    # Mirror the user into the Identity table so governance
-                    # flows (e.g. request_termination) can resolve the
-                    # requesting actor by OIDC subject. Both rows are upserted
-                    # in the same transaction; failures here are non-fatal
-                    # because the request is already authenticated.
                     await user_cache.upsert_identity(
                         session,
                         sub=sub,
@@ -125,6 +120,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     )
 
                     group_claims: list[str] = claims.get("groups", [])
+                    logger.info(
+                        "_sync_user_and_groups sub=%s user_id=%s group_claims=%s has_groups=%s",
+                        sub, platform_user.id, group_claims, bool(group_claims),
+                    )
                     if group_claims:
                         mapper = GroupClaimMapper()
                         new_groups = await mapper.map_claims(session, platform_user.id, group_claims)
@@ -133,6 +132,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                                 "Auto-assigned user %s to %d group(s) via IdP claims",
                                 platform_user.id,
                                 len(new_groups),
+                            )
+                        else:
+                            logger.info(
+                                "_sync_user_and_groups user_id=%s group_claims_present BUT no matching groups found. claims=%s",
+                                platform_user.id, group_claims,
                             )
         except Exception as exc:
             logger.warning("User cache/group mapping failed for sub=%s: %s", sub, exc)

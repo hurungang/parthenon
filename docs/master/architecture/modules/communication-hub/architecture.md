@@ -76,6 +76,7 @@ flowchart TB
 - **Intervention Router**: Inspects `human_intervene` suspend signals for a `conversation_session_id`. When present, routes the intervention request to the connected WebSocket client of the parent conversation. When absent, falls through to the existing dashboard-based intervention flow.
 - **Intervention Queue**: Per-conversation-session FIFO queue for intervention requests. When multiple delegated sub-agents request intervention concurrently, requests are delivered sequentially.
 - **Task Delegation Event Router**: In-memory router that manages delivery of non-conversational delegation status events and intervention requests to execution log viewer clients. Maintains a mapping of active log viewer connections to parent task agent sessions. Pushes delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) and intervention requests to the correct log viewer. Falls back to poll-based delivery when no live viewer is connected.
+- **System Tool Router**: The `endpoint_map` dict in `_route_to_system_tool()` maps bare tool names to Control Center system-tool endpoint URLs. Routing entries include `save_data`, `get_data`, `get_output`, and `query_result` — each pointing to the corresponding `POST /api/v1/internal/system-tools/<tool>` URL on Control Center. No new structural components are needed; existing permission-check and certificate-forwarding infrastructure handles these tool calls automatically.
 
 ## WebSocket Message Types
 

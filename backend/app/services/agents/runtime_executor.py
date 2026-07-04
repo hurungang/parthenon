@@ -2195,7 +2195,7 @@ class AgentRuntimeExecutor:
         - Routing to MCP servers or system tool endpoints
 
         Args:
-            tool_name: Tool name (e.g., "hello-world/helloWorld", "save_result")
+            tool_name: Tool name (e.g., "hello-world/helloWorld", "save_data")
             tool_args: Tool arguments
             role_mcp_sessions: Session mapping (not used - for backward compatibility)
             agent_type_id: Agent type ID
@@ -2684,39 +2684,7 @@ class AgentRuntimeExecutor:
 
         return response_text, build_conversation_guardrail_usage(), status_events
 
-    async def _save_result_for_conversation(
-        self,
-        tool_args: dict[str, Any],
-        agent_type_id: uuid.UUID,
-        conv_session_id: uuid.UUID,
-        db: AsyncSession,
-    ) -> dict[str, Any]:
-        """Persist a save_result tool call for a conversation agent.
-
-        Associates the ResultRecord with both the agent type and conversation session.
-        """
-        try:
-            from app.db.models.results import ResultRecord
-
-            record = ResultRecord(
-                agent_type_id=agent_type_id,
-                conversation_session_id=conv_session_id,
-                payload=tool_args.get("data") or tool_args,
-                content_type="application/json",
-                title=tool_args.get("title", "Conversation result"),
-                tags=["conversation"],
-            )
-            db.add(record)
-            await db.flush()
-            logger.info(
-                "Saved result %s for conversation session %s", record.id, conv_session_id
-            )
-            return {"status": "saved", "result_id": str(record.id)}
-        except Exception as exc:
-            logger.warning(
-                "save_result failed for conversation session %s: %s", conv_session_id, exc
-            )
-            return {"status": "error", "error": str(exc)}
+    # _save_result_for_conversation removed — conversation agents use CommHub tool routing.
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -3121,9 +3089,7 @@ class AgentRuntimeExecutor:
                         config=_cc_cfg,
                     )
                     _cc_sr = _cc_result.get("structured_response")
-                    if _save_result_holder:
-                        output_data = {**_save_result_holder}
-                    elif _cc_sr is not None:
+                    if _cc_sr is not None:
                         output_data = (
                             _cc_sr.model_dump()
                             if hasattr(_cc_sr, "model_dump")
@@ -3483,8 +3449,7 @@ class AgentRuntimeExecutor:
                 )
                 
                 # Whether LangChain failed or is unavailable, always use stub reasoning.
-                # This ensures the full trace (including save_result) is emitted and
-                # the session completes rather than hanging in an incomplete state.
+                # This ensures the session completes rather than hanging in an incomplete state.
                 ctx = self._apply_stub_reasoning(ctx, agent_type)
 
         return ctx
@@ -3492,30 +3457,12 @@ class AgentRuntimeExecutor:
     def _apply_stub_reasoning(self, ctx: TaskAgentLoop, agent_type: Any) -> TaskAgentLoop:
         """Synthetic LLM response used when the real LLM is unavailable.
 
-        Simulates a ``save_result`` tool call so the full observe-reason-act cycle
-        (including tool dispatch and result persistence) is exercised even in stub mode.
-        Setting ``is_complete = True`` ensures the loop exits after ``_act()`` processes
-        the pending tool call.
+        Simulates a ``complete`` response so the loop exits cleanly.
+        Setting ``is_complete = True`` ensures the loop terminates even in stub mode.
         """
         ctx.append_assistant_message(
             f"Task processed by stub executor (model_id={agent_type.model_id})"
         )
-        ctx._pending_tool_calls = [  # type: ignore[attr-defined]
-            {
-                "id": "stub_save_result",
-                "name": "save_result",
-                "args": {
-                    "title": f"Session {ctx.session_id} result",
-                    "content": "Task completed (stub executor)",
-                    "data": {
-                        "session_id": ctx.session_id,
-                        "allowed_tool_count": len(ctx.allowed_tools),
-                        "input": ctx.input_data if hasattr(ctx, "input_data") else None,
-                        "iterations": ctx.iteration + 1,
-                    },
-                },
-            }
-        ]
         ctx.is_complete = True
         return ctx
 
@@ -3528,9 +3475,10 @@ class AgentRuntimeExecutor:
     ) -> TaskAgentLoop:
         """Act: dispatch pending tool calls with permission enforcement.
 
-        Each tool call is logged before and after execution.  ``save_result`` is
-        handled as a special pseudo-tool that persists to the Result Repository.
-        All other calls are dispatched via ``McpProxyEngine``.
+        Each tool call is logged before and after execution.
+        All tool calls are dispatched via the appropriate route
+        (system tools, MCP tools, agent delegation). No pseudo-tool
+        hardcoding — all system tools route through CommHub.
         An ``iteration_complete`` event is emitted after all tool calls finish.
         """
         ctx.iteration += 1
@@ -3593,9 +3541,7 @@ class AgentRuntimeExecutor:
                     data={"tool": tool_name, "args": tool_args, "call_id": call_id},
                 )
 
-                if tool_name == "save_result":
-                    result = await self._handle_save_result_tool_call(ctx, tool_args, db)
-                elif tool_name == "send_notification":
+                if tool_name == "send_notification":
                     from app.services.notifications.mcp_tool import handle_send_notification
                     result = await handle_send_notification(
                         args=tool_args,
@@ -3862,60 +3808,7 @@ class AgentRuntimeExecutor:
         # auto or unknown — default to JSON for ResultRecord compatibility
         return "application/json"
 
-    async def _handle_save_result_tool_call(
-        self,
-        ctx: TaskAgentLoop,
-        args: dict[str, Any],
-        db: AsyncSession,
-    ) -> dict[str, Any]:
-        """Execute the ``save_result`` pseudo-tool: persist a ResultRecord.
-
-        Updates ``ctx.output_data`` so the session result is available to callers.
-        Emits a ``save_result`` execution log event for full traceability.
-        """
-        result_id: str | None = None
-        try:
-            from app.db.models.results import ResultRecord
-
-            # Phase 1.4: Derive content_type from output_type instead of hardcoding
-            content_type = self._resolve_content_type(ctx.output_type)
-
-            record = ResultRecord(
-                agent_type_id=uuid.UUID(ctx.agent_type_id),
-                payload=args.get("data") or args,
-                content_type=content_type,
-                title=args.get("title", f"Session {ctx.session_id} result"),
-                tags=["agent_session"],
-            )
-            db.add(record)
-            await db.flush()
-            result_id = str(record.id)
-            logger.info("Persisted ResultRecord %s for session %s", result_id, ctx.session_id)
-        except Exception as exc:
-            logger.warning(
-                "save_result tool call: failed to persist ResultRecord for session %s: %s",
-                ctx.session_id,
-                exc,
-            )
-
-        ctx.output_data = {
-            "result": args.get("content", ""),
-            "title": args.get("title", ""),
-            "result_id": result_id,
-        }
-
-        await self._log_execution_event(
-            session_id=uuid.UUID(ctx.session_id),
-            event_type="save_result",
-            message="save_result: ResultRecord persisted to Result Repository",
-            data={
-                "result_id": result_id,
-                "title": args.get("title", ""),
-                "output_keys": list(args.keys()),
-            },
-        )
-
-        return {"status": "saved", "result_id": result_id}
+    # _handle_save_result_tool_call removed — agents use save_data via CommHub instead.
 
     async def _load_role_mcp_session_map(
         self, role_id: uuid.UUID, db: AsyncSession
@@ -4096,46 +3989,7 @@ class AgentRuntimeExecutor:
             logger.warning("Failed to retrieve agent identity JWT: %s", exc)
             return None
 
-    async def _persist_result(
-        self, job: AgentJob, output_data: dict[str, Any], db: AsyncSession
-    ) -> None:
-        """Persist output_data as a ResultRecord (Result Repository / save_result)."""
-        with tracer.start_as_current_span(
-            "runtime_executor.persist_result",
-            attributes={"session_id": str(job.id)},
-        ):
-            result_id: str | None = None
-            try:
-                from app.db.models.results import ResultRecord
-                record = ResultRecord(
-                    agent_type_id=job.agent_type_id,
-                    payload=output_data,
-                    content_type="application/json",
-                    title=f"Session {job.id} result",
-                    tags=["agent_session"],
-                )
-                db.add(record)
-                await db.flush()
-                result_id = str(record.id)
-                logger.info("Persisted ResultRecord for session %s", job.id)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to persist ResultRecord for session %s: %s — continuing",
-                    job.id,
-                    exc,
-                )
-
-            # GAP-2: log save_result so operators can trace result persistence
-            await self._log_execution_event(
-                session_id=job.id,
-                event_type="save_result",
-                message="save_result: ResultRecord persisted to Result Repository",
-                data={
-                    "result_id": result_id,
-                    "output_keys": list(output_data.keys()) if output_data else [],
-                    "title": f"Session {job.id} result",
-                },
-            )
+    # _persist_result removed — agents now use save_data via CommHub for result persistence.
 
     async def _format_user_prompt(
         self,

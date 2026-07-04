@@ -131,6 +131,9 @@ tbody tr:last-child{border-bottom:none}
 .chip-violet{background:#DDD6FE;color:#4C1D95}
 .chip-green-dark{background:#DCFCE7;color:#166534}
 .chip-slate{background:#E5E7EB;color:#1F2937}
+.chip-high{background:#FEE2E2;color:#B91C1C}
+.chip-medium{background:#FEF3C7;color:#92400E}
+.chip-low{background:#DCFCE7;color:#15803D}
 .chip-new-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:3px}
 .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 .dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
@@ -440,6 +443,89 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 .flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
 .mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
 .w-full{width:100%}
+
+/* ── ENHANCE AGENT OUTPUT SYSTEM: NEW COMPONENTS ── */
+
+/* Typed output rendering */
+.typed-field{display:flex;padding:10px 0;border-bottom:1px solid #F1F5F9}
+.typed-field:last-child{border-bottom:none}
+.typed-field-label{flex:0 0 160px;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;padding-top:4px}
+.typed-field-value{flex:1;font-size:14px;color:var(--text-primary)}
+.typed-field-value .bool-true{color:var(--success);display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.typed-field-value .bool-false{color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px}
+
+/* Data type badge */
+.dt-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.dt-badge-typed{background:#EDE9FE;color:#6D28D9}
+.dt-badge-untyped{background:#F1F5F9;color:#475569}
+
+/* Validation error banner */
+.valid-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);margin-bottom:16px}
+.valid-banner .valid-icon{color:var(--error);font-size:20px;flex-shrink:0;margin-top:1px}
+.valid-banner .valid-content{flex:1}
+.valid-banner .valid-title{font-weight:600;color:#B91C1C;font-size:13px}
+.valid-banner .valid-desc{font-size:12px;color:#991B1B;margin-top:4px}
+.valid-banner .valid-raw{font-family:'Courier New',monospace;font-size:11px;background:#FFF;padding:10px;border:1px solid #FECACA;border-radius:var(--radius-sm);margin-top:8px;white-space:pre-wrap;max-height:120px;overflow-y:auto}
+
+/* Stat badges */
+.stat-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.stat-valid{background:#DCFCE7;color:#15803D}
+.stat-error{background:#FEE2E2;color:#B91C1C}
+
+/* Exec tabs in log dialog */
+.exec-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px;padding:0 20px;padding-top:4px}
+.exec-tab{padding:10px 20px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;transition:all var(--transition);background:none;border-top:none;border-left:none;border-right:none}
+.exec-tab:hover{color:var(--text-primary)}
+.exec-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.exec-tab-content{display:none}.exec-tab-content.active{display:block}
+
+/* Field editor rows */
+.field-row-new{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F1F5F9}
+.field-row-new:last-child{border-bottom:none}
+.field-row-new .field-name-col{flex:2;min-width:0}
+.field-row-new .field-type-col{flex:2;min-width:0}
+.field-row-new .field-req-col{flex:0 0 80px;text-align:center}
+.field-row-new .field-act-col{flex:0 0 40px;text-align:right}
+
+/* Enum values input inline */
+.enum-values-inline{margin-top:4px}
+.enum-values-inline input{font-size:12px;padding:5px 8px}
+
+/* Field editor empty state */
+.fields-empty-state{padding:16px;text-align:center;font-size:13px;color:var(--text-secondary);border:1px dashed var(--border);border-radius:var(--radius-sm);margin-top:4px}
+
+/* Search input with icon */
+.search-input-wrap{position:relative}
+.search-input-wrap .material-icons{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--text-secondary);pointer-events:none}
+.search-input-wrap input{padding-left:32px!important}
+
+/* Inline form error */
+.inline-form-error{font-size:11px;color:var(--error);margin-top:4px}
+
+/* Count badge */
+.count-badge{background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;display:inline-block}
+
+/* Data type dropdown option */
+.dt-dropdown-option{padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background var(--transition);font-size:13px}
+.dt-dropdown-option:hover{background:var(--primary-light)}
+
+/* Drawer (for output detail) */
+.drawer-overlay-new{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:900}
+.drawer-overlay-new.open{display:block}
+.drawer-new{position:fixed;top:0;right:-520px;bottom:0;width:520px;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:901;transition:right 0.3s ease;display:flex;flex-direction:column;overflow:hidden}
+.drawer-new.open{right:0}
+.drawer-new .drawer-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-new .drawer-header h3{font-size:16px;font-weight:600}
+.drawer-new .drawer-body{flex:1;overflow-y:auto;padding:24px}
+.drawer-new .drawer-body::-webkit-scrollbar{width:4px}.drawer-new .drawer-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Toast animation */
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.sched-toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.sched-toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
+.sched-toast.sched-success{background:#2E7D32}
+.sched-toast.sched-error{background:#C62828}
+.sched-toast.sched-info{background:#1565C0}
 strong{font-weight:600}
 .inline-form{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:12px}
 
@@ -674,6 +760,11 @@ strong{font-weight:600}
     <span class="nav-icon">🏠</span>Dashboard
   </div>
 
+  <!-- 1b. STANDALONE: Project Showcase -->
+  <div class="nav-item" data-view="project-showcase" data-group="project-showcase" onclick="nav(this,'project-showcase')">
+    <span class="nav-icon">🌐</span>Project Showcase
+  </div>
+
   <!-- 2. GROUP: Agents (collapsible, expanded by default) -->
   <div class="nav-parent-group" id="nav-agents" data-group="agents">
     <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
@@ -693,6 +784,18 @@ strong{font-weight:600}
       <div class="nav-item sub-item" data-view="schedules"          data-group="agents" onclick="nav(this,'schedules')">         <span class="nav-icon">📅</span>Schedules</div>
       <div class="nav-item sub-item" data-view="conversational-intervention" data-group="agents" onclick="nav(this,'conversational-intervention')"><span class="nav-icon">💬</span>Conversational Intervention</div>
       <div class="nav-item sub-item" data-view="intervene-requests" data-group="agents" onclick="nav(this,'intervene-requests')"><span class="nav-icon">🛑</span>Intervene Requests</div>
+      <div class="nav-item sub-item" data-view="data-types" data-group="agents" onclick="nav(this,'data-types')"><span class="nav-icon">📐</span>Data Types</div>
+    </div>
+  </div>
+
+  <!-- 2b. GROUP: Results (new - enhance-agent-output-system) -->
+  <div class="nav-parent-group" id="nav-results" data-group="results">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>📊 Results</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="agent-outputs" data-group="results" onclick="nav(this,'agent-outputs')"><span class="nav-icon">📤</span>Agent Outputs</div>
     </div>
   </div>
 
@@ -900,6 +1003,217 @@ strong{font-weight:600}
       <div class="metric-value" style="color:var(--success)">99.9%</div>
       <div class="metric-delta delta-up">All services operational</div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: PROJECT SHOWCASE ═══════════════════════════════ -->
+<div id="view-project-showcase" class="view">
+  <div class="view-header">
+    <div><h2>Project Showcase</h2><div class="view-desc">Public site deployed to GitHub Pages — architecture, security, and workflow walkthroughs for evaluators and contributors.</div></div>
+    <button class="btn btn-primary" onclick="window.open('https://github.com','_blank')">Open Showcase Site ↗</button>
+  </div>
+
+  <div class="change-banner">
+    <div class="cb-icon">🌐</div>
+    <div class="cb-body">
+      <h4>GitHub Pages Project Showcase <span class="cb-tag">github-pages-project-showcase</span></h4>
+      <p>A static marketing site presenting Parthenon's enterprise AI harness capabilities to platform evaluators, prospective contributors, and executive stakeholders. Auto-deployed on every push to main via GitHub Actions. No backend required.</p>
+    </div>
+  </div>
+
+  <div class="tabs" style="margin-top:4px">
+    <div class="tab active" onclick="switchTab(this,'showcase-arch-panel')">🏗️ Architecture</div>
+    <div class="tab" onclick="switchTab(this,'showcase-security-panel')">🛡️ Security</div>
+    <div class="tab" onclick="switchTab(this,'showcase-demo-panel')">👣 Walkthroughs</div>
+  </div>
+
+  <!-- Architecture tab -->
+  <div id="showcase-arch-panel" class="tab-panel active">
+    <div class="view-desc" style="margin-bottom:18px">Four foundational design pillars presented in the showcase site's High-Level Architecture section.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><h3>🔌 SOP / Skill-Driven MCP Integration</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Skills wrap one or more MCP tool calls into a named, permissionable unit. SOPs (Standard Operating Procedures) compose multiple Skills with sequencing logic and support agent-to-agent delegation. Each MCP server is registered with a unique slug; all its tools are synced under that namespace. Permissions are granted at the tool level — agents only see the tools their assigned Skills allow.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🛡️ Security &amp; Permission Control</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Agent Roles are permission sets granting access to specific SOPs and Skills. Roles resolve to a complete, deterministic set of allowed MCP tools at execution time. Agent identities are first-class OIDC principals in a dedicated agent realm, never sharing human credentials. Agents never hold identity tokens directly — tokens are injected per tool call by the Communication Hub.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>⚙️ Three-Service Isolation</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">
+            <strong>Control Center</strong> — sole database owner; manages CA, issues certificates, resolves permissions, maintains audit logs.<br>
+            <strong>Communication Hub</strong> — central broker for UI↔agent and agent↔agent messaging; acts as Agent Gateway for session management.<br>
+            <strong>Agent Runtime</strong> — the only service that executes agents (LangChain loop); authenticates via mTLS, never touches the database.<br>
+            Cross-service calls use certificate-based mTLS; no service shares database credentials.
+          </p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🪪 Dual Identity Support</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">
+            <strong>User Realm</strong> — human accounts; OIDC login via Keycloak or Azure EntraID; standard OAuth2 flows.<br>
+            <strong>Agent Realm</strong> — dedicated OIDC realm for AI agent identities; credentials stored encrypted, refreshed automatically.<br>
+            Agent Types define the pairing of an agent identity, role, model config, system instruction, and I/O type. Each execution validates that the agent identity is still assigned to its declared role before proceeding.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>📐 Architecture Diagram</h3><span class="text-secondary" style="font-size:12px">Flowchart: User Browser → Services → MCP Hub → PostgreSQL</span></div>
+      <div class="card-body" style="padding:0">
+        <div class="chart-placeholder" style="height:180px;border:none;border-radius:0;background:#F8FAFC;text-align:center;padding:60px 20px 0">
+          <div style="font-size:28px;margin-bottom:8px">🏗️</div>
+          <div style="font-weight:600;font-size:14px;color:var(--text-primary)">Three-Service Architecture — Mermaid flowchart</div>
+          <div class="text-secondary" style="font-size:12px;margin-top:4px">Rendered client-side from inline Mermaid source text · Dark theme with Parthenon colour tokens</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security tab -->
+  <div id="showcase-security-panel" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:18px">Three security deep-dive cards presented in the showcase site's Trust &amp; Compliance section.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div class="card">
+        <div class="card-header"><h3>🔐 Tool-Level Permission Control</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Permissions are granted at the individual MCP tool level, not at the server level. Agent Roles define which Skills an agent can invoke; at runtime, those Skills resolve to an exact, deterministic allow-list of tools. Agents cannot call any tool outside that computed set — enforced by Control Center on every request.</p>
+          <div style="margin-top:12px"><span class="chip chip-purple">SOP → Skill → Tool</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>📜 mTLS Certificate Authentication</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Each Agent Runtime instance receives a short-lived agent-instance certificate (24-hour validity) issued by Control Center's built-in Certificate Authority. Internal services use longer-lived service certificates (30-day validity). All inter-service calls are mutually authenticated via mTLS — no shared secrets or API keys cross service boundaries.</p>
+          <div style="margin-top:12px"><span class="chip chip-blue">24h agent-instance · 30d service</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🔒 Token Isolation</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;line-height:1.6">Agent Runtime instances never hold identity tokens. When an agent needs to call an MCP tool, the Communication Hub resolves the correct OIDC token for the agent identity and injects it into that specific tool call — just-in-time and scoped. Agent-instance certificates are explicitly blocked from internal management endpoints.</p>
+          <div style="margin-top:12px"><span class="chip chip-green">Just-in-time token injection</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Walkthroughs tab -->
+  <div id="showcase-demo-panel" class="tab-panel">
+    <div class="view-desc" style="margin-bottom:18px">Five guided walkthroughs presented on the showcase site, each with numbered steps and placeholder screenshots.</div>
+
+    <!-- Sub-tabs for walkthroughs -->
+    <div class="tabs" style="margin-bottom:18px;border-bottom-width:1px">
+      <div class="tab active" onclick="switchTab(this,'showcase-walk-mcp')" style="font-size:12px">1. MCP Server</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-skill')" style="font-size:12px">2. Skill &amp; SOP</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-role')" style="font-size:12px">3. Agent Roles</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-agent')" style="font-size:12px">4. Agent Types &amp; Trigger</div>
+      <div class="tab" onclick="switchTab(this,'showcase-walk-logs')" style="font-size:12px">5. Execution Logs</div>
+    </div>
+
+    <!-- Walkthrough 1: MCP Server -->
+    <div id="showcase-walk-mcp" class="tab-panel active">
+      <div class="card">
+        <div class="card-header"><h3>Integrate MCP Server</h3></div>
+        <div class="card-body">
+          <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Register the MCP Server</strong><br><span class="text-secondary" style="font-size:12px">In Control Center → MCP Hub, supply a unique slug, server URL, and encrypted credentials.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Sync &amp; Verify Tools</strong><br><span class="text-secondary" style="font-size:12px">Query the MCP server's manifest and import all available tools under the slug namespace.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Configure MCP Sessions</strong><br><span class="text-secondary" style="font-size:12px">Create named sessions that bind different identity credentials for varied OIDC contexts.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Test Connectivity</strong><br><span class="text-secondary" style="font-size:12px">Use the built-in connection test to confirm the server is ready for Skill references.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 2: Skill & SOP -->
+    <div id="showcase-walk-skill" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Create Skill &amp; SOP</h3></div>
+        <div class="card-body">
+          <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Define a Skill</strong><br><span class="text-secondary" style="font-size:12px">Select which MCP tools a Skill wraps — the smallest permissionable unit in Parthenon.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Compose an SOP</strong><br><span class="text-secondary" style="font-size:12px">Combine multiple Skills in sequence with branching logic and agent-to-agent delegation steps.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Review the Tool Allow-List</strong><br><span class="text-secondary" style="font-size:12px">The platform automatically resolves which MCP tools the SOP will expose at runtime.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Test the SOP</strong><br><span class="text-secondary" style="font-size:12px">Simulate execution with a mock agent identity before exposing to production agents.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 3: Agent Roles -->
+    <div id="showcase-walk-role" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Create Agent Roles</h3></div>
+        <div class="card-body">
+          <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Create an Agent Role</strong><br><span class="text-secondary" style="font-size:12px">Select SOPs and Skills — the platform computes the complete transitive set of accessible MCP tools.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Assign Agent Identities</strong><br><span class="text-secondary" style="font-size:12px">Attach OIDC agent identities via the many-to-many assignment panel. Each execution validates assignments.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Audit the Role</strong><br><span class="text-secondary" style="font-size:12px">Review creation timestamps, identity assignments, and permission resolution history in the audit trail.</span></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 4: Agent Types & Trigger -->
+    <div id="showcase-walk-agent" class="tab-panel">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-header"><h3>⚡ Non-Conversational Trigger</h3></div>
+          <div class="card-body">
+            <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Define Agent Type</strong><br><span class="text-secondary" style="font-size:12px">Set I/O to Non-Conversational, supply structured input schema and system instruction.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Trigger via Schedule or API</strong><br><span class="text-secondary" style="font-size:12px">Use cron scheduler or Agent Gateway API with structured input payload.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Retrieve Structured Result</strong><br><span class="text-secondary" style="font-size:12px">Agent persists output via built-in result-persistence tool. Query the Result Repository.</span></li>
+            </ol>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>💬 Conversational Session</h3></div>
+          <div class="card-body">
+            <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Define Agent Type</strong><br><span class="text-secondary" style="font-size:12px">Set I/O to Conversational — agent maintains full conversation history across turns.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Open a Session</strong><br><span class="text-secondary" style="font-size:12px">Web UI opens a WebSocket session via the Communication Hub. Stream responses in real time.</span></li>
+              <li style="font-size:13px;color:var(--text-primary)"><strong>Continue the Conversation</strong><br><span class="text-secondary" style="font-size:12px">Subsequent messages append to session history. Full tool call tracing in Execution Logs.</span></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Walkthrough 5: Execution Logs -->
+    <div id="showcase-walk-logs" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Execution Logs Viewer</h3></div>
+        <div class="card-body">
+          <p class="text-secondary" style="font-size:13px;margin-bottom:14px">Every agent run produces a rich, structured execution log visible in the <strong>Execution Log Viewer</strong> on the Agent Session page. Logs are captured before the first LLM call and span the entire observe-reason-act loop.</p>
+          <ul style="padding-left:20px;display:flex;flex-direction:column;gap:8px">
+            <li style="font-size:13px;color:var(--text-primary)"><strong>System context snapshot</strong><br><span class="text-secondary" style="font-size:12px">Full system instruction and user prompt captured at submission time for audit and traceability.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Span-based hierarchy</strong><br><span class="text-secondary" style="font-size:12px">Iterations, LLM calls, tool calls, and agent-to-agent delegations grouped into collapsible spans with timestamps and icons.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Tool call details</strong><br><span class="text-secondary" style="font-size:12px">Each MCP tool call shows input payload, raw response, and duration — expandable inline.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>Raw log toggle</strong><br><span class="text-secondary" style="font-size:12px">Switch between structured user-friendly view and raw technical log for debugging.</span></li>
+            <li style="font-size:13px;color:var(--text-primary)"><strong>OTEL integration</strong><br><span class="text-secondary" style="font-size:12px">Traces, metrics, and structured logs emitted to Prometheus, Jaeger, Loki, etc.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:24px">Placeholder Screenshots</div>
+  <div class="view-desc" style="margin-bottom:12px">The showcase site uses five clearly labelled SVG placeholder images that visitors can replace with real screenshots. Each is 800×500 px with the Parthenon dark colour palette.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="chip chip-blue">placeholder-mcp.svg</span>
+    <span class="chip chip-purple">placeholder-skill-sop.svg</span>
+    <span class="chip chip-green">placeholder-agent-roles.svg</span>
+    <span class="chip chip-yellow">placeholder-agent-trigger.svg</span>
+    <span class="chip chip-gray">placeholder-exec-logs.svg</span>
   </div>
 </div>
 
@@ -2864,6 +3178,64 @@ Returns: { request_id, status }</div>
 </div>
 
   </div><!-- /main-content -->
+
+<!-- ═══════════════════════════════ VIEW: DATA TYPES (NEW — enhance-agent-output-system) ═══════════════ -->
+<div id="view-data-types" class="view">
+  <div class="view-header">
+    <div><h2>Agent Data Types</h2><div class="view-desc">Define reusable typed schemas for agent outputs</div></div>
+    <button class="btn btn-primary" onclick="dtOpenCreate()">+ Create Data Type</button>
+  </div>
+  <div class="table-wrap" id="dtTableWrap">
+    <table>
+      <thead><tr><th>Name</th><th>Slug</th><th>Fields</th><th>Used By</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="dtTableBody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="dtEmptyState" style="display:none">
+    <div class="empty-icon">📐</div>
+    <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">No data types yet</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:20px;max-width:360px">Create your first data type to define a reusable schema for agent outputs.</div>
+    <button class="btn btn-primary" onclick="dtOpenCreate()">+ Create Data Type</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: AGENT OUTPUTS (NEW — enhance-agent-output-system) ═══════════════ -->
+<div id="view-agent-outputs" class="view">
+  <div class="view-header">
+    <div><h2>Agent Outputs</h2><div class="view-desc">Browse, filter, and export past typed agent execution results</div></div>
+    <button class="btn btn-primary" onclick="aoExportCsv()">📥 Export CSV</button>
+  </div>
+  <div class="filter-bar">
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">Data Type</label>
+      <select class="form-control" id="aoFilterDataType" onchange="aoApplyFilters()" style="min-width:180px">
+        <option value="">All data types</option><option value="IncidentReport">IncidentReport</option>
+        <option value="EnrichmentResult">EnrichmentResult</option><option value="ComplianceReport">ComplianceReport</option>
+      </select></div>
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">Agent Type</label>
+      <select class="form-control" id="aoFilterAgentType" onchange="aoApplyFilters()" style="min-width:180px">
+        <option value="">All agent types</option><option value="Incident Analyzer">Incident Analyzer</option>
+        <option value="Data Enrichment Agent">Data Enrichment Agent</option><option value="Compliance Auditor">Compliance Auditor</option>
+      </select></div>
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">From</label>
+      <input type="date" class="form-control" id="aoFilterDateFrom" value="2026-01-01" onchange="aoApplyFilters()" style="min-width:150px"></div>
+    <div class="form-group" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)">To</label>
+      <input type="date" class="form-control" id="aoFilterDateTo" value="2026-01-31" onchange="aoApplyFilters()" style="min-width:150px"></div>
+    <button class="btn btn-sm btn-secondary" onclick="aoClearFilters()" style="margin-top:16px">Clear</button>
+  </div>
+  <div class="table-wrap" id="aoTableWrap">
+    <table>
+      <thead><tr id="aoTableHead"><th>Timestamp</th><th>Agent Type</th><th>Data Type</th><th>Priority</th><th>Summary</th><th>Status</th></tr></thead>
+      <tbody id="aoTableBody"></tbody>
+    </table>
+    <div class="empty-state" id="aoEmptyState" style="display:none">
+      <div class="empty-icon">🔍</div>
+      <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">No outputs match the selected filters</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Try adjusting your filter criteria.</div>
+      <button class="btn btn-secondary" onclick="aoClearFilters()">Clear Filters</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- /main-wrapper -->
 </div><!-- /app-shell -->
 
@@ -3164,6 +3536,24 @@ Returns: { request_id, status }</div>
         <div class="form-group">
           <label>Output Schema (JSON)</label>
           <textarea class="form-control" rows="3" placeholder='{"type":"object","properties":{"result":{"type":"string"}}}'></textarea>
+        </div>
+      </div>
+
+      <!-- Output Data Type (NEW — enhance-agent-output-system) -->
+      <div id="agent-output-data-type-field" style="display:none">
+        <div class="form-group">
+          <label>Output Data Type <span class="text-secondary" style="font-weight:400">(optional)</span></label>
+          <select class="form-control" id="agent-output-data-type-select" onchange="var v=this.value;var b=document.getElementById('atSelectedDtBadge');var n=document.getElementById('atSelectedDtName');if(b&&n){if(v){n.textContent=v;b.style.display=''}else b.style.display='none'}">
+            <option value="">— None — no data type assigned</option>
+            <option value="IncidentReport">IncidentReport (5 fields)</option>
+            <option value="EnrichmentResult">EnrichmentResult (4 fields)</option>
+            <option value="ComplianceReport">ComplianceReport (4 fields)</option>
+          </select>
+          <div class="form-hint">Assign a data type to validate and structure this agent's outputs. Leave blank for untyped raw JSON output.</div>
+          <div style="margin-top:8px;display:none" id="atSelectedDtBadge">
+            <span class="dt-badge dt-badge-typed">📐 <span id="atSelectedDtName">IncidentReport</span></span>
+            <span style="font-size:11px;color:var(--text-secondary);margin-left:6px">Schema validation will be applied at execution time</span>
+          </div>
         </div>
       </div>
 
@@ -3895,7 +4285,10 @@ const viewTitles = {
   'agent-trails': 'Agent Trails',
   'system-config': 'System Config',
   'conversational-intervention': 'Conversational Agent Intervention',
-  'intervene-requests': 'Intervene Requests'
+  'intervene-requests': 'Intervene Requests',
+  'data-types': 'Agent Data Types',
+  'agent-outputs': 'Agent Outputs',
+  'project-showcase': 'Project Showcase'
 };
 
 
@@ -4557,6 +4950,7 @@ function toggleAgentTypeFields() {
   document.getElementById('agent-output-type-select').disabled = (inputType === 'conversation');
   if (inputType === 'conversation') {
     document.getElementById('agent-output-schema-field').style.display = 'none';
+    document.getElementById('agent-output-data-type-field').style.display = 'none';
   }
 }
 
@@ -4564,6 +4958,17 @@ function toggleAgentOutputTypeFields() {
   var inputType = document.getElementById('agent-input-type-select').value;
   var outputType = document.getElementById('agent-output-type-select').value;
   document.getElementById('agent-output-schema-field').style.display = (inputType !== 'conversation' && outputType === 'typed') ? 'block' : 'none';
+  // ENHANCE-AGENT-OUTPUT-SYSTEM: show data type selector for typed output
+  var dtField = document.getElementById('agent-output-data-type-field');
+  if (dtField) dtField.style.display = (inputType !== 'conversation' && outputType === 'typed') ? 'block' : 'none';
+  // Show badge when a data type is selected
+  var sel = document.getElementById('agent-output-data-type-select');
+  var badge = document.getElementById('atSelectedDtBadge');
+  var nameSpan = document.getElementById('atSelectedDtName');
+  if (sel && badge && nameSpan) {
+    if (sel.value) { nameSpan.textContent = sel.value; badge.style.display = ''; }
+    else badge.style.display = 'none';
+  }
 }
 
 // ═══════════════════════════════ SCHEDULES ═══════════════════════════════
@@ -5267,6 +5672,16 @@ function setExecutionLogMode(mode) {
   raw.style.display = mode === 'raw' ? 'block' : 'none';
 }
 
+// ENHANCE-AGENT-OUTPUT-SYSTEM: exec log tab switching
+function exSwitchTab(tab, btn) {
+  document.querySelectorAll('#executionDetailsModal .exec-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('#executionDetailsModal .exec-tab-content').forEach(function(c){ c.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  var target = document.getElementById('exec-tab-' + tab);
+  if (target) target.classList.add('active');
+}
+window.exSwitchTab = exSwitchTab;
+
 // ═══════════════════════════════ INIT ═══════════════════════════════
 (function init() {
   showView('dashboard');
@@ -5659,6 +6074,7 @@ function setExecutionLogMode(mode) {
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <span class="chip chip-blue">Policy Snapshot: gps-pr-reviewer-2026-05-25</span>
             <span class="chip chip-green">Within Limits</span>
+            <span class="dt-badge dt-badge-typed" style="margin-left:4px">IncidentReport</span>
           </div>
         </div>
         <div class="card-body" style="padding:12px 14px;">
@@ -5673,40 +6089,48 @@ function setExecutionLogMode(mode) {
         </div>
       </div>
 
-      <div class="form-group" style="display:flex;justify-content:flex-end;gap:8px;">
-        <button class="btn btn-secondary btn-sm" onclick="setExecutionLogMode('friendly')">Friendly View</button>
-        <button class="btn btn-secondary btn-sm" onclick="setExecutionLogMode('raw')">Raw Log</button>
+      <!-- Tabs: Execution Logs | Result -->
+      <div class="exec-tabs">
+        <button class="exec-tab active" onclick="exSwitchTab('logs',this)">Execution Logs</button>
+        <button class="exec-tab" onclick="exSwitchTab('result',this)">Result <span class="chip chip-purple" style="margin-left:6px;padding:1px 8px;font-size:10px">IncidentReport</span></button>
       </div>
 
-      <div id="execution-log-friendly">
-        <div class="timeline">
-          <div class="timeline-item">
-            <h4><span>Preparation</span><small>09:21:11</small></h4>
-            <p>session_started, tools_resolved, plan_injected</p>
+      <!-- Execution Logs tab -->
+      <div class="exec-tab-content active" id="exec-tab-logs" style="padding:0">
+        <div class="form-group" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
+          <button class="btn btn-secondary btn-sm" onclick="setExecutionLogMode('friendly')">Friendly View</button>
+          <button class="btn btn-secondary btn-sm" onclick="setExecutionLogMode('raw')">Raw Log</button>
+        </div>
+        <div id="execution-log-friendly">
+          <div class="timeline">
+            <div class="timeline-item"><h4><span>Preparation</span><small>09:21:11</small></h4><p>session_started, tools_resolved, plan_injected</p></div>
+            <div class="timeline-item"><h4><span>Iteration 1</span><small>09:21:19</small></h4><p>observe, llm_request, llm_response, tool_call github.read_pr</p></div>
+            <div class="timeline-item warning"><h4><span>Guardrail Snapshot</span><small>09:21:29</small></h4><p>token_usage_current_session=412400, cumulative_iterations=6, delegated_steps=11</p></div>
+            <div class="timeline-item success"><h4><span>Completion</span><small>09:21:35</small></h4><p>task_loop_completed, session_completed</p></div>
           </div>
-          <div class="timeline-item">
-            <h4><span>Iteration 1</span><small>09:21:19</small></h4>
-            <p>observe, llm_request, llm_response, tool_call github.read_pr</p>
-          </div>
-          <div class="timeline-item warning">
-            <h4><span>Guardrail Snapshot</span><small>09:21:29</small></h4>
-            <p>token_usage_current_session=412400, cumulative_iterations=6, delegated_steps=11</p>
-          </div>
-          <div class="timeline-item success">
-            <h4><span>Completion</span><small>09:21:35</small></h4>
-            <p>task_loop_completed, session_completed</p>
+        </div>
+        <div id="execution-log-raw" style="display:none">
+          <div class="log-stream">
+            <div class="log-line log-info">[2026-05-25T09:21:11.104Z] [INFO] [session_started] Session started for pr-reviewer</div>
+            <div class="log-line log-info">[2026-05-25T09:21:12.018Z] [INFO] [sops_skills_loaded] Loaded SOP github-pr-workflow</div>
+            <div class="log-line log-info">[2026-05-25T09:21:29.441Z] [INFO] [guardrail.runtime.snapshot] {"cumulative_iterations":6}</div>
+            <div class="log-line log-info">[2026-05-25T09:21:35.227Z] [INFO] [task_loop_completed] Task loop completed</div>
+            <div class="log-line log-info">[2026-05-25T09:21:35.311Z] [INFO] [session_completed] Session completed successfully</div>
           </div>
         </div>
       </div>
 
-      <div id="execution-log-raw" style="display:none">
-        <div class="log-stream">
-          <div class="log-line log-info">[2026-05-25T09:21:11.104Z] [INFO] [session_started] Session started for pr-reviewer</div>
-          <div class="log-line log-info">[2026-05-25T09:21:12.018Z] [INFO] [sops_skills_loaded] Loaded SOP github-pr-workflow and related skills</div>
-          <div class="log-line log-info">[2026-05-25T09:21:29.441Z] [INFO] [guardrail.runtime.snapshot] {"cumulative_iterations":6,"delegated_steps":11,"delegation_depth":2,"token_usage_current_session":412400}</div>
-          <div class="log-line log-info">[2026-05-25T09:21:35.227Z] [INFO] [task_loop_completed] Task loop completed within configured guardrails</div>
-          <div class="log-line log-info">[2026-05-25T09:21:35.311Z] [INFO] [session_completed] Session completed successfully</div>
+      <!-- Result tab (NEW — enhance-agent-output-system: typed output) -->
+      <div class="exec-tab-content" id="exec-tab-result" style="padding:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span class="dt-badge dt-badge-typed" style="font-size:12px;gap:4px">✅ IncidentReport</span>
+          <span style="font-size:12px;color:var(--text-secondary)">— Schema validated output</span>
         </div>
+        <div class="typed-field"><div class="typed-field-label">Priority</div><div class="typed-field-value"><span class="chip chip-high">High</span></div></div>
+        <div class="typed-field"><div class="typed-field-label">Incident Date</div><div class="typed-field-value">Jan 15, 2026</div></div>
+        <div class="typed-field"><div class="typed-field-label">Summary</div><div class="typed-field-value">Database server db-01 experiencing high CPU usage and connection timeouts. All read operations affected.</div></div>
+        <div class="typed-field"><div class="typed-field-label">Resolved</div><div class="typed-field-value"><span class="bool-false">❌ No</span></div></div>
+        <div class="typed-field"><div class="typed-field-label">Category</div><div class="typed-field-value"><span class="chip chip-blue">Infrastructure</span></div></div>
       </div>
     </div>
   </div>
@@ -7090,7 +7514,292 @@ mcRenderCascade('mcCascadeModalTree');
   // Initial render on page load (if view shown)
   irRender();
 })();
+
+// ═══════════════════════════════ ENHANCE AGENT OUTPUT SYSTEM ═══════════════════════════════
+// Data Types CRUD and Agent Outputs admin page
+(function(){
+  // ── DATA ──
+  var dataTypes = [
+    { id:'dt-1', name:'IncidentReport', slug:'incident-report', description:'Schema for incident analysis results', fields:[
+      { name:'priority', type:'enum', enumValues:['high','medium','low'], required:true },
+      { name:'incident_date', type:'date', required:true },
+      { name:'summary', type:'string', required:true },
+      { name:'resolved', type:'boolean', required:true },
+      { name:'category', type:'enum', enumValues:['infrastructure','security','application','network'], required:false }
+    ], created:'2026-01-10', usedBy:['Incident Analyzer'] },
+    { id:'dt-2', name:'EnrichmentResult', slug:'enrichment-result', description:'Schema for data enrichment agent results', fields:[
+      { name:'source_field', type:'string', required:true },
+      { name:'enriched_value', type:'string', required:true },
+      { name:'confidence', type:'number', required:true },
+      { name:'processed_at', type:'date', required:true }
+    ], created:'2026-01-12', usedBy:['Data Enrichment Agent'] },
+    { id:'dt-3', name:'ComplianceReport', slug:'compliance-report', description:'Schema for compliance audit agent outputs', fields:[
+      { name:'check_name', type:'string', required:true },
+      { name:'status', type:'enum', enumValues:['pass','fail','warning'], required:true },
+      { name:'details', type:'string', required:false },
+      { name:'checked_at', type:'date', required:true }
+    ], created:'2026-01-14', usedBy:[] }
+  ];
+  var fieldTypes = ['string','number','boolean','date','enum'];
+  var editingDtId = null;
+
+  var agentOutputs = [
+    { id:'out-1', timestamp:'2026-01-15 14:32:18', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'high',incident_date:'2026-01-15',summary:'Database server db-01 high CPU usage and connection timeouts.',resolved:false,category:'infrastructure'} },
+    { id:'out-2', timestamp:'2026-01-15 13:10:05', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'medium',incident_date:'2026-01-15',summary:'API rate limit exceeded on payment gateway.',resolved:true,category:'application'} },
+    { id:'out-3', timestamp:'2026-01-14 09:22:44', agentType:'Data Enrichment Agent', dataType:'EnrichmentResult', status:'valid', fields:{source_field:'user.email',enriched_value:'john@acme.com',confidence:0.97,processed_at:'2026-01-14'} },
+    { id:'out-4', timestamp:'2026-01-14 07:15:30', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'validation_error', fields:{priority:'critical',incident_date:'2026-01-14',summary:'Security breach detected — unauthorised admin panel access.',resolved:false,category:'security'} },
+    { id:'out-5', timestamp:'2026-01-13 16:45:12', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'low',incident_date:'2026-01-13',summary:'SSL certificate expiring in 14 days.',resolved:false,category:'infrastructure'} },
+    { id:'out-6', timestamp:'2026-01-12 08:05:22', agentType:'Incident Analyzer', dataType:'IncidentReport', status:'valid', fields:{priority:'high',incident_date:'2026-01-12',summary:'Production deployment failed — build timeout.',resolved:true,category:'infrastructure'} }
+  ];
+
+  function makeSlug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── DATA TYPES RENDERING ──
+  function dtRender() {
+    var body = document.getElementById('dtTableBody'), empty = document.getElementById('dtEmptyState'), wrap = document.getElementById('dtTableWrap');
+    if (!body) return;
+    if (dataTypes.length === 0) { empty.style.display = ''; wrap.style.display = 'none'; return; }
+    empty.style.display = 'none'; wrap.style.display = '';
+    body.innerHTML = dataTypes.map(function(d){
+      return '<tr><td style="font-weight:600">'+esc(d.name)+'</td><td><code style="font-size:12px;background:#F1F5F9;padding:2px 6px;border-radius:3px">'+esc(d.slug)+'</code></td>'+
+        '<td><span class="count-badge">'+d.fields.length+' field'+(d.fields.length!==1?'s':'')+'</span></td>'+
+        '<td style="font-size:12px;color:var(--text-secondary)">'+(d.usedBy.length?d.usedBy.join(', '):'—')+'</td>'+
+        '<td style="font-size:13px">'+d.created+'</td>'+
+        '<td class="actions-cell" style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="dtOpenEdit(\''+d.id+'\')">Edit</button><button class="btn btn-sm btn-secondary" style="color:var(--error)" onclick="dtOpenDelete(\''+d.id+'\')">Delete</button></td></tr>';
+    }).join('');
+  }
+
+  // ── DATA TYPE DIALOG ──
+  function dtOpenCreate() {
+    editingDtId = null; document.getElementById('dtDialog').style.display = 'flex';
+    document.getElementById('dtDlgTitle').textContent = 'Create Data Type';
+    document.getElementById('dtDlgName').value = ''; document.getElementById('dtDlgSlug').value = '';
+    document.getElementById('dtDlgDesc').value = ''; document.getElementById('dtDlgNameErr').textContent = '';
+    document.getElementById('dtDlgSlugErr').textContent = ''; document.getElementById('dtDlgFieldsErr').textContent = '';
+    dtRenderFields();
+  }
+  function dtOpenEdit(id) {
+    var d = dataTypes.find(function(x){return x.id===id}); if(!d) return;
+    editingDtId = id; document.getElementById('dtDialog').style.display = 'flex';
+    document.getElementById('dtDlgTitle').textContent = 'Edit Data Type — '+d.name;
+    document.getElementById('dtDlgName').value = d.name; document.getElementById('dtDlgSlug').value = d.slug;
+    document.getElementById('dtDlgDesc').value = d.description||''; document.getElementById('dtDlgNameErr').textContent = '';
+    document.getElementById('dtDlgSlugErr').textContent = ''; document.getElementById('dtDlgFieldsErr').textContent = '';
+    dtRenderFields(d.fields);
+  }
+  function dtCloseDialog() { document.getElementById('dtDialog').style.display = 'none'; }
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&document.getElementById('dtDialog')&&document.getElementById('dtDialog').style.display==='flex') dtCloseDialog(); });
+
+  function dtRenderFields(fields) {
+    var container = document.getElementById('dtFieldsContainer'), empty = document.getElementById('dtFieldsEmpty');
+    var f = fields || [];
+    if (f.length === 0) { empty.style.display = ''; container.innerHTML = ''; return; }
+    empty.style.display = 'none';
+    container.innerHTML = f.map(function(ff, idx){
+      var topts = fieldTypes.map(function(t){ return '<option value="'+t+'"'+(ff.type===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>'; }).join('');
+      var chk = ff.required ? ' checked' : '';
+      var en = ff.type==='enum'? '<div class="enum-values-inline"><input type="text" class="form-control" placeholder="high,medium,low" value="'+((ff.enumValues||[]).join(', '))+'" oninput="dtSetEnum('+idx+',this.value)" style="font-size:12px;padding:5px 8px"><div class="form-hint">Comma-separated</div></div>' : '';
+      return '<div class="field-row-new" data-fi="'+idx+'"><div class="field-name-col"><input type="text" class="form-control" value="'+(ff.name||'')+'" placeholder="Field name" style="font-size:13px;padding:6px 8px">'+en+'</div>'+
+        '<div class="field-type-col"><select class="form-control" onchange="dtFieldTypeChange('+idx+',this.value)" style="font-size:13px;padding:6px 8px">'+topts+'</select></div>'+
+        '<div class="field-req-col"><label class="toggle"><input type="checkbox"'+(ff.required?' checked':'')+' style="margin:0 auto"><span class="toggle-slider"></span></label></div>'+
+        '<div class="field-act-col"><button class="btn-icon-sm" onclick="dtRemoveField('+idx+')">🗑️</button></div></div>';
+    }).join('');
+  }
+  function dtAddField() {
+    var c = document.getElementById('dtFieldsContainer'), empty = document.getElementById('dtFieldsEmpty');
+    empty.style.display = 'none';
+    var idx = c.querySelectorAll('.field-row-new').length;
+    var topts = fieldTypes.map(function(t){ return '<option value="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>'; }).join('');
+    var row = document.createElement('div'); row.className = 'field-row-new'; row.dataset.fi = idx;
+    row.innerHTML = '<div class="field-name-col"><input type="text" class="form-control" placeholder="Field name" style="font-size:13px;padding:6px 8px"></div>'+
+      '<div class="field-type-col"><select class="form-control" onchange="dtFieldTypeChange('+idx+',this.value)" style="font-size:13px;padding:6px 8px">'+topts+'</select></div>'+
+      '<div class="field-req-col"><label class="toggle"><input type="checkbox" checked style="margin:0 auto"><span class="toggle-slider"></span></label></div>'+
+      '<div class="field-act-col"><button class="btn-icon-sm" onclick="dtRemoveField('+idx+')">🗑️</button></div>';
+    c.appendChild(row);
+  }
+  function dtRemoveField(idx) { var r = document.querySelector('#dtFieldsContainer .field-row-new[data-fi="'+idx+'"]'); if(r) r.remove(); if(!document.querySelectorAll('#dtFieldsContainer .field-row-new').length) document.getElementById('dtFieldsEmpty').style.display = ''; }
+  function dtFieldTypeChange(idx, val) {
+    var rows = document.querySelectorAll('#dtFieldsContainer .field-row-new'); var row = rows[idx]; if(!row) return;
+    var nc = row.querySelector('.field-name-col'), ex = nc.querySelector('.enum-values-inline'); if(ex) ex.remove();
+    if(val==='enum'){ var d=document.createElement('div');d.className='enum-values-inline';d.innerHTML='<input type="text" class="form-control" placeholder="high,medium,low" oninput="dtSetEnum('+idx+',this.value)" style="font-size:12px;padding:5px 8px"><div class="form-hint">Comma-separated</div>'; nc.appendChild(d); }
+  }
+  function dtSetEnum(idx, val) { /* stored at save time */ }
+  function dtGetFields() {
+    var fields = []; var rows = document.querySelectorAll('#dtFieldsContainer .field-row-new');
+    rows.forEach(function(row, idx){
+      var n = row.querySelector('.field-name-col input[type="text"]'), t = row.querySelector('.field-type-col select'), r = row.querySelector('.field-req-col input[type="checkbox"]'), e = row.querySelector('.field-name-col .enum-values-inline input');
+      var f = { name: n?n.value:'', type: t?t.value:'string', required: r?r.checked:true };
+      if (f.type==='enum' && e) f.enumValues = e.value.split(',').map(function(s){return s.trim()}).filter(Boolean);
+      if (f.name) fields.push(f);
+    });
+    return fields;
+  }
+  function dtSave() {
+    var name = (document.getElementById('dtDlgName').value||'').trim(), slug = (document.getElementById('dtDlgSlug').value||'').trim(), desc = (document.getElementById('dtDlgDesc').value||'').trim(), fields = dtGetFields(), err = false;
+    if (!name) { document.getElementById('dtDlgNameErr').textContent = 'Name is required'; err = true; }
+    if (dataTypes.some(function(d){ return d.name.toLowerCase()===name.toLowerCase() && d.id!==editingDtId; })) { document.getElementById('dtDlgNameErr').textContent = 'Duplicate name'; err = true; }
+    if (!slug) { document.getElementById('dtDlgSlugErr').textContent = 'Slug is required'; err = true; }
+    if (!fields.length) { document.getElementById('dtDlgFieldsErr').textContent = 'At least one field is required'; err = true; }
+    if (fields.some(function(f){ return !f.name; })) { document.getElementById('dtDlgFieldsErr').textContent = 'All fields must have a name'; err = true; }
+    if (err) return;
+    if (editingDtId) { var d = dataTypes.find(function(x){ return x.id===editingDtId; }); if(d){ d.name=name; d.slug=slug; d.description=desc; d.fields=fields; } }
+    else { dataTypes.push({ id:'dt-'+Date.now(), name:name, slug:slug, description:desc, fields:fields, created: new Date().toISOString().split('T')[0], usedBy:[] }); }
+    dtCloseDialog(); dtRender(); schedToast('Data type saved','sched-success');
+  }
+
+  // ── DELETE GUARD ──
+  function dtOpenDelete(id) {
+    var d = dataTypes.find(function(x){ return x.id===id; }); if(!d) return;
+    document.getElementById('dtDeleteName').textContent = d.name;
+    document.getElementById('dtDeleteRefText').textContent = d.usedBy&&d.usedBy.length>0 ? 'Cannot delete: referenced by '+d.usedBy.length+' agent type(s): '+d.usedBy.join(', ')+'.' : '';
+    document.getElementById('dtDeleteRefWarn').style.display = d.usedBy&&d.usedBy.length>0 ? '' : 'none';
+    document.getElementById('dtDeleteBtn').disabled = d.usedBy&&d.usedBy.length>0;
+    document.getElementById('dtDeleteBtn').style.opacity = d.usedBy&&d.usedBy.length>0 ? '0.5' : '1';
+    document.getElementById('dtDeleteDialog').style.display = 'flex';
+    document.getElementById('dtDeleteDialog').dataset.delId = id;
+  }
+  function dtCloseDelete() { document.getElementById('dtDeleteDialog').style.display = 'none'; }
+  function dtConfirmDelete() {
+    var id = document.getElementById('dtDeleteDialog').dataset.delId, d = dataTypes.find(function(x){ return x.id===id; }); if(!d) return;
+    if (d.usedBy&&d.usedBy.length>0) { schedToast('Cannot delete: data type is in use','sched-error'); return; }
+    dataTypes = dataTypes.filter(function(x){ return x.id!==id; }); dtCloseDelete(); dtRender(); schedToast('Data type deleted','sched-success');
+  }
+
+  // Slug auto-gen
+  (function setupSlugGen(){
+    var ni=document.getElementById('dtDlgName'); if(ni) ni.addEventListener('input', function(){ var si=document.getElementById('dtDlgSlug'); if(si&&!si.dataset.manual) si.value=makeSlug(this.value); });
+    var si=document.getElementById('dtDlgSlug'); if(si) si.addEventListener('input', function(){ this.dataset.manual='1'; });
+  })();
+
+  // ── AGENT OUTPUTS ──
+  function aoApplyFilters() {
+    var dtf = document.getElementById('aoFilterDataType').value, atf = document.getElementById('aoFilterAgentType').value;
+    var df = document.getElementById('aoFilterDateFrom').value, dt = document.getElementById('aoFilterDateTo').value;
+    var results = agentOutputs.filter(function(o){
+      if (dtf && o.dataType !== dtf) return false; if (atf && o.agentType !== atf) return false;
+      var od = o.timestamp.split(' ')[0]; if (df && od < df) return false; if (dt && od > dt) return false;
+      return true;
+    });
+    var body = document.getElementById('aoTableBody'), empty = document.getElementById('aoEmptyState');
+    if (!body) return;
+    if (!results.length) { empty.style.display = ''; body.innerHTML = ''; return; }
+    empty.style.display = 'none';
+    body.innerHTML = results.map(function(o){
+      var f = o.fields, statusBadge = o.status==='valid' ? '<span class="stat-badge stat-valid">Valid</span>' : '<span class="stat-badge stat-error">Validation Error</span>';
+      var priorityChip = f.priority ? '<span class="chip chip-'+f.priority+'">'+f.priority.charAt(0).toUpperCase()+f.priority.slice(1)+'</span>' : '—';
+      var summary = (f.summary||'').length>50 ? (f.summary||'').substring(0,50)+'...' : (f.summary||'—');
+      return '<tr style="cursor:pointer" onclick="aoOpenDrawer(\''+o.id+'\')"><td style="font-size:12px">'+o.timestamp+'</td><td style="font-weight:500">'+esc(o.agentType)+'</td><td><span class="dt-badge dt-badge-typed">'+esc(o.dataType)+'</span></td><td>'+priorityChip+'</td><td style="font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(summary)+'</td><td>'+statusBadge+'</td></tr>';
+    }).join('');
+  }
+  function aoClearFilters() { document.getElementById('aoFilterDataType').value='';document.getElementById('aoFilterAgentType').value='';document.getElementById('aoFilterDateFrom').value='';document.getElementById('aoFilterDateTo').value=''; aoApplyFilters(); }
+  function aoExportCsv() { schedToast('CSV export — '+agentOutputs.length+' rows','sched-info'); }
+
+  // ── DRAWER ──
+  function aoOpenDrawer(id) {
+    var o = agentOutputs.find(function(x){ return x.id===id; }); if(!o) return;
+    document.getElementById('aoDrawerOverlay').style.display = ''; document.getElementById('aoDrawer').classList.add('open');
+    var body = document.getElementById('aoDrawerBody'), f = o.fields;
+    var html = '<div style="margin-bottom:16px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="dt-badge dt-badge-typed">'+esc(o.dataType)+'</span>'+
+      (o.status==='valid'?'<span class="stat-badge stat-valid">Valid</span>':'<span class="stat-badge stat-error">Validation Error</span>')+'</div>'+
+      '<div style="font-size:12px;color:var(--text-secondary)"><div>Agent Type: <strong>'+esc(o.agentType)+'</strong></div><div>Timestamp: <strong>'+o.timestamp+'</strong></div></div></div>';
+    if (o.status==='validation_error') html += '<div class="valid-banner"><span class="valid-icon">⚠️</span><div class="valid-content"><div class="valid-title">Schema Validation Failed</div><div class="valid-desc">The output does not match the expected schema.</div></div></div>';
+    html += '<div class="section-title" style="margin-top:0">Field Values</div>';
+    for (var k in f) {
+      var v = f[k], dv = v;
+      if (typeof v==='boolean') dv = v ? '<span class="bool-true">✅ Yes</span>' : '<span class="bool-false">❌ No</span>';
+      else if (k==='priority') dv = '<span class="chip chip-'+v+'">'+String(v).charAt(0).toUpperCase()+String(v).slice(1)+'</span>';
+      else if (k==='status'&&v) { var cc = v==='pass'?'green':(v==='warning'?'yellow':'red'); dv = '<span class="chip chip-'+cc+'">'+String(v).charAt(0).toUpperCase()+String(v).slice(1)+'</span>'; }
+      else if (k==='confidence'&&typeof v==='number') dv = (v*100).toFixed(0)+'%';
+      html += '<div class="typed-field"><div class="typed-field-label">'+k.replace(/_/g,' ')+'</div><div class="typed-field-value">'+dv+'</div></div>';
+    }
+    body.innerHTML = html;
+  }
+  function aoCloseDrawer() { document.getElementById('aoDrawerOverlay').style.display = 'none'; document.getElementById('aoDrawer').classList.remove('open'); }
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'&&document.getElementById('aoDrawer')&&document.getElementById('aoDrawer').classList.contains('open')) aoCloseDrawer(); });
+
+  // ── TOAST ──
+  function schedToast(msg, type) { var c = document.querySelector('.sched-toast-container'); var t = document.createElement('div'); t.className='sched-toast sched-'+(type||'info'); t.textContent=msg; c.appendChild(t); setTimeout(function(){ t.remove(); },3000); }
+  window.schedToast = schedToast;
+
+  // ── ON NAVIGATION, SHOW FIRST SCREEN ──
+  var origShowView = showView;
+  showView = function(viewId) {
+    origShowView(viewId);
+    if (viewId==='data-types') dtRender();
+    if (viewId==='agent-outputs') aoApplyFilters();
+  };
+
+  // ── EXPOSE TO WINDOW ──
+  window.dtOpenCreate = dtOpenCreate; window.dtOpenEdit = dtOpenEdit; window.dtCloseDialog = dtCloseDialog;
+  window.dtAddField = dtAddField; window.dtRemoveField = dtRemoveField;
+  window.dtFieldTypeChange = dtFieldTypeChange; window.dtSetEnum = dtSetEnum; window.dtSave = dtSave;
+  window.dtOpenDelete = dtOpenDelete; window.dtCloseDelete = dtCloseDelete; window.dtConfirmDelete = dtConfirmDelete;
+  window.aoApplyFilters = aoApplyFilters; window.aoClearFilters = aoClearFilters;
+  window.aoExportCsv = aoExportCsv; window.aoOpenDrawer = aoOpenDrawer; window.aoCloseDrawer = aoCloseDrawer;
+})();
 </script>
+
+<!-- ═══════════════════════════════ ENHANCE AGENT OUTPUT SYSTEM: DIALOGS ═══════════════════════════════ -->
+<!-- Data Type Create / Edit Dialog -->
+<div class="modal-overlay" id="dtDialog" onclick="if(event.target===this)dtCloseDialog()">
+  <div class="modal modal-lg" style="max-width:660px">
+    <div class="modal-header"><h3 id="dtDlgTitle">Create Data Type</h3><button class="modal-close" onclick="dtCloseDialog()">×</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input class="form-control" id="dtDlgName" placeholder="e.g. Incident Report"><div class="inline-form-error" id="dtDlgNameErr"></div></div>
+        <div class="form-group"><label>Slug</label><input class="form-control" id="dtDlgSlug" placeholder="e.g. incident-report"><div class="form-hint">Auto-generated from name, editable</div><div class="inline-form-error" id="dtDlgSlugErr"></div></div>
+      </div>
+      <div class="form-group"><label>Description</label><textarea class="form-control" id="dtDlgDesc" rows="2" placeholder="Describe the purpose of this data type"></textarea></div>
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px"><span>Fields</span><button class="btn btn-sm btn-secondary" onclick="dtAddField()">+ Add Field</button></div>
+      <div class="form-hint" style="margin-bottom:8px">At least one field is required.</div>
+      <div class="inline-form-error" id="dtDlgFieldsErr" style="margin-bottom:8px"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">
+        <div style="flex:2">Field Name</div><div style="flex:2">Type</div><div style="flex:0 0 80px;text-align:center">Required</div><div style="flex:0 0 40px"></div>
+      </div>
+      <div id="dtFieldsContainer"></div>
+      <div class="fields-empty-state" id="dtFieldsEmpty">No fields yet. Click "Add Field" to define the schema.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="dtCloseDialog()">Cancel</button>
+      <button class="btn btn-primary" onclick="dtSave()">Save Data Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- Data Type Delete Confirmation Dialog -->
+<div class="modal-overlay" id="dtDeleteDialog" onclick="if(event.target===this)dtCloseDelete()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><h3>Delete Data Type</h3><button class="modal-close" onclick="dtCloseDelete()">×</button></div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <span style="font-size:32px;flex-shrink:0">⚠️</span>
+        <div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px">Delete '<span id="dtDeleteName">—</span>'?</div>
+          <div style="font-size:13px;color:var(--text-secondary)">This cannot be undone. Agent outputs keep their schema snapshot.</div>
+          <div id="dtDeleteRefWarn" style="display:none;margin-top:10px;padding:10px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);font-size:12px;color:#B91C1C">
+            🚫 <span id="dtDeleteRefText"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="dtCloseDelete()">Cancel</button>
+      <button class="btn btn-danger" id="dtDeleteBtn" onclick="dtConfirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Agent Outputs Detail Drawer -->
+<div class="drawer-overlay-new" id="aoDrawerOverlay" onclick="aoCloseDrawer()"></div>
+<div class="drawer-new" id="aoDrawer">
+  <div class="drawer-header"><h3>Agent Output Detail</h3><button class="modal-close" onclick="aoCloseDrawer()">×</button></div>
+  <div class="drawer-body" id="aoDrawerBody"></div>
+</div>
+
+<!-- Toast container -->
+<div class="sched-toast-container"></div>
 
 </body>
 </html>

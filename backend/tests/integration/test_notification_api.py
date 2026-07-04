@@ -46,7 +46,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_NOTIFICATION
+from app.core.resource_types import RT_INTEGRATION_NOTIFICATIONS
 from app.db.models.notifications import (
     ChannelProperty,
     ChannelType,
@@ -67,14 +67,14 @@ from app.services.notifications.repository import NotificationRepository
 
 
 def _allow_read():
-    """Dependency override that grants RT_NOTIFICATION read permission."""
+    """Dependency override that grants RT_INTEGRATION_NOTIFICATIONS read permission."""
     def override():
         return {"sub": "test-admin", "roles": ["admin"]}
     return override
 
 
 def _allow_manage():
-    """Dependency override that grants RT_NOTIFICATION manage permission."""
+    """Dependency override that grants RT_INTEGRATION_NOTIFICATIONS manage permission."""
     def override():
         return {"sub": "test-admin", "roles": ["admin"]}
     return override
@@ -451,8 +451,8 @@ async def authed_client(test_engine):
     app = create_app()
 
     # Override permission deps
-    app.dependency_overrides[require_permission(RT_NOTIFICATION, "read")] = _allow_read()
-    app.dependency_overrides[require_permission(RT_NOTIFICATION, "manage")] = _allow_manage()
+    app.dependency_overrides[require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")] = _allow_read()
+    app.dependency_overrides[require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")] = _allow_manage()
 
     # Share the same in-memory engine
     SessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
@@ -765,7 +765,7 @@ async def test_api_list_logs_returns_200(authed_client: AsyncClient):
 async def test_api_permission_denied_returns_403():
     """Requests with denied permission return 403 (JWT valid but permission check fails)."""
     app = create_app()
-    app.dependency_overrides[require_permission(RT_NOTIFICATION, "read")] = _deny_permission()
+    app.dependency_overrides[require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")] = _deny_permission()
 
     with _bypass_jwt_middleware():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

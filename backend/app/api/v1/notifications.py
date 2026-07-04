@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import require_permission
 from app.core.credential_vault import get_vault
-from app.core.resource_types import RT_NOTIFICATION
+from app.core.resource_types import RT_INTEGRATION_NOTIFICATIONS
 from app.db.session import DbSession
 from app.db.models.notifications import (
     DeliveryStatus,
@@ -86,7 +86,7 @@ def _enrich_channel_with_values(channel: NotificationChannel) -> dict:
 @NotificationRouter.get("/channels", response_model=list[NotificationChannelRead])
 async def list_channels(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
     limit: int = 0,
     offset: int = 0,
 ):
@@ -104,7 +104,7 @@ async def list_channels(
 async def create_channel(
     body: NotificationChannelCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ):
     """Create a notification channel with properties."""
     repo = NotificationRepository(db)
@@ -129,7 +129,7 @@ async def create_channel(
 async def get_channel(
     channel_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
 ):
     """Get a notification channel with non-secret property values populated."""
     repo = NotificationRepository(db)
@@ -144,7 +144,7 @@ async def update_channel(
     channel_id: uuid.UUID,
     body: NotificationChannelUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ):
     """Update a notification channel with non-secret property values populated in response."""
     repo = NotificationRepository(db)
@@ -169,7 +169,7 @@ async def update_channel(
 async def delete_channel(
     channel_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> None:
     """Delete a notification channel and cascade-remove all recipient configurations."""
     repo = NotificationRepository(db)
@@ -187,7 +187,7 @@ async def test_channel(
     channel_id: uuid.UUID,
     body: TestChannelRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> TestChannelResponse:
     svc = NotificationService(db)
     result = await svc.test_channel(channel_id, body.test_recipient)
@@ -200,7 +200,7 @@ async def test_channel(
 @NotificationRouter.get("/recipient-groups", response_model=list[RecipientGroupRead])
 async def list_recipient_groups(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
     limit: int = 0,
     offset: int = 0,
 ) -> list[RecipientGroup]:
@@ -216,7 +216,7 @@ async def list_recipient_groups(
 async def create_recipient_group(
     body: RecipientGroupCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> RecipientGroup:
     repo = NotificationRepository(db)
     slug = body.slug or _slugify(body.name)
@@ -239,7 +239,7 @@ async def create_recipient_group(
 async def get_recipient_group(
     group_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
 ) -> RecipientGroup:
     repo = NotificationRepository(db)
     group = await repo.get_recipient_group(group_id)
@@ -253,7 +253,7 @@ async def update_recipient_group(
     group_id: uuid.UUID,
     body: RecipientGroupUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> RecipientGroup:
     repo = NotificationRepository(db)
     updates = body.model_dump(exclude_unset=True)
@@ -270,7 +270,7 @@ async def update_recipient_group(
 async def delete_recipient_group(
     group_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> None:
     repo = NotificationRepository(db)
     deleted = await repo.delete_recipient_group(group_id)
@@ -286,7 +286,7 @@ async def assign_channel_to_group(
     group_id: uuid.UUID,
     body: AssignChannelRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> dict:
     repo = NotificationRepository(db)
     group = await repo.get_recipient_group(group_id)
@@ -316,7 +316,7 @@ async def remove_channel_from_group(
     group_id: uuid.UUID,
     channel_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> None:
     repo = NotificationRepository(db)
     removed = await repo.remove_channel_from_group(group_id, channel_id)
@@ -331,7 +331,7 @@ async def remove_channel_from_group(
 async def send_notification(
     body: SendNotificationRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "manage")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "manage")),
 ) -> dict:
     svc = NotificationService(db)
     try:
@@ -354,7 +354,7 @@ async def send_notification(
 @NotificationRouter.get("/logs", response_model=list[NotificationLogRead])
 async def list_notification_logs(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
     group_id: uuid.UUID | None = None,
     channel_id: uuid.UUID | None = None,
     log_status: str | None = None,
@@ -382,7 +382,7 @@ async def list_notification_logs(
 async def get_notification_log(
     log_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
 ) -> object:
     repo = NotificationRepository(db)
     log = await repo.get_log(log_id)
@@ -397,7 +397,7 @@ async def get_notification_log(
 @NotificationRouter.get("/events", response_model=list[NotificationEventRead])
 async def list_events(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_NOTIFICATION, "read")),
+    _: dict = Depends(require_permission(RT_INTEGRATION_NOTIFICATIONS, "read")),
     channel_id: uuid.UUID | None = None,
     limit: int = 50,
 ) -> list[NotificationEvent]:

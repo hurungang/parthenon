@@ -60,10 +60,9 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
 
     # Override all require_permission(mcp_server, *) calls so tests don't
     # need a real JWT or a PlatformUser row in the DB.
-    from app.api.v1 import mcp_hub  # noqa: F401
-    RT_MCP_SERVER = mcp_hub.RT_MCP_SERVER
+    from app.core.resource_types import RT_INTEGRATION_MCP_HUB
     for action in ("read", "create", "update", "delete", "manage"):
-        dep = require_permission(RT_MCP_SERVER, action)
+        dep = require_permission(RT_INTEGRATION_MCP_HUB, action)
         app.dependency_overrides[dep] = _permission_bypass()
 
     async with AsyncClient(

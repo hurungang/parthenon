@@ -2,14 +2,14 @@
 import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_USER
+from app.core.resource_types import RT_SYSTEM_PERMISSIONS
 from app.db.models.group import Group
 from app.db.models.group_role import GroupRole
-from app.db.models.identity import Role
+from app.db.models.identity import Identity, Role
 from app.db.models.platform_user import PlatformUser
 from app.db.models.user_group import UserGroup
 from app.db.models.user_role import UserRole
@@ -22,6 +22,9 @@ from app.schemas.platform_users import (
     PlatformUserRead,
 )
 from app.schemas.perm_roles import PermRoleRead
+
+import logging
+logger = logging.getLogger(__name__)
 
 PlatformUsersRouter = APIRouter(prefix="/platform-users", tags=["Permissions: Platform Users"])
 
@@ -52,7 +55,7 @@ async def list_platform_users(
     db: DbSession,
     page: int = 1,
     page_size: int = 20,
-    _: dict = Depends(require_permission(RT_USER, "read")),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "read")),
 ) -> List[PlatformUserRead]:
     """Paginated list of platform users with role/group counts."""
     offset = (page - 1) * page_size
@@ -70,7 +73,7 @@ async def list_platform_users(
 async def get_platform_user(
     user_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_USER, "read")),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "read")),
 ) -> PlatformUserDetail:
     """Get a platform user with full role and group membership detail."""
     user = await _get_user_or_404(db, user_id)
@@ -119,7 +122,7 @@ async def assign_user_role(
     user_id: uuid.UUID,
     body: AssignUserRoleBody,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_USER, "manage")),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "manage")),
 ) -> Role:
     """Assign a direct role to a platform user."""
     await _get_user_or_404(db, user_id)
@@ -147,7 +150,7 @@ async def remove_user_role(
     user_id: uuid.UUID,
     role_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_USER, "manage")),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "manage")),
 ) -> None:
     """Remove a direct role from a platform user."""
     await _get_user_or_404(db, user_id)
@@ -169,7 +172,7 @@ async def add_user_to_group(
     user_id: uuid.UUID,
     body: AddUserToGroupBody,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_USER, "manage")),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "manage")),
 ) -> GroupMembershipRead:
     """Add a platform user to a group directly."""
     await _get_user_or_404(db, user_id)
@@ -204,7 +207,7 @@ async def remove_user_from_group(
     user_id: uuid.UUID,
     group_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_USER, "manage")),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "manage")),
 ) -> None:
     """Remove a platform user from a group."""
     await _get_user_or_404(db, user_id)
@@ -215,4 +218,48 @@ async def remove_user_from_group(
     if not row:
         raise HTTPException(status_code=404, detail="Group membership not found.")
     await db.delete(row)
+
+
+@PlatformUsersRouter.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_platform_user(
+    user_id: uuid.UUID,
+    db: DbSession,
+    force: bool = Query(default=False),
+    _: dict = Depends(require_permission(RT_SYSTEM_PERMISSIONS, "delete")),
+) -> None:
+    """Delete a platform user and all associated records.
+
+    Cascades to user_roles, user_groups, access_requests, and access_request_batches.
+    Also removes the corresponding Identity record if it exists.
+
+    Requires ``force=true`` query parameter as a safety measure.
+    """
+    user = await _get_user_or_404(db, user_id)
+
+    if not force:
+        raise HTTPException(
+            status_code=400,
+            detail="Use ?force=true to confirm user deletion.",
+        )
+
+    sub = user.sub
+
+    await db.delete(user)
+    await db.flush()
+
+    identity_result = await db.execute(
+        select(Identity).where(Identity.subject == sub)
+    )
+    identity = identity_result.scalar_one_or_none()
+    if identity:
+        await db.delete(identity)
+        await db.flush()
+
+    logger.info(
+        "Deleted PlatformUser id=%s sub=%s email=%s",
+        user_id, sub, user.email,
+    )
 

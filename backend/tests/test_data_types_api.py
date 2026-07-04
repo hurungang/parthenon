@@ -25,7 +25,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_DATA_TYPE
+from app.core.resource_types import RT_AGENT_DATA_TYPES
 from app.db.models.agent_data_type import AgentDataType
 from app.db.models.agents import AgentType
 from app.db.session import get_db
@@ -57,11 +57,11 @@ async def authed_client(test_engine):
     app = create_app()
 
     # Override all data type permission deps
-    app.dependency_overrides[require_permission(RT_DATA_TYPE, "read")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_DATA_TYPE, "create")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_DATA_TYPE, "update")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_DATA_TYPE, "delete")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_DATA_TYPE, "manage")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_DATA_TYPES, "read")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_DATA_TYPES, "create")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_DATA_TYPES, "update")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_DATA_TYPES, "delete")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_DATA_TYPES, "manage")] = _allow_permission()
 
     # Share the same in-memory engine
     SessionLocal = async_sessionmaker(

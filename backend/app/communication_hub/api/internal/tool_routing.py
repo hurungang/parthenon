@@ -2,7 +2,7 @@
 
 Routes ALL tool calls from Agent Runtime to:
 - External MCP servers (via MCP Proxy)
-- Control Center system tools (system____save_result, system____send_notification,
+- Control Center system tools (system____save_data, system____send_notification,
   system____get_recipient_group)
 
 All requests require valid agent certificate (mTLS).
@@ -181,7 +181,7 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
     Raises:
         HTTPException: If Control Center call fails
     """
-    # Resolve to bare handler name (e.g. "save_result")
+    # Resolve to bare handler name (e.g. "save_data")
     try:
         bare_name = get_bare_tool_name(body.tool_name)
     except ValueError:

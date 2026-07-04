@@ -18,7 +18,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_SCHEDULING
+from app.core.resource_types import RT_AGENT_SCHEDULES
 from app.db.models.scheduling import (
     ExecutionStatus,
     JobExecution,
@@ -61,10 +61,10 @@ async def authed_client(test_engine):
     app = create_app()
 
     # Override all scheduling permission deps
-    app.dependency_overrides[require_permission(RT_SCHEDULING, "read")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_SCHEDULING, "create")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_SCHEDULING, "update")] = _allow_permission()
-    app.dependency_overrides[require_permission(RT_SCHEDULING, "delete")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_SCHEDULES, "read")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_SCHEDULES, "create")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_SCHEDULES, "update")] = _allow_permission()
+    app.dependency_overrides[require_permission(RT_AGENT_SCHEDULES, "delete")] = _allow_permission()
 
     # Share the same in-memory engine
     SessionLocal = async_sessionmaker(

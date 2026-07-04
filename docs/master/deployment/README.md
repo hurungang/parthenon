@@ -10,6 +10,7 @@ This section contains all deployment documentation for the Parthenon platform. G
 |--------|-------|----------|
 | Docker Compose (self-hosted) | [First-Time Deployment](first-time-deployment.md) | Local development, internal self-hosted deployments |
 | Kubernetes / Helm (production) | [First-Time Deployment](first-time-deployment.md) | Enterprise production deployments with HA and autoscaling |
+| GitHub Pages | [GitHub Pages Project Showcase](github-pages-showcase.md) | Static showcase site published via GitHub Actions (independent of main app stack) |
 
 ---
 
@@ -24,6 +25,7 @@ This section contains all deployment documentation for the Parthenon platform. G
 | [rollback.md](rollback.md) | Runbook for rolling back a failed deployment to the last known-good state, including service-segregation policy rollback sequence |
 | [configuration-files.md](configuration-files.md) | Reference for platform-managed configuration files (e.g., `config/telemetry.yaml`); covers resolution order, Docker Compose bind-mounts, and Kubernetes ConfigMap mounting |
 | [database-migrations.md](database-migrations.md) | Chronological log of all Alembic migration revisions applied to production; update whenever a migration is promoted |
+| [github-pages-showcase.md](github-pages-showcase.md) | Deployment guide for the GitHub Pages static showcase site — trigger, setup, rollback, and custom domain configuration |
 
 ---
 

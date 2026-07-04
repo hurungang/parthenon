@@ -6,6 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/permissionsApi'
 import type {
+  BatchPolicySaveRequest,
   TagDefinitionCreate,
   TagDefinitionUpdate,
   RoleCloneCreate,
@@ -143,6 +144,18 @@ export function useUpdatePolicyStatement() {
     }) => api.updatePolicyStatement(roleId, policyId, data),
     onSuccess: (_data, { roleId }) => {
       qc.invalidateQueries({ queryKey: permissionKeys.role(roleId) })
+    },
+  })
+}
+
+export function useBatchSaveRolePolicies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ roleId, data }: { roleId: string; data: BatchPolicySaveRequest }) =>
+      api.batchSaveRolePolicies(roleId, data),
+    onSuccess: (_data, { roleId }) => {
+      qc.invalidateQueries({ queryKey: permissionKeys.role(roleId) })
+      qc.invalidateQueries({ queryKey: permissionKeys.roles })
     },
   })
 }
@@ -301,6 +314,16 @@ export function useRemoveUserFromGroup() {
       api.removeUserFromGroup(userId, groupId),
     onSuccess: (_data, { userId }) => {
       qc.invalidateQueries({ queryKey: permissionKeys.platformUser(userId) })
+    },
+  })
+}
+
+export function useDeletePlatformUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.deletePlatformUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: permissionKeys.platformUsers })
     },
   })
 }

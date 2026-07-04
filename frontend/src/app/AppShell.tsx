@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { isAxiosError } from 'axios'
 import {
   AppBar,
   Badge,
@@ -219,14 +220,20 @@ export function AppShell() {
   const [expandedGroups, setExpandedGroups] =
     useState<Record<string, boolean>>(DEFAULT_EXPANDED_GROUPS)
   const [interveneMetrics, setInterveneMetrics] = useState<InterveneMetrics | null>(null)
+  const metricsStoppedRef = useRef(false)
 
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null
     const fetchMetrics = async () => {
+      if (metricsStoppedRef.current) return
       try {
         const { data } = await apiClient.get<InterveneMetrics>('/intervene/metrics')
         setInterveneMetrics(data)
-      } catch {
-        // Metrics are best-effort
+      } catch (err) {
+        if (isAxiosError(err) && err.response?.status === 403) {
+          metricsStoppedRef.current = true
+          if (interval) clearInterval(interval)
+        }
       }
     }
     
@@ -236,8 +243,8 @@ export function AppShell() {
     }
     
     void fetchMetrics()
-    const interval = setInterval(fetchMetrics, 15_000)
-    return () => clearInterval(interval)
+    interval = setInterval(fetchMetrics, 15_000)
+    return () => { if (interval) clearInterval(interval) }
   }, [])
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen)

@@ -280,9 +280,7 @@ class SystemToolRegistry:
 # Everything else (CommHub routing, MCP Hub UI, skill seeding, name
 # validation) is derived automatically from this registry.
 #
-# NOTE: save_result is intentionally absent.  The CC endpoint and
-# LangChainSaveResultTool are retained only for the final session-completion
-# flow in langchain_tool_wrapper.py.  Agents use save_data instead.
+# NOTE: save_result is intentionally absent — retired in favour of save_data.
 #
 # UUID allocation (never reuse or change a deployed UUID):
 #   00000000-0000-0000-0000-000000000001  → System server

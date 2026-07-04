@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_DATA_TYPE
+from app.core.resource_types import RT_AGENT_DATA_TYPES
 from app.db.session import DbSession
 from app.schemas.data_types import (
     DataTypeCreate,
@@ -57,7 +57,7 @@ async def list_data_types(
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     search: str | None = Query(None, description="Search by name, slug, or description"),
     usage: bool = Query(False, description="Include referencing agent type info"),
-    _: dict = Depends(require_permission(RT_DATA_TYPE, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "read")),
 ) -> DataTypeListResponse:
     """List data types with pagination, optional search, and usage info."""
     items, total = await _service.list(
@@ -97,7 +97,7 @@ async def list_data_types(
 async def create_data_type(
     body: DataTypeCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_DATA_TYPE, "create")),
+    _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "create")),
 ) -> DataTypeResponse:
     """Create a new data type with typed fields."""
     try:
@@ -127,7 +127,7 @@ async def create_data_type(
 async def get_data_type(
     data_type_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_DATA_TYPE, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "read")),
 ) -> DataTypeResponse:
     """Get a single data type by ID."""
     dt = await _service.get(db=db, id=data_type_id)
@@ -153,7 +153,7 @@ async def update_data_type(
     data_type_id: uuid.UUID,
     body: DataTypeUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_DATA_TYPE, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "update")),
 ) -> DataTypeResponse:
     """Update an existing data type."""
     try:
@@ -190,7 +190,7 @@ async def update_data_type(
 async def delete_data_type(
     data_type_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_DATA_TYPE, "delete")),
+    _: dict = Depends(require_permission(RT_AGENT_DATA_TYPES, "delete")),
 ) -> None:
     """Delete a data type.
 
