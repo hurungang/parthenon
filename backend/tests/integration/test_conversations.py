@@ -59,7 +59,7 @@ def _auth_override(user_id: uuid.UUID | None = None):
 async def test_create_session_returns_session_id(async_client: AsyncClient, db_session: AsyncSession):
     """POST /conversations creates a session and returns its ID."""
     from app.api.deps import require_permission, get_current_claims
-    from app.core.resource_types import RT_CONVERSATION
+    from app.core.resource_types import RT_AGENT_TRAILS
     from app.main import create_app
 
     agent_type = await _create_agent_type(db_session)
@@ -75,7 +75,7 @@ async def test_create_session_returns_session_id(async_client: AsyncClient, db_s
             )
 
             from app.api.deps import _permission_dep_cache
-            dep_fn = require_permission(RT_CONVERSATION, "read")
+            dep_fn = require_permission(RT_AGENT_TRAILS, "read")
 
             app = __import__("app.main", fromlist=["create_app"]).create_app()
             app.dependency_overrides[dep_fn] = lambda: _auth_override(user_id)

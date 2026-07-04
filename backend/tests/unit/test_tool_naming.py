@@ -18,8 +18,8 @@ from app.services.agents.tool_naming import (
 
 
 class TestBuildToolName:
-    def test_system_save_result(self) -> None:
-        assert build_tool_name("system", "save_result") == "system____save_result"
+    def test_system_save_data(self) -> None:
+        assert build_tool_name("system", "save_data") == "system____save_data"
 
     def test_mcp_tool(self) -> None:
         assert build_tool_name("hello-world", "helloWorld") == "hello-world____helloWorld"
@@ -38,8 +38,8 @@ class TestBuildToolName:
 
 class TestParseToolName:
     # Canonical format
-    def test_canonical_system_save_result(self) -> None:
-        assert parse_tool_name("system____save_result") == ("system", "save_result")
+    def test_canonical_system_save_data(self) -> None:
+        assert parse_tool_name("system____save_data") == ("system", "save_data")
 
     def test_canonical_system_send_notification(self) -> None:
         assert parse_tool_name("system____send_notification") == ("system", "send_notification")
@@ -55,8 +55,8 @@ class TestParseToolName:
         assert parse_tool_name(name) == ("my-server", "my_tool")
 
     # Legacy bare-name fallback
-    def test_legacy_save_result(self) -> None:
-        assert parse_tool_name("save_result") == ("system", "save_result")
+    def test_legacy_save_data(self) -> None:
+        assert parse_tool_name("save_data") == ("system", "save_data")
 
     def test_legacy_send_notification(self) -> None:
         assert parse_tool_name("send_notification") == ("system", "send_notification")
@@ -94,7 +94,7 @@ class TestIsSystemTool:
     @pytest.mark.parametrize(
         "name",
         [
-            "system____save_result",
+            "system____save_data",
             "system____send_notification",
             "system____get_recipient_group",
         ],
@@ -106,7 +106,7 @@ class TestIsSystemTool:
     @pytest.mark.parametrize(
         "name",
         [
-            "save_result",
+            "save_data",
             "send_notification",
             "get_recipient_group",
         ],
@@ -118,7 +118,7 @@ class TestIsSystemTool:
     @pytest.mark.parametrize(
         "name",
         [
-            "system/save_result",
+            "system/save_data",
             "system/send_notification",
             "system/get_recipient_group",
         ],
@@ -130,7 +130,7 @@ class TestIsSystemTool:
     @pytest.mark.parametrize(
         "name",
         [
-            "system_save_result",
+            "system_save_data",
             "system_send_notification",
             "system_get_recipient_group",
         ],
@@ -156,13 +156,13 @@ class TestIsSystemTool:
 
 class TestGetServerName:
     def test_canonical_system_tool(self) -> None:
-        assert get_server_name("system____save_result") == "system"
+        assert get_server_name("system____save_data") == "system"
 
     def test_mcp_tool(self) -> None:
         assert get_server_name("hello-world____helloWorld") == "hello-world"
 
     def test_legacy_bare_name(self) -> None:
-        assert get_server_name("save_result") == "system"
+        assert get_server_name("save_data") == "system"
 
     def test_unknown_raises(self) -> None:
         with pytest.raises(ValueError):
@@ -174,13 +174,13 @@ class TestGetServerName:
 
 class TestGetBareToolName:
     def test_canonical_system_tool(self) -> None:
-        assert get_bare_tool_name("system____save_result") == "save_result"
+        assert get_bare_tool_name("system____save_data") == "save_data"
 
     def test_mcp_tool(self) -> None:
         assert get_bare_tool_name("hello-world____helloWorld") == "helloWorld"
 
     def test_legacy_bare_name(self) -> None:
-        assert get_bare_tool_name("save_result") == "save_result"
+        assert get_bare_tool_name("save_data") == "save_data"
 
     def test_unknown_raises(self) -> None:
         with pytest.raises(ValueError):

@@ -67,6 +67,32 @@ Changes involving certificate issuance, validation, or revocation require:
 - E2E: `e2e/tests/`
 - MCP Demo App (standalone): `mcp-demo-app/tests/` — unit and integration tests for the demo MCP server; uses its own pytest configuration with mocked Keycloak identities
 
+## Agent Data Types & Typed Outputs Testing
+
+Changes involving the Agent Data Type registry, typed output persistence, schema validation, or the `query_result` system tool require:
+
+**Pre-test checklist:**
+1. Applied migrations verified: `agent_data_types` table, `agent_outputs` table with FKs, `AgentOutputValidationStatus` enum, `agent_types.output_data_type_id` column, `agent_jobs.output_id` column all exist
+2. All 5 field types (string, number, boolean, date, enum) have corresponding validators in `SchemaValidationService`
+3. `save_result` path handles both typed (calls validation + `OutputService.save_typed`) and untyped (legacy `ResultRecord`) branches
+
+**Backend integration tests must:**
+- Cover full CRUD lifecycle for data types: create, read, update, delete, duplicate detection, delete guard
+- Validate all 5 field types individually and in combination
+- Test the two-phase output persistence: validate then persist, with correct handling of both valid and invalid outputs
+- Verify `query_result` system tool routing through Communication Hub to Control Center
+- Confirm backward compatibility: existing untyped agent execution paths unchanged
+
+**Frontend component tests must:**
+- Verify `TypedOutputRenderer` handles all 5 field types with type-aware formatting
+- Verify `OutputTypeResultTab` detects typed vs untyped outputs and renders accordingly
+- Test `DataTypeFormDialog` field editor: add, remove, configure fields; validation errors
+
+**E2E tests must cover:**
+- Full CRUD lifecycle on Data Types page with mocked API
+- Agent Outputs Query page: filter bar, dynamic columns, CSV export, detail drawer
+- Typed execution flow: agent management badge, detail dialog data type name, execution log typed rendering
+
 Refer to individual test plans for module-specific coverage and test file references.
 
 ## Dual-Identity Tool Security Testing

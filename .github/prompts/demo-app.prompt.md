@@ -50,6 +50,7 @@ Available scenarios (from `e2e/tests/`):
 - `permissions` — user permission management (tags, roles, groups, users, access requests)
 - `conversational-agent-intervention` — inline intervention dialogs during conversational agent delegation (approval/choice/text)
 - `agent-save-data-get-tools` — save_data/get_data/get_output system tools: multi-record saves, query guardrails, output history retrieval
+- `namespace-resource-types` — namespaced permission resource types: grouped dropdowns, wildcard policies, migration visibility, validation
 
 ---
 

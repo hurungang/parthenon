@@ -147,6 +147,19 @@
 - test_tools_call_with_real_jwt_returns_agent_sub
 - Human Intervene > submitting approval response sends API call
 - Real Backend Integration - Conversational Agent Intervention > GET /api/v1/intervene/requests returns data
+- agent-save-data-get-tools > agent context does not expose save_result
+- agent-save-data-get-tools > save_data stores multiple records per session
+- agent-save-data-get-tools > get_data requires at least one filter
+- agent-save-data-get-tools > get_output returns output history by date range
+- GitHub Pages showcase page > renders core sections and switches walkthrough tabs
+- Data Types CRUD > displays list of data types from API
+- Data Types CRUD > create button opens form dialog
+- Data Types CRUD > delete button invokes delete guard for referenced type
+- Agent Outputs Query > displays agent output records with data type names
+- Agent Outputs Query > has export CSV button
+- Agent Outputs Query > shows validation status badges
+- Typed Execution Flow > agent management page shows output data type badge
+- Typed Execution Flow > execution logs page shows typed sessions
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -303,3 +316,16 @@
 | 140 | Inline MCP Session Assignment — Create Role | User creates an agent role with SOPs/Skills, sees required MCP servers appear inline, assigns sessions via dropdowns, and saves — the role is fully configured with all sessions in one operation | improve-role-mcp-session-assignment | agent-role-mcp-assignment.spec.ts |
 | 141 | Inline MCP Session Assignment — Save Blocked | User selects SOPs that require MCP servers but does not assign all sessions — the Save button is disabled with a clear inline validation message naming the missing servers | improve-role-mcp-session-assignment | agent-role-mcp-assignment.spec.ts |
 | 142 | Inline MCP Session Assignment — Refresh & Passthrough | User clicks the refresh button on an inline dropdown to reload sessions; passthrough badge is visible on configured servers | improve-role-mcp-session-assignment | agent-role-mcp-assignment.spec.ts |
+| 143 | System tool rename and exposure | User-visible tool context includes save_data/get_data/get_output and excludes legacy save_result | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
+| 144 | Intermediate data persistence | A single session can save multiple named records, demonstrating repeatable data capture during a run | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
+| 145 | Data query guardrail validation | Query without filters is rejected, showing protection against unbounded retrieval requests | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
+| 146 | Output history retrieval | Output history is returned for a requested date window, showing timeline-based retrieval behavior | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
+| 147 | Showcase page walkthrough | Renders architecture/security sections and exercises demo tab switching end-to-end in browser | github-pages-project-showcase | github-pages-showcase.spec.ts |
+| 148 | Data Types — List | Admin navigates to Data Types page and sees all created data types with field counts and slug names | enhance-agent-output-system | data-types-crud.spec.ts |
+| 149 | Data Types — Create Dialog | Admin clicks Create Data Type to open a form dialog with a field editor for adding typed fields (string, number, boolean, date, enum) | enhance-agent-output-system | data-types-crud.spec.ts |
+| 150 | Data Types — Delete Guard | Admin attempts to delete a data type referenced by an agent type; deletion is blocked with reference information | enhance-agent-output-system | data-types-crud.spec.ts |
+| 151 | Agent Outputs — Query Page | Admin filters agent outputs by data type; table columns dynamically update to show field-level columns from the schema | enhance-agent-output-system | agent-outputs-query.spec.ts |
+| 152 | Agent Outputs — CSV Export | Admin clicks Export CSV; a streaming download is triggered with columns matching the current data type filter | enhance-agent-output-system | agent-outputs-query.spec.ts |
+| 153 | Agent Outputs — Validation Status | Results table shows validation status badges (valid/validation_error) for typed outputs | enhance-agent-output-system | agent-outputs-query.spec.ts |
+| 154 | Typed Execution — Data Type Badge | Agent management page shows the assigned data type name as a badge on agent type rows | enhance-agent-output-system | typed-execution-flow.spec.ts |
+| 155 | Typed Execution — Logs Display | Execution logs page shows typed session entries with structured output and data type name in the Result tab | enhance-agent-output-system | typed-execution-flow.spec.ts |

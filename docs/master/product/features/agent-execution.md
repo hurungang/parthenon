@@ -59,9 +59,31 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 
 All tools available to agents — whether built-in platform tools or external MCP server tools — use a consistent naming scheme that separates the server namespace from the tool name. This convention ensures tool names are globally unique and routing is deterministic.
 
-## Explicit Result Saving
+## Explicit Data Saving
 
-The agent runtime does **not** automatically save results at the end of execution. If an SOP or agent instruction requires a result to be persisted, the agent must explicitly call the `system____save_result` tool. If no such instruction is given, no result record is created. This design ensures result creation is intentional and traceable to a specific SOP step.
+The agent runtime captures one **final output** automatically when a session completes. For intermediate data that must be persisted before session end, the agent explicitly calls the `system____save_data` tool. Agents can call `save_data` zero or more times per session, while the final output is a single, session-completion artifact. If no `save_data` instruction is given, no intermediate data records are created. This design ensures that final outputs and intermediate saves are clearly distinguishable, and that every intermediate save is intentional and traceable to a specific SOP step.
+
+## Typed Output Validation
+
+When a non-conversational agent type has an assigned output data type from the [Agent Data Type Registry](./agent-data-types.md), the platform validates the agent's final output against that schema at execution completion:
+
+- **Validation pass**: The typed result is saved to the result repository with a reference to the data type. The result is immediately queryable and rendered as a structured field-by-field view in the execution log.
+- **Validation failure**: The execution still completes (it is not aborted), but a schema validation error is recorded. The raw, unvalidated output is saved alongside the error. The validation error is surfaced prominently in the execution log Result tab, and a fallback raw-output view is available.
+
+Agents that have no assigned data type (untyped agents) and conversational agents are unaffected — their outputs continue to be saved as before without schema validation.
+
+The `save_data` tool (intermediate saves) is not subject to typed output validation — only the final session-completion output is validated against the data type schema.
+
+## query_result System Tool
+
+A new `system____query_result` tool enables agents to retrieve and reason across past typed agent outputs. This unlocks result-analysis workflows where an agent queries historical results, compares them, identifies trends, or generates summary reports — all within a single SOP.
+
+- The tool accepts a **data type name** and optional filters (date range, specific field values).
+- It returns a list of matching typed results conforming to the requested data type schema.
+- If the data type name is invalid or does not exist, a descriptive error is returned to the agent.
+- The tool follows the explicit-trigger pattern: it is available to all agents by default and must be referenced in SOP or agent instructions to be used.
+- Access is scoped to results the agent is authorized to see, based on the agent's role and permissions.
+- The tool is routed through the existing MCP tool flow and operates within the same service segregation boundaries.
 
 ## Human-in-the-Loop Intervention
 
@@ -83,7 +105,7 @@ When a **delegated sub-agent** calls `human_intervene` during a non-conversation
 
 The runtime control dashboard now surfaces intervention requests from both non-conversational standalone agents and delegated agents in conversational sessions, giving operators a single view of all pending human interventions regardless of execution context.
 
-The `human_intervene` tool follows the same explicit-trigger pattern as `system____save_result` — it is available to all agents by default and must be referenced in SOP or agent instructions to be used.
+The `human_intervene` tool follows the same explicit-trigger pattern as `system____save_data` — it is available to all agents by default and must be referenced in SOP or agent instructions to be used.
 
 ## Runtime Control and Termination Governance
 - A **runtime control dashboard** surfaces all currently running agents, their delegated children, and operator-controlled termination actions
@@ -136,6 +158,12 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - Non-conversational agents are limited to 1-level delegation depth; sub-agents cannot further delegate
 - Blocked delegation attempts due to depth limit produce clear outcome messages in execution logs
 - Delegation exit conditions (success, timeout, failure, termination) appear as distinct statuses in execution logs
+- **When a non-conversational agent with an assigned data type completes, its final output is validated against the data type schema**
+- **On validation success, the typed result is saved with its data type reference and is queryable**
+- **On validation failure, the execution completes and the validation error is recorded; raw output is preserved as fallback**
+- **The `query_result` tool is available to all agents by default and returns typed results filtered by data type name and optional criteria**
+- **`query_result` returns a descriptive error when called with an invalid data type name**
+- **`query_result` access is scoped to results the agent is authorized to retrieve based on its role and permissions**
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

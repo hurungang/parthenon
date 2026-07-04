@@ -12,7 +12,7 @@ from app.api.deps import require_permission
 from app.api.v1.mcp_hub import (
     SYSTEM_TOOL_IDS,
 )
-from app.core.resource_types import RT_SKILL
+from app.core.resource_types import RT_AGENT_SKILLS
 from app.db.session import DbSession
 from app.db.models.mcp_hub import McpTool
 from app.db.models.skills import Skill, SkillToolBinding
@@ -182,7 +182,7 @@ def _require_workflow_model_id() -> str:
 @SkillRouter.get("", response_model=list[SkillRead])
 async def list_skills(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[SkillRead]:
@@ -201,7 +201,7 @@ async def list_skills(
 async def create_skill(
     body: SkillCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "create")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "create")),
 ) -> SkillDetailRead:
     # Validate all tool IDs exist (skip system tools)
     for tool_id in body.tool_ids:
@@ -242,7 +242,7 @@ async def create_skill(
 async def get_skill(
     skill_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
 ) -> SkillDetailRead:
     result = await db.execute(
         select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
@@ -258,7 +258,7 @@ async def update_skill(
     skill_id: uuid.UUID,
     body: SkillUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "update")),
 ) -> SkillDetailRead:
     result = await db.execute(
         select(Skill).options(*_SKILL_LOAD_OPTIONS).where(Skill.id == skill_id)
@@ -307,7 +307,7 @@ async def update_skill(
 async def generate_skill_workflow(
     body: SkillWorkflowGenerateRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "update")),
 ) -> SkillWorkflowGenerateResponse:
     if not body.description.strip():
         raise HTTPException(status_code=422, detail="Description is required to generate workflow")
@@ -350,7 +350,7 @@ async def generate_skill_workflow(
 async def preview_skill_workflow(
     body: SkillWorkflowPreviewRequest,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
 ) -> SkillWorkflowPreviewResponse:
     model_id = _require_workflow_model_id()
 
@@ -376,7 +376,7 @@ async def preview_skill_workflow(
 async def delete_skill(
     skill_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "delete")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "delete")),
 ) -> None:
     skill = await db.get(Skill, skill_id)
     if not skill:
@@ -390,7 +390,7 @@ async def delete_skill(
 async def get_skill_roles(
     skill_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "read")),
 ) -> list[uuid.UUID]:
     skill = await db.get(Skill, skill_id)
     if not skill:
@@ -406,7 +406,7 @@ async def set_skill_roles(
     skill_id: uuid.UUID,
     body: dict,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SKILL, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SKILLS, "update")),
 ) -> list[uuid.UUID]:
     skill = await db.get(Skill, skill_id)
     if not skill:

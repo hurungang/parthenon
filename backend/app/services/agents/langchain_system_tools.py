@@ -4,7 +4,6 @@ These replace the inline tool-dispatch checks in runtime_executor.py with
 proper LangChain tool objects that can be bound to a ChatModel.
 
 System tools:
-- LangChainSaveResultTool     — stores the agent's final result (DEPRECATED)
 - LangChainSendNotificationTool — sends a notification via CommHub
 - LangChainGetRecipientGroupTool — retrieves a recipient group
 - LangChainHumanInterveneTool — requests human intervention (HITL)
@@ -30,12 +29,6 @@ logger = logging.getLogger(__name__)
 
 # ── Arg schemas ───────────────────────────────────────────────────────────────
 
-class _SaveResultArgs(BaseModel):
-    result_summary: str = Field(description="Summary of the result to save.")
-    output_data: Optional[dict] = Field(default=None, description="Structured output data dict.")
-    content_type: str = Field(default="text/plain", description="MIME type of the result.")
-
-
 class _SendNotificationArgs(BaseModel):
     message: str = Field(description="Notification message to send.")
     recipient_group_id: Optional[str] = Field(default=None, description="Recipient group identifier.")
@@ -56,53 +49,6 @@ class _HumanInterveneArgs(BaseModel):
 class _QueryResultArgs(BaseModel):
     session_id: Optional[str] = Field(default=None, description="Session ID to query results from.")
     query: Optional[str] = Field(default=None, description="Optional query filter.")
-
-
-# ── Tool classes ──────────────────────────────────────────────────────────────
-
-class LangChainSaveResultTool(BaseTool):
-    """LangChain tool that stores the agent's final task result.
-
-    Deprecated: use save_data instead. This tool is no longer bound to agent
-    sessions. The class is retained only for backward compatibility with
-    the final session completion flow in langchain_tool_wrapper.py.
-    """
-
-    name: str = "save_result"
-    description: str = (
-        "Save the final result of the task. Use this when you have completed the task "
-        "and have a result to return. Provide a summary and optional structured data."
-    )
-    args_schema: Type[BaseModel] = _SaveResultArgs
-
-    data_client: Any = Field(exclude=True)
-    session_id: str = Field(exclude=True)
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def _run(self, result_summary: str, output_data: Optional[dict] = None, content_type: str = "text/plain") -> str:
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(
-                self._arun(result_summary=result_summary, output_data=output_data, content_type=content_type)
-            )
-        except Exception as exc:
-            return json.dumps({"error": str(exc)})
-
-    async def _arun(self, result_summary: str, output_data: Optional[dict] = None, content_type: str = "text/plain") -> str:
-        try:
-            await self.data_client.save_output(
-                session_id=self.session_id,
-                result=result_summary,
-                output_data=output_data or {},
-                content_type=content_type,
-            )
-            return json.dumps({"status": "saved", "summary": result_summary[:100]})
-        except Exception as exc:
-            logger.error("LangChainSaveResultTool failed for session %s: %s", self.session_id, exc)
-            return json.dumps({"error": str(exc)})
 
 
 class LangChainSendNotificationTool(BaseTool):

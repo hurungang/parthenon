@@ -54,7 +54,9 @@ How this step is completed depends on the selected identity provider type.
 
 **Bundled Keycloak (`IDENTITY_PROVIDER_TYPE=keycloak_bundled`)**
 
-Do not manually register a client. The Bootstrap Service provisions the Keycloak realm and client automatically during the setup wizard or CLI run in Step 10. Proceed to Step 5 without setting `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REALM`, or `OIDC_AUDIENCE` — the wizard or CLI will populate these. Confirm that the JWKS endpoint (`http://keycloak:8080/realms/parthenon/protocol/openid-connect/certs`) will be accessible from the Platform API container's network.
+Do not manually register a client. The Bootstrap Service provisions the Keycloak realm and client automatically during the setup wizard or CLI run in Step 10. The provisioning flow also creates a Group Membership protocol mapper on the `parthenon-api-ui` client — this ensures JWT tokens include a `groups` claim so that group-based permission inheritance works correctly. No manual Keycloak admin steps are needed for mapper configuration.
+
+Proceed to Step 5 without setting `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REALM`, or `OIDC_AUDIENCE` — the wizard or CLI will populate these. Confirm that the JWKS endpoint (`http://keycloak:8080/realms/parthenon/protocol/openid-connect/certs`) will be accessible from the Platform API container's network.
 
 **External Keycloak (`IDENTITY_PROVIDER_TYPE=keycloak_external`)**
 

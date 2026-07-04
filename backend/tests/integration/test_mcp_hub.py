@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models.mcp_hub import McpServer, McpServerStatus, McpSession, McpSessionAuthType, McpTool
 from app.db.session import Base, get_db
 from app.main import create_app
-from app.core.resource_types import RT_MCP_SERVER
+from app.core.resource_types import RT_INTEGRATION_MCP_HUB
 
 
 # ── Schema / enum presence ─────────────────────────────────────────────────────
@@ -212,10 +212,10 @@ async def test_passthrough_enum_value_in_information_schema_postgres_only(db_ses
 
 @pytest_asyncio.fixture
 async def authed_mcp_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
-    """HTTP test client with auth middleware mocked and RT_MCP_SERVER permissions overridden.
+    """HTTP test client with auth middleware mocked and RT_INTEGRATION_MCP_HUB permissions overridden.
 
     - OIDC validation is bypassed (returns {'sub': 'test-user', 'roles': ['admin']})
-    - require_permission for RT_MCP_SERVER (manage, read, create, execute) is no-op
+    - require_permission for RT_INTEGRATION_MCP_HUB (manage, read, create, execute) is no-op
     - raw_token is set to 'fake-test-token' by the middleware (Bearer header present)
     """
     from app.api.deps import require_permission
@@ -247,7 +247,7 @@ async def authed_mcp_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
 
     for action in ("read", "create", "update", "delete", "execute", "manage"):
-        dep = require_permission(RT_MCP_SERVER, action)
+        dep = require_permission(RT_INTEGRATION_MCP_HUB, action)
         app.dependency_overrides[dep] = no_op_permission
 
     with patch("app.middleware.auth.get_oidc_client", return_value=mock_oidc):
@@ -300,7 +300,7 @@ async def no_token_mcp_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
 
     for action in ("read", "create", "update", "delete", "execute", "manage"):
-        dep = require_permission(RT_MCP_SERVER, action)
+        dep = require_permission(RT_INTEGRATION_MCP_HUB, action)
         app.dependency_overrides[dep] = no_op_permission
 
     with patch.object(JWTAuthMiddleware, "dispatch", bypass_without_token):

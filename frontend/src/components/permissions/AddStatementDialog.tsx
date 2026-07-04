@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Autocomplete,
   Box,
   Button,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -21,13 +19,14 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import {
-  useResourceTypes,
   useTagDefinitions,
   useCreatePolicyStatement,
   useUpdatePolicyStatement,
 } from '../../hooks/usePermissions'
 import { useTagValueOptions } from '../../hooks/useTagValueOptions'
 import PermissionDeniedAlert from './PermissionDeniedAlert'
+import FreeSoloResourceTypeSelect from './FreeSoloResourceTypeSelect'
+import FreeSoloActionSelect from './FreeSoloActionSelect'
 import { PolicyEffect } from '../../types/permissions'
 import type { PolicyStatement } from '../../types/permissions'
 
@@ -154,7 +153,6 @@ export default function AddStatementDialog({
   onClose,
 }: AddStatementDialogProps) {
   const { t } = useTranslation()
-  const { data: resourceTypes } = useResourceTypes()
   const createStatement = useCreatePolicyStatement()
   const updateStatement = useUpdatePolicyStatement()
 
@@ -162,10 +160,6 @@ export default function AddStatementDialog({
 
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [form, setForm] = useState(DEFAULT_FORM)
-
-  // Available actions for selected resource type
-  const availableActions =
-    resourceTypes?.find((rt) => rt.resource_type === form.resourceType)?.actions ?? []
 
   // Populate form in edit mode, reset in add mode
   useEffect(() => {
@@ -268,20 +262,10 @@ export default function AddStatementDialog({
         )}
         <Stack spacing={2} sx={{ mt: 1 }}>
           {/* Resource Type */}
-          <FormControl required>
-            <InputLabel>{t('permissions.roles.resourceType')}</InputLabel>
-            <Select
-              value={form.resourceType}
-              label={t('permissions.roles.resourceType')}
-              onChange={(e) => handleResourceTypeChange(e.target.value)}
-            >
-              {(resourceTypes ?? []).map((rt) => (
-                <MenuItem key={rt.resource_type} value={rt.resource_type}>
-                  {rt.resource_type}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <FreeSoloResourceTypeSelect
+            value={form.resourceType}
+            onChange={handleResourceTypeChange}
+          />
 
           {/* Effect */}
           <FormControl required>
@@ -299,33 +283,17 @@ export default function AddStatementDialog({
           </FormControl>
 
           {/* Actions */}
-          <Autocomplete
-            multiple
-            options={availableActions}
+          <FreeSoloActionSelect
             value={form.actions}
+            onChange={(newActions) => setForm((f) => ({ ...f, actions: newActions }))}
             disabled={!form.resourceType}
-            onChange={(_e, value) => setForm((f) => ({ ...f, actions: value }))}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => (
-                <Chip
-                  label={option}
-                  size="small"
-                  {...getTagProps({ index })}
-                  key={option}
-                />
-              ))
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={t('permissions.roles.actions')}
-                placeholder={form.resourceType ? t('permissions.roles.selectActions') : t('permissions.roles.selectResourceTypeFirst')}
-              />
-            )}
           />
 
           {/* Resource IDs */}
           <Box>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              {t('permissions.roles.placeholderFeature')}
+            </Typography>
             <Typography variant="subtitle2" gutterBottom>
               {t('permissions.roles.resourceIds')}
             </Typography>

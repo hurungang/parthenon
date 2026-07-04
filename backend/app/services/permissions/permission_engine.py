@@ -7,7 +7,7 @@ from typing import List
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.resource_types import ResourceTypeManifest
+from app.core.resource_types import MODULE_GROUPS, ResourceTypeManifest, get_module_from_resource_type, is_valid_wildcard
 from app.db.models.policy_statement import PolicyStatement, PolicyEffect
 from app.db.models.policy_action import PolicyAction
 from app.db.models.policy_resource import PolicyResource
@@ -51,29 +51,39 @@ class PermissionEngine:
         4. For each allow statement, check action, resource, and tag conditions
         5. Return allow if any statement matches; deny otherwise
         """
-        # Manifest validation — fail fast for unknown resource types or actions
-        # Wildcard module '*' bypasses this check (used internally by system admin policy)
-        if module != "*":
+        # Manifest validation — fail fast for unknown module names
+        # Wildcards '*', '*::*', and 'module::*' bypass this check
+        # Actions are NOT validated here — they are evaluated during policy lookup,
+        # allowing wildcard policies (action="*") to grant any action on any module.
+        if module not in ("*", "*::*") and not is_valid_wildcard(module):
             if module not in ResourceTypeManifest:
                 return AuthorizationResult(
                     allowed=False,
                     reason=f"Unknown resource type '{module}'.",
-                )
-            if action != "*" and action not in ResourceTypeManifest[module]["actions"]:
-                return AuthorizationResult(
-                    allowed=False,
-                    reason=f"Action '{action}' is not valid for resource type '{module}'.",
                 )
 
         role_ids = await self._get_effective_role_ids(db, user_id)
         if not role_ids:
             return AuthorizationResult(allowed=False, reason="User has no assigned roles.")
 
-        # Fetch all policy statements for those roles matching this module OR wildcard '*'
+        # Fetch all policy statements for those roles matching this module or any
+        # applicable wildcard pattern (*, *::*, module::*)
+        module_match_conditions = [
+            PolicyStatement.module == module,
+            PolicyStatement.module == "*",
+            PolicyStatement.module == "*::*",
+        ]
+        # If the requested module has a namespace prefix, also match module::* policies
+        module_prefix = get_module_from_resource_type(module)
+        if module_prefix and module_prefix in MODULE_GROUPS:
+            module_match_conditions.append(
+                PolicyStatement.module == f"{module_prefix}::*"
+            )
+
         stmts_result = await db.execute(
             select(PolicyStatement).where(
                 PolicyStatement.role_id.in_(role_ids),
-                or_(PolicyStatement.module == module, PolicyStatement.module == "*"),
+                or_(*module_match_conditions),
                 PolicyStatement.effect == PolicyEffect.allow,
             )
         )
@@ -135,16 +145,12 @@ class PermissionEngine:
 
         return AuthorizationResult(
             allowed=False,
-            reason=f"No matching allow policy for action '{action}' on '{resource_id}'.",
+            reason=f"No matching allow policy for action '{action}' on {'all resources' if resource_id == '*' or resource_id is None else repr(resource_id)}.",
         )
 
     def _match_resource_id(self, pattern: str, resource_id: str) -> bool:
-        """Match a resource_id pattern against an actual resource_id.
-
-        Wildcard support: if pattern ends with '*', match as prefix.
-        E.g. 'support_*' matches 'support_001' and 'support_team'.
-        Exact match otherwise.
-        """
+        if resource_id == "*":
+            return True
         if pattern == "*":
             return True
         if pattern.endswith("*"):
@@ -161,20 +167,43 @@ class PermissionEngine:
             select(UserRole.role_id).where(UserRole.user_id == user_id)
         )
         role_ids = list(direct_result.scalars().all())
+        logger.debug(
+            "_get_effective_role_ids user=%s direct_roles=%s",
+            user_id, [str(r) for r in role_ids],
+        )
 
         # Group-inherited roles
         group_result = await db.execute(
             select(UserGroup.group_id).where(UserGroup.user_id == user_id)
         )
         group_ids = list(group_result.scalars().all())
+        logger.debug(
+            "_get_effective_role_ids user=%s group_ids=%s",
+            user_id, [str(g) for g in group_ids],
+        )
 
         if group_ids:
             group_role_result = await db.execute(
                 select(GroupRole.role_id).where(GroupRole.group_id.in_(group_ids))
             )
-            role_ids.extend(group_role_result.scalars().all())
+            group_role_ids = list(group_role_result.scalars().all())
+            logger.debug(
+                "_get_effective_role_ids user=%s group_roles=%s",
+                user_id, [str(r) for r in group_role_ids],
+            )
+            role_ids.extend(group_role_ids)
+        else:
+            logger.debug(
+                "_get_effective_role_ids user=%s NO group memberships found",
+                user_id,
+            )
 
-        return list(set(role_ids))
+        effective = list(set(role_ids))
+        logger.info(
+            "_get_effective_role_ids user=%s effective_role_ids=%s count=%d",
+            user_id, [str(r) for r in effective], len(effective),
+        )
+        return effective
 
 
 def get_permission_engine() -> PermissionEngine:

@@ -644,14 +644,14 @@ async def test_get_sop_with_real_db_triggers_missing_greenlet(
     # Override require_permission to bypass PlatformUser DB lookup while still
     # letting the request reach the actual endpoint code (where the bug lives).
     from app.api.deps import require_permission
-    from app.core.resource_types import RT_SKILL
+    from app.core.resource_types import RT_AGENT_SOPS
 
     async def _allow_read():
         return {"sub": "admin-sub", "roles": ["admin"]}
 
     app = create_app()
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[require_permission(RT_SKILL, "read")] = _allow_read
+    app.dependency_overrides[require_permission(RT_AGENT_SOPS, "read")] = _allow_read
 
     # ── Act: call GET /api/v1/sops/{sop_id} with a real DB session ───────────────
     with _bypass_auth(), _mock_permission_allow():

@@ -6,6 +6,7 @@ import apiClient from './apiClient'
 import type {
   AccessRequest,
   AccessRequestBatch,
+  BatchPolicySaveRequest,
   Group,
   GroupCreate,
   GroupMember,
@@ -100,6 +101,17 @@ export async function updatePolicyStatement(
 ): Promise<PolicyStatement> {
   const response = await apiClient.patch<PolicyStatement>(
     `/user-roles/${roleId}/policies/${policyId}`,
+    data
+  )
+  return response.data
+}
+
+export async function batchSaveRolePolicies(
+  roleId: string,
+  data: BatchPolicySaveRequest
+): Promise<PolicyStatement[]> {
+  const response = await apiClient.put<PolicyStatement[]>(
+    `/user-roles/${roleId}/policies/batch`,
     data
   )
   return response.data
@@ -216,6 +228,10 @@ export async function addUserToGroup(
 
 export async function removeUserFromGroup(userId: string, groupId: string): Promise<void> {
   await apiClient.delete(`/platform-users/${userId}/groups/${groupId}`)
+}
+
+export async function deletePlatformUser(id: string): Promise<void> {
+  await apiClient.delete(`/platform-users/${id}`, { params: { force: true } })
 }
 
 // ── Access Requests ───────────────────────────────────────────────────────────

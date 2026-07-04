@@ -36,7 +36,7 @@ from app.api.v1.mcp_hub import (
     seed_system_tools,
 )
 from app.api.deps import require_permission
-from app.core.resource_types import RT_SKILL, RT_MCP_SERVER
+from app.core.resource_types import RT_AGENT_SKILLS, RT_INTEGRATION_MCP_HUB
 from app.db.models.mcp_hub import McpServer, McpServerStatus, McpTool
 from app.db.models.skills import Skill, SkillToolBinding
 from app.db.session import get_db
@@ -81,11 +81,11 @@ async def authed_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     """AsyncClient with JWT middleware and Skill permission deps bypassed."""
     app = create_app()
 
-    app.dependency_overrides[require_permission(RT_SKILL, "read")] = _allow_skill_read()
-    app.dependency_overrides[require_permission(RT_SKILL, "create")] = _allow_skill_create()
-    app.dependency_overrides[require_permission(RT_SKILL, "update")] = _allow_skill_update()
-    app.dependency_overrides[require_permission(RT_SKILL, "delete")] = _allow_skill_create()
-    app.dependency_overrides[require_permission(RT_MCP_SERVER, "read")] = _allow_skill_read()
+    app.dependency_overrides[require_permission(RT_AGENT_SKILLS, "read")] = _allow_skill_read()
+    app.dependency_overrides[require_permission(RT_AGENT_SKILLS, "create")] = _allow_skill_create()
+    app.dependency_overrides[require_permission(RT_AGENT_SKILLS, "update")] = _allow_skill_update()
+    app.dependency_overrides[require_permission(RT_AGENT_SKILLS, "delete")] = _allow_skill_create()
+    app.dependency_overrides[require_permission(RT_INTEGRATION_MCP_HUB, "read")] = _allow_skill_read()
 
     SessionLocal = async_sessionmaker(
         bind=test_engine, class_=AsyncSession, expire_on_commit=False

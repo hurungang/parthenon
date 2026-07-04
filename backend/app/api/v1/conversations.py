@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_claims, require_permission
-from app.core.resource_types import RT_CONVERSATION
+from app.core.resource_types import RT_AGENT_TRAILS
 from app.db.models.conversations import ConversationSession, ConversationStatus
 from app.db.models.identity import Identity
 from app.db.session import DbSession
@@ -46,7 +46,7 @@ async def create_conversation_session(
     body: ConversationSessionCreate,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ) -> ConversationSession:
     """Create a new conversation session for the given agent type."""
     user_id = _get_requesting_user_id(request)
@@ -66,7 +66,7 @@ async def resume_conversation_session(
     session_id: uuid.UUID,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ) -> ConversationSession:
     """Return full session context (metadata + all turns) for resuming a conversation."""
     user_id = _get_requesting_user_id(request)
@@ -88,7 +88,7 @@ async def end_conversation_session(
     session_id: uuid.UUID,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ) -> ConversationSession:
     """Transition a conversation session to closed status."""
     user_id = _get_requesting_user_id(request)
@@ -110,7 +110,7 @@ async def archive_conversation_session(
     session_id: uuid.UUID,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ) -> ConversationSession:
     """Transition a conversation session to archived status."""
     user_id = _get_requesting_user_id(request)
@@ -131,7 +131,7 @@ async def archive_conversation_session(
 async def list_conversations(
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
     agent_type_id: uuid.UUID | None = None,
     triggered_by_user_id: uuid.UUID | None = None,
     status: ConversationStatus | None = None,
@@ -153,7 +153,7 @@ async def list_pending_interventions_for_conversation(
     session_id: uuid.UUID,
     request: Request,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ):
     """Return currently pending intervention requests for a conversation session.
 
@@ -181,7 +181,7 @@ async def respond_to_conversation_intervention(
     body: InterveneResponseSubmit,
     request: Request,
     db: DbSession,
-    claims: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    claims: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ):
     """Submit a response to an intervention request within a conversation session.
 
@@ -276,7 +276,7 @@ async def respond_to_conversation_intervention(
 async def get_conversation(
     session_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_CONVERSATION, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ) -> ConversationSession:
     session = await _store.get_session_with_turns(session_id, db)
     if not session:

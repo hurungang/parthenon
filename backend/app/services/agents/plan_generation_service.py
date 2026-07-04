@@ -623,13 +623,21 @@ class PlanGenerationService:
     @staticmethod
     def _compute_config_hash(agent_type: AgentType) -> str:
         """Compute a deterministic hash of the agent configuration inputs."""
-        # Collect SOP binding IDs sorted for deterministic hashing
-        sop_binding_ids = sorted(
-            str(b.sop_id) for b in getattr(agent_type, "sop_bindings", [])
-        )
-        skill_binding_ids = sorted(
-            str(b.skill_id) for b in getattr(agent_type, "skill_bindings", [])
-        )
+        from sqlalchemy.orm import attributes
+
+        state = attributes.instance_state(agent_type)
+
+        sop_binding_ids: list[str] = []
+        if "sop_bindings" not in state.unloaded:
+            sop_binding_ids = sorted(
+                str(b.sop_id) for b in agent_type.sop_bindings  # type: ignore[union-attr]
+            )
+
+        skill_binding_ids: list[str] = []
+        if "skill_bindings" not in state.unloaded:
+            skill_binding_ids = sorted(
+                str(b.skill_id) for b in agent_type.skill_bindings  # type: ignore[union-attr]
+            )
         parts = [
             str(agent_type.role_id or ""),
             "|".join(sop_binding_ids),

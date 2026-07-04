@@ -390,6 +390,7 @@ erDiagram
         json input_schema
         enum output_type
         json output_schema
+        uuid output_data_type_id "optional; linked when output_type=typed"
         boolean is_active
         datetime created_at
         datetime updated_at
@@ -412,6 +413,7 @@ erDiagram
         uuid id
         uuid agent_type_id
         uuid triggered_by_user_id
+        uuid output_id "optional; convenience link"
         json input_data
         enum status "queued | running | waiting_for_human | completed | failed | terminated"
         datetime started_at
@@ -430,6 +432,35 @@ erDiagram
         enum status
         datetime created_at
         datetime disconnected_at
+    }
+    AgentData {
+        uuid id
+        uuid agent_type_id
+        uuid session_id
+        string data_name
+        json data_value
+        enum data_type
+        boolean is_active
+        datetime timestamp
+    }
+    AgentOutput {
+        uuid id
+        uuid data_type_id
+        uuid agent_type_id
+        uuid execution_session_id
+        json field_values "values keyed by field name per the data type schema"
+        enum validation_status "valid | validation_error"
+        string raw_output "unstructured fallback when validation fails"
+        datetime created_at
+    }
+    AgentDataType {
+        uuid id
+        string name
+        string slug
+        string description
+        json fields "array of typed field definitions"
+        datetime created_at
+        datetime updated_at
     }
 
     AgentRole ||--o{ AgentRoleSOP : "grants access to"
@@ -477,9 +508,80 @@ erDiagram
     AgentTypeSopBinding }o--|| Sop : "references"
     AgentTypeSkillBinding }o--|| Skill : "references"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
+    AgentType ||--o{ AgentData : "saves named data"
+    AgentSession ||--o{ AgentData : "contains saved records"
+    AgentType ||--o{ AgentOutput : "produces final output"
+    AgentSession ||--o| AgentOutput : "result stored in"
+    AgentDataType ||--o{ AgentOutput : "defines schema for"
+    AgentType }o--|| AgentDataType : "output schema defined by"
 ```
 
-**Source**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+
+### Agent Execution Data Flow
+
+Saved data (AgentData) is intermediate and optional — the `save_data` tool may be called zero or more times per session. Output (AgentOutput) is the final, singular result per session, produced once at execution completion.
+
+```mermaid
+erDiagram
+    AgentType {
+        uuid id
+        string name
+        string slug
+        enum output_type
+        boolean is_active
+    }
+
+    AgentSession {
+        uuid id
+        uuid agent_type_id
+        enum status
+        datetime started_at
+        datetime completed_at
+        boolean is_terminal
+    }
+
+    AgentData {
+        uuid id
+        uuid agent_type_id
+        uuid session_id
+        string data_name
+        json data_value
+        enum data_type
+        boolean is_active
+        datetime timestamp
+    }
+
+    AgentOutput {
+        uuid id
+        uuid data_type_id
+        uuid agent_type_id
+        uuid execution_session_id
+        json field_values "values keyed by field name"
+        enum validation_status "valid | validation_error"
+        string raw_output "fallback when validation fails"
+        datetime created_at
+    }
+    AgentDataType {
+        uuid id
+        string name
+        string slug
+        string description
+        json fields "array of typed field definitions"
+        datetime created_at
+        datetime updated_at
+    }
+
+    AgentType ||--o{ AgentSession : "executes as"
+    AgentType ||--o{ AgentData : "saves named data"
+    AgentSession ||--o{ AgentData : "contains saved records"
+    AgentType ||--o{ AgentOutput : "produces final output"
+    AgentSession ||--o| AgentOutput : "result stored in"
+    AgentDataType ||--o{ AgentOutput : "defines schema for"
+    AgentType }o--|| AgentDataType : "output schema defined by"
+```
+
+**Source**: `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`
 
 ---
 
@@ -813,7 +915,8 @@ erDiagram
     AgentType ||--o{ InterveneRequest : "initiates via tools"
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
-    AgentType ||--o{ ResultRecord : "produces"
+    AgentType ||--o{ AgentOutput : "produces final output"
+    AgentType ||--o{ AgentData : "saves named data"
     AgentType ||--o{ AgentTypeSopBinding : "curates SOPs via"
     AgentTypeSopBinding }o--|| Sop : "references"
     AgentType ||--o{ AgentTypeSkillBinding : "curates skills via"

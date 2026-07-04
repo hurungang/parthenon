@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { isAxiosError } from 'axios'
 import * as interveneApi from '../api/interveneApi'
 import type {
   InterveneMetrics,
@@ -21,8 +22,10 @@ export function useInterveneRequests(options: UseInterveneRequestsOptions = {}) 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const stoppedDueToPermissionRef = useRef(false)
 
   const fetchData = useCallback(async () => {
+    if (stoppedDueToPermissionRef.current) return
     try {
       setError(null)
       const all = await interveneApi.getInterveneRequests({
@@ -38,6 +41,13 @@ export function useInterveneRequests(options: UseInterveneRequestsOptions = {}) 
       setMetrics(m)
     } catch (err) {
       setError(err)
+      if (isAxiosError(err) && err.response?.status === 403) {
+        stoppedDueToPermissionRef.current = true
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+      }
     } finally {
       setIsLoading(false)
     }

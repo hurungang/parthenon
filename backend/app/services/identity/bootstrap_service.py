@@ -173,6 +173,16 @@ class IdentityBootstrapService:
                 ],
                 public_client=True,
             )
+            try:
+                await kc.create_group_membership_mapper(
+                    token, realm_name, f"{client_id}-ui"
+                )
+            except KeycloakAdminError as exc:
+                logger.warning(
+                    "Failed to create group membership mapper for client %r-ui: %s",
+                    client_id,
+                    exc,
+                )
             if request.initial_admin_password:
                 await kc.create_user(
                     token,

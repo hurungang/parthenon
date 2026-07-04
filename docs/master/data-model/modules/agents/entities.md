@@ -81,6 +81,7 @@ erDiagram
         json input_schema
         enum output_type
         json output_schema
+        uuid output_data_type_id "optional; linked when output_type=typed"
         boolean is_active
         datetime created_at
         datetime updated_at
@@ -103,6 +104,7 @@ erDiagram
         uuid id
         uuid agent_type_id
         uuid triggered_by_user_id
+        uuid output_id "optional; convenience link"
         json input_data
         enum status "queued | running | waiting_for_human | completed | failed | terminated"
         datetime started_at
@@ -144,6 +146,35 @@ erDiagram
         enum status
         datetime created_at
         datetime disconnected_at
+    }
+    AgentData {
+        uuid id
+        uuid agent_type_id
+        uuid session_id
+        string data_name
+        json data_value
+        enum data_type
+        boolean is_active
+        datetime timestamp
+    }
+    AgentOutput {
+        uuid id
+        uuid data_type_id
+        uuid agent_type_id
+        uuid execution_session_id
+        json field_values "values keyed by field name per the data type schema"
+        enum validation_status "valid | validation_error"
+        string raw_output "unstructured fallback when validation fails"
+        datetime created_at
+    }
+    AgentDataType {
+        uuid id
+        string name
+        string slug
+        string description
+        json fields "array of typed field definitions"
+        datetime created_at
+        datetime updated_at
     }
     McpServer {
         uuid id
@@ -243,9 +274,15 @@ erDiagram
     AgentTypeSopBinding }o--|| Sop : "references"
     AgentTypeSkillBinding }o--|| Skill : "references"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
+    AgentType ||--o{ AgentData : "saves named data"
+    AgentSession ||--o{ AgentData : "contains saved records"
+    AgentType ||--o{ AgentOutput : "produces final output"
+    AgentSession ||--o| AgentOutput : "result stored in"
+    AgentDataType ||--o{ AgentOutput : "defines schema for"
+    AgentType }o--|| AgentDataType : "output schema defined by"
 ```
 
-**Source**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
 
 | Entity | Description |
 |--------|-------------|
@@ -257,13 +294,16 @@ erDiagram
 | **AgentRoleSkill** | Join table linking an AgentRole to a Skill directly (outside of any SOP). Contributes the Skill's required MCP tools to the role's allowed tool set. |
 | **AgentRoleMcpSession** | Join table associating an MCP Session with an AgentRole, providing credential and resource context for MCP tool calls. At most one session per MCP server per role. |
 | **AgentIdentity** | Represents an agent's user account in a dedicated identity provider realm (e.g., `ai_agents`). Stores encrypted OAuth tokens used at runtime; refresh tokens are stored encrypted and refreshed automatically. `token_status` tracks the current refresh state (`active`, `expired`, `refresh_failed`); `last_token_refresh_at` records the most recent successful refresh. If `token_status` becomes `refresh_failed`, agent execution is blocked until operator intervention. Identity slug/name is treated as a slug-safe runtime identifier, while display labels remain user-friendly. |
-| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
+| **AgentType** | The definition of an agent class: its identity, permission role, model selection, system instruction, and input/output schema. When `output_type` is `typed`, `output_data_type_id` links to the `AgentDataType` that defines the expected output schema. The `model_id` is resolved at runtime against active `ModelConfig.enabled_models`; there is no direct FK to ModelConfig. Agent type slug is the canonical routing key for delegation and protocol metadata. Agent Types store curated SOP and skill bindings via `AgentTypeSopBinding` and `AgentTypeSkillBinding` join tables. |
 | **AgentTypeSopBinding** | Join entity linking an AgentType to a Sop with an explicit ordering position. Each pair (agent_type_id, sop_id) is unique. The order field determines the sequence in the merged binding list alongside skill bindings. Used by system instruction generation and Agent Plan Mode. |
 | **AgentTypeSkillBinding** | Join entity linking an AgentType to a Skill with an explicit ordering position. Each pair (agent_type_id, skill_id) is unique. The order field determines the sequence in the merged binding list alongside SOP bindings. |
-| **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. Status includes `waiting_for_human` when the agent is paused pending operator response to an intervene request. |
+| **AgentSession** | A single agent execution instance from submission through completion. Serves as the agent instance record for the dashboard. Stores input, output, status, timing, and (for conversational agents) the full `conversation_history`. Provides session context for `get_data` and `get_output` queries. `output_id` provides an optional convenience link to the session's typed output record when one exists. Status includes `waiting_for_human` when the agent is paused pending operator response to an intervene request. |
 | **InterveneRequest** | An agent-initiated request for human intervention during execution. Supports three intervention types: `approval` (yes/no), `choice` (select one from a list), and `text` (free-form input). Tracks lifecycle from `pending` through `responded`, `cancelled`, or `expired`. Links to the parent `ConversationSession` (when surfaced in a conversational context) and preserves `delegation_depth` from the originating `AgentJob` for audit. |
 | **InterveneResponse** | The operator's response to an intervene request. Exactly one response per request. The response field populated depends on the intervention type: `approval_value` (boolean) for approval requests, `selected_choice` (string) for choice requests, `text_value` (string) for text requests. |
 | **AgentA2ASessionLink** | Tracks A2A requester/receiver linkage for delegated runs. Supports shared-session lifecycle tracking, receiver cleanup decisions, and delegated execution status visibility. |
+| **AgentData** | A named, typed data record explicitly saved via the `save_data` tool during an agent execution session. Multiple AgentData records may exist per session (intermediate, optional); each is scoped to an AgentType and AgentSession. Queried at runtime via `get_data` by data_name and session. |
+| **AgentOutput** | Immutable record of a single typed agent execution result. Links the agent type, execution session, and data type schema together with validated field values. `validation_status` is `valid` when field values pass schema validation, `validation_error` otherwise. `raw_output` stores the unparsed agent output as a fallback for UI rendering when validation fails. `field_values` stores values keyed by field name per the referenced `AgentDataType` schema. |
+| **AgentDataType** | Central registry of reusable output schemas. Each type defines a named collection of typed fields (`fields` is an ordered array of field definitions with name, type, and validation constraints) that agent types reference as their output contract. The `slug` is the canonical identifier used by the `query_result` tool at runtime. |
 | **AgentPlan** | Stores the most recent LLM-generated implementation plan for an agent type. One record per `AgentType` (unique on `agent_type_id`). `plan_steps` is a structured, ordered plan payload that is both human-readable (for UI preview) and machine-parseable (for runtime execution guidance). `topology` is an opaque node-edge JSON payload produced by the Topology Builder service for frontend rendering. `generation_status` tracks `pending` \| `success` \| `failed` state; `generation_error` captures the failure reason without discarding the last successful plan. `agent_config_hash` is a hash of the inputs at generation time (role, SOPs, skills, system instruction) used to detect plan staleness. The Agent Runtime loads the saved plan during session initialization to guide execution. |
 | **AgentInstanceCertificate** | X.509 certificate issued to a specific agent runtime instance by the Control Center CA. Tracks the full certificate lifecycle: issuance, expiration (24-hour validity), and revocation. The `instance_id` combined with `agent_type_id` uniquely identifies the runtime instance. `status` is computed: `revoked` if `revoked_at` is set, `expired` if past `expires_at`, otherwise `active`. |
 | **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, and any error message. Supports compliance review and debugging of refresh failures. Old entries (> 90 days) may be archived. |
@@ -278,6 +318,12 @@ erDiagram
 - A session in `waiting_for_human` may transition to `running` (resume), `terminated` (operator terminated), or `failed` (system error during resume).
 - Multiple concurrent intervene requests per session are not permitted — a duplicate `human_intervene` call while a `pending` request exists returns the existing request ID.
 - When a session transitions from `waiting_for_human` to `terminated`, all `pending` intervene requests for that session are automatically marked `cancelled`.
+- `AgentDataType.name` must be unique. At least one field is required in `fields`.
+- `AgentDataType.slug` is the canonical identifier used by the `query_result` tool at runtime and should be slug-safe.
+- When `AgentType.output_type` is `typed`, `output_data_type_id` must be non-null; it must be null for `auto` and `markdown` output types.
+- `AgentOutput.validation_status` is `valid` when `field_values` passes schema validation against the referenced `AgentDataType.fields`, `validation_error` otherwise.
+- `AgentOutput.raw_output` stores the unparsed agent output as a fallback for UI rendering when validation fails.
+- `AgentOutput.field_values` is soft-referenced to the data type schema — the schema is resolved at read time via `data_type_id`.
 
 ## Model Guardrail and Runtime Control Entities
 

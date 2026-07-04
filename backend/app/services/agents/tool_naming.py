@@ -117,7 +117,7 @@ def get_server_name(name: str) -> str:
     """Return the server slug from a canonical tool name.
 
     Args:
-        name: Canonical tool name (e.g. ``"system____save_result"``).
+        name: Canonical tool name (e.g. ``"system____save_data"``).
 
     Returns:
         Server slug (e.g. ``"system"``).
@@ -133,10 +133,10 @@ def get_bare_tool_name(name: str) -> str:
     """Return the bare tool name suffix from a canonical tool name.
 
     Args:
-        name: Canonical tool name (e.g. ``"system____save_result"``).
+        name: Canonical tool name (e.g. ``"system____save_data"``).
 
     Returns:
-        Bare tool name (e.g. ``"save_result"``).
+        Bare tool name (e.g. ``"save_data"``).
 
     Raises:
         ValueError: If *name* cannot be parsed (see :func:`parse_tool_name`).

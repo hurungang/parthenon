@@ -67,7 +67,7 @@ class BootstrapService:
         existing = await db.execute(
             select(PolicyStatement).where(
                 PolicyStatement.role_id == role.id,
-                PolicyStatement.module == "*",
+                PolicyStatement.module == "*::*",
                 PolicyStatement.effect == PolicyEffect.allow,
             )
         )
@@ -76,7 +76,7 @@ class BootstrapService:
             stmt = PolicyStatement(
                 role_id=role.id,
                 effect=PolicyEffect.allow,
-                module="*",
+                module="*::*",
             )
             db.add(stmt)
             await db.flush()
@@ -84,7 +84,7 @@ class BootstrapService:
             # Wildcard action
             db.add(PolicyAction(policy_statement_id=stmt.id, action="*"))
             # Wildcard resource
-            db.add(PolicyResource(policy_statement_id=stmt.id, resource_type="*", resource_id="*"))
+            db.add(PolicyResource(policy_statement_id=stmt.id, resource_type="*::*", resource_id="*"))
             await db.flush()
             logger.info("Created full-access policy statement id=%s for system_admin role", stmt.id)
 

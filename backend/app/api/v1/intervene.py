@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_INTERVENE
+from app.core.resource_types import RT_AGENT_HUMAN_INTERVENTION
 from app.db.models.identity import Identity
 from app.db.models.intervene import (
     InterveneRequest,
@@ -60,7 +60,7 @@ async def _resume_agent_session(session_id: uuid.UUID, response_value: dict) -> 
 @InterveneRouter.get("/requests", response_model=list[InterveneRequestRead])
 async def list_intervene_requests(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_INTERVENE, "view")),
+    _: dict = Depends(require_permission(RT_AGENT_HUMAN_INTERVENTION, "view")),
     status: InterveneRequestStatus | None = None,
     intervention_type: InterventionType | None = None,
     agent_session_id: uuid.UUID | None = None,
@@ -81,7 +81,7 @@ async def list_intervene_requests(
 async def get_intervene_request(
     request_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_INTERVENE, "view")),
+    _: dict = Depends(require_permission(RT_AGENT_HUMAN_INTERVENTION, "view")),
 ):
     request = await _store.get_request(db=db, request_id=request_id)
     if not request:
@@ -94,7 +94,7 @@ async def respond_to_intervene_request(
     request_id: uuid.UUID,
     body: InterveneResponseSubmit,
     db: DbSession,
-    claims: dict = Depends(require_permission(RT_INTERVENE, "respond")),
+    claims: dict = Depends(require_permission(RT_AGENT_HUMAN_INTERVENTION, "respond")),
 ):
     # Validate request_id in path matches body
     if body.request_id != request_id:
@@ -157,7 +157,7 @@ async def respond_to_intervene_request(
 async def cancel_intervene_request(
     request_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_INTERVENE, "respond")),
+    _: dict = Depends(require_permission(RT_AGENT_HUMAN_INTERVENTION, "respond")),
 ):
     try:
         request = await _store.cancel_request(db=db, request_id=request_id)
@@ -172,7 +172,7 @@ async def cancel_intervene_request(
 @InterveneRouter.get("/metrics", response_model=InterveneMetrics)
 async def get_intervene_metrics(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_INTERVENE, "view")),
+    _: dict = Depends(require_permission(RT_AGENT_HUMAN_INTERVENTION, "view")),
 ):
     metrics = await _store.get_metrics(db=db)
     return InterveneMetrics(**metrics)

@@ -319,6 +319,105 @@ class KeycloakAdminClient:
         secret_value: str = secret_resp.json().get("value", "")
         return ClientSecret(value=secret_value)
 
+    async def create_group_membership_mapper(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        client_id: str,
+    ) -> None:
+        """Add a Group Membership protocol mapper to an OIDC client.  Idempotent.
+
+        The mapper causes Keycloak to include a ``groups`` claim in JWT tokens,
+        which the ``GroupClaimMapper`` in the auth middleware consumes to
+        auto-assign users to Parthenon groups.
+
+        Args:
+            token: Valid admin token.
+            realm_name: Target realm.
+            client_id: Client identifier (e.g. ``parthenon-api-ui``).
+        """
+        mapper_name = "group_membership"
+
+        # Resolve the internal Keycloak client UUID
+        list_url = f"{self._base_url}/admin/realms/{realm_name}/clients"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            list_resp = await _request_with_retry(
+                client,
+                "GET",
+                list_url,
+                params={"clientId": client_id},
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if list_resp.status_code != 200:
+            raise KeycloakAdminError(
+                "client_lookup_failed",
+                f"Failed to list clients for realm {realm_name!r} "
+                f"(HTTP {list_resp.status_code}): {list_resp.text[:200]}",
+            )
+        clients = list_resp.json()
+        if not clients:
+            raise KeycloakAdminError(
+                "client_not_found",
+                f"Client {client_id!r} not found in realm {realm_name!r}",
+            )
+        keycloak_client_uuid = clients[0]["id"]
+
+        # Check if mapper already exists (idempotency)
+        mappers_url = (
+            f"{self._base_url}/admin/realms/{realm_name}"
+            f"/clients/{keycloak_client_uuid}/protocol-mappers/models"
+        )
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            mappers_resp = await _request_with_retry(
+                client,
+                "GET",
+                mappers_url,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if mappers_resp.status_code == 200:
+            existing_mappers = mappers_resp.json()
+            if any(m.get("name") == mapper_name for m in existing_mappers):
+                logger.info(
+                    "Group membership mapper already exists for client %r in realm %r — skipping",
+                    client_id,
+                    realm_name,
+                )
+                return
+
+        # Create the mapper
+        mapper_payload = {
+            "name": mapper_name,
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-group-membership-mapper",
+            "config": {
+                "full.path": "false",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "claim.name": "groups",
+            },
+        }
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            create_resp = await _request_with_retry(
+                client,
+                "POST",
+                mappers_url,
+                json=mapper_payload,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if create_resp.status_code not in (200, 201):
+            raise KeycloakAdminError(
+                "mapper_creation_failed",
+                f"Failed to create group membership mapper for client {client_id!r} "
+                f"in realm {realm_name!r} (HTTP {create_resp.status_code}): "
+                f"{create_resp.text[:200]}",
+            )
+        logger.info(
+            "Group membership mapper created for client %r in realm %r",
+            client_id,
+            realm_name,
+        )
+
     async def create_user(
         self,
         token: AdminToken,

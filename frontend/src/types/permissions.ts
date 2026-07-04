@@ -202,3 +202,7 @@ export interface AccessRequestBatch {
   submitted_at: string
   requests: AccessRequest[]
 }
+
+export interface BatchPolicySaveRequest {
+  policies: PolicyStatementCreate[]
+}

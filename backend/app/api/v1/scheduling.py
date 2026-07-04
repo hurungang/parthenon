@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_SCHEDULING
+from app.core.resource_types import RT_AGENT_SCHEDULES
 from app.db.session import DbSession
 from app.db.models.scheduling import ExecutionStatus, JobExecution, JobStatus, ScheduledJob
 from app.schemas.scheduling import JobExecutionRead, ScheduledJobCreate, ScheduledJobRead, ScheduledJobUpdate
@@ -20,7 +20,7 @@ ScheduleRouter = APIRouter(prefix="/schedules", tags=["Scheduling"])
 @ScheduleRouter.get("", response_model=list[ScheduledJobRead])
 async def list_schedules(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[ScheduledJob]:
@@ -38,7 +38,7 @@ async def list_schedules(
 async def create_schedule(
     body: ScheduledJobCreate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "create")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "create")),
 ) -> ScheduledJob:
     job = ScheduledJob(**body.model_dump())
     db.add(job)
@@ -58,7 +58,7 @@ async def create_schedule(
 async def get_schedule(
     job_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "read")),
 ) -> ScheduledJob:
     job = await db.get(ScheduledJob, job_id)
     if not job or job.status == JobStatus.deleted:
@@ -71,7 +71,7 @@ async def update_schedule(
     job_id: uuid.UUID,
     body: ScheduledJobUpdate,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "update")),
 ) -> ScheduledJob:
     job = await db.get(ScheduledJob, job_id)
     if not job or job.status == JobStatus.deleted:
@@ -97,7 +97,7 @@ async def update_schedule(
 async def delete_schedule(
     job_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "delete")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "delete")),
 ) -> None:
     job = await db.get(ScheduledJob, job_id)
     if not job:
@@ -113,7 +113,7 @@ async def delete_schedule(
 async def pause_schedule(
     job_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "update")),
 ) -> ScheduledJob:
     job = await db.get(ScheduledJob, job_id)
     if not job or job.status == JobStatus.deleted:
@@ -131,7 +131,7 @@ async def pause_schedule(
 async def resume_schedule(
     job_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "update")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "update")),
 ) -> ScheduledJob:
     job = await db.get(ScheduledJob, job_id)
     if not job or job.status == JobStatus.deleted:
@@ -149,7 +149,7 @@ async def resume_schedule(
 async def list_executions(
     job_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_SCHEDULING, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "read")),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[JobExecution]:
