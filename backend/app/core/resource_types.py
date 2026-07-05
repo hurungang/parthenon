@@ -21,6 +21,7 @@ RT_AGENT_SCHEDULES: Final[str] = "agent::schedules"
 RT_AGENT_TRAILS: Final[str] = "agent::trails"
 RT_AGENT_HUMAN_INTERVENTION: Final[str] = "agent::human_intervention"
 RT_AGENT_DATA_TYPES: Final[str] = "agent::data_types"
+RT_AGENT_DATA: Final[str] = "agent::data"
 RT_AGENT_OUTPUTS: Final[str] = "agent::outputs"
 
 # Integrations module
@@ -71,6 +72,9 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     RT_AGENT_DATA_TYPES: {
         "actions": ["create", "read", "update", "delete", "manage"],
     },
+    RT_AGENT_DATA: {
+        "actions": ["read"],
+    },
     RT_AGENT_OUTPUTS: {
         "actions": ["read"],
     },
@@ -106,6 +110,7 @@ MODULE_GROUPS: Final[dict[str, list[str]]] = {
         RT_AGENT_TRAILS,
         RT_AGENT_HUMAN_INTERVENTION,
         RT_AGENT_DATA_TYPES,
+        RT_AGENT_DATA,
         RT_AGENT_OUTPUTS,
     ],
     "integration": [

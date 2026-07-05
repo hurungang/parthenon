@@ -22,7 +22,7 @@ import { GatewayConfigPage } from '../pages/gateway/GatewayConfigPage'
 import { ScheduleManagerPage } from '../pages/scheduling/ScheduleManagerPage'
 import { ConversationHistoryPage } from '../pages/conversations/ConversationHistoryPage'
 import { AgentTrailsPage } from '../pages/trails/AgentTrailsPage'
-import { ResultRepositoryPage } from '../pages/results/ResultRepositoryPage'
+import { AgentDataPage } from '../pages/agent-data/AgentDataPage'
 import { NotificationConfigPage } from '../pages/notifications/NotificationConfigPage'
 import { ChannelListPage } from '../pages/notifications/ChannelListPage'
 import { RecipientGroupListPage } from '../pages/notifications/RecipientGroupListPage'
@@ -117,7 +117,7 @@ function AppRoutes() {
         <Route path="/schedules" element={<ScheduleManagerPage />} />
         <Route path="/conversations" element={<ConversationHistoryPage />} />
         <Route path="/agent-trails" element={<AgentTrailsPage />} />
-        <Route path="/results" element={<ResultRepositoryPage />} />
+        <Route path="/admin/agent-data" element={<AgentDataPage />} />
         <Route path="/notifications" element={<NotificationConfigPage />} />
         <Route path="/admin/notifications/channels" element={<ChannelListPage />} />
         <Route path="/admin/notifications/groups" element={<RecipientGroupListPage />} />

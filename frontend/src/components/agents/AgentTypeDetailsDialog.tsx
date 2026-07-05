@@ -949,6 +949,11 @@ export function AgentTypeDetailsDialog({
             setSelectedSessionId(sessionId)
             setExecutionDetailsDialogOpen(true)
           }}
+          onRegeneratePlan={async () => {
+            await regeneratePlanMutation.mutateAsync()
+            setLaunchOpen(false)
+            setActiveTab(1)
+          }}
         />
       )}
 

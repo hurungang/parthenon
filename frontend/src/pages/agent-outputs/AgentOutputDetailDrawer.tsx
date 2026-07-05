@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Chip,
+  CircularProgress,
   Divider,
   Drawer,
   IconButton,
@@ -12,14 +13,14 @@ import CloseIcon from '@mui/icons-material/Close'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import { TypedOutputRenderer } from '../../components/executions/TypedOutputRenderer'
-import type { AgentDataType, AgentOutputResponse } from '../../types'
+import { useDataType } from '../../hooks/useDataTypes'
+import type { AgentOutputResponse } from '../../types'
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface AgentOutputDetailDrawerProps {
   open: boolean
   output: AgentOutputResponse | null
-  dataType: AgentDataType | null
   onClose: () => void
 }
 
@@ -38,10 +39,13 @@ interface AgentOutputDetailDrawerProps {
 export function AgentOutputDetailDrawer({
   open,
   output,
-  dataType,
   onClose,
 }: AgentOutputDetailDrawerProps) {
   const { t } = useTranslation()
+
+  const { data: dataType, isLoading: schemaLoading, isError: schemaError } = useDataType(
+    output?.data_type_id ?? '',
+  )
 
   if (!output) return null
 
@@ -147,14 +151,28 @@ export function AgentOutputDetailDrawer({
           })}
         </Typography>
 
-        {hasFields ? (
+        {schemaLoading && (
+          <Box display="flex" justifyContent="center" py={2}>
+            <CircularProgress size={24} />
+          </Box>
+        )}
+
+        {!schemaLoading && schemaError && (
+          <Typography variant="body2" color="text.secondary" fontStyle="italic" sx={{ mb: 2 }}>
+            {t('admin.agentOutputs.schemaLoadError', {
+              defaultValue: 'Could not load data type schema.',
+            })}
+          </Typography>
+        )}
+
+        {!schemaLoading && !schemaError && hasFields ? (
           <Box sx={{ mb: 3 }}>
             <TypedOutputRenderer
               fields={fields}
               values={output.field_values ?? {}}
             />
           </Box>
-        ) : (
+        ) : !schemaLoading && !schemaError && (
           <Typography
             variant="body2"
             color="text.secondary"

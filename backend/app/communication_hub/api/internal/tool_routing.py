@@ -245,6 +245,7 @@ async def _route_to_system_tool(body: ToolCallRequest, request: Request) -> Tool
     # Call Control Center with mTLS certificate
     payload: dict[str, Any] = {
         "session_id": body.session_id,
+        "agent_type_id": body.agent_type_id,
         "tool_args": body.tool_args,
     }
     if body.conv_session_id:

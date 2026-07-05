@@ -9,13 +9,14 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.api.deps import require_service_certificate
+from app.api.deps import _CH_ALLOWLIST, require_service_certificate
 from app.db.models.agent_data import AgentData
 from app.db.models.agent_data_type import AgentDataType
 from app.db.models.agent_output import AgentOutput, AgentOutputValidationStatus
 from app.db.models.agents import AgentJob, AgentJobStatus, AgentType
 from app.db.session import get_db
 from app.main import create_app
+from app.services.agents.system_tool_registry import SystemToolRegistry
 
 
 def _bypass_service_cert():
@@ -169,3 +170,68 @@ async def test_get_output_endpoint_returns_output_history(
     payload = response.json()["result"]
     assert payload["count"] >= 1
     assert any(r["execution_session_id"] == str(job.id) for r in payload["records"])
+
+
+# ── _CH_ALLOWLIST completeness tests ──────────────────────────────────
+
+
+def test_ch_allowlist_contains_all_system_tool_cc_endpoint_paths() -> None:
+    """Verify every system tool's CC endpoint path is in _CH_ALLOWLIST.
+
+    Bug FIX-20260704-070000: When CommHub proxies system-tool calls
+    (save_data, get_data, get_output) to Control Center, it receives
+    HTTP 403 with ``deny_reason: endpoint_not_allowlisted`` because
+    these paths are missing from _CH_ALLOWLIST.  The old deprecated
+    ``save-result`` path is still present but the replacement endpoints
+    are not.
+
+    This test cross-references ``SystemToolRegistry`` (single source of
+    truth) against ``_CH_ALLOWLIST``.  If CommHub would reject a
+    registered system tool, this test fails.
+    """
+    # All system-tool endpoints registered on the internal router use POST.
+    method = "POST"
+
+    missing: list[str] = []
+    stale_allowlisted: list[str] = []
+
+    # 1. Check every registered system tool's CC endpoint is allowlisted
+    for name, tool in sorted(SystemToolRegistry._tools.items()):
+        path = tool.cc_endpoint_path
+        if (method, path) not in _CH_ALLOWLIST:
+            missing.append(f"{method} {path}  (tool={name})")
+
+    # 2. Check for stale allowlist entries — paths in _CH_ALLOWLIST that
+    #    refer to system-tools but no longer match any registered tool
+    registered_paths = {
+        (method, tool.cc_endpoint_path)
+        for tool in SystemToolRegistry._tools.values()
+    }
+    for entry in sorted(_CH_ALLOWLIST):
+        ep_method, ep_path = entry
+        if "/system-tools/" in ep_path and entry not in registered_paths:
+            stale_allowlisted.append(f"{ep_method} {ep_path}  (stale)")
+
+    # Build failure message
+    lines: list[str] = []
+    if missing:
+        lines.append("MISSING from _CH_ALLOWLIST (CommHub calls will get 403):")
+        for m in missing:
+            lines.append(f"    {m}")
+    if stale_allowlisted:
+        if lines:
+            lines.append("")
+        lines.append("STALE entries in _CH_ALLOWLIST (endpoint no longer exists):")
+        for s in stale_allowlisted:
+            lines.append(f"    {s}")
+    if not lines:
+        lines.append("All system-tool CC endpoint paths are correctly allowlisted.")
+
+    assert not missing, "\n".join(lines) if lines else ""
+
+    # stale entries are informational only — warn the team but don't fail
+    if stale_allowlisted:
+        import warnings
+        warnings.warn(
+            f"Stale entries in _CH_ALLOWLIST:\n" + "\n".join(stale_allowlisted)
+        )

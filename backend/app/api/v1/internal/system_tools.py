@@ -39,6 +39,7 @@ class SystemToolRequest(BaseModel):
     """Request to execute a system tool."""
 
     session_id: str
+    agent_type_id: str | None = None
     tool_args: dict[str, Any]
     conversation_session_id: str | None = None
 
@@ -597,7 +598,7 @@ async def save_data_tool(
         session_id_str = body.session_id
         data_name = body.tool_args.get("data_name")
         data_value = body.tool_args.get("data_value")
-        agent_type_id_raw = body.tool_args.get("agent_type_id")
+        agent_type_id_raw = body.agent_type_id or body.tool_args.get("agent_type_id")
         data_type = body.tool_args.get("data_type", "json")
 
         if not session_id_str:

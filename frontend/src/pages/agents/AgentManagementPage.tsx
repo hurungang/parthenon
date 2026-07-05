@@ -413,6 +413,15 @@ export function AgentManagementPage() {
             setSelectedSessionId(sessionId)
             setExecutionDetailsDialogOpen(true)
           }}
+          onRegeneratePlan={async () => {
+            await apiClient.post(`/agents/types/${launchType.id}/regenerate-plan`)
+            await queryClient.invalidateQueries({ queryKey: ['agents', 'types', launchType.id] })
+            await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+            setLaunchOpen(false)
+            setLaunchType(null)
+            setDetailsDialogTypeId(launchType.id)
+            setDetailsDialogInitialTab(1)
+          }}
         />
       )}
 
