@@ -5,6 +5,9 @@ import type { TFunction } from 'i18next'
 import type { AgentOutputType, AgentDataType } from '../../types'
 import { useDataType } from '../../hooks/useDataTypes'
 import { TypedOutputRenderer } from './TypedOutputRenderer'
+import { ContentRenderer } from '../ContentRenderer'
+import { MaximizableContent } from '../MaximizableContent'
+import { simpleMarkdownToHtml, escapeHtml } from '../../utils/markdown'
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -110,10 +113,6 @@ function renderJsonValue(value: unknown, depth: number, path: string): string {
     return html
   }
   return escapeHtml(String(value))
-}
-
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function syntaxHighlightJson(json: string): string {
@@ -321,24 +320,26 @@ export function OutputTypeResultTab({
 
       {/* ── Markdown Output ── */}
       {outputType === 'markdown' && (
-        <Box
-          className="result-markdown"
-          sx={{
-            '& h2': { fontSize: 20, fontWeight: 700, color: 'text.primary', mb: 1.5, pb: 1, borderBottom: 2, borderColor: 'divider' },
-            '& h3': { fontSize: 16, fontWeight: 600, color: 'text.primary', mt: 2.5, mb: 1 },
-            '& h4': { fontSize: 14, fontWeight: 600, color: 'text.primary', mt: 2, mb: 1 },
-            '& p': { fontSize: 14, lineHeight: 1.65, mb: 1.25, color: 'text.primary' },
-            '& strong': { fontWeight: 700 },
-            '& ul, & ol': { pl: 3, mb: 1.5 },
-            '& li': { fontSize: 14, lineHeight: 1.65, mb: 0.5 },
-            '& code': { bgcolor: '#F1F5F9', px: 0.75, borderRadius: 0.5, fontSize: 13, fontFamily: 'monospace', color: '#C2410C' },
-            '& pre': { bgcolor: '#1E293B', color: '#E2E8F0', p: 2, borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.5, mb: 1.5, '& code': { bgcolor: 'transparent', color: 'inherit', p: 0, fontSize: 13 } },
-            '& em': { fontStyle: 'italic', color: 'text.secondary' },
-            '& blockquote': { borderLeft: 4, borderColor: 'primary.main', pl: 2, py: 1, my: 1.5, bgcolor: '#EFF6FF', borderRadius: '0 4px 4px 0', fontStyle: 'italic', color: 'text.secondary' },
-            '& hr': { border: 'none', borderTop: 1, borderColor: 'divider', my: 2.5 },
-          }}
-          dangerouslySetInnerHTML={{ __html: markdownHtml }}
-        />
+        <MaximizableContent title={t('agents.agentType.outputMarkdown', { defaultValue: 'Markdown' })}>
+          <Box
+            className="result-markdown"
+            sx={{
+              '& h2': { fontSize: 20, fontWeight: 700, color: 'text.primary', mb: 1.5, pb: 1, borderBottom: 2, borderColor: 'divider' },
+              '& h3': { fontSize: 16, fontWeight: 600, color: 'text.primary', mt: 2.5, mb: 1 },
+              '& h4': { fontSize: 14, fontWeight: 600, color: 'text.primary', mt: 2, mb: 1 },
+              '& p': { fontSize: 14, lineHeight: 1.65, mb: 1.25, color: 'text.primary' },
+              '& strong': { fontWeight: 700 },
+              '& ul, & ol': { pl: 3, mb: 1.5 },
+              '& li': { fontSize: 14, lineHeight: 1.65, mb: 0.5 },
+              '& code': { bgcolor: '#F1F5F9', px: 0.75, borderRadius: 0.5, fontSize: 13, fontFamily: 'monospace', color: '#C2410C' },
+              '& pre': { bgcolor: '#1E293B', color: '#E2E8F0', p: 2, borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.5, mb: 1.5, '& code': { bgcolor: 'transparent', color: 'inherit', p: 0, fontSize: 13 } },
+              '& em': { fontStyle: 'italic', color: 'text.secondary' },
+              '& blockquote': { borderLeft: 4, borderColor: 'primary.main', pl: 2, py: 1, my: 1.5, bgcolor: '#EFF6FF', borderRadius: '0 4px 4px 0', fontStyle: 'italic', color: 'text.secondary' },
+              '& hr': { border: 'none', borderTop: 1, borderColor: 'divider', my: 2.5 },
+            }}
+            dangerouslySetInnerHTML={{ __html: markdownHtml }}
+          />
+        </MaximizableContent>
       )}
 
       {/* ── Typed Output (schema-based structured view) ── */}
@@ -351,17 +352,19 @@ export function OutputTypeResultTab({
             {t('executions.resultTab.structuredOutput', { defaultValue: 'Structured Output' })}
           </Typography>
 
-          <Box
-            sx={{
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-              overflow: 'hidden',
-              bgcolor: 'background.paper',
-            }}
-          >
-            <TypedOutputRenderer fields={effectiveSchema.fields} values={fieldValues} />
-          </Box>
+          <MaximizableContent title={t('executions.resultTab.structuredOutput', { defaultValue: 'Structured Output' })}>
+            <Box
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <TypedOutputRenderer fields={effectiveSchema.fields} values={fieldValues} />
+            </Box>
+          </MaximizableContent>
         </Box>
       )}
 
@@ -375,35 +378,37 @@ export function OutputTypeResultTab({
             {t('executions.resultTab.structuredOutput', { defaultValue: 'Structured Output' })}
           </Typography>
 
-          <Box
-            sx={{
-              fontFamily: 'monospace',
-              fontSize: 13,
-              lineHeight: 1.7,
-              bgcolor: '#FAFBFC',
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-              p: 2,
-              overflowX: 'auto',
-              '& .ojt-line': { whiteSpace: 'nowrap', transition: 'background 0.2s', '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' } },
-              '& .ojt-key': { color: '#1D4ED8' },
-              '& .ojt-str': { color: '#15803D' },
-              '& .ojt-num': { color: '#C2410C' },
-              '& .ojt-bool': { color: '#6D28D9' },
-              '& .ojt-null': { color: '#9CA3AF', fontStyle: 'italic' },
-              '& .ojt-bracket': { color: '#94A3B8' },
-              '& .ojt-comma': { color: '#94A3B8' },
-              '& .ojt-block': { display: 'inline' },
-              '& .ojt-hidden': { display: 'none' },
-              '& .ojt-toggle.ojt-collapsed': { transform: 'rotate(-90deg)' },
-              '& .ojt-hl-key': { color: '#1D4ED8' },
-              '& .ojt-hl-str': { color: '#15803D' },
-              '& .ojt-hl-num': { color: '#C2410C' },
-              '& .ojt-hl-bool': { color: '#6D28D9' },
-            }}
-            dangerouslySetInnerHTML={{ __html: jsonTreeHtml }}
-          />
+          <MaximizableContent title={t('executions.resultTab.structuredOutput', { defaultValue: 'Structured Output' })}>
+            <Box
+              sx={{
+                fontFamily: 'monospace',
+                fontSize: 13,
+                lineHeight: 1.7,
+                bgcolor: '#FAFBFC',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2,
+                overflowX: 'auto',
+                '& .ojt-line': { whiteSpace: 'nowrap', transition: 'background 0.2s', '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' } },
+                '& .ojt-key': { color: '#1D4ED8' },
+                '& .ojt-str': { color: '#15803D' },
+                '& .ojt-num': { color: '#C2410C' },
+                '& .ojt-bool': { color: '#6D28D9' },
+                '& .ojt-null': { color: '#9CA3AF', fontStyle: 'italic' },
+                '& .ojt-bracket': { color: '#94A3B8' },
+                '& .ojt-comma': { color: '#94A3B8' },
+                '& .ojt-block': { display: 'inline' },
+                '& .ojt-hidden': { display: 'none' },
+                '& .ojt-toggle.ojt-collapsed': { transform: 'rotate(-90deg)' },
+                '& .ojt-hl-key': { color: '#1D4ED8' },
+                '& .ojt-hl-str': { color: '#15803D' },
+                '& .ojt-hl-num': { color: '#C2410C' },
+                '& .ojt-hl-bool': { color: '#6D28D9' },
+              }}
+              dangerouslySetInnerHTML={{ __html: jsonTreeHtml }}
+            />
+          </MaximizableContent>
 
           {/* Schema toggle */}
           {outputSchema && (
@@ -480,50 +485,35 @@ export function OutputTypeResultTab({
           >
             {t('executions.resultTab.agentOutput', { defaultValue: 'Agent Output' })}
           </Typography>
-          {autoExtractedText ? (
-            // Render extracted text (plain string or from Claude content blocks) as markdown
-            <Box
-              className="result-markdown"
-              sx={{
-                '& h2': { fontSize: 20, fontWeight: 700, color: 'text.primary', mb: 1.5, pb: 1, borderBottom: 2, borderColor: 'divider' },
-                '& h3': { fontSize: 16, fontWeight: 600, color: 'text.primary', mt: 2.5, mb: 1 },
-                '& h4': { fontSize: 14, fontWeight: 600, color: 'text.primary', mt: 2, mb: 1 },
-                '& p': { fontSize: 14, lineHeight: 1.65, mb: 1.25, color: 'text.primary' },
-                '& strong': { fontWeight: 700 },
-                '& ul, & ol': { pl: 3, mb: 1.5 },
-                '& li': { fontSize: 14, lineHeight: 1.65, mb: 0.5 },
-                '& code': { bgcolor: '#F1F5F9', px: 0.75, borderRadius: 0.5, fontSize: 13, fontFamily: 'monospace', color: '#C2410C' },
-                '& pre': { bgcolor: '#1E293B', color: '#E2E8F0', p: 2, borderRadius: 1, overflowX: 'auto', fontSize: 13, lineHeight: 1.5, mb: 1.5, '& code': { bgcolor: 'transparent', color: 'inherit', p: 0, fontSize: 13 } },
-                '& em': { fontStyle: 'italic', color: 'text.secondary' },
-                '& blockquote': { borderLeft: 4, borderColor: 'primary.main', pl: 2, py: 1, my: 1.5, bgcolor: '#EFF6FF', borderRadius: '0 4px 4px 0', fontStyle: 'italic', color: 'text.secondary' },
-                '& hr': { border: 'none', borderTop: 1, borderColor: 'divider', my: 2.5 },
-              }}
-              dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(autoExtractedText) }}
-            />
-          ) : (
-            <Box
-              component="pre"
-              sx={{
-                bgcolor: '#FAFBFC',
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-                p: 2.5,
-                fontFamily: 'monospace',
-                fontSize: 13,
-                lineHeight: 1.6,
-                color: 'text.primary',
-                overflowX: 'auto',
-                whiteSpace: 'pre',
-                m: 0,
-                '& .ojt-hl-key': { color: '#1D4ED8' },
-                '& .ojt-hl-str': { color: '#15803D' },
-                '& .ojt-num': { color: '#C2410C' },
-                '& .ojt-bool': { color: '#6D28D9' },
-              }}
-              dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(JSON.stringify(outputData, null, 2)) }}
-            />
-          )}
+          <MaximizableContent title={t('executions.resultTab.agentOutput', { defaultValue: 'Agent Output' })}>
+            {autoExtractedText ? (
+              // Use ContentRenderer for auto content-type-aware rendering
+              <ContentRenderer mode="auto" content={autoExtractedText} />
+            ) : (
+              <Box
+                component="pre"
+                sx={{
+                  bgcolor: '#FAFBFC',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 2.5,
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  color: 'text.primary',
+                  overflowX: 'auto',
+                  whiteSpace: 'pre',
+                  m: 0,
+                  '& .ojt-hl-key': { color: '#1D4ED8' },
+                  '& .ojt-hl-str': { color: '#15803D' },
+                  '& .ojt-num': { color: '#C2410C' },
+                  '& .ojt-bool': { color: '#6D28D9' },
+                }}
+                dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(JSON.stringify(outputData, null, 2)) }}
+              />
+            )}
+          </MaximizableContent>
         </Box>
       )}
 
@@ -560,66 +550,4 @@ export function OutputTypeResultTab({
       )}
     </Box>
   )
-}
-
-// ── Simple markdown to HTML converter ─────────────────────────────────────────
-
-function simpleMarkdownToHtml(md: string): string {
-  let html = escapeHtml(md)
-
-  // Headings (h2-h4)
-  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-
-  // Horizontal rules
-  html = html.replace(/^---$/gm, '<hr>')
-
-  // Blockquotes
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-
-  // Bold and italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-
-  // Unordered lists
-  html = html.replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
-
-  // Ordered lists
-  html = html.replace(/^\s*\d+\. (.+)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => {
-    if (match.includes('<ul>')) return match
-    return `<ol>${match}</ol>`
-  })
-
-  // Code blocks (fenced)
-  html = html.replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, (_, code) => {
-    return `<pre><code>${code}</code></pre>`
-  })
-
-  // Fix consecutive blockquotes
-  html = html.replace(/<\/blockquote>\n<blockquote>/g, '<br>')
-
-  // Paragraphs: wrap remaining text lines in <p>
-  const blockTags = ['h2', 'h3', 'h4', 'ul', 'ol', 'li', 'pre', 'blockquote', 'hr', 'code']
-  const parts = html.split('\n\n')
-  html = parts
-    .map((part) => {
-      const trimmed = part.trim()
-      if (!trimmed) return ''
-      const startsWithBlock = blockTags.some((tag) => {
-        const regex = new RegExp(`^<${tag}[ >]`)
-        return regex.test(trimmed)
-      })
-      if (startsWithBlock) return trimmed
-      return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`
-    })
-    .join('\n\n')
-
-  return html
 }

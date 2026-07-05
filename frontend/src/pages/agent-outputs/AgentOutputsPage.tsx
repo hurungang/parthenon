@@ -4,7 +4,11 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -22,17 +26,22 @@ import {
   Typography,
   Chip,
 } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 import DownloadIcon from '@mui/icons-material/Download'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorIcon from '@mui/icons-material/Error'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { ContentRenderer } from '../../components/ContentRenderer'
+import { MaximizableContent } from '../../components/MaximizableContent'
 import { useDataTypes } from '../../hooks/useDataTypes'
 import { useAgentTypes } from '../../hooks/useAgentTypes'
 import { useAgentOutputs, useAutoOutputs, useExportAgentOutputs } from '../../hooks/useAgentOutputs'
 import { usePagination } from '../../hooks/usePagination'
 import { renderFieldValue } from '../../components/executions/TypedFieldRenderers'
 import { AgentOutputDetailDrawer } from './AgentOutputDetailDrawer'
+import apiClient from '../../api/apiClient'
 import type {
+  AgentJob,
   AgentOutputResponse,
   AgentOutputQueryParams,
 } from '../../types'
@@ -112,6 +121,33 @@ export function AgentOutputsPage() {
 
   const [selectedOutput, setSelectedOutput] = useState<AgentOutputResponse | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // ── Auto output detail dialog state ─────────────────────────────────────
+  const [autoDetailOpen, setAutoDetailOpen] = useState(false)
+  const [autoDetailSession, setAutoDetailSession] = useState<AgentJob | null>(null)
+  const [autoDetailLoading, setAutoDetailLoading] = useState(false)
+  const [autoDetailError, setAutoDetailError] = useState<string | null>(null)
+
+  const handleAutoRowClick = async (sessionId: string) => {
+    setAutoDetailOpen(true)
+    setAutoDetailLoading(true)
+    setAutoDetailError(null)
+    try {
+      const { data } = await apiClient.get<AgentJob>(`/agents/sessions/${sessionId}`)
+      setAutoDetailSession(data)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      setAutoDetailError(message)
+    } finally {
+      setAutoDetailLoading(false)
+    }
+  }
+
+  const handleCloseAutoDetail = () => {
+    setAutoDetailOpen(false)
+    setAutoDetailSession(null)
+    setAutoDetailError(null)
+  }
 
   const items = outputsResponse?.items ?? []
   const total = outputsResponse?.total ?? 0
@@ -372,7 +408,12 @@ export function AgentOutputsPage() {
                   </TableRow>
                 ) : (
                   (autoOutputsResponse?.items ?? []).map((item) => (
-                    <TableRow key={item.session_id} hover>
+                    <TableRow
+                      key={item.session_id}
+                      hover
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => handleAutoRowClick(item.session_id)}
+                    >
                       <TableCell>
                         <Typography variant="body2">
                           {new Date(item.created_at).toLocaleString()}
@@ -421,9 +462,52 @@ export function AgentOutputsPage() {
       <AgentOutputDetailDrawer
         open={drawerOpen}
         output={selectedOutput}
-        dataType={selectedDataType}
         onClose={handleCloseDrawer}
       />
+
+      {/* Auto Output Detail Dialog */}
+      <Dialog
+        open={autoDetailOpen}
+        onClose={handleCloseAutoDetail}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6" fontWeight={700}>
+            {autoDetailSession?.agent_type_name ?? t('admin.agentOutputs.autoDetailTitle', { defaultValue: 'Auto Output Detail' })}
+          </Typography>
+          <IconButton onClick={handleCloseAutoDetail} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {autoDetailLoading && (
+            <Box display="flex" justifyContent="center" py={4}>
+              <CircularProgress />
+            </Box>
+          )}
+          {autoDetailError && (
+            <PermissionDeniedAlert error={autoDetailError} fallbackMessage={t('app.error')} />
+          )}
+          {!autoDetailLoading && !autoDetailError && autoDetailSession && (
+            <MaximizableContent title={t('admin.agentOutputs.autoOutput', { defaultValue: 'Auto Output' })}>
+              <ContentRenderer
+                mode="auto"
+                content={
+                  typeof autoDetailSession.output_data?.result === 'string'
+                    ? autoDetailSession.output_data.result
+                    : JSON.stringify(autoDetailSession.output_data)
+                }
+              />
+            </MaximizableContent>
+          )}
+          {!autoDetailLoading && !autoDetailError && autoDetailSession && !autoDetailSession.output_data && (
+            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+              {t('admin.agentOutputs.noOutputData', { defaultValue: 'No output data available for this session.' })}
+            </Typography>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   )
 }

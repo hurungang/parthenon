@@ -68,6 +68,7 @@
     "permissions": "Permissions",
     "systemConfig": "System Config",
     "dataTypes": "Data Types",
+    "agentData": "Agent Data",
     "groupAgents": "Agents",
     "groupIntegrations": "Integrations",
     "groupSystem": "System"
@@ -1433,6 +1434,19 @@
       "confirmDelete": "Delete Data Type",
       "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
       "atLeastOneField": "At least one field is required."
+    },
+    "agentData": {
+      "title": "Agent Data",
+      "filterAgentType": "Agent Type",
+      "allAgentTypes": "All Agent Types",
+      "columnTimestamp": "Timestamp",
+      "columnDataName": "Data Name",
+      "columnAgentType": "Agent Type",
+      "columnSessionId": "Session ID",
+      "columnDataType": "Data Type",
+      "detailTitle": "Agent Data Detail",
+      "dataValueLabel": "Data Value",
+      "noResults": "No agent data records found matching the current filters."
     },
     "agentOutputs": {
       "title": "Agent Outputs",

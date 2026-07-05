@@ -27,6 +27,7 @@ interface AgentJobLaunchDialogProps {
   agentType: AgentType
   onClose: () => void
   onLaunched: (sessionId: string) => void
+  onRegeneratePlan?: () => Promise<void>
 }
 
 /**
@@ -43,10 +44,12 @@ export function AgentJobLaunchDialog({
   agentType,
   onClose,
   onLaunched,
+  onRegeneratePlan,
 }: AgentJobLaunchDialogProps) {
   const { t } = useTranslation()
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
   const [inputText, setInputText] = useState('')
   const [typedInputData, setTypedInputData] = useState<Record<string, any>>({})
   const [useRawJson, setUseRawJson] = useState(false)
@@ -206,15 +209,26 @@ export function AgentJobLaunchDialog({
             <Alert severity="warning" sx={{ flex: 1, alignItems: 'center' }}>
               {staleDefinitionsMessage}
             </Alert>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<RefreshIcon />}
-              onClick={() => void regeneratePlanMutation.mutateAsync()}
-              disabled={regeneratePlanMutation.isPending}
-            >
-              Regenerate plan
-            </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<RefreshIcon />}
+                onClick={async () => {
+                  setRegenerating(true)
+                  try {
+                    if (onRegeneratePlan) {
+                      await onRegeneratePlan()
+                    } else {
+                      await regeneratePlanMutation.mutateAsync()
+                    }
+                  } finally {
+                    setRegenerating(false)
+                  }
+                }}
+                disabled={regeneratePlanMutation.isPending || regenerating}
+              >
+                Regenerate plan
+              </Button>
           </Box>
         )}
 

@@ -30,6 +30,7 @@ from app.api.v1.notifications import NotificationRouter
 from app.api.v1.platform_users import PlatformUsersRouter
 from app.api.v1.policy import PolicyRouter
 from app.api.v1.agent_outputs import OutputRouter
+from app.api.v1.agent_data import AgentDataRouter
 from app.api.v1.data_types import DataTypeRouter
 from app.api.v1.results import ResultRouter
 from app.api.v1.scheduling import ScheduleRouter
@@ -87,8 +88,9 @@ router.include_router(ModelUsageGuardrailRouter)
 router.include_router(ModelAvailabilityRouter)
 router.include_router(RuntimeControlRouter)
 
-# Data Types & Agent Outputs
+# Data Types, Agent Data & Agent Outputs
 router.include_router(DataTypeRouter)
+router.include_router(AgentDataRouter)
 router.include_router(OutputRouter)
 
 # Supporting modules

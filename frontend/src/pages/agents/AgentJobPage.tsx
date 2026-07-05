@@ -20,6 +20,8 @@ import { useExecutionLogs } from '../../hooks/useExecutionLogs'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import { useTypedOutput } from '../../hooks/useTypedOutput'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { ContentRenderer } from '../../components/ContentRenderer'
+import { MaximizableContent } from '../../components/MaximizableContent'
 import { LogViewer } from '../../components/executions/LogViewer'
 import { OutputTypeResultTab } from '../../components/executions/OutputTypeResultTab'
 import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
@@ -543,9 +545,15 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
                     color: msg.role === 'user' ? 'primary.contrastText' : 'text.primary',
                   }}
                 >
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {msg.content}
-                  </Typography>
+                  {msg.role !== 'user' ? (
+                    <MaximizableContent title="Agent Response">
+                      <ContentRenderer mode="chat" content={msg.content} />
+                    </MaximizableContent>
+                  ) : (
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                      {msg.content}
+                    </Typography>
+                  )}
                 </Paper>
                 <Typography variant="caption" color="text.secondary" display="block" mt={0.25}
                   textAlign={msg.role === 'user' ? 'right' : 'left'}>
@@ -681,12 +689,18 @@ export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hi
                     borderRadius: 2,
                   }}
                 >
-                  <Typography
-                    variant="body2"
-                    sx={{ whiteSpace: 'pre-wrap', fontFamily: msg.role === 'tool' ? 'monospace' : undefined }}
-                  >
-                    {msg.content}
-                  </Typography>
+                  {msg.role !== 'user' ? (
+                    <MaximizableContent title="Agent Response">
+                      <ContentRenderer mode="chat" content={msg.content} />
+                    </MaximizableContent>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      sx={{ whiteSpace: 'pre-wrap' }}
+                    >
+                      {msg.content}
+                    </Typography>
+                  )}
                 </Paper>
               </Box>
             ))}

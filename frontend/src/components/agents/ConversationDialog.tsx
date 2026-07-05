@@ -32,6 +32,8 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import apiClient from '../../api/apiClient'
 import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
+import { ContentRenderer } from '../ContentRenderer'
+import { MaximizableContent } from '../MaximizableContent'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { InlineInterventionDialog } from '../conversations/InlineInterventionDialog'
 import { InterventionPendingIndicator } from '../conversations/InterventionPendingIndicator'
@@ -689,18 +691,24 @@ export function ConversationDialog({
                               {msg.role === 'user' ? <PersonIcon /> : <SmartToyIcon />}
                             </Avatar>
                             <Box sx={{ maxWidth: { xs: 'calc(100% - 48px)', sm: '70%' } }}>
-                              <Paper
-                                sx={{
-                                  p: 1.5,
-                                  width: 'fit-content',
-                                  maxWidth: '100%',
-                                  bgcolor: msg.role === 'user' ? 'primary.light' : 'background.paper',
-                                }}
-                              >
-                                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                                  {msg.content}
-                                </Typography>
-                              </Paper>
+                                <Paper
+                                  sx={{
+                                    p: 1.5,
+                                    width: 'fit-content',
+                                    maxWidth: '100%',
+                                    bgcolor: msg.role === 'user' ? 'primary.light' : 'background.paper',
+                                  }}
+                                >
+                                  {msg.role !== 'user' ? (
+                                    <MaximizableContent title="Agent Response">
+                                      <ContentRenderer mode="chat" content={msg.content} />
+                                    </MaximizableContent>
+                                  ) : (
+                                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                      {msg.content}
+                                    </Typography>
+                                  )}
+                                </Paper>
                               <Typography color="text.secondary" display="block" sx={{ fontSize: '0.65rem', mt: 0.25, whiteSpace: 'nowrap' }}>
                                 {formatDateTime(msg.timestamp)}
                               </Typography>

@@ -11,8 +11,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models.agent_data import AgentData
 
@@ -70,6 +71,94 @@ class AgentDataService:
         )
         return record
 
+    async def list_all(
+        self,
+        db: AsyncSession,
+        data_name: str | None = None,
+        agent_type_id: uuid.UUID | str | None = None,
+        session_id: uuid.UUID | str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[AgentData], int]:
+        """Public paginated listing of active AgentData records.
+
+        All filters are optional — when none are provided, returns all active
+        records ordered by created_at DESC.
+
+        Args:
+            db: Database session.
+            data_name: Optional exact match filter on data_name.
+            agent_type_id: Optional filter by agent type ID.
+            session_id: Optional filter by session ID.
+            page: Page number (1-indexed, default 1).
+            page_size: Items per page (default 20).
+
+        Returns:
+            Tuple of (list of AgentData records, total count).
+        """
+        if isinstance(agent_type_id, str):
+            agent_type_id = uuid.UUID(agent_type_id)
+        if isinstance(session_id, str):
+            session_id = uuid.UUID(session_id)
+
+        base = select(AgentData).where(AgentData.is_active.is_(True))
+
+        # Eager-load agent_type to avoid MissingGreenlet errors when
+        # accessing record.agent_type.name in the response layer.
+        base = base.options(selectinload(AgentData.agent_type))
+
+        if data_name is not None:
+            base = base.where(AgentData.data_name == data_name)
+        if agent_type_id is not None:
+            base = base.where(AgentData.agent_type_id == agent_type_id)
+        if session_id is not None:
+            base = base.where(AgentData.session_id == session_id)
+
+        count_q = select(func.count()).select_from(AgentData).where(
+            AgentData.is_active.is_(True)
+        )
+        if data_name is not None:
+            count_q = count_q.where(AgentData.data_name == data_name)
+        if agent_type_id is not None:
+            count_q = count_q.where(AgentData.agent_type_id == agent_type_id)
+        if session_id is not None:
+            count_q = count_q.where(AgentData.session_id == session_id)
+
+        total_result = await db.execute(count_q)
+        total = total_result.scalar() or 0
+
+        offset = (page - 1) * page_size
+        query = base.order_by(AgentData.created_at.desc()).offset(offset).limit(page_size)
+
+        result = await db.execute(query)
+        items = list(result.scalars().all())
+
+        return items, total
+
+    async def get_by_id(
+        self,
+        db: AsyncSession,
+        record_id: uuid.UUID,
+    ) -> AgentData | None:
+        """Get a single AgentData record by ID.
+
+        Args:
+            db: Database session.
+            record_id: UUID of the record to retrieve.
+
+        Returns:
+            The AgentData record or None if not found or inactive.
+        """
+        result = await db.execute(
+            select(AgentData)
+            .options(selectinload(AgentData.agent_type))
+            .where(
+                AgentData.id == record_id,
+                AgentData.is_active.is_(True),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def query_by_filters(
         self,
         db: AsyncSession,
@@ -83,20 +172,6 @@ class AgentDataService:
 
         At least one of data_name, agent_type_id, or session_id must be
         provided to prevent unbounded full-table scans.
-
-        Args:
-            db: Database session.
-            data_name: Optional filter by data name.
-            agent_type_id: Optional filter by agent type ID.
-            session_id: Optional filter by session ID.
-            limit: Maximum number of records to return (default 50).
-            offset: Number of records to skip (default 0).
-
-        Returns:
-            List of matching AgentData records ordered by created_at desc.
-
-        Raises:
-            ValueError: If all filter arguments are None.
         """
         if data_name is None and agent_type_id is None and session_id is None:
             raise ValueError(

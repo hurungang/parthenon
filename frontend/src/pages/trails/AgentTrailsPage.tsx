@@ -3,7 +3,6 @@ import { Box, Tab, Tabs, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { ConversationHistoryPage } from '../conversations/ConversationHistoryPage'
 import { AgentInstanceDashboardPage } from '../agents/AgentInstanceDashboardPage'
-import { ResultRepositoryPage } from '../results/ResultRepositoryPage'
 
 interface TabPanelProps {
   children: React.ReactNode
@@ -39,13 +38,11 @@ export function AgentTrailsPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tab} onChange={handleTabChange} aria-label={t('nav.agentTrails')}>
           <Tab label={t('nav.agentExecutions')} id="trails-tab-0" />
-          <Tab label={t('nav.results')} id="trails-tab-1" />
-          <Tab label={t('nav.agentLogs')} id="trails-tab-2" />
+          <Tab label={t('nav.agentLogs')} id="trails-tab-1" />
         </Tabs>
       </Box>
       <TabPanel value={tab} index={0}><AgentInstanceDashboardPage /></TabPanel>
-      <TabPanel value={tab} index={1}><ResultRepositoryPage /></TabPanel>
-      <TabPanel value={tab} index={2}><ConversationHistoryPage /></TabPanel>
+      <TabPanel value={tab} index={1}><ConversationHistoryPage /></TabPanel>
     </Box>
   )
 }

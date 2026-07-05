@@ -42,6 +42,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import TimelineIcon from '@mui/icons-material/Timeline'
 import NotificationsIcon from '@mui/icons-material/Notifications'
 import PanToolIcon from '@mui/icons-material/PanTool'
+import SaveAltIcon from '@mui/icons-material/SaveAlt'
 import { useAuthStore } from '../stores/authStore'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
 import apiClient from '../api/apiClient'
@@ -116,6 +117,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.agentTrails', path: '/agent-trails', icon: <TimelineIcon /> },
       { labelKey: 'nav.humanIntervene', path: '/agents/intervene', icon: <PanToolIcon /> },
       { labelKey: 'nav.dataTypes', path: '/admin/data-types', icon: <StorageIcon /> },
+      { labelKey: 'nav.agentData', path: '/admin/agent-data', icon: <SaveAltIcon /> },
       { labelKey: 'nav.agentOutputs', path: '/admin/agent-outputs', icon: <ListAltIcon /> },
     ],
   },

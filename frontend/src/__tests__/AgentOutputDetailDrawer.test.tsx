@@ -16,6 +16,34 @@ vi.mock('../components/executions/TypedOutputRenderer', () => ({
 import { AgentOutputDetailDrawer } from '../pages/agent-outputs/AgentOutputDetailDrawer'
 import type { AgentOutputResponse, AgentDataType } from '../types'
 
+const DATA_TYPE: AgentDataType = {
+  id: 'dt-1',
+  name: 'Incident Report',
+  slug: 'incident-report',
+  description: null,
+  fields: [
+    { name: 'title', type: 'string', required: true },
+    { name: 'severity', type: 'enum', enum_values: ['low', 'medium', 'high'], required: true },
+  ],
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
+// Mock useDataType to return the test schema for dt-1
+vi.mock('../hooks/useDataTypes', () => ({
+  useDataType: (id: string) => {
+    if (id === 'dt-1') {
+      return { data: DATA_TYPE, isLoading: false, isError: false }
+    }
+    return { data: null, isLoading: false, isError: false }
+  },
+  useDataTypes: () => ({ data: null, isLoading: false }),
+  useDataTypesWithUsage: () => ({ data: [], isLoading: false }),
+  useCreateDataType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateDataType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteDataType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}))
+
 const VALID_OUTPUT: AgentOutputResponse = {
   id: 'out-1',
   data_type_id: 'dt-1',
@@ -42,26 +70,12 @@ const ERROR_OUTPUT: AgentOutputResponse = {
   created_at: '2026-01-15T11:00:00Z',
 }
 
-const DATA_TYPE: AgentDataType = {
-  id: 'dt-1',
-  name: 'Incident Report',
-  slug: 'incident-report',
-  description: null,
-  fields: [
-    { name: 'title', type: 'string', required: true },
-    { name: 'severity', type: 'enum', enum_values: ['low', 'medium', 'high'], required: true },
-  ],
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-}
-
 describe('AgentOutputDetailDrawer', () => {
   it('renders nothing when output is null', () => {
     const { container } = render(
       <AgentOutputDetailDrawer
         open={true}
         output={null}
-        dataType={null}
         onClose={vi.fn()}
       />,
     )
@@ -74,7 +88,6 @@ describe('AgentOutputDetailDrawer', () => {
       <AgentOutputDetailDrawer
         open={true}
         output={VALID_OUTPUT}
-        dataType={DATA_TYPE}
         onClose={vi.fn()}
       />,
     )
@@ -90,7 +103,6 @@ describe('AgentOutputDetailDrawer', () => {
       <AgentOutputDetailDrawer
         open={true}
         output={ERROR_OUTPUT}
-        dataType={DATA_TYPE}
         onClose={vi.fn()}
       />,
     )
@@ -103,7 +115,6 @@ describe('AgentOutputDetailDrawer', () => {
       <AgentOutputDetailDrawer
         open={true}
         output={ERROR_OUTPUT}
-        dataType={DATA_TYPE}
         onClose={vi.fn()}
       />,
     )
@@ -116,7 +127,6 @@ describe('AgentOutputDetailDrawer', () => {
       <AgentOutputDetailDrawer
         open={true}
         output={VALID_OUTPUT}
-        dataType={DATA_TYPE}
         onClose={vi.fn()}
       />,
     )

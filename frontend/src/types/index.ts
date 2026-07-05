@@ -868,6 +868,35 @@ export interface AutoOutputItem {
   created_at: string
 }
 
+// ── Agent Data ─────────────────────────────────────────────────────────────────
+
+export interface AgentDataResponse {
+  id: string
+  agent_type_id: string | null
+  session_id: string | null
+  data_name: string
+  data_value: unknown
+  data_type: string
+  is_active: boolean
+  created_at: string
+  agent_type_name: string | null
+}
+
+export interface AgentDataQueryParams {
+  data_name?: string
+  agent_type_id?: string
+  session_id?: string
+  page?: number
+  page_size?: number
+}
+
+export interface AgentDataListResponse {
+  items: AgentDataResponse[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export interface AutoOutputListResponse {
   items: AutoOutputItem[]
   total: number
