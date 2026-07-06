@@ -4,8 +4,8 @@
 <!-- Updated automatically by /change:update-master — do not edit grep patterns manually -->
 
 ## Grep Patterns
-<!-- Playwright --grep filter: one pattern per line, joined with | at runtime -->
-<!-- Format: <Describe suite name> > <test name> -->
+<!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
+<!-- One pattern per line; joined with | at runtime for --grep / regex matching -->
 - Authentication > unauthenticated request to protected route redirects to login
 - Dashboard > dashboard renders app shell layout with header
 - Agent Management > displays list of agent types from API
@@ -160,6 +160,14 @@
 - Agent Outputs Query > shows validation status badges
 - Typed Execution Flow > agent management page shows output data type badge
 - Typed Execution Flow > execution logs page shows typed sessions
+<!-- Vitest component tests (frontend rendering — no Playwright/E2E): -->
+- ContentRenderer > renders complex nested HTML
+- ContentRenderer > strips script tags via DOMPurify
+- ContentRenderer > handles mixed HTML and markdown-like content by following HTML path
+- ContentRenderer > does not treat angle bracket comparison as HTML
+- MaximizableContent > opens dialog when maximize button is clicked
+- MaximizableContent > closes dialog via Escape key
+- OutputTypeResultTab > extracts text from Claude content blocks for auto output type
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -329,3 +337,10 @@
 | 153 | Agent Outputs — Validation Status | Results table shows validation status badges (valid/validation_error) for typed outputs | enhance-agent-output-system | agent-outputs-query.spec.ts |
 | 154 | Typed Execution — Data Type Badge | Agent management page shows the assigned data type name as a badge on agent type rows | enhance-agent-output-system | typed-execution-flow.spec.ts |
 | 155 | Typed Execution — Logs Display | Execution logs page shows typed session entries with structured output and data type name in the Result tab | enhance-agent-output-system | typed-execution-flow.spec.ts |
+| 156 | Rich HTML Rendering | Tables, headings, and nested divs render as formatted content (not raw markup); demonstrates HTML detection in agent auto-output | improve-agent-response-rendering | ContentRenderer.test.tsx |
+| 157 | XSS Sanitization | `<script>` tags stripped via DOMPurify before rendering; safe HTML content preserved | improve-agent-response-rendering | ContentRenderer.test.tsx |
+| 158 | HTML Detection Priority | Mixed HTML+markdown content follows HTML rendering path; markdown syntax appears as literal text, not converted | improve-agent-response-rendering | ContentRenderer.test.tsx |
+| 159 | False-Positive Avoidance | Comparison operators like `x < 5` NOT misdetected as HTML; plain text passes through markdown conversion normally | improve-agent-response-rendering | ContentRenderer.test.tsx |
+| 160 | Maximize to Full-View | Clicking maximize button opens MUI Dialog with same rendered content; title displayed in dialog header | improve-agent-response-rendering | MaximizableContent.test.tsx |
+| 161 | Keyboard Dismiss | Escape key closes the maximize dialog and returns to inline view | improve-agent-response-rendering | MaximizableContent.test.tsx |
+| 162 | Claude Content Blocks Integration | Auto output type with Claude content blocks flows through ContentRenderer for HTML detection; text extracted and rendered correctly | improve-agent-response-rendering | OutputTypeResultTab.test.tsx |

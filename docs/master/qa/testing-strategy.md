@@ -35,6 +35,31 @@ Changes that include database schema changes (`has_db_changes: true`) require ad
 
 Some complex components using React Query + MSW in the Vitest environment require workaround test files (`*.simple.test.tsx`, `*.minimal.test.tsx`). These cover core rendering assertions. Full CRUD coverage for affected components is provided by E2E tests. This is an infrastructure limitation, not an implementation defect.
 
+## Content-Type-Aware Rendering Testing
+
+Changes that introduce content-type detection, HTML rendering, or content sanitization require:
+
+**Pre-test checklist:**
+1. DOMPurify is listed as an explicit dependency in `package.json`
+2. `ContentRenderer` component implements a defensive null-check on DOMPurify before use
+3. `dangerouslySetInnerHTML` is ONLY used with DOMPurify-sanitized output, never with raw/untrusted content
+4. The detection regex (`containsHtmlTags`) requires `<` immediately followed by an ASCII letter — comparison operators (`< 5`, `> 10`) must not trigger false positives
+
+**Frontend component tests must:**
+- Cover all mode × content-type combinations (auto/chat × html/markdown/plain/null)
+- Validate XSS sanitization: script tags, event handler attributes, and other XSS vectors stripped by DOMPurify
+- Verify comparison operators are NOT misidentified as HTML tags
+- Test the maximize/restore flow end-to-end: open dialog, verify content identity, close via all mechanisms (Escape, close button, backdrop)
+- Ensure keyboard accessibility throughout the maximize flow (Tab navigation, focus trapping)
+- Confirm regression: existing markdown, plain-text, and typed output rendering unchanged
+
+**Security assertions:**
+- At least one test must assert that `<script>` tags are stripped from rendered HTML output
+- At least one test must assert that event handler attributes (`onclick`, `onerror`, etc.) are stripped
+- At least one test must assert that `<` followed by a space or digit is NOT detected as HTML
+
+Refer to `agent-response-rendering-test-plan.md` for module-specific coverage and test file references.
+
 ## Critical Quality Gates
 - 100% pass rate required for all test layers before release
 - All PRD acceptance criteria must be mapped to at least one test scenario

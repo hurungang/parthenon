@@ -743,6 +743,48 @@ strong{font-weight:600}
 /* ── CHAT INPUT BLOCKED STATE ── */
 .chat-input-blocked{background:#FFF8E1;border:1px solid #FFE0B2;border-radius:24px;padding:8px 18px;font-size:12px;color:#92400E;display:flex;align-items:center;gap:8px;flex:1}
 
+/* ── CONTENT-TYPE-AWARE RENDERING (improve-agent-response-rendering) ── */
+
+/* MaximizableContent: icon button positioned absolute top-right */
+.maximize-icon-btn{position:absolute;top:4px;right:4px;background:rgba(255,255,255,0.88);border:1px solid var(--border);border-radius:4px;padding:4px;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);transition:all var(--transition);z-index:5}
+.maximize-icon-btn:hover{background:rgba(255,255,255,1);border-color:var(--primary);color:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,0.18)}
+.maximize-icon-btn svg{width:16px;height:16px}
+
+/* Content wrap with relative positioning for maximize button */
+.content-wrap{position:relative}
+
+/* Rendered HTML content (matches ContentRenderer output styling via result-markdown class) */
+.rendered-content{font-size:13.5px;line-height:1.6}
+.rendered-content table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+.rendered-content th{text-align:left;padding:6px 10px;background:#F8FAFC;color:var(--text-secondary);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)}
+.rendered-content td{padding:6px 10px;border-bottom:1px solid #F0F0F0;color:var(--text-primary)}
+.rendered-content tr:last-child td{border-bottom:none}
+.rendered-content ul,.rendered-content ol{padding-left:20px;margin:6px 0}
+.rendered-content li{margin:3px 0}
+.rendered-content strong{color:var(--text-primary)}
+.rendered-content h3,.rendered-content h4{font-size:14px;font-weight:600;margin:8px 0 4px}
+.rendered-content code{font-family:'Courier New',monospace;font-size:12px;background:#F1F5F9;padding:1px 5px;border-radius:3px;color:#C2410C}
+
+/* Maximize dialog (matches MUI Dialog: fullWidth, maxWidth=false, height 95vh) */
+.max-dialog-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1100;align-items:center;justify-content:center}
+.max-dialog-overlay.open{display:flex}
+.max-dialog{display:flex;flex-direction:column;background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 20px 60px rgba(0,0,0,0.3);width:calc(100% - 16px);height:95vh;max-height:95vh;margin:8px;overflow:hidden;animation:maxDialogIn .2s ease}
+@keyframes maxDialogIn{from{opacity:0;transform:scale(0.97)}to{opacity:1;transform:scale(1)}}
+.max-dialog-title{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);flex-shrink:0}
+.max-dialog-title h3{font-size:16px;font-weight:600}
+.max-dialog-close-btn{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.max-dialog-close-btn:hover{background:var(--bg);color:var(--text-primary)}
+.max-dialog-close-btn svg{width:18px;height:18px}
+.max-dialog-content{flex:1;overflow-y:auto;padding:24px 32px}
+.max-dialog-content::-webkit-scrollbar{width:6px}.max-dialog-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Change banner for improve-agent-response-rendering */
+.change-banner-improve{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid rgba(37,99,235,0.25);background:rgba(37,99,235,0.05);border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:18px}
+.change-banner-improve .cbi-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.change-banner-improve .cbi-body{flex:1}
+.change-banner-improve h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner-improve p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+
 </style>
 </head>
 <body>
@@ -2600,6 +2642,14 @@ Returns: { request_id, status }</div>
 
 <!-- ═══════════════════════════════ VIEW: CHAT ═══════════════════════════════ -->
 <div id="view-chat" class="view">
+  <!-- improve-agent-response-rendering banner -->
+  <div class="change-banner-improve" style="margin-bottom:12px">
+    <div class="cbi-icon">R</div>
+    <div class="cbi-body">
+      <h4>Content-Type-Aware Rendering &amp; Maximize <span class="cb-tag" style="margin-left:6px;vertical-align:middle;font-size:10px">improve-agent-response-rendering</span></h4>
+      <p>Agent messages now auto-detect HTML content and render it inline. Click the <strong>maximize icon</strong> (↔) on any agent message to expand into full-view. <strong>ContentRenderer</strong> handles HTML/markdown/plain-text detection; <strong>MaximizableContent</strong> wraps each agent response with a maximize affordance.</p>
+    </div>
+  </div>
   <div class="chat-shell">
     <!-- Left panel -->
     <div class="chat-left">
@@ -2682,20 +2732,31 @@ Returns: { request_id, status }</div>
         <!-- Agent message -->
         <div class="msg msg-agent">
           <div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>
-          <div class="msg-bubble">I'll start by querying the Q3 sales data. One moment...</div>
+          <div class="content-wrap">
+            <div class="msg-bubble" style="padding-right:28px">I'll start by querying the Q3 sales data. One moment...</div>
+            <button class="maximize-icon-btn" onclick="maxOpen('chat-msg-1','Agent Response &mdash; data-analyst')" title="Maximize content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3v7h-2V6.41l-6.3 6.3-1.41-1.41L17.59 5H14V3h7z"/><path d="M3 21v-7h2v3.59l6.3-6.3 1.41 1.41L6.41 19H10v2H3z"/></svg>
+            </button>
+          </div>
         </div>
         <!-- Tool call -->
         <div class="msg-tool">🔧 Calling <strong>db-query.execute_query</strong> with args: <span style="color:#0F172A">{ query: "SELECT region, SUM(revenue)..." }</span></div>
         <!-- Agent with markdown-like content -->
         <div class="msg msg-agent">
           <div style="width:28px;height:28px;border-radius:50%;background:#E0E7FF;color:#4338CA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">DA</div>
-          <div class="msg-bubble" style="max-width:420px">
-            Here's what I found in the Q3 data:<br><br>
-            <strong>Revenue:</strong> $4.2M (↑ 8% vs Q2)<br>
-            <strong>Top Region:</strong> APAC ($1.8M)<br>
-            <strong>Notable:</strong> Enterprise segment grew 23%<br><br>
-            Would you like me to save this as a result or create a visual report?
+          <div class="content-wrap">
+            <div class="msg-bubble" style="max-width:420px;padding-right:28px">
+              Here's what I found in the Q3 data:<br><br>
+              <strong>Revenue:</strong> $4.2M (&uarr; 8% vs Q2)<br>
+              <strong>Top Region:</strong> APAC ($1.8M)<br>
+              <strong>Notable:</strong> Enterprise segment grew 23%<br><br>
+              Would you like me to save this as a result or create a visual report?
+            </div>
+            <button class="maximize-icon-btn" onclick="maxOpen('chat-msg-2','Agent Response &mdash; data-analyst')" title="Maximize content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3v7h-2V6.41l-6.3 6.3-1.41-1.41L17.59 5H14V3h7z"/><path d="M3 21v-7h2v3.59l6.3-6.3 1.41 1.41L6.41 19H10v2H3z"/></svg>
+            </button>
           </div>
+        </div>
         </div>
         <!-- Agent question card -->
         <div style="max-width:460px;margin-left:4px">
@@ -2863,6 +2924,14 @@ Returns: { request_id, status }</div>
 <div id="view-agent-executions" class="view">
   <div class="view-header">
     <div><h2>Agent Executions</h2><div class="view-desc">Monitor running and historical agent jobs</div></div>
+  </div>
+  <!-- improve-agent-response-rendering banner -->
+  <div class="change-banner-improve">
+    <div class="cbi-icon">R</div>
+    <div class="cbi-body">
+      <h4>Agent responses now auto-detect content type <span class="cb-tag" style="margin-left:6px;vertical-align:middle;font-size:10px">improve-agent-response-rendering</span></h4>
+      <p>Execution results with HTML content now render inline instead of showing raw markup. A <strong>maximize button</strong> on result content areas opens a full-view dialog for detailed review. <strong>ContentRenderer</strong> handles HTML/markdown/plain-text detection; <strong>MaximizableContent</strong> provides the expand affordance on every output area.</p>
+    </div>
   </div>
   
   <div class="filter-bar">
@@ -6126,11 +6195,16 @@ window.exSwitchTab = exSwitchTab;
           <span class="dt-badge dt-badge-typed" style="font-size:12px;gap:4px">✅ IncidentReport</span>
           <span style="font-size:12px;color:var(--text-secondary)">— Schema validated output</span>
         </div>
-        <div class="typed-field"><div class="typed-field-label">Priority</div><div class="typed-field-value"><span class="chip chip-high">High</span></div></div>
-        <div class="typed-field"><div class="typed-field-label">Incident Date</div><div class="typed-field-value">Jan 15, 2026</div></div>
-        <div class="typed-field"><div class="typed-field-label">Summary</div><div class="typed-field-value">Database server db-01 experiencing high CPU usage and connection timeouts. All read operations affected.</div></div>
-        <div class="typed-field"><div class="typed-field-label">Resolved</div><div class="typed-field-value"><span class="bool-false">❌ No</span></div></div>
-        <div class="typed-field"><div class="typed-field-label">Category</div><div class="typed-field-value"><span class="chip chip-blue">Infrastructure</span></div></div>
+        <div class="content-wrap" id="exec-result-content">
+          <div class="typed-field"><div class="typed-field-label">Priority</div><div class="typed-field-value"><span class="chip chip-high">High</span></div></div>
+          <div class="typed-field"><div class="typed-field-label">Incident Date</div><div class="typed-field-value">Jan 15, 2026</div></div>
+          <div class="typed-field"><div class="typed-field-label">Summary</div><div class="typed-field-value">Database server db-01 experiencing high CPU usage and connection timeouts. All read operations affected.</div></div>
+          <div class="typed-field"><div class="typed-field-label">Resolved</div><div class="typed-field-value"><span class="bool-false">❌ No</span></div></div>
+          <div class="typed-field"><div class="typed-field-label">Category</div><div class="typed-field-value"><span class="chip chip-blue">Infrastructure</span></div></div>
+          <button class="maximize-icon-btn" onclick="maxOpen('exec-result-content','Execution Result &mdash; IncidentReport')" title="Maximize content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3v7h-2V6.41l-6.3 6.3-1.41-1.41L17.59 5H14V3h7z"/><path d="M3 21v-7h2v3.59l6.3-6.3 1.41 1.41L6.41 19H10v2H3z"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -7738,6 +7812,55 @@ mcRenderCascade('mcCascadeModalTree');
   window.dtOpenDelete = dtOpenDelete; window.dtCloseDelete = dtCloseDelete; window.dtConfirmDelete = dtConfirmDelete;
   window.aoApplyFilters = aoApplyFilters; window.aoClearFilters = aoClearFilters;
   window.aoExportCsv = aoExportCsv; window.aoOpenDrawer = aoOpenDrawer; window.aoCloseDrawer = aoCloseDrawer;
+
+  /* ── MAXIMIZE DIALOG (improve-agent-response-rendering) ── */
+  window.maxOpen = function(contentId, title) {
+    title = title || 'Maximized View';
+    var sourceEl = null;
+
+    if (contentId === 'chat-msg-1') {
+      var msgs1 = document.querySelectorAll('.msg-agent .msg-bubble');
+      sourceEl = msgs1.length > 0 ? msgs1[0] : null;
+    } else if (contentId === 'chat-msg-2') {
+      var msgs2 = document.querySelectorAll('.msg-agent .msg-bubble');
+      sourceEl = msgs2.length > 1 ? msgs2[1] : null;
+    } else if (contentId === 'exec-result') {
+      sourceEl = document.getElementById('exec-result-content');
+    } else {
+      var el = document.getElementById(contentId);
+      if (el) sourceEl = el;
+    }
+
+    var content = document.getElementById('maxDialogContent');
+    var titleEl = document.getElementById('maxDialogTitle');
+    content.innerHTML = '';
+
+    if (sourceEl) {
+      var clone = sourceEl.cloneNode(true);
+      // Normalize styles for dialog viewing
+      clone.style.maxWidth = '100%';
+      clone.style.fontSize = '14px';
+      clone.style.lineHeight = '1.7';
+      content.appendChild(clone);
+    }
+
+    titleEl.textContent = title;
+    document.getElementById('maxDialogOverlay').classList.add('open');
+  };
+
+  window.maxClose = function() {
+    document.getElementById('maxDialogOverlay').classList.remove('open');
+  };
+
+  // Close maximize dialog on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var overlay = document.getElementById('maxDialogOverlay');
+      if (overlay && overlay.classList.contains('open')) {
+        maxClose();
+      }
+    }
+  });
 })();
 </script>
 
@@ -7800,6 +7923,19 @@ mcRenderCascade('mcCascadeModalTree');
 
 <!-- Toast container -->
 <div class="sched-toast-container"></div>
+
+<!-- ═══════════════════════════════ MAXIMIZE DIALOG (improve-agent-response-rendering) ═══════════════════════════════ -->
+<div class="max-dialog-overlay" id="maxDialogOverlay" onclick="if(event.target===this)maxClose()">
+  <div class="max-dialog">
+    <div class="max-dialog-title">
+      <h3 id="maxDialogTitle">Maximized View</h3>
+      <button class="max-dialog-close-btn" onclick="maxClose()" title="Close (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="max-dialog-content" id="maxDialogContent"></div>
+  </div>
+</div>
 
 </body>
 </html>
