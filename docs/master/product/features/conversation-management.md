@@ -10,6 +10,8 @@ Conversation Management ensures that all interactions—across users, agents, an
 
 ## What It Does
 - Persists all conversation turns, including user, agent, tool, and agent-to-agent messages
+- Renders agent messages with content-type awareness: messages containing HTML are displayed as rich formatted text instead of raw markup, while plain-text and markdown messages continue to display with existing whitespace and line-break preservation
+- Provides a maximize button on each rendered agent message, allowing operators to expand individual outputs into a focused full-view for detailed review without chat UI distractions
 - Provides persistent, user-named conversation sessions for conversation-type agents
 - Automatically generates session titles from the first user message
 - Enables users to start, resume, end, and archive conversation sessions

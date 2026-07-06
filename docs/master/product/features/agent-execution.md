@@ -74,6 +74,15 @@ Agents that have no assigned data type (untyped agents) and conversational agent
 
 The `save_data` tool (intermediate saves) is not subject to typed output validation — only the final session-completion output is validated against the data type schema.
 
+## Execution Log Result Rendering
+
+The execution log Result tab applies content-type-aware rendering for the `auto` output type, where agents may return content in any format:
+
+- **HTML detection**: If the result content contains HTML tags, it renders directly as rich HTML — bypassing the markdown-to-HTML pipeline that previously corrupted pre-formatted HTML responses.
+- **Markdown and plain-text fallback**: Content without HTML tags continues through the standard markdown rendering path unchanged.
+- **Typed outputs unaffected**: Schema-validated typed results follow their existing structured field-by-field layout and are not subject to HTML detection.
+- **Maximize button**: Every rendered result area (for all output types) now includes a maximize button. Operators can expand any result into a full-content focus mode, showing only the rendered output at full viewport size — useful for reviewing large HTML reports, tables, or complex structured results. A close action restores the normal inline view.
+
 ## query_result System Tool
 
 A new `system____query_result` tool enables agents to retrieve and reason across past typed agent outputs. This unlocks result-analysis workflows where an agent queries historical results, compares them, identifies trends, or generates summary reports — all within a single SOP.

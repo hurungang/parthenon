@@ -42,6 +42,8 @@ Agent Outputs introduces schema-validated, typed agent results as first-class pl
 - For typed outputs, the tab renders a structured field-by-field view: each field displays its label, its value formatted by type (booleans as toggle indicators, dates as formatted dates, enums as chips, numbers and strings as-is).
 - The Result tab label includes a badge showing the data type name (for example, "Result [IncidentReport]").
 - If schema validation failed, a prominent validation error message appears in the Result tab, and the raw (unvalidated) output is shown as fallback.
+- For the `auto` output type, the platform now performs content-type detection at render time: if HTML tags are detected, the content renders directly as rich HTML (bypassing markdown conversion); if no HTML tags are detected, the content continues through standard markdown rendering. This ensures HTML-rich agent responses display correctly instead of appearing as corrupted markdown or raw markup.
+- All rendered result areas (typed, auto, and markdown) now include a maximize button that lets operators expand the output into a focused, full-content view for reviewing large or complex agent results without surrounding UI distractions.
 - Untyped outputs continue to render as plain text or markdown, unchanged.
 
 ### query_result System Tool

@@ -100,6 +100,53 @@ The sidebar "Agent Trails" child item navigates to a consolidated tabbed page; "
 |-----------|-------------|
 | `index.css` | Root stylesheet loaded by Vite; provides global layout rules (full-height `html`/`body`, `box-sizing: border-box`); the legacy `font-family` stack was removed when Inter was adopted via the MUI theme |
 
+### Agent Response Rendering
+
+Reusable components and utilities for rendering agent response content. The `ContentRenderer` component detects whether content contains HTML markup and routes through the appropriate rendering pipeline: DOMPurify-sanitized HTML, markdown-to-HTML conversion, or plain pre-formatted text. The `MaximizableContent` component wraps any content area with a maximize button that opens a full-view MUI Dialog — it is a pure layout decorator that does not alter content rendering. Both are platform-wide reusable infrastructure, not tied to any specific agent page.
+
+#### Content Rendering Components
+
+| Component | Description |
+|-----------|-------------|
+| `ContentRenderer` | Inspects a content string and renders through sanitized HTML, markdown conversion, or plain text based on detected format and `mode` prop (`'auto'` or `'chat'`); handles null/undefined/empty content gracefully |
+| `MaximizableContent` | Wraps children with a maximize icon button positioned absolutely in the top-right corner; clicking opens a fullscreen MUI `Dialog` containing the same children; accepts optional `title` prop for the dialog header; manages `isMaximized` boolean as internal React state |
+
+#### Content Detection & Sanitization Utilities
+
+| Component | Description |
+|-----------|-------------|
+| `containsHtmlTags` | Stateless regex-based function; tests whether a string contains HTML markup by matching opening (`<letter`) and closing (`</letter`) tag patterns; avoids false positives on comparison operators |
+| `sanitizeHtml` | Synchronous wrapper around DOMPurify's `sanitize()`; strips disallowed tags and attributes from HTML strings; called by `ContentRenderer` before `dangerouslySetInnerHTML` |
+
+#### Markdown Utilities
+
+| Component | Description |
+|-----------|-------------|
+| `simpleMarkdownToHtml` | Converts markdown text to HTML; extracted from `OutputTypeResultTab.tsx` to a shared utility file so both `OutputTypeResultTab` and `ContentRenderer` can import it without circular dependencies |
+| `escapeHtml` | Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`) in a string for safe embedding in HTML context |
+
+### Execution Result Display
+
+Components responsible for rendering agent execution results. The `OutputTypeResultTab` component is the central dispatcher that inspects an output's type and renders it appropriately — it now delegates HTML-aware rendering to `ContentRenderer` and wraps results with `MaximizableContent`.
+
+| Component | Description |
+|-----------|-------------|
+| `OutputTypeResultTab` | Central dispatcher for rendering execution results by output type (`auto`, `markdown`, `typed`); the `auto` branch now uses `ContentRenderer` with `mode="auto"` instead of calling `simpleMarkdownToHtml` directly; `markdown` and `typed` branches are unchanged in rendering logic |
+| `OutputTypeResultTabProps` | TypeScript interface defining the props contract for `OutputTypeResultTab` (output data, schema, and rendering context); schema unchanged by this change |
+| `extractResultText` | Helper function that extracts plain text from content block arrays or strings; used internally by `OutputTypeResultTab` |
+| `badgeForType` | Helper function returning badge style configuration (color, label) for a given output type; used internally by `OutputTypeResultTab` |
+
+### Agent Chat Interfaces
+
+Existing chat interface components that now integrate `ContentRenderer` and `MaximizableContent` for improved agent response rendering.
+
+| Component | Description |
+|-----------|-------------|
+| `ConversationDialog` | Dialog-based chat interface for conversational agents; agent messages (`msg.role !== 'user'`) now rendered via `ContentRenderer` with `mode="chat"` and wrapped with `MaximizableContent`; user messages unchanged |
+| `AgentJobPage` | Standalone agent session page with chat and result views; chat interface and conversation history view both use `ContentRenderer`/`MaximizableContent` for agent messages; the standalone markdown rendering path for `session.output_data.markdown` remains unchanged (not routed through `ContentRenderer` since data is already markdown-safe) |
+| `AgentExecutionDetailsDialog` | Tabbed execution detail dialog showing full session details and logs; uses `OutputTypeResultTab` for the Result tab, gaining the new HTML-aware rendering |
+| `SessionExecutionLogsDialog` | Session execution logs dialog with result tab; benefits from the same `OutputTypeResultTab` improvements |
+
 ---
 
 ## State Management
@@ -193,6 +240,47 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | `LogSummaryPanel` | component | Renders execution summary chips including guardrail usage and token-visibility information | `frontend/src/components/executions/LogSummaryPanel.tsx` |
 | `AgentTypeForm` | component | Agent Type editor surface where guardrail policy values are configured and displayed in k-token units | `frontend/src/pages/agents/AgentTypeForm.tsx` |
 | `AgentTypeDetailsDialog` | component | Read-only/details surface that presents the configured guardrail profile for an Agent Type | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
+
+### Agent Response Rendering — Components
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ContentRenderer` | component | Renders agent response content with HTML/markdown/plain-text auto-detection; supports `auto` and `chat` rendering modes; uses DOMPurify for sanitization and `simpleMarkdownToHtml` for markdown conversion | `frontend/src/components/ContentRenderer.tsx` |
+| `MaximizableContent` | component | Wraps content area with a maximize icon button and full-view MUI Dialog; manages `isMaximized` boolean as local React state; accepts optional `title` prop | `frontend/src/components/MaximizableContent.tsx` |
+
+### Agent Response Rendering — Utilities
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `containsHtmlTags` | function | Regex-based HTML tag detection in strings; matches opening (`<letter`) and closing (`</letter`) tag patterns without false positives on comparison operators | `frontend/src/utils/contentDetection.ts` |
+| `sanitizeHtml` | function | Sanitizes HTML strings via DOMPurify's synchronous `sanitize()`; called by `ContentRenderer` before `dangerouslySetInnerHTML` | `frontend/src/utils/contentDetection.ts` |
+| `simpleMarkdownToHtml` | function | Converts markdown text to HTML; extracted from `OutputTypeResultTab.tsx` to a shared utility for reuse by both `OutputTypeResultTab` and `ContentRenderer` | `frontend/src/utils/markdown.ts` |
+| `escapeHtml` | function | Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`) in a string for safe embedding in HTML context | `frontend/src/utils/markdown.ts` |
+
+### Agent Response Rendering — Tests
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ContentRenderer.test.tsx` | test | Unit tests for `ContentRenderer` covering auto/chat modes, HTML detection, markdown conversion, empty/null handling, and sanitization | `frontend/src/__tests__/ContentRenderer.test.tsx` |
+| `MaximizableContent.test.tsx` | test | Unit tests for `MaximizableContent` covering maximize toggle, dialog open/close, title rendering, and escape key handling | `frontend/src/__tests__/MaximizableContent.test.tsx` |
+
+### Execution Result Display
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `OutputTypeResultTab` | component | Central dispatcher for rendering execution results by output type (`auto`, `markdown`, `typed`); the `auto` branch now uses `ContentRenderer` with `mode="auto"`; all branches wrap results with `MaximizableContent` | `frontend/src/components/executions/OutputTypeResultTab.tsx` |
+| `OutputTypeResultTabProps` | interface | TypeScript interface defining props for `OutputTypeResultTab` (output data, schema, context); schema unchanged | `frontend/src/components/executions/OutputTypeResultTab.tsx` |
+| `extractResultText` | function | Extracts plain text from content block arrays or strings; used internally by `OutputTypeResultTab` | `frontend/src/components/executions/OutputTypeResultTab.tsx` |
+| `badgeForType` | function | Returns badge style config (color, label) for a given output type; used internally by `OutputTypeResultTab` | `frontend/src/components/executions/OutputTypeResultTab.tsx` |
+
+### Agent Chat Interfaces
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ConversationDialog` | component | Dialog-based chat interface for conversational agents; agent messages now rendered via `ContentRenderer` with `mode="chat"` and wrapped with `MaximizableContent` | `frontend/src/components/agents/ConversationDialog.tsx` |
+| `AgentJobPage` | component | Standalone agent session page with chat and result views; chat and conversation history use `ContentRenderer`/`MaximizableContent` for agent messages; standalone markdown path for `session.output_data.markdown` remains unchanged | `frontend/src/pages/agents/AgentJobPage.tsx` |
+| `AgentExecutionDetailsDialog` | component | Tabbed execution detail dialog; uses `OutputTypeResultTab` for the Result tab, gaining the new HTML-aware rendering pipeline | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
+| `SessionExecutionLogsDialog` | component | Session execution logs dialog with result tab; benefits from `OutputTypeResultTab` improvements via `ContentRenderer` and `MaximizableContent` | `frontend/src/pages/agents/SessionExecutionLogsDialog.tsx` |
 
 ### Segregation Audit Coverage
 
