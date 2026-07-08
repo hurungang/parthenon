@@ -28,6 +28,18 @@ class IdentityProviderSetupState(Base):
         default=False,
         server_default=sa.text("false"),
     )
+    user_provider_configured: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.text("false"),
+    )
+    agent_provider_configured: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.text("false"),
+    )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -40,5 +52,7 @@ class IdentityProviderSetupState(Base):
     def __repr__(self) -> str:
         return (
             f"<IdentityProviderSetupState id={self.id} "
-            f"is_setup_complete={self.is_setup_complete}>"
+            f"is_setup_complete={self.is_setup_complete} "
+            f"user_provider_configured={self.user_provider_configured} "
+            f"agent_provider_configured={self.agent_provider_configured}>"
         )

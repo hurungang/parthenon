@@ -1596,7 +1596,7 @@ async def agent_oauth_authorize(
 
     # Use identity_id as state if provided, else use "new" to signal creation
     state_value = str(identity_id) if identity_id else "new"
-    authorization_url = _identity_service.get_oauth_authorize_url(state_value, redirect_uri)
+    authorization_url = await _identity_service.get_oauth_authorize_url(state_value, redirect_uri)
     return AgentIdentityOAuthAuthorizeResponse(authorization_url=authorization_url)
 
 

@@ -4,9 +4,10 @@ Orchestrates the full identity provider setup lifecycle:
 - Detect current setup state.
 - Provision bundled Keycloak.
 - Register external OIDC provider.
-- Persist resolved settings to DB + config/identity.yaml.
+- Persist resolved settings to DB via OIDCConfigService.
 - Trigger OIDC client reload.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,6 +33,7 @@ from app.schemas.identity_bootstrap import (
     SetupState,
 )
 from app.services.identity.keycloak_admin_client import KeycloakAdminClient, KeycloakAdminError
+from app.services.oidc_config_service import OIDCConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,6 @@ class IdentityBootstrapService:
         Returns:
             :attr:`SetupState.CONFIGURED` if setup is complete,
             :attr:`SetupState.NOT_CONFIGURED` otherwise.
-            :attr:`SetupState.IN_PROGRESS` is reserved for future use.
         """
         result = await db.execute(select(IdentityProviderSetupState))
         row = result.scalar_one_or_none()
@@ -72,7 +73,7 @@ class IdentityBootstrapService:
         """Return the active ``IdentityProviderConfig`` DB row, or ``None``."""
         result = await db.execute(
             select(IdentityProviderConfig)
-            .where(IdentityProviderConfig.is_setup_complete.is_(True))
+            .where(IdentityProviderConfig.is_enabled.is_(True))
             .order_by(IdentityProviderConfig.created_at.desc())
             .limit(1)
         )
@@ -94,12 +95,9 @@ class IdentityBootstrapService:
         4. Create ``parthenon-api`` confidential client.
         5. Create ``parthenon-ui`` public client.
         6. Create initial admin user in the realm.
-        7. Persist to DB (within a transaction).
-        8. Write identity.yaml.
+        7. Persist to DB via OIDCConfigService.
+        8. Write identity.yaml (backward compat).
         9. Reload the OIDC client.
-
-        Raises:
-            :class:`KeycloakAdminError` if any Keycloak step fails.
         """
         if not request.keycloak_url:
             return ProviderSetupResult(
@@ -200,25 +198,37 @@ class IdentityBootstrapService:
             )
 
         oidc_provider_url = f"{keycloak_url}/realms/{realm_name}"
-        encrypted_secret: Optional[str] = None
-        if api_secret_obj and api_secret_obj.value:
-            encrypted_secret = get_vault().encrypt(api_secret_obj.value)
 
-        # 7. Persist to DB within a transaction
+        # 7. Persist to DB via OIDCConfigService
         now = datetime.now(timezone.utc)
         try:
-            config_row = IdentityProviderConfig(
-                id=uuid.uuid4(),
-                provider_type=request.provider_type.value,
-                oidc_provider_url=oidc_provider_url,
-                client_id=client_id,
-                client_secret=encrypted_secret,
-                realm_name=realm_name,
-                audience=client_id,
-                is_setup_complete=True,
-                setup_completed_at=now,
-            )
-            db.add(config_row)
+            provider_type_mapped = _map_provider_type_to_db(request.provider_type)
+            config_service = OIDCConfigService()
+
+            # Check if user provider already exists
+            existing = await config_service.get_by_scope(db, "user")
+            if existing is not None:
+                # Update existing
+                config = await config_service.update_provider(
+                    db,
+                    "user",
+                    provider_type=provider_type_mapped,
+                    issuer_url=oidc_provider_url,
+                    client_id=client_id,
+                    client_secret=api_secret_obj.value if api_secret_obj else None,
+                    changed_by="setup_wizard",
+                )
+            else:
+                config = await config_service.create_provider(
+                    db,
+                    provider_scope="user",
+                    provider_type=provider_type_mapped,
+                    display_name=f"Keycloak - {realm_name}",
+                    issuer_url=oidc_provider_url,
+                    client_id=client_id,
+                    client_secret=api_secret_obj.value if api_secret_obj else None,
+                    changed_by="setup_wizard",
+                )
 
             # Upsert the single-row state sentinel
             state_result = await db.execute(select(IdentityProviderSetupState))
@@ -227,11 +237,13 @@ class IdentityBootstrapService:
                 state_row = IdentityProviderSetupState(
                     id=uuid.uuid4(),
                     is_setup_complete=True,
+                    user_provider_configured=True,
                     completed_at=now,
                 )
                 db.add(state_row)
             else:
                 state_row.is_setup_complete = True
+                state_row.user_provider_configured = True
                 state_row.completed_at = now
 
             await db.commit()
@@ -245,7 +257,7 @@ class IdentityBootstrapService:
                 detail=f"Database error during provisioning: {exc}",
             )
 
-        # 8. Write identity.yaml
+        # 8. Write identity.yaml (backward compat)
         yaml_cfg = IdentityYamlConfig(
             provider_type=request.provider_type.value,
             oidc_provider_url=oidc_provider_url,
@@ -283,9 +295,9 @@ class IdentityBootstrapService:
 
         Steps:
         1. Fetch /.well-known/openid-configuration to validate the URL.
-        2. Store client ID + encrypted secret in ``IdentityProviderConfig``.
+        2. Persist to DB via OIDCConfigService.
         3. Mark setup complete in ``IdentityProviderSetupState``.
-        4. Write identity.yaml.
+        4. Write identity.yaml (backward compat).
         5. Reload the OIDC client.
         """
         if not request.oidc_discovery_url and not request.keycloak_url:
@@ -336,38 +348,51 @@ class IdentityBootstrapService:
         issuer: str = discovery_doc.get("issuer", discovery_url.split("/.well-known")[0])
         oidc_provider_url = issuer.rstrip("/")
 
-        encrypted_secret: Optional[str] = None
-        if request.client_secret:
-            encrypted_secret = get_vault().encrypt(request.client_secret)
-
         now = datetime.now(timezone.utc)
+        provider_type_mapped = _map_provider_type_to_db(request.provider_type)
+        display_name = f"External {request.provider_type.value}"
 
-        # 2–3. Persist to DB
+        # 2. Persist to DB via OIDCConfigService
         try:
-            config_row = IdentityProviderConfig(
-                id=uuid.uuid4(),
-                provider_type=request.provider_type.value,
-                oidc_provider_url=oidc_provider_url,
-                client_id=request.client_id,
-                client_secret=encrypted_secret,
-                realm_name=request.realm_name,
-                audience=request.client_id,
-                is_setup_complete=True,
-                setup_completed_at=now,
-            )
-            db.add(config_row)
+            config_service = OIDCConfigService()
 
+            existing = await config_service.get_by_scope(db, "user")
+            if existing is not None:
+                config = await config_service.update_provider(
+                    db,
+                    "user",
+                    provider_type=provider_type_mapped,
+                    issuer_url=oidc_provider_url,
+                    client_id=request.client_id,
+                    client_secret=request.client_secret,
+                    changed_by="setup_wizard",
+                )
+            else:
+                config = await config_service.create_provider(
+                    db,
+                    provider_scope="user",
+                    provider_type=provider_type_mapped,
+                    display_name=display_name,
+                    issuer_url=oidc_provider_url,
+                    client_id=request.client_id,
+                    client_secret=request.client_secret,
+                    changed_by="setup_wizard",
+                )
+
+            # 3. Update setup state
             state_result = await db.execute(select(IdentityProviderSetupState))
             state_row = state_result.scalar_one_or_none()
             if state_row is None:
                 state_row = IdentityProviderSetupState(
                     id=uuid.uuid4(),
                     is_setup_complete=True,
+                    user_provider_configured=True,
                     completed_at=now,
                 )
                 db.add(state_row)
             else:
                 state_row.is_setup_complete = True
+                state_row.user_provider_configured = True
                 state_row.completed_at = now
 
             await db.commit()
@@ -381,7 +406,7 @@ class IdentityBootstrapService:
                 detail=f"Database error during provisioning: {exc}",
             )
 
-        # 4. Write identity.yaml
+        # 4. Write identity.yaml (backward compat)
         yaml_cfg = IdentityYamlConfig(
             provider_type=request.provider_type.value,
             oidc_provider_url=oidc_provider_url,
@@ -422,9 +447,21 @@ class IdentityBootstrapService:
 
             reset_singleton()
             client = get_oidc_client()
-            client.reload(provider_url, algorithm, audience)
+            client.clear_cache()
             get_settings.cache_clear()
             logger.info("OIDC client reloaded for provider: %s", provider_url)
         except Exception as exc:
             logger.warning("Failed to reload OIDC client: %s", exc)
 
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _map_provider_type_to_db(pt: ProviderType) -> str:
+    """Map the schema ``ProviderType`` enum to the DB ``provider_type`` values."""
+    mapping = {
+        ProviderType.KEYCLOAK_BUNDLED: "keycloak",
+        ProviderType.KEYCLOAK_EXTERNAL: "keycloak",
+        ProviderType.AZURE_ENTRAID: "azure_entraid",
+    }
+    return mapping.get(pt, "oidc_generic")

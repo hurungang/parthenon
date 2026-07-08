@@ -35,6 +35,7 @@ from app.api.v1.data_types import DataTypeRouter
 from app.api.v1.results import ResultRouter
 from app.api.v1.scheduling import ScheduleRouter
 from app.api.v1.setup import SetupRouter
+from app.api.v1.system_config import AuthRouter, SystemConfigRouter
 from app.api.v1.skills import SkillRouter
 from app.api.v1.sops import SopRouter
 from app.api.v1.telemetry import TelemetryRouter
@@ -47,6 +48,12 @@ router = APIRouter()
 
 # Public endpoints
 router.include_router(SetupRouter)
+
+# Auth endpoints
+router.include_router(AuthRouter)
+
+# System Config (identity providers, super admin management)
+router.include_router(SystemConfigRouter)
 
 # Certificate Authority (public CA cert endpoint + admin issue/revoke)
 router.include_router(CertificatesRouter)

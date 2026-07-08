@@ -1,7 +1,9 @@
 """DB models package — import all models so Alembic autogenerate detects them."""
 from app.db.models.identity import Identity, Permission, Role, RolePermission  # noqa: F401
 from app.db.models.identity_provider_config import IdentityProviderConfig  # noqa: F401
+from app.db.models.identity_provider_config_audit import IdentityProviderConfigAudit  # noqa: F401
 from app.db.models.identity_provider_setup_state import IdentityProviderSetupState  # noqa: F401
+from app.db.models.super_admin_credentials import SuperAdminCredentials  # noqa: F401
 from app.db.models.mcp_hub import McpServer, McpSession, McpTool, ToolPermission  # noqa: F401
 from app.db.models.skills import Skill, SkillToolBinding, Sop, SopStep  # noqa: F401
 from app.db.models.agents import (  # noqa: F401

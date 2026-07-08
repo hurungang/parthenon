@@ -50,10 +50,9 @@ function statusColor(
 
 function tokenStatusColor(
   expiresAt: string,
-): 'success' | 'warning' | 'error' {
+): 'success' | 'error' {
   const diff = new Date(expiresAt).getTime() - Date.now()
   if (diff <= 0) return 'error'
-  if (diff < 5 * 60 * 1000) return 'warning'
   return 'success'
 }
 
