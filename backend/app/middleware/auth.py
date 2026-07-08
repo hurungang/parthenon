@@ -119,7 +119,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 "Auth middleware: Super admin auth succeeded for %s (user: %s)",
                 path, claims.get("username", "unknown"),
             )
-            await self._sync_user_and_groups(request, claims)
             return await call_next(request)
 
         # ── Tier 2: OIDC JWT ───────────────────────────────────────────────
@@ -149,37 +148,21 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     ) -> dict[str, Any] | None:
         """Try to validate the token as a super admin JWT."""
         try:
-            from app.db.session import AsyncSessionLocal
             from app.services.super_admin_auth_service import (
                 SuperAdminAuthError,
-                SuperAdminAuthService,
+                super_admin_enabled,
+                validate_super_admin_token,
             )
         except ImportError:
             logger.debug("Auth middleware: SuperAdminAuthService not available")
             return None
 
-        service = SuperAdminAuthService()
-
-        # Check env-level disable
-        if not service.is_enabled():
-            logger.debug("Auth middleware: Super admin disabled at env level")
+        if not super_admin_enabled():
+            logger.debug("Auth middleware: Super admin disabled")
             return None
 
-        # Check DB-level disable
         try:
-            async with AsyncSessionLocal() as db:
-                if not await service.is_db_enabled(db):
-                    logger.debug("Auth middleware: Super admin disabled in DB")
-                    return None
-        except Exception as exc:
-            logger.warning(
-                "Auth middleware: Failed to check super admin DB status: %s", exc
-            )
-            return None
-
-        # Validate token
-        try:
-            claims = service.validate_token(token)
+            claims = validate_super_admin_token(token)
             logger.debug(
                 "Auth middleware: Super admin token valid for %s", path
             )

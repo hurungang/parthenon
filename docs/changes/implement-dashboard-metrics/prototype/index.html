@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Dashboard Operational Metrics Prototype</title>
+<style>
+/* ═══════════════════════════════ DESIGN TOKENS (from master UX + dark sidebar) ═══════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#0F172A;--sidebar-text:#94A3B8;--sidebar-active-bg:rgba(37,99,235,0.15);
+  --sidebar-hover-bg:rgba(255,255,255,0.04);--sidebar-active-text:#60A5FA;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --shadow-lg:0 10px 25px rgba(0,0,0,0.12);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ═══════════════════════════════ APP SHELL ═══════════════════════════════ */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ═══════════════════════════════ DARK SIDEBAR ═══════════════════════════════ */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid rgba(255,255,255,0.06)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:#fff;letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--sidebar-text);letter-spacing:.5px;text-transform:uppercase}
+
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg);color:#CBD5E1}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+
+.nav-parent-group{margin-top:4px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--sidebar-text);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:#CBD5E1}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--sidebar-text)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--sidebar-text)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:#CBD5E1}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+.nav-parent-group.locked-open .toggle-icon{display:none}
+.nav-parent-group.locked-open .nav-parent-group-label{cursor:default}
+.nav-parent-group.locked-open .nav-parent-group-label:hover{color:var(--sidebar-text)}
+
+/* ═══════════════════════════════ TOP BAR ═══════════════════════════════ */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ═══════════════════════════════ VIEWS ═══════════════════════════════ */
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ═══════════════════════════════ BUTTONS ═══════════════════════════════ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-sm{padding:5px 12px;font-size:12px}
+
+/* ═══════════════════════════════ SECTION TITLE ═══════════════════════════════ */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:28px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ═══════════════════════════════ CHANGE BANNER ═══════════════════════════════ */
+.change-banner{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid rgba(37,99,235,.25);background:rgba(37,99,235,0.05);border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:18px}
+.change-banner .cb-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.change-banner .cb-body{flex:1}
+.change-banner h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+.change-banner .cb-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-left:6px;vertical-align:middle}
+
+/* ═══════════════════════════════ METRIC CARDS ═══════════════════════════════ */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.metrics-grid-3col{grid-template-columns:repeat(3,1fr)}
+
+.metric-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:20px;transition:box-shadow var(--transition),opacity var(--transition);position:relative;overflow:hidden}
+.metric-card:hover{box-shadow:var(--shadow-md)}
+.metric-card-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.metric-card-icon{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.metric-card-icon.blue{background:#DBEAFE;color:#1D4ED8}
+.metric-card-icon.green{background:#DCFCE7;color:#15803D}
+.metric-card-icon.purple{background:#EDE9FE;color:#6D28D9}
+.metric-card-icon.orange{background:#FED7AA;color:#C2410C}
+.metric-card-icon.red{background:#FEE2E2;color:#B91C1C}
+.metric-card-icon.teal{background:#D1FAE5;color:#065F46}
+.metric-card-icon.amber{background:#FEF3C7;color:#92400E}
+.metric-card-icon.slate{background:#F1F5F9;color:#475569}
+.metric-card-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;line-height:1.3}
+.metric-card-value{font-size:28px;font-weight:700;color:var(--text-primary);line-height:1;margin-bottom:6px}
+.metric-card-sub{font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.metric-card-sub .sub-breakdown{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:#F1F5F9;color:#475569}
+
+/* Time-sensitive metric card */
+.metric-card.time-sensitive{border-left:3px solid var(--primary)}
+.metric-card.time-sensitive .date-range-label{font-size:11px;color:var(--text-secondary);font-style:italic;margin-top:4px}
+.metric-card .dual-value{display:flex;align-items:baseline;gap:8px}
+.metric-card .dual-value .val-completed{font-size:28px;font-weight:700;color:var(--success)}
+.metric-card .dual-value .val-separator{font-size:20px;color:var(--text-secondary);font-weight:300}
+.metric-card .dual-value .val-failed{font-size:28px;font-weight:700;color:var(--error)}
+
+/* Zero state */
+.metric-card.zero-state .metric-card-value{color:var(--text-secondary);font-weight:400}
+
+/* ═══════════════════════════════ PERMISSION DENIED STATE ═══════════════════════════════ */
+.metric-card.permission-denied{opacity:.55;border-style:dashed;background:#FAFBFC}
+.metric-card.permission-denied .metric-card-value{color:#9CA3AF}
+.metric-card.permission-denied .metric-card-label{color:#9CA3AF}
+.metric-card.permission-denied .metric-card-icon{background:#F1F5F9;color:#94A3B8}
+.metric-card .lock-overlay{position:absolute;top:12px;right:12px;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#F1F5F9;color:#94A3B8;font-size:14px}
+.metric-card.permission-denied .lock-overlay{display:flex}
+.metric-card:not(.permission-denied) .lock-overlay{display:none}
+.metric-card .denied-label{display:none;font-size:12px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px}
+.metric-card.permission-denied .denied-label{display:block}
+.metric-card.permission-denied .metric-card-value{display:none}
+.metric-card.permission-denied .metric-card-sub{display:none}
+
+/* ═══════════════════════════════ LOADING SKELETON ═══════════════════════════════ */
+.metric-card.loading .metric-card-icon{background:#E2E8F0;color:transparent;animation:skeletonPulse 1.5s ease-in-out infinite}
+.metric-card.loading .metric-card-label{background:#E2E8F0;color:transparent;border-radius:4px;display:inline-block;min-width:80px;animation:skeletonPulse 1.5s ease-in-out infinite}
+.metric-card.loading .metric-card-value{background:#E2E8F0;color:transparent;border-radius:4px;display:inline-block;min-width:60px;animation:skeletonPulse 1.5s ease-in-out infinite;height:32px}
+.metric-card.loading .metric-card-sub{display:none}
+.metric-card.loading .lock-overlay{display:none}
+
+@keyframes skeletonPulse{0%,100%{opacity:.6}50%{opacity:.9}}
+
+/* Date Range Picker */
+.date-range-wrap{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.date-range-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.date-input-group{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;box-shadow:var(--shadow)}
+.date-input-group label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px}
+.date-input-group input[type="date"],
+.date-input-group input[type="time"]{border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;font-size:13px;color:var(--text-primary);background:var(--bg);outline:none}
+.date-input-group input:focus{border-color:var(--primary)}
+.preset-btns{display:flex;gap:4px}
+.preset-btn{padding:5px 12px;font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-secondary);cursor:pointer;transition:all var(--transition)}
+.preset-btn:hover{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.preset-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600}
+.date-range-refresh{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)}
+
+/* ═══════════════════════════════ ALERT ═══════════════════════════════ */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+
+/* ═══════════════════════════════ CHIPS ═══════════════════════════════ */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+
+/* ═══════════════════════════════ TOGGLE ═══════════════════════════════ */
+.toggle{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:36px;height:20px;background:#CBD5E1;border-radius:10px;transition:background var(--transition);position:relative;flex-shrink:0}
+.toggle-slider::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+.toggle-slider{background:var(--success)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(16px)}
+
+/* ═══════════════════════════════ CARD (for secondary sections) ═══════════════════════════════ */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:16px}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ═══════════════════════════════ STATUS DOT ═══════════════════════════════ */
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+
+/* ═══════════════════════════════ IDP STATUS CARDS ═══════════════════════════════ */
+.idp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.idp-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:20px}
+.idp-card-icon{width:40px;height:40px;border-radius:var(--radius-sm);background:#F1F5F9;color:#475569;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.idp-card-content{display:flex;align-items:center;gap:12px}
+.idp-card-info{flex:1}
+.idp-card-title{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+.idp-card-status{font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px}
+
+/* ═══════════════════════════════ DEMO PANEL ═══════════════════════════════ */
+.demo-panel{position:fixed;bottom:16px;right:16px;background:rgba(15,23,42,0.9);color:#fff;border-radius:var(--radius-lg);padding:14px 18px;font-size:11px;z-index:500;min-width:260px;backdrop-filter:blur(8px);box-shadow:var(--shadow-lg)}
+.demo-panel-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;margin-bottom:10px}
+.demo-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
+.demo-row .demo-label{color:#CBD5E1}
+.demo-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:all var(--transition);font-weight:500}
+.demo-btn:hover{background:rgba(255,255,255,0.18)}
+.demo-btn.active{background:var(--primary);border-color:var(--primary)}
+.demo-divider{height:1px;background:rgba(255,255,255,0.1);margin:8px 0}
+.demo-role-preset{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.demo-role-preset button{font-size:10px;padding:3px 8px}
+
+/* ═══════════════════════════════ TOAST ═══════════════════════════════ */
+.toast-container{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:10px 18px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease;display:flex;align-items:center;gap:8px}
+.toast-info{background:#1565C0}.toast-success{background:#2E7D32}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════════════ RESPONSIVE ═══════════════════════════════ */
+@media (max-width:1400px){
+  .metrics-grid{grid-template-columns:repeat(3,1fr)}
+  .metrics-grid-3col{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:1024px){
+  .metrics-grid{grid-template-columns:repeat(2,1fr)}
+  .metrics-grid-3col{grid-template-columns:repeat(2,1fr)}
+  .idp-grid{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .metrics-grid{grid-template-columns:1fr}
+  .metrics-grid-3col{grid-template-columns:1fr}
+  .idp-grid{grid-template-columns:1fr}
+  .date-range-wrap{flex-direction:column;align-items:stretch}
+  .sidebar{display:none}
+}
+
+/* ═══════════════════════════════ MISC ═══════════════════════════════ */
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}
+.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
+strong{font-weight:600}
+
+/* Spin animation for refresh */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ DARK SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <div class="nav-item active" data-view="dashboard">
+    <span class="nav-icon">🏠</span>Dashboard
+  </div>
+
+  <div class="nav-parent-group">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="true" tabindex="0">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">👤</span>Agent Roles</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🆔</span>Agent Identities</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item"><span class="nav-icon">▶️</span>Agent Executions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">📅</span>Schedules</div>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open">
+    <div class="nav-parent-group-label">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">🔌</span>MCP Hub</div>
+    </div>
+  </div>
+
+  <div class="nav-parent-group">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="false" tabindex="0">
+      <span>⚙️ System</span>
+      <span class="toggle-icon" aria-hidden="true">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">📊</span>Observability</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔐</span>Permissions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">⚙️</span>System Config</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title">Dashboard</div>
+    <div class="topbar-actions">
+      <span class="chip chip-yellow" id="sa-indicator" style="display:none">🔑 Super Admin</span>
+      <div class="avatar" title="Operator — Platform Admin">OP</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ DASHBOARD VIEW ═══════════════════════════════ -->
+<div id="view-dashboard" class="view active">
+
+  <div class="view-header">
+    <div><h2>Dashboard</h2><div class="view-desc">Platform overview and quick actions</div></div>
+  </div>
+
+  <!-- Change Banner -->
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>Dashboard Operational Metrics <span class="cb-tag">implement-dashboard-metrics</span></h4>
+      <p>Real-time operational overview with 10 metric cards — snapshot counts, time-sensitive breach/execution trends, and permission-aware visibility. Identity provider status retained below.</p>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 1: REAL-TIME OPERATIONAL METRICS ═══════════ -->
+  <div class="section-title">Operational Metrics</div>
+
+  <div class="metrics-grid" id="snapshot-grid">
+    <!-- Agent Types -->
+    <div class="metric-card" id="card-agent-types" data-permission="agent_types">
+      <div class="metric-card-header">
+        <div class="metric-card-icon blue">🤖</div>
+        <div class="metric-card-label" style="flex:1">Agent Types</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">12</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown" style="background:#DCFCE7;color:#15803D">8 active</span>
+        <span class="sub-breakdown" style="background:#DBEAFE;color:#1D4ED8">3 running</span>
+      </div>
+    </div>
+
+    <!-- Pending Interventions -->
+    <div class="metric-card" id="card-pending-interventions" data-permission="interventions">
+      <div class="metric-card-header">
+        <div class="metric-card-icon orange">🛑</div>
+        <div class="metric-card-label" style="flex:1">Pending Interventions</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">5</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown" style="background:#FEF3C7;color:#92400E">2 high priority</span>
+      </div>
+    </div>
+
+    <!-- Model Configurations -->
+    <div class="metric-card" id="card-model-configs" data-permission="model_configs">
+      <div class="metric-card-header">
+        <div class="metric-card-icon purple">⚙️</div>
+        <div class="metric-card-label" style="flex:1">Model Configurations</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">7</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown">enabled</span>
+      </div>
+    </div>
+
+    <!-- Active Schedules -->
+    <div class="metric-card" id="card-active-schedules" data-permission="schedules">
+      <div class="metric-card-header">
+        <div class="metric-card-icon green">📅</div>
+        <div class="metric-card-label" style="flex:1">Active Schedules</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">14</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown">4 due within 1 hour</span>
+      </div>
+    </div>
+
+    <!-- Agent Identities -->
+    <div class="metric-card" id="card-agent-identities" data-permission="identities">
+      <div class="metric-card-header">
+        <div class="metric-card-icon teal">🆔</div>
+        <div class="metric-card-label" style="flex:1">Agent Identities</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">23</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown">provisioned</span>
+      </div>
+    </div>
+
+    <!-- Agent Roles -->
+    <div class="metric-card" id="card-agent-roles" data-permission="roles">
+      <div class="metric-card-header">
+        <div class="metric-card-icon amber">👤</div>
+        <div class="metric-card-label" style="flex:1">Agent Roles</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">6</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown">defined</span>
+      </div>
+    </div>
+
+    <!-- MCP Servers -->
+    <div class="metric-card" id="card-mcp-servers" data-permission="mcp_servers">
+      <div class="metric-card-header">
+        <div class="metric-card-icon red">🔌</div>
+        <div class="metric-card-label" style="flex:1">MCP Servers</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">9</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="sub-breakdown">registered</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 2: TIME-SENSITIVE METRICS ═══════════ -->
+  <div class="section-title" style="margin-top:32px">Time-Sensitive Metrics</div>
+
+  <!-- Date Range Picker -->
+  <div class="date-range-wrap" id="date-range-wrap">
+    <div class="date-range-controls">
+      <div class="date-input-group">
+        <label>From</label>
+        <input type="date" id="date-start" onchange="onDateRangeChange()">
+        <input type="time" id="time-start" onchange="onDateRangeChange()">
+      </div>
+      <span style="color:var(--text-secondary);font-size:13px">&mdash;</span>
+      <div class="date-input-group">
+        <label>To</label>
+        <input type="date" id="date-end" onchange="onDateRangeChange()">
+        <input type="time" id="time-end" onchange="onDateRangeChange()">
+      </div>
+      <div class="preset-btns">
+        <button class="preset-btn" onclick="applyPreset('hour')" id="preset-hour">Last Hour</button>
+        <button class="preset-btn active" onclick="applyPreset('day')" id="preset-day">Last 24h</button>
+        <button class="preset-btn" onclick="applyPreset('week')" id="preset-week">Last 7d</button>
+      </div>
+    </div>
+    <div class="date-range-refresh">
+      <button class="btn btn-secondary btn-sm" onclick="simulateRefresh()" id="btn-refresh">&#x1F504; Refresh</button>
+    </div>
+  </div>
+
+  <div class="metrics-grid metrics-grid-3col" id="time-sensitive-grid">
+    <!-- Guardrail Breach Events -->
+    <div class="metric-card time-sensitive" id="card-guardrail-breaches" data-permission="guardrail_breaches">
+      <div class="metric-card-header">
+        <div class="metric-card-icon red">🚨</div>
+        <div class="metric-card-label" style="flex:1">Guardrail Breach Events</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">3</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="date-range-label" id="guardrail-range-label">Jul 7 08:00 &mdash; Jul 8 08:00</div>
+    </div>
+
+    <!-- Agent Executions -->
+    <div class="metric-card time-sensitive" id="card-agent-executions" data-permission="executions">
+      <div class="metric-card-header">
+        <div class="metric-card-icon blue">▶️</div>
+        <div class="metric-card-label" style="flex:1">Agent Executions</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="dual-value">
+        <span class="val-completed">42</span>
+        <span class="val-separator">/</span>
+        <span class="val-failed">3</span>
+      </div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="metric-card-sub">
+        <span class="text-sm text-secondary">completed / failed</span>
+      </div>
+      <div class="date-range-label" id="executions-range-label">Jul 7 08:00 &mdash; Jul 8 08:00</div>
+    </div>
+
+    <!-- Model Usage Posture Breaches -->
+    <div class="metric-card time-sensitive" id="card-posture-breaches" data-permission="posture_breaches">
+      <div class="metric-card-header">
+        <div class="metric-card-icon purple">⚠️</div>
+        <div class="metric-card-label" style="flex:1">Model Usage Posture Breaches</div>
+        <div class="lock-overlay" title="Permission Denied">🔒</div>
+      </div>
+      <div class="metric-card-value">1</div>
+      <div class="denied-label">Permission Denied</div>
+      <div class="date-range-label" id="posture-range-label">Jul 7 08:00 &mdash; Jul 8 08:00</div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 3: IDENTITY PROVIDER STATUS ═══════════ -->
+  <div class="section-title" style="margin-top:32px">Identity Provider Status</div>
+
+  <div class="idp-grid" id="idp-grid">
+    <div class="idp-card">
+      <div class="idp-card-content">
+        <div class="idp-card-icon">🛡️</div>
+        <div class="idp-card-info">
+          <div class="idp-card-title">User Identity Provider</div>
+          <div class="idp-card-status">
+            <span class="status-dot dot-green"></span>
+            Connected — Keycloak (parthenon-users)
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="idp-card">
+      <div class="idp-card-content">
+        <div class="idp-card-icon">🤖</div>
+        <div class="idp-card-info">
+          <div class="idp-card-title">Agent Identity Provider</div>
+          <div class="idp-card-status">
+            <span class="status-dot dot-green"></span>
+            Connected — Keycloak (ai_agents)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>Quick Actions</h3></div>
+    <div class="card-body" style="display:flex;gap:12px">
+      <button class="btn btn-primary">⚙️ Configure Identity Providers</button>
+      <button class="btn btn-secondary">🔌 MCP Hub</button>
+      <button class="btn btn-secondary">📊 Observability</button>
+    </div>
+  </div>
+
+</div><!-- /dashboard view -->
+
+</div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ TOAST CONTAINER ═══════════════════════════════ -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ═══════════════════════════════ DEMO CONTROLS PANEL ═══════════════════════════════ -->
+<div class="demo-panel">
+  <div class="demo-panel-title">Demo Controls</div>
+
+  <div class="demo-row">
+    <span class="demo-label">All Cards Loading</span>
+    <label class="toggle">
+      <input type="checkbox" id="toggle-loading" onchange="toggleAllLoading(this.checked)">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="demo-divider"></div>
+
+  <div class="demo-row">
+    <span class="demo-label">Permission Simulation</span>
+  </div>
+  <div class="demo-role-preset" style="margin-bottom:6px">
+    <button class="demo-btn active" onclick="setPermissionPreset('full')">Full Access</button>
+    <button class="demo-btn" onclick="setPermissionPreset('operator')">Operator</button>
+    <button class="demo-btn" onclick="setPermissionPreset('limited')">Limited</button>
+    <button class="demo-btn" onclick="setPermissionPreset('none')">No Access</button>
+  </div>
+
+  <div class="demo-divider"></div>
+
+  <div class="demo-row">
+    <span class="demo-label">Zero Counts</span>
+    <label class="toggle">
+      <input type="checkbox" id="toggle-zero" onchange="toggleZeroCounts(this.checked)">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="demo-divider"></div>
+
+  <div class="demo-row">
+    <span class="demo-label">Date Range</span>
+    <div style="display:flex;gap:4px">
+      <button class="demo-btn active" id="demo-preset-hour" onclick="applyPreset('hour')">1H</button>
+      <button class="demo-btn" id="demo-preset-day" onclick="applyPreset('day')">24H</button>
+      <button class="demo-btn" id="demo-preset-week" onclick="applyPreset('week')">7D</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════ STATE ═══════════════════════════════
+const APP = {
+  startTime: null,
+  endTime: null,
+  isLoading: false,
+  zeroMode: false,
+  permissionSet: {
+    agent_types: true,
+    interventions: true,
+    model_configs: true,
+    schedules: true,
+    identities: true,
+    roles: true,
+    mcp_servers: true,
+    guardrail_breaches: true,
+    executions: true,
+    posture_breaches: true
+  }
+};
+
+// ═══════════════════════════════ MOCK DATA ═══════════════════════════════
+const SNAPSHOT_DATA = {
+  'card-agent-types': { value: '12', sub: '<span class="sub-breakdown" style="background:#DCFCE7;color:#15803D">8 active</span> <span class="sub-breakdown" style="background:#DBEAFE;color:#1D4ED8">3 running</span>' },
+  'card-pending-interventions': { value: '5', sub: '<span class="sub-breakdown" style="background:#FEF3C7;color:#92400E">2 high priority</span>' },
+  'card-model-configs': { value: '7', sub: '<span class="sub-breakdown">enabled</span>' },
+  'card-active-schedules': { value: '14', sub: '<span class="sub-breakdown">4 due within 1 hour</span>' },
+  'card-agent-identities': { value: '23', sub: '<span class="sub-breakdown">provisioned</span>' },
+  'card-agent-roles': { value: '6', sub: '<span class="sub-breakdown">defined</span>' },
+  'card-mcp-servers': { value: '9', sub: '<span class="sub-breakdown">registered</span>' }
+};
+
+const TIME_SENSITIVE_DATA = {
+  hour: {
+    guardrail: '0',
+    executions: { completed: '8', failed: '1' },
+    posture: '0',
+    rangeLabel: function(start,end){ return formatRange(start,end); }
+  },
+  day: {
+    guardrail: '3',
+    executions: { completed: '42', failed: '3' },
+    posture: '1',
+    rangeLabel: function(start,end){ return formatRange(start,end); }
+  },
+  week: {
+    guardrail: '18',
+    executions: { completed: '312', failed: '21' },
+    posture: '6',
+    rangeLabel: function(start,end){ return formatRange(start,end); }
+  },
+  custom: {
+    guardrail: '0',
+    executions: { completed: '0', failed: '0' },
+    posture: '0',
+    rangeLabel: function(start,end){ return formatRange(start,end); }
+  }
+};
+
+// Helper: figure out which preset key is active (or return 'custom')
+function getActivePresetKey() {
+  if (!APP.startTime || !APP.endTime) return 'day';
+  const durMs = APP.endTime - APP.startTime;
+  const durH = durMs / (1000 * 60 * 60);
+  if (durH <= 1.05 && durH >= 0.95) return 'hour';
+  if (durH <= 24.5 && durH >= 23.5) return 'day';
+  if (durH <= 170 && durH >= 165) return 'week';
+  return 'custom';
+}
+
+// ═══════════════════════════════ FUNCTIONS ═══════════════════════════════
+
+// Toggle nav group collapse
+function toggleNavGroup(labelEl) {
+  const group = labelEl.parentElement;
+  group.classList.toggle('collapsed');
+}
+
+// Format date as "MMM DD HH:MM"
+function formatRange(startDate, endDate) {
+  const opts = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  const start = startDate.toLocaleDateString('en-US', opts).replace(',','');
+  const end = endDate.toLocaleDateString('en-US', opts).replace(',','');
+  return start + ' \u2014 ' + end;
+}
+
+// Initialize date inputs to last 24 hours
+function initDateRange() {
+  const now = new Date();
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  APP.startTime = dayAgo;
+  APP.endTime = now;
+  setDateInputs(dayAgo, now);
+}
+
+function setDateInputs(start, end) {
+  const fmt = d => d.toISOString().slice(0,16); // "YYYY-MM-DDTHH:MM"
+  const dtStart = fmt(start);
+  const dtEnd = fmt(end);
+  document.getElementById('date-start').value = dtStart.split('T')[0];
+  document.getElementById('time-start').value = dtStart.split('T')[1];
+  document.getElementById('date-end').value = dtEnd.split('T')[0];
+  document.getElementById('time-end').value = dtEnd.split('T')[1];
+}
+
+// Apply a preset
+function applyPreset(presetId) {
+  const now = new Date();
+  let start;
+  switch(presetId) {
+    case 'hour': start = new Date(now.getTime() - 1 * 60 * 60 * 1000); break;
+    case 'day':  start = new Date(now.getTime() - 24 * 60 * 60 * 1000); break;
+    case 'week': start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+    default: return;
+  }
+  APP.startTime = start;
+  APP.endTime = now;
+  setDateInputs(start, now);
+  updatePresetButtons(presetId);
+  updateTimeSensitiveCards();
+  showToast('Range set: ' + formatRange(start, now), 'info');
+}
+
+// User changes date/time manually
+function onDateRangeChange() {
+  const ds = document.getElementById('date-start').value;
+  const ts = document.getElementById('time-start').value;
+  const de = document.getElementById('date-end').value;
+  const te = document.getElementById('time-end').value;
+  if (!ds || !ts || !de || !te) return;
+  const start = new Date(ds + 'T' + ts);
+  const end = new Date(de + 'T' + te);
+  if (isNaN(start) || isNaN(end) || start >= end) return;
+  APP.startTime = start;
+  APP.endTime = end;
+  updatePresetButtons(null); // clear active preset
+  updateTimeSensitiveCards();
+}
+
+function updatePresetButtons(activeId) {
+  ['hour','day','week'].forEach(id => {
+    const btn = document.getElementById('preset-' + id);
+    const dbtn = document.getElementById('demo-preset-' + id);
+    if (btn) btn.classList.toggle('active', id === activeId);
+    if (dbtn) dbtn.classList.toggle('active', id === activeId);
+  });
+}
+
+// Update time-sensitive cards from date range
+function updateTimeSensitiveCards() {
+  if (!APP.startTime || !APP.endTime) return;
+  const presetKey = getActivePresetKey();
+  const d = TIME_SENSITIVE_DATA[presetKey] || TIME_SENSITIVE_DATA.custom;
+  const isZero = APP.zeroMode;
+  const rangeLabel = formatRange(APP.startTime, APP.endTime);
+
+  // Guardrail Breach Events
+  updateCardValue('card-guardrail-breaches', 'value', isZero ? '0' : d.guardrail);
+  document.getElementById('guardrail-range-label').textContent = rangeLabel;
+  toggleZeroClass('card-guardrail-breaches', isZero || d.guardrail === '0');
+
+  // Agent Executions
+  const execCard = document.getElementById('card-agent-executions');
+  const dualVal = execCard.querySelector('.dual-value');
+  const compEl = dualVal.querySelector('.val-completed');
+  const failEl = dualVal.querySelector('.val-failed');
+  if (isZero) {
+    compEl.textContent = '0';
+    failEl.textContent = '0';
+  } else {
+    compEl.textContent = d.executions.completed;
+    failEl.textContent = d.executions.failed;
+  }
+  document.getElementById('executions-range-label').textContent = rangeLabel;
+  toggleZeroClass('card-agent-executions', isZero || (d.executions.completed === '0' && d.executions.failed === '0'));
+
+  // Model Usage Posture Breaches
+  updateCardValue('card-posture-breaches', 'value', isZero ? '0' : d.posture);
+  document.getElementById('posture-range-label').textContent = rangeLabel;
+  toggleZeroClass('card-posture-breaches', isZero || d.posture === '0');
+
+  applyPermissionStates();
+  if (APP.isLoading) setAllLoading(true);
+}
+
+// Update a snapshot card's value display
+function updateCardValue(cardId, type, value) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  if (type === 'value') {
+    const valEl = card.querySelector('.metric-card-value');
+    if (valEl) valEl.textContent = value;
+  }
+}
+
+// Toggle zero state class on a card
+function toggleZeroClass(cardId, isZero) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  if (isZero && !APP.isLoading && !isPermissionDenied(card.dataset.permission)) {
+    card.classList.add('zero-state');
+  } else {
+    card.classList.remove('zero-state');
+  }
+}
+
+// Update refresh timestamp - stub, no longer shown in date range UI
+function updateRefreshTimestamp() {
+}
+
+// Simulate refresh
+function simulateRefresh() {
+  const btn = document.getElementById('btn-refresh');
+  btn.textContent = '⏳ Refreshing...';
+  btn.disabled = true;
+  // Briefly show loading on time-sensitive cards
+  setTimeSensitiveLoading(true);
+  setTimeout(() => {
+    setTimeSensitiveLoading(false);
+    updateTimeSensitiveCards();
+    btn.innerHTML = '\u{1F504} Refresh';
+    btn.disabled = false;
+    showToast('Data refreshed for selected range', 'success');
+  }, 1200);
+}
+
+// Show toast notification
+function showToast(msg, type) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + (type || 'info');
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-12px)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// ═══════════════════════════════ LOADING STATE ═══════════════════════════════
+
+function toggleAllLoading(loading) {
+  APP.isLoading = loading;
+  setAllLoading(loading);
+}
+
+function setAllLoading(loading) {
+  const allCards = document.querySelectorAll('.metric-card');
+  allCards.forEach(card => {
+    if (loading) {
+      card.classList.add('loading');
+    } else {
+      card.classList.remove('loading');
+      // Restore correct state after loading
+      const perm = card.dataset.permission;
+      if (perm && !APP.permissionSet[perm]) {
+        card.classList.add('permission-denied');
+      }
+    }
+  });
+}
+
+function setTimeSensitiveLoading(loading) {
+  const cards = document.querySelectorAll('.metric-card.time-sensitive');
+  cards.forEach(card => {
+    if (loading) {
+      card.classList.add('loading');
+    } else {
+      card.classList.remove('loading');
+      const perm = card.dataset.permission;
+      if (perm && !APP.permissionSet[perm]) {
+        card.classList.add('permission-denied');
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════ PERMISSION STATES ═══════════════════════════════
+
+function setPermissionPreset(preset) {
+  // Update preset buttons
+  document.querySelectorAll('.demo-role-preset .demo-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Define permission sets
+  const presets = {
+    full: {
+      agent_types: true, interventions: true, model_configs: true, schedules: true,
+      identities: true, roles: true, mcp_servers: true,
+      guardrail_breaches: true, executions: true, posture_breaches: true
+    },
+    operator: {
+      agent_types: true, interventions: true, model_configs: false, schedules: true,
+      identities: false, roles: false, mcp_servers: false,
+      guardrail_breaches: true, executions: true, posture_breaches: false
+    },
+    limited: {
+      agent_types: true, interventions: false, model_configs: true, schedules: false,
+      identities: false, roles: false, mcp_servers: false,
+      guardrail_breaches: false, executions: true, posture_breaches: false
+    },
+    none: {
+      agent_types: false, interventions: false, model_configs: false, schedules: false,
+      identities: false, roles: false, mcp_servers: false,
+      guardrail_breaches: false, executions: false, posture_breaches: false
+    }
+  };
+
+  APP.permissionSet = presets[preset];
+  applyPermissionStates();
+  showToast('Permission preset: ' + preset, 'info');
+}
+
+function isPermissionDenied(permKey) {
+  return APP.permissionSet.hasOwnProperty(permKey) && !APP.permissionSet[permKey];
+}
+
+function applyPermissionStates() {
+  document.querySelectorAll('.metric-card[data-permission]').forEach(card => {
+    const permKey = card.dataset.permission;
+    if (isPermissionDenied(permKey)) {
+      card.classList.add('permission-denied');
+      card.classList.remove('loading');
+      card.classList.remove('zero-state');
+    } else {
+      card.classList.remove('permission-denied');
+    }
+  });
+}
+
+// ═══════════════════════════════ ZERO COUNTS ═══════════════════════════════
+
+function toggleZeroCounts(zero) {
+  APP.zeroMode = zero;
+  if (zero) {
+    // Set snapshot cards to zero
+    Object.keys(SNAPSHOT_DATA).forEach(cardId => {
+      updateCardValue(cardId, 'value', '0');
+      const card = document.getElementById(cardId);
+      if (card) {
+        const subEl = card.querySelector('.metric-card-sub');
+        if (subEl) subEl.innerHTML = '<span class="sub-breakdown" style="background:#F1F5F9;color:#475569">none</span>';
+        if (!isPermissionDenied(card.dataset.permission) && !APP.isLoading) {
+          card.classList.add('zero-state');
+        }
+      }
+    });
+    // Time-sensitive cards already handled via updateTimeSensitiveCards
+    updateTimeSensitiveCards();
+  } else {
+    // Restore snapshot cards
+    Object.keys(SNAPSHOT_DATA).forEach(cardId => {
+      const d = SNAPSHOT_DATA[cardId];
+      updateCardValue(cardId, 'value', d.value);
+      const card = document.getElementById(cardId);
+      if (card) {
+        const subEl = card.querySelector('.metric-card-sub');
+        if (subEl) subEl.innerHTML = d.sub;
+        if (!isPermissionDenied(card.dataset.permission) && !APP.isLoading) {
+          card.classList.remove('zero-state');
+        }
+      }
+    });
+    updateTimeSensitiveCards();
+  }
+}
+
+// ═══════════════════════════════ INIT ═══════════════════════════════
+// System nav group starts collapsed
+document.addEventListener('DOMContentLoaded', () => {
+  initDateRange();
+  const systemGroup = document.querySelector('.sidebar .nav-parent-group:not(.locked-open):last-of-type');
+  if (systemGroup) {
+    systemGroup.classList.add('collapsed');
+  }
+});
+</script>
+</body>
+</html>

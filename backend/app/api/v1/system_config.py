@@ -20,15 +20,9 @@ from app.schemas.system_config import (
     OIDCTestResponse,
     SuperAdminLoginRequest,
     SuperAdminLoginResponse,
-    SuperAdminPasswordUpdateRequest,
     SuperAdminStatusResponse,
-    SuperAdminToggleRequest,
 )
 from app.services.oidc_config_service import OIDCConfigError, OIDCConfigService
-from app.services.super_admin_auth_service import (
-    SuperAdminAuthError,
-    SuperAdminAuthService,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -45,17 +39,19 @@ AuthRouter = APIRouter(prefix="/auth", tags=["Auth"])
 async def super_admin_login(
     request: Request,
     body: SuperAdminLoginRequest,
-    db: DbSession,
 ) -> SuperAdminLoginResponse:
     """Authenticate as the built-in super admin.
 
+    Credentials are read from environment variables.
     Returns a short-lived internal JWT for platform access.
     Public endpoint — no prior auth required.
     """
-    service = SuperAdminAuthService()
+    from app.services.super_admin_auth_service import (
+        SuperAdminAuthError,
+        super_admin_login as do_login,
+    )
     try:
-        token = await service.login(db, body.username, body.password)
-        await db.commit()
+        token = do_login(body.username, body.password)
         return SuperAdminLoginResponse(
             access_token=token,
             username=body.username,
@@ -67,14 +63,19 @@ async def super_admin_login(
 @AuthRouter.post("/super-admin/refresh", response_model=SuperAdminLoginResponse)
 async def super_admin_refresh(
     request: Request,
-    db: DbSession,
 ) -> SuperAdminLoginResponse:
     """Refresh a super admin JWT.
 
-    Requires a valid (non-expired) super admin token in the Authorization header.
-    The identity attached to the request by the middleware is used to issue
-    a new token for the same user.
+    Requires a valid super admin token. Re-issues a fresh token for
+    the same user if the account is still enabled.
     """
+    from app.services.super_admin_auth_service import (
+        SuperAdminAuthError,
+        super_admin_enabled,
+        super_admin_username,
+        super_admin_reissue,
+    )
+
     identity = getattr(request.state, "identity", None)
     if not identity or not identity.get("is_super_admin"):
         raise HTTPException(status_code=401, detail="Not a valid super admin session")
@@ -83,18 +84,17 @@ async def super_admin_refresh(
     if not username:
         raise HTTPException(status_code=401, detail="Invalid token identity")
 
-    service = SuperAdminAuthService()
-    try:
-        # Re-issue token for the same user (validate they still exist & are enabled)
-        creds = await service._get_credentials(db)  # noqa: SLF001
-        if creds is None or creds.username != username or not creds.is_enabled:
-            raise HTTPException(status_code=401, detail="Super admin account is no longer valid")
+    if not super_admin_enabled() or super_admin_username() != username:
+        raise HTTPException(status_code=401, detail="Super admin account is no longer valid")
 
-        token = service._issue_token(creds)  # noqa: SLF001
+    try:
+        token = super_admin_reissue(username)
         return SuperAdminLoginResponse(
             access_token=token,
             username=username,
         )
+    except SuperAdminAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
     except SuperAdminAuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc))
 
@@ -483,93 +483,26 @@ async def test_login_status(
 )
 async def get_super_admin_status(
     request: Request,
-    db: DbSession,
 ) -> SuperAdminStatusResponse:
     """Return the current super admin status (public endpoint).
 
-    Accessible without auth so the login page can determine whether to
-    show the super admin login form.
+    Reads from environment variables — no database involved.
     """
-    service = SuperAdminAuthService()
-    status = await service.get_status(db)
-    if status is None:
-        return SuperAdminStatusResponse(
-            is_enabled=service.is_enabled(),
-            username=None,
-            last_login_at=None,
-        )
-    # Env-level disable overrides DB
-    env_enabled = service.is_enabled()
-    status["is_enabled"] = status["is_enabled"] and env_enabled
-    return SuperAdminStatusResponse(**status)
+    from app.services.super_admin_auth_service import (
+        is_env_controlled,
+        super_admin_enabled,
+        super_admin_username,
+    )
+    return SuperAdminStatusResponse(
+        is_enabled=super_admin_enabled(),
+        username=super_admin_username(),
+        env_controlled=is_env_controlled(),
+    )
 
 
-@SystemConfigRouter.patch(
-    "/super-admin/toggle", response_model=SuperAdminStatusResponse
-)
-async def toggle_super_admin(
-    body: SuperAdminToggleRequest,
-    request: Request,
-    db: DbSession,
-) -> SuperAdminStatusResponse:
-    """Enable or disable the super admin account.
 
-    Requires super admin auth.
-    Disabling requires at least one active OIDC provider (guard rail).
-    """
-    _require_super_admin(request)
-    service = SuperAdminAuthService()
-
-    # Guard rail: before disabling, ensure at least one OIDC provider exists
-    if not body.is_enabled:
-        config_service = OIDCConfigService()
-        providers = await config_service.list_providers(db)
-        active_providers = [p for p in providers if p.is_enabled]
-        if not active_providers:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot disable super admin: no active OIDC provider configured. "
-                       "Configure at least one OIDC provider before disabling the super admin.",
-            )
-
-    try:
-        creds = await service.toggle(db, is_enabled=body.is_enabled)
-        await db.commit()
-        status = await service.get_status(db)
-        if status is None:
-            return SuperAdminStatusResponse(is_enabled=body.is_enabled)
-        return SuperAdminStatusResponse(**status)
-    except SuperAdminAuthError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@SystemConfigRouter.put(
-    "/super-admin/password", response_model=SuperAdminStatusResponse
-)
-async def update_super_admin_password(
-    body: SuperAdminPasswordUpdateRequest,
-    request: Request,
-    db: DbSession,
-) -> SuperAdminStatusResponse:
-    """Update the super admin password.
-
-    Requires super admin auth.
-    """
-    _require_super_admin(request)
-    service = SuperAdminAuthService()
-    try:
-        await service.update_password(
-            db, body.current_password, body.new_password
-        )
-        await db.commit()
-        status = await service.get_status(db)
-        if status is None:
-            return SuperAdminStatusResponse(is_enabled=True)
-        return SuperAdminStatusResponse(**status)
-    except SuperAdminAuthError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Identity Provider CRUD (System Config)
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────

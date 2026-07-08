@@ -77,6 +77,7 @@ export interface SuperAdminStatusResponse {
   is_enabled: boolean
   username: string | null
   last_login_at: string | null
+  env_controlled: boolean
 }
 
 export interface SuperAdminLoginResponse {

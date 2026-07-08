@@ -109,6 +109,7 @@ class SuperAdminStatusResponse(BaseModel):
     is_enabled: bool
     username: Optional[str] = None
     last_login_at: Optional[str] = None
+    env_controlled: bool = False
 
 
 class SuperAdminToggleRequest(BaseModel):
