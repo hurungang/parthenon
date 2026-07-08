@@ -61,7 +61,9 @@ export function LoginPage() {
 
   // Determine login state
   const providers = providersData?.items ?? []
-  const hasOidcProvider = providers.some((p) => p.is_enabled)
+  const userProvider = providers.find((p) => p.provider_scope === 'user')
+  const hasOidcProvider = !!userProvider?.is_enabled
+  const providerName = userProvider?.display_name || t('auth.oidcProvider')
   const superAdminEnabled = superAdminStatus?.is_enabled ?? false
 
   let loginState: LoginState = 'loading'
@@ -150,7 +152,7 @@ export function LoginPage() {
               {t('auth.loginWith')}
             </Typography>
             <Button variant="contained" size="large" fullWidth onClick={login}>
-              {t('auth.loginWithOidc')}
+              {t('auth.loginWithProvider', { provider: providerName })}
             </Button>
           </Box>
         )}
@@ -162,7 +164,7 @@ export function LoginPage() {
               {t('auth.loginWith')}
             </Typography>
             <Button variant="contained" size="large" fullWidth onClick={login} sx={{ mb: 2 }}>
-              {t('auth.loginWithOidc')}
+              {t('auth.loginWithProvider', { provider: providerName })}
             </Button>
 
             <Divider sx={{ my: 2 }}>{t('auth.or')}</Divider>

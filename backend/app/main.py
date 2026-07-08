@@ -252,7 +252,7 @@ async def startup_event() -> None:
     await _cleanup_stale_sessions_on_startup()
     await _run_bootstrap()
     await _seed_system_tools()
-    await _seed_super_admin()
+    await _cleanup_super_admin_db_records()
     await _run_identity_yaml_migration()
     await _initialize_oidc_provider_registry()
     await _run_skill_seeder()
@@ -266,18 +266,34 @@ async def shutdown_event() -> None:
     await _stop_scheduling_engine()
 
 
-async def _seed_super_admin() -> None:
-    """Seed super admin credentials from env vars on startup (idempotent)."""
+async def _cleanup_super_admin_db_records() -> None:
+    """Remove super admin PlatformUser and Identity records from DB.
+
+    Super admin is now purely env-var based — no DB records needed.
+    """
     try:
         from app.db.session import AsyncSessionLocal
-        from app.services.super_admin_auth_service import SuperAdminAuthService
+        from sqlalchemy import delete
+
         async with AsyncSessionLocal() as db:
-            service = SuperAdminAuthService()
-            await service.seed_credentials(db)
+            from app.db.models.identity import Identity as IdentityModel
+            from app.db.models.platform_user import PlatformUser
+            result = await db.execute(
+                delete(IdentityModel).where(IdentityModel.subject.like("super_admin:%"))
+            )
+            deleted_ids = result.rowcount
+            result2 = await db.execute(
+                delete(PlatformUser).where(PlatformUser.sub.like("super_admin:%"))
+            )
+            deleted_users = result2.rowcount
             await db.commit()
-        logger.info("Super admin seeding complete")
+            if deleted_ids or deleted_users:
+                logger.info(
+                    "Cleaned up %d super_admin Identity and %d PlatformUser records",
+                    deleted_ids, deleted_users,
+                )
     except Exception:
-        logger.exception("Super admin seeding failed; application will continue.")
+        logger.exception("Failed to clean up super admin DB records")
 
 
 async def _initialize_oidc_provider_registry() -> None:

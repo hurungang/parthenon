@@ -193,7 +193,6 @@ export function IdentityProvidersConfigPage() {
         <Paper sx={{ p: 3 }}>
           <SuperAdminConfigSection
             status={superAdminStatus ?? null}
-            hasActiveOidcProvider={hasActiveOidcProvider}
           />
         </Paper>
       </Box>

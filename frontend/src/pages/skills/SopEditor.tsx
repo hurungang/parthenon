@@ -346,6 +346,9 @@ export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopE
                 {t('sops.editor.addStep')}
               </Button>
             </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              {t('sops.editor.stepsOrderHint')}
+            </Typography>
             <Stack spacing={1}>
               {steps.map((step, idx) => (
                 <Card key={step.localId} variant="outlined" sx={{ p: 1 }}>
@@ -413,14 +416,6 @@ export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopE
                             </Select>
                           </FormControl>
                         )}
-                        <TextField
-                          label={t('app.name')}
-                          value={step.name}
-                          onChange={(e) => updateStep(step.localId, { name: e.target.value })}
-                          disabled={isViewMode}
-                          size="small"
-                          fullWidth
-                        />
                       </Stack>
                     </Box>
                     <IconButton size="small" color="error" onClick={() => removeStep(step.localId)} disabled={isViewMode}>

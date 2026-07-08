@@ -78,6 +78,8 @@
     "login": "Sign In",
     "loginWith": "Sign in with your organization account",
     "loginWithOidc": "Sign in with OIDC",
+    "loginWithProvider": "Sign in with {{provider}}",
+    "oidcProvider": "Identity Provider",
     "loginAsSuperAdmin": "Login as Super Admin",
     "logout": "Sign Out",
     "loggingIn": "Signing in...",
@@ -322,8 +324,8 @@
       "agentDelegation": "Agent Delegation"
     },
     "editor": {
-      "steps": "Steps",
-      "addStep": "Add Step",
+      "steps": "Skill & Agent Associations",
+      "addStep": "Add Association",
       "agentType": "Agent Type",
       "stepType": "Step Type",
       "nameHint": "Use slug format: lowercase letters, digits, and hyphens only (e.g. onboard-new-user)",
@@ -332,7 +334,8 @@
       "instructionsHint": "Describe the end-to-end SOP workflow and intent",
       "generateWorkflow": "Generate Workflow with AI",
       "previewWorkflow": "Preview Workflow",
-      "workflowPreviewTitle": "Workflow Preview (Model: {{model}})"
+      "workflowPreviewTitle": "Workflow Preview (Model: {{model}})",
+      "stepsOrderHint": "These skill and agent associations are not sequential steps. Their order is only used as a reference when generating the workflow with AI. The actual execution flow is defined entirely by the workflow instructions above."
     }
   },
   "agents": {
@@ -1300,6 +1303,7 @@
       "lastSeen": "Last Seen",
       "firstSeen": "First Seen",
       "manageAccess": "Manage Access",
+      "builtIn": "built-in",
       "assignRole": "Assign Role",
       "removeRole": "Remove Role",
       "addToGroup": "Add to Group",
@@ -1550,6 +1554,10 @@
       "disabled": "Super Admin Disabled",
       "enableDescription": "The super admin account allows access to the platform independently of OIDC. Keep enabled until OIDC is verified working.",
       "disableDescription": "The super admin account is disabled. All authentication flows through configured OIDC providers.",
+      "envControlled": "Super admin state is controlled by the PARTHENON_SUPER_ADMIN_ENABLED environment variable. Changes via UI are disabled.",
+      "statusLabel": "Status",
+      "disabledByEnv": "Super admin is disabled by environment variable PARTHENON_SUPER_ADMIN_ENABLED=false. Remove or change this variable to re-enable.",
+      "disabledByUI": "Super admin is disabled. To re-enable, set environment variable {{envVar}}=true and restart the Control Center.",
       "disableWarningTitle": "Disable Super Admin?",
       "disableWarningBody": "Disabling the super admin means you can only access the platform through configured OIDC providers. If OIDC becomes unavailable or misconfigured, you will be locked out until you re-enable the super admin via environment variable (PARTHENON_SUPER_ADMIN_ENABLED=true).",
       "disableGuardRail": "Cannot disable super admin: no active OIDC provider configured. Configure at least one OIDC provider first.",
@@ -1600,5 +1608,39 @@
       "testOidcConfig": "Test OIDC Configuration",
       "testOidcLogin": "Test OIDC Login"
     }
+  },
+  "dashboard": {
+    "operationalMetrics": "Operational Metrics",
+    "timeSensitiveMetrics": "Time-Sensitive Metrics",
+    "idpStatus": "Identity Provider Status",
+    "agentTypes": "Agent Types",
+    "pendingInterventions": "Pending Interventions",
+    "modelConfigs": "Model Configurations",
+    "activeSchedules": "Active Schedules",
+    "agentIdentities": "Agent Identities",
+    "agentRoles": "Agent Roles",
+    "mcpServers": "MCP Servers",
+    "guardrailBreachEvents": "Guardrail Breach Events",
+    "agentExecutions": "Agent Executions",
+    "modelUsagePostureBreaches": "Model Usage Posture Breaches",
+    "notificationDelivery": "Notification Delivery",
+    "permissionRequests": "Permission Requests",
+    "from": "From",
+    "to": "To",
+    "presetHour": "Last Hour",
+    "preset24h": "Last 24h",
+    "preset7d": "Last 7d",
+    "executionsCompletedFailed": "completed / failed",
+    "activeBreakdown": "active",
+    "runningBreakdown": "running",
+    "enabledBreakdown": "enabled",
+    "provisionedBreakdown": "provisioned",
+    "definedBreakdown": "defined",
+    "registeredBreakdown": "registered",
+    "pendingBreakdown": "pending",
+    "vendorsBreakdown": "vendors",
+    "loadingError": "Failed to load dashboard metrics. Please try again.",
+    "retry": "Retry",
+    "go": "Go"
   }
 }

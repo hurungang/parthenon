@@ -204,31 +204,6 @@ class Settings(BaseSettings):
     # Credential Vault — must be exactly 32 bytes for AES-256
     credential_vault_key: str = Field(default="change-me-32-byte-key-for-aes256!")
 
-    # Super Admin — bootstrap credentials from environment variables
-    super_admin_enabled: bool = Field(
-        default=True,
-        validation_alias=AliasChoices(
-            "super_admin_enabled", "PARTHENON_SUPER_ADMIN_ENABLED"
-        ),
-    )
-    super_admin_username: str = Field(
-        default="admin",
-        validation_alias=AliasChoices(
-            "super_admin_username", "SUPER_ADMIN_USERNAME"
-        ),
-    )
-    super_admin_password_hash: str = Field(
-        default="",
-        validation_alias=AliasChoices(
-            "super_admin_password_hash", "SUPER_ADMIN_PASSWORD_HASH"
-        ),
-    )
-
-    # Super admin JWT token expiry (seconds)
-    super_admin_token_expiry_seconds: int = Field(
-        default=900,
-    )
-
     @field_validator("credential_vault_key")
     @classmethod
     def validate_vault_key(cls, v: str) -> str:

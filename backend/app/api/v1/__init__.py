@@ -15,6 +15,7 @@ from app.api.v1.agents import (
 )
 from app.api.v1.certificates import CertificatesRouter
 from app.api.v1.conversations import ConversationRouter
+from app.api.v1.dashboard import DashboardRouter
 from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
 from app.api.v1.internal.agent_data import InternalAgentDataRouter
 from app.api.v1.internal.authorization import InternalAuthorizationRouter
@@ -54,6 +55,9 @@ router.include_router(AuthRouter)
 
 # System Config (identity providers, super admin management)
 router.include_router(SystemConfigRouter)
+
+# Dashboard
+router.include_router(DashboardRouter)
 
 # Certificate Authority (public CA cert endpoint + admin issue/revoke)
 router.include_router(CertificatesRouter)

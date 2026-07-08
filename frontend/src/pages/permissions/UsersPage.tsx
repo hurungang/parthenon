@@ -37,6 +37,8 @@ export function UsersPage() {
   const [manageUser, setManageUser] = useState<PlatformUser | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PlatformUser | null>(null)
 
+  const isSuperAdmin = (u: PlatformUser) => u.sub.startsWith('super_admin:')
+
   const filtered = (users ?? []).filter(
     (u) =>
       !search ||
@@ -74,33 +76,47 @@ export function UsersPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filtered.map((user) => (
-              <TableRow key={user.id} hover sx={{ cursor: 'pointer' }}>
-                <TableCell>{user.display_name}</TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>{user.direct_role_count}</TableCell>
-                <TableCell>{user.group_count}</TableCell>
-                <TableCell>{new Date(user.last_seen_at).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <Button
-                    size="small"
-                    startIcon={<ManageAccountsIcon />}
-                    onClick={() => setManageUser(user)}
-                  >
-                    {t('permissions.users.manageAccess')}
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setDeleteTarget(user)}
-                    sx={{ ml: 0.5 }}
-                  >
-                    {t('app.delete')}
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {filtered.map((user) => {
+              const sa = isSuperAdmin(user)
+              return (
+                <TableRow key={user.id} hover sx={{ cursor: 'pointer' }}>
+                  <TableCell>
+                    {user.display_name}
+                    {sa && (
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                        ({t('permissions.users.builtIn')})
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>{user.direct_role_count}</TableCell>
+                  <TableCell>{user.group_count}</TableCell>
+                  <TableCell>{new Date(user.last_seen_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {!sa && (
+                      <>
+                        <Button
+                          size="small"
+                          startIcon={<ManageAccountsIcon />}
+                          onClick={() => setManageUser(user)}
+                        >
+                          {t('permissions.users.manageAccess')}
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          onClick={() => setDeleteTarget(user)}
+                          sx={{ ml: 0.5 }}
+                        >
+                          {t('app.delete')}
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </TableContainer>
