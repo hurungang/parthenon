@@ -53,20 +53,30 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
   return base64UrlEncode(hash)
 }
 
-// ── Context definition ─────────────────────────────────────────────────────────
+// ── Provider type ──────────────────────────────────────────────────────────────
+
+export interface AvailableProvider {
+  scope: string
+  providerType: string
+  displayName: string
+  isEnabled: boolean
+}
 
 interface AuthContextValue extends AuthState {
   login: () => void
   logout: () => void
   setToken: (token: string) => void
+  availableProviders: AvailableProvider[] | null
+  superAdminEnabled: boolean
+  isSuperAdmin: boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 // ── Provider ───────────────────────────────────────────────────────────────────
 
-const OIDC_AUTHORITY = import.meta.env.VITE_OIDC_AUTHORITY ?? 'http://localhost:8082/realms/parthenon'
-const OIDC_CLIENT_ID = import.meta.env.VITE_OIDC_CLIENT_ID ?? 'parthenon-api-ui'
+const OIDC_AUTHORITY_FALLBACK = import.meta.env.VITE_OIDC_AUTHORITY ?? 'http://localhost:8082/realms/parthenon'
+const OIDC_CLIENT_ID_FALLBACK = import.meta.env.VITE_OIDC_CLIENT_ID ?? 'parthenon-api-ui'
 const OIDC_REDIRECT_URI = `${window.location.origin}/callback`
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -74,12 +84,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem('access_token'),
   )
   const [isLoading] = useState(false)
+  const [availableProviders, setAvailableProviders] = useState<AvailableProvider[] | null>(null)
+  const [superAdminEnabled, setSuperAdminEnabled] = useState(false)
+  const [oidcAuthority, setOidcAuthority] = useState<string>(OIDC_AUTHORITY_FALLBACK)
+  const [oidcClientId, setOidcClientId] = useState<string>(OIDC_CLIENT_ID_FALLBACK)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const claims = useMemo<AuthClaims | null>(() => {
     if (!token) return null
     return parseJwt(token)
   }, [token])
+
+  const isSuperAdmin = useMemo(() => {
+    return !!claims && !!(claims as unknown as Record<string, unknown>).is_super_admin
+  }, [claims])
 
   const isAuthenticated = !!token && !!claims && !isTokenExpired(claims)
 
@@ -88,24 +106,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(newToken)
   }, [])
 
+  // Discover active providers and super admin status on app load
+  useEffect(() => {
+    const discoverProviders = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+        const headers: Record<string, string> = {}
+        const storedToken = localStorage.getItem('access_token')
+        if (storedToken) {
+          headers.Authorization = `Bearer ${storedToken}`
+        }
+
+        // Fetch identity providers
+        try {
+          const providersResp = await fetch(`${apiBase}/system/identity-providers`, { headers })
+          if (providersResp.ok) {
+            const data = await providersResp.json() as {
+              items: Array<{
+                provider_scope: string
+                provider_type: string
+                display_name: string
+                is_enabled: boolean
+                issuer_url: string
+                client_id: string
+                ui_client_id?: string
+                public_client_id?: string
+              }>
+            }
+            setAvailableProviders(
+              data.items.map((p) => ({
+                scope: p.provider_scope,
+                providerType: p.provider_type,
+                displayName: p.display_name,
+                isEnabled: p.is_enabled,
+              })),
+            )
+            // Update dynamic OIDC config from discovered user provider
+            const userP = data.items.find((p) => p.provider_scope === 'user' && p.is_enabled)
+            if (userP) {
+              setOidcAuthority(userP.issuer_url)
+              setOidcClientId(userP.public_client_id || userP.ui_client_id || userP.client_id || OIDC_CLIENT_ID_FALLBACK)
+            }
+          }
+        } catch {
+          // Silently fail; providers may not be configured
+        }
+
+        // Fetch super admin status
+        try {
+          const saResp = await fetch(`${apiBase}/system/super-admin/status`, { headers })
+          if (saResp.ok) {
+            const saData = await saResp.json() as { is_enabled: boolean }
+            setSuperAdminEnabled(saData.is_enabled)
+          }
+        } catch {
+          // Silently fail
+        }
+      } catch {
+        // Silently fail; discovery is best-effort
+      }
+    }
+
+    void discoverProviders()
+  }, [token])
+
   const login = useCallback(async () => {
     // Generate PKCE code verifier and challenge
     const codeVerifier = await generateCodeVerifier()
     const codeChallenge = await generateCodeChallenge(codeVerifier)
-    
+
     // Store verifier in sessionStorage for callback handler
     sessionStorage.setItem('pkce_code_verifier', codeVerifier)
-    
+
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: OIDC_CLIENT_ID,
+      client_id: oidcClientId,
       redirect_uri: OIDC_REDIRECT_URI,
       scope: 'openid profile email',
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     })
-    window.location.href = `${OIDC_AUTHORITY}/protocol/openid-connect/auth?${params}`
-  }, [])
+    window.location.href = `${oidcAuthority}/protocol/openid-connect/auth?${params}`
+  }, [oidcAuthority, oidcClientId])
 
   const logout = useCallback(() => {
     // Clear local tokens
@@ -113,27 +195,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('id_token')
+    localStorage.removeItem('super_admin_token')
     setTokenState(null)
+    setAvailableProviders(null)
+    setSuperAdminEnabled(false)
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    
+
+    // For super admin sessions, just redirect to login
+    if (isSuperAdmin) {
+      window.location.href = '/login'
+      return
+    }
+
     // Redirect to Keycloak's logout endpoint to end the SSO session
     const postLogoutRedirectUri = `${window.location.origin}/login`
     const params = new URLSearchParams({
-      client_id: OIDC_CLIENT_ID,
+      client_id: oidcClientId,
       post_logout_redirect_uri: postLogoutRedirectUri,
     })
-    
-    // Include id_token_hint if available (recommended for better logout)
+
+    // Include id_token_hint if available
     if (idToken) {
       params.append('id_token_hint', idToken)
     }
-    
-    window.location.href = `${OIDC_AUTHORITY}/protocol/openid-connect/logout?${params}`
-  }, [])
+
+    window.location.href = `${oidcAuthority}/protocol/openid-connect/logout?${params}`
+  }, [isSuperAdmin, oidcAuthority, oidcClientId])
 
   // Silent token refresh: schedule refresh 60s before expiry
   useEffect(() => {
     if (!claims) return
+    // Don't auto-refresh super admin tokens
+    if (isSuperAdmin) return
+
     const expiresIn = claims.exp * 1000 - Date.now()
     const refreshIn = expiresIn - 60_000
     if (refreshIn <= 0) {
@@ -148,13 +242,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       try {
         const response = await fetch(
-          `${OIDC_AUTHORITY}/protocol/openid-connect/token`,
+          `${oidcAuthority}/protocol/openid-connect/token`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
               grant_type: 'refresh_token',
-              client_id: OIDC_CLIENT_ID,
+              client_id: oidcClientId,
               refresh_token: refreshToken,
             }),
           },
@@ -173,11 +267,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     refreshTimerRef.current = timer
     return () => clearTimeout(timer)
-  }, [claims, logout, setToken])
+  }, [claims, logout, setToken, isSuperAdmin, oidcAuthority, oidcClientId])
 
   const value = useMemo<AuthContextValue>(
-    () => ({ isAuthenticated, isLoading, token, claims, login, logout, setToken }),
-    [isAuthenticated, isLoading, token, claims, login, logout, setToken],
+    () => ({
+      isAuthenticated,
+      isLoading,
+      token,
+      claims,
+      login,
+      logout,
+      setToken,
+      availableProviders,
+      superAdminEnabled,
+      isSuperAdmin,
+    }),
+    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

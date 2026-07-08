@@ -18,6 +18,7 @@ Examples:
 - `/demo-app` — curated product demo at normal speed (uses master demo-cases if available)
 - `/demo-app --cases docs/changes/enterprise-ai-harness/demo-cases.md` — demo only the change's curated cases
 - `/demo-app --cases docs/changes/agent-delegation-visibility/demo-cases.md` — run refined delegation-visibility demo cases
+- `/demo-app --cases docs/changes/refine-oidc-integration/demo-cases.md` — demo OIDC integration changes (login, super admin, system config)
 - `/demo-app --cases docs/master/qa/demo-cases.md --speed slow` — full product demo, slow pace
 - `/demo-app --filter notifications` — demo notification management only
 - `/demo-app --speed slow` — slow, presentation-friendly demo
@@ -25,6 +26,7 @@ Examples:
 - `/demo-app --cases docs/changes/my-change/demo-cases.md --pause` — step through change scenarios manually
 
 Available scenarios (from `e2e/tests/`):
+- `oidc-login-flows` — OIDC login page rendering, super admin form, system config navigation
 - `dashboard` — main dashboard overview
 - `conversations` — conversation history and chat
 - `conversation-sessions` — start, resume, end, and archive conversation agent sessions

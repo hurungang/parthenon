@@ -3,44 +3,58 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
 
 class IdentityProviderConfig(Base):
-    """Stores the active identity provider (IdP) configuration."""
+    """Stores an OIDC identity provider configuration for user or agent auth.
+
+    Each scope (user / agent) has at most one enabled config.
+    Supports any OIDC-compliant provider via ``oidc_generic``, plus first-class
+    support for Keycloak and Azure EntraID.
+    """
 
     __tablename__ = "identity_provider_configs"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    provider_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, comment="keycloak_bundled | keycloak_external | azure_entraid"
+    provider_scope: Mapped[str] = mapped_column(
+        String(50), nullable=False, comment="user | agent"
     )
-    oidc_provider_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    provider_type: Mapped[str] = mapped_column(
+        String(50), nullable=False,
+        comment="oidc_generic | keycloak | azure_entraid"
+    )
+    display_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    issuer_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     client_id: Mapped[str] = mapped_column(String(500), nullable=False)
-    client_secret: Mapped[str | None] = mapped_column(
+    ui_client_id: Mapped[str | None] = mapped_column(
+        String(500), nullable=True,
+        comment="Public OIDC client ID for frontend PKCE login (no secret). Only used for user scope."
+    )
+    encrypted_client_secret: Mapped[str | None] = mapped_column(
         String(2048), nullable=True, comment="AES-256-GCM encrypted client secret"
     )
-    realm_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    audience: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    is_setup_complete: Mapped[bool] = mapped_column(
+    scopes: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        default="openid profile email",
+        server_default=sa.text("'openid profile email'"),
+    )
+    claim_mappings: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True,
+        comment="OIDC claim to platform field mappings (e.g. {'sub': 'subject'})"
+    )
+    is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=False,
-        server_default=sa.text("false"),
-    )
-    setup_completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    setup_completed_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("identities.id", ondelete="SET NULL"),
-        nullable=True,
+        default=True,
+        server_default=sa.text("true"),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -57,6 +71,7 @@ class IdentityProviderConfig(Base):
     def __repr__(self) -> str:
         return (
             f"<IdentityProviderConfig id={self.id} "
+            f"provider_scope={self.provider_scope} "
             f"provider_type={self.provider_type} "
-            f"is_setup_complete={self.is_setup_complete}>"
+            f"is_enabled={self.is_enabled}>"
         )

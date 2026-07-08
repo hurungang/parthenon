@@ -175,6 +175,11 @@ def require_permission(module: str, action: str) -> Callable:
         from app.services.permissions.permission_engine import PermissionEngine
 
         claims: dict[str, Any] = getattr(request.state, "identity", {})
+
+        # Super admin bypass — full access to all modules and actions
+        if getattr(request.state, "is_super_admin", False):
+            return claims
+
         sub: str | None = claims.get("sub")
         realm_roles = claims.get("realm_access", {}).get("roles", [])
         client_roles: list[str] = []

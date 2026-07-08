@@ -14,20 +14,98 @@ import json
 import logging
 import urllib.parse
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Optional
 
 import httpx
 from fastapi import Request
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
 from app.core.ssl_context import get_ssl_context
-from app.core.yaml_config import load_identity_yaml
 from app.db.models.agents import AgentIdentity, AgentIdentityStatus, AgentIdentityType, AgentRole, AgentRoleIdentity, AgentType
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AgentOAuthConfig:
+    """Resolved OAuth configuration for the agent identity provider."""
+
+    issuer_url: str
+    client_id: str
+    # Derived fields for building auth/token URLs
+    auth_endpoint: str
+    token_endpoint: str
+
+
+async def _resolve_agent_oauth_config(db: AsyncSession) -> Optional[AgentOAuthConfig]:
+    """Resolve the agent identity provider config from the database.
+
+    Reads the ``IdentityProviderConfig`` with ``provider_scope == "agent"``
+    from the database and resolves OIDC Discovery endpoints.  Falls back
+    to the legacy env-var / YAML config if no DB config exists.
+    """
+    from app.db.models.identity_provider_config import IdentityProviderConfig
+    from app.services.oidc_config_service import OIDCConfigService
+
+    result = await db.execute(
+        select(IdentityProviderConfig).where(
+            IdentityProviderConfig.provider_scope == "agent",
+            IdentityProviderConfig.is_enabled == True,
+        )
+    )
+    agent_config = result.scalar_one_or_none()
+
+    if agent_config is not None:
+        # Resolve OIDC Discovery to get endpoints
+        service = OIDCConfigService()
+        try:
+            discovery_result = await service.test_connection(
+                issuer_url=agent_config.issuer_url,
+            )
+            discovery = discovery_result.get("discovery_doc", {})
+            auth_ep = discovery.get("authorization_endpoint", "")
+            token_ep = discovery.get("token_endpoint", "")
+            if auth_ep and token_ep:
+                return AgentOAuthConfig(
+                    issuer_url=agent_config.issuer_url.rstrip("/"),
+                    client_id=agent_config.client_id,
+                    auth_endpoint=auth_ep,
+                    token_endpoint=token_ep,
+                )
+        except Exception:
+            logger.warning("Failed OIDC discovery for agent provider; falling back to legacy config")
+
+    # Fallback to legacy config (env / YAML) for backward compatibility
+    return _legacy_agent_oauth_config()
+
+
+def _legacy_agent_oauth_config() -> Optional[AgentOAuthConfig]:
+    """Legacy fallback using env vars and identity.yaml (pre-DB-config era)."""
+    from app.core.yaml_config import load_identity_yaml
+
+    settings = get_settings()
+    url = settings.oidc_provider_url.rstrip("/")
+    if "/realms/" in url:
+        keycloak_base = url.split("/realms/")[0]
+    else:
+        keycloak_base = url
+
+    yaml_cfg = load_identity_yaml()
+    realm = getattr(yaml_cfg, "agent_realm_name", None) or "ai_agents"
+    client_id = settings.jwt_audience or "parthenon-api"
+
+    return AgentOAuthConfig(
+        issuer_url=f"{keycloak_base}/realms/{realm}",
+        client_id=client_id,
+        auth_endpoint=f"{keycloak_base}/realms/{realm}/protocol/openid-connect/auth",
+        token_endpoint=f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token",
+    )
 
 
 class AgentIdentityNotFoundError(Exception):
@@ -40,34 +118,6 @@ class AgentIdentityConflictError(Exception):
 
 class AgentOAuthError(Exception):
     """Raised when the OAuth authorization code exchange fails."""
-
-
-def _keycloak_base_url() -> str:
-    """Derive the Keycloak base URL from the configured OIDC provider URL.
-
-    e.g. "http://localhost:8082/realms/parthenon" → "http://localhost:8082"
-    Falls back to the raw oidc_provider_url if it doesn't look like a realm URL.
-    """
-    settings = get_settings()
-    url = settings.oidc_provider_url.rstrip("/")
-    # Strip "/realms/<realm>" suffix if present
-    if "/realms/" in url:
-        return url.split("/realms/")[0]
-    return url
-
-
-def _agent_realm_name() -> str:
-    """Return the configured agent realm name (default: ai_agents)."""
-    yaml_cfg = load_identity_yaml()
-    return getattr(yaml_cfg, "agent_realm_name", None) or "ai_agents"
-
-
-def _agent_realm_client_id() -> str:
-    """Return the OAuth client ID registered in the agent realm."""
-    settings = get_settings()
-    # Use the platform client_id but suffixed so it's distinct in the agent realm
-    base_client_id = settings.jwt_audience or "parthenon-api"
-    return f"{base_client_id}"
 
 
 class AgentIdentityService:
@@ -188,11 +238,11 @@ class AgentIdentityService:
 
     # ── OAuth Flow ────────────────────────────────────────────────────────────
 
-    def get_oauth_authorize_url(self, state: str, redirect_uri: str) -> str:
-        """Generate the OAuth authorization URL for signing in as the agent user.
+    async def get_oauth_authorize_url(self, state: str, redirect_uri: str) -> str:
+        """Generate the OAuth authorization URL using the DB-stored agent provider config.
 
-        The state parameter is passed through the OAuth flow and returned to the
-        callback. It can be a UUID (for token refresh) or "new" (for creation).
+        Reads the agent ``IdentityProviderConfig`` from the database (with
+        fallback to legacy env/YAML config for backward compatibility).
 
         Args:
             state: State value to pass to callback (UUID or "new").
@@ -201,24 +251,30 @@ class AgentIdentityService:
         Returns:
             Full authorization URL to redirect the administrator's browser to.
         """
-        keycloak_base = _keycloak_base_url()
-        realm = _agent_realm_name()
-        client_id = _agent_realm_client_id()
+        from app.db.session import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            oauth_config = await _resolve_agent_oauth_config(db)
+
+        if oauth_config is None:
+            raise AgentOAuthError("No agent identity provider configured. Configure one in System Config.")
 
         params = {
-            "client_id": client_id,
+            "client_id": oauth_config.client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": "openid profile email offline_access",
             "state": state,
-            "prompt": "login",  # Force re-authentication even if SSO session exists
-            # login_hint omitted to prevent pre-filling username from previous session
+            "prompt": "login",
         }
         auth_url = (
-            f"{keycloak_base}/realms/{realm}/protocol/openid-connect/auth"
+            f"{oauth_config.auth_endpoint}"
             f"?{urllib.parse.urlencode(params)}"
         )
-        logger.info("Generated OAuth authorize URL with state=%s in realm %s (prompt=login)", state, realm)
+        logger.info(
+            "Generated OAuth authorize URL with state=%s issuer=%s (prompt=login)",
+            state, oauth_config.issuer_url,
+        )
         return auth_url
 
     async def complete_oauth_flow(
@@ -248,18 +304,17 @@ class AgentIdentityService:
         """
         identity = await self.get_identity(identity_id, db)
 
-        keycloak_base = _keycloak_base_url()
-        realm = _agent_realm_name()
-        client_id = _agent_realm_client_id()
-        token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
+        oauth_config = await _resolve_agent_oauth_config(db)
+        if oauth_config is None:
+            raise AgentOAuthError("No agent identity provider configured")
 
         token_data: dict
         async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
             response = await http_client.post(
-                token_url,
+                oauth_config.token_endpoint,
                 data={
                     "grant_type": "authorization_code",
-                    "client_id": client_id,
+                    "client_id": oauth_config.client_id,
                     "code": code,
                     "redirect_uri": redirect_uri,
                 },
@@ -322,19 +377,18 @@ class AgentIdentityService:
         Raises:
             AgentOAuthError: If the token exchange or userinfo request fails.
         """
-        keycloak_base = _keycloak_base_url()
-        realm = _agent_realm_name()
-        client_id = _agent_realm_client_id()
-        token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
+        oauth_config = await _resolve_agent_oauth_config(db)
+        if oauth_config is None:
+            raise AgentOAuthError("No agent identity provider configured")
 
         # Exchange code for tokens
         token_data: dict
         async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
             response = await http_client.post(
-                token_url,
+                oauth_config.token_endpoint,
                 data={
                     "grant_type": "authorization_code",
-                    "client_id": client_id,
+                    "client_id": oauth_config.client_id,
                     "code": code,
                     "redirect_uri": redirect_uri,
                 },
@@ -515,17 +569,16 @@ class AgentIdentityService:
             )
 
         refresh_token_plain = vault.decrypt(identity.refresh_token)
-        keycloak_base = _keycloak_base_url()
-        realm = identity.realm_name or _agent_realm_name()
-        client_id = _agent_realm_client_id()
-        token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
+        oauth_config = await _resolve_agent_oauth_config(db)
+        if oauth_config is None:
+            raise AgentOAuthError("No agent identity provider configured")
 
         async with httpx.AsyncClient(timeout=30.0, verify=get_ssl_context()) as http_client:
             response = await http_client.post(
-                token_url,
+                oauth_config.token_endpoint,
                 data={
                     "grant_type": "refresh_token",
-                    "client_id": client_id,
+                    "client_id": oauth_config.client_id,
                     "refresh_token": refresh_token_plain,
                 },
             )
@@ -623,5 +676,5 @@ class AgentIdentityService:
         redirect_uri = f"{origin}/agents/identities/oauth/callback"
 
         state = str(identity_id)
-        return self.get_oauth_authorize_url(state=state, redirect_uri=redirect_uri)
+        return await self.get_oauth_authorize_url(state=state, redirect_uri=redirect_uri)
 

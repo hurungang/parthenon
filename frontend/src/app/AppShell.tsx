@@ -139,6 +139,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.observability', path: '/observability', icon: <MonitorIcon /> },
       { labelKey: 'nav.permissions', path: '/user-permissions', icon: <SecurityIcon /> },
       { labelKey: 'nav.systemConfig', path: '/system-config', icon: <SettingsIcon /> },
+      { labelKey: 'nav.identityProviders', path: '/system/identity-providers', icon: <SecurityIcon /> },
     ],
   },
 ]

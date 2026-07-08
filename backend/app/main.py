@@ -47,6 +47,21 @@ def _log_http_client_log_policy() -> None:
 # Global rate limiter instance — shared across all route modules
 limiter = Limiter(key_func=get_remote_address)
 
+# Global OIDC Provider Registry — initialized at startup, accessed by middleware
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.services.oidc_provider_registry import OIDCProviderRegistry
+
+_registry = None
+
+def _get_registry():
+    """Return the module-level OIDC Provider Registry singleton."""
+    global _registry
+    if _registry is None:
+        from app.services.oidc_provider_registry import OIDCProviderRegistry
+        _registry = OIDCProviderRegistry()
+    return _registry
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -237,6 +252,9 @@ async def startup_event() -> None:
     await _cleanup_stale_sessions_on_startup()
     await _run_bootstrap()
     await _seed_system_tools()
+    await _seed_super_admin()
+    await _run_identity_yaml_migration()
+    await _initialize_oidc_provider_registry()
     await _run_skill_seeder()
     await _initialize_agent_realm()
     await _initialize_certificate_authority()
@@ -246,6 +264,56 @@ async def startup_event() -> None:
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     await _stop_scheduling_engine()
+
+
+async def _seed_super_admin() -> None:
+    """Seed super admin credentials from env vars on startup (idempotent)."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.super_admin_auth_service import SuperAdminAuthService
+        async with AsyncSessionLocal() as db:
+            service = SuperAdminAuthService()
+            await service.seed_credentials(db)
+            await db.commit()
+        logger.info("Super admin seeding complete")
+    except Exception:
+        logger.exception("Super admin seeding failed; application will continue.")
+
+
+async def _initialize_oidc_provider_registry() -> None:
+    """Load OIDC provider configs from DB into the in-memory registry."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.oidc_provider_registry import OIDCProviderRegistry
+        async with AsyncSessionLocal() as db:
+            registry = _get_registry()
+            await registry.initialize(db)
+
+        has_user = registry.has_user_provider()
+        has_agent = registry.has_agent_provider()
+        logger.info(
+            "OIDCProviderRegistry initialized: user_provider=%s, agent_provider=%s, total=%d",
+            has_user, has_agent, len(registry.list_providers()),
+        )
+    except Exception:
+        logger.exception(
+            "OIDCProviderRegistry initialization failed; auth will be unavailable."
+        )
+
+
+async def _run_identity_yaml_migration() -> None:
+    """Run one-time migration from config/identity.yaml to database."""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.identity_yaml_migration import IdentityYamlMigration
+        async with AsyncSessionLocal() as db:
+            migration = IdentityYamlMigration()
+            migrated = await migration.run(db)
+            await db.commit()
+        if migrated:
+            logger.info("identity.yaml migration complete")
+    except Exception:
+        logger.exception("identity.yaml migration failed; application will continue.")
 
 
 async def _run_skill_seeder() -> None:
@@ -262,8 +330,43 @@ async def _run_skill_seeder() -> None:
 
 
 async def _initialize_agent_realm() -> None:
-    """Initialize the agent realm in the identity provider on startup."""
+    """Initialize the agent realm in the bundled Keycloak identity provider.
+
+    Only runs when the agent provider type is ``keycloak`` and the Keycloak
+    server is reachable.  For external OIDC deployments, the operator creates
+    realms and clients manually — this step is skipped.
+    """
     try:
+        from app.db.session import AsyncSessionLocal
+        from app.db.models.identity_provider_config import IdentityProviderConfig
+        from sqlalchemy import select
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(IdentityProviderConfig).where(
+                    IdentityProviderConfig.provider_scope == "agent",
+                    IdentityProviderConfig.is_enabled == True,
+                )
+            )
+            agent_config = result.scalar_one_or_none()
+
+        if agent_config is None or agent_config.provider_type != "keycloak":
+            logger.info(
+                "Agent realm auto-provisioning skipped — agent provider is %s (only runs for keycloak)",
+                agent_config.provider_type if agent_config else "not configured",
+            )
+            return
+
+        # Only auto-provision for localhost (bundled/dev) Keycloak deployments.
+        # For external/production OIDC, the operator creates realms manually.
+        issuer = agent_config.issuer_url or ""
+        if "localhost" not in issuer and "127.0.0.1" not in issuer:
+            logger.info(
+                "Agent realm auto-provisioning skipped — external provider detected (issuer=%s)",
+                issuer,
+            )
+            return
+
         from app.services.identity.realm_manager import RealmManager
         manager = RealmManager()
         await manager.initialize_agent_realm()

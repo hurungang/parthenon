@@ -27,12 +27,20 @@ apiClient.interceptors.request.use(
 )
 
 // Response interceptor: handle 401 by redirecting to login; 403 with
-// structured permission data dispatches a targeted error event
+// structured permission data dispatches a targeted error event.
+// Super admin sessions are preserved — 401s during super admin sessions
+// only clear the access_token and let the caller handle the error,
+// preventing the session from being destroyed by a single failed request.
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Clear stored tokens
+      const isSuperAdminSession = !!localStorage.getItem('super_admin_token')
+      if (isSuperAdminSession) {
+        // Don't redirect super admin — let error propagate to caller
+        return Promise.reject(error)
+      }
+      // Clear stored tokens for regular OIDC users
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       // Redirect to login
