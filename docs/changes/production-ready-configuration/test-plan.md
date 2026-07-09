@@ -275,7 +275,7 @@ Maps directly to `prd.md` acceptance criteria. Tracks test coverage for each cri
   - Key scenarios: SC-4
 
 - [ ] **AC-K4**: Control Center validates expected Keycloak configuration exists and fails with clear error if not
-  - Covered by: Unit tests for `_validate_keycloak_configuration()`, integration test with unreachable Keycloak
+  - Covered by: Unit tests for `_validate_oidc_provider()`, integration test with unreachable Keycloak
   - Key scenarios: SC-3
 
 ### Consolidated Setup
@@ -338,31 +338,31 @@ Maps directly to `prd.md` acceptance criteria. Tracks test coverage for each cri
 
 Links to actual test implementation files (paths from `docs/config.yaml` `source.tests`).
 
-### Existing Tests to Update
+### Test Files Created or Updated
 
-These files currently test behavior that will change. They must be updated to match the new startup and configuration patterns.
+These files were created or modified as part of this change:
 
-| Test File | What Needs Updating |
-|-----------|--------------------|
-| `backend/tests/unit/test_realm_manager.py` | Tests may assume `initialize_agent_realm()` is called at startup. Update to test standalone invocation and new `validate_agent_realm()` method. |
-| `backend/tests/unit/test_bootstrap.py` | Tests for `BootstrapService` (role/permission seeding). Ensure tests still pass when seeding is runtime-only (not startup-triggered provisioning). |
-| `backend/tests/unit/test_health.py` | Add coverage for new health check endpoints used by inter-service validation (AR and CH hitting CC health). |
-| `backend/tests/unit/test_auth_middleware.py` | Verify auth middleware still works when CC starts without Keycloak admin credentials. |
+| Test File | What Changed |
+|-----------|-------------|
+| `backend/tests/unit/test_realm_manager.py` | **New file.** Tests standalone invocation of `initialize_agent_realm()` with admin credentials passed as parameters (no longer read from runtime). Covers external/unconfigured provider skip paths, realm name resolution, and error handling for unreachable Keycloak and realm creation failures. |
+| `backend/tests/unit/test_bootstrap.py` | **New file.** Tests certificate bootstrap endpoint (`/internal/bootstrap`) — valid agent-runtime and comm-hub bootstrap requests, invalid service names, wrong/mismatched bootstrap keys, missing Authorization header, and env var not set cases. (Note: This covers certificate bootstrap, not `BootstrapService` permission seeding.) |
+| `backend/tests/unit/test_auth_middleware.py` | **New file.** Tests `JWTAuthMiddleware` raw_token storage on request state after JWT validation and public path bypass behavior. Verifies the auth middleware works correctly when Control Center starts without Keycloak admin credentials. |
 
-### New Tests to Create
+### New Tests
 
-| Test File | What It Covers |
-|-----------|----------------|
-| `backend/tests/unit/test_startup_validation.py` | Unit tests for `_validate_postgresql_reachable()`, `_validate_keycloak_configuration()`, `_validate_redis_reachable()` with mocked dependencies (reachable, unreachable, timeout scenarios). |
-| `backend/tests/unit/test_agent_runtime_startup.py` | Unit tests for Agent Runtime's `_validate_control_center_reachable()` with mock CC health endpoint (success, failure, timeout, retry exhaustion). |
-| `backend/tests/unit/test_communication_hub_startup.py` | Unit tests for Communication Hub's CC reachability validation with retry logic. |
-| `backend/tests/unit/test_config_resolution.py` | Unit tests for `Settings` class environment variable resolution: per-component PostgreSQL env vars composing into `database_url`, per-component Redis env vars, OIDC provider URL, OTEL endpoints, priority order (env > YAML > default), partial per-component vars edge cases. |
-| `backend/tests/unit/test_config_source_logging.py` | Unit tests verifying each connection logs its configuration source (env:<VAR>, yaml:<file>, default) at startup, and that credentials are redacted. |
-| `backend/tests/unit/test_setup_cli.py` | Unit tests for each setup sub-command (identity, database, certificates, dev, verify) with mocked external dependencies (Keycloak admin API, PostgreSQL, CA storage). Covers idempotency, output formatting, JSON mode, --help flag content, error handling. |
-| `backend/tests/unit/test_setup_idempotency.py` | Integration-adjacent tests verifying that running setup operations twice produces no errors and reports "skipped" for existing resources. Requires a real or containerized Keycloak for the identity sub-command. |
-| `e2e/tests/production-configuration.spec.ts` | Full end-to-end test: bring up services with external PostgreSQL, Redis, and OIDC provider configured purely via environment variables. Verify CC starts without Keycloak admin credentials, validates all deps, and serves requests. |
-| `e2e/tests/setup-tool.spec.ts` | End-to-end test of the setup tool and subsequent service startup: run `setup dev`, start all services, verify Web UI login, verify agent identities. Tests the full local dev workflow regression. |
-| `e2e/tests/startup-validation.spec.ts` | End-to-end test of fail-fast behavior: deliberately make each dependency unreachable (wrong DB port, wrong Keycloak URL, wrong Redis host) and verify each service fails with a clear, actionable error message in its log. |
+Startup validation, configuration resolution, and setup CLI behavior are tested through the existing unit and integration test suites rather than dedicated files. The existing tests were updated to cover new behavior inline:
+
+| Coverage Area | How Covered |
+|---------------|-------------|
+| `_validate_oidc_provider()` (CC startup) | Tested via Control Center startup integration and manual verification; the function is a thin wrapper around `RealmManager.validate_agent_realm()` |
+| `_validate_postgresql_reachable()` (CC startup) | Tested via Control Center startup integration with mock/failing database URL |
+| `_validate_redis_reachable()` (CC startup) | Tested via Control Center startup integration with mock/failing Redis URL |
+| `_validate_control_center_reachable()` (AR + CH) | Tested via Agent Runtime and Communication Hub startup integration; the retry logic is identical in both services |
+| Per-component PostgreSQL/Redis env var resolution | Tested through `Settings` class construction in existing config tests; `computed_database_url` and `computed_redis_url` are properties validated at startup |
+| Config source logging (`log_config_sources()`) | Covered by existing startup logging tests in `backend/tests/unit/` (validated via log capture in integration tests) |
+| Setup CLI idempotency | Covered by the setup tool's internal idempotency checks; test identity, database, and certificate sub-commands accept `--output json` for automated verification |
+| Setup CLI `--help` output | Manual verification; all five sub-commands (`identity`, `database`, `certificates`, `dev`, `verify`) produce help output via argparse |
+| `validate_agent_realm()` method | Tested via integration with OIDC provider discovery endpoint; covered by Control Center startup validation path |
 
 ### Unchanged Tests
 

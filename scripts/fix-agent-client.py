@@ -1,3 +1,11 @@
+"""
+⚠ DEPRECATED — use ``python -m setup.main identity`` instead.
+
+This script will be removed in a future release.
+See: setup/README.md
+"""
+import sys as _sys
+print("⚠ DEPRECATED: Use 'python -m setup.main identity' instead.", file=_sys.stderr)
 # Fix agent realm client mismatch by creating client matching config/identity.yaml.
 import asyncio
 import sys

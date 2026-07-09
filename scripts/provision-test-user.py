@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 """
+⚠ DEPRECATED — use ``python -m setup.main identity`` instead.
+
+This script will be removed in a future release.
+See: setup/README.md
+"""
+import sys as _sys
+print("⚠ DEPRECATED: Use 'python -m setup.main identity' instead.", file=_sys.stderr)
+"""
 Provision or deprovision a test user in Keycloak for E2E testing.
 
 Usage:

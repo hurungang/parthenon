@@ -91,7 +91,12 @@ The only state changes are internal to the backend:
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `Settings` | class | Central Pydantic BaseSettings model, extended with per-component env var fields for PostgreSQL, Redis, and OIDC connections | `backend/app/core/config.py` |
+| `Settings` | class | Central Pydantic BaseSettings model, extended with per-component env var fields for PostgreSQL, Redis, OIDC connections, and setup-only Keycloak admin credentials | `backend/app/core/config.py` |
+| `Settings.computed_database_url` | property | **NEW** — returns composed URL from POSTGRES_* env vars, falling back to DATABASE_URL | `backend/app/core/config.py` |
+| `Settings.computed_redis_url` | property | **NEW** — returns composed URL from REDIS_* env vars, falling back to REDIS_URL | `backend/app/core/config.py` |
+| `Settings.log_config_sources` | method | **NEW** — logs resolved configuration sources for every infrastructure connection | `backend/app/core/config.py` |
+| `Settings.keycloak_admin_user` | field | **NEW** — Keycloak master-realm admin username (setup tool only) | `backend/app/core/config.py` |
+| `Settings.keycloak_admin_password` | field | **NEW** — Keycloak master-realm admin password (setup tool only) | `backend/app/core/config.py` |
 | `get_settings` | function | Cached singleton returning the Settings instance | `backend/app/core/config.py` |
 | `TelemetrySettings` | class | Nested telemetry configuration model within Settings | `backend/app/core/config.py` |
 | `_SparseYamlSource` | class | Custom YAML source that drops null/empty placeholders, ensuring env vars take priority | `backend/app/core/config.py` |
@@ -99,7 +104,7 @@ The only state changes are internal to the backend:
 | `create_app` | function | Control Center FastAPI application factory | `backend/app/main.py` |
 | `startup_event` | coroutine | Control Center startup sequence — modified to call validation instead of provisioning | `backend/app/main.py` |
 | `_initialize_agent_realm` | coroutine | **REMOVED** — former auto-provisioning of agent realm at startup; relocated to setup tool | `backend/app/main.py` |
-| `_validate_keycloak_configuration` | coroutine | **NEW** — validates Keycloak realm exists by fetching OIDC discovery document | `backend/app/main.py` |
+| `_validate_oidc_provider` | coroutine | **NEW** — validates OIDC provider reachability (skipped when super-admin enabled) | `backend/app/main.py` |
 | `_validate_postgresql_reachable` | coroutine | **NEW** — validates PostgreSQL connectivity with a lightweight query | `backend/app/main.py` |
 | `_validate_redis_reachable` | coroutine | **NEW** — validates Redis connectivity with PING | `backend/app/main.py` |
 | `_run_bootstrap` | coroutine | Seeds system roles and permissions at startup (retained — runtime seeding, not setup-time) | `backend/app/main.py` |
@@ -131,11 +136,11 @@ The only state changes are internal to the backend:
 | `_run_setup_identity` | coroutine | Executes identity bootstrap via CLI | `backend/app/cli.py` |
 | `_run_seed_skills` | coroutine | Executes skill seeder via CLI | `backend/app/cli.py` |
 | `main` (setup) | function | **NEW** — consolidated setup CLI entry point with sub-commands | `setup/main.py` |
-| `SetupIdentityCommand` | class/function | **NEW** — provisions Keycloak realms, clients, roles, admin user | `setup/identity.py` |
-| `SetupDatabaseCommand` | class/function | **NEW** — verifies DB readiness, seeds roles, permissions, skills, system tools | `setup/database.py` |
-| `SetupCertificatesCommand` | class/function | **NEW** — bootstraps certificate authority | `setup/certificates.py` |
-| `SetupDevCommand` | class/function | **NEW** — full dev bootstrap: identity + database + certificates + test data | `setup/dev.py` |
-| `SetupVerifyCommand` | class/function | **NEW** — checks current state of all components without making changes | `setup/verify.py` |
+| `run_identity_setup` | coroutine | **NEW** — provisions Keycloak realms, clients, roles, admin user | `setup/identity.py` |
+| `run_database_setup` | coroutine | **NEW** — verifies DB readiness, seeds roles, permissions, skills, system tools | `setup/database.py` |
+| `run_certificates_setup` | coroutine | **NEW** — bootstraps certificate authority | `setup/certificates.py` |
+| `run_dev_setup` | coroutine | **NEW** — full dev bootstrap: identity + database + certificates | `setup/dev.py` |
+| `run_verify` | coroutine | **NEW** — checks current state of all components without making changes | `setup/verify.py` |
 | `LocalDevInitializer` | class | **DEPRECATED** — replaced by `SetupDevCommand`; consolidated into setup tool | `scripts/init-local-dev.py` |
 | `initialize` | method | Full initialization sequence (dev mode) — replaced by `setup dev` | `scripts/init-local-dev.py` |
 | `load_identity_yaml` | function | Loads `config/identity.yaml` with Pydantic validation | `backend/app/core/yaml_config.py` |

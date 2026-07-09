@@ -54,6 +54,42 @@ services:
     networks:
       - parthenon
 
+  # ── Setup — one-shot environment bootstrapping ───────────────────────────
+  # Only runs when explicitly invoked: docker compose --profile setup run setup dev
+  setup:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: parthenon-setup
+    entrypoint: ["python", "-m", "setup.main"]
+    command: ["dev"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-parthenon}:${POSTGRES_PASSWORD:-parthenon}@postgres:5432/${POSTGRES_DB:-parthenon}
+      REDIS_URL: redis://redis:6379/0
+      OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL:-http://keycloak:8080/realms/parthenon}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      CREDENTIAL_VAULT_KEY: ${CREDENTIAL_VAULT_KEY:-change-me-32-byte-key-for-aes256!}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_USER: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-parthenon}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./setup:/app/setup
+      - ./backend:/app/backend
+      - ./scripts:/app/scripts
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    profiles:
+      - setup
+    networks:
+      - parthenon
+
   control-center:
     build:
       context: ./backend

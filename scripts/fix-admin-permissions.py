@@ -1,3 +1,11 @@
+"""
+⚠ DEPRECATED — use ``python -m setup.main database`` instead.
+
+This script will be removed in a future release.
+See: setup/README.md
+"""
+import sys as _sys
+print("⚠ DEPRECATED: Use 'python -m setup.main database' instead.", file=_sys.stderr)
 """Fix admin permissions by assigning system_admin role to duplicate admin user."""
 import asyncio
 import sys

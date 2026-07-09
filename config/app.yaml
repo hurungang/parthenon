@@ -1,0 +1,76 @@
+# ============================================================
+# Parthenon — Application Configuration Defaults
+# ============================================================
+#
+# This file defines the DEFAULT values for all application
+# configuration.  Every value here can be overridden by an
+# environment variable of the same name (see .env.example).
+#
+# Priority (highest to lowest):
+#   1. Environment variable / .env file
+#   2. config/app.yaml (this file)
+#   3. Hard-coded fallback in Settings class
+#
+# For Kubernetes, mount this as a ConfigMap and override
+# individual fields per-pod via env vars.
+# ============================================================
+
+# ── Database (PostgreSQL) ───────────────────────────────────────────────────
+# Full connection URL.  When any POSTGRES_HOST / POSTGRES_PORT /
+# POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB env var is set,
+# those compose a URL at runtime, taking priority over this value.
+# Override via env: DATABASE_URL=postgresql+asyncpg://...
+database_url: postgresql+asyncpg://parthenon:parthenon@localhost:5432/parthenon
+db_pool_size: 10
+db_max_overflow: 20
+
+# ── Redis ───────────────────────────────────────────────────────────────────
+# Full connection URL.  When any REDIS_HOST / REDIS_PORT /
+# REDIS_PASSWORD / REDIS_DB env var is set, those compose a URL
+# at runtime, taking priority over this value.
+# Override via env: REDIS_URL=redis://...
+redis_url: redis://localhost:6379/0
+
+# ── OIDC Provider ───────────────────────────────────────────────────────────
+# The OpenID Connect issuer URL.  This is used both for JWT validation
+# at runtime and for discovery-document validation at startup.
+# Override via env: OIDC_PROVIDER_URL=https://...
+oidc_provider_url: http://localhost:8082/realms/parthenon
+
+# ── Application Secrets ─────────────────────────────────────────────────────
+# !!CHANGE THESE IN PRODUCTION!!
+# secret_key is used for internal session signing.
+secret_key: change-me-in-production
+# credential_vault_key must be at least 32 bytes for AES-256.
+credential_vault_key: change-me-32-byte-key-for-aes256!
+
+# ── Service URLs (inter-service communication) ──────────────────────────────
+control_center_url: http://localhost:8000
+agent_runtime_url: http://localhost:8001
+communication_hub_url: http://localhost:8002
+
+# ── Agent Defaults ──────────────────────────────────────────────────────────
+default_max_agent_instances: 5
+agent_question_timeout_seconds: 300
+
+# ── Scheduling ──────────────────────────────────────────────────────────────
+scheduler_enabled: true
+scheduler_check_interval_seconds: 60
+
+# ── Rate Limiting ───────────────────────────────────────────────────────────
+gateway_rate_limit_per_minute: 60
+
+# ── Application Metadata ────────────────────────────────────────────────────
+app_name: Parthenon AI Harness
+app_version: 0.1.0
+environment: development
+debug: false
+jwt_algorithm: RS256
+
+# ── Bootstrap Keys (inter-service auth) ────────────────────────────────────
+# Control Center reads these from env via the bootstrap endpoint.
+# Defined here so they appear in configuration with safe defaults.
+# Override via env: AGENT_RUNTIME_BOOTSTRAP_KEY=...
+agent_runtime_bootstrap_key: null
+comm_hub_bootstrap_key: null
+test_service_bootstrap_key: null

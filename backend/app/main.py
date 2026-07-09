@@ -247,16 +247,27 @@ async def startup_event() -> None:
     """Run Control Center startup tasks.
 
     Session dispatching is handled by the Agent Runtime service.
+    Startup validations run first — any unreachable dependency causes
+    immediate exit.  Identity provider provisioning has been moved to the
+    separate ``setup/`` CLI for production security.
     """
     _log_http_client_log_policy()
+
+    # Log resolved configuration sources for every infrastructure connection
+    settings.log_config_sources()
+
+    # Phase 1: Validate external dependencies before doing any DB work
+    await _validate_postgresql_reachable()
+    await _validate_redis_reachable()
+    await _validate_oidc_provider()
+
+    # Phase 2: Internal data seeding and service initialization
     await _cleanup_stale_sessions_on_startup()
     await _run_bootstrap()
     await _seed_system_tools()
     await _cleanup_super_admin_db_records()
-    await _run_identity_yaml_migration()
     await _initialize_oidc_provider_registry()
     await _run_skill_seeder()
-    await _initialize_agent_realm()
     await _initialize_certificate_authority()
     await _start_scheduling_engine()
 
@@ -317,21 +328,6 @@ async def _initialize_oidc_provider_registry() -> None:
         )
 
 
-async def _run_identity_yaml_migration() -> None:
-    """Run one-time migration from config/identity.yaml to database."""
-    try:
-        from app.db.session import AsyncSessionLocal
-        from app.services.identity_yaml_migration import IdentityYamlMigration
-        async with AsyncSessionLocal() as db:
-            migration = IdentityYamlMigration()
-            migrated = await migration.run(db)
-            await db.commit()
-        if migrated:
-            logger.info("identity.yaml migration complete")
-    except Exception:
-        logger.exception("identity.yaml migration failed; application will continue.")
-
-
 async def _run_skill_seeder() -> None:
     """Idempotently seed default platform skills (save_result, send_notification)."""
     try:
@@ -345,53 +341,119 @@ async def _run_skill_seeder() -> None:
         logger.exception("SkillSeeder failed; application will continue without default skills.")
 
 
-async def _initialize_agent_realm() -> None:
-    """Initialize the agent realm in the bundled Keycloak identity provider.
+# ── Startup validations (replaced auto-provisioning) ──────────────────────
 
-    Only runs when the agent provider type is ``keycloak`` and the Keycloak
-    server is reachable.  For external OIDC deployments, the operator creates
-    realms and clients manually — this step is skipped.
+
+async def _validate_postgresql_reachable() -> None:
+    """Validate PostgreSQL connectivity with a lightweight query.
+
+    On failure, logs a clear error and exits the process — the Control
+    Center cannot operate without a database.
     """
+    import asyncio
+    import asyncpg
+    from urllib.parse import urlparse
+
     try:
-        from app.db.session import AsyncSessionLocal
-        from app.db.models.identity_provider_config import IdentityProviderConfig
-        from sqlalchemy import select
-
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(IdentityProviderConfig).where(
-                    IdentityProviderConfig.provider_scope == "agent",
-                    IdentityProviderConfig.is_enabled == True,
-                )
-            )
-            agent_config = result.scalar_one_or_none()
-
-        if agent_config is None or agent_config.provider_type != "keycloak":
-            logger.info(
-                "Agent realm auto-provisioning skipped — agent provider is %s (only runs for keycloak)",
-                agent_config.provider_type if agent_config else "not configured",
-            )
-            return
-
-        # Only auto-provision for localhost (bundled/dev) Keycloak deployments.
-        # For external/production OIDC, the operator creates realms manually.
-        issuer = agent_config.issuer_url or ""
-        if "localhost" not in issuer and "127.0.0.1" not in issuer:
-            logger.info(
-                "Agent realm auto-provisioning skipped — external provider detected (issuer=%s)",
-                issuer,
-            )
-            return
-
-        from app.services.identity.realm_manager import RealmManager
-        manager = RealmManager()
-        await manager.initialize_agent_realm()
-        logger.info("Agent realm initialization complete")
+        parsed = urlparse(settings.database_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 5432
+        db_name = parsed.path.lstrip("/") or "unknown"
     except Exception:
-        logger.exception(
-            "Agent realm initialization failed; agents may not be able to authenticate. "
-            "Ensure the identity provider is reachable and configured correctly."
+        host, port, db_name = "unknown", 5432, "unknown"
+
+    try:
+        conn = await asyncio.wait_for(
+            asyncpg.connect(
+                host=host,
+                port=port,
+                user=parsed.username or "",
+                password=parsed.password or "",
+                database=db_name,
+                timeout=5,
+            ),
+            timeout=5.0,
         )
+        await conn.execute("SELECT 1")
+        await conn.close()
+        logger.info(
+            "resolved PostgreSQL from database_url: %s:%s/%s (password redacted)",
+            host, port, db_name,
+        )
+    except Exception as exc:
+        logger.error(
+            "PostgreSQL is NOT reachable at %s:%s/%s: %s. "
+            "Check DATABASE_URL or POSTGRES_* env vars and ensure the database is running.",
+            host, port, db_name, exc,
+        )
+        sys.exit(1)
+
+
+async def _validate_redis_reachable() -> None:
+    """Validate Redis connectivity with PING.
+
+    On failure, logs a clear error and exits the process.
+    """
+    import redis.asyncio as aioredis
+
+    redis_url = getattr(settings, "computed_redis_url", None) or settings.redis_url
+    try:
+        client = aioredis.from_url(redis_url, socket_connect_timeout=5)
+        await client.ping()
+        await client.aclose()
+        logger.info(
+            "resolved Redis from redis_url: %s (password redacted)",
+            _redact_url(redis_url),
+        )
+    except Exception as exc:
+        logger.error(
+            "Redis is NOT reachable at %s: %s. "
+            "Check REDIS_URL or REDIS_* env vars and ensure Redis is running.",
+            _redact_url(redis_url), exc,
+        )
+        sys.exit(1)
+
+
+async def _validate_oidc_provider() -> None:
+    """Validate the OIDC provider is reachable (when super-admin login is disabled).
+
+    When super-admin login is enabled, the super admin may be in the middle
+    of initial setup, so the check is skipped.  When disabled, the OIDC
+    provider is the only auth path and must be reachable.
+    """
+    from app.services.super_admin_auth_service import super_admin_enabled
+    from app.services.identity.realm_manager import RealmManager
+
+    if super_admin_enabled():
+        logger.info(
+            "OIDC reachability validation skipped — super-admin login is enabled "
+            "(PARTHENON_SUPER_ADMIN_ENABLED is set). "
+            "The OIDC provider may not be configured yet."
+        )
+        return
+
+    manager = RealmManager()
+    reachable, error = await manager.validate_agent_realm()
+    if not reachable:
+        logger.error(
+            "OIDC provider is NOT reachable at %s: %s. "
+            "Super-admin login is disabled — the OIDC provider must be configured and running. "
+            "Check OIDC_PROVIDER_URL or run the setup command to initialize the identity provider.",
+            settings.oidc_provider_url,
+            error,
+        )
+        sys.exit(1)
+
+    logger.info(
+        "OIDC provider validated at %s/.well-known/openid-configuration",
+        settings.oidc_provider_url.rstrip("/"),
+    )
+
+
+def _redact_url(url: str) -> str:
+    """Redact password from a database or Redis URL for safe logging."""
+    import re
+    return re.sub(r"://[^:]+:[^@]+@", "://***:***@", url)
 
 
 async def _initialize_certificate_authority() -> None:

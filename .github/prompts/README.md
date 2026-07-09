@@ -9,23 +9,39 @@ This directory contains project-specific slash commands for working with the Par
 #### `/init-app`
 **First-time setup for local development**
 
-Initializes the local development environment by:
-- Creating Keycloak realms (human users: `parthenon`, agents: `ai_agents`)
-- Configuring OIDC clients in both realms
-- Creating default admin user with consistent UUID
-- Seeding database with system roles and permissions
-- Assigning system_admin role to admin user
+Initializes the local development environment using the consolidated `setup/` CLI tool.
+
+**Supports two modes:**
+1. **Full Docker Compose** — All components provisioned locally (PostgreSQL, Redis, Keycloak)
+2. **Selective External** — Pick which services come from external providers
+
+**What it does:**
+- Creates Keycloak realms (human users: `parthenon`, agents: `ai_agents`) — skipped for external OIDC
+- Configures OIDC clients in both realms
+- Creates default admin user
+- Seeds database with system roles, permissions, skills
+- Bootstraps certificate authority for inter-service mTLS
 
 **Prerequisites:**
-- Infrastructure must be running (`/start-app --infra`)
-- Python virtual environment must be activated
+- Infrastructure must be running (`/start-app --infra`) unless using external services
+- Python virtual environment must be set up
 
 **Usage:**
 ```
-/init-app
+/init-app                           # Full docker-compose setup
+/init-app --external-oidc           # Use external OIDC provider (Azure EntraID, etc.)
+/init-app --external-postgres       # Use external PostgreSQL
+/init-app --external-all            # All infrastructure from external providers
 ```
 
-**Idempotent:** Safe to run multiple times if setup fails or Keycloak is reset.
+**Idempotent:** Safe to run multiple times — the setup tool detects existing state and skips.
+
+**Environment variables** for external services:
+- PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` (or `DATABASE_URL`)
+- Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` (or `REDIS_URL`)
+- OIDC: `OIDC_PROVIDER_URL`
+
+> The old `scripts/init-local-dev.py` is **deprecated** — use `python -m setup.main dev` directly.
 
 ---
 
@@ -41,6 +57,7 @@ Starts services based on flags provided.
 /start-app --backend          # Start only backend API + infra
 /start-app --infra            # Start only infrastructure (postgres, redis, keycloak)
 /start-app --docker           # Start full stack via docker compose
+/start-app --setup            # Run setup before starting services (fresh environment)
 ```
 
 **Services:**
@@ -178,9 +195,11 @@ netstat -ano | findstr ":8000 :5173 :8082"
 
 All commands are implemented as markdown prompts in `.github/prompts/` using the agent workflow pattern. They guide the AI agent through executing PowerShell commands and validating results.
 
+These prompts are **mirrored** in `.opencode/prompts/` for use with opencode. Changes to either directory should be kept in sync.
+
 To add a new command:
 1. Create `<name>.prompt.md` in this directory
 2. Add YAML frontmatter with `description`
 3. Write step-by-step instructions for the agent
-4. Update this README
-5. Update references in `change-apply.prompt.md` and `change-refinement.prompt.md`
+4. Copy to `.opencode/prompts/` for opencode compatibility
+5. Update this README and `.opencode/prompts/README.md`

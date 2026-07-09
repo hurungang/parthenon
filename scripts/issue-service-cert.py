@@ -1,3 +1,11 @@
+"""
+⚠ DEPRECATED — use ``python -m setup.main certificates`` instead.
+
+This script will be removed in a future release.
+See: setup/README.md
+"""
+import sys as _sys
+print("⚠ DEPRECATED: Use 'python -m setup.main certificates' instead.", file=_sys.stderr)
 """Issue a service certificate for the Communication Hub (or any internal service).
 
 This script connects to the running backend to initialize the CA, then issues a

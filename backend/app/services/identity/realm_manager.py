@@ -13,7 +13,6 @@ import logging
 
 from app.core.config import get_settings
 from app.core.ssl_context import get_ssl_context
-from app.core.yaml_config import load_identity_yaml
 from app.services.identity.keycloak_admin_client import KeycloakAdminClient, KeycloakAdminError
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,12 @@ class RealmManager:
             return url.split("/realms/")[0]
         return url or None
 
-    async def initialize_agent_realm(self, realm_name: str | None = None) -> None:
+    async def initialize_agent_realm(
+        self,
+        realm_name: str | None = None,
+        admin_user: str | None = None,
+        admin_password: str | None = None,
+    ) -> None:
         """Initialize the agent realm in the OIDC provider.
 
         For ``keycloak_bundled`` providers:
@@ -67,12 +71,16 @@ class RealmManager:
         For ``external`` providers: logs a warning and returns without error.
 
         Args:
-            realm_name: Agent realm name to initialize.  Defaults to the value
-                of ``agent_realm_name`` in ``config/identity.yaml``, or
-                ``"ai_agents"`` if not set.
+            realm_name: Agent realm name to initialize.  Defaults to
+                ``settings.agent_realm_name``, or ``"ai_agents"`` if not set.
+            admin_user: Keycloak admin username (master realm). Required for
+                setup-time invocation; the Control Center runtime no longer
+                holds these credentials.
+            admin_password: Keycloak admin password (master realm). Required
+                for setup-time invocation.
         """
-        yaml_cfg = load_identity_yaml()
-        provider_type = yaml_cfg.provider_type or "unconfigured"
+        settings = get_settings()
+        provider_type = settings.identity_provider_type or "unconfigured"
 
         if provider_type not in ("keycloak_bundled",):
             logger.warning(
@@ -84,7 +92,7 @@ class RealmManager:
 
         effective_realm_name: str = (
             realm_name
-            or getattr(yaml_cfg, "agent_realm_name", None)
+            or settings.agent_realm_name
             or "ai_agents"
         )
 
@@ -96,12 +104,18 @@ class RealmManager:
                 "agent realm initialization aborted",
             )
 
-        settings = get_settings()
+        # Admin credentials are required for setup-time calls.
+        # Fall back to env/settings for backward compat with older scripts.
+        if not admin_user or not admin_password:
+            admin_user = admin_user or settings.keycloak_admin_user
+            admin_password = admin_password or settings.keycloak_admin_password
 
-        # Derive admin credentials from environment / settings
-        # (same credentials used by IdentityBootstrapService)
-        admin_user: str = getattr(settings, "keycloak_admin_user", "admin")
-        admin_password: str = getattr(settings, "keycloak_admin_password", "admin")
+        if not admin_user or not admin_password:
+            raise RealmManagerError(
+                "missing_admin_credentials",
+                "Keycloak admin credentials are required to initialize the agent realm. "
+                "Set KEYCLOAK_ADMIN_USER and KEYCLOAK_ADMIN_PASSWORD or pass them as arguments.",
+            )
 
         kc = KeycloakAdminClient(keycloak_base)
         try:
@@ -137,7 +151,7 @@ class RealmManager:
             "http://localhost:3000/agents/identities/oauth/callback",
             "*",  # Permissive for dev; tighten in production
         ]
-        client_id = yaml_cfg.client_id or "parthenon-api"
+        client_id = settings.jwt_audience or "parthenon-api"
         try:
             await kc.create_oidc_client(
                 token,
@@ -188,21 +202,29 @@ class RealmManager:
         else:
             logger.debug("Token policies applied to agent realm %r", realm_name)
 
-    async def realm_exists(self, realm_name: str | None = None) -> bool:
+    async def realm_exists(
+        self,
+        realm_name: str | None = None,
+        admin_user: str | None = None,
+        admin_password: str | None = None,
+    ) -> bool:
         """Return True if the agent realm already exists in Keycloak."""
-        yaml_cfg = load_identity_yaml()
+        settings = get_settings()
         effective_realm_name: str = (
             realm_name
-            or getattr(yaml_cfg, "agent_realm_name", None)
+            or settings.agent_realm_name
             or "ai_agents"
         )
         keycloak_base = self._get_keycloak_base_url()
         if not keycloak_base:
             return False
 
-        settings = get_settings()
-        admin_user: str = getattr(settings, "keycloak_admin_user", "admin")
-        admin_password: str = getattr(settings, "keycloak_admin_password", "admin")
+        admin_user = admin_user or settings.keycloak_admin_user
+        admin_password = admin_password or settings.keycloak_admin_password
+
+        if not admin_user or not admin_password:
+            logger.warning("No admin credentials available for realm existence check")
+            return False
 
         kc = KeycloakAdminClient(keycloak_base)
         try:
@@ -210,4 +232,35 @@ class RealmManager:
             return await kc.realm_exists(token, effective_realm_name)
         except KeycloakAdminError:
             return False
+
+    async def validate_agent_realm(self) -> tuple[bool, str | None]:
+        """Validate that the configured OIDC provider is reachable.
+
+        Fetches the ``.well-known/openid-configuration`` endpoint of the
+        configured OIDC provider.  Does NOT require Keycloak admin
+        credentials — uses a public endpoint only.
+
+        Returns:
+            A tuple of ``(reachable: bool, error_detail: str | None)``.
+        """
+        import httpx
+
+        settings = get_settings()
+        discovery_url = f"{settings.oidc_provider_url.rstrip('/')}/.well-known/openid-configuration"
+        try:
+            async with httpx.AsyncClient(timeout=10.0, verify=get_ssl_context()) as client:
+                resp = await client.get(discovery_url)
+                resp.raise_for_status()
+                return True, None
+        except httpx.HTTPStatusError as exc:
+            return False, (
+                f"OIDC discovery endpoint returned HTTP {exc.response.status_code} "
+                f"for {discovery_url}"
+            )
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.TransportError) as exc:
+            return False, (
+                f"Cannot reach OIDC provider at {discovery_url}: {exc}"
+            )
+        except Exception as exc:
+            return False, f"Unexpected error validating OIDC provider: {exc}"
 

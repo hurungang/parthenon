@@ -7,8 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from app.core.config import get_settings
-from app.core.yaml_config import _get_yaml_path
+from app.core.config import _resolve_app_yaml_path, get_settings
 
 
 def get_workflow_generation_model_id() -> str | None:
@@ -18,13 +17,13 @@ def get_workflow_generation_model_id() -> str | None:
 
 
 def set_workflow_generation_model_id(model_id: str | None) -> None:
-    """Persist workflow generation model ID into config/identity.yaml.
+    """Persist workflow generation model ID into config/app.yaml.
 
-    The value is saved in the shared runtime config so all services and users
+    The value is saved alongside other application defaults so all services
     resolve the same model selection.
     """
-    target_path = _get_yaml_path()
-    tmp_path = _tmp_yaml_path(target_path)
+    target_path = _resolve_app_yaml_path()
+    tmp_path = target_path.with_suffix(".yaml.tmp")
 
     existing: dict[str, object] = {}
     if target_path.exists():
@@ -43,9 +42,5 @@ def set_workflow_generation_model_id(model_id: str | None) -> None:
         yaml.safe_dump(existing, fh, default_flow_style=False, allow_unicode=False, sort_keys=True)
     os.replace(tmp_path, target_path)
 
-    # The settings object is cached; refresh it after mutating identity.yaml.
+    # The settings object is cached; refresh it after mutating app.yaml.
     get_settings.cache_clear()
-
-
-def _tmp_yaml_path(target_path: Path) -> Path:
-    return target_path.with_suffix(".yaml.tmp")

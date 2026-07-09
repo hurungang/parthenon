@@ -21,7 +21,6 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
 from app.core.ssl_context import get_ssl_context
-from app.core.yaml_config import load_identity_yaml
 from app.db.models.agents import AgentIdentity, AgentIdentityStatus
 
 logger = logging.getLogger(__name__)
@@ -39,8 +38,8 @@ def _keycloak_base_url() -> str:
 
 
 def _agent_realm_name() -> str:
-    yaml_cfg = load_identity_yaml()
-    return getattr(yaml_cfg, "agent_realm_name", None) or "ai_agents"
+    settings = get_settings()
+    return settings.agent_realm_name or "ai_agents"
 
 
 def _agent_realm_client_id() -> str:
