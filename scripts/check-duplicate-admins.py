@@ -1,3 +1,11 @@
+"""
+⚠ DEPRECATED — use ``python -m setup.main verify`` instead.
+
+This script will be removed in a future release.
+See: setup/README.md
+"""
+import sys as _sys
+print("⚠ DEPRECATED: Use 'python -m setup.main verify' instead.", file=_sys.stderr)
 """Check which admin user is the correct one."""
 import asyncio
 import sys

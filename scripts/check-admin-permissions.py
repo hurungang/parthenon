@@ -1,3 +1,11 @@
+"""
+⚠ DEPRECATED — use ``python -m setup.main verify`` instead.
+
+This script will be removed in a future release.
+See: setup/README.md
+"""
+import sys as _sys
+print("⚠ DEPRECATED: Use 'python -m setup.main verify' instead.", file=_sys.stderr)
 """Diagnostic script to check admin user permissions."""
 import asyncio
 import os

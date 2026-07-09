@@ -7,46 +7,46 @@ This plan implements the separation of Keycloak bootstrap tooling from the runti
 ## Task Checklist
 
 ### Phase 1 — Extract Keycloak Bootstrap from Control Center Startup
-- [ ] 1.1 — Remove Keycloak admin credential fields from Control Center runtime Settings
-- [ ] 1.2 — Remove `_initialize_agent_realm()` call from Control Center startup event
-- [ ] 1.3 — Move `RealmManager.initialize_agent_realm()` into a standalone callable usable outside the runtime
-- [ ] 1.4 — Add conditional startup validation that expected Keycloak realm exists (only when super-admin login is disabled)
+- [x] 1.1 — Remove Keycloak admin credential fields from Control Center runtime Settings
+- [x] 1.2 — Remove `_initialize_agent_realm()` call from Control Center startup event
+- [x] 1.3 — Move `RealmManager.initialize_agent_realm()` into a standalone callable usable outside the runtime
+- [x] 1.4 — Add conditional startup validation that expected Keycloak realm exists (only when super-admin login is disabled)
 
 ### Phase 2 — Create setup/ Directory with Consolidated Init Script
-- [ ] 2.1 — Create `setup/` directory structure at project root
-- [ ] 2.2 — Create unified setup CLI entry point with sub-commands
-- [ ] 2.3 — Port Keycloak realm and client provisioning from `scripts/init-local-dev.py` and `backend/app/services/identity/bootstrap_service.py` into setup sub-commands
-- [ ] 2.4 — Port database seeding (roles, skills, system tools, admin user) into setup sub-commands
-- [ ] 2.5 — Port certificate authority bootstrapping into setup sub-command
-- [ ] 2.6 — Add `--dev` flag that runs full bootstrap matching old `scripts/init-local-dev.py` behavior
-- [ ] 2.7 — Add idempotency checks and structured output reporting to all setup operations
-- [ ] 2.8 — Deprecate or remove ad-hoc scripts replaced by the consolidated setup command
+- [x] 2.1 — Create `setup/` directory structure at project root
+- [x] 2.2 — Create unified setup CLI entry point with sub-commands
+- [x] 2.3 — Port Keycloak realm and client provisioning from `scripts/init-local-dev.py` and `backend/app/services/identity/bootstrap_service.py` into setup sub-commands
+- [x] 2.4 — Port database seeding (roles, skills, system tools, admin user) into setup sub-commands
+- [x] 2.5 — Port certificate authority bootstrapping into setup sub-command
+- [x] 2.6 — Add `--dev` flag that runs full bootstrap matching old `scripts/init-local-dev.py` behavior
+- [x] 2.7 — Add idempotency checks and structured output reporting to all setup operations
+- [x] 2.8 — Deprecate or remove ad-hoc scripts replaced by the consolidated setup command
 
 ### Phase 3 — Restructure Configuration for Environment-Variable Priority
-- [ ] 3.1 — Add per-component environment variable fields for PostgreSQL connection to `Settings`
-- [ ] 3.2 — Add per-component environment variable fields for Redis connection to `Settings`
-- [ ] 3.3 — Add environment variable fields for Keycloak admin credentials (used by setup tool only)
-- [ ] 3.4 — Implement startup configuration-source logging (env var, YAML, or default) for every infrastructure connection
+- [x] 3.1 — Add per-component environment variable fields for PostgreSQL connection to `Settings`
+- [x] 3.2 — Add per-component environment variable fields for Redis connection to `Settings`
+- [x] 3.3 — Add environment variable fields for Keycloak admin credentials (used by setup tool only)
+- [x] 3.4 — Implement startup configuration-source logging (env var, YAML, or default) for every infrastructure connection
 
 ### Phase 4 — Add Startup Validation (Instead of Auto-Provisioning)
-- [ ] 4.1 — Add PostgreSQL reachability validation to Control Center startup
-- [ ] 4.2 — Add conditional Keycloak realm existence validation to Control Center startup (skipped when super-admin login enabled)
-- [ ] 4.3 — Add Redis reachability validation to Control Center startup
-- [ ] 4.4 — Add Control Center reachability validation to Agent Runtime startup
-- [ ] 4.5 — Add Control Center reachability validation to Communication Hub startup
+- [x] 4.1 — Add PostgreSQL reachability validation to Control Center startup
+- [x] 4.2 — Add conditional Keycloak realm existence validation to Control Center startup (skipped when super-admin login enabled)
+- [x] 4.3 — Add Redis reachability validation to Control Center startup
+- [x] 4.4 — Add Control Center reachability validation to Agent Runtime startup
+- [x] 4.5 — Add Control Center reachability validation to Communication Hub startup
 
 ### Phase 5 — Update Docker Compose, .env.example, and Documentation
-- [ ] 5.1 — Update `docker-compose.yml` to remove Keycloak admin credentials from Control Center environment
-- [ ] 5.2 — Update `docker-compose.yml` to add optional setup service for bundled deployments
-- [ ] 5.3 — Update `.env.example` with all new environment variables and their descriptions
-- [ ] 5.4 — Update `parthenon.ps1` to support setup invocation before service start
+- [x] 5.1 — Update `docker-compose.yml` to remove Keycloak admin credentials from Control Center environment
+- [x] 5.2 — Update `docker-compose.yml` to add optional setup service for bundled deployments
+- [x] 5.3 — Update `.env.example` with all new environment variables and their descriptions
+- [x] 5.4 — Update `parthenon.ps1` to support setup invocation before service start
 
 ### Phase 6 — Regression Testing and Cleanup
-- [ ] 6.1 — Run full backend test suite and fix regressions
-- [ ] 6.2 — Run frontend test suite
-- [ ] 6.3 — Verify local dev workflow (single command to bootstrap and start services)
-- [ ] 6.4 — Verify production-mode startup with external PostgreSQL, Redis, and OIDC provider via env vars only
-- [ ] 6.5 — Clean up deprecated code paths and remove dead configuration imports
+- [x] 6.1 — Run full backend test suite and fix regressions
+- [x] 6.2 — Run frontend test suite
+- [x] 6.3 — Verify local dev workflow (single command to bootstrap and start services)
+- [x] 6.4 — Verify production-mode startup with external PostgreSQL, Redis, and OIDC provider via env vars only
+- [x] 6.5 — Clean up deprecated code paths and remove dead configuration imports
 
 ---
 
@@ -376,19 +376,19 @@ Remove any code that is no longer reachable after the changes: the old `_initial
 
 ## Completion Checklist
 
-- [ ] Control Center starts without Keycloak admin credentials and without auto-provisioning the agent realm
-- [ ] Control Center validates PostgreSQL, Keycloak, and Redis reachability at startup with clear error messages on failure
-- [ ] Agent Runtime validates Control Center reachability at startup before certificate bootstrap
-- [ ] Communication Hub validates Control Center reachability at startup before certificate bootstrap
-- [ ] `setup/` directory exists with unified CLI covering identity, database, certificates, and dev bootstrap
-- [ ] `python -m setup.main dev` replicates all behavior of the old `scripts/init-local-dev.py`
-- [ ] All setup operations are idempotent and produce structured output
-- [ ] PostgreSQL, Redis, and OIDC provider connections are configurable via per-component environment variables
-- [ ] Every infrastructure connection's configuration source is logged at startup
-- [ ] `docker-compose.yml` has an optional setup service, and Control Center no longer receives Keycloak admin credentials
-- [ ] `.env.example` documents all new and existing environment variables
-- [ ] `parthenon.ps1` supports setup invocation before service start
-- [ ] All backend tests pass
-- [ ] All frontend tests pass
-- [ ] Local dev workflow (setup + start) works end-to-end
-- [ ] Production-mode startup with external infrastructure via env vars works
+- [x] Control Center starts without Keycloak admin credentials and without auto-provisioning the agent realm
+- [x] Control Center validates PostgreSQL, Keycloak, and Redis reachability at startup with clear error messages on failure
+- [x] Agent Runtime validates Control Center reachability at startup before certificate bootstrap
+- [x] Communication Hub validates Control Center reachability at startup before certificate bootstrap
+- [x] `setup/` directory exists with unified CLI covering identity, database, certificates, and dev bootstrap
+- [x] `python -m setup.main dev` replicates all behavior of the old `scripts/init-local-dev.py`
+- [x] All setup operations are idempotent and produce structured output
+- [x] PostgreSQL, Redis, and OIDC provider connections are configurable via per-component environment variables
+- [x] Every infrastructure connection's configuration source is logged at startup
+- [x] `docker-compose.yml` has an optional setup service, and Control Center no longer receives Keycloak admin credentials
+- [x] `.env.example` documents all new and existing environment variables
+- [x] `parthenon.ps1` supports setup invocation before service start
+- [x] All backend tests pass
+- [x] All frontend tests pass
+- [x] Local dev workflow (setup + start) works end-to-end
+- [x] Production-mode startup with external infrastructure via env vars works

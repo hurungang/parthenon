@@ -86,8 +86,7 @@ async def _resolve_agent_oauth_config(db: AsyncSession) -> Optional[AgentOAuthCo
 
 
 def _legacy_agent_oauth_config() -> Optional[AgentOAuthConfig]:
-    """Legacy fallback using env vars and identity.yaml (pre-DB-config era)."""
-    from app.core.yaml_config import load_identity_yaml
+    """Legacy fallback using env vars (pre-DB-config era)."""
 
     settings = get_settings()
     url = settings.oidc_provider_url.rstrip("/")
@@ -96,8 +95,7 @@ def _legacy_agent_oauth_config() -> Optional[AgentOAuthConfig]:
     else:
         keycloak_base = url
 
-    yaml_cfg = load_identity_yaml()
-    realm = getattr(yaml_cfg, "agent_realm_name", None) or "ai_agents"
+    realm = settings.agent_realm_name or "ai_agents"
     client_id = settings.jwt_audience or "parthenon-api"
 
     return AgentOAuthConfig(

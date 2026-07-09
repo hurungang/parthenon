@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
@@ -14,6 +15,18 @@ from pydantic_settings import (
 )
 
 _REPO_ROOT = Path(__file__).parent.parent.parent.parent
+
+
+def _app_yaml_path() -> str:
+    """Return path to config/app.yaml (static defaults checked into git)."""
+    return os.environ.get(
+        "APP_YAML_PATH", str(_REPO_ROOT / "config" / "app.yaml")
+    )
+
+
+def _resolve_app_yaml_path() -> Path:
+    """Return resolved Path for app.yaml (used for writing settings back)."""
+    return Path(_app_yaml_path())
 
 
 # ---------------------------------------------------------------------------
@@ -126,10 +139,6 @@ class TelemetrySettings(BaseModel):
         return v.upper()
 
 
-def _identity_yaml_path() -> str:
-    return os.environ.get("IDENTITY_YAML_PATH", str(_REPO_ROOT / "config" / "identity.yaml"))
-
-
 class _SparseYamlSource(YamlConfigSettingsSource):
     """YamlConfigSettingsSource that drops null/empty template placeholders.
 
@@ -142,13 +151,32 @@ class _SparseYamlSource(YamlConfigSettingsSource):
         return {k: v for k, v in data.items() if v is not None and v != ""}
 
 
+# ---------------------------------------------------------------------------
+# Runtime helper: detect which source resolved a value
+# ---------------------------------------------------------------------------
+
+
+def _load_yaml_keys(yaml_path: str) -> set[str]:
+    """Return the set of top-level keys present in a YAML file.
+
+    Returns an empty set if the file does not exist or is empty.
+    """
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as fh:
+            raw = yaml.safe_load(fh)
+    except Exception:
+        return set()
+    if isinstance(raw, dict):
+        return {k for k, v in raw.items() if v is not None and v != ""}
+    return set()
+
 class Settings(BaseSettings):
-    """Platform-wide settings loaded from environment variables and config/identity.yaml.
+    """Platform-wide settings loaded from environment variables and app.yaml.
 
     Priority order (highest to lowest):
     1. Environment variable / .env file
-    2. config/identity.yaml (via YamlConfigSettingsSource)
-    3. Hard-coded default
+    2. config/app.yaml (application-wide static defaults)
+    3. Hard-coded field default
     """
 
     model_config = SettingsConfigDict(
@@ -171,35 +199,78 @@ class Settings(BaseSettings):
     db_pool_size: int = 10
     db_max_overflow: int = 20
 
+    # Per-component PostgreSQL fields (override database_url when set)
+    postgres_host: str | None = Field(default=None)
+    postgres_port: int | None = Field(default=None)
+    postgres_user: str | None = Field(default=None)
+    postgres_password: str | None = Field(default=None)
+    postgres_db: str | None = Field(default=None)
+
+    @property
+    def computed_database_url(self) -> str:
+        """Return the composed database URL from per-component env vars.
+
+        When any per-component PostgreSQL env var is set, composes a full
+        ``postgresql+asyncpg://`` URL.  Falls back to ``database_url``
+        when no per-component vars are present.
+        """
+        if any(
+            getattr(self, f) is not None
+            for f in ("postgres_host", "postgres_port", "postgres_user", "postgres_password", "postgres_db")
+        ):
+            host = self.postgres_host or "localhost"
+            port = self.postgres_port or 5432
+            user = self.postgres_user or "parthenon"
+            password = self.postgres_password or ""
+            db = self.postgres_db or "parthenon"
+            return (
+                f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
+            )
+        return self.database_url
+
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/0")
 
-    # Auth / OIDC — AliasChoices lets the YAML key name also populate this field
+    # Per-component Redis fields (override redis_url when set)
+    redis_host: str | None = Field(default=None)
+    redis_port: int | None = Field(default=None)
+    redis_password: str | None = Field(default=None)
+    redis_db: int | None = Field(default=None)
+
+    @property
+    def computed_redis_url(self) -> str:
+        """Return the composed Redis URL from per-component env vars.
+
+        When any per-component Redis env var is set, composes a full
+        ``redis://`` URL.  Falls back to ``redis_url`` when no
+        per-component vars are present.
+        """
+        if any(
+            getattr(self, f) is not None
+            for f in ("redis_host", "redis_port", "redis_password", "redis_db")
+        ):
+            host = self.redis_host or "localhost"
+            port = self.redis_port or 6379
+            db = self.redis_db if self.redis_db is not None else 0
+            password_segment = f":{self.redis_password}@" if self.redis_password else ""
+            # If no password, don't include the colon
+            if password_segment == ":None@":
+                password_segment = "@"
+            return f"redis://{password_segment}{host}:{port}/{db}" if self.redis_password else f"redis://{host}:{port}/{db}"
+        return self.redis_url
+
+    # Auth / OIDC
     oidc_provider_url: str = Field(default="http://localhost:8080/realms/parthenon")
     secret_key: str = Field(default="change-me-in-production")
     jwt_algorithm: str = Field(default="RS256")
-    jwt_audience: str = Field(
-        default="parthenon",
-        validation_alias=AliasChoices("jwt_audience", "audience"),
-    )
+    jwt_audience: str = Field(default="parthenon")
 
-    # Identity provider settings — merged from config/identity.yaml + env vars
-    identity_provider_type: str = Field(
-        default="unconfigured",
-        validation_alias=AliasChoices("identity_provider_type", "provider_type"),
-    )
-    identity_realm: str = Field(
-        default="",
-        validation_alias=AliasChoices("identity_realm", "realm_name"),
-    )
-    identity_setup_complete: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("identity_setup_complete", "setup_complete"),
-    )
-    workflow_generation_model_id: str = Field(
-        default="",
-        validation_alias=AliasChoices("workflow_generation_model_id"),
-    )
+    # Identity provider settings — populated from DB IdentityProviderConfig at runtime
+    identity_provider_type: str = Field(default="unconfigured")
+    identity_realm: str = Field(default="")
+    identity_setup_complete: bool = Field(default=False)
+    agent_realm_name: str = Field(default="ai_agents")
+    workflow_generation_model_id: str = Field(default="")
 
     # Credential Vault — must be exactly 32 bytes for AES-256
     credential_vault_key: str = Field(default="change-me-32-byte-key-for-aes256!")
@@ -237,6 +308,23 @@ class Settings(BaseSettings):
     # Rate limiting
     gateway_rate_limit_per_minute: int = 60
 
+    # ══════════════════════════════════════════════════════════════════════
+    # Keycloak admin credentials — SETUP TOOL ONLY
+    #
+    # These are consumed exclusively by the ``setup/`` CLI and the
+    # ``IdentityBootstrapService`` during initial provisioning.  The
+    # Control Center runtime does NOT require or load them — setting
+    # them at runtime is harmless but unnecessary.
+    # ══════════════════════════════════════════════════════════════════════
+    keycloak_admin_user: str | None = Field(
+        default=None,
+        description="Keycloak master-realm admin username (setup tool only)",
+    )
+    keycloak_admin_password: str | None = Field(
+        default=None,
+        description="Keycloak master-realm admin password (setup tool only)",
+    )
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -246,14 +334,92 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Place YAML below env vars so env always wins."""
+        """Place YAML source below env vars so env always wins.
+
+        Priority (highest to lowest):
+        1. init_settings      — values passed to Settings() constructor
+        2. env_settings       — environment variables
+        3. dotenv_settings    — .env file
+        4. app.yaml           — application-wide static defaults
+        5. file_secret_settings — secrets directory
+        """
         return (
             init_settings,
             env_settings,
             dotenv_settings,
-            _SparseYamlSource(settings_cls, yaml_file=_identity_yaml_path()),
+            _SparseYamlSource(settings_cls, yaml_file=_app_yaml_path()),
             file_secret_settings,
         )
+
+    def log_config_sources(self) -> None:
+        """Log the resolved source for every infrastructure connection.
+
+        Uses INFO level.  Passwords are redacted in log output.
+        Called by each service's startup event.
+        """
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
+        _app_keys = _load_yaml_keys(_app_yaml_path())
+
+        def _source(field_name: str, env_names: list[str]) -> str:
+            """Infer config source: env → app.yaml → default."""
+            for ename in env_names:
+                if ename in os.environ:
+                    return f"env:{ename}"
+            if field_name in _app_keys:
+                return "yaml:config/app.yaml"
+            return "default"
+
+        # PostgreSQL
+        pg_source = _source(
+            "database_url",
+            ["POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER",
+             "POSTGRES_PASSWORD", "POSTGRES_DB", "DATABASE_URL"],
+        )
+        _log.info(
+            "resolved PostgreSQL from %s: %s",
+            pg_source, _redact_url(self.computed_database_url),
+        )
+
+        # Redis
+        redis_source = _source(
+            "redis_url",
+            ["REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD", "REDIS_DB", "REDIS_URL"],
+        )
+        _log.info(
+            "resolved Redis from %s: %s",
+            redis_source, _redact_url(self.computed_redis_url),
+        )
+
+        # OIDC Provider
+        oidc_source = _source("oidc_provider_url", ["OIDC_PROVIDER_URL"])
+        _log.info(
+            "resolved OIDC provider from %s: %s",
+            oidc_source, self.oidc_provider_url,
+        )
+
+        # OTEL
+        otel_env_keys = [k for k in os.environ if k.startswith("TELEMETRY__")]
+        otel_source = "env" if otel_env_keys else (
+            "yaml:config/app.yaml" if "telemetry" in _app_keys else "default"
+        )
+        _log.info(
+            "resolved OTEL exporters=%s traces=%s metrics=%s logs=%s from %s",
+            [e.value for e in self.telemetry.exporters],
+            self.telemetry.traces_enabled,
+            self.telemetry.metrics_enabled,
+            self.telemetry.logs_enabled,
+            otel_source,
+        )
+
+
+import re as _re
+
+
+def _redact_url(url: str) -> str:
+    """Redact password from a database or Redis URL for safe logging."""
+    return _re.sub(r"://[^:]+:[^@]+@", "://***:***@", url)
 
 
 @lru_cache

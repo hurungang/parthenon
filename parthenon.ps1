@@ -32,8 +32,8 @@
     Start all services
 
 .EXAMPLE
-    .\parthenon.ps1 start -Services backend
-    Start all services except infrastructure (assumes infra is running)
+    .\parthenon.ps1 start -Services backend -RunSetup
+    Run setup then start all services except infrastructure (assumes infra is running)
 
 .EXAMPLE
     .\parthenon.ps1 start -Services control-center,frontend
@@ -93,7 +93,10 @@ param(
 
     [Parameter()]
     [ValidateSet('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')]
-    [string]$LogLevel = 'INFO'
+    [string]$LogLevel = 'INFO',
+
+    [Parameter()]
+    [switch]$RunSetup
 )
 
 # Script configuration
@@ -693,7 +696,36 @@ switch ($Action) {
         Write-Host ""
         Set-SslCaBundle
         Write-Host ""
-        
+
+        # Run setup if -RunSetup flag is present and setup hasn't been completed
+        if ($RunSetup.IsPresent) {
+            $setupMarker = Join-Path $Script:ProjectRoot ".setup-complete.marker"
+            if (Test-Path $setupMarker) {
+                Write-Host "Setup marker found — skipping setup (use -Force to re-run)" -ForegroundColor Green
+            } else {
+                Write-Host "--- Running Environment Setup ---" -ForegroundColor Cyan
+                Push-Location $Script:ProjectRoot
+                try {
+                    if (Test-Path ".venv\Scripts\Activate.ps1") {
+                        & .venv\Scripts\Activate.ps1
+                    }
+                    python -m setup.main dev
+                    $setupExit = $LASTEXITCODE
+                } finally {
+                    Pop-Location
+                }
+
+                if ($setupExit -eq 0) {
+                    New-Item -ItemType File -Path $setupMarker -Force | Out-Null
+                    Write-Host "Setup complete — marker written to .setup-complete.marker" -ForegroundColor Green
+                } else {
+                    Write-Host "Setup failed with exit code $setupExit — services will NOT be started" -ForegroundColor Red
+                    exit 1
+                }
+            }
+            Write-Host ""
+        }
+
         # Start in dependency order: infra -> control-center -> agent-runtime -> communication-hub -> frontend
         $orderedServices = @('infra', 'control-center', 'agent-runtime', 'communication-hub', 'frontend') | Where-Object { $_ -in $serviceList }
         
@@ -771,27 +803,27 @@ switch ($Action) {
             exit 1
         }
         
-        Write-Host "Running initialization script..." -ForegroundColor Cyan
+        Write-Host "Running setup command..." -ForegroundColor Cyan
         Write-Host ""
         
-        # Activate venv and run init script
+        # Activate venv and run setup
         Push-Location $Script:ProjectRoot
         try {
             if (Test-Path ".venv\Scripts\Activate.ps1") {
                 & .venv\Scripts\Activate.ps1
             }
-            python scripts\init-local-dev.py
+            python -m setup.main dev
             $exitCode = $LASTEXITCODE
             
             if ($exitCode -eq 0) {
                 Write-Host ""
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
-                Write-Host "  Initialization Complete!" -ForegroundColor Green
+                Write-Host "  Setup Complete!" -ForegroundColor Green
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Green
             } else {
                 Write-Host ""
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
-                Write-Host "  Initialization Failed!" -ForegroundColor Red
+                Write-Host "  Setup Failed!" -ForegroundColor Red
                 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Red
             }
         }

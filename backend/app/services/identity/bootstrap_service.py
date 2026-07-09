@@ -22,8 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.credential_vault import get_vault
 from app.core.ssl_context import get_ssl_context
-from app.core.yaml_config import IdentityYamlConfig
-from app.core.yaml_writer import write_identity_yaml
 from app.db.models.identity_provider_config import IdentityProviderConfig
 from app.db.models.identity_provider_setup_state import IdentityProviderSetupState
 from app.schemas.identity_bootstrap import (
@@ -49,8 +47,7 @@ class IdentityBootstrapService:
         """Determine the current setup state.
 
         Queries ``IdentityProviderSetupState`` first; falls back to the
-        ``identity_setup_complete`` flag in ``Settings`` (which is sourced
-        from identity.yaml) when the DB is empty.
+        ``identity_setup_complete`` flag in ``Settings`` when the DB is empty.
 
         Returns:
             :attr:`SetupState.CONFIGURED` if setup is complete,
@@ -96,8 +93,7 @@ class IdentityBootstrapService:
         5. Create ``parthenon-ui`` public client.
         6. Create initial admin user in the realm.
         7. Persist to DB via OIDCConfigService.
-        8. Write identity.yaml (backward compat).
-        9. Reload the OIDC client.
+        8. Reload the OIDC client.
         """
         if not request.keycloak_url:
             return ProviderSetupResult(
@@ -257,25 +253,7 @@ class IdentityBootstrapService:
                 detail=f"Database error during provisioning: {exc}",
             )
 
-        # 8. Write identity.yaml (backward compat)
-        yaml_cfg = IdentityYamlConfig(
-            provider_type=request.provider_type.value,
-            oidc_provider_url=oidc_provider_url,
-            realm_name=realm_name,
-            client_id=client_id,
-            audience=client_id,
-            jwt_algorithm="RS256",
-            setup_complete=True,
-            completed_at=now.isoformat(),
-        )
-        try:
-            write_identity_yaml(yaml_cfg)
-        except Exception as exc:
-            logger.warning("Failed to write identity.yaml (non-fatal): %s", exc)
-
-        # 9. Reload OIDC client and clear settings cache
-        self._reload_oidc_client(oidc_provider_url, "RS256", client_id)
-
+        # 8. OIDC config persisted to DB in step 7 — done processing.
         return ProviderSetupResult(
             success=True,
             provider_type=request.provider_type.value,
@@ -297,8 +275,7 @@ class IdentityBootstrapService:
         1. Fetch /.well-known/openid-configuration to validate the URL.
         2. Persist to DB via OIDCConfigService.
         3. Mark setup complete in ``IdentityProviderSetupState``.
-        4. Write identity.yaml (backward compat).
-        5. Reload the OIDC client.
+        4. Reload the OIDC client.
         """
         if not request.oidc_discovery_url and not request.keycloak_url:
             return ProviderSetupResult(
@@ -406,25 +383,7 @@ class IdentityBootstrapService:
                 detail=f"Database error during provisioning: {exc}",
             )
 
-        # 4. Write identity.yaml (backward compat)
-        yaml_cfg = IdentityYamlConfig(
-            provider_type=request.provider_type.value,
-            oidc_provider_url=oidc_provider_url,
-            client_id=request.client_id,
-            audience=request.client_id,
-            jwt_algorithm="RS256",
-            setup_complete=True,
-            completed_at=now.isoformat(),
-            realm_name=request.realm_name or "",
-        )
-        try:
-            write_identity_yaml(yaml_cfg)
-        except Exception as exc:
-            logger.warning("Failed to write identity.yaml (non-fatal): %s", exc)
-
-        # 5. Reload OIDC client
-        self._reload_oidc_client(oidc_provider_url, "RS256", request.client_id)
-
+        # 4. OIDC config persisted to DB in step 3 — done processing.
         return ProviderSetupResult(
             success=True,
             provider_type=request.provider_type.value,

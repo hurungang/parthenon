@@ -1,3 +1,13 @@
+"""
+⚠ DEPRECATED — use ``python -m setup.main dev`` instead.
+
+This script will be removed in a future release.
+The new setup CLI provides the same functionality with idempotency
+guarantees, structured output, and JSON output for scripting.
+
+See: setup/README.md
+"""
+
 """Local development environment initialization script.
 
 Idempotent setup script that ensures:

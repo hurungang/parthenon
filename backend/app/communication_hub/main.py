@@ -137,6 +137,8 @@ app = create_app()
 async def startup_event() -> None:
     """Run Communication Hub startup tasks."""
     _log_http_client_log_policy()
+    settings.log_config_sources()
+    await _validate_control_center_reachable()
     await _load_certificate()
     _init_data_client()
     await _start_certificate_renewal()
@@ -244,3 +246,47 @@ def _init_task_delegation_router() -> None:
         logger.info("Task Delegation Event Router initialized")
     except Exception as exc:
         logger.warning("Task Delegation Event Router initialization failed: %s", exc)
+
+
+async def _validate_control_center_reachable() -> None:
+    """Validate Control Center is reachable before attempting certificate bootstrap.
+
+    Sends a GET to ``{CONTROL_CENTER_URL}/health`` with 3 retries at
+    5-second intervals.  On failure, logs a clear error and exits.
+    """
+    import asyncio
+    import httpx
+
+    cc_url = settings.control_center_url.rstrip("/")
+    health_url = f"{cc_url}/health"
+
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(health_url)
+            if resp.status_code == 200:
+                logger.info(
+                    "resolved Control Center from env:CONTROL_CENTER_URL: %s (reachable)",
+                    cc_url,
+                )
+                return
+            logger.warning(
+                "Control Center health check returned HTTP %d (attempt %d/3)",
+                resp.status_code, attempt + 1,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Control Center not reachable at %s (attempt %d/3): %s",
+                health_url, attempt + 1, exc,
+            )
+
+        if attempt < 2:
+            await asyncio.sleep(5)
+
+    logger.error(
+        "Control Center is NOT reachable at %s after 3 attempts. "
+        "The Communication Hub requires Control Center for certificate bootstrap "
+        "and data access. Check CONTROL_CENTER_URL and ensure Control Center is running.",
+        health_url,
+    )
+    sys.exit(1)
