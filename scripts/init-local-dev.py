@@ -14,6 +14,7 @@ Safe to run multiple times - will skip steps that are already complete.
 import asyncio
 import logging
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -63,6 +64,11 @@ class LocalDevInitializer:
     
     # Agent realm
     AGENT_REALM_NAME = "ai_agents"
+
+    ROOT_DIR = Path(__file__).parent.parent
+    ROOT_ENV_PATH = ROOT_DIR / ".env"
+    BACKEND_ENV_PATH = ROOT_DIR / "backend" / ".env"
+    ENV_TEMPLATE_PATH = ROOT_DIR / ".env.example"
     
     def __init__(self):
         self.settings = get_settings()
@@ -77,6 +83,9 @@ class LocalDevInitializer:
         print()
         
         try:
+            # Step 0: Ensure required local env vars exist for service startup
+            self._ensure_local_env_vars()
+
             # Step 1: Authenticate with Keycloak
             await self._authenticate_keycloak()
             
@@ -115,6 +124,7 @@ class LocalDevInitializer:
             print("You can now start local application services with:")
             print("  Windows PowerShell: ./parthenon.ps1 start -Services backend")
             print("  macOS (VS Code slash command): /start-app --backend")
+            print("  (Required env vars were written to .env and backend/.env)")
             print()
             print("Admin credentials:")
             print(f"  Email:    {self.ADMIN_EMAIL}")
@@ -127,6 +137,155 @@ class LocalDevInitializer:
         except Exception as e:
             logger.exception("Initialization failed")
             raise InitializationError(f"Initialization failed: {e}")
+
+    def _parse_env_file(self, path: Path) -> tuple[list[str], dict[str, str], dict[str, int]]:
+        """Return raw lines + parsed key-values + first-line index per key."""
+        if not path.exists():
+            return [], {}, {}
+
+        lines = path.read_text(encoding="utf-8").splitlines()
+        values: dict[str, str] = {}
+        indices: dict[str, int] = {}
+
+        for idx, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in indices:
+                indices[key] = idx
+            if key:
+                values[key] = value
+
+        return lines, values, indices
+
+    @staticmethod
+    def _looks_placeholder(value: str | None) -> bool:
+        """Return True when env value is empty or a known placeholder token."""
+        if value is None:
+            return True
+        cleaned = value.strip()
+        if not cleaned:
+            return True
+
+        lowered = cleaned.lower()
+        return (
+            lowered.startswith("change-me")
+            or lowered.startswith("<")
+            or lowered.startswith("your-")
+            or lowered == "set-me"
+        )
+
+    @staticmethod
+    def _write_env_file(path: Path, lines: list[str]):
+        """Persist env file with trailing newline."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = "\n".join(lines).strip() + "\n"
+        path.write_text(payload, encoding="utf-8")
+
+    def _apply_env_updates(self, path: Path, updates: dict[str, str]):
+        """Create or update env keys in target file while preserving unrelated lines."""
+        lines, _values, indices = self._parse_env_file(path)
+        if not lines and self.ENV_TEMPLATE_PATH.exists() and path == self.ROOT_ENV_PATH:
+            lines = self.ENV_TEMPLATE_PATH.read_text(encoding="utf-8").splitlines()
+            indices = {}
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in line:
+                    continue
+                key = line.split("=", 1)[0].strip()
+                if key and key not in indices:
+                    indices[key] = idx
+
+        changed = False
+        for key, value in updates.items():
+            new_line = f"{key}={value}"
+            if key in indices:
+                if lines[indices[key]] != new_line:
+                    lines[indices[key]] = new_line
+                    changed = True
+            else:
+                if lines and lines[-1].strip() != "":
+                    lines.append("")
+                lines.append(new_line)
+                indices[key] = len(lines) - 1
+                changed = True
+
+        if changed or not path.exists():
+            self._write_env_file(path, lines)
+
+    def _ensure_local_env_vars(self):
+        """Ensure local env files contain required service bootstrap variables.
+
+        Services load from backend/.env during local startup; Windows helper scripts
+        also read root .env. We keep both files aligned for consistent behavior.
+        """
+        logger.info("Step 0: Ensuring local env files contain required bootstrap variables...")
+
+        for cert_dir in (
+            self.ROOT_DIR / "backend" / "certs" / "agent-runtime",
+            self.ROOT_DIR / "backend" / "certs" / "communication-hub",
+        ):
+            cert_dir.mkdir(parents=True, exist_ok=True)
+
+        _, root_values, _ = self._parse_env_file(self.ROOT_ENV_PATH)
+        _, backend_values, _ = self._parse_env_file(self.BACKEND_ENV_PATH)
+
+        # Prefer existing non-placeholder values from either env file.
+        existing_ar = root_values.get("AGENT_RUNTIME_BOOTSTRAP_KEY") or backend_values.get(
+            "AGENT_RUNTIME_BOOTSTRAP_KEY"
+        )
+        existing_ch = root_values.get("COMM_HUB_BOOTSTRAP_KEY") or backend_values.get(
+            "COMM_HUB_BOOTSTRAP_KEY"
+        )
+
+        if self._looks_placeholder(existing_ar) and self._looks_placeholder(existing_ch):
+            shared_key = secrets.token_urlsafe(36)
+            agent_runtime_bootstrap_key = shared_key
+            comm_hub_bootstrap_key = shared_key
+        else:
+            agent_runtime_bootstrap_key = (
+                existing_ar if not self._looks_placeholder(existing_ar) else existing_ch
+            )
+            comm_hub_bootstrap_key = (
+                existing_ch if not self._looks_placeholder(existing_ch) else existing_ar
+            )
+
+        if self._looks_placeholder(agent_runtime_bootstrap_key):
+            agent_runtime_bootstrap_key = secrets.token_urlsafe(36)
+        if self._looks_placeholder(comm_hub_bootstrap_key):
+            comm_hub_bootstrap_key = agent_runtime_bootstrap_key
+
+        # SERVICE_BOOTSTRAP_KEY is used when launching services directly without
+        # service-specific wrappers. Keep a safe default in env files.
+        existing_service_bootstrap = root_values.get("SERVICE_BOOTSTRAP_KEY") or backend_values.get(
+            "SERVICE_BOOTSTRAP_KEY"
+        )
+        service_bootstrap_key = (
+            existing_service_bootstrap
+            if not self._looks_placeholder(existing_service_bootstrap)
+            else agent_runtime_bootstrap_key
+        )
+
+        defaults = {
+            "OIDC_PROVIDER_URL": f"{self.KEYCLOAK_BASE_URL}/realms/{self.REALM_NAME}",
+            "CONTROL_CENTER_URL": "http://localhost:8000",
+            "AGENT_RUNTIME_BOOTSTRAP_KEY": agent_runtime_bootstrap_key,
+            "COMM_HUB_BOOTSTRAP_KEY": comm_hub_bootstrap_key,
+            "SERVICE_BOOTSTRAP_KEY": service_bootstrap_key,
+            "AGENT_CERT_PATH": "certs/agent-runtime/service-cert.pem",
+            "AGENT_KEY_PATH": "certs/agent-runtime/service-key.pem",
+            "COMM_HUB_CERT_PATH": "certs/communication-hub/service-cert.pem",
+            "COMM_HUB_KEY_PATH": "certs/communication-hub/service-key.pem",
+            "CA_CERT_PATH": "certs/agent-runtime/ca-cert.pem",
+        }
+
+        self._apply_env_updates(self.ROOT_ENV_PATH, defaults)
+        self._apply_env_updates(self.BACKEND_ENV_PATH, defaults)
+
+        print("  ✓ Local env variables ensured in .env and backend/.env")
 
     def _run_migrations(self):
         """Apply Alembic migrations before database initialization."""
@@ -217,8 +376,19 @@ class LocalDevInitializer:
                 "parthenon-api-ui",
                 [
                     "http://localhost:5173/*",
+                    "http://127.0.0.1:5173/*",
                     "http://localhost:4173/*",
+                    "http://127.0.0.1:4173/*",
                     "http://localhost:3000/*",
+                    "http://127.0.0.1:3000/*",
+                ],
+                web_origins=[
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:4173",
+                    "http://127.0.0.1:4173",
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
                 ],
                 public_client=True,
             )
@@ -262,9 +432,21 @@ class LocalDevInitializer:
                 agent_client_id,
                 [
                     "http://localhost:8000/api/v1/agents/oauth/callback",
+                    "http://127.0.0.1:8000/api/v1/agents/oauth/callback",
                     "http://localhost:5173/agents/identities/oauth/callback",
+                    "http://127.0.0.1:5173/agents/identities/oauth/callback",
                     "http://localhost:4173/agents/identities/oauth/callback",
+                    "http://127.0.0.1:4173/agents/identities/oauth/callback",
                     "http://localhost:3000/agents/identities/oauth/callback",
+                    "http://127.0.0.1:3000/agents/identities/oauth/callback",
+                ],
+                web_origins=[
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:4173",
+                    "http://127.0.0.1:4173",
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
                 ],
                 public_client=True,
             )

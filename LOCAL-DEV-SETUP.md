@@ -55,6 +55,7 @@ This will:
 - ✅ Create default admin user: `admin@parthenon.local` / `admin`
 - ✅ Seed system roles and permissions in the database
 - ✅ Assign system_admin role to the admin user
+- ✅ Ensure required local service env vars exist in both `.env` and `backend/.env`
 
 **This is idempotent** — safe to run multiple times if something goes wrong.
 
@@ -130,7 +131,7 @@ Use the helper script for manual control and fast reload:
 - ✅ Separate terminal windows for each service
 - ✅ Full console output visibility
 - ✅ Easy debugging with breakpoints
-- ✅ Environment variables loaded from .env file
+- ✅ Environment variables loaded from `.env` (helpers) and `backend/.env` (service runtime)
 
 ### 3. Or Use Orchestration Script
 
@@ -155,7 +156,11 @@ For automated startup:
 
 ## Environment Configuration
 
-All services load environment variables from `.env` file:
+Local runtime services read `backend/.env`.
+Helper scripts (for example `start-service.ps1`) also load root `.env`.
+`./parthenon.ps1 init` now ensures both files contain required local defaults.
+
+Example values:
 
 ```env
 # Database

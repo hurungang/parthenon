@@ -21,9 +21,11 @@ This command performs a complete local development setup and startup:
 - ✅ Creates default admin user with consistent UUID
 - ✅ Seeds database with `system_admin` role and wildcard policy
 - ✅ Assigns system_admin role to admin user
+- ✅ Auto-provisions required local env vars in both `.env` and `backend/.env` (bootstrap keys, cert paths, control-center URL)
 - ✅ Uses Docker only for infrastructure
 - ✅ Starts app services locally via `./parthenon.ps1 start -Services backend`
 - ✅ Provides login instructions
+- ✅ Prevents local OIDC redirect mismatch (`localhost` vs `127.0.0.1`) by seeding both URI variants
 
 **Safe to run multiple times** — all operations are idempotent and will skip steps already completed.
 
@@ -219,6 +221,13 @@ if (-not $ready) {
 
 Execute the initialization script that performs all setup steps.
 
+This step now also ensures required local service env vars exist in both `.env` and `backend/.env`, including:
+- `AGENT_RUNTIME_BOOTSTRAP_KEY`
+- `COMM_HUB_BOOTSTRAP_KEY`
+- `SERVICE_BOOTSTRAP_KEY`
+- `CONTROL_CENTER_URL`
+- `AGENT_CERT_PATH`, `AGENT_KEY_PATH`, `COMM_HUB_CERT_PATH`, `COMM_HUB_KEY_PATH`, `CA_CERT_PATH`
+
 ```powershell
 Write-Host ""
 Write-Host "═══════════════════════════════════════════════════" -ForegroundColor Cyan
@@ -397,6 +406,19 @@ Run this quick confirmation checklist:
 5. Confirm local services are healthy on ports 8000, 8001, 8002, and 5173.
 6. Confirm admin user can authenticate and reach frontend.
 
+Additional OIDC callback validation (required):
+7. Confirm Keycloak UI client `parthenon-api-ui` has redirect URIs for both hostname variants:
+    - `http://localhost:5173/*`
+    - `http://127.0.0.1:5173/*`
+8. Confirm Keycloak UI client web origins include both:
+    - `http://localhost:5173`
+    - `http://127.0.0.1:5173`
+9. Confirm `backend/.env` exists and contains non-placeholder bootstrap/env values:
+    - `AGENT_RUNTIME_BOOTSTRAP_KEY`
+    - `COMM_HUB_BOOTSTRAP_KEY`
+    - `SERVICE_BOOTSTRAP_KEY`
+    - `CONTROL_CENTER_URL`
+
 If any item fails, surface the exact failed component and recommended fix.
 
 ---
@@ -448,6 +470,12 @@ This is equivalent but doesn't provide the interactive verification step.
 **Issue: "Connection refused" errors during initialization**
 - Keycloak is still starting up — wait 30-60 seconds and retry
 - Check Keycloak logs: `docker compose logs keycloak`
+
+**Issue: "Invalid parameter: redirect_uri" on Keycloak login page**
+- Cause: frontend opened with `127.0.0.1` but Keycloak client allows only `localhost` (or vice versa)
+- Solution:
+    1. Re-run `/init-app` to reseed OIDC clients with both hostname variants
+    2. Or use a consistent frontend URL (`http://localhost:5173`)
 
 ---
 
