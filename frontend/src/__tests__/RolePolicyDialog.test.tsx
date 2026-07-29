@@ -89,7 +89,6 @@ vi.mock('../components/permissions/FreeSoloResourceTypeSelect', () => ({
 vi.mock('../components/permissions/FreeSoloActionSelect', () => ({
   default: ({
     value,
-    onChange,
     disabled,
   }: {
     value: string[]

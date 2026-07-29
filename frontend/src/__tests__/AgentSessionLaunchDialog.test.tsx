@@ -34,6 +34,8 @@ function makeAgentType(overrides: Partial<AgentType> = {}): AgentType {
     input_schema: null,
     output_type: 'auto',
     output_schema: null,
+    output_data_type_id: null,
+    output_data_type_name: null,
     sop_bindings: [],
     skill_bindings: [],
     is_active: true,

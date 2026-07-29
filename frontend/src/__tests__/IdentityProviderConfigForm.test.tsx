@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 
@@ -136,6 +136,7 @@ describe('IdentityProviderConfigForm', () => {
         id: '1', provider_scope: 'user', provider_type: 'oidc_generic',
         display_name: 'Test', issuer_url: 'https://example.com', client_id: 'test',
         encrypted_client_secret: 'encrypted', scopes: 'openid', claim_mappings: null,
+        ui_client_id: null, public_client_id: null,
         is_enabled: true, created_at: '', updated_at: '',
       },
     }))
@@ -161,6 +162,7 @@ describe('IdentityProviderConfigForm', () => {
         id: '1', provider_scope: 'user', provider_type: 'oidc_generic',
         display_name: '', issuer_url: 'https://example.com', client_id: 'test',
         encrypted_client_secret: null, scopes: 'openid', claim_mappings: null,
+        ui_client_id: null, public_client_id: null,
         is_enabled: true, created_at: '', updated_at: '',
       },
     }))
@@ -178,6 +180,7 @@ describe('IdentityProviderConfigForm', () => {
         id: '1', provider_scope: 'user', provider_type: 'oidc_generic',
         display_name: '', issuer_url: 'https://example.com', client_id: 'test',
         encrypted_client_secret: null, scopes: 'openid', claim_mappings: null,
+        ui_client_id: null, public_client_id: null,
         is_enabled: true, created_at: '', updated_at: '',
       },
     }))

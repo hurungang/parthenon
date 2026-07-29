@@ -129,7 +129,7 @@ vi.mock('../hooks/useChatSession', () => ({
     guardrailUsage: null,
     chatStatus: shared.chatStatusState,
     delegationCycles: buildMockDelegationCycles(),
-    activeDelegationCycleId: buildMockDelegationCycles().at(-1)?.id ?? null,
+    activeDelegationCycleId: buildMockDelegationCycles().slice(-1)[0]?.id ?? null,
     delegationSnippets: shared.delegationSnippetsState,
     delegationSnippetsCollapsed: true,
     delegationCompleted: shared.delegationCompletedState,

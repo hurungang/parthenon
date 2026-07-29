@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 
 const shared = vi.hoisted(() => ({
   mockGet: vi.fn(),
@@ -234,8 +234,6 @@ describe('useChatSession - intervention messages', () => {
       )
     })
 
-    // Try sending a message
-    const wsSend = socket.send as ReturnType<typeof vi.fn>
     // The hook should block and not call send
     // Verify intervention is active
     expect(result.current.interventionRequest).not.toBeNull()

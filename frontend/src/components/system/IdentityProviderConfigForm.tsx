@@ -5,7 +5,6 @@ import {
   Collapse,
   FormControl,
   FormControlLabel,
-  FormHelperText,
   IconButton,
   InputAdornment,
   InputLabel,
@@ -67,7 +66,7 @@ export function IdentityProviderConfigForm({
   const [clientId, setClientId] = useState(currentConfig?.client_id ?? '')
   const [clientSecret, setClientSecret] = useState('')
   const [publicClientId, setPublicClientId] = useState(currentConfig?.public_client_id ?? currentConfig?.ui_client_id ?? '')
-  const [scopes, setScopes] = useState(currentConfig?.scopes ?? DEFAULT_SCOPES[scope])
+  const [scopes, _setScopes] = useState(currentConfig?.scopes ?? DEFAULT_SCOPES[scope])
   const [claimsMapping, setClaimsMapping] = useState(
     currentConfig?.claim_mappings
       ? Object.entries(currentConfig.claim_mappings)
@@ -128,7 +127,7 @@ export function IdentityProviderConfigForm({
 
   return (
     <Box>
-      {dialogError && (
+      {dialogError != null && (
         <Box mb={2}>
           <PermissionDeniedAlert error={dialogError} fallbackMessage={t('systemConfig.identityProviders.saveError')} />
         </Box>

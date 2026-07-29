@@ -64,7 +64,6 @@ export function IdentityProvidersConfigPage() {
   const providers = providersData?.items ?? []
   const userProvider = providers.find((p) => p.provider_scope === 'user')
   const agentProvider = providers.find((p) => p.provider_scope === 'agent')
-  const hasActiveOidcProvider = providers.some((p) => p.is_enabled)
 
   const handleSaveProvider = async (
     scope: 'user' | 'agent',

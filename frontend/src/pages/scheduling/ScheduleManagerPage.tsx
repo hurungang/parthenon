@@ -36,6 +36,7 @@ import apiClient from '../../api/apiClient'
 import CronEditor from '../../components/scheduling/CronEditor'
 import ExecutionHistory from '../../components/scheduling/ExecutionHistory'
 import { DynamicSchemaForm } from '../../components/DynamicSchemaForm'
+import type { JsonSchema } from '../../components/DynamicSchemaForm'
 import { usePagination } from '../../hooks/usePagination'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type { AgentType, ScheduledJob } from '../../types'
@@ -262,7 +263,7 @@ export function ScheduleManagerPage() {
             </FormControl>
             {selectedAgent && selectedAgent.input_type === 'typed' && selectedAgent.input_schema && (
               <DynamicSchemaForm
-                schema={selectedAgent.input_schema}
+                schema={selectedAgent.input_schema as unknown as JsonSchema}
                 value={form.payload}
                 onChange={(payload) => setForm((f) => ({ ...f, payload }))}
               />

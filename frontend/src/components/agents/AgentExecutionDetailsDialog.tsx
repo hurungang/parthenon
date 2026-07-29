@@ -50,8 +50,8 @@ export function AgentExecutionDetailsDialog({
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: string; content: string }> | null>(null)
   const [loading, setLoading] = useState(true)
   const [subAgentDialogSessionId, setSubAgentDialogSessionId] = useState<string | null>(null)
-  const [inlineInterventionRequest, setInlineInterventionRequest] = useState<InterveneRequest | null>(null)
-  const [inlineDialogDismissed, setInlineDialogDismissed] = useState(false)
+  const [, setInlineInterventionRequest] = useState<InterveneRequest | null>(null)
+  const [, setInlineDialogDismissed] = useState(false)
   const [autoDialogOpen, setAutoDialogOpen] = useState(false)
   const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
   const [terminating, setTerminating] = useState(false)
@@ -62,7 +62,6 @@ export function AgentExecutionDetailsDialog({
   // ── Ref declarations ──────────────────────────────────────────────────────
   const logEndRef = useRef<HTMLDivElement | null>(null)
   const prevLogCountRef = useRef(0)
-  const interventionRef = useRef<HTMLDivElement | null>(null)
   const inlineDialogShownRef = useRef<string | null>(null)
   const autoDialogShownRef = useRef<string | null>(null)
 
@@ -242,7 +241,7 @@ export function AgentExecutionDetailsDialog({
           e.log_level.toUpperCase() === 'CRITICAL',
       )
         .map((e) => e.message)
-        .at(-1) ?? null)
+        .slice(-1)[0] ?? null)
     : null
   // Always show execution tab when there are logs, or when result is shown (so user can inspect logs after completion)
   const hasExecutionLogs = logEntries.length > 0 || execLogs.length > 0 || hasResult

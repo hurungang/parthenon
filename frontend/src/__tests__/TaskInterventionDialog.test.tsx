@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import { TaskInterventionDialog } from '../components/executions/TaskInterventionDialog'
 import type { InterveneRequest } from '../types'
 

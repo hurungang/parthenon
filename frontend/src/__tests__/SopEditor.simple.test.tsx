@@ -65,7 +65,7 @@ describe('SopEditor', () => {
   it('renders instructions field for new SOP', async () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
     
-    const { container } = render(
+    render(
       <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
       { wrapper }
     )
@@ -77,7 +77,7 @@ describe('SopEditor', () => {
   it('renders Add Step button', async () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
     
-    const { container } = render(
+    render(
       <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
       { wrapper }
     )

@@ -41,7 +41,7 @@ vi.mock('react-i18next', () => ({
 
 // Mock SkillEditor to avoid rendering complexity that causes test hangs
 vi.mock('../pages/skills/SkillEditor', () => ({
-  SkillEditor: ({ open, mode }: { open: boolean; mode: string }) => {
+  SkillEditor: ({ open }: { open: boolean; mode: string }) => {
     if (!open) return null
     return (
       <div data-testid="mock-skill-editor">
@@ -53,7 +53,7 @@ vi.mock('../pages/skills/SkillEditor', () => ({
 
 // Mock SopEditor to avoid rendering complexity that causes test hangs
 vi.mock('../pages/skills/SopEditor', () => ({
-  SopEditor: ({ mode }: { mode: string }) => (
+  SopEditor: () => (
     <div data-testid="mock-sop-editor">
       <input type="text" name="workflow" placeholder="Workflow" />
     </div>
@@ -93,7 +93,7 @@ describe('Workflow terminology rename coverage', () => {
 
   it('uses Workflow label in SOP editor and hides legacy System Instruction wording', async () => {
     const { SopEditor } = await import('../pages/skills/SopEditor')
-    render(<SopEditor sop={null} mode="create" onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
+    render(<SopEditor sop={null} mode="create" open onClose={vi.fn()} onSaved={vi.fn()} />, { wrapper })
 
     // Check that the mocked component with Workflow is rendered
     expect(screen.getByTestId('mock-sop-editor')).toBeDefined()

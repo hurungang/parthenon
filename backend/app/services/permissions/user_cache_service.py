@@ -26,17 +26,26 @@ class UserCacheService:
         email: str,
         display_name: str,
     ) -> PlatformUser:
-        """Insert PlatformUser on first encounter; update last_seen_at on subsequent encounters.
-
-        Sets first_seen_at and last_seen_at on creation.
-        Updates only last_seen_at on subsequent calls.
-        """
+        """Upsert PlatformUser by sub; handle email conflict from re-provisioned IdP."""
         result = await db.execute(
             select(PlatformUser).where(PlatformUser.sub == sub)
         )
         user = result.scalar_one_or_none()
 
         if user is None:
+            # Check for email conflict — stale user from a previous IdP instance
+            existing_by_email = await db.execute(
+                select(PlatformUser).where(PlatformUser.email == email)
+            )
+            stale = existing_by_email.scalar_one_or_none()
+            if stale is not None:
+                logger.warning(
+                    "Removing stale PlatformUser sub=%s email=%s — IdP re-provisioned",
+                    stale.sub, email,
+                )
+                await db.delete(stale)
+                await db.flush()
+
             now = datetime.utcnow()
             user = PlatformUser(
                 sub=sub,
@@ -49,7 +58,6 @@ class UserCacheService:
             logger.info("Created new PlatformUser for sub=%s", sub)
         else:
             user.last_seen_at = datetime.utcnow()
-            # Update email/display_name if they've changed in the IdP
             if email:
                 user.email = email
             if display_name:

@@ -99,6 +99,58 @@ param(
     [switch]$RunSetup
 )
 
+# Platform detection and helpers
+$_IsWindows = $PSVersionTable.Platform -eq 'Win32NT' -or [System.Environment]::OSVersion.Platform -eq 'Win32NT'
+$_IsMacOS   = [System.Environment]::OSVersion.Platform -eq 'Unix' -and (uname -s 2>$null) -eq 'Darwin'
+$_IsLinux   = [System.Environment]::OSVersion.Platform -eq 'Unix' -and (uname -s 2>$null) -ne 'Darwin'
+$_PwshExe   = if ($_IsWindows) { 'pwsh.exe' } else { 'pwsh' }
+$_VenvDir   = if ($_IsWindows) { '.venv\Scripts' } else { '.venv/bin' }
+
+function Get-PortPid {
+    param([int]$Port)
+    if ($_IsWindows) {
+        $line = netstat -ano 2>$null | Select-String ":$Port .*LISTEN" | Select-Object -First 1
+        if ($line) { return ($line.ToString().Trim() -split '\s+')[-1] }
+    } else {
+        $line = lsof -ti :$Port -sTCP:LISTEN 2>$null
+        if ($line) { return ($line -split '\n')[0] }
+    }
+    return $null
+}
+
+function Test-PortInUse {
+    param([int]$Port)
+    if ($_IsWindows) {
+        return (netstat -ano 2>$null | Select-String ":$Port .*LISTEN") -ne $null
+    } else {
+        $pids = lsof -ti :$Port -sTCP:LISTEN 2>$null
+        return -not [string]::IsNullOrWhiteSpace($pids)
+    }
+}
+
+function Kill-PortProcess {
+    param([int]$Port)
+    if ($_IsWindows) {
+        $pids = netstat -ano 2>$null | Select-String ":$Port .*LISTEN" | ForEach-Object {
+            ($_.ToString().Trim() -split '\s+')[-1]
+        } | Select-Object -Unique
+        foreach ($pid in $pids) {
+            taskkill /F /T /PID $pid >$null 2>&1
+        }
+    } else {
+        $pids = lsof -ti :$Port -sTCP:LISTEN 2>$null
+        if ($pids) {
+            $pids -split '\n' | ForEach-Object { kill -9 $_ 2>$null }
+        }
+    }
+}
+
+function Get-RootPath {
+    param([string]$Path)
+    # Normalize Windows-style paths with backslashes to platform-native
+    return $Path -replace '\\', ([System.IO.Path]::DirectorySeparatorChar)
+}
+
 # Script configuration
 $Script:ProjectRoot = $PSScriptRoot
 $Script:BackendDir = Join-Path $ProjectRoot "backend"
@@ -166,15 +218,15 @@ $Script:ServiceConfig = @{
         Name = "Control Center"
         Port = 8000
         HealthUrl = "http://localhost:8000/health"
-        LogFile = "backend\logs\control-center.log"
-        CheckCommand = { (netstat -ano | Select-String ":8000 .*LISTEN") -ne $null }
+        LogFile = (Get-RootPath "backend/logs/control-center.log")
+        CheckCommand = { Test-PortInUse -Port 8000 }
         StartCommand = {
             Write-Host "Starting Control Center (port 8000)..." -ForegroundColor Cyan
             $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
-            $logPath = Join-Path $Script:ProjectRoot "backend\logs\control-center.log"
+            $logPath = Join-Path $Script:ProjectRoot (Get-RootPath "backend/logs/control-center.log")
 
             # Start using helper script
-            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "control-center", "-LogLevel", "$LogLevel"
+            Start-Process -FilePath $_PwshExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "control-center", "-LogLevel", "$LogLevel"
             
             # Wait for service to be ready with better health checking
             Write-Host "  Waiting for Control Center to be ready (max 60s)..." -ForegroundColor Cyan
@@ -218,20 +270,9 @@ $Script:ServiceConfig = @{
         }
         StopCommand = {
             Write-Host "Stopping Control Center..." -ForegroundColor Cyan
-            $pids = netstat -ano | Select-String ":8000 .*LISTEN" | ForEach-Object {
-                ($_.ToString().Trim() -split '\s+')[-1]
-            } | Select-Object -Unique
-            
-            foreach ($processId in $pids) {
-                Write-Host "  Killing process tree $processId..."
-                # Use taskkill /F /T to kill entire process tree (parent + children)
-                taskkill /F /T /PID $processId >$null 2>&1
-            }
-            
-            # Wait a moment and verify port is actually free
+            Kill-PortProcess -Port 8000
             Start-Sleep -Milliseconds 500
-            $stillRunning = netstat -ano | Select-String ":8000 .*LISTEN"
-            if ($stillRunning) {
+            if (Test-PortInUse -Port 8000) {
                 Write-Host "  Warning: Port 8000 still in use after stop" -ForegroundColor Yellow
             } else {
                 Write-Host "  ✓ Port 8000 is now free" -ForegroundColor Green
@@ -243,9 +284,9 @@ $Script:ServiceConfig = @{
         Name = "Agent Runtime"
         Port = 8001
         HealthUrl = "http://localhost:8001/health"
-        LogFile = "backend\logs\agent-runtime.log"
+        LogFile = (Get-RootPath "backend/logs/agent-runtime.log")
         DependsOn = @('control-center')
-        CheckCommand = { (netstat -ano | Select-String ":8001 .*LISTEN") -ne $null }
+        CheckCommand = { Test-PortInUse -Port 8001 }
         StartCommand = {
             Write-Host "Starting Agent Runtime (port 8001)..." -ForegroundColor Cyan
             
@@ -259,8 +300,8 @@ $Script:ServiceConfig = @{
             }
             
             $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
-            $logPath = Join-Path $Script:ProjectRoot "backend\logs\agent-runtime.log"
-            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "agent-runtime", "-LogLevel", "$LogLevel"
+            $logPath = Join-Path $Script:ProjectRoot (Get-RootPath "backend/logs/agent-runtime.log")
+            Start-Process -FilePath $_PwshExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "agent-runtime", "-LogLevel", "$LogLevel"
             
             Write-Host "  Waiting for Agent Runtime to be ready (max 60s)..." -ForegroundColor Cyan
             $ready = $false
@@ -300,20 +341,9 @@ $Script:ServiceConfig = @{
         }
         StopCommand = {
             Write-Host "Stopping Agent Runtime..." -ForegroundColor Cyan
-            $pids = netstat -ano | Select-String ":8001 .*LISTEN" | ForEach-Object {
-                ($_.ToString().Trim() -split '\s+')[-1]
-            } | Select-Object -Unique
-            
-            foreach ($processId in $pids) {
-                Write-Host "  Killing process tree $processId..."
-                # Use taskkill /F /T to kill entire process tree (parent + children)
-                taskkill /F /T /PID $processId >$null 2>&1
-            }
-            
-            # Wait a moment and verify port is actually free
+            Kill-PortProcess -Port 8001
             Start-Sleep -Milliseconds 500
-            $stillRunning = netstat -ano | Select-String ":8001 .*LISTEN"
-            if ($stillRunning) {
+            if (Test-PortInUse -Port 8001) {
                 Write-Host "  Warning: Port 8001 still in use after stop" -ForegroundColor Yellow
             } else {
                 Write-Host "  ✓ Port 8001 is now free" -ForegroundColor Green
@@ -325,9 +355,9 @@ $Script:ServiceConfig = @{
         Name = "Communication Hub"
         Port = 8002
         HealthUrl = "http://localhost:8002/health"
-        LogFile = "backend\logs\communication-hub.log"
+        LogFile = (Get-RootPath "backend/logs/communication-hub.log")
         DependsOn = @('control-center')
-        CheckCommand = { (netstat -ano | Select-String ":8002 .*LISTEN") -ne $null }
+        CheckCommand = { Test-PortInUse -Port 8002 }
         StartCommand = {
             Write-Host "Starting Communication Hub (port 8002)..." -ForegroundColor Cyan
             
@@ -341,8 +371,8 @@ $Script:ServiceConfig = @{
             }
             
             $startScript = Join-Path $Script:ProjectRoot "start-service.ps1"
-            $logPath = Join-Path $Script:ProjectRoot "backend\logs\communication-hub.log"
-            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "communication-hub", "-LogLevel", "$LogLevel"
+            $logPath = Join-Path $Script:ProjectRoot (Get-RootPath "backend/logs/communication-hub.log")
+            Start-Process -FilePath $_PwshExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$startScript`"", "-Service", "communication-hub", "-LogLevel", "$LogLevel"
             
             Write-Host "  Waiting for Communication Hub to be ready (max 60s)..." -ForegroundColor Cyan
             $ready = $false
@@ -382,20 +412,9 @@ $Script:ServiceConfig = @{
         }
         StopCommand = {
             Write-Host "Stopping Communication Hub..." -ForegroundColor Cyan
-            $pids = netstat -ano | Select-String ":8002 .*LISTEN" | ForEach-Object {
-                ($_.ToString().Trim() -split '\s+')[-1]
-            } | Select-Object -Unique
-            
-            foreach ($processId in $pids) {
-                Write-Host "  Killing process tree $processId..."
-                # Use taskkill /F /T to kill entire process tree (parent + children)
-                taskkill /F /T /PID $processId >$null 2>&1
-            }
-            
-            # Wait a moment and verify port is actually free
+            Kill-PortProcess -Port 8002
             Start-Sleep -Milliseconds 500
-            $stillRunning = netstat -ano | Select-String ":8002 .*LISTEN"
-            if ($stillRunning) {
+            if (Test-PortInUse -Port 8002) {
                 Write-Host "  Warning: Port 8002 still in use after stop" -ForegroundColor Yellow
             } else {
                 Write-Host "  ✓ Port 8002 is now free" -ForegroundColor Green
@@ -408,11 +427,11 @@ $Script:ServiceConfig = @{
         Port = 5173
         HealthUrl = "http://localhost:5173"
         LogFile = $null  # Logs to console only
-        CheckCommand = { (netstat -ano | Select-String ":5173 .*LISTEN") -ne $null }
+        CheckCommand = { Test-PortInUse -Port 5173 }
         StartCommand = {
             Write-Host "Starting frontend dev server..." -ForegroundColor Cyan
             $frontendPath = Join-Path $Script:ProjectRoot "frontend"
-            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoExit", "-Command", "Set-Location '$frontendPath'; npm run dev"
+            Start-Process -FilePath $_PwshExe -ArgumentList "-NoExit", "-Command", "Set-Location '$frontendPath'; npm run dev"
             
             # Wait for frontend to be ready
             Write-Host "  Waiting for frontend to be ready (max 30s)..." -ForegroundColor Cyan
@@ -443,20 +462,9 @@ $Script:ServiceConfig = @{
         }
         StopCommand = {
             Write-Host "Stopping frontend dev server..." -ForegroundColor Cyan
-            $pids = netstat -ano | Select-String ":5173 .*LISTEN" | ForEach-Object {
-                ($_.ToString().Trim() -split '\s+')[-1]
-            } | Select-Object -Unique
-            
-            foreach ($processId in $pids) {
-                Write-Host "  Killing process tree $processId..."
-                # Use taskkill /F /T to kill entire process tree (parent + children)
-                taskkill /F /T /PID $processId >$null 2>&1
-            }
-            
-            # Wait a moment and verify port is actually free
+            Kill-PortProcess -Port 5173
             Start-Sleep -Milliseconds 500
-            $stillRunning = netstat -ano | Select-String ":5173 .*LISTEN"
-            if ($stillRunning) {
+            if (Test-PortInUse -Port 5173) {
                 Write-Host "  Warning: Port 5173 still in use after stop" -ForegroundColor Yellow
             } else {
                 Write-Host "  ✓ Port 5173 is now free" -ForegroundColor Green
@@ -640,15 +648,7 @@ function Stop-Service {
                 Write-Host "⚠️  $($config.Name) did not stop cleanly - forcing kill..." -ForegroundColor Yellow
                 # Force kill by port one more time
                 if ($config.Port) {
-                    $pids = netstat -ano | Select-String ":$($config.Port) .*LISTEN" | ForEach-Object {
-                        ($_.ToString().Trim() -split '\s+')[-1]
-                    } | Select-Object -Unique
-                    
-                    foreach ($processId in $pids) {
-                        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                        Write-Host "  Force killed process $processId" -ForegroundColor Red
-                    }
-                    Start-Sleep -Seconds 1
+                    Kill-PortProcess -Port $config.Port
                 }
             }
         }
@@ -706,10 +706,11 @@ switch ($Action) {
                 Write-Host "--- Running Environment Setup ---" -ForegroundColor Cyan
                 Push-Location $Script:ProjectRoot
                 try {
-                    if (Test-Path ".venv\Scripts\Activate.ps1") {
-                        & .venv\Scripts\Activate.ps1
+                    $pythonExe = Join-Path $Script:ProjectRoot $_VenvDir "python"
+                    if ($_IsWindows) { $pythonExe += ".exe" }
+                    if (Test-Path $pythonExe) {
+                        & $pythonExe -m setup.main dev
                     }
-                    python -m setup.main dev
                     $setupExit = $LASTEXITCODE
                 } finally {
                     Pop-Location
@@ -809,10 +810,11 @@ switch ($Action) {
         # Activate venv and run setup
         Push-Location $Script:ProjectRoot
         try {
-            if (Test-Path ".venv\Scripts\Activate.ps1") {
-                & .venv\Scripts\Activate.ps1
+            $pythonExe = Join-Path $Script:ProjectRoot $_VenvDir "python"
+            if ($_IsWindows) { $pythonExe += ".exe" }
+            if (Test-Path $pythonExe) {
+                & $pythonExe -m setup.main dev
             }
-            python -m setup.main dev
             $exitCode = $LASTEXITCODE
             
             if ($exitCode -eq 0) {

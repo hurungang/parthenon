@@ -60,18 +60,19 @@ describe('SuperAdminConfigSection', () => {
     is_enabled: true,
     username: 'admin',
     last_login_at: '2025-01-15T10:00:00Z',
+    env_controlled: false,
   }
 
   const disabledStatus = {
     is_enabled: false,
     username: 'admin',
     last_login_at: null,
+    env_controlled: false,
   }
 
   it('renders the title', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.title')).toBeDefined()
   })
@@ -79,7 +80,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows enabled label when enabled', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.enabled')).toBeDefined()
   })
@@ -87,7 +87,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows disabled label when disabled', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: disabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.disabled')).toBeDefined()
   })
@@ -95,7 +94,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows username in status', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('admin')).toBeDefined()
   })
@@ -103,7 +101,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows last login timestamp content', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     // The text is rendered as "systemConfig.superAdmin.lastLogin: <date>"
     // Use a regex partial match
@@ -114,7 +111,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows never when no last login', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: { ...enabledStatus, last_login_at: null },
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.never')).toBeDefined()
   })
@@ -122,7 +118,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows info alert when enabled', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.enableDescription')).toBeDefined()
   })
@@ -130,7 +125,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows warning alert when disabled', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: disabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.disableDescription')).toBeDefined()
   })
@@ -138,7 +132,6 @@ describe('SuperAdminConfigSection', () => {
   it('renders password change button', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     expect(screen.getByText('systemConfig.superAdmin.passwordChange')).toBeDefined()
   })
@@ -146,7 +139,6 @@ describe('SuperAdminConfigSection', () => {
   it('disables password change button when super admin is disabled', () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: disabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     const passBtn = screen.getByText('systemConfig.superAdmin.passwordChange')
     expect(passBtn.closest('button')).toHaveProperty('disabled', true)
@@ -155,7 +147,6 @@ describe('SuperAdminConfigSection', () => {
   it('opens disable confirmation modal when toggling off', async () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
 
     // MUI Switch renders with role="checkbox" inside a label
@@ -172,7 +163,6 @@ describe('SuperAdminConfigSection', () => {
   it('shows guard rail modal when disabling without OIDC provider', async () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: false,
     }), { wrapper: Wrapper })
 
     const toggleLabel = screen.getByText('systemConfig.superAdmin.enabled')
@@ -187,7 +177,6 @@ describe('SuperAdminConfigSection', () => {
   it('opens password change dialog', async () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
     const passBtn = screen.getByText('systemConfig.superAdmin.passwordChange')
     fireEvent.click(passBtn)
@@ -201,7 +190,6 @@ describe('SuperAdminConfigSection', () => {
   it('can open and close the disable confirmation modal', async () => {
     render(React.createElement(SuperAdminConfigSection, {
       status: enabledStatus,
-      hasActiveOidcProvider: true,
     }), { wrapper: Wrapper })
 
     // Click the label text to toggle switch and open the modal
