@@ -327,7 +327,6 @@ describe('AddStatementDialog', () => {
 
     // The action select should exist — verify related text is present
     // FreeSoloActionSelect renders with label "permissions.roles.actions"
-    const actionLabels = screen.queryAllByText('permissions.roles.actions')
     // It might not render if the component uses InputLabel differently
     // Verify the dialog content is rendered at minimum
     const cancelBtn = screen.getByRole('button', { name: /app\.cancel/i })

@@ -96,7 +96,7 @@ describe('InterveneRequestList', () => {
     render(
       <InterveneRequestList
         requests={[
-          { ...baseRequest, intervention_type: 'text_input' as const },
+          { ...baseRequest, intervention_type: 'text' as const },
         ]}
         isLoading={false}
         onSubmitResponse={onSubmitResponse}

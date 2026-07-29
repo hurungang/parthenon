@@ -22,8 +22,6 @@ describe('InterventionPendingIndicator', () => {
     // Should have border styling
     const box = container.firstElementChild
     expect(box).not.toBeNull()
-    // Non-inline variant should have px: 2 (padding)
-    const style = window.getComputedStyle(box!)
     // Just verify it renders without error
     expect(box?.tagName).toBe('DIV')
   })

@@ -176,6 +176,13 @@ export function McpSessionManager({ serverId }: McpSessionManagerProps) {
       basic_auth_username: hasCreds && session.auth_type === 'basic_auth' ? '__saved__' : '',
       basic_auth_password: hasCreds && session.auth_type === 'basic_auth' ? '__saved__' : '',
       oauth2_authenticated: false,
+      oauth_metadata_url: '',
+      oauth_authorization_url: '',
+      oauth_token_url: '',
+      oauth_client_id: '',
+      oauth_client_secret: '',
+      oauth_scope: '',
+      api_key_as_bearer: false,
     })
     setDialogError(null)
     setDialogOpen(true)

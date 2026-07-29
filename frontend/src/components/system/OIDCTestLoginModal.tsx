@@ -36,7 +36,7 @@ export function OIDCTestLoginModal({
 
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
-  const [testId, setTestId] = useState<string | null>(null)
+  const [_testId, setTestId] = useState<string | null>(null)
   const [polling, setPolling] = useState(false)
 
   useEffect(() => {
@@ -104,7 +104,7 @@ export function OIDCTestLoginModal({
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{t('systemConfig.oidcTest.testLoginTitle')}</DialogTitle>
       <DialogContent>
-        {dialogError && (
+        {dialogError != null && (
           <Box mb={2}>
             <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
           </Box>

@@ -71,7 +71,7 @@ export function OIDCTestConfigModal({
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{t('systemConfig.oidcTest.testConfigTitle')}</DialogTitle>
       <DialogContent>
-        {dialogError && (
+        {dialogError != null && (
           <Box mb={2}>
             <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
           </Box>

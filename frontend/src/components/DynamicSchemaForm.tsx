@@ -9,7 +9,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-interface JsonSchema {
+export interface JsonSchema {
   type: 'object'
   properties?: Record<string, {
     type: 'string' | 'number' | 'boolean' | 'array' | 'object'

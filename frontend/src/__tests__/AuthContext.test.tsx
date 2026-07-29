@@ -19,7 +19,6 @@ Object.defineProperty(window, 'location', {
 })
 
 describe('AuthContext', () => {
-  let AuthContext: any
   let AuthProvider: any
   let useAuthStore: any
 
@@ -56,7 +55,7 @@ describe('AuthContext', () => {
     Object.keys(storage).forEach((k) => delete storage[k])
 
     const mod = await import('../stores/AuthContext')
-    AuthContext = mod.AuthContext
+    void mod.AuthContext
     AuthProvider = mod.AuthProvider
 
     const storeMod = await import('../stores/authStore')

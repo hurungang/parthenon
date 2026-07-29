@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 // Mock i18next
@@ -94,8 +94,6 @@ describe('OIDCTestConfigModal', () => {
       open: true, onClose: mockOnClose,
       issuerUrl: 'https://example.com', clientId: 'test-client',
     }))
-    // Find the test button - it's the run test button in pre-test state
-    const buttons = screen.queryAllByRole('button')
     // The default state should have a close button and potentially a "Run Test" button
     // Since there's no explicit "Run Test" button in pre-test state, we need to check dialog actions
     // Looking at the code, the pre-test state only shows info text, no run button directly

@@ -323,11 +323,12 @@ async def generate_skill_workflow(
             f"- {tool.name}: {(tool.description or 'No description').strip()}"
             for tool in body.selected_tools
         ]
+        nl = "\n"
         user_prompt = (
             "Business description:\n"
             f"{body.description.strip()}\n\n"
             "Selected tools:\n"
-            f"{'\n'.join(tool_lines)}\n\n"
+            f"{nl.join(tool_lines)}\n\n"
             "Write a concise execution workflow that references the selected tools."
         )
         workflow = await generate_workflow_text(

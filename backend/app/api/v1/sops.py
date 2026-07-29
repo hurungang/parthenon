@@ -146,11 +146,12 @@ async def generate_sop_workflow(
                 extra += f" | skill:{skill_name}"
             step_lines.append(f"- [{step.order + 1}] {label} ({step.step_type}) - {description}{extra}")
 
+        nl = "\n"
         user_prompt = (
             "Business description:\n"
             f"{body.description.strip()}\n\n"
             "Ordered SOP steps:\n"
-            f"{'\n'.join(step_lines)}\n\n"
+            f"{nl.join(step_lines)}\n\n"
             "Write a concise execution workflow that follows the provided order and preserves delegation semantics."
         )
         workflow = await generate_workflow_text(

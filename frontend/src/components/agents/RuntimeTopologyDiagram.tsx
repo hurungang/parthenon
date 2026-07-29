@@ -196,14 +196,6 @@ export function RuntimeTopologyDiagram({
     return topology.nodes.filter((n) => visibleKeys.has(statusKey(n.kind ?? 'agent', n.status)))
   }, [topology, visibleKeys])
 
-  const filteredTopology = useMemo(
-    () =>
-      topology
-        ? { ...topology, nodes: filteredNodes, edges: topology.edges ?? [] }
-        : undefined,
-    [topology, filteredNodes],
-  )
-
   const { positioned, widthInColumns, heightInRows } = useMemo(
     () => layoutNodes(filteredNodes),
     [filteredNodes],
@@ -426,7 +418,7 @@ export function RuntimeTopologyDiagram({
 // ``onToggleKey`` is undefined, the legend is rendered as a
 // read-only display (no checkboxes).
 function renderLegend(
-  t: (k: string, d?: string) => string,
+  t: any,
   visibleKeys: Set<string> | undefined,
   onToggleKey: ((key: string) => void) | undefined,
 ) {

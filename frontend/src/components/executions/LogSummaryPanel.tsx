@@ -93,20 +93,6 @@ function formatTokenCountK(value: number | null): string {
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}k tokens`
 }
 
-function formatValuePair(
-  current: number | null,
-  limit: number | null,
-  formatter: (value: number) => string,
-): string | null {
-  if (current == null) {
-    return null
-  }
-
-  const currentLabel = formatter(current)
-  const limitLabel = limit == null ? null : formatter(limit)
-  return limitLabel ? `${currentLabel} / ${limitLabel}` : currentLabel
-}
-
 type GuardrailState = 'good' | 'near' | 'reached' | 'over'
 
 function resolveGuardrailState(current: number | null, limit: number | null): GuardrailState {

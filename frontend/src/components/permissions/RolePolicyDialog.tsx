@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -98,7 +97,7 @@ function editingToPayload(p: EditingPolicy): PolicyStatementCreate {
   }
 }
 
-function validateJsonText(jsonText: string, t: (key: string) => string): JsonValidationResult {
+function validateJsonText(jsonText: string, t: (key: string, options?: Record<string, unknown>) => string): JsonValidationResult {
   try {
     const parsed = JSON.parse(jsonText)
     if (!parsed || typeof parsed !== 'object') {

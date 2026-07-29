@@ -49,11 +49,11 @@ const baseRequest: InterveneRequestMessage = {
 }
 
 describe('InlineInterventionDialog', () => {
-  let onApprove: ReturnType<typeof vi.fn>
-  let onDeny: ReturnType<typeof vi.fn>
-  let onSelectChoice: ReturnType<typeof vi.fn>
-  let onSubmitText: ReturnType<typeof vi.fn>
-  let onDismiss: ReturnType<typeof vi.fn>
+  let onApprove: () => void | Promise<void>
+  let onDeny: () => void | Promise<void>
+  let onSelectChoice: (choice: string) => void | Promise<void>
+  let onSubmitText: (text: string) => void | Promise<void>
+  let onDismiss: () => void | Promise<void>
 
   beforeEach(() => {
     onApprove = vi.fn()

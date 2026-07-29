@@ -27,10 +27,32 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     # ── 1. Enum types ────────────────────────────────────────────────────────
-    # The enum types (model_guardrail_period_enum and 
-    # model_availability_disabled_reason_enum) are created automatically by
-    # SQLAlchemy when the models are imported in env.py. No explicit creation
-    # needed here.
+    # Create enum types explicitly; create_type=False on columns avoids
+    # duplicate-create errors on re-run.
+    result = bind.execute(
+        sa.text(
+            "SELECT 1 FROM pg_type WHERE typname = 'model_guardrail_period_enum'"
+        )
+    )
+    if result.scalar() is None:
+        op.execute(
+            sa.text(
+                "CREATE TYPE model_guardrail_period_enum AS ENUM "
+                "('hour', 'day', 'week', 'month')"
+            )
+        )
+    result = bind.execute(
+        sa.text(
+            "SELECT 1 FROM pg_type WHERE typname = 'model_availability_disabled_reason_enum'"
+        )
+    )
+    if result.scalar() is None:
+        op.execute(
+            sa.text(
+                "CREATE TYPE model_availability_disabled_reason_enum AS ENUM "
+                "('manual', 'vendor_cascaded')"
+            )
+        )
 
     # ── 2. Add vendor is_disabled to model_configs ──────────────────────────
     op.add_column(
