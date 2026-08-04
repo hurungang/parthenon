@@ -54,12 +54,41 @@ erDiagram
         uuid id
         string name
     }
+    AgentApiKey {
+        uuid id
+        string name
+        string key_hash
+        string key_prefix
+        uuid agent_identity_id
+        uuid agent_role_id
+        enum status "active | revoked"
+        datetime created_at
+        datetime last_used_at
+        uuid created_by
+    }
+    ApiKeyUsageLog {
+        uuid id
+        uuid api_key_id
+        enum action "validate | load_skills | tool_call"
+        string tool_name
+        string ip_address
+        datetime timestamp
+        boolean success
+    }
+    AgentRole {
+        uuid id
+        string name
+        string slug
+    }
 
     AgentType ||--o{ AgentInstanceCertificate : "issues"
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
+    AgentApiKey }o--|| AgentIdentity : "bound to"
+    AgentApiKey }o--|| AgentRole : "bound to"
+    AgentApiKey ||--o{ ApiKeyUsageLog : "audited by"
 ```
 
-**Sources**: `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/certificate_revocation_entry.py`, `backend/app/db/models/token_refresh_log.py`, `backend/app/db/models/certificate_validation_log.py`
+**Sources**: `backend/app/db/models/agent_security.py`, `backend/app/db/models/agent_api_key.py`
 
 | Entity | Description |
 |--------|-------------|
@@ -67,3 +96,5 @@ erDiagram
 | **CertificateRevocationEntry** | Fast-lookup revocation list for certificate validation. Each entry is immutable once created; serial numbers are unique. Control Center checks this table on every certificate validation request. Entries older than 30 days past their certificate's expiration may be archived. |
 | **TokenRefreshLog** | Audit trail for every automatic OAuth token refresh attempt on an agent identity. Records the outcome (`success`, `failure`, `rate_limited`), retry attempt number, scheduled next retry, and a JSON metadata field for provider response details. Retries use exponential backoff (1 s, 5 s, 15 s) with a maximum of 3 attempts per refresh operation. Old entries (> 90 days) may be archived for compliance. |
 | **CertificateValidationLog** | Audit trail for every certificate validation performed by Control Center and Communication Hub. One entry is written per agent metadata request and per tool call. High-volume table; indexed on `certificate_serial_number` and `validated_at` for audit queries. Old entries (> 90 days) may be archived for compliance. |
+| **AgentApiKey** | API key bound to a specific agent identity and agent role for third-party MCP hub access. The key value is SHA-256 hashed at rest (`key_hash`); only the hash and a readable prefix (`key_prefix`, e.g. `phn_sk_`) are persisted. The clear-text key is displayed once at creation and never retrievable afterward. Status is `active` or `revoked`; revoked keys remain for audit. `last_used_at` is updated on each successful authentication. One active key per identity-role pair. |
+| **ApiKeyUsageLog** | Immutable audit record for each API key operation. Captures the action type (`validate` for authentication, `load_skills` for skill discovery, `tool_call` for individual tool invocations), the tool name when applicable, client IP address, timestamp, and whether the operation succeeded. Append-only; entries are never modified or deleted. Supports security monitoring and usage analytics. |

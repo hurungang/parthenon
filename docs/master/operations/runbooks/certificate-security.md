@@ -18,8 +18,9 @@ Resolving CA initialization failures, certificate expiry and renewal issues, cer
 **Resolution**:
 1. Confirm database is reachable and migrations are current (`alembic current` shows the expected revision).
 2. Verify `CREDENTIAL_VAULT_KEY` is set in the deployment environment.
-3. Restart the backend service after resolving connectivity or configuration issues.
-4. Confirm `ca.initialized` INFO log appears after restart; verify `GET /api/v1/certificates/ca` returns `200 OK`.
+3. Run `setup certificates` to bootstrap the CA. If the CA already exists, the command is idempotent and will emit `setup.certificates.ca_exists`. See [setup-tool.md](setup-tool.md) for detailed setup tool guidance.
+4. Restart the backend service after resolving connectivity or configuration issues.
+5. Confirm `ca.initialized` INFO log appears after restart; verify `GET /api/v1/certificates/ca` returns `200 OK`.
 
 ---
 

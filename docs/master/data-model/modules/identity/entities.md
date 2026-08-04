@@ -31,31 +31,49 @@ erDiagram
     }
     IdentityProviderConfig {
         uuid id
-        string provider_type
-        string oidc_provider_url
+        enum provider_scope
+        enum provider_type
+        string display_name
+        string issuer_url
         string client_id
-        string client_secret
-        string realm_name
-        string audience
-        boolean is_setup_complete
-        datetime setup_completed_at
-        uuid setup_completed_by
+        string encrypted_client_secret
+        string scopes
+        json claim_mappings
+        boolean is_enabled
+    }
+    IdentityProviderConfigAudit {
+        uuid id
+        uuid config_id
+        string changed_by
+        enum change_type
+        json changed_fields
+        json previous_values
+        datetime changed_at
     }
     IdentityProviderSetupState {
         uuid id
         boolean is_setup_complete
+        boolean user_provider_configured
+        boolean agent_provider_configured
         datetime completed_at
         uuid completed_by
+    }
+    SuperAdminCredentials {
+        uuid id
+        string username
+        string hashed_password
+        boolean is_enabled
+        datetime last_login_at
     }
 
     Identity }o--|| Role : "assigned to"
     Role ||--o{ RolePermission : "grants"
     Permission ||--o{ RolePermission : "is granted via"
-    IdentityProviderConfig ||--o| Identity : "setup_completed_by"
+    IdentityProviderConfig ||--o{ IdentityProviderConfigAudit : "audits"
     IdentityProviderSetupState ||--o| Identity : "completed_by"
 ```
 
-**Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_setup_state.py`
+**Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_config_audit.py`, `backend/app/db/models/identity_provider_setup_state.py`, `backend/app/db/models/super_admin_credentials.py`
 
 | Entity | Description |
 |--------|-------------|
@@ -63,8 +81,10 @@ erDiagram
 | **Role** | A named set of permissions representing a class of principal; type is one of: user, agent, or both. |
 | **Permission** | A grantable right to perform a specific action on a named resource within the platform. |
 | **RolePermission** | The join record that links a Role to a Permission, establishing what that role is allowed to do. |
-| **IdentityProviderConfig** | Stores the active identity provider configuration (type, OIDC URL, client credentials, realm); tracks whether initial setup has been completed. |
-| **IdentityProviderSetupState** | Records the completion state of the first-run IdP setup wizard, including timestamp and the identity that completed it. |
+| **IdentityProviderConfig** | An OIDC identity provider configuration for user or agent authentication. Each scope (`user` / `agent`) has at most one enabled config. Supports any OIDC-compliant provider via `oidc_generic`, plus first-class support for Keycloak and Azure EntraID. Sensitive fields are encrypted at rest. |
+| **IdentityProviderConfigAudit** | Immutable audit entry recording every administrative change to an identity provider configuration (create, update, test, delete). Stores a snapshot of previous values for rollback and security review. |
+| **IdentityProviderSetupState** | Single-row sentinel tracking whether the initial platform bootstrap is complete, plus per-provider-configured flags for user and agent identity domains. |
+| **SuperAdminCredentials** | Stores the built-in super admin bootstrap credentials (single-row). Enables platform access when OIDC is unavailable or misconfigured. Can be disabled once OIDC is operational. Password is always stored hashed; credentials are sourced from environment variables with DB override capability. |
 
 ---
 
@@ -112,7 +132,7 @@ erDiagram
         uuid id
         uuid role_id
         string effect
-        string module
+        string module "namespace::submodule (e.g., agent::management)"
         datetime created_at
     }
     PolicyAction {
@@ -123,7 +143,7 @@ erDiagram
     PolicyResource {
         uuid id
         uuid policy_statement_id
-        string resource_type
+        string resource_type "namespace::submodule (e.g., integration::mcp_hub)"
         string resource_id
     }
     PolicyTagCondition {
@@ -184,6 +204,8 @@ erDiagram
     }
 ```
 
+> **Module::submodule naming convention**: `PolicyStatement.module` and `PolicyResource.resource_type` use a two-layer namespaced format (`module::submodule`, e.g. `agent::management`). There are three modules: `agent`, `integration`, and `system`. Wildcards are supported: `*::*` matches all, `module::*` matches all submodules within a module. Legacy flat values are no longer accepted — validation is enforced via `ResourceTypeManifest`.
+
 **Sources**: `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`
 
 | Entity | Description |
@@ -191,9 +213,9 @@ erDiagram
 | **TagDefinition** | Defines a tag key with allowed values, scope, and optional resource-type constraint for resource tagging. |
 | **TagValue** | An allowed value for a tag definition. |
 | **Role** | A named permission role; `role_type` distinguishes system-managed roles (immutable) from user-defined roles. |
-| **PolicyStatement** | A permission statement belonging to a role; `effect` is allow/deny, `module` scopes the statement to a platform module. |
+| **PolicyStatement** | A permission statement belonging to a role; `effect` is allow/deny, `module` uses the `module::submodule` namespaced format (e.g., `agent::management`, `integration::*`, `*::*`) to scope the statement to platform resource types. Legacy flat values are no longer accepted. |
 | **PolicyAction** | A specific action permitted or denied by a policy statement. |
-| **PolicyResource** | A resource (by type and optional id) that a policy statement applies to. |
+| **PolicyResource** | A resource (by namespaced type identifier and optional id) that a policy statement applies to. `resource_type` uses the `module::submodule` format (e.g., `integration::mcp_hub`) or wildcard patterns; `resource_id = "*"` matches all instances. |
 | **PolicyTagCondition** | A tag-based condition that further constrains when a policy statement applies. |
 | **PlatformUser** | A human user cached from OIDC sign-in; `oidc_sub` is the identity provider subject claim. |
 | **UserRole** | Direct role assignment to a platform user (junction). |

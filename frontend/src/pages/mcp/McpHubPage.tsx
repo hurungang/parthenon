@@ -55,22 +55,21 @@ export function McpHubPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
   const [editServer, setEditServer] = useState<McpServer | null>(null)
-  const [form, setForm] = useState({ name: '', slug: '', base_url: '', description: '' })
+  const [form, setForm] = useState({ slug: '', base_url: '', description: '' })
   const [sessionServerId, setSessionServerId] = useState<string | null>(null)
   const [syncWarnings, setSyncWarnings] = useState<string | null>(null)
-  const invalidName = !!form.name && !SLUG_PATTERN.test(form.name)
   const invalidSlug = !!form.slug && !SLUG_PATTERN.test(form.slug)
 
   const handleOpenCreate = () => {
     setEditServer(null)
-    setForm({ name: '', slug: '', base_url: '', description: '' })
+    setForm({ slug: '', base_url: '', description: '' })
     setDialogError(null)
     setDialogOpen(true)
   }
 
   const handleOpenEdit = (server: McpServer) => {
     setEditServer(server)
-    setForm({ name: server.name, slug: server.slug, base_url: server.base_url, description: server.description ?? '' })
+    setForm({ slug: server.slug, base_url: server.base_url, description: server.description ?? '' })
     setDialogError(null)
     setDialogOpen(true)
   }
@@ -78,18 +77,15 @@ export function McpHubPage() {
   const handleSave = async () => {
     try {
       setDialogError(null)
-      if (!SLUG_PATTERN.test(form.name)) {
-        setDialogError(new Error('Server name must use lowercase letters, numbers, and hyphens only'))
-        return
-      }
       if (!SLUG_PATTERN.test(form.slug)) {
         setDialogError(new Error('Server slug must use lowercase letters, numbers, and hyphens only'))
         return
       }
+      const payload = { ...form, name: form.slug }
       if (editServer) {
-        await apiClient.put(`/mcp/servers/${editServer.id}`, form)
+        await apiClient.put(`/mcp/servers/${editServer.id}`, payload)
       } else {
-        await apiClient.post('/mcp/servers', form)
+        await apiClient.post('/mcp/servers', payload)
       }
       setDialogOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['mcp', 'servers'] })
@@ -153,7 +149,6 @@ export function McpHubPage() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>{t('app.name')}</TableCell>
                     <TableCell>{t('mcp.slug')}</TableCell>
                     <TableCell>{t('mcp.baseUrl')}</TableCell>
                     <TableCell>{t('app.status')}</TableCell>
@@ -169,14 +164,11 @@ export function McpHubPage() {
                     <TableRow key={server.id}>
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={1}>
-                          <Typography variant="body2" fontWeight={500}>{server.name}</Typography>
+                          <code>{server.slug}</code>
                           {isSystem && (
                             <Chip label={t('mcp.system.builtIn')} color="error" size="small" variant="outlined" />
                           )}
                         </Box>
-                      </TableCell>
-                      <TableCell>
-                        <code>{server.slug}</code>
                       </TableCell>
                       <TableCell>{isSystem ? '' : server.base_url}</TableCell>
                       <TableCell>
@@ -312,21 +304,13 @@ export function McpHubPage() {
           {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
             <TextField
-              label={t('app.name')}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              fullWidth
-              error={invalidName}
-              helperText={invalidName ? 'Lowercase letters, numbers, hyphens only' : undefined}
-            />
-            <TextField
               label={t('mcp.slug')}
               value={form.slug}
               onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
               fullWidth
               disabled={!!editServer}
               error={invalidSlug}
-              helperText="Lowercase letters, numbers, hyphens only"
+              helperText={invalidSlug ? 'Lowercase letters, numbers, hyphens only' : undefined}
             />
             <TextField
               label={t('mcp.baseUrl')}
@@ -346,7 +330,7 @@ export function McpHubPage() {
         </DialogContent>
         <Box display="flex" justifyContent="flex-end" gap={1} p={2} pt={0}>
           <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={invalidName || invalidSlug}>{t('app.save')}</Button>
+          <Button variant="contained" onClick={handleSave} disabled={invalidSlug}>{t('app.save')}</Button>
         </Box>
       </Dialog>
     </Box>

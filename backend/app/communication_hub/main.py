@@ -86,6 +86,10 @@ def create_app() -> FastAPI:
     from app.communication_hub.middleware.authorization import CertificateAuthorizationMiddleware
     app.add_middleware(CertificateAuthorizationMiddleware)
 
+    # API key auth middleware: detect API keys on MCP paths, validate via CC
+    from app.communication_hub.middleware.api_key_auth import ApiKeyAuthMiddleware
+    app.add_middleware(ApiKeyAuthMiddleware)
+
     # Control plane middleware: validate Control Center service cert on /internal/* paths
     # (task 4.3 — while still accepting JWT-authenticated WebSocket connections)
     from app.communication_hub.middleware.control_plane import ControlPlaneMiddleware
@@ -119,7 +123,9 @@ def _register_routers(app: FastAPI) -> None:
     from app.communication_hub.api.internal.agent_terminate import router as agent_terminate_router
     from app.communication_hub.api.internal.agent_resume import router as agent_resume_router
     from app.communication_hub.api.a2a import router as a2a_router  # Phase 1.1
+    from app.communication_hub.api.mcp_tools import mcp_router  # API Key MCP Hub
 
+    app.include_router(mcp_router)  # MCP tools for external agents
     app.include_router(GatewayRouter)
     app.include_router(ws_router)
     app.include_router(dispatch_router)  # POST /internal/dispatch

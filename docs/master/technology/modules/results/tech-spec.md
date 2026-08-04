@@ -38,6 +38,6 @@ The results module provides persistent storage for structured outputs produced b
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `ResultStore` | class | Legacy service for `ResultRecord` persistence; decoupled from active agent tool path — no longer registers `save_result` as a platform MCP tool for agents | `backend/app/services/results/store.py` |
-| `ResultRouter` | router | Query endpoints for filtered result listing and detailed record retrieval; guarded by `require_permission(RT_RESULT, "read")`; `RT_RESULT` was newly registered in this module's access-control change | `backend/app/api/v1/results.py` |
+| `ResultRouter` | router | Query endpoints for filtered result listing and detailed record retrieval; guarded by `require_permission(RT_AGENT_TRAILS, "read")` | `backend/app/api/v1/results.py` |
 | `ResultRecord` | model | SQLAlchemy model for a structured agent/SOP output with payload, schema, and source metadata | `backend/app/db/models/results.py` |
 | `ResultRepositoryPage` | component | Result record list with filter controls and structured detail view | `frontend/src/pages/results/ResultRepositoryPage.tsx` |

@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.credential_vault import get_vault
+from app.db.models.agent_api_key import AgentApiKey
 from app.db.models.agent_security import AgentInstanceCertificate
 from app.db.models.agents import AgentIdentity, AgentType
 from app.services.agents.permission_manager import get_shared_permission_manager
@@ -269,6 +270,100 @@ def check_tool_permission(tool_name: str, allowed_tools: set[str]) -> bool:
     return tool_name in allowed_tools
 
 
+# ── API Key Entry Point ──────────────────────────────────────────────────────
+
+
+async def resolve_permissions_from_api_key(
+    api_key: AgentApiKey,
+    db: AsyncSession,
+) -> AuthorizationResult:
+    """Resolve agent permissions starting from an API key.
+
+    The resolution chain: API key → bound agent identity → bound agent role
+    → policy evaluation → allowed tools/skills/SOPs.
+
+    Returns the identical permission set as an internal agent with the same role.
+    Used by the internal API key validation endpoint.
+
+    Args:
+        api_key: Active AgentApiKey record with bound identity and role.
+        db: Active async database session.
+
+    Returns:
+        AuthorizationResult with identity token on success.
+    """
+    # 1. Look up agent identity
+    identity = await db.get(AgentIdentity, api_key.agent_identity_id)
+    if identity is None:
+        return AuthorizationResult(
+            authorized=False,
+            identity_token=None,
+            identity_id=api_key.agent_identity_id,
+            agent_type_id=None,
+            reason="identity_not_found",
+            required_permission=None,
+            agent_type_name=None,
+        )
+
+    # 2. Check/refresh token
+    needs_refresh = await check_token_expiration(identity.id, db)
+    if needs_refresh:
+        logger.info("Token expired for identity %s (API key); triggering refresh", identity.id)
+        try:
+            refresh_result = await refresh_oauth_token(identity.id, db)
+            access_token_plain = refresh_result.access_token
+            await db.refresh(identity)
+        except Exception as exc:
+            logger.error("Token refresh failed for identity %s: %s", identity.id, exc)
+            return AuthorizationResult(
+                authorized=False,
+                identity_token=None,
+                identity_id=identity.id,
+                agent_type_id=None,
+                reason=f"token_refresh_failed: {exc}",
+                required_permission=None,
+                agent_type_name=None,
+            )
+    else:
+        if not identity.access_token:
+            return AuthorizationResult(
+                authorized=False,
+                identity_token=None,
+                identity_id=identity.id,
+                agent_type_id=None,
+                reason="no_access_token",
+                required_permission=None,
+                agent_type_name=None,
+            )
+        vault = get_vault()
+        try:
+            access_token_plain = vault.decrypt(identity.access_token)
+        except Exception as exc:
+            logger.error("Failed to decrypt access token for identity %s: %s", identity.id, exc)
+            return AuthorizationResult(
+                authorized=False,
+                identity_token=None,
+                identity_id=identity.id,
+                agent_type_id=None,
+                reason="token_decryption_failed",
+                required_permission=None,
+                agent_type_name=None,
+            )
+
+    # 3. Resolve allowed tools for the bound role
+    allowed_tools = await get_allowed_tools(api_key.agent_role_id, db)
+
+    return AuthorizationResult(
+        authorized=True,
+        identity_token=access_token_plain,
+        identity_id=identity.id,
+        agent_type_id=None,  # API keys aren't bound to agent types
+        reason=None,
+        required_permission=None,
+        agent_type_name=None,
+    )
+
+
 # ── Main Service Class ────────────────────────────────────────────────────────
 
 
@@ -302,3 +397,8 @@ class PermissionResolutionService:
         self, tool_name: str, allowed_tools: set[str]
     ) -> bool:
         return check_tool_permission(tool_name, allowed_tools)
+
+    async def resolve_permissions_from_api_key(
+        self, api_key: AgentApiKey, db: AsyncSession
+    ) -> AuthorizationResult:
+        return await resolve_permissions_from_api_key(api_key, db)

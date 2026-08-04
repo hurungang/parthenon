@@ -282,7 +282,7 @@ erDiagram
     AgentType }o--|| AgentDataType : "output schema defined by"
 ```
 
-**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
 
 | Entity | Description |
 |--------|-------------|
@@ -429,7 +429,7 @@ erDiagram
     SopRecursionValidationFinding }o--|| SopRecursionValidationCheck : "found by"
 ```
 
-**Sources**: `backend/app/db/models/model_guardrail_configuration.py`, `backend/app/db/models/model_usage_posture.py`, `backend/app/db/models/session_logs.py`, `backend/app/db/models/agent_instance.py`
+**Sources**: `backend/app/db/models/model_guardrail_configuration.py`, `backend/app/db/models/model_usage_posture.py`, `backend/app/db/models/model_availability.py`, `backend/app/db/models/guardrail_threshold_event.py`, `backend/app/db/models/agent_run_relationship.py`, `backend/app/db/models/termination_request.py`, `backend/app/db/models/termination_cascade_outcome.py`, `backend/app/db/models/sop_recursion_validation_check.py`, `backend/app/db/models/sop_recursion_validation_finding.py`
 
 | Entity | Description |
 |--------|-------------|
@@ -443,6 +443,8 @@ erDiagram
 | **GuardrailThresholdEvent** | Append-only log of guardrail threshold transitions. `event_category` is one of `model_disabled`, `vendor_disabled`, `guardrail_breached`. `posture_state` is the new state at the time of the event. |
 | **SopRecursionValidationCheck** | Records a recursion/dead-loop risk validation at create, update, or run initiation. `check_trigger` is `create` / `update` / `run`; `result` is `pass` / `fail`. |
 | **SopRecursionValidationFinding** | The specific cycle path(s) found by a `SopRecursionValidationCheck`. Stores the cycle path as a JSON array of SOP IDs. |
+| **ModelGuardrailEvaluation** | Per-run evaluation outcome for model guardrail policy checks. Records the guardrail configuration, agent job, policy name, evaluated period, threshold value, observed value, posture state, and evaluation outcome (pass/fail/error). |
+| **ExecutionLogEntry** | Immutable audit trail of agent session execution events (LLM calls, tool calls, system events, errors). Categorised by event type and actor type; referenced by `agent_job_id` for session-scoped queries. |
 
 **Business rules:**
 - A model can have one to four `ModelGuardrailConfiguration` records, one per period. There is no forced four-period entry.

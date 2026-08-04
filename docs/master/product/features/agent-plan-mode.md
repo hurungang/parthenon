@@ -41,7 +41,7 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - The plan and diagram update automatically if the agent's configuration, role, or binding list changes (triggers re-generation on save).
 - Plan generation uses only the Agent Type's explicitly bound SOPs and skills from the ordered binding list.
 - When no bindings are defined, plan generation falls back to all role-assigned SOPs and skills (current behaviour, backward compatible).
-- All UI text is internationalized via i18next.
+- All UI text uses the platform's localization framework.
 - The feature is accessible and usable on both desktop and tablet devices.
 - Error handling: If plan generation fails, users receive a clear, actionable error message and the agent save is not blocked.
 - No direct database access occurs from the frontend; all data flows through the backend API.
@@ -61,7 +61,7 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 - Requires up-to-date SOP and Skill definitions for meaningful plan generation
 - Requires access to an LLM (configured model in the platform) for plan generation
 - LLM response time impacts user experience during agent save (plan generation must be reasonably fast)
-- Must integrate with existing i18next localization framework
+- Must integrate with existing localization framework
 - Subject to current frontend/backend API contract and strong typing conventions
 - Agent execution runtime must support loading and following the saved plan
 - Plan must be stored in a format that's both human-readable (for preview) and machine-parseable (for execution guidance)

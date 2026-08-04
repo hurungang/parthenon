@@ -186,8 +186,8 @@ The module is owned entirely by **Control Center** — all database tables, serv
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `DataTypeRouter` | APIRouter | `GET/POST /data-types`, `GET/PUT/DELETE /data-types/{id}`; `?usage=true` returns referencing agent types; permission: `RT_DATA_TYPE` | `backend/app/api/v1/data_types.py` |
-| `OutputRouter` (public) | APIRouter | `GET /agent-outputs` (filtered, paginated), `GET /agent-outputs/export` (CSV); permission: `RT_RESULT`, `"read"` | `backend/app/api/v1/agent_outputs.py` |
+| `DataTypeRouter` | APIRouter | `GET/POST /data-types`, `GET/PUT/DELETE /data-types/{id}`; `?usage=true` returns referencing agent types; permission: `RT_AGENT_DATA_TYPES` | `backend/app/api/v1/data_types.py` |
+| `OutputRouter` (public) | APIRouter | `GET /agent-outputs` (filtered, paginated), `GET /agent-outputs/export` (CSV); permission: `RT_AGENT_OUTPUTS`, `"read"` | `backend/app/api/v1/agent_outputs.py` |
 
 ### Backend Internal Endpoints
 
@@ -197,7 +197,7 @@ The module is owned entirely by **Control Center** — all database tables, serv
 | `validate_output` | endpoint | `POST /internal/validate-output` — validate payload against data type schema | `backend/app/api/v1/internal/outputs.py` |
 | `create_internal_output` | endpoint | `POST /internal/agent-outputs` — persist typed output (201) | `backend/app/api/v1/internal/outputs.py` |
 | `query_internal_outputs` | endpoint | `GET /internal/agent-outputs` — query typed outputs with filters and pagination | `backend/app/api/v1/internal/outputs.py` |
-| `RT_DATA_TYPE` | constant | Resource type identifier for data type permission checks | `backend/app/core/resource_types.py` |
+| `RT_AGENT_DATA_TYPES` | constant | Resource type identifier for data type permission checks | `backend/app/core/resource_types.py` |
 
 ### Frontend Pages & Components
 

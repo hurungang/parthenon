@@ -111,7 +111,7 @@ def _system_server_read() -> McpServerRead:
     now = datetime.now(timezone.utc)
     return McpServerRead(
         id=SYSTEM_SERVER_ID,
-        name="System",
+        name="system",
         slug="system",
         description="Built-in system tools available to all agents",
         base_url="",
@@ -136,7 +136,7 @@ def _system_tool_reads() -> list[McpToolRead]:
             id=entry["id"],
             server_id=SYSTEM_SERVER_ID,
             server_slug="system",
-            server_name="System",
+            server_name="system",
             name=entry["name"],
             original_name=entry["original_name"],
             description=entry["description"],
@@ -165,7 +165,7 @@ async def seed_system_tools(db: "AsyncSession") -> None:
     if not existing_server:
         system_server = McpServer(
             id=SYSTEM_SERVER_ID,
-            name="System",
+            name="system",
             slug="system",
             description="Built-in system tools available to all agents",
             base_url="",

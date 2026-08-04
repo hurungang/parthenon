@@ -20,13 +20,14 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Skills can be bound directly to Agent Types (in addition to SOPs), giving agent designers the flexibility to reference skills at any granularity
 
 ## Key Concepts
-- **Skill**: A reusable, permission-controlled action wrapping one or more tool calls
+- **Skill**: A reusable, permission-controlled action wrapping one or more tool calls. Each skill carries an `updated_at` timestamp that changes whenever the skill definition is modified.
 - **Workflow Authoring**: Defining the business workflow text that guides how a Skill should be executed
 - **AI-Assisted Drafting**: Generating an initial workflow draft that authors can edit before publication
 - **Workflow Preview**: Reviewing the final formatted content that will be loaded at execution time
 - **Skill Assignment**: Granting access to Skills for users, agents, or roles
 - **MCP Tool Wrapping**: Encapsulating tool calls within Skills for governance
 - **Permission Control**: Restricting Skill execution to authorized entities
+- **Skill Version Tracking**: The `updated_at` timestamp enables external agents to cache skills locally and only re-download those that have changed since their last sync. The `load_skills` system tool supports an optional `since` parameter for incremental sync of only updated skills.
 
 ## Acceptance Criteria
 - Admins can define new Skills and edit existing ones

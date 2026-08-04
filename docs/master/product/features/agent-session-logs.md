@@ -78,7 +78,7 @@ For active non-conversation runs, execution progress is visible live so users an
 - Changes to agent execution logic or error handling
 
 ## Dependencies & Constraints
-- Requires updates to frontend log display components (React + MUI)
+- Requires updates to frontend log display components
 - Must preserve access to full raw logs for technical users
 - No changes to backend log structure or API responses
 - Must comply with existing audit and traceability requirements

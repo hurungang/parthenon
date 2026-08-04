@@ -5,7 +5,8 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 
 ## Feature Index
 
-- **Foundation Platform** — Roles, permissions, OIDC integration, setup wizard, and Web UI shell
+- **Foundation Platform** — Roles, permissions, provider-agnostic OIDC integration (any OIDC-compliant provider), independent user and agent identity providers, built-in super admin with enable/disable lifecycle, database-backed identity configuration, OIDC provider testing, setup wizard, Web UI shell, and operational dashboard
+- **Dashboard Metrics** — Real-time stat cards, time-sensitive metrics with date range picker, and permission-aware widgets for platform health overview
 - **MCP Hub** — Server registration, tool sync, session management, credential binding, and proxy
 - **MCP Demo App** — Minimal MCP application for validating agent identity authentication and tool registration (reference implementation)
 - **Skill Management** — Skill definition, MCP tool wrapping, and permission assignment
@@ -14,6 +15,7 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 - **Agent Management** — Agent types, identity, instance lifecycle, and max-instance enforcement
 - **Agent Types** — Per-Agent-Type execution guardrail profiles and bounded policy controls
 - **Agent A2A Communication and Slug Enforcement** — Dynamic agent-to-agent continuity, delegation governance, and slug-safe naming for routing-critical entities
+- **Agent Data** — Filterable operator-facing module for browsing intermediate data saved by agents during execution, with full JSON inspection in a detail drawer
 - **Agent Data Types** — Centralized registry of reusable typed output schemas; administrators define flat-typed fields (string, number, boolean, date, enum) and assign data types to non-conversational agent types for schema-validated outputs
 - **Agent Gateway** — Lifecycle protocol, HTTP and MCP transports
 - **Agent Outputs** — Schema-validated typed agent results with dedicated admin page (filtering by data type, date range, agent type, CSV export), `query_result` system tool for cross-session result analysis, and structured field-by-field rendering in execution logs

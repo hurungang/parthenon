@@ -1,96 +1,19 @@
----
-description: Stop Parthenon services using parthenon.ps1. Defaults to all services. Supports --infra, --backend, --frontend, --control-center, --agent-runtime, --communication-hub, and --force.
----
+# /stop-app
 
-Stop the Parthenon application.
+Stop the Parthenon full-stack application.
 
-**Usage**: `/stop-app [--infra] [--backend] [--frontend] [--control-center] [--agent-runtime] [--communication-hub] [--force]`
+## Steps
 
-- No flags -> stop all services (`frontend,communication-hub,agent-runtime,control-center,infra`)
-- `--infra` -> stop infrastructure only
-- `--backend` -> stop backend stack (control-center, agent-runtime, communication-hub, frontend)
-- `--frontend` -> stop frontend only
-- `--control-center` -> stop Control Center only
-- `--agent-runtime` -> stop Agent Runtime only
-- `--communication-hub` -> stop Communication Hub only
-- `--force` -> pass `-Force` to `parthenon.ps1`
+1. **Frontend**: Kill the Vite dev server (process on port 5173)
+2. **Backend services**: Stop Control Center (8000), Agent Runtime (8001), Communication Hub (8002)
+   - On Windows, use: `.\parthenon.ps1 stop -Services backend -Force`
+   - On macOS/Linux: `kill $(lsof -ti:8000,8001,8002)`
+3. **Infrastructure** (optional): `docker compose down` from project root
+4. **Verify**: All ports 5173, 8000, 8001, 8002, 8082, 5432 are free
 
----
+## Flags
 
-## Step 1: Parse Input
-
-Read the user's message and map flags to `-Services` values.
-
-Service mapping:
-- `--infra` -> `infra`
-- `--backend` -> `backend`
-- `--frontend` -> `frontend`
-- `--control-center` -> `control-center`
-- `--agent-runtime` -> `agent-runtime`
-- `--communication-hub` -> `communication-hub`
-
-If no service flags are provided, use `all`.
-
-If multiple service flags are present, combine as comma-separated values.
-
-If `--backend` is present with other backend-service flags, prefer `backend`.
-
----
-
-## Step 2: Run Stack Command
-
-From the project root, execute:
-
-```powershell
-.\parthenon.ps1 stop -Services <resolved_services> <optional_force>
-```
-
-Examples:
-
-```powershell
-.\parthenon.ps1 stop -Services all
-.\parthenon.ps1 stop -Services backend
-.\parthenon.ps1 stop -Services infra
-.\parthenon.ps1 stop -Services control-center,agent-runtime
-```
-
-If script execution is blocked, run:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-```
-
-Then retry once.
-
----
-
-## Step 3: Verify Services Stopped
-
-Always run:
-
-```powershell
-.\parthenon.ps1 status
-```
-
-Optionally validate key ports are no longer listening for requested services:
-
-```powershell
-netstat -ano | Select-String ":5173 .*LISTEN|:8000 .*LISTEN|:8001 .*LISTEN|:8002 .*LISTEN"
-```
-
-For infra checks, confirm containers are stopped:
-
-```powershell
-docker ps --format "{{.Names}}"
-```
-
----
-
-## Step 4: Report Outcome
-
-Provide:
-
-- Executed command
-- Resolved service set
-- Status per requested service: Stopped / Not running / Failed
-- Any remaining listening ports or containers if stop was incomplete
+- `--frontend` — Stop only the frontend
+- `--backend` — Stop only the backend services
+- `--infra` or `--docker` — Stop Docker services
+- `--all` — Stop everything (default)

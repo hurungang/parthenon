@@ -4,11 +4,16 @@
 
 Parthenon's identity bootstrap flow now automatically provisions a Group Membership protocol mapper on the Keycloak OIDC client during initial setup and reprovisioning. This ensures that JWT tokens issued by Keycloak include a `groups` claim, enabling the platform's group-based permission system to correctly assign roles to users based on their Keycloak group memberships — with no manual admin intervention required.
 
-## What Changed
+## Business Goals
+- Eliminate silent permission failures caused by missing `groups` claims in JWT tokens
+- Automate group membership mapper creation during identity provider provisioning
+- Support reprovisioning for existing installations to retrofit the mapper
+- Ensure idempotent mapper creation (safe to run multiple times)
 
-Prior to this capability, the Keycloak OIDC client created during identity provider provisioning lacked a Group Membership mapper. While the `GroupClaimMapper` and `JWTAuthMiddleware` were designed to auto-assign users to Parthenon groups by matching JWT `groups` claims against configured `idp_claim_value` entries, the claim was never present in tokens. This caused a silent failure: users belonging to the correct Keycloak groups received no corresponding Parthenon group roles, resulting in "Permission Denied" errors even when group-to-role mappings were correctly configured.
-
-The identity bootstrap flow now addresses this gap by creating the mapper as part of client provisioning.
+## User Stories
+- As a platform administrator, I want group membership mappers to be automatically provisioned during setup so that group-based role assignment works out of the box.
+- As a platform administrator, I want to reprovision the identity provider to add mappers to existing clients without data loss.
+- As an existing user, I want to receive correct group-based roles after reprovisioning on my next login.
 
 ## Key Capabilities
 
@@ -40,6 +45,19 @@ No changes to the `GroupClaimMapper` or auth middleware were needed — they wer
 - **New installations**: Group membership mapping works out of the box after completing the setup wizard — no additional steps needed
 - **Existing installations**: Administrators should reprovision the identity provider to add the mapper to their existing client. After reprovisioning, users will receive group-based role assignments on their next login
 - **External identity providers (e.g., Azure EntraID)**: This capability applies only to the bundled Keycloak provider. Administrators using external providers must configure group claim mapping in their own identity provider
+
+## Acceptance Criteria
+- Group Membership mapper is automatically created on the Keycloak OIDC client during bundled Keycloak provisioning
+- JWT tokens include `groups` claim after provisioning completes
+- Group-based role assignment works on first login after setup
+- Reprovisioning adds the mapper to existing clients without creating duplicates
+- External OIDC providers are unaffected — group claim mapping is configured in the external provider
+
+## Out of Scope
+- Managing Keycloak groups from Parthenon (groups must be created in Keycloak Admin Console)
+- Automatic group-to-role mapping configuration (administrators must set `idp_claim_value` on groups)
+- Provisioning group membership mappers on external OIDC providers
+- Migration of existing users between identity providers
 
 ## Prerequisites
 

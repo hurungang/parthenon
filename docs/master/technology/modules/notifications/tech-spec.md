@@ -29,7 +29,7 @@ All sensitive channel properties (API keys, SMTP passwords, webhook signing secr
 |-----------|-------------|
 | `BaseChannelProvider` | Abstract base class defining the `send(recipients, subject, body, properties)` async interface and `ChannelDeliveryResult` dataclass. All providers implement this interface. |
 | `SMTPChannelProvider` | Sends via Python `smtplib` (wrapped in `asyncio.to_thread`). Reads `smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`, `from_address`, `use_tls` from decrypted channel properties. |
-| `SendGridChannelProvider` | Sends via SendGrid API. Reads `api_key`, `from_address` from decrypted channel properties. |
+| `ResendChannelProvider` | Sends via Resend email API. Reads `api_key`, `from_address` from decrypted channel properties. |
 | `SlackWebhookChannelProvider` | HTTP POST to Slack incoming webhook. Reads `webhook_url`. Formats Slack Block Kit payload. |
 | `TeamsWebhookChannelProvider` | HTTP POST to Microsoft Teams incoming webhook. Reads `webhook_url`. Formats Teams adaptive card payload. |
 | `DeliveryTracker` | Records `NotificationLog` entries via `NotificationRepository`. Emits `notifications.sent.total` counter and `notification_delivery_duration_seconds` histogram to OpenTelemetry, labelled by `channel_type` and `status`. |

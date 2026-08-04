@@ -38,4 +38,4 @@ The Agent Gateway is tested at three layers: backend unit tests verify session e
 - `backend/tests/unit/test_lifecycle_handler.py`
 - `backend/tests/unit/test_communication_hub.py`
 - `backend/tests/integration/test_communication_hub.py`
-- `e2e/tests/gateway.spec.ts`
+- `e2e/tests/auth-required/gateway.spec.ts`

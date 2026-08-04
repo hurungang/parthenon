@@ -33,12 +33,7 @@ flowchart LR
 
 ## ModelConfig Entity
 
-| Field | Description |
-|---|---|
-| **provider_type** | Provider category — one of twelve supported keys across two dispatch families: **OpenAI-compatible** (`openai`, `azure_openai`, `litellm_proxy`, `mistral`, `groq`, `together`, `fireworks`, `perplexity`, `deepseek`) and **native-API** (`anthropic`, `gemini`, `cohere`). New providers are added through the platform's provider registry during coordinated releases. |
-| **api_endpoint** | Provider API URL |
-| **credentials** | API key or auth token, encrypted at rest |
-| **enabled_models** | Array of model IDs available via this provider config (e.g. `["gpt-4o", "gpt-4o-mini"]`) |
+Stores provider type (one of twelve supported provider keys across two dispatch families: OpenAI-compatible and native-API), API endpoint, encrypted credentials, and enabled model IDs.
 
 ## Model Guardrail Hierarchy (Vendor → Model → Guardrail)
 
@@ -46,45 +41,11 @@ The previous flat per-model configuration has been replaced with a three-level h
 
 | Level | Entity | Description |
 |---|---|---|
-| **Vendor** | Model availability (vendor-level disable) | A vendor groups its models. Disabling a vendor cascades to every model under it; the per-model disable affordances remain visible to show the cascade source. |
-| **Model** | `ModelGuardrailConfiguration` (per-period), `ModelAvailability` (disabled flag + reason) | A model may have one to four guardrail records, one per period (hour, day, week, month). Each model can be temporarily disabled. |
-| **Guardrail** | `ModelGuardrailConfiguration` (period, threshold, posture) | A single guardrail scoped to one period. Each guardrail has its own enforcement posture (`terminate` or `observe-only`) and can be individually enabled, disabled, or removed. |
+| **Vendor** | Model availability (vendor-level disable) | A vendor groups its models. Disabling a vendor cascades to every model under it. |
+| **Model** | Guardrail configuration (per-period), Model availability (disabled flag + reason) | A model may have one to four guardrail records, one per period (hour, day, week, month). |
+| **Guardrail** | Guardrail configuration (period, threshold, posture) | A single guardrail scoped to one period with enforcement posture (`terminate` or `observe-only`). |
 
-### ModelGuardrailConfiguration
-
-| Field | Description |
-|---|---|
-| `vendor` | Vendor name (e.g. `openai`, `anthropic`) |
-| `model_name` | Model ID (e.g. `gpt-4o`) |
-| `period` | One of `hour`, `day`, `week`, `month` |
-| `max_units` | Maximum units allowed within the period |
-| `enforcement_posture` | `terminate` (default) or `observe-only` |
-| `is_active` | Per-guardrail enable flag |
-
-Each model name has at most one guardrail per period.
-
-### ModelAvailability
-
-| Field | Description |
-|---|---|
-| `model_id` | FK to `ModelConfig` |
-| `model_name` | Model ID (e.g. `gpt-4o`) |
-| `is_disabled` | Per-model disable flag |
-| `disabled_reason` | `vendor_disabled` (cascade), `model_disabled` (manual), or `null` |
-| `disabled_at` | Timestamp of disable |
-
-A `null` reason and `is_disabled=False` indicates the model is available. A non-null reason blocks execution.
-
-### ModelUsagePosture
-
-| Field | Description |
-|---|---|
-| `model_id`, `model_name`, `period` | Same key as the guardrail |
-| `posture_state` | `within_limit`, `approaching_limit`, `breached` |
-| `current_units` | Current usage against the guardrail threshold |
-| `last_updated_at` | Timestamp of last posture update |
-
-When `posture_state` is `breached` and the guardrail's `enforcement_posture` is `terminate`, the agent execution is blocked and the block is surfaced in execution logs. When the posture is `observe-only`, the breach is logged as an alert but execution continues.
+Each model name has at most one guardrail per period. The `ModelUsagePosture` tracks current usage against guardrail thresholds (`within_limit`, `approaching_limit`, `breached`). When posture is `breached` and enforcement is `terminate`, agent execution is blocked.
 
 ## Pre-Execution Check
 

@@ -112,6 +112,40 @@ Update this table whenever new components are added or new metrics are instrumen
 | **Communication Hub** | `parthenon_ch_name_resolver_errors_total` | NameResolver failures (unknown server, malformed name) |
 | **Communication Hub** | `parthenon_ch_cert_validation_failures_total` | Agent certificates that failed validation at CommHub; any non-zero rate requires investigation |
 | **Agent Identities (Security Segregation)** | `token_status = 'refresh_failed'` count | Count of agent identities with `token_status = 'refresh_failed'`; any non-zero value pages on-call immediately |
+| **API Key Access** | `api_key.auth_total` by `action`, `outcome`, `key_prefix` | Total API key authentication attempts; tracks validate, load_skills, and tool_call operations |
+| **API Key Access** | `api_key.auth_failure_total` by `failure_reason`, `key_prefix` | Authentication failures broken down by reason (invalid_key, revoked_key, unknown) |
+| **API Key Access** | `api_key.revoked_key_attempt_total` by `key_prefix` | Authentication attempts using a revoked key; any sustained rate is a security concern |
+| **API Key Access** | `api_key.auth_latency_seconds` by `action` | End-to-end latency for API key validation (CH → CC → DB round-trip); rising latency indicates CC/DB pressure |
+| **API Key Access** | `api_key.load_skills_total` by `sync_mode` | `load_skills` call volume split by full vs incremental sync |
+| **API Key Access** | `api_key.load_skills_skill_count` histogram | Number of skills returned per `load_skills` response; tracks payload size growth |
+| **API Key Access** | `api_key.tool_call_total` by `outcome`, `tool_name` | Tool call volume via API key auth; tracks success, permission_denied, and error outcomes |
+| **API Key Access** | `api_key.tool_call_auth_method` by `method` | Ratio of tool calls by auth method (api_key vs certificate); used for volume comparison |
+| **Startup Validation — Control Center** | `startup.validation.database_ok` / `startup.validation.database_failed` | PostgreSQL reachability at startup; failure prevents CC from starting |
+| **Startup Validation — Control Center** | `startup.validation.keycloak_ok` / `startup.validation.keycloak_not_found` | Keycloak realm existence at startup; failure means operator must run `setup identity` or fix OIDC config |
+| **Startup Validation — Control Center** | `startup.validation.redis_ok` / `startup.validation.redis_failed` | Redis reachability at startup; failure prevents CC from starting |
+| **Startup Validation — Agent Runtime** | `startup.validation.control_center_ok` / `startup.validation.control_center_unreachable` | Control Center reachability at AR startup; failure prevents certificate bootstrap |
+| **Startup Validation — Communication Hub** | `startup.validation.control_center_ok` / `startup.validation.control_center_unreachable` | Control Center reachability at CH startup; failure prevents certificate bootstrap |
+| **Startup Validation — Communication Hub** | `startup.validation.redis_ok` / `startup.validation.redis_failed` | Redis reachability at CH startup; failure prevents message brokering |
+| **Configuration Source** | `config:*:resolved from <source>` | Source of each infrastructure connection (env var, YAML, or default); in production, should always be `env var` |
+| **Service Restarts** | Restart count per service within rolling window | > 2 restarts in 5 minutes indicates intermittent infrastructure issue |
+| **OIDC Provider Registry** | `oidc.provider.reachability` (gauge, labels: `provider_type`, `provider_name`) | 1 = provider reachable via OIDC Discovery; 0 = unreachable. Per-provider health signal for both user and agent identity providers. |
+| **OIDC Provider Registry** | `oidc.provider.discovery_latency` (p99, labels: `provider_type`, `provider_name`) | Time to complete `.well-known/openid-configuration` fetch. High p99 indicates provider-side latency or network issues. |
+| **OIDC Provider Registry** | `oidc.jwks.fetch_failures_total` (labels: `provider_type`, `provider_name`) | Failed JWKS endpoint fetches per provider. Any sustained non-zero rate is critical — JWTs will fail validation. |
+| **OIDC Provider Registry** | `oidc.jwks.cache_hits_total` | JWKS keys served from in-memory cache. |
+| **OIDC Provider Registry** | `oidc.jwks.cache_misses_total` | JWKS cache misses requiring a fetch from the provider. |
+| **OIDC Provider Registry** | `oidc.jwks.cache_hit_rate` (derived) | `cache_hits / (cache_hits + cache_misses)`; below 90% indicates excessive key rotation or undersized TTL. |
+| **OIDC Provider Registry** | `oidc.registry.reload_total` (labels: `trigger`) | Registry reload events; `trigger` is one of `config_update`, `manual`, `startup`. Spikes indicate frequent operator-driven config changes. |
+| **OIDC Provider Registry** | `oidc.registry.reload_errors_total` | Failed registry reload attempts. Any non-zero rate means config is stale and new provider settings are not taking effect. |
+| **Super Admin Auth** | `superadmin.login_attempts_total` (labels: `outcome`) | Super admin login attempts; `outcome` is `success` or `failure`. |
+| **Super Admin Auth** | `superadmin.login_failures_total` (labels: `reason`) | Failed super admin attempts; `reason` is `invalid_credentials`, `disabled`, or `expired`. |
+| **Super Admin Auth** | `superadmin.token_issued_total` | Short-lived JWT tokens issued to super admin sessions. |
+| **Auth Middleware** | `auth.pipeline.decision_total` (labels: `tier`, `outcome`) | Which tier resolved the request; `tier` is `super_admin`, `oidc_user`, `oidc_agent`, or `public`. `outcome` is `allowed` or `denied`. |
+| **Auth Middleware** | `auth.pipeline.latency` (p99, labels: `tier`) | Time spent in each auth tier. High p99 for `oidc_*` tiers indicates provider-side latency. |
+| **Auth Middleware** | `auth.oidc.validation_failures_total` (labels: `provider_type`, `reason`) | OIDC JWT validation failures; `reason` is `signature`, `expired`, `audience`, `issuer`, `claims`, or `unknown`. |
+| **OIDC Config Service** | `oidc.config.test_success_total` (labels: `provider_type`, `test_type`) | Successful OIDC test connections and test logins from the UI. |
+| **OIDC Config Service** | `oidc.config.test_failure_total` (labels: `provider_type`, `test_type`, `reason`) | Failed OIDC tests with failure reason (connectivity, auth, claims mapping). |
+| **OIDC Config Service** | `oidc.config.change_total` (labels: `action`, `provider_type`) | Provider config mutations; `action` is `create`, `update`, or `delete`. Used for audit trail. |
+| **OIDC Config Service** | `oidc.config.secret_encryption_errors_total` | Client secret encryption failures at rest. Any non-zero rate indicates crypto subsystem issue. |
 
 ---
 
@@ -135,6 +169,17 @@ Add as a panel group within the MCP Hub dashboard. Panels:
 - **JWT Extraction Rate** — Percentage of requests where middleware successfully extracts `raw_token`; alert annotation at < 99%.
 - **JWKS Cache Hit Rate** — Gauge showing Keycloak JWKS cache hit percentage; alert annotation at < 80%.
 - **Passthrough Tool Latency** — p99 time series for end-to-end passthrough tool call duration; alert annotation at > 5 s.
+
+### API Key Access
+Add as a panel group within the MCP Hub dashboard, or as a standalone dashboard. Panels:
+
+- **API Key Auth Rate** — `api_key.auth_total` rate split by `action` and `outcome`; success (green) and failure (red) stacked area.
+- **Auth Failure Breakdown** — `api_key.auth_failure_total` by `failure_reason`; pie or stacked bar.
+- **Revoked Key Attempts** — `api_key.revoked_key_attempt_total` rate line chart; any sustained non-zero rate is a security concern.
+- **load_skills Call Rate** — `api_key.load_skills_total` rate split by `sync_mode`; shows full vs incremental sync ratio.
+- **load_skills Response Size** — `api_key.load_skills_skill_count` histogram; p50/p99 to track response payload growth.
+- **Tool Call Volume: API Key vs Certificate** — Ratio derived from `api_key.tool_call_auth_method`; shows external agent vs internal agent usage.
+- **Auth Latency p99** — `api_key.auth_latency_seconds` p99 time series; rising latency indicates CC or DB pressure.
 
 ### Scheduling Engine
 Schedule health view. Include: triggered job count and completed job count overlaid on the same time axis (divergence is immediately visible), and scheduler queue depth trend.
@@ -180,6 +225,26 @@ Dedicated dashboard panel group for internal caller boundary controls. Panels:
 - **Internal Authorization Latency** — `internal_authorization_duration_seconds` p99 by `caller_type` and `endpoint_group`.
 - **Allowlisted Path 403 Regression** — `internal_http_403_total` for known allowlisted endpoint groups.
 - **System Tools Unauthenticated Rejects** — `internal_system_tools_unauthenticated_rejected_total` by endpoint.
+
+### Startup Health Dashboard
+Operations dashboard for detecting configuration regressions across service restarts. Panels:
+
+- **Last Startup Status per Service** — Panel showing the last startup status (success or failed) for each service, with the failure reason extracted from the `startup.validation.*_failed` log event.
+- **Configuration Source Summary** — Aggregation of `config:<connection> resolved from <source>` log events across all services, colour-coded by source: env var (green), YAML (yellow), default (red).
+- **Service Restart Count** — Restart count per service within a rolling 10-minute window; colours thresholded at > 3 restarts.
+
+### Configuration Source Dashboard
+At-a-glance visibility into which services are using which configuration model. Panels:
+
+- **Configuration Source by Connection** — For each infrastructure connection (database, redis, oidc), show which source was resolved per service.
+- **Configuration Drift Detection** — If any service changes its resolved source between restarts, highlight the transition.
+- **Production Configuration Compliance** — All connections should resolve from `env var` in production; any `yaml` or `default` source is flagged.
+
+### OIDC Provider Health
+Single-pane view of identity provider connectivity. Include: per-provider reachability gauges (user and agent), OIDC Discovery latency p99 per provider, JWKS cache hit rate per provider, JWKS fetch failure rate per provider, and registry reload event count. Use red/green colour coding for reachability.
+
+### Super Admin & Auth Pipeline
+Authentication decision overview. Include: auth pipeline tier distribution (stacked bar: super_admin, oidc_user, oidc_agent, public), super admin login success/failure rate as a time series, OIDC JWT validation failure rate by reason, and auth pipeline p99 latency per tier.
 
 ---
 
@@ -266,6 +331,25 @@ Route Warning alerts to the operations on-call channel. Route Critical alerts to
 | `Internal403RegressionAllowedPath` | `rate(internal_http_403_total{endpoint_group=~"allowlisted.*"})` above baseline for 5 min | Warning | Investigate allowlist regression on valid paths; follow boundary runbook |
 | `SystemToolsUnauthenticatedAccessAttempt` | `rate(internal_system_tools_unauthenticated_rejected_total) > 0` for 2 min | Critical | Treat as security event; validate source and network path; follow boundary runbook |
 
+### OIDC Identity Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `OIDCProviderUnreachable` | `oidc.provider.reachability == 0` for 5 min | Critical | OIDC login is broken for affected provider; check network, DNS, and provider health |
+| `OIDCJWKSFetchFailureSustained` | `rate(oidc.jwks.fetch_failures_total) > 0` for 2 min | Critical | All JWT validation is failing; JWT signatures cannot be verified |
+| `OIDCJWKSCacheDegraded` | `oidc.jwks.cache_hit_rate < 0.90` for 10 min | Warning | Excessive JWKS key rotation or undersized cache TTL |
+| `OIDCRegistryReloadError` | `rate(oidc.registry.reload_errors_total) > 0` for 2 min | Critical | Registry reload failed; OIDC config is stale and provider changes are not reflected |
+| `AuthPipelineOIDCLatencyHigh` | `auth.pipeline.latency` p99 > 5 s for `oidc_user` or `oidc_agent` tier for 5 min | Warning | OIDC provider or network is slow; user login experience degraded |
+| `OIDCTestFailureSustained` | `rate(oidc.config.test_failure_total) > 0` for 10 min | Warning | Operator repeatedly unable to validate OIDC connectivity; check provider configuration |
+| `OIDCSecretEncryptionError` | `rate(oidc.config.secret_encryption_errors_total) > 0` | Critical | Client secret encryption/decryption failing; OIDC authentication may not function |
+
+### Super Admin Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `SuperAdminBruteForce` | `rate(superadmin.login_failures_total) > 10/min` for 5 min | Critical | Potential brute-force attack on super admin credentials; consider disabling super admin or rotating credentials |
+| `SuperAdminDisabledLoginAttempt` | `rate(superadmin.login_failures_total{reason="disabled"}) > 0` for 5 min | Warning | Login attempts to a disabled super admin; may indicate misconfiguration or unauthorized access attempt |
+
 ### MCP Demo App Alerts
 
 Metrics are emitted via OpenTelemetry; panels live in the **MCP Demo App** panel group on the MCP Hub Grafana dashboard.
@@ -287,6 +371,17 @@ Metrics are emitted via OpenTelemetry; panels live in the **MCP Demo App** panel
 | `PassthroughJWKSCacheDegraded` | JWKS cache hit rate < 80% over 10 min | Warning | Review JWKS cache TTL configuration in `backend/app/auth.py` |
 | `PassthroughSessionCreationRateAnomaly` | New passthrough sessions > 100/hour | Warning | Review session creation logs for potential abuse patterns |
 
+### API Key Access Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `ApiKeyAuthFailureSpike` | `rate(api_key.auth_failure_total) > 10/min` for 5 min | Warning | Check key validity and CH → CC connectivity; review `failure_reason` breakdown |
+| `ApiKeyAuthFailureSustained` | `rate(api_key.auth_failure_total) > 50/min` for 2 min | Critical | Possible brute-force attack; consider temporary IP-level rate limiting |
+| `RevokedKeyAttemptDetected` | `rate(api_key.revoked_key_attempt_total) > 0` sustained for 5 min | Warning | Investigate source IP and key prefix; may indicate compromised key or misconfigured agent; see [api-key-auth.md](runbooks/api-key-auth.md) |
+| `ApiKeyAuthLatencyHigh` | `api_key.auth_latency_seconds` p99 > 2 s for 5 min | Warning | Check CC database query performance; verify `api_keys` table indexes |
+| `ApiKeyLoadSkillsEmpty` | `api_key.load_skills_skill_count` p50 = 0 sustained for 10 min | Warning | Load skills returning empty for most callers; verify role-to-skill assignments |
+| `ApiKeyPermissionDenialSpike` | `rate(api_key.tool_call_total{outcome="permission_denied"}) > 5/min` for 5 min | Warning | Tools requested outside bound role permissions; review agent configuration |
+
 ### Certificate Security Alerts
 
 | Alert Name | Condition | Severity | Action |
@@ -295,3 +390,13 @@ Metrics are emitted via OpenTelemetry; panels live in the **MCP Demo App** panel
 | `AgentCertRenewalFailure` | `cert.renewal_failed` ERROR log present | Critical | Certificate will expire without intervention; re-provision immediately; see [certificate-security.md](runbooks/certificate-security.md) |
 | `AgentCertExpired` | `cert.validation.failed` WARN with `outcome = expired` sustained | Critical | Agent runtime shutting down; manually issue replacement certificate; see [certificate-security.md](runbooks/certificate-security.md) |
 | `AgentIdentityRefreshFailed` | Count of `agent_identities.token_status = 'refresh_failed'` > 0 | Critical | Agent identity requires manual re-authorization via Admin UI → Agent Identities; see [certificate-security.md](runbooks/certificate-security.md) |
+
+### Startup Validation and Configuration Alerts
+
+| Alert Name | Condition | Severity | Action |
+|------------|-----------|----------|--------|
+| `StartupValidationFailed` | `startup.validation.*_failed` log event present | Critical | Page on-call; service cannot start; check the specific dependency in the log event |
+| `ConfigurationFromDefault` | Any `resolved from built-in default` log event in production | Warning | Operator review: ensure all production infrastructure env vars are set |
+| `KeycloakConfigNotFound` | `startup.validation.keycloak_not_found` log event present | Critical | Operator must run `setup identity` or verify OIDC environment variables |
+| `KeycloakAdminCredsInRuntime` | `KEYCLOAK_ADMIN` detected in CC environment at startup | Critical | Security violation: admin credentials exposed to runtime; remove immediately |
+| `ServiceRestartLoop` | Any service restarts > 3 times in 10 minutes | Critical | Page on-call; intermittent infrastructure connectivity likely |

@@ -120,12 +120,12 @@ describe('Slug Validation', () => {
     expect(screen.getAllByLabelText(/app\.name/i)[1]).toHaveAttribute('aria-invalid', 'false')
   })
 
-  it('mcp server name validates the slug pattern', async () => {
+  it('mcp server slug validates the slug pattern', async () => {
     const { McpHubPage } = await import('../../pages/mcp/McpHubPage')
     render(<McpHubPage />, { wrapper })
 
     fireEvent.click(screen.getByRole('button', { name: /mcp\.registerServer/i }))
-    fireEvent.change(screen.getByLabelText(/app\.name/i), { target: { value: 'Invalid Server' } })
+    fireEvent.change(screen.getByLabelText(/mcp\.slug/i), { target: { value: 'Invalid Server' } })
 
     expect(screen.getAllByText('Lowercase letters, numbers, hyphens only').length).toBeGreaterThan(0)
   })
@@ -136,7 +136,6 @@ describe('Slug Validation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /mcp\.registerServer/i }))
 
-    fireEvent.change(screen.getByLabelText(/app\.name/i), { target: { value: 'valid-server' } })
     fireEvent.change(screen.getByLabelText(/mcp\.slug/i), { target: { value: 'bad slug' } })
 
     await waitFor(() => {

@@ -28,6 +28,9 @@ RT_AGENT_OUTPUTS: Final[str] = "agent::outputs"
 RT_INTEGRATION_MCP_HUB: Final[str] = "integration::mcp_hub"
 RT_INTEGRATION_NOTIFICATIONS: Final[str] = "integration::notifications"
 
+# API Keys — bound to agent identities for external MCP hub access
+RT_API_KEYS: Final[str] = "agent::api_keys"
+
 # System module
 RT_SYSTEM_OBSERVABILITY: Final[str] = "system::observability"
 RT_SYSTEM_PERMISSIONS: Final[str] = "system::permissions"
@@ -36,6 +39,9 @@ RT_SYSTEM_CONFIG: Final[str] = "system::system_config"
 # ── Manifest ──────────────────────────────────────────────────────────────────
 
 ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
+    RT_API_KEYS: {
+        "actions": ["read", "manage"],
+    },
     RT_AGENT: {
         "actions": ["read"],
     },
@@ -99,6 +105,7 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
 
 MODULE_GROUPS: Final[dict[str, list[str]]] = {
     "agent": [
+        RT_API_KEYS,
         RT_AGENT_ROLES,
         RT_AGENT_IDENTITIES,
         RT_AGENT_MANAGEMENT,

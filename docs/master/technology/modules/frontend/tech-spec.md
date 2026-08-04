@@ -232,6 +232,29 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | `useDialogErrorHandler` | hook | Reusable hook implementing the Dialog Error Handling Standard: manages `dialogError` state, clear-on-open/close lifecycle, and error display pattern used by all dialogs with API calls | `frontend/src/hooks/useDialogErrorHandler.ts` |
 | `toolNaming` | utility module | Shared frontend naming/slug formatting helpers used for consistent slug validation and normalization across MCP and agent surfaces | `frontend/src/utils/toolNaming.ts` |
 
+### API Keys — UI Components
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ApiKeyListPage` | component | Main API key management page with table, filtering, search, empty/loading/error states | `frontend/src/pages/api-keys/ApiKeyListPage.tsx` |
+| `CreateApiKeyDialog` | component | Two-step modal: form (identity+role selection) → key reveal with copy | `frontend/src/pages/api-keys/CreateApiKeyDialog.tsx` |
+| `RevokeApiKeyDialog` | component | Confirmation modal for irreversible key revocation | `frontend/src/pages/api-keys/RevokeApiKeyDialog.tsx` |
+
+### API Keys — Data Layer
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `useApiKeys` | hook | React hook: fetches API key list with loading/error state, exposes `refresh()` | `frontend/src/hooks/useApiKeys.ts` |
+| `fetchApiKeys` | function | HTTP GET `/api/v1/api-keys` — fetches key list with optional status filter | `frontend/src/api/apiKeysApi.ts` |
+| `createApiKey` | function | HTTP POST `/api/v1/api-keys` — creates a new API key | `frontend/src/api/apiKeysApi.ts` |
+| `revokeApiKey` | function | HTTP POST `/api/v1/api-keys/{key_id}/revoke` — revokes an API key | `frontend/src/api/apiKeysApi.ts` |
+| `fetchIdentitiesWithRoles` | function | HTTP GET `/api/v1/api-keys/identities-with-roles` — dropdown data for create dialog | `frontend/src/api/apiKeysApi.ts` |
+| `ApiKey` | interface | TypeScript type for API key list item | `frontend/src/types/apiKeys.ts` |
+| `ApiKeyCreateRequest` | interface | TypeScript type for API key creation form data | `frontend/src/types/apiKeys.ts` |
+| `ApiKeyCreateResponse` | interface | TypeScript type for API key creation response (includes one-time key) | `frontend/src/types/apiKeys.ts` |
+| `ApiKeyStatus` | enum | TypeScript enum: `active` / `revoked` | `frontend/src/types/apiKeys.ts` |
+| `IdentityWithRoles` | interface | TypeScript type for identity with available roles (dropdown data) | `frontend/src/types/apiKeys.ts` |
+
 ### Agent Guardrails & Execution Summary UI
 
 | Symbol | Type | Description | File |

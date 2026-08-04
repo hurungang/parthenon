@@ -65,8 +65,8 @@ Use this sequence for `add-agent-execution-guardrails` and subsequent guardrail 
 
 ## Quick Reference
 
-- **Infrastructure dependencies**: PostgreSQL 16 and Redis must be healthy before any backend service starts. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, the bundled Keycloak container is also an infrastructure dependency and must be healthy before the Platform API starts. Ensure host port `8080` is free before starting the stack in bundled mode.
-- **Startup order**: Platform API must be up before MCP Hub, Skill Engine, Agent Engine, Scheduling Engine, Notification Engine, Communication Hub, and Agent Gateway
+- **Infrastructure dependencies**: PostgreSQL 16 and Redis must be healthy before any backend service starts. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, the bundled Keycloak container is also an infrastructure dependency and must be healthy before the Control Center starts. Ensure host port `8082` is free before starting the stack in bundled mode (Keycloak uses port 8082 on the host).
+- **Startup order**: Control Center (port 8000) → Agent Runtime (port 8001) → Communication Hub (port 8002). All three services must be healthy before Web UI and nginx.
 - **Secrets management**: All sensitive environment variables must be supplied via Docker secrets (Docker Compose) or Kubernetes Secrets — never in plain-text configuration files
 - **Migrations**: Alembic migrations in `backend/alembic/` must be applied against the database before the Platform API starts
 - **OIDC**: For bundled Keycloak, the Bootstrap Service provisions the realm and client automatically via the setup wizard or CLI — do not register clients manually. For external providers (Keycloak or Azure EntraID), manual client registration is required before running the setup wizard or CLI.

@@ -796,3 +796,127 @@ async def get_output_tool(
     except Exception as exc:
         logger.exception("Failed to get output for session %s", body.session_id)
         raise HTTPException(status_code=500, detail=f"Failed to get output: {exc}")
+
+
+# ── Skills Resolution for External Agents ────────────────────────────────────
+
+from app.schemas.api_key import SkillResolveInternalRequest, SkillResolveInternalResponse
+
+
+@router.post("/skills/resolve", response_model=SkillResolveInternalResponse)
+async def resolve_skills_internal(
+    body: SkillResolveInternalRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SkillResolveInternalResponse:
+    """Resolve all accessible skills for an agent role with optional ``since`` filter.
+
+    Called by Communication Hub when an external agent invokes ``load_skills``.
+    Returns full skill definitions including tool schemas and ``updated_at``
+    timestamps. Supports incremental sync via ``since`` parameter.
+
+    Args:
+        body: Request with ``agent_role_id`` and optional ``since`` timestamp.
+        db: Database session.
+
+    Returns:
+        SkillResolveInternalResponse with list of SkillWithVersion.
+
+    Raises:
+        HTTPException: 404 if role not found, 500 on database error.
+    """
+    from sqlalchemy.orm import selectinload
+
+    from app.db.models.agents import AgentRole, AgentRoleSkill
+    from app.db.models.mcp_hub import McpTool
+    from app.db.models.skills import Skill, SkillToolBinding
+    from app.schemas.api_key import SkillWithVersion, ToolDefinition
+
+    logger.info(
+        "Skills resolve requested for role %s (since=%s)",
+        body.agent_role_id,
+        body.since,
+    )
+
+    try:
+        # Verify role exists
+        role = await db.get(AgentRole, body.agent_role_id)
+        if not role:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent role {body.agent_role_id} not found",
+            )
+
+        # Get skill IDs assigned to the role
+        result = await db.execute(
+            select(AgentRoleSkill.skill_id).where(
+                AgentRoleSkill.role_id == body.agent_role_id
+            )
+        )
+        skill_ids = [row[0] for row in result.fetchall()]
+
+        if not skill_ids:
+            return SkillResolveInternalResponse(skills=[])
+
+        # Fetch skills with tool bindings
+        stmt = (
+            select(Skill)
+            .where(Skill.id.in_(skill_ids), Skill.is_active.is_(True))
+            .options(
+                selectinload(Skill.tool_bindings).selectinload(SkillToolBinding.tool)
+            )
+        )
+
+        if body.since is not None:
+            stmt = stmt.where(Skill.updated_at > body.since)
+
+        result = await db.execute(stmt)
+        skills = result.scalars().unique().all()
+
+        skill_versions: list[SkillWithVersion] = []
+        for skill in skills:
+            tools: list[ToolDefinition] = []
+            for binding in skill.tool_bindings:
+                tool = binding.tool
+                if tool and tool.is_active:
+                    tools.append(
+                        ToolDefinition(
+                            tool_id=tool.id,
+                            name=tool.name,
+                            description=tool.description,
+                            input_schema=getattr(tool, 'input_schema', None),
+                            output_schema=getattr(tool, 'output_schema', None),
+                        )
+                    )
+
+            skill_versions.append(
+                SkillWithVersion(
+                    skill_id=skill.id,
+                    name=skill.name,
+                    description=skill.description,
+                    instructions=skill.instructions,
+                    is_active=skill.is_active,
+                    is_system=skill.is_system,
+                    updated_at=skill.updated_at,
+                    tools=tools,
+                )
+            )
+
+        logger.info(
+            "Resolved %d skills for role %s",
+            len(skill_versions),
+            body.agent_role_id,
+        )
+
+        return SkillResolveInternalResponse(skills=skill_versions)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "Failed to resolve skills for role %s",
+            body.agent_role_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to resolve skills: {exc}",
+        )

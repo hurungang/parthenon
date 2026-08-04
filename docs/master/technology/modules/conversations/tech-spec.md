@@ -69,7 +69,7 @@ For **conversation-type agents**, the module provides persistent, user-named ses
 | `ConversationSessionRead` | schema | Pydantic response schema; updated to include `title`, `triggered_by_user_id`, `agent_job_id`, `updated_at`; removes legacy fields | `backend/app/schemas/conversations.py` |
 | `ConversationTurnRead` | schema | Pydantic response schema for individual turns; includes `turn_type` and `intervene_request_id` | `backend/app/schemas/conversations.py` |
 | `ConversationSessionDetailRead` | schema | Extends ConversationSessionRead with nested `turns`; no structural change beyond inherited field updates | `backend/app/schemas/conversations.py` |
-| `ConversationRouter` | router | FastAPI router at /conversations; extended with create, resume, end, archive, and intervention respond + pending-query endpoints; guarded by `require_permission(RT_CONVERSATION, "read")` | `backend/app/api/v1/conversations.py` |
+| `ConversationRouter` | router | FastAPI router at /conversations; extended with create, resume, end, archive, and intervention respond + pending-query endpoints; guarded by `require_permission(RT_AGENT_TRAILS, "read")` | `backend/app/api/v1/conversations.py` |
 | `AgentSessionService` | service | WebSocket lifecycle handler for agent sessions; extended to dispatch SessionAutoNamer and push `title_update` events | `backend/app/services/agents/session_service.py` |
 | `useConversationSessions` | hook | New React Query hook; exposes sessions list, create/end/archive mutations for a given agent type | `frontend/src/hooks/useConversationSessions.ts` |
 | `ChatRole` | TypeScript type | Role union used for chat turn rendering in conversation surfaces | `frontend/src/hooks/useChatSession.ts` |

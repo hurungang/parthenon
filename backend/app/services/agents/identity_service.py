@@ -407,6 +407,10 @@ class AgentIdentityService:
         refresh_token_plain: str | None = token_data.get("refresh_token")
         expires_in: int = int(token_data.get("expires_in", 300))
 
+        # Extract realm from issuer URL (format: http://host:port/realms/{realm_name})
+        realm_parts = oauth_config.issuer_url.split("/realms/")
+        realm = realm_parts[-1] if len(realm_parts) > 1 else "ai_agents"
+
         # Decode access token to extract username (JWT claims: preferred_username)
         # Keycloak JWTs have 3 parts: header.payload.signature
         try:
