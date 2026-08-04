@@ -90,14 +90,14 @@ The loop continues until the LLM produces a final answer or a session limit is r
 
 ### 5a. Human-in-the-Loop Intervention — Suspend and Resume
 
-During the observe-reason-act loop, an agent may call the `system____human_intervene` system tool to pause execution and request human input. When this occurs:
+During the observe-reason-act loop, an agent may call the `human_intervene` system tool to pause execution and request human input. When this occurs:
 
 1. The Agent Runtime serialises the current execution context (messages, iteration count, tool results) and signals suspension to the Communication Hub.
 2. The Communication Hub routes the tool call to Control Center for persistence.
 3. Control Center persists the `InterveneRequest` record with `status=pending` and emits an `intervene_request_created` notification event.
-4. The agent session transitions to `waiting_for_human` state — no further LLM or tool calls are made.
+4. The agent session suspends — no further LLM or tool calls are made.
 5. An operator (or business user viewing the live execution log stream) views the request through the Web UI and submits a response (approval Yes/No, choice selection, or free-form text).
-6. The response flows: Web UI → Communication Hub → Control Center, where the `InterveneResponse` is persisted and the request status becomes `responded`.
+6. The response flows: Web UI → Communication Hub → Control Center, where the response is persisted and the request status becomes `responded`.
 7. Control Center signals resume through the Communication Hub to the Agent Runtime.
 8. The Agent Runtime restores the execution context and injects the response value as the `human_intervene` tool's return value.
 9. The observe-reason-act loop resumes with the human input available to the agent.
@@ -106,7 +106,7 @@ This suspend/resume cycle also applies to the inline intervene popup on the exec
 
 ### 5b. Non-Conversational Delegation with HITL
 
-When a **delegated sub-agent** in a non-conversational (task) session calls `human_intervene`, the intervention request follows a different routing path:
+When a **delegated sub-agent** in a non-conversational session calls `human_intervene`, the intervention request follows a different routing path:
 
 1. The sub-agent's `human_intervene` call arrives at the Communication Hub without a `conversation_session_id`.
 2. CH's `InterventionRouter` detects the absence of a `conversation_session_id` and falls through — the request is not routed to a conversation WebSocket client.

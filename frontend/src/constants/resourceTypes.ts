@@ -7,6 +7,7 @@
  */
 
 export const RESOURCE_TYPE_MANIFEST = {
+  "agent::api_keys": { actions: ["read", "manage"] },
   "agent::roles": { actions: ["read", "manage"] },
   "agent::identities": { actions: ["read", "manage"] },
   "agent::management": { actions: ["create", "read", "update", "delete", "execute"] },
@@ -42,6 +43,7 @@ export const MODULE_GROUPS: Record<string, ModuleGroup> = {
   agents: {
     label: "Agents",
     submodules: [
+      "agent::api_keys",
       "agent::roles",
       "agent::identities",
       "agent::management",

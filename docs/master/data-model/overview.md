@@ -1,6 +1,6 @@
 # Data Model Overview
 
-Parthenon's data model is organised into six domains. Each section below contains the entity-relationship diagram for that domain with key business attributes. Cross-domain links are summarised in the last section.
+Parthenon's data model is organised into the following domains. Each section below contains the entity-relationship diagram for that domain with key business attributes. Cross-domain links are summarised in the last section.
 
 For entity descriptions, see the module docs in `docs/master/data-model/modules/`.
 Schema source files live in `backend/app/db/models/`.
@@ -40,31 +40,49 @@ erDiagram
     }
     IdentityProviderConfig {
         uuid id
-        string provider_type
-        string oidc_provider_url
+        enum provider_scope
+        enum provider_type
+        string display_name
+        string issuer_url
         string client_id
-        string client_secret
-        string realm_name
-        string audience
-        boolean is_setup_complete
-        datetime setup_completed_at
-        uuid setup_completed_by
+        string encrypted_client_secret
+        string scopes
+        json claim_mappings
+        boolean is_enabled
+    }
+    IdentityProviderConfigAudit {
+        uuid id
+        uuid config_id
+        string changed_by
+        enum change_type
+        json changed_fields
+        json previous_values
+        datetime changed_at
     }
     IdentityProviderSetupState {
         uuid id
         boolean is_setup_complete
+        boolean user_provider_configured
+        boolean agent_provider_configured
         datetime completed_at
         uuid completed_by
+    }
+    SuperAdminCredentials {
+        uuid id
+        string username
+        string hashed_password
+        boolean is_enabled
+        datetime last_login_at
     }
 
     Identity }o--|| Role : "assigned to"
     Role ||--o{ RolePermission : "grants"
     Permission ||--o{ RolePermission : "is granted via"
-    IdentityProviderConfig ||--o| Identity : "setup_completed_by"
+    IdentityProviderConfig ||--o{ IdentityProviderConfigAudit : "audits"
     IdentityProviderSetupState ||--o| Identity : "completed_by"
 ```
 
-**Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_setup_state.py`
+**Sources**: `backend/app/db/models/identity.py`, `backend/app/db/models/identity_provider_config.py`, `backend/app/db/models/identity_provider_config_audit.py`, `backend/app/db/models/identity_provider_setup_state.py`, `backend/app/db/models/super_admin_credentials.py`
 
 ---
 
@@ -112,7 +130,7 @@ erDiagram
         uuid id
         uuid role_id
         string effect
-        string module
+        string module "namespace::submodule (e.g., agent::management)"
         datetime created_at
     }
     PolicyAction {
@@ -123,7 +141,7 @@ erDiagram
     PolicyResource {
         uuid id
         uuid policy_statement_id
-        string resource_type
+        string resource_type "namespace::submodule (e.g., integration::mcp_hub)"
         string resource_id
     }
     PolicyTagCondition {
@@ -183,6 +201,8 @@ erDiagram
         string reviewer_reason
     }
 ```
+
+> **Module::submodule naming convention**: `PolicyStatement.module` and `PolicyResource.resource_type` use a two-layer namespaced format (`module::submodule`, e.g. `agent::management`). There are three modules: `agent` (12 submodules — roles, identities, management, runtime_control, skills, sops, model_configs, schedules, trails, human_intervention, data_types, outputs), `integration` (mcp_hub, notifications), and `system` (observability, permissions, system_config). Wildcards are supported: `*::*` matches all resource types across all modules, and `module::*` matches all submodules within a given module. Legacy flat values (e.g. `agent`, `role`, `skill`, `mcp_server`) are no longer accepted — they have been migrated to their namespaced equivalents. Validation is enforced at the application layer via `ResourceTypeManifest`.
 
 **Sources**: `backend/app/db/models/tag_definition.py`, `backend/app/db/models/tag_value.py`, `backend/app/db/models/role.py`, `backend/app/db/models/policy_statement.py`, `backend/app/db/models/policy_action.py`, `backend/app/db/models/policy_resource.py`, `backend/app/db/models/policy_tag_condition.py`, `backend/app/db/models/platform_user.py`, `backend/app/db/models/user_role.py`, `backend/app/db/models/group.py`, `backend/app/db/models/group_role.py`, `backend/app/db/models/user_group.py`, `backend/app/db/models/access_request_batch.py`, `backend/app/db/models/access_request.py`
 
@@ -306,6 +326,8 @@ erDiagram
 ```
 
 **Source**: `backend/app/db/models/skills.py`
+
+> **Skill versioning**: The `Skill.updated_at` timestamp is surfaced to MCP clients via the `load_skills` response. External agents use this to cache skill definitions locally and only re-download skills whose `updated_at` is newer than their cached copy.
 
 ---
 
@@ -483,20 +505,6 @@ erDiagram
         datetime updated_at
     }
 
-    AgentInstanceCertificate {
-        uuid id
-        uuid agent_type_id
-        string instance_id
-        string serial_number
-        enum status
-    }
-    TokenRefreshLog {
-        uuid id
-        uuid agent_identity_id
-        enum outcome
-        int retry_attempt
-    }
-
     AgentType }o--|| AgentRole : "governed by"
     AgentType }o--|| AgentIdentity : "authenticates as"
     AgentSession }o--|| AgentType : "executes"
@@ -516,7 +524,7 @@ erDiagram
     AgentType }o--|| AgentDataType : "output schema defined by"
 ```
 
-**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/token_refresh_log.py`
+**Sources**: `backend/app/db/models/agents.py`, `backend/app/db/models/agent_data.py`, `backend/app/db/models/agent_output.py`, `backend/app/db/models/agent_data_type.py`, `backend/app/db/models/agent_security.py`
 
 ### Agent Execution Data Flow
 
@@ -646,7 +654,74 @@ erDiagram
     AgentIdentity ||--o{ TokenRefreshLog : "logs"
 ```
 
-**Sources**: `backend/app/db/models/agent_instance_certificate.py`, `backend/app/db/models/certificate_revocation_entry.py`, `backend/app/db/models/token_refresh_log.py`, `backend/app/db/models/certificate_validation_log.py`
+**Sources**: `backend/app/db/models/agent_security.py`
+
+### API Key Access
+
+```mermaid
+erDiagram
+    AgentApiKey {
+        uuid id
+        string name
+        string key_hash
+        string key_prefix
+        uuid agent_identity_id
+        uuid agent_role_id
+        enum status "active | revoked"
+        datetime created_at
+        datetime last_used_at
+        uuid created_by
+    }
+    ApiKeyUsageLog {
+        uuid id
+        uuid api_key_id
+        enum action "validate | load_skills | tool_call"
+        string tool_name
+        string ip_address
+        datetime timestamp
+        boolean success
+    }
+    AgentIdentity {
+        uuid id
+        string name
+        enum identity_type
+        enum status
+    }
+    AgentRole {
+        uuid id
+        string name
+        string slug
+        datetime created_at
+        datetime updated_at
+    }
+    Skill {
+        uuid id
+        string name
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+    AgentRoleSkill {
+        uuid role_id
+        uuid skill_id
+    }
+
+    AgentApiKey }o--|| AgentIdentity : "bound to"
+    AgentApiKey }o--|| AgentRole : "bound to"
+    AgentApiKey ||--o{ ApiKeyUsageLog : "audited by"
+    AgentRole ||--o{ AgentRoleSkill : "grants access to"
+    AgentRoleSkill }o--|| Skill : "references"
+```
+
+**Source**: `backend/app/db/models/agent_api_key.py`
+
+**Business rules:**
+- Keys inherit the full permission set of the bound `AgentRole` — no per-tool or per-SOP scoping on the key itself.
+- One active key per identity-role pair at a time; `status` is `active` or `revoked`.
+- `key_hash` uses SHA-256; the raw key is never stored after creation.
+- `key_prefix` identifies the key type visually (e.g. `phn_sk_`) without exposing the secret.
+- `last_used_at` is updated on each successful authentication.
+- `ApiKeyUsageLog` entries are append-only and capture the action type, tool name (when applicable), client IP, and success/failure for every API key operation.
 
 ---
 

@@ -1,8 +1,8 @@
-# User Permission Management — Module Architecture
+# IAM & Permission Management — Module Architecture
 
 ## Overview
 
-The User Permission Management system controls human user access to Parthenon features and resources through a tag-based policy model. It operates independently of the agent permission system. Authorization decisions are centralised in the Permission Engine, which is consulted by every protected Resource API before executing an operation.
+The IAM system controls user and agent access to Parthenon features and resources through a policy-based, deny-by-default authorization model. Resource types use the `module::submodule` namespace convention (e.g., `agent::roles`, `integration::mcp_hub`, `system::permissions`). The `PermissionEngine` evaluates policy statements before any protected operation proceeds, and wildcards (`agent::*`, `*::*`) support broad grants without compromising auditability.
 
 ## Component Architecture
 
@@ -13,55 +13,50 @@ flowchart TD
     end
 
     subgraph Core["Core (Backend)"]
-        Auth[Auth Layer]
-        APIs[Resource APIs]
+        EP[Protected API Endpoints]
+        PP["require_permission<br>Dependency Factory"]
         PE[Permission Engine]
-        TR[Tag Registry]
-        UC[User Cache]
-        GM[Group Mapper]
-        AR[Access Request Service]
-        NS[Notification Service]
-        BS[Bootstrap Service]
-        RC[Resource Config]
+        RT[ResourceTypeManifest]
+        PS[(Policy Statements)]
     end
 
-    DS[(Data Store)]
-
-    Auth -->|register user| UC
-    Auth -->|assign groups| GM
-    APIs -->|authorize| PE
-    PE --> TR
-    PE --> UC
-    PE --> RC
-    AR --> NS
-    UI --> TR
-    UI --> AR
-    UI --> UC
-    BS -->|seed| DS
+    EP -->|Depends| PP
+    PP --> PE
+    PE --> RT
+    PE --> PS
+    UI --> PE
 ```
 
 ## Component Responsibilities
 
 | Component | Responsibility |
 |---|---|
-| **Permission Management UI** | Provides administrators with interfaces to manage roles, policies, tags, groups, and access requests |
-| **Auth Layer** | Verifies user identity on every request; registers new users in the User Cache and triggers group assignment on first login |
-| **Resource APIs** | Delegate all authorization decisions to the Permission Engine before executing protected operations |
-| **Permission Engine** | Evaluates whether a user may perform an action on a resource by applying tag-based policy conditions; returns an allow or deny decision |
-| **Tag Registry** | Manages permission tag definitions — their allowed values and scope — serving as the reference for policy authoring and enforcement |
-| **User Cache** | Tracks authenticated users to support permission lookups and administrative visibility; kept current at login time |
-| **Group Mapper** | Automatically assigns users to groups based on identity claims received at login; operates idempotently |
-| **Access Request Service** | Manages the lifecycle of user requests to join groups — covering submission, review, and approval or rejection by group owners |
-| **Notification Service** | Alerts group owners on new join requests and notifies requesting users when their request status changes |
-| **Bootstrap Service** | Seeds foundational system roles and policies on startup; safe to run on every startup without side effects |
-| **Resource Config** | Defines recognised resource types and their permitted actions; acts as the authoritative schema for policy authoring and runtime enforcement |
-| **Data Store** | Persists users, groups, tags, policies, and access requests |
+| **Permission Management UI** | Provides administrators with interfaces to manage user roles, policies, and resource permissions |
+| **require_permission** | FastAPI dependency factory that resolves the authenticated user and calls `PermissionEngine.authorize()` with a `(resource_type, action)` tuple; raises `HTTPException(403)` on denial |
+| **Permission Engine** | Central `authorize()` method that evaluates policy statements against the requested resource type and action; evaluates wildcard policies at three levels of specificity (exact match → module-level `agent::*` → global `*::*`) |
+| **ResourceTypeManifest** | Central registry in `backend/app/core/resource_types.py` mapping all `module::submodule` resource types to their allowed actions; validated at startup; mirrored in the frontend as `RESOURCE_TYPE_MANIFEST` |
+| **Policy Statements** | Database-backed policy rules linking user roles to allowed resources, actions, and optional tag conditions |
+
+## Resource Type Naming Convention
+
+All resource types follow the two-level namespaced format `module::submodule`:
+
+| Module | Example Resource Types |
+|---|---|
+| `agent` | `agent::management`, `agent::roles`, `agent::identities`, `agent::trails`, `agent::data`, `agent::outputs`, `agent::skills`, `agent::sops`, `agent::model_configs`, `agent::schedules`, `agent::data_types`, `agent::api_keys`, `agent::human_intervention`, `agent::runtime_control` |
+| `integration` | `integration::mcp_hub`, `integration::notifications` |
+| `system` | `system::observability`, `system::permissions`, `system::system_config` |
+
+### Wildcard Evaluation Rules
+
+The Permission Engine evaluates policies in this order:
+1. **Exact match** — e.g., `agent::roles` with `manage` action
+2. **Module-level wildcard** — e.g., `agent::*` covers all agent submodules
+3. **Global wildcard** — `*::*` covers every resource type
 
 ## Key Flows
 
 | Flow | Path |
 |---|---|
-| **User login** | Auth Layer → User Cache + Group Mapper |
-| **API authorization** | Resource APIs → Permission Engine → Tag Registry + User Cache + Resource Config |
-| **Access request** | Access Request Service → Notification Service → group owner |
-| **System startup** | Bootstrap Service → Data Store (seed roles and policies) |
+| **API authorization** | Endpoint → `require_permission(resource_type, action)` → `PermissionEngine.authorize()` → ResourceTypeManifest validation → Policy Statement evaluation → Allow/Deny |
+| **System startup** | `PermissionEngine` validates `ResourceTypeManifest` entries at init; unknown resource types are rejected before any wildcard evaluation |

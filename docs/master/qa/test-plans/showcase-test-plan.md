@@ -2,6 +2,16 @@
 
 Covers the static project showcase website, its build pipeline, content correctness, and deployment verification.
 
+## WHEN/THEN Scenarios
+
+| # | WHEN | THEN |
+|---|---|---|
+| SC1 | The source directory `site/` is inspected | All required source files are present (index.html, main.ts, tabs.ts, animations.ts, mermaid-init.ts) |
+| SC2 | The CI/CD workflow file is validated | It exists at `.github/workflows/deploy-github-pages.yml` and contains required Pages deployment actions |
+| SC3 | The index page content is checked | It contains Architecture, Security, and Demo Walkthroughs section headings with five tab anchor IDs |
+| SC4 | A tab pill is clicked in the demo walkthrough | The corresponding panel activates and other panels are hidden |
+| SC5 | The page loads in a browser | Core section headings are visible and placeholder images render in active tab panels |
+
 ---
 
 ## Coverage Areas

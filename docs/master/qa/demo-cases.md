@@ -6,8 +6,21 @@
 ## Grep Patterns
 <!-- Matches Playwright test titles and Vitest describe > it names (same format) -->
 <!-- One pattern per line; joined with | at runtime for --grep / regex matching -->
+- Dashboard Operational Metrics > operational metric cards are visible
+- Dashboard Operational Metrics > time-sensitive metrics section is visible
+- Dashboard Operational Metrics > date range picker preset buttons are visible
+- Namespace Resource Types — Full CRUD Lifecycle > resource types endpoint returns 17 namespaced entries (real backend)
+- Namespace Migration Visibility > dashboard remains accessible without specific permission
+- AddStatementDialog > Add Statement dialog shows Resource IDs section
+- Edit Policy Statement > Edit button opens dialog pre-filled with existing policy data
+- Namespace Validation Errors > POST policy with unknown namespaced type 'agent::nonexistent' is rejected
+- RolePolicyDialog E2E > roles page renders with mocked namespaced data
+- RolePolicyDialog E2E > batch save with wildcard module value is accepted
+- Login Page States > shows both when both enabled
+- OIDC Callback Flow > callback with valid code exchanges token and lands on /dashboard
+- Setup Wizard — full user journey > bundled Keycloak happy path completes and shows success
+- System Config Page > system config page renders without crash
 - Authentication > unauthenticated request to protected route redirects to login
-- Dashboard > dashboard renders app shell layout with header
 - Agent Management > displays list of agent types from API
 - Agent Management > shows create agent type button and opens dialog on click
 - Chat > chat page shows agent type selector or session list
@@ -28,7 +41,6 @@
 - Real Backend Integration - Notifications > notification channels endpoint returns 200
 - Observability Dashboard > observability dashboard shows request rate metric
 - Result Repository > result repository shows result payload text
-- Schedule Manager > schedule manager shows schedule names from API
 - Skills > skills page lists skill names from API
 - Skills > skills page has create skill button
 - Skill editor with instructions and tool binding > skills API response includes instructions field
@@ -56,7 +68,6 @@
 - Group-Optional Access Request Flow > admin can assign a group and approve a group-less request
 - Permissions Page > renders tabs for tag/role/group/user/access management
 - Bug Reproduction: Group View Members > View Members button for groups should open members drawer
-- Schedule Manager > schedule execution history is available
 - Notification Configuration > notification page shows event log with event types
 - Result Repository > result repository shows tags for results
 - Permission Denied: Snackbar > 403 on agent create triggers permission-denied snackbar
@@ -68,9 +79,6 @@
 - JSONViewModal > View JSON button opens modal with formatted JSON
 - CloneRoleDialog > Clone dialog pre-fills source role name with Copy prefix
 - Agent Role Management > renders agent roles page with role list
-- Agent Identity Management > renders agent identities page with identity list
-- Agent Identity Management > renders realm_name column values
-- Agent Identity Management > OAuth sign-in button appears in create dialog
 - Agent Type Configuration > renders agent type with input_type chip
 - Agent Session Launch > opens launch dialog when launch button is clicked
 - Agent Session Status > renders completed session with result
@@ -97,12 +105,6 @@
 - Agent Plan Mode — Mocked > Update agent type: PlanPreviewModal opens with updated plan on save
 - Agent Plan Mode — Mocked > Failed plan: modal opens with error message when generation_status is failed
 - Real Backend Integration — Agent Plan Mode > POST /api/v1/agents/types returns plan field in response
-- Agent Type SOP/Skill Bindings — Mocked > binding section renders below the role picker
-- Agent Type SOP/Skill Bindings — Mocked > add binding dialog opens with type selector
-- Agent Type SOP/Skill Bindings — Mocked > remove binding removes entry from list
-- Agent Type SOP/Skill Bindings — Mocked > reorder moves entry up and down
-- Agent Type SOP/Skill Bindings — Mocked > save payload includes sop_bindings and skill_bindings
-- Agent Type SOP/Skill Bindings — Real Backend > POST returns binding fields in response
 - Agent Log Viewer > Summary panel displays identity and role from system instruction
 - Agent Log Viewer > Agent Working Steps section is collapsed by default
 - Agent Log Viewer > Expand working steps section reveals step rows
@@ -138,8 +140,6 @@
 - Runtime Control Dashboard > surfaces observe-only threshold policy events in execution logs
 - Runtime Control Dashboard > shows topology selection and opens termination dialog for selected node
 - Runtime Control Dashboard > returns recursion_validation_failed contract for run preflight dead-loop checks
-- Runtime Control Dashboard > renders vendor → model → guardrail hierarchy in the runtime control panel
-- Runtime Control Dashboard > vendor disable cascades the cascade-source badge to all child models
 - test_hello_agent_tool_with_role_returns_greeting
 - test_hello_agent_tool_without_role_returns_access_denied
 - test_hello_user_tool_with_role_returns_greeting
@@ -160,7 +160,6 @@
 - Agent Outputs Query > shows validation status badges
 - Typed Execution Flow > agent management page shows output data type badge
 - Typed Execution Flow > execution logs page shows typed sessions
-<!-- Vitest component tests (frontend rendering — no Playwright/E2E): -->
 - ContentRenderer > renders complex nested HTML
 - ContentRenderer > strips script tags via DOMPurify
 - ContentRenderer > handles mixed HTML and markdown-like content by following HTML path
@@ -168,6 +167,10 @@
 - MaximizableContent > opens dialog when maximize button is clicked
 - MaximizableContent > closes dialog via Escape key
 - OutputTypeResultTab > extracts text from Claude content blocks for auto output type
+- API Key Management - Mocked Admin CRUD > displays status chips
+- API Key Management - Create Key Flow > can select identity and role then create
+- API Key Management - Revoke Key Flow > revoke dialog shows key name and warning
+- API Key Management - Filtering > status filter has all/active/revoked options
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -321,9 +324,9 @@
 | 137 | MCP Dual-Identity — helloWorld regression | Existing helloWorld tool unchanged: still surfaces agent identity, no role gating, works with real Keycloak JWT | mcp-dual-identity-tools | mcp-demo-app/tests/integration/test_agent_flow.py |
 | 138 | Intervention Response with Approval Dialog | User opens intervention dialog, selects Yes, submits approval, and verifies the API call was sent — the complete user decision-making loop | add-conversational-agent-intervention | e2e/tests/intervene.spec.ts |
 | 139 | Intervention API Endpoint Integration | Real-backend validation that the intervention requests data endpoint serves correctly against live services with migrations applied | add-conversational-agent-intervention | e2e/tests/conversation-intervention.spec.ts |
-| 140 | Inline MCP Session Assignment — Create Role | User creates an agent role with SOPs/Skills, sees required MCP servers appear inline, assigns sessions via dropdowns, and saves — the role is fully configured with all sessions in one operation | improve-role-mcp-session-assignment | agent-role-mcp-assignment.spec.ts |
-| 141 | Inline MCP Session Assignment — Save Blocked | User selects SOPs that require MCP servers but does not assign all sessions — the Save button is disabled with a clear inline validation message naming the missing servers | improve-role-mcp-session-assignment | agent-role-mcp-assignment.spec.ts |
-| 142 | Inline MCP Session Assignment — Refresh & Passthrough | User clicks the refresh button on an inline dropdown to reload sessions; passthrough badge is visible on configured servers | improve-role-mcp-session-assignment | agent-role-mcp-assignment.spec.ts |
+| 140 | Inline MCP Session Assignment — Create Role | User creates an agent role with SOPs/Skills, sees required MCP servers appear inline, assigns sessions via dropdowns, and saves — the role is fully configured with all sessions in one operation | improve-role-mcp-session-assignment | (planned) |
+| 141 | Inline MCP Session Assignment — Save Blocked | User selects SOPs that require MCP servers but does not assign all sessions — the Save button is disabled with a clear inline validation message naming the missing servers | improve-role-mcp-session-assignment | (planned) |
+| 142 | Inline MCP Session Assignment — Refresh & Passthrough | User clicks the refresh button on an inline dropdown to reload sessions; passthrough badge is visible on configured servers | improve-role-mcp-session-assignment | (planned) |
 | 143 | System tool rename and exposure | User-visible tool context includes save_data/get_data/get_output and excludes legacy save_result | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
 | 144 | Intermediate data persistence | A single session can save multiple named records, demonstrating repeatable data capture during a run | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
 | 145 | Data query guardrail validation | Query without filters is rejected, showing protection against unbounded retrieval requests | agent-save-data-get-tools | agent-save-data-get-tools.spec.ts |
@@ -344,3 +347,27 @@
 | 160 | Maximize to Full-View | Clicking maximize button opens MUI Dialog with same rendered content; title displayed in dialog header | improve-agent-response-rendering | MaximizableContent.test.tsx |
 | 161 | Keyboard Dismiss | Escape key closes the maximize dialog and returns to inline view | improve-agent-response-rendering | MaximizableContent.test.tsx |
 | 162 | Claude Content Blocks Integration | Auto output type with Claude content blocks flows through ContentRenderer for HTML detection; text extracted and rendered correctly | improve-agent-response-rendering | OutputTypeResultTab.test.tsx |
+| 163 | API Key List — Status Chips | Admin views key list with active/revoked status chips — shows both key states in a single glance with colored indicators | api-key-mcp-hub | api-key-management.spec.ts |
+| 164 | API Key — Create Flow | Full two-step create flow: fill in name, select identity + role from dropdowns, submit form, transition to step 2 showing the one-time key and save warning | api-key-mcp-hub | api-key-management.spec.ts |
+| 165 | API Key — Revoke Flow | Revoke confirmation dialog showing key name, identity/role binding, warning message, and description — complete pre-revoke verification UI | api-key-mcp-hub | api-key-management.spec.ts |
+| 166 | API Key — Status Filtering | Status filter dropdown interaction opening the select and revealing all/active/revoked filter options | api-key-mcp-hub | api-key-management.spec.ts |
+| 167 | Dashboard Operational Metrics | Section heading and all 7 snapshot stat cards render with mock data | implement-dashboard-metrics | dashboard.spec.ts |
+| 168 | Dashboard Time-Sensitive Metrics | Date-range-filtered metrics section with 3 time-sensitive cards | implement-dashboard-metrics | dashboard.spec.ts |
+| 169 | Dashboard Date Range Presets | Last Hour, Last 24h, and Last 7d preset shortcut buttons render correctly | implement-dashboard-metrics | dashboard.spec.ts |
+| 170 | Namespace Structure | Backend returns exactly 17 resource types with `::` delimiter across 3 modules, no legacy flat values remain | namespace-resource-types | namespace-resource-types.spec.ts |
+| 171 | Namespace Migration Visibility | Dashboard page loads without 403 — proves migration didn't break core pages or add unintended permission gates | namespace-resource-types | namespace-migration-visibility.spec.ts |
+| 172 | Add Policy — Resource IDs | Administrator navigates to Roles, expands a role, clicks "Add Statement", and sees the full dialog with resource type dropdown and resource ID management section | namespace-resource-types | role-policy-management.spec.ts |
+| 173 | Edit Policy — Pre-fill | Administrator expands a role, clicks Edit on an existing policy, and sees the dialog pre-filled with current data (effect, module, actions, resources) | namespace-resource-types | role-policy-management.spec.ts |
+| 174 | Namespace Validation | Backend rejects a properly-namespaced but unknown type (`agent::nonexistent`) — proves validation distinguishes format from validity | namespace-resource-types | namespace-validation-errors.spec.ts |
+| 175 | RolePolicyDialog UI | Roles page renders with mocked namespaced resource data — the RolePolicyDialog loads correctly with the batch save endpoint, module dropdown populated from namespaced resource types API | namespace-resource-types | role-policy-dialog.spec.ts |
+| 176 | FreeSolo Wildcard Input | Batch save API accepts free-text wildcard patterns (`agent::*`, `integration::*`, `*::*`) as valid module values — enables freeSolo autocomplete entry in resource type selectors | namespace-resource-types | role-policy-dialog.spec.ts |
+| 177 | Login Page State | Login page adapts to show both OIDC login button and super admin credential form when both are configured | refine-oidc-integration | oidc-login-flows.spec.ts |
+| 178 | OIDC Authorization Code Flow | User returns from identity provider with an auth code, token is exchanged, and dashboard loads | refine-oidc-integration | auth-required/oidc-callback.spec.ts |
+| 179 | Setup Wizard — Keycloak | Operator completes first-run setup via bundled Keycloak flow, fills config form, and sees success confirmation | refine-oidc-integration | setup-wizard.spec.ts |
+| 180 | System Config Identity Management | Super admin navigates to system config page, identity provider tabs render with user/agent provider sections | refine-oidc-integration | oidc-login-flows.spec.ts |
+| 181 | Consolidated `setup dev` bootstrap | Single command replaces 7+ ad-hoc scripts — provisions Keycloak realms/clients, seeds database roles/permissions/skills, bootstraps certificate authority, and seeds test agent identities in one idempotent invocation | production-ready-configuration | (manual) |
+| 182 | Zero-Trust Control Center | Control Center validates the OIDC realm exists via discovery endpoint only — never calls Keycloak admin API | production-ready-configuration | (manual) |
+| 183 | Env Variable Override Config | All infrastructure config resolved from environment variables — no YAML editing, no container rebuilds | production-ready-configuration | (manual) |
+| 184 | Fail-Fast Startup Validation | Services detect unreachable dependencies at startup and exit with clear, actionable diagnostics | production-ready-configuration | (manual) |
+| 185 | Setup Tool Full Idempotency | Operators can safely re-run `setup dev` without errors — all steps detect existing resources and report `skipped` | production-ready-configuration | (manual) |
+

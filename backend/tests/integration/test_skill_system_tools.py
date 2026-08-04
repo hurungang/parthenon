@@ -521,7 +521,7 @@ async def test_system_server_appears_in_servers_list(
     # The virtual system server is always prepended first by the API.
     system_server = system_servers[0]
     assert system_server["id"] == str(SYSTEM_SERVER_ID)
-    assert system_server["name"] == "System"
+    assert system_server["name"] == "system"
     assert system_server["status"] == "active"
 
 

@@ -139,7 +139,7 @@
 - `e2e/tests/agent-runtime.spec.ts` — Agent Type Configuration, Agent Session Launch, Agent Session Status, Agent Instance Dashboard, Conversation History Display suites
 - `e2e/tests/conversation-delegation-visibility.spec.ts` — conversational visibility cues, folded snippets, and terminal waiting resolution
 - `e2e/tests/agent-live-logs-stream.spec.ts` — running-session live stream updates and no-refresh progress visibility
-- `e2e/tests/access-control.spec.ts` — `Permission Denied: Snackbar` and `Permission Denied: Request Access Flow`
+- `e2e/tests/auth-required/access-control.spec.ts` — `Permission Denied: Snackbar` and `Permission Denied: Request Access Flow`
 - `e2e/tests/permission-errors.spec.ts` — structured 403 error rendering per page
 - `backend/tests/unit/services/test_plan_generation_service.py` — PlanGenerationService unit tests (LLM mocking, upsert, non-blocking failure, hash computation, no-role path)
 - `backend/tests/integration/api/test_agent_types_plan.py` — agent_plans schema verification, unique constraint, CASCADE delete, API response shape

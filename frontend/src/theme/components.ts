@@ -1,6 +1,17 @@
 import type { Components, Theme } from '@mui/material/styles'
 
 export const components: Components<Theme> = {
+  MuiOutlinedInput: {
+    styleOverrides: {
+      root: {
+        '@supports (-webkit-appearance: none)': {
+          '& legend': {
+            transition: 'none',
+          },
+        },
+      },
+    },
+  },
   MuiCard: {
     styleOverrides: {
       root: ({ theme }) => ({

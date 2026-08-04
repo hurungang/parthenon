@@ -18,7 +18,7 @@ Resolving stuck sessions, permission failures, OAuth expiry, timeouts, and queue
 **Resolution**:
 1. Check `dispatcher.poll` DEBUG logs — absence of these entries confirms the worker loop is not running.
 2. Check `dispatcher.stalled` warnings — long-running sessions occupying all slots will block new dispatches.
-3. Verify backend process health: `docker compose ps backend` or equivalent Kubernetes pod status.
+3. Verify backend process health: `docker compose ps agent-runtime` or equivalent Kubernetes pod status.
 4. If the process is healthy but the worker is stalled, restart the backend service to reset the worker loop.
 5. If stuck sessions need to be retried, update their status from `running` to `queued` via the Platform API admin tools or database console.
 

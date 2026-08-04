@@ -3,6 +3,8 @@
 ## Overview
 This feature defines and governs a formal service-segregation security model for agent runtime execution in Parthenon. Agent Runtime is treated as a strictly bounded execution surface: it can run approved agent work, but it cannot access sensitive identity material or direct data stores. Identity handling and access governance remain centralized in the Control Center, and runtime access to internal business operations is constrained to an approved, caller-specific allowlist. A deny-by-default policy is applied to all non-approved paths, creating clear boundary enforcement and auditable evidence of blocked access attempts.
 
+The security model also covers API key authentication for external agents. API keys are stored as cryptographic hashes in Control Center's database — the clear-text key is never persisted or retrievable. When an external agent authenticates with an API key, the Communication Hub validates it against Control Center's internal API over mTLS-secured channels, and the resolved identity token is injected into proxied MCP requests without ever being exposed to the external agent. This ensures that sensitive credential and identity material never leaves the protected service boundary.
+
 ## Business Goals
 - Reduce internal attack surface through explicit runtime boundary enforcement
 - Eliminate credential exposure risk in runtime execution environments
@@ -41,6 +43,7 @@ This feature defines and governs a formal service-segregation security model for
 - Deny-by-default boundary enforcement for non-allowlisted Control Center paths
 - Centralized identity and authorization governance that keeps sensitive identity handling outside runtime surfaces
 - Security gap tracking with risk-ranked remediation ownership and target outcomes
+- **API Key Security Model**: API keys are stored as cryptographic hashes in Control Center's database — the clear-text key is never persisted or retrievable after creation. Authentication involves hashing the presented key and comparing against the stored hash. Identity tokens resolved during API key authentication are injected into proxied MCP requests by the Communication Hub and never exposed to the external agent, maintaining strict token isolation. All Communication Hub to Control Center calls for key validation are conducted over mTLS-secured service channels.
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

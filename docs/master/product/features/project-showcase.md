@@ -16,7 +16,7 @@ The Project Showcase is a public-facing static website published to GitHub Pages
 - Delivers a **High-Level Design** section explaining the platform's architecture: SOP/Skill-driven MCP integration, the tools permission control chain, the three-service backend decomposition, and the dual-identity model.
 - Delivers a **Demo / Walkthrough** section with dedicated pages covering five end-to-end workflows: integrating an MCP server, creating Skills and SOPs, creating Agent Roles, creating Agent Types and triggering agents, and viewing execution logs.
 - Uses clearly labeled placeholder images at every point where a live application screenshot would appear, allowing operators to substitute real screenshots at any time.
-- Publishes automatically to GitHub Pages on every push to the main branch via a GitHub Actions workflow — no manual deployment steps required.
+- Publishes automatically to GitHub Pages on every push to the main branch via CI/CD — no manual deployment steps required.
 - Runs as purely static HTML, CSS, and JavaScript with no backend server or runtime dependencies.
 
 ## Key Concepts
@@ -53,13 +53,13 @@ Where live screenshots of the running Parthenon application are referenced, the 
 
 ### Automated Publication
 
-The showcase site is published through a GitHub Actions workflow that triggers on every push to the main branch. The workflow builds the static site (if a build step is needed) and deploys the output to GitHub Pages with no manual intervention. The site is purely static — no server-side runtime, no database, no backend — and is served directly from GitHub's content delivery network.
+The showcase site is published through a CI/CD workflow that triggers on every push to the main branch. The workflow builds the static site and deploys to GitHub Pages with no manual intervention. The site is purely static — no server-side runtime, no database, no backend — and is served directly from a content delivery network.
 
 ## Acceptance Criteria
 
 ### Site Availability
 - The site is accessible at the project's GitHub Pages URL after merging to the main branch.
-- The GitHub Actions workflow automatically builds and publishes the site on every push to main.
+- The CI/CD workflow automatically builds and publishes the site on every push to main.
 - The site loads correctly in modern browsers (Chrome, Firefox, Safari, Edge) without errors.
 
 ### High-Level Design Section
@@ -80,7 +80,7 @@ The showcase site is published through a GitHub Actions workflow that triggers o
 - No broken links or missing assets are present on any page.
 
 ### Build and Deployment
-- The GitHub Actions workflow handles any build steps automatically.
+- The CI/CD workflow handles any build steps automatically.
 - The build produces a static output served directly by GitHub Pages.
 - The site requires no server-side runtime, database, or dynamic backend.
 
@@ -96,7 +96,7 @@ The showcase site is published through a GitHub Actions workflow that triggers o
 ## Dependencies & Constraints
 
 - The site must be compatible with GitHub Pages static hosting constraints (no server-side execution).
-- The GitHub Actions workflow must use only standard GitHub-provided runners with no external secrets required for the basic build and publish step.
+- The CI/CD workflow must use only standard provided runners with no external secrets required for the basic build and publish step.
 - Architecture descriptions in the showcase must accurately reflect the platform's actual design as documented in master architecture docs — no contradictions permitted.
 - Placeholder images must be clearly distinguishable from real screenshots so visitors are not misled.
 - The showcase is the canonical public-facing description of the platform; any significant architecture changes must be reflected in the showcase content.

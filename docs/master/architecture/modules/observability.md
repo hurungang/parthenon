@@ -9,9 +9,8 @@ Observability is a cross-cutting concern applied uniformly across all platform s
 ```mermaid
 flowchart LR
     subgraph Services
-        API[Platform API]
-        AE[Agent Engine]
-        SE[Skill Engine]
+        CC[Control Center]
+        AR[Agent Runtime]
         CH[Communication Hub]
     end
 
@@ -62,7 +61,7 @@ flowchart LR
 
 Telemetry settings are resolved in priority order: config file (`telemetry.yaml`) provides the base values, which environment variable overrides can supersede at runtime (12-factor pattern). This allows per-deployment defaults alongside per-pod or per-environment overrides without changing application code.
 
-The frontend fetches its telemetry settings from the backend at startup via `/api/v1/telemetry/config`, avoiding configuration duplication and ensuring the frontend always uses the same export target as the backend.
+The frontend fetches its telemetry settings from the backend at startup, avoiding configuration duplication and ensuring the frontend always uses the same export target as the backend.
 
 **Supported export targets:**
 

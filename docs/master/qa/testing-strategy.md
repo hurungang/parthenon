@@ -133,6 +133,44 @@ Security assertions for dual-identity features:
 - **No unnecessary validation**: User-only tools must not validate agent JWTs (and vice versa) — a missing agent JWT must not block a user-tool call when user JWT is present
 - **Single-realm fallback**: When user realm is unconfigured, app must validate user JWT against agent realm and still enforce role gating
 
+## API Key Authentication Testing
+
+Changes involving API key management, external agent authentication, or the Communication Hub auth middleware require:
+
+**Pre-test checklist:**
+1. Alembic migration applied: confirm `api_keys` and `api_key_usage_logs` tables exist; `skills.updated_at` backfill has no NULL values; `status` enum contains `active` and `revoked`
+2. API key endpoints map to resource types registered in both `backend/app/core/resource_types.py` and `frontend/src/constants/resourceTypes.ts`
+3. Test data uses identifiable prefixes to ensure cleanup after test runs
+
+**Backend integration tests must:**
+- Cover full CRUD lifecycle: create (one-time clear-text return), read (list with status filter), update (revoke), delete (not supported; keys are revoked, not deleted)
+- Verify key hash stored as SHA-256, never plaintext
+- Verify unique constraint: one active key per identity-role pair (409 on duplicate)
+- Validate the internal `/internal/auth/validate-api-key` endpoint rejects all callers except Communication Hub (mTLS service certificate enforcement)
+- Cover all key states: active, revoked; verify revoked keys are immediately unusable
+- Verify `ApiKeyUsageLog` entries for validate, load_skills, and tool_call actions
+- Verify `load_skills` returns `updated_at` on every skill; `since` parameter correctly filters
+
+**Security invariances:**
+- External agents MUST NEVER receive the identity token in any response — at least one test must assert the absence of `identity_token`, `access_token`, and `refresh_token` in external-facing API responses
+- Key value MUST NEVER appear in any log, audit entry, or API response outside the one-time creation display
+- Failed authentication attempts must be logged with `success=false` for security monitoring
+- Rate limiting must be enforced on the auth endpoint to prevent brute-force attacks
+
+**Frontend component tests must:**
+- Verify clear-text key displayed once at creation with copy mechanism; never retrievable after dialog close
+- Verify dialog error handling follows the Dialog Error Handling Standard: `dialogError` state, try-catch wrapping, error clearance on open/close
+- Verify list auto-refreshes after create and revoke without manual page reload
+- Verify status filter dropdown contains all/active/revoked options and applies correct filtering
+- Verify revoked items show "revoked" status chip; no re-activation possible
+
+**E2E tests must cover:**
+- Full admin workflow: key list rendering → create dialog (identity + role selection, name input, form validation) → one-time key display → revoke dialog (confirmation with key name/identity/role) → status filter interaction
+- Real-backend integration tests: endpoint auth checks verify GET/POST require authentication; health endpoint confirms schema migration applied
+- No regression: all existing agent management, role management, MCP hub pages continue to render correctly
+
+Refer to `api-key-mcp-hub-test-plan.md` for module-specific coverage and test file references.
+
 ## Service Segregation Security Requirements
 
 Changes that touch internal service boundaries must include:
@@ -141,3 +179,116 @@ Changes that touch internal service boundaries must include:
 - Fail-closed behavior checks when certificate revocation status cannot be validated
 - Structured deny-event validation including caller type, endpoint, method, reason, and timestamp
 - At least one real-backend E2E suite validating internal endpoint wiring and browser API/WS-only boundaries
+
+## Dashboard Operational Metrics Testing
+
+Changes involving the dashboard operational metrics (stat cards, time-sensitive metrics, permission-aware cards) require:
+
+**Pre-test checklist:**
+1. Dashboard route (`/`) has NO `require_permission()` decorator — any authenticated user receives 200
+2. All ten metric cards map to correct module-action pairs from `ResourceTypeManifest`
+3. Human Interventions card uses `view` action (not `read`) per manifest
+
+**Backend tests must:**
+- Verify `DashboardMetricsService.aggregate_metrics()` returns correct counts vs. direct `SELECT COUNT(*)` queries
+- Cover all four result states per domain: normal (count returned), permission-denied (flag=true, count=0), empty (count=0, flag=false), and individual query failure (count=0, other domains unaffected)
+- Verify single domain query failure does not crash entire endpoint — remaining domains continue to aggregate
+- Test date range boundary inclusivity (records at window edges included)
+- Verify snapshot counts ignore date range changes — only `time_sensitive` counts affected
+
+**Frontend tests must:**
+- Verify all four visual states per card: normal, zero ("0" displayed), loading (skeleton), permission-denied (dashed border, lock icon, reduced opacity)
+- Verify `DateRangePicker` presets trigger re-fetch but only for time-sensitive cards (snapshot cards remain static)
+- Verify `permission_flags` boolean interpretation is correct (`true` = denied, NOT `true` = allowed)
+- Verify IdP status section retained below operational metrics with all three cards
+
+**E2E tests must cover:**
+- Full dashboard load with all cards, date range switching, and IdP status section
+- At least one real-backend test (no mocks) validating JSON response shape and real counts
+- Permission-denied scenarios with mocked `permission_flags`
+
+Refer to `dashboard-test-plan.md` for module-specific coverage and test file references.
+
+## Namespaced Resource Types & Migration Testing
+
+Changes involving the `::`-delimited resource type system, policy authoring with namespaced identifiers, or the Alembic data migration require:
+
+**Pre-test checklist:**
+1. All 17 namespaced identifiers registered in both `backend/app/core/resource_types.py` and `frontend/src/constants/resourceTypes.ts`
+2. Alembic migration generated and reviewed for correct mapping of 15 legacy values to 17 namespaced values
+3. All `require_permission()` call sites updated to use new `RT_*` constants
+
+**Backend tests must:**
+- Verify manifest contains exactly 17 entries across 3 modules (`agent`: 12, `integration`: 2, `system`: 3)
+- Test `::` delimiter parsing: correct splitting, flat-value rejection, three-layer rejection, empty-value rejection
+- Test wildcard expansion: `agent::*` → 12 concrete submodules, `*::*` → all 17
+- Verify permission engine `_match_module()` uses manifest-aware expansion (not string prefix matching)
+- Test batch save endpoint (`PUT /api/v1/user-roles/{id}/policies/batch`) for atomicity: single invalid policy rejects entire batch
+
+**Migration tests must:**
+- Verify `information_schema` confirms column types unchanged (`varchar(100)`)
+- Verify no legacy flat values remain in `policy_statements.module` or `policy_resources.resource_type`
+- Test consolidation groups (5→`system::permissions`, 2→`agent::trails`) with pre-seeded data — verify no data loss, no duplicates
+- Test alembic downgrade restores flat values for the 15 legacy types
+
+**Frontend tests must:**
+- Verify `AddStatementDialog` dropdown groups options by module (Agents, Integrations, System)
+- Verify `freeSolo` autocomplete accepts wildcards and predefined manifest values
+- Verify `RolePolicyDialog` Form↔JSON view toggle preserves all changes bidirectionally (round-trip fidelity)
+- Verify unsaved changes guard: Cancel/Escape/backdrop click → confirmation dialog when changes exist
+
+Refer to `namespace-resource-types-test-plan.md` for module-specific coverage and test file references.
+
+## OIDC Integration & Auth Pipeline Testing
+
+Changes involving the three-tier auth pipeline (super admin → OIDC user → OIDC agent → public), database-backed identity provider configuration, or the super admin credential bootstrap require:
+
+**Pre-test checklist:**
+1. `super_admin_credentials` table exists; `identity_provider_configs` has `provider_scope`, `issuer_url`, `encrypted_client_secret` columns; removed columns (`realm_name`, `audience`, setup tracking fields) are absent
+2. `provider_scope` enum has unique constraint (only one config per scope)
+3. Alembic migration applied; `alembic current` shows latest revision
+
+**Backend tests must:**
+- Verify super admin credential validation uses bcrypt with timing-safe comparison
+- Verify super admin `is_enabled` flag is checked at validation time (not just issue time) — disabled super admin tokens rejected even if still within expiry
+- Verify guard rail: cannot disable super admin if no enabled OIDC provider exists
+- Verify three-tier pipeline branches: super admin path, OIDC user path, OIDC agent path, public path, mixed states
+- Verify client secret encryption at rest (DB stores ciphertext, not plaintext)
+- Verify provider registry hot-reloads from DB on config change without service restart
+- Verify identity.yaml → DB migration: field mapping correct, idempotent, database takes precedence after migration
+
+**Frontend tests must:**
+- Verify login page three-state rendering: super admin only (form), OIDC only (button), both (button + toggle)
+- Verify identity provider config form: separate user/agent entries, field validation, enable toggle
+- Verify test connection and test login modals without affecting active provider state
+
+**Security invariants:**
+- At least one test must assert that super admin credentials are never hardcoded in source code
+- At least one test must assert that client secret is never returned in plaintext from any API response
+- At least one test must assert that agent tokens are NOT validated against user provider (and vice versa)
+
+Refer to `refine-oidc-integration-test-plan.md` for module-specific coverage and test file references.
+
+## Production-Ready Configuration Testing
+
+Changes involving startup dependency validation, environment-variable-based configuration resolution, or the consolidated setup tool require:
+
+**Pre-test checklist:**
+1. Control Center starts without Keycloak admin credentials (`KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD` absent from environment)
+2. All three backend services (CC, AR, CH) validate dependencies at startup and fail-fast with clear errors
+3. Setup tool supports `--output json` for machine-parseable verification
+
+**Backend tests must:**
+- Verify Control Center `Settings` class does not load Keycloak admin credentials at runtime
+- Verify `_initialize_agent_realm()` is NOT called during CC startup (only setup tool calls it)
+- Verify PostgreSQL, OIDC, and Redis validation at startup: reachable → pass; unreachable → logged error + non-zero exit
+- Verify Agent Runtime and Communication Hub validate Control Center reachability before certificate bootstrap
+- Verify retry logic: transient failures within retry windows do not cause startup failure
+- Verify configuration source logging: every connection logs source (env, yaml, or default); credentials redacted
+
+**Setup tool tests must:**
+- Verify all sub-commands (`identity`, `database`, `certificates`, `dev`, `verify`) are idempotent (run twice → "skipped" for all)
+- Verify structured output: `created` / `skipped` / `error` indicators
+- Verify credentials never appear in log output, error messages, or JSON output
+
+Refer to `production-ready-configuration-test-plan.md` for module-specific coverage and test file references.

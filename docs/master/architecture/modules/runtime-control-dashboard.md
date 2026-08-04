@@ -52,7 +52,7 @@ Edges are derived from the agent session parent/child relationship graph: a pare
 
 The legend is a tickable list of every `(kind, status)` combination. The dashboard maintains a `Set<string>` filter state; default-visible keys include all kinds and statuses except `conversation:sleep` (operators opt in to see sleep conversations). Hidden nodes are rendered at reduced opacity.
 
-Status is rendered as a color-coded dot in the top-right corner of each node box. The box shape varies by node kind: `agent` is solid and rounded, `conversation` is dashed with a more rounded corner, `instance` has a tabbed left edge.
+Status is rendered as an indicator on each node box. The box shape varies by node kind to visually distinguish agents, conversations, and instances.
 
 ## Node Actions
 

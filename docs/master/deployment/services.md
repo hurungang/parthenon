@@ -13,10 +13,11 @@ This inventory applies to both deployment targets:
 | Service | Container / Pod Name | Role |
 |---------|----------------------|------|
 | API Gateway | `nginx` | Reverse proxy routing all inbound HTTP and WebSocket traffic to Control Center and Communication Hub; TLS termination in production |
-| Control Center | `control-center` | Sole owner of the PostgreSQL database. Hosts the Platform REST API (identity, MCP Hub, skills, agents, scheduling, notifications, conversations, results), acts as Certificate Authority (issues X.509 certs to Agent Runtime and Communication Hub), manages identity tokens, and triggers execution and message dispatch on peer services. |
+| Control Center | `control-center` | Sole owner of the PostgreSQL database. Hosts the Platform REST API (identity, MCP Hub, skills, agents, scheduling, notifications, conversations, results), acts as Certificate Authority (issues X.509 certs to Agent Runtime and Communication Hub), manages identity tokens, runs the OIDC Provider Registry (dynamic discovery of identity providers configured in the database), authenticates super admin logins (local credential path for bootstrap/recovery), and triggers execution and message dispatch on peer services. At startup, validates the identity provider configuration (does NOT provision — provisioning is handled by the consolidated setup tool) and logs the configuration source for every infrastructure connection (env var, YAML, or default). |
+| Setup Tool | `setup` (profiles: `[setup]`) | Consolidated setup CLI run as a one-shot service. Provisions the Keycloak realm, clients, roles, and admin user; verifies database readiness and seeds roles/permissions/skills; bootstraps the certificate authority for mTLS. Requires Keycloak admin credentials but runs independently of runtime services — never triggered by application startup. Exits after completing. |
 | Agent Runtime | `agent-runtime` | Stateless LangChain executor. Receives execution triggers from Control Center over mTLS. Fetches all agent context (plan, skills, model config) from Control Center data APIs. Executes the observe-reason-act loop. Posts results back to Control Center. No direct database access. |
-| Communication Hub | `communication-hub` | Message broker and agent gateway. Accepts Web UI WebSocket connections authenticated by JWT. Receives message dispatch commands from Control Center over mTLS. Validates agent certificates and resolves identity per tool call via Control Center. Routes all tool calls using the unified `server____tool` convention — `system____*` to internal handlers, `<server>____*` to MCP Hub. No direct database access. |
-| Keycloak | `parthenon-keycloak` | Bundled OpenID Connect identity provider; manages the `parthenon` realm (human users) and `ai_agents` realm (agent identities); Admin REST API used during provisioning. Only deployed when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. |
+| Communication Hub | `communication-hub` | Message broker and agent gateway. Accepts Web UI WebSocket connections authenticated by JWT. Accepts MCP connections from external third-party agents authenticated via API key (Bearer token or query parameter) in addition to internal Agent Runtime agents authenticated via mTLS certificates. Receives message dispatch commands from Control Center over mTLS. Validates agent certificates and resolves identity per tool call via Control Center. Routes all tool calls using the unified `server____tool` convention — `system____*` to internal handlers (including `system____load_skills` for external agent skill discovery with incremental sync), `<server>____*` to MCP Hub. No direct database access. |
+| Keycloak | `parthenon-keycloak` | Bundled OpenID Connect identity provider; manages the `parthenon` realm (human users) and `ai_agents` realm (agent identities). **Optional in production** — only required for dev/demo deployments or when no external OIDC providers are configured in the database. If all identity providers are configured via the System Config UI with external OIDC, the Keycloak service can be omitted. |
 | Web UI | `web-ui` | React/Vite SPA providing admin configuration modules, real-time operations dashboards, observability panels, and user-to-agent chat |
 | OTEL Collector | `otel-collector` | Receives OTLP telemetry (traces, metrics, logs) from all services; fans out to Prometheus, Jaeger, and Loki backends |
 | PostgreSQL | `postgres` | Primary relational data store — accessed only by Control Center |
@@ -47,7 +48,7 @@ The Control Center internal API is caller-scoped and deny-by-default. Access is 
 | Caller Type | Allowed Internal API Surface | Explicitly Disallowed |
 |-------------|------------------------------|-----------------------|
 | Agent Runtime | Runtime-essential certificate lifecycle and execution support endpoints required to run agent sessions | Communication Hub-only internal routes, administrative policy routes, and any endpoint not explicitly in the Agent Runtime allowlist |
-| Communication Hub | Hub-essential certificate validation, token-resolution support, and routing support endpoints required for message and tool-call brokering | Agent Runtime-only internal routes, administrative policy routes, and any endpoint not explicitly in the Communication Hub allowlist |
+| Communication Hub | Hub-essential certificate validation, token-resolution support, API key validation (`POST /internal/auth/validate-api-key`), and routing support endpoints required for message and tool-call brokering | Agent Runtime-only internal routes, administrative policy routes, and any endpoint not explicitly in the Communication Hub allowlist |
 
 ### Service boundary guarantees
 
@@ -87,7 +88,7 @@ Use this model for the `add-agent-execution-guardrails` deployment and future gu
 
 ```
 postgres ──┐
-           ├──► keycloak (bundled only)
+           ├──► keycloak (bundled only) ◄── setup (one-shot)
 redis ─────┤         │
            │         ▼
            └──► control-center ──┬──► agent-runtime
@@ -100,4 +101,6 @@ web-ui ◄──── nginx
 otel-collector ◄──── (all services emit OTLP)
 ```
 
-All services depend on `postgres` and `redis` being healthy. When `IDENTITY_PROVIDER_TYPE=keycloak_bundled`, Control Center also depends on `keycloak`. Agent Runtime and Communication Hub bootstrap by requesting certificates from Control Center — Control Center must be healthy before they start. `nginx` must be deployed after all backend services are healthy. `mcp-demo-app` depends on `keycloak` (healthy) and `control-center` (healthy).
+All services depend on `postgres` and `redis` being healthy. Keycloak is optional in production — only start it for dev/demo deployments or when `SUPER_ADMIN_ENABLED=true` with no OIDC DB config and the setup wizard provisions the bundled Keycloak. Agent Runtime and Communication Hub bootstrap by requesting certificates from Control Center — Control Center must be healthy before they start. `nginx` must be deployed after all backend services are healthy. `mcp-demo-app` depends on `keycloak` (healthy) and `control-center` (healthy).
+
+The **setup tool** (`profiles: [setup]`) is a one-shot service that runs BEFORE the runtime services. It provisions the Keycloak realm and bootstraps certificates using Keycloak admin credentials, then exits. The Control Center no longer auto-provisions Keycloak — it validates the existing configuration at startup and fails if the realm is not found.

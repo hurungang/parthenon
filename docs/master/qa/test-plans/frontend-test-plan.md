@@ -2,6 +2,16 @@
 
 Covers frontend component tests and E2E UI tests for all frontend-specific concerns including theming, accessibility, and visual consistency.
 
+## WHEN/THEN Scenarios
+
+| # | WHEN | THEN |
+|---|---|---|
+| SC1 | The global theme is applied | Inter font is used globally, primary color is indigo, cards use 12px border radius, and Roboto is absent |
+| SC2 | An interactive element receives focus | A visible focus indicator appears |
+| SC3 | All themed pages are checked for color contrast | Foreground/background pairs meet WCAG AA contrast ratios (≥ 4.5:1 normal, ≥ 3:1 large text) |
+| SC4 | A page with themed components loads | All component overrides (AppBar, Drawer, Button, Card, TextField, Chip, Dialog) match design specification |
+| SC5 | Major application pages are navigated | Theme is consistent across all pages with no visual regressions |
+
 ---
 
 ## Coverage Areas

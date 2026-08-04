@@ -39,6 +39,12 @@ from app.db.models.conversations import (  # noqa: F401
     ToolCallRecord,
 )
 from app.db.models.results import ResultRecord  # noqa: F401
+from app.db.models.agent_api_key import (  # noqa: F401
+    AgentApiKey,
+    ApiKeyUsageLog,
+    ApiKeyStatus,
+    ApiKeyUsageAction,
+)
 from app.db.models.agent_data_type import AgentDataType  # noqa: F401
 from app.db.models.agent_output import (  # noqa: F401
     AgentOutput,

@@ -1,7 +1,7 @@
 # Communication Hub
 
 ## Overview
-The Communication Hub provides centralized, reliable message routing between the Web UI, agents, and other platform components. It maintains session context and supports real-time, auditable communication for all agent interactions.
+The Communication Hub provides centralized, reliable message routing between the Web UI, agents, and other platform components. It maintains session context and supports real-time, auditable communication for all agent interactions. It also serves as the MCP endpoint for external third-party agents, accepting both certificate-based authentication (for internal Agent Runtime instances) and API key authentication (for external agents).
 
 ## Who Uses It
 - Enterprise Admins: Monitor and troubleshoot message flows
@@ -15,6 +15,9 @@ The Communication Hub provides centralized, reliable message routing between the
 - Supports real-time messaging via WebSocket
 - Enables agent-to-agent message routing
 - Surfaces guardrail-related session outcomes so operations teams can separate policy stops from functional failures during triage
+- Authenticates external third-party agents via API keys (Bearer token or query parameter) for MCP endpoint access
+- Resolves API key authentication to the bound agent identity, role, and permissions via Control Center's internal API
+- Provides the `load_skills` system tool for agents to discover all accessible skills and SOPs with full tool definitions, input/output schemas, and `updated_at` timestamps
 
 
 ## Key Concepts
@@ -23,6 +26,8 @@ The Communication Hub provides centralized, reliable message routing between the
 - **Passthrough Session**: Session type where agent identity is automatically propagated to the MCP server, eliminating manual session selection
 - **WebSocket**: Real-time, bidirectional communication channel
 - **Agent-to-Agent Routing**: Direct messaging between agents
+- **API Key Authentication**: External agents authenticate to the Communication Hub's MCP endpoint using a Bearer token or query parameter. The Communication Hub validates the key against Control Center's internal API and resolves the bound agent identity role and permissions, then injects the identity token into proxied MCP requests without exposing it to the external agent.
+- **load_skills System Tool**: A built-in tool that returns all skills and SOPs the authenticated agent is permitted to access, with full tool definitions, input/output schemas, and `updated_at` timestamps. Supports an optional `since` parameter for incremental sync — only skills updated after the given timestamp are returned, enabling efficient local caching by external agents.
 
 
 ## Central Tool Router
@@ -45,3 +50,10 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - Agent-to-agent communication is supported and auditable
 - Guardrail stop outcomes are visible in communication-related operational views for fast incident classification
 - All message flows are accessible for monitoring and troubleshooting
+- External agents can authenticate via API key using Bearer token or query parameter
+- Invalid or revoked API keys receive a clear authentication error response
+- External agents receive only the skills and tools granted by their bound role, enforced identically to internal agents
+- External agents never receive the underlying identity token — only the Communication Hub holds it for proxying
+- The `load_skills` system tool returns all permitted skills with `updated_at` timestamps
+- The `load_skills` tool supports a `since` parameter for incremental sync of only updated skills
+- All API key authentication events (success and failure) are logged for security monitoring

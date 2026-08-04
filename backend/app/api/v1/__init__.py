@@ -1,6 +1,7 @@
 """API v1 root router — aggregates all domain routers."""
 from fastapi import APIRouter
 
+from app.api.v1.api_keys import AdminApiKeyRouter
 from app.api.v1.agents import (
     AgentIdentityRouter,
     AgentInstanceRouter,
@@ -19,6 +20,7 @@ from app.api.v1.dashboard import DashboardRouter
 from app.api.v1.identity import IdentityRouter, PermissionRouter, RoleRouter
 from app.api.v1.internal.agent_data import InternalAgentDataRouter
 from app.api.v1.internal.authorization import InternalAuthorizationRouter
+from app.api.v1.internal.validate_api_key import InternalAuthRouter
 from app.api.v1.internal.bootstrap import InternalBootstrapRouter
 from app.api.v1.internal.certificates import InternalCertificatesRouter
 from app.api.v1.internal.mcp_proxy import InternalMcpProxyRouter
@@ -63,6 +65,7 @@ router.include_router(DashboardRouter)
 router.include_router(CertificatesRouter)
 
 # Internal service-to-service endpoints (should be network-isolated in production)
+router.include_router(InternalAuthRouter)
 router.include_router(InternalBootstrapRouter)
 router.include_router(InternalCertificatesRouter)
 router.include_router(InternalAuthorizationRouter)
@@ -98,6 +101,9 @@ router.include_router(ModelConfigRouter)
 router.include_router(ModelUsageGuardrailRouter)
 router.include_router(ModelAvailabilityRouter)
 router.include_router(RuntimeControlRouter)
+
+# API Keys
+router.include_router(AdminApiKeyRouter)
 
 # Data Types, Agent Data & Agent Outputs
 router.include_router(DataTypeRouter)

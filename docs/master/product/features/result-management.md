@@ -25,3 +25,9 @@ Result Management provides a centralized repository for all outputs and saved da
 - Agents can query historical final outputs using `get_output` with filters (agent type, session context, date range)
 - All data saves, final output captures, and retrieval operations are logged
 - Result access is auditable for compliance
+
+## Out of Scope
+- Editing or deleting saved data records from the UI (read-only repository)
+- Data retention policies or automatic archival of old results
+- Export integrations to external data warehouse or cloud storage
+- Migration of legacy `save_result` records to the `save_data` model

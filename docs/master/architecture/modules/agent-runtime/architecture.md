@@ -6,10 +6,10 @@ Agent Runtime binds LangChain `BaseTool` subclasses for all platform system tool
 
 | System Tool | Purpose | Tool Call Path |
 |---|---|---|
-| `save_data` | Persist intermediate named data records during execution (zero or more per session) | AR → CH → CC `POST /internal/system-tools/save-data` |
-| `get_data` | Query previously saved data by name, agent type, or session | AR → CH → CC `POST /internal/system-tools/get-data` |
-| `get_output` | Query historical final outputs by agent type, session, or date range | AR → CH → CC `POST /internal/system-tools/get-output` |
-| `query_result` | Query past typed agent outputs by data type name with optional filters | AR → CH → CC `POST /internal/system-tools/query-result` |
+| `save_data` | Persist intermediate named data records during execution (zero or more per session) | AR → CH → CC |
+| `get_data` | Query previously saved data by name, agent type, or session | AR → CH → CC |
+| `get_output` | Query historical final outputs by agent type, session, or date range | AR → CH → CC |
+| `query_result` | Query past typed agent outputs by data type name with optional filters | AR → CH → CC |
 | `send_notification` | Send notifications via configured channels | AR → CH → CC |
 | `get_recipient_group` | Resolve notification recipient groups | AR → CH → CC |
 | `human_intervene` | Suspend execution and request human input (HITL) | AR → CH → CC |
@@ -18,10 +18,10 @@ Agent Runtime binds LangChain `BaseTool` subclasses for all platform system tool
 
 When a non-conversational agent type has an assigned output data type (`output_data_type_id`), Agent Runtime performs a two-phase completion flow:
 
-1. **Validation phase**: Calls `POST /api/v1/internal/validate-output` on Control Center with the output payload and data type ID. Control Center validates against the schema and returns `{valid, errors[]}`.
-2. **Persistence phase**: Calls `POST /api/v1/internal/agent-outputs` on Control Center to persist the typed output with `validation_status` (`valid` or `validation_error`), `field_values` (JSONB), and `raw_output` fallback.
+1. **Validation phase**: Calls Control Center's internal validation endpoint with the output payload and data type ID. Control Center validates against the schema and returns validation result.
+2. **Persistence phase**: Calls Control Center's internal output persistence endpoint to persist the typed output with validation status, field values, and raw output fallback.
 
-Structured output is enforced at the LangChain level via `ToolStrategy(schema=output_json_schema)` passed to `create_agent()`. LangChain auto-promotes to provider-native JSON mode where supported.
+Structured output is enforced at the agent framework level via an output JSON schema passed during agent creation. The framework auto-promotes to provider-native JSON mode where supported.
 
 The legacy `save_result` tool is decoupled from typed output — typed output is captured at session completion by the runtime executor, not via the agent's tool call.
 
@@ -38,9 +38,11 @@ Depth is tracked via `RuntimeGuardrailState.delegation_depth`, incremented when 
 
 ## Termination Governance
 
-Agent Runtime exposes a control-plane termination endpoint that allows authorized callers to cancel an in-flight agent job. The endpoint is only reachable through the Communication Hub, which authenticates the caller with a service certificate. Agent Runtime's `ControlCenterCertificateMiddleware` rejects direct calls from Control Center — this preserves service segregation. The certificate middleware accepts only `service:communication-hub` service certificates on `/internal/agent/terminate/*` paths.
+Agent Runtime exposes a control-plane termination endpoint reachable through the Communication Hub, which authenticates the caller with a service certificate. Agent Runtime rejects direct calls from Control Center — this preserves service segregation. Only Communication Hub service certificates are accepted on internal termination paths.
 
-When a parent agent job is terminated, Agent Runtime cancels the in-flight task and walks the delegation graph to cancel all active delegated child jobs. The `AgentJob.status` is updated to `terminated`, a distinct state from `failed` (genuine agent or runtime error). Late-arriving tool call completions or status updates from the underlying LangChain deep-agent framework are rejected by terminal-state guards in the internal session-data endpoint.
+When a parent agent job is terminated, Agent Runtime cancels the in-flight task and walks the delegation graph to cancel all active delegated child jobs. The agent job status is updated to `terminated`, a distinct state from `failed` (genuine agent or runtime error). Late-arriving tool call completions or status updates are rejected by terminal-state guards.
+
+## Execution Flow
 
 ```mermaid
 flowchart LR
@@ -51,13 +53,9 @@ flowchart LR
     SOP{SOP names in system instruction?}
     DSOP[Default SOP fallback]
     RM[Runtime Guardrail Monitor]
-    FS[Guardrail Fail-Safe Handler]
     TC[Tool and Delegation Calls]
     DDG[Delegation Depth Guard]
     EVT[Status and execution events]
-    ST[Workflow status and stop reason]
-    TR[Terminate Endpoint]
-    CB[Cascade Terminate Children]
 
     CH --> ORCH
     ORCH --> PV
@@ -71,9 +69,20 @@ flowchart LR
     DDG -->|depth ≤ 1: allow| CH
     DDG -->|depth > 1: blocked| EVT
     EVT --> CH
-    RM -->|Guardrail exceeded| FS
-    FS --> ST
+    RM -->|Guardrail exceeded| FS[Guardrail Fail-Safe Handler]
+    FS --> ST[Workflow status and stop reason]
     ST --> CH
+```
+
+## Termination Cascade
+
+```mermaid
+flowchart LR
+    CH[Communication Hub]
+    ORCH[Session Orchestrator]
+    TR[Terminate Endpoint]
+    CB[Cascade Terminate Children]
+
     CH -->|terminate request| TR
     TR --> ORCH
     ORCH --> CB

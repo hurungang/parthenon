@@ -128,6 +128,7 @@ const NAV_GROUPS: NavGroup[] = [
     lockedOpen: true,
     children: [
       { labelKey: 'nav.mcpHub', path: '/mcp', icon: <HubIcon /> },
+      { labelKey: 'nav.apiKeys', path: '/api-keys', icon: <SecurityIcon /> },
       { labelKey: 'nav.notifications', path: '/notifications', icon: <NotificationsIcon /> },
     ],
   },

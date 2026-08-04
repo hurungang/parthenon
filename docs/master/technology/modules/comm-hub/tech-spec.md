@@ -19,7 +19,8 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `AgentRouter` | Service class that routes inter-agent messages from a source agent instance to a target instance's pub/sub channel via `MessageBroker`; enables agent-to-agent communication |
 | `SessionContextManager` | Service class that stores and retrieves active session state — including participants, turn count, and current status — in Redis with a configurable TTL; context is flushed to PostgreSQL when the session closes |
 | `CertificateAuthorizationMiddleware` | Starlette middleware intercepting all agent tool call requests; extracts the client certificate from the TLS handshake, validates it with the Control Center, and fetches the authorised identity token; tool execution proceeds with the Control Center-provided token; returns `403 Forbidden` with reason on any validation or authorisation failure; all decisions written to `certificate_validation_log` |
-| `NameResolver` | Routes all tool calls from Agent Runtime to the correct handler using the unified `server____tool` naming convention. `system____*` calls are dispatched to internal system tool handlers (e.g., Notification Service, Human Intervene persistence); `<server>____*` calls are forwarded to the MCP Hub for external server proxying. No tool-type branching exists in Agent Runtime code — all routing decisions are made here. |
+| `ApiKeyAuthMiddleware` | Middleware on the Communication Hub that detects API key authentication on incoming MCP requests. Checks `Authorization: Bearer` header first, then `?apiKey=` query parameter. Hashes the extracted key, calls Control Center's internal validation endpoint, stores the returned identity token and permission set on the request context, and rejects invalid/revoked keys with 401. Coexists with existing mTLS certificate auth — detects which method is in use and routes accordingly. |
+| Tool naming & routing | Utilities in `tool_naming.py` (`is_system_tool`, `get_bare_tool_name`) and `tool_routing.py` (`_route_to_system_tool`, `_route_to_mcp_tool`) that route all tool calls from Agent Runtime using the unified `server____tool` naming convention. `system____*` calls are dispatched to internal system tool handlers (e.g., Notification Service, Human Intervene persistence); `<server>____*` calls are forwarded to the MCP Hub for external server proxying. |
 | `InterventionRouter` | New router that inspects suspend signals from Agent Runtime for `human_intervene` invocations containing a `conversation_session_id`. When detected, routes the intervention request to the connected WebSocket client of the parent conversation. Falls through to existing dashboard-based flow when `conversation_session_id` is absent. |
 | `InterventionQueue` | Per-conversation-session FIFO queue for pending intervention requests. Backed by database state for resilience across disconnects and service restarts. Delivers queued requests to UI in order as prior interventions are resolved or cancelled. |
 
@@ -38,6 +39,7 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 |----------|------|---------|
 | `WebSocket` | `/ws/sessions/{session_id}` | Bidirectional real-time messaging for user ↔ agent chat |
 | `POST` | `/internal/agent/resume/{session_id}` | Resume a suspended agent session after an intervene response; forwards resume signal from Control Center to Agent Runtime |
+| `MCP Tool` | `load_skills` | MCP system tool: discover all skills (including SOPs) accessible to the authenticated agent. Accepts optional `since` parameter (ISO 8601 timestamp) for incremental sync — only skills updated after the given timestamp are returned. |
 
 ---
 
@@ -46,7 +48,11 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `MessageBroker` | class | Redis pub/sub broker with per-session typed message channels | `backend/app/services/comm_hub/broker.py` |
-| `create_app` | function | Communication Hub application bootstrap and middleware composition entry point | `backend/app/communication_hub/main.py` |
+| `create_app` | function | Communication Hub FastAPI application factory — composes middleware and startup validation | `backend/app/communication_hub/main.py` |
+| `startup_event` | coroutine | Communication Hub startup sequence — validates Control Center reachability before certificate operations, then validates Redis connectivity | `backend/app/communication_hub/main.py` |
+| `_validate_control_center_reachable` | coroutine | **NEW** (CH variant) — validates Control Center health check reachability before attempting certificate bootstrap; fails fast if CA is unavailable | `backend/app/communication_hub/main.py` |
+| `_verify_redis_connectivity` | coroutine | Validates Redis connectivity with PING at startup (existing, retained) | `backend/app/communication_hub/main.py` |
+| `_load_certificate` | coroutine | Loads or bootstraps service certificate from Control Center (retained) | `backend/app/communication_hub/main.py` |
 | `_register_routers` | function | Registers API routers for internal routing, A2A, and WebSocket/chat surfaces | `backend/app/communication_hub/main.py` |
 | `WebSocketServer` | class | WebSocket endpoint handler; authenticates connection and bridges to MessageBroker | `backend/app/api/ws/chat.py` |
 | `_build_chat_status_event` | function | Normalizes additive `chat_status` payloads (status, tool name, delegated agent type, timestamp) before WebSocket emission | `backend/app/api/ws/chat.py` |
@@ -75,6 +81,11 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `resume_agent_session` | endpoint | `POST /internal/agent/resume/{session_id}` — Forwards resume signal from Control Center to Agent Runtime with the operator's response value; restores suspended session | `backend/app/communication_hub/api/internal/resume.py` |
 | `request_a2a` | endpoint | Creates agent-to-agent delegation requests through Control Center orchestration APIs while preserving delegated guardrail outcome metadata | `backend/app/communication_hub/api/a2a.py` |
 | `disconnect_a2a` | endpoint | Closes linked A2A sessions and updates orchestration state via Control Center | `backend/app/communication_hub/api/a2a.py` |
+| `ApiKeyAuthMiddleware` | middleware | CH middleware detecting API keys (Bearer/query param), validating via CC, enriching request context | `backend/app/communication_hub/middleware/api_key_auth.py` |
+| `_extract_api_key` | function | Extracts API key from Authorization header or query parameter | `backend/app/communication_hub/middleware/api_key_auth.py` |
+| `_validate_api_key_with_cc` | function (async) | Calls CC internal validation endpoint over mTLS, returns enriched response | `backend/app/communication_hub/middleware/api_key_auth.py` |
+| `load_skills` | function (system tool) | MCP system tool: returns accessible skills with schemas, supports `since` for incremental sync | `backend/app/communication_hub/api/mcp_tools.py` |
+| `mcp_router` | router | FastAPI APIRouter for MCP-facing tool endpoints on Communication Hub | `backend/app/communication_hub/api/mcp_tools.py` |
 | `ChatPage` | component | Real-time user-to-agent chat interface backed by WebSocket connection | `frontend/src/pages/chat/ChatPage.tsx` |
 | `useChatSession` | hook | Manages WebSocket connection lifecycle, inbound message queue, pending question state, and reconnection | `frontend/src/hooks/useChatSession.ts` |
 

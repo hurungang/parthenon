@@ -31,8 +31,17 @@ The Control Center is the authoritative security and identity hub for agent exec
 
 | Component | Description |
 |-----------|-------------|
-| `PermissionResolutionService` | Main authorisation entry point for the Communication Hub; resolves cert serial → agent type → identity → roles → tools; calls `TokenRefreshServiceV2` if token is expiring; returns `AuthorizationResult` with identity token on success or explicit denial reason on failure |
+| `PermissionResolutionService` | Main authorisation entry point for the Communication Hub; resolves cert serial → agent type → identity → roles → tools; calls `TokenRefreshServiceV2` if token is expiring; returns `AuthorizationResult` with identity token on success or explicit denial reason on failure. Extended to accept an API key as the root of the resolution chain: API Key → bound agent identity → bound agent role → policy evaluation → allowed tools/skills/SOPs. |
 | `AuthorizationResult` | NamedTuple: `authorized`, `identity_token`, `identity_id`, `agent_type_id`, `reason` (on denial) |
+
+### API Key Management
+
+| Component | Description |
+|-----------|-------------|
+| `ApiKeyService` | Service layer for API key business logic: cryptographically random key generation with `phn_sk_` prefix, SHA-256 hashing, hash-based lookup, status management (activate/revoke), usage log creation, identity token decryption for bound identities |
+| `AdminApiKeyRouter` | FastAPI APIRouter for JWT-protected admin-facing API key CRUD endpoints (list, create, revoke) and identity-with-roles listing |
+
+**File**: `backend/app/services/api_key_service.py` (service), `backend/app/api/v1/api_keys.py` (router)
 
 ### Database Models (`backend/app/db/models/agent_security.py`)
 
@@ -71,6 +80,22 @@ The Control Center is the authoritative security and identity hub for agent exec
 |--------|------|------|---------|
 | `POST` | `/internal/certificates/validate` | Service-to-service | Validate cert PEM from Communication Hub; returns agent_type_id and instance_id on success |
 | `POST` | `/internal/authorize/tool-call` | Service-to-service | Authorise tool call for a cert serial number; returns identity token and authorisation decision |
+| `POST` | `/internal/auth/validate-api-key` | Service-to-service | Validate a hashed API key from Communication Hub; returns resolved agent identity, role, identity token, and full permission set |
+
+### API Key Admin Endpoints (JWT-protected)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/api/v1/api-keys` | Admin JWT | List all API keys with optional `?status=active\|revoked` filter |
+| `POST` | `/api/v1/api-keys` | Admin JWT | Create a new API key bound to an agent identity and role; returns clear-text key once |
+| `POST` | `/api/v1/api-keys/{key_id}/revoke` | Admin JWT | Revoke an API key (idempotent) |
+| `GET` | `/api/v1/api-keys/identities-with-roles` | Admin JWT | List all agent identities with their available roles |
+
+### Internal System Tool Endpoints (extended)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/internal/system-tools/skills/resolve` | Service-to-service | Resolve all skills accessible to a given agent role with optional `since` filter for incremental sync |
 
 ---
 
@@ -123,6 +148,7 @@ The Control Center is the authoritative security and identity hub for agent exec
 | `get_agent_identity` | function | Retrieve assigned identity record for an agent type | `backend/app/services/permission_resolution.py` |
 | `get_allowed_tools` | function | Resolve agent type roles to complete set of allowed MCP tool identifiers | `backend/app/services/permission_resolution.py` |
 | `check_tool_permission` | function | Return `True` if the requested tool is in the resolved allowed set | `backend/app/services/permission_resolution.py` |
+| `resolve_permissions_from_api_key` | function (async) | Resolves agent permissions starting from an API key (key → identity → role → permissions) | `backend/app/services/permission_resolution.py` |
 
 ### API Endpoints
 
@@ -157,9 +183,53 @@ The Control Center is the authoritative security and identity hub for agent exec
 
 ### Application Startup (`backend/app/main.py`)
 
+**Startup sequence (revised):** The Control Center no longer auto-provisions Keycloak realms at startup. Instead, it validates that external dependencies are reachable and fails fast with actionable error messages. Identity provider provisioning is an operator-invoked operation handled exclusively by the [setup tool](../setup/tech-spec.md).
+
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `_initialize_certificate_authority` | function | FastAPI startup hook; calls `initialize_ca()` to load or create the root CA cert and encrypted key on boot | `backend/app/main.py` |
+| `create_app` | function | Control Center FastAPI application factory; composes all startup event handlers | `backend/app/main.py` |
+| `startup_event` | coroutine | Control Center startup sequence — validates external dependencies instead of provisioning them | `backend/app/main.py` |
+| `_validate_oidc_provider` | coroutine | **NEW** — validates OIDC provider reachability via discovery document fetch; skipped when super-admin mode is enabled | `backend/app/main.py` |
+| `_validate_postgresql_reachable` | coroutine | **NEW** — validates PostgreSQL connectivity with a lightweight query | `backend/app/main.py` |
+| `_validate_redis_reachable` | coroutine | **NEW** — validates Redis connectivity with PING | `backend/app/main.py` |
+| `_initialize_certificate_authority` | function | Loads or generates root CA certificate and encrypted private key at startup (retained) | `backend/app/main.py` |
+| `_initialize_oidc_provider_registry` | function | Loads OIDC provider configs from DB into in-memory registry (retained) | `backend/app/main.py` |
+| `_run_bootstrap` | function | Seeds system roles and permissions at startup — runtime seeding, not setup-time (retained) | `backend/app/main.py` |
+| `_seed_system_tools` | function | Seeds system MCP server and tools at startup (retained) | `backend/app/main.py` |
+| `_cleanup_stale_sessions_on_startup` | function | Closes non-terminal sessions at startup (retained) | `backend/app/main.py` |
+| `_initialize_agent_realm` | coroutine | **REMOVED** — former auto-provisioning of agent realm at startup; relocated to setup tool | `backend/app/main.py` |
+
+### API Key Management (`backend/app/services/api_key_service.py`, `backend/app/api/v1/api_keys.py`, `backend/app/schemas/api_key.py`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ApiKeyService` | class | Service layer for key generation, hashing, validation, and lifecycle management | `backend/app/services/api_key_service.py` |
+| `generate_api_key` | function | Generates a cryptographically random API key with `phn_sk_` prefix | `backend/app/services/api_key_service.py` |
+| `hash_api_key` | function | SHA-256 hashes a raw API key for storage and lookup | `backend/app/services/api_key_service.py` |
+| `validate_api_key_from_hash` | function | Looks up key by hash, checks status, returns key record or raises | `backend/app/services/api_key_service.py` |
+| `create_api_key_usage_log` | function | Creates an `ApiKeyUsageLog` entry for audit trail | `backend/app/services/api_key_service.py` |
+| `resolve_identity_token` | function (async) | Decrypts and returns the identity token for a given agent identity | `backend/app/services/api_key_service.py` |
+| `resolve_allowed_tools` | function (async) | Resolves all tool names accessible to a given agent role | `backend/app/services/api_key_service.py` |
+| `update_last_used_at` | function (async) | Updates the `last_used_at` timestamp on an API key record | `backend/app/services/api_key_service.py` |
+| `check_duplicate_active_key` | function (async) | Checks whether an active key already exists for an identity-role pair; raises 409 if so | `backend/app/services/api_key_service.py` |
+| `AdminApiKeyRouter` | router | FastAPI APIRouter for admin-facing API key CRUD endpoints | `backend/app/api/v1/api_keys.py` |
+| `list_api_keys` | endpoint | `GET /api/v1/api-keys` — list keys with optional status filter | `backend/app/api/v1/api_keys.py` |
+| `create_api_key` | endpoint | `POST /api/v1/api-keys` — create key, return clear-text once | `backend/app/api/v1/api_keys.py` |
+| `revoke_api_key` | endpoint | `POST /api/v1/api-keys/{key_id}/revoke` — set key status to revoked | `backend/app/api/v1/api_keys.py` |
+| `list_identities_with_roles` | endpoint | `GET /api/v1/api-keys/identities-with-roles` — identities and their available roles | `backend/app/api/v1/api_keys.py` |
+| `validate_api_key_internal` | endpoint | Internal POST endpoint: validates hashed key, returns identity token + permissions | `backend/app/api/v1/internal/validate_api_key.py` |
+| `InternalAuthRouter` | router | FastAPI APIRouter for internal auth endpoints, protected by `require_service_certificate` | `backend/app/api/v1/internal/validate_api_key.py` |
+| `resolve_skills_internal` | endpoint | Internal POST endpoint: resolves skills for a role with optional `since` filter | `backend/app/api/v1/internal/system_tools.py` |
+| `ApiKeyCreate` | schema | Pydantic schema for API key creation request (name, identity_id, role_id) | `backend/app/schemas/api_key.py` |
+| `ApiKeyCreateResponse` | schema | Pydantic schema for API key creation response (includes clear-text key shown once) | `backend/app/schemas/api_key.py` |
+| `ApiKeyRead` | schema | Pydantic schema for API key data with optional identity/role name fields | `backend/app/schemas/api_key.py` |
+| `ApiKeyListItem` | schema | Pydantic schema for API key list items with denormalized identity/role names (metadata only, never includes secret) | `backend/app/schemas/api_key.py` |
+| `ApiKeyRevokeResponse` | schema | Pydantic schema for revoke response (status confirmation) | `backend/app/schemas/api_key.py` |
+| `RoleItem` | schema | Pydantic schema for a role item in identity-with-roles responses | `backend/app/schemas/api_key.py` |
+| `ToolDefinition` | schema | Pydantic schema for a resolved tool definition with input/output schemas | `backend/app/schemas/api_key.py` |
+| `ApiKeyValidateRequest` | schema | Pydantic schema for internal validation request (hashed key) | `backend/app/schemas/api_key.py` |
+| `ApiKeyValidateResponse` | schema | Pydantic schema for internal validation response (identity token + permissions) | `backend/app/schemas/api_key.py` |
+| `SkillWithVersion` | schema | Pydantic schema extending skill with `updated_at` and tool definitions | `backend/app/schemas/api_key.py` |
 
 ### Internal Segregation Enforcement
 

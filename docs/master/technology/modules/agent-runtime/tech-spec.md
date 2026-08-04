@@ -68,8 +68,11 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `create_app` | function | Agent Runtime app factory that wires middleware, routing, and runtime service clients | `backend/app/agent_runtime/main.py` |
-| `startup_event` | function | Startup lifecycle hook that initializes runtime dependencies before session execution begins | `backend/app/agent_runtime/main.py` |
+| `create_app` | function | Agent Runtime FastAPI application factory that wires middleware, routing, and runtime service clients | `backend/app/agent_runtime/main.py` |
+| `startup_event` | coroutine | Startup lifecycle hook — validates Control Center reachability before certificate bootstrap, then loads certificate and starts renewal task | `backend/app/agent_runtime/main.py` |
+| `_validate_control_center_reachable` | coroutine | **NEW** — validates Control Center health check reachability with retry logic before attempting certificate bootstrap; fails fast if CA is unavailable | `backend/app/agent_runtime/main.py` |
+| `_load_certificate` | coroutine | Loads or bootstraps agent-instance certificate from Control Center (retained) | `backend/app/agent_runtime/main.py` |
+| `_start_certificate_renewal` | coroutine | Starts background certificate renewal task (retained) | `backend/app/agent_runtime/main.py` |
 
 ### Runtime Boundary Enforcement
 

@@ -209,6 +209,7 @@ tbody tr:last-child{border-bottom:none}
 .form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
 .form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
 .form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 2px rgba(244,67,54,.15)}
 .form-control::placeholder{color:#94A3B8}
 textarea.form-control{resize:vertical;min-height:80px}
 select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
@@ -529,6 +530,41 @@ select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3C
 strong{font-weight:600}
 .inline-form{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:12px}
 
+/* ── LOGIN PAGE (refine-oidc-integration) ── */
+.login-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#f0f4ff 0%,#e8edf5 100%);padding:24px}
+.login-card{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:440px;overflow:hidden}
+.login-header{padding:32px 32px 20px;text-align:center}
+.login-header .logo-icon{width:56px;height:56px;background:var(--primary);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+.login-header h1{font-size:22px;margin-bottom:4px}
+.login-state{display:none}.login-state.active{display:block}
+.login-body{padding:0 32px 32px}
+.login-footer{padding:16px 32px;border-top:1px solid var(--border);background:#FAFBFC;text-align:center;border-radius:0 0 var(--radius-lg) var(--radius-lg)}
+.login-footer p{font-size:12px;color:var(--text-secondary)}
+.form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}.form-error.visible{display:block}
+.login-divider{display:flex;align-items:center;gap:14px;margin:20px 0;color:var(--text-secondary);font-size:12px}
+.login-divider::before,.login-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.login-divider span{white-space:nowrap}
+.oidc-login-btn{display:flex;align-items:center;gap:10px;width:100%;padding:12px 20px;border:2px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text-primary);font-weight:600;font-size:14px;cursor:pointer;transition:all var(--transition);justify-content:center}
+.oidc-login-btn:hover{border-color:var(--primary);background:var(--primary-light);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.oidc-login-btn .oidc-icon{font-size:20px}
+.advanced-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--primary);font-size:13px;font-weight:500;margin-top:12px;padding:4px 0;background:none;border:none}
+.advanced-toggle:hover{color:var(--primary-dark)}
+.advanced-panel{display:none;margin-top:12px;padding:14px;background:#FAFBFC;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.advanced-panel.open{display:block}
+.login-state-demo{position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,.75);color:#fff;border-radius:8px;padding:10px 14px;font-size:11px;z-index:500}
+.login-state-demo .lsd-title{margin-bottom:6px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.5px}
+.login-state-demo button{padding:4px 10px;font-size:10px;margin-right:4px;border:none;border-radius:4px;cursor:pointer;font-weight:500}
+.test-step{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-secondary);transition:color var(--transition)}
+.test-step:last-child{border-bottom:none}
+.test-step.done{color:var(--success)}.test-step.fail{color:var(--error)}.test-step.active{color:var(--primary);font-weight:500}
+.test-step .step-icon{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px}
+.mini-spinner{width:16px;height:16px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite;display:inline-block}
+.test-result{border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.6;max-height:240px;overflow-y:auto;background:#F8FAFC}
+.test-result pre{white-space:pre-wrap;word-break:break-all;color:var(--text-primary)}
+.config-badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:500}
+.config-badge.configured{background:#DCFCE7;color:#15803D}
+.config-badge.not-configured{background:#E2E8F0;color:#64748B}
+
 /* ── BINDING LIST ── */
 .binding-section{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-top:12px}
 .binding-section-title{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
@@ -785,9 +821,210 @@ strong{font-weight:600}
 .change-banner-improve h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
 .change-banner-improve p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
 
+/* ── API KEY MANAGEMENT ── */
+.key-reveal-box{background:#F8FAFC;border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:16px;text-align:center}
+.key-reveal-box .key-warning{display:flex;align-items:center;gap:8px;background:#FEF3C7;color:#92400E;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px;font-weight:600;text-align:left}
+.key-reveal-box .key-warning .warn-icon{font-size:20px;flex-shrink:0}
+.key-display{display:flex;align-items:center;gap:8px;background:#1E293B;color:#E2E8F0;border-radius:var(--radius-sm);padding:12px 16px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:.5px;word-break:break-all;text-align:left;position:relative;margin-bottom:12px}
+.key-display .key-text{flex:1;overflow-x:auto;white-space:nowrap}
+.key-display .key-text::-webkit-scrollbar{height:3px}.key-display .key-text::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+.key-display .key-text.masked{filter:blur(6px);user-select:none}
+.key-display .copy-btn{flex-shrink:0;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#E2E8F0;padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.key-display .copy-btn:hover{background:rgba(255,255,255,0.2)}
+.key-reveal-actions{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.key-reveal-actions .reveal-toggle{font-size:13px;font-weight:600;color:var(--primary);background:none;border:none;cursor:pointer;padding:6px 12px;border-radius:var(--radius-sm);transition:background var(--transition)}
+.key-reveal-actions .reveal-toggle:hover{background:var(--primary-light)}
+.key-format-hint{font-size:11px;color:var(--text-secondary);margin-top:8px;font-family:'Courier New',monospace}
+.key-hint{font-family:'Courier New',monospace;font-size:12px;color:#64748B;background:#F1F5F9;padding:3px 8px;border-radius:4px;display:inline-block}
+.key-created-success{text-align:center;padding:16px 0}
+.key-created-success .success-icon{width:56px;height:56px;background:#DCFCE7;color:#15803D;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px}
+.key-created-success h4{font-size:16px;font-weight:600;margin-bottom:4px;color:var(--text-primary)}
+.key-created-success p{font-size:13px;color:var(--text-secondary)}
+tr.revoked-row{opacity:.65}
+tr.revoked-row td{color:#9CA3AF}
+.spinner-sm{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin .7s linear infinite;display:inline-block}
+
+/* ── DASHBOARD METRICS (implement-dashboard-metrics) ── */
+
+/* Metric card extensions */
+.metric-card.dash-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:16px 20px;position:relative;overflow:hidden;transition:box-shadow var(--transition),opacity var(--transition),border var(--transition)}
+.metric-card.dash-card:hover{box-shadow:var(--shadow-md)}
+.metric-card.dash-card.clickable{cursor:pointer}
+
+.dash-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;position:relative}
+.dash-card-icon{width:36px;height:36px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.dash-card-icon.blue{background:#DBEAFE;color:#1D4ED8}
+.dash-card-icon.green{background:#DCFCE7;color:#15803D}
+.dash-card-icon.purple{background:#EDE9FE;color:#6D28D9}
+.dash-card-icon.orange{background:#FED7AA;color:#C2410C}
+.dash-card-icon.red{background:#FEE2E2;color:#B91C1C}
+.dash-card-icon.teal{background:#D1FAE5;color:#065F46}
+.dash-card-icon.amber{background:#FEF3C7;color:#92400E}
+.dash-card-icon.slate{background:#F1F5F9;color:#475569}
+.dash-card-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;line-height:1.3;flex:1}
+.dash-card-value{font-size:28px;font-weight:700;color:var(--text-primary);line-height:1;margin-bottom:6px}
+.dash-card-zero .dash-card-value{font-weight:400;color:var(--text-secondary)}
+.dash-card-sub{font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+/* Sub-breakdown chips */
+.sub-breakdown-d{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:10.5px;font-weight:500;background:#F1F5F9;color:#475569}
+.sub-label-d{font-size:11px;color:var(--text-secondary)}
+
+/* Time-sensitive left-border accent */
+.dash-card.time-sensitive{border-left:3px solid}
+
+/* Dual value (completed / failed) */
+.dual-value-d{display:flex;align-items:baseline;gap:8px}
+.dual-value-d .val-completed{font-size:28px;font-weight:700;color:var(--success);line-height:1}
+.dual-value-d .val-separator{font-size:20px;color:var(--text-secondary);font-weight:300}
+.dual-value-d .val-failed{font-size:28px;font-weight:700;color:var(--error);line-height:1}
+
+/* Permission-denied state */
+.dash-card.permission-denied{opacity:.7;border:1px dashed #EF4444;background:#FFF5F5}
+.dash-card.permission-denied .dash-card-icon{background:#F1F5F9!important;color:#94A3B8!important}
+.dash-card.permission-denied .dash-card-label{color:#9CA3AF}
+.dash-card .dash-lock-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:2;gap:8px}
+.dash-card.permission-denied .dash-lock-overlay{display:flex}
+.dash-lock-overlay .lock-icon{font-size:24px;color:#EF4444}
+.dash-lock-overlay .denied-text{font-size:11px;font-weight:700;color:#EF4444;text-transform:uppercase;letter-spacing:.5px}
+.dash-card.permission-denied .dash-card-header,
+.dash-card.permission-denied .dash-card-value,
+.dash-card.permission-denied .dash-card-sub{filter:blur(2px);pointer-events:none}
+
+/* Loading skeleton */
+.dash-card.loading .dash-card-icon{background:#E2E8F0;color:transparent;animation:skeletonPulse 1.5s ease-in-out infinite}
+.dash-card.loading .dash-card-label{background:#E2E8F0;color:transparent;border-radius:4px;display:inline-block;min-width:80px;animation:skeletonPulse 1.5s ease-in-out infinite}
+.dash-card.loading .dash-card-value{background:#E2E8F0;color:transparent;border-radius:4px;display:inline-block;min-width:60px;animation:skeletonPulse 1.5s ease-in-out infinite;height:30px}
+.dash-card.loading .dash-card-sub{display:none}
+.dash-card.loading .dash-lock-overlay{display:none!important}
+@keyframes skeletonPulse{0%,100%{opacity:.6}50%{opacity:.9}}
+
+/* Date Range Picker */
+.date-range-wrap-d{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+.date-range-controls-d{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.date-datetime-input-d{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;color:var(--text-primary);background:var(--surface);outline:none;min-width:200px}
+.date-datetime-input-d:focus{border-color:var(--primary)}
+.date-range-arrow-d{color:var(--text-secondary);font-size:13px;font-weight:300}
+.preset-btns-d{display:flex;gap:4px}
+.preset-btn-d{padding:5px 12px;font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-secondary);cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.preset-btn-d:hover{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.preset-btn-d.active{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600}
+.go-btn-d{padding:5px 12px;font-size:12px;font-weight:500;border:1px solid var(--primary);border-radius:var(--radius-sm);background:var(--primary);color:#fff;cursor:pointer;transition:all var(--transition);display:none;align-items:center;gap:4px}
+.go-btn-d.visible{display:inline-flex}
+.date-range-right-d{display:flex;align-items:center;gap:8px}
+.date-range-label-d{font-size:12px;color:var(--text-secondary)}
+
+/* Dashboard alert */
+.dash-alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:none;gap:10px;align-items:flex-start}
+.dash-alert-error{background:#FFF5F5;color:#991B1B;border-left:4px solid #F44336}
+
+/* IDP cards */
+.idp-grid-d{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.idp-card-d{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:20px}
+.idp-card-icon-d{width:40px;height:40px;border-radius:var(--radius-sm);background:#F1F5F9;color:#475569;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.idp-card-content-d{display:flex;align-items:center;gap:12px}
+.idp-card-info-d{flex:1}
+.idp-card-title-d{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+.idp-card-status-d{font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px}
+
+/* Demo controls panel */
+.demo-panel-d{position:fixed;bottom:16px;right:16px;background:rgba(15,23,42,.92);color:#fff;border-radius:var(--radius-lg);padding:14px 18px;font-size:11px;z-index:500;min-width:280px;backdrop-filter:blur(8px);box-shadow:0 10px 25px rgba(0,0,0,.12)}
+.demo-panel-title-d{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;margin-bottom:10px}
+.demo-row-d{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
+.demo-row-d .demo-label-d{color:#CBD5E1}
+.demo-btn-d{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:all var(--transition);font-weight:500}
+.demo-btn-d:hover{background:rgba(255,255,255,.18)}
+.demo-btn-d.active{background:var(--primary);border-color:var(--primary)}
+.demo-divider-d{height:1px;background:rgba(255,255,255,.1);margin:8px 0}
+.demo-role-preset-d{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.demo-role-preset-d button{font-size:10px;padding:3px 8px}
+
+/* Dashboard toast */
+.dash-toast-container{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.dash-toast{padding:10px 18px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:dashToastIn .3s ease;display:flex;align-items:center;gap:8px}
+.dash-toast-info{background:#1565C0}.dash-toast-success{background:#2E7D32}
+@keyframes dashToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* Dashboard responsive */
+@media(max-width:1400px){.dash-metrics-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1024px){.dash-metrics-grid{grid-template-columns:repeat(2,1fr)}.idp-grid-d{grid-template-columns:1fr}}
+@media(max-width:640px){.dash-metrics-grid{grid-template-columns:1fr}.idp-grid-d{grid-template-columns:1fr}}
+.dash-metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+
 </style>
 </head>
 <body>
+
+<!-- ═══════════════════════════════ LOGIN PAGE (refine-oidc-integration) ═══════════════════════════════ -->
+<div id="login-page" class="login-page" style="display:none">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo-icon">⚡</div>
+      <h1>Parthenon</h1>
+      <p style="font-size:13px;color:var(--text-secondary)">Enterprise AI Harness Platform</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="login-state-loading" class="login-state active">
+      <div class="login-body" style="text-align:center;padding:32px 0">
+        <div class="spinner"></div>
+        <p class="text-secondary">Discovering identity providers...</p>
+      </div>
+    </div>
+    <!-- Setup Wizard -->
+    <div id="login-state-setup" class="login-state">
+      <div class="login-body">
+        <div class="alert alert-warning">
+          <div><strong style="display:block;margin-bottom:2px">Application Not Accessible</strong>No identity provider configured and super admin is not enabled.</div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="oidcGoToSetup()">Go to Setup Wizard</button>
+      </div>
+    </div>
+    <!-- Super Admin Only -->
+    <div id="login-state-saonly" class="login-state">
+      <div class="login-body">
+        <div class="alert alert-info">
+          <div><strong style="display:block;margin-bottom:2px">Super Admin Required</strong>Log in as Super Admin to configure OIDC authentication.</div>
+        </div>
+        <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user" placeholder="Enter username" value="admin"></div>
+        <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass" placeholder="Enter password" value="admin123"></div>
+        <div id="oidc-login-error-saonly" class="form-error">Invalid credentials.</div>
+        <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()" style="margin-top:8px">Sign In as Super Admin</button>
+      </div>
+    </div>
+    <!-- Both -->
+    <div id="login-state-both" class="login-state">
+      <div class="login-body">
+        <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
+        <div class="login-divider"><span>or</span></div>
+        <button class="btn btn-ghost btn-block" onclick="oidcShowSAForm()" style="font-size:13px;color:var(--text-secondary);padding:8px">Login as Super Admin</button>
+        <div id="oidc-sa-inline-form" style="display:none;margin-top:12px">
+          <div class="form-group"><label>Username</label><input type="text" class="form-control" id="oidc-sa-user-both" placeholder="Username" value="admin"></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="oidc-sa-pass-both" placeholder="Password" value="admin123"></div>
+          <div id="oidc-login-error-both" class="form-error">Invalid credentials.</div>
+          <button class="btn btn-primary btn-block" onclick="oidcLoginAsSuperAdmin()" style="margin-top:4px">Sign In as Super Admin</button>
+        </div>
+      </div>
+    </div>
+    <!-- OIDC Only -->
+    <div id="login-state-oidconly" class="login-state">
+      <div class="login-body">
+        <button class="oidc-login-btn" onclick="oidcSimulateLogin()"><span class="oidc-icon">🔐</span>Login with Identity Provider</button>
+      </div>
+    </div>
+    <div class="login-footer"><p>Secure authentication via OIDC/OAuth2 &bull; Parthenon v2.0</p></div>
+  </div>
+  <!-- Demo: Login State Switcher -->
+  <div class="login-state-demo" id="oidc-demo-switcher">
+    <div class="lsd-title">Demo: Login State</div>
+    <button style="background:#F1F5F9;color:#475569" onclick="oidcSetState('loading')">Loading</button>
+    <button style="background:#FEF3C7;color:#92400E" onclick="oidcSetState('setup')">Setup</button>
+    <button style="background:#DBEAFE;color:#1D4ED8" onclick="oidcSetState('saonly')">SA Only</button>
+    <button style="background:#DCFCE7;color:#15803D" onclick="oidcSetState('both')">Both</button>
+    <button style="background:#FEE2E2;color:#B91C1C" onclick="oidcSetState('oidconly')">OIDC Only</button>
+  </div>
+</div>
+
 <div class="app-shell">
 
 <!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
@@ -850,6 +1087,7 @@ strong{font-weight:600}
     <div class="nav-children">
       <div class="nav-item sub-item" data-view="mcp-hub"             data-group="integrations" onclick="nav(this,'mcp-hub')">           <span class="nav-icon">🔌</span>MCP Hub</div>
       <div class="nav-item sub-item" data-view="notifications"       data-group="integrations" onclick="nav(this,'notifications')">     <span class="nav-icon">🔔</span>Notification Integration</div>
+      <div class="nav-item sub-item" data-view="api-keys"           data-group="integrations" onclick="nav(this,'api-keys')">         <span class="nav-icon">🔑</span>API Keys</div>
     </div>
   </div>
 
@@ -873,6 +1111,7 @@ strong{font-weight:600}
   <div class="topbar">
     <div class="topbar-title" id="topbar-title">Communication Hub</div>
     <div class="topbar-actions">
+      <span class="chip chip-yellow" id="oidc-sa-indicator" style="display:inline-flex">🔑 Super Admin</span>
       <button class="btn-icon" title="Notifications">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         <span class="badge">3</span>
@@ -1019,31 +1258,239 @@ strong{font-weight:600}
   </div>
 </div>
 
-<!-- ═══════════════════════════════ VIEW: DASHBOARD ═══════════════════════════════ -->
+<!-- ═══════════════════════════════ VIEW: DASHBOARD (implement-dashboard-metrics) ═══════════════════════════════ -->
 <div id="view-dashboard" class="view">
   <div class="view-header">
     <div><h2>Dashboard</h2><div class="view-desc">Platform overview and quick actions</div></div>
   </div>
-  <div class="metrics-grid">
-    <div class="metric-card">
-      <div class="metric-label">Active Agents</div>
-      <div class="metric-value">12</div>
-      <div class="metric-delta delta-up">↑ 3 new today</div>
+
+  <!-- Change Banner -->
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>Dashboard Operational Metrics <span class="cb-tag">implement-dashboard-metrics</span></h4>
+      <p>Real-time operational overview with 12 metric cards — 8 snapshot counts and 4 time-sensitive metrics with date-range filtering. Permission-aware visibility with loading, zero, and access-denied states. Identity provider status retained in secondary section.</p>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Failed Requests</div>
-      <div class="metric-value" style="color:var(--error)">4</div>
-      <div class="metric-delta delta-neutral">Requires attention</div>
+  </div>
+
+  <!-- Error Banner -->
+  <div class="dash-alert dash-alert-error" id="dash-error">
+    <span style="flex-shrink:0">⚠️</span>
+    <div style="flex:1">
+      <strong>Failed to load dashboard data</strong>
+      <button style="margin-left:12px;font-size:12px;font-weight:600;padding:3px 10px;border:1px solid #F44336;border-radius:4px;background:transparent;color:#991B1B;cursor:pointer" onclick="dashRetry()">Retry</button>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Tasks Completed</div>
-      <div class="metric-value">1,492</div>
-      <div class="metric-delta delta-up">↑ +2.4% vs last week</div>
+  </div>
+
+  <!-- ═══════════ SECTION 1: OPERATIONAL METRICS (8 Cards) ═══════════ -->
+  <div class="section-title">Operational Metrics</div>
+
+  <div class="dash-metrics-grid" id="dash-snapshot-grid">
+    <!-- 1. Agent Types (subBreakdowns: active/running chips) -->
+    <div class="metric-card dash-card clickable" id="dash-card-agent-types" data-dash-perm="agent_types" onclick="dashClick('Agent Types')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon blue">🤖</div>
+        <div class="dash-card-label">Agent Types</div>
+      </div>
+      <div class="dash-card-value">12</div>
+      <div class="dash-card-sub">
+        <span class="sub-breakdown-d" style="background:#DCFCE7;color:#15803D">8 active</span>
+        <span class="sub-breakdown-d" style="background:#DBEAFE;color:#1D4ED8">3 running</span>
+      </div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">System Health</div>
-      <div class="metric-value" style="color:var(--success)">99.9%</div>
-      <div class="metric-delta delta-up">All services operational</div>
+
+    <!-- 2. Pending Interventions (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-pending-interventions" data-dash-perm="interventions" onclick="dashClick('Pending Interventions','/agents/intervene')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon orange">🛑</div>
+        <div class="dash-card-label">Pending Interventions</div>
+      </div>
+      <div class="dash-card-value">5</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Pending</span></div>
+    </div>
+
+    <!-- 3. Model Configurations (model_counts as value, vendors as subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-model-configs" data-dash-perm="model_configs" onclick="dashClick('Model Configurations','/agents/model-configs')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon purple">⚙️</div>
+        <div class="dash-card-label">Model Configurations</div>
+      </div>
+      <div class="dash-card-value">12</div>
+      <div class="dash-card-sub"><span class="sub-label-d">7 Vendors</span></div>
+    </div>
+
+    <!-- 4. Active Schedules (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-active-schedules" data-dash-perm="schedules" onclick="dashClick('Active Schedules','/schedules')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon green">📅</div>
+        <div class="dash-card-label">Active Schedules</div>
+      </div>
+      <div class="dash-card-value">14</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Active</span></div>
+    </div>
+
+    <!-- 5. Agent Identities (subLabel) -->
+    <div class="metric-card dash-card" id="dash-card-agent-identities" data-dash-perm="identities" onclick="dashClick('Agent Identities')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon teal">🆔</div>
+        <div class="dash-card-label">Agent Identities</div>
+      </div>
+      <div class="dash-card-value">23</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Provisioned</span></div>
+    </div>
+
+    <!-- 6. Agent Roles (subLabel) -->
+    <div class="metric-card dash-card" id="dash-card-agent-roles" data-dash-perm="roles" onclick="dashClick('Agent Roles')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon amber">👤</div>
+        <div class="dash-card-label">Agent Roles</div>
+      </div>
+      <div class="dash-card-value">6</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Defined</span></div>
+    </div>
+
+    <!-- 7. MCP Servers (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-mcp-servers" data-dash-perm="mcp_servers" onclick="dashClick('MCP Servers','/mcp')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon red">🔌</div>
+        <div class="dash-card-label">MCP Servers</div>
+      </div>
+      <div class="dash-card-value">9</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Registered</span></div>
+    </div>
+
+    <!-- 8. Permission Requests (subLabel + navigateTo) -->
+    <div class="metric-card dash-card clickable" id="dash-card-permission-requests" data-dash-perm="permission_requests" onclick="dashClick('Permission Requests','/permissions/access-requests')">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon slate">🔑</div>
+        <div class="dash-card-label">Permission Requests</div>
+      </div>
+      <div class="dash-card-value">3</div>
+      <div class="dash-card-sub"><span class="sub-label-d">Pending</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 2: TIME-SENSITIVE METRICS (4 Cards) ═══════════ -->
+  <div class="section-title" style="margin-top:32px">Time-Sensitive Metrics</div>
+
+  <!-- Date Range Picker (draft-based with Go button) -->
+  <div class="date-range-wrap-d">
+    <div class="date-range-controls-d">
+      <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px">From</label>
+      <input type="datetime-local" class="date-datetime-input-d" id="dash-draft-start" onchange="dashOnDraftChange()">
+      <span class="date-range-arrow-d">&mdash;</span>
+      <label style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px">To</label>
+      <input type="datetime-local" class="date-datetime-input-d" id="dash-draft-end" onchange="dashOnDraftChange()">
+      <button class="go-btn-d" id="dash-go-btn" onclick="dashHandleGo()">▶ Go</button>
+      <div class="preset-btns-d" style="margin-left:4px">
+        <button class="preset-btn-d" onclick="dashPreset('hour')" id="dash-preset-hour">Last Hour</button>
+        <button class="preset-btn-d active" onclick="dashPreset('day')" id="dash-preset-day">Last 24h</button>
+        <button class="preset-btn-d" onclick="dashPreset('week')" id="dash-preset-week">Last 7d</button>
+      </div>
+    </div>
+    <div class="date-range-right-d">
+      <span class="date-range-label-d" id="dash-range-label"></span>
+      <button class="btn btn-secondary btn-sm" onclick="dashRefresh()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="dash-metrics-grid" id="dash-time-grid">
+    <!-- Guardrail Breach Events (single-value) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-guardrail-breaches" data-dash-perm="guardrail_breaches" style="border-left-color:#B91C1C">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon red">🚨</div>
+        <div class="dash-card-label">Guardrail Breach Events</div>
+      </div>
+      <div class="dash-card-value" id="dash-guardrail-value">3</div>
+    </div>
+
+    <!-- Agent Executions (dual: completed/failed) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-agent-executions" data-dash-perm="executions" style="border-left-color:#1D4ED8">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon blue">▶️</div>
+        <div class="dash-card-label">Agent Executions</div>
+      </div>
+      <div class="dual-value-d" id="dash-executions-value">
+        <span class="val-completed">42</span>
+        <span class="val-separator">/</span>
+        <span class="val-failed">3</span>
+      </div>
+      <div class="dash-card-sub" style="margin-top:6px"><span class="text-sm text-secondary">completed / failed</span></div>
+    </div>
+
+    <!-- Model Usage Posture Breaches (single-value) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-posture-breaches" data-dash-perm="posture_breaches" style="border-left-color:#6D28D9">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon purple">⚠️</div>
+        <div class="dash-card-label">Model Usage Posture Breaches</div>
+      </div>
+      <div class="dash-card-value" id="dash-posture-value">1</div>
+    </div>
+
+    <!-- Notification Delivery (dual: delivered/failed) -->
+    <div class="metric-card dash-card time-sensitive" id="dash-card-notifications" data-dash-perm="notifications" style="border-left-color:#065F46">
+      <div class="dash-lock-overlay"><span class="lock-icon">🔒</span><span class="denied-text">Access Denied</span></div>
+      <div class="dash-card-header">
+        <div class="dash-card-icon teal">📧</div>
+        <div class="dash-card-label">Notification Delivery</div>
+      </div>
+      <div class="dual-value-d" id="dash-notif-value">
+        <span class="val-completed">128</span>
+        <span class="val-separator">/</span>
+        <span class="val-failed">2</span>
+      </div>
+      <div class="dash-card-sub" style="margin-top:6px"><span class="text-sm text-secondary">delivered / failed</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION 3: IDENTITY PROVIDER STATUS ═══════════ -->
+  <div class="section-title" style="margin-top:32px">Identity Provider Status</div>
+
+  <div class="idp-grid-d">
+    <div class="idp-card-d">
+      <div class="idp-card-content-d">
+        <div class="idp-card-icon-d">🛡️</div>
+        <div class="idp-card-info-d">
+          <div class="idp-card-title-d">User Identity Provider</div>
+          <div class="idp-card-status-d">
+            <span class="status-dot dot-green"></span>
+            Connected — Keycloak (parthenon-users)
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="idp-card-d">
+      <div class="idp-card-content-d">
+        <div class="idp-card-icon-d">🤖</div>
+        <div class="idp-card-info-d">
+          <div class="idp-card-title-d">Agent Identity Provider</div>
+          <div class="idp-card-status-d">
+            <span class="status-dot dot-green"></span>
+            Connected — Keycloak (ai_agents)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>Quick Actions</h3></div>
+    <div class="card-body" style="display:flex;gap:12px">
+      <button class="btn btn-primary">⚙️ Configure Identity Providers</button>
+      <button class="btn btn-secondary">🔌 MCP Hub</button>
+      <button class="btn btn-secondary">📊 Observability</button>
     </div>
   </div>
 </div>
@@ -1656,6 +2103,60 @@ strong{font-weight:600}
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: API KEY MANAGEMENT ═══════════════════════════════ -->
+<div id="view-api-keys" class="view">
+  <div class="view-header">
+    <div>
+      <h2>API Key Management</h2>
+      <div class="view-desc">Create and manage API keys for third-party agents connecting via the MCP Hub</div>
+    </div>
+    <button class="btn btn-primary" onclick="akOpenCreate()">
+      + Create API Key
+    </button>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <select id="akFilterStatus" onchange="akRefreshTable()">
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="revoked">Revoked</option>
+    </select>
+    <div class="search-input" style="max-width:300px">
+      <span style="font-size:15px">🔍</span>
+      <input type="text" id="akSearchInput" placeholder="Search by name or identity..." oninput="akRefreshTable()">
+    </div>
+    <span class="text-sm text-secondary" id="akResultCount">4 keys</span>
+  </div>
+
+  <!-- API Keys Table -->
+  <div class="table-wrap" id="akTableWrap">
+    <table id="akTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Agent Identity</th>
+          <th>Agent Role</th>
+          <th>Status</th>
+          <th>Key Hint</th>
+          <th>Created</th>
+          <th>Last Used</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="akTbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Empty State -->
+  <div id="akEmptyState" class="empty-state" style="display:none">
+    <div class="empty-icon">🔑</div>
+    <h3>No API Keys Yet</h3>
+    <p>Create your first API key to allow external agents to connect to the MCP Hub.</p>
+    <button class="btn btn-primary" onclick="akOpenCreate()">+ Create API Key</button>
   </div>
 </div>
 
@@ -3099,63 +3600,169 @@ Returns: { request_id, status }</div>
 <!-- ═══════════════════════════════ VIEW: SYSTEM CONFIG ═══════════════════════════════ -->
 <div id="view-system-config" class="view">
   <div class="view-header">
-    <div><h2>System Config</h2><div class="view-desc">Global platform settings, feature flags, and system preferences</div></div>
-    <button class="btn btn-primary" onclick="mcFlashToast('System configuration saved.')">Save Changes</button>
+    <div><h2>System Configuration</h2><div class="view-desc">Manage identity providers, authentication, and platform settings</div></div>
+    <button class="btn btn-primary" onclick="mcFlashToast('Configuration saved to database.')">💾 Save All Changes</button>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  <!-- OIDC Setup Instructions -->
+  <div class="alert alert-info">
+    <div>
+      <strong style="display:block;margin-bottom:2px">OIDC Client Setup</strong>
+      <p class="text-sm" style="margin:0"><strong>Root URL:</strong> <code>http://localhost:3000</code> &bull; <strong>Home URL:</strong> <code>http://localhost:3000/dashboard</code> &bull; <strong>Redirect URIs:</strong> <code>http://localhost:3000/callback</code> (PKCE login) and <code>http://localhost:3000/*</code> (dev wildcard). User identity: register a <strong>public</strong> OIDC client for PKCE — no secret needed (UI Client ID). Agent identity: register a single OIDC client for the agent realm.</p>
+    </div>
+  </div>
+
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body"><h4>Independent Provider Configuration</h4><p>User identity and agent identity can be sourced from <strong>separate, independent</strong> OIDC providers. Configurations are persisted to the database — no YAML editing.</p></div>
+  </div>
+
+  <div class="tabs" id="oidc-config-tabs">
+    <div class="tab active" onclick="oidcSwitchConfigTab(this,'oidc-panel-user')">👤 User Identity Provider</div>
+    <div class="tab" onclick="oidcSwitchConfigTab(this,'oidc-panel-agent')">🤖 Agent Identity Provider</div>
+    <div class="tab" onclick="oidcSwitchConfigTab(this,'oidc-panel-general')">⚙️ General Settings</div>
+  </div>
+
+  <!-- USER IDENTITY PROVIDER TAB -->
+  <div id="oidc-panel-user" class="tab-panel active">
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">👤</span><span style="font-weight:600;font-size:15px">User Identity Provider</span>
+            <span class="config-badge not-configured" id="oidc-user-badge">Not Configured</span>
+          </div>
+          <label class="toggle" style="font-size:12px"><span>Enabled</span><input type="checkbox" id="oidc-user-enabled" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Provider Type</label>
+            <select class="form-control" id="oidc-user-type" onchange="oidcUpdateBadges()">
+              <option value="">-- Select --</option><option value="oidc_generic">Generic OIDC</option><option value="keycloak">Keycloak</option><option value="azure_entraid">Azure EntraID</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Display Name</label><input class="form-control" id="oidc-user-name" placeholder="User Provider"></div>
+        </div>
+        <div class="form-group"><label>Issuer URL <span style="color:var(--error)">*</span></label><input type="url" class="form-control" id="oidc-user-issuer" placeholder="https://auth.example.com/realms/my-realm"></div>
+        <div class="form-group"><label>UI Client ID (Public) <span style="color:var(--error)">*</span></label><input class="form-control" id="oidc-user-ui-client" placeholder="parthenon-api-ui"><div class="form-hint">Public client ID for browser PKCE login. No client secret needed.</div></div>
+        <div class="form-group"><label>Scopes</label><input class="form-control" id="oidc-user-scopes" value="openid profile email" disabled><div class="form-hint">Scopes are fixed to ensure correct OIDC claims.</div></div>
+
+        <button class="advanced-toggle" onclick="oidcToggleAdvanced('oidc-user-advanced')" id="oidc-user-advanced-toggle">▼ Advanced Options</button>
+        <div class="advanced-panel open" id="oidc-user-advanced">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px">Confidential Client (Backend)</div>
+          <div class="form-group"><label>Client ID (Confidential)</label><input class="form-control" id="oidc-user-client-id" placeholder="parthenon-user-client"></div>
+          <div class="form-group"><label>Client Secret</label><div style="display:flex;gap:6px"><input type="password" class="form-control" id="oidc-user-secret" placeholder="(unchanged if left empty)" style="flex:1"><button class="btn btn-secondary btn-sm" onclick="oidcTogglePw('oidc-user-secret',this)">👁️</button></div></div>
+          <div class="form-group"><label>Claims Mapping</label><textarea class="form-control" id="oidc-user-claims" rows="3" placeholder="email:email&#10;name:display_name&#10;groups:roles" style="font-family:monospace;font-size:12px"></textarea><div class="form-hint">Key:value pairs, one per line. Maps OIDC claims to Parthenon attributes.</div></div>
+        </div>
+      </div>
+      <div class="card-footer" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="oidcSaveProvider('user')">💾 Save Provider</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestConfig('user')">🔍 Test Configuration</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestLogin('user')">🔑 Test Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENT IDENTITY PROVIDER TAB -->
+  <div id="oidc-panel-agent" class="tab-panel">
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">🤖</span><span style="font-weight:600;font-size:15px">Agent Identity Provider</span>
+            <span class="config-badge not-configured" id="oidc-agent-badge">Not Configured</span>
+          </div>
+          <label class="toggle" style="font-size:12px"><span>Enabled</span><input type="checkbox" id="oidc-agent-enabled" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div class="form-group">
+          <label class="toggle"><input type="checkbox" id="oidc-agent-same" onchange="oidcSyncAgent()"><span class="toggle-slider"></span><span style="font-size:13px;font-weight:500">Same as User Provider</span></label>
+          <div class="form-hint">When enabled, uses the same configuration as the User Identity Provider.</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Provider Type</label>
+            <select class="form-control" id="oidc-agent-type" onchange="oidcUpdateAgentBadge()">
+              <option value="">-- Select --</option><option value="oidc_generic">Generic OIDC</option><option value="keycloak">Keycloak</option><option value="azure_entraid">Azure EntraID</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Display Name</label><input class="form-control" id="oidc-agent-name" placeholder="Agent Provider"></div>
+        </div>
+        <div class="form-group"><label>Issuer URL <span style="color:var(--error)">*</span></label><input type="url" class="form-control" id="oidc-agent-issuer" placeholder="https://auth.example.com/realms/agent-realm"></div>
+        <div class="form-group"><label>UI Client ID</label><input class="form-control" id="oidc-agent-ui-client" placeholder="parthenon-agent-ui"><div class="form-hint">Client ID for agent realm OAuth flows.</div></div>
+        <div class="form-group"><label>Scopes</label><input class="form-control" id="oidc-agent-scopes" value="openid profile email offline_access" disabled></div>
+
+        <button class="advanced-toggle" onclick="oidcToggleAdvanced('oidc-agent-advanced')" id="oidc-agent-advanced-toggle">▶ Advanced Options</button>
+        <div class="advanced-panel" id="oidc-agent-advanced">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px">Confidential Client</div>
+          <div class="form-group"><label>Client ID (Confidential)</label><input class="form-control" id="oidc-agent-client-id" placeholder="parthenon-agent-client"></div>
+          <div class="form-group"><label>Client Secret</label><div style="display:flex;gap:6px"><input type="password" class="form-control" id="oidc-agent-secret" placeholder="(unchanged if left empty)" style="flex:1"><button class="btn btn-secondary btn-sm" onclick="oidcTogglePw('oidc-agent-secret',this)">👁️</button></div></div>
+          <div class="form-group"><label>Claims Mapping</label><textarea class="form-control" id="oidc-agent-claims" rows="3" placeholder="agent_name:client_name&#10;agent_type:agent_type&#10;permissions:roles" style="font-family:monospace;font-size:12px"></textarea></div>
+        </div>
+      </div>
+      <div class="card-footer" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="oidcSaveProvider('agent')">💾 Save Provider</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestConfig('agent')">🔍 Test Configuration</button>
+        <button class="btn btn-secondary btn-sm" onclick="oidcTestLogin('agent')">🔑 Test Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERAL SETTINGS TAB -->
+  <div id="oidc-panel-general" class="tab-panel">
+    <!-- Super Admin -->
+    <div class="card">
+      <div class="card-header"><h3>Super Admin Configuration</h3></div>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:12px;background:#FAFBFC;border-radius:6px">
+          <span style="font-size:13px;color:var(--text-secondary)">Status:</span>
+          <span class="chip chip-green" id="oidc-sa-chip">Enabled</span>
+          <span style="font-size:13px;color:var(--text-secondary)">&mdash; Username:</span>
+          <strong style="font-size:13px">admin</strong>
+        </div>
+        <div class="form-group">
+          <label class="toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="oidc-toggle-sa" checked onchange="oidcToggleSA()"><span class="toggle-slider"></span>
+            <span style="font-size:13px;font-weight:500">Enable Super Admin Login</span>
+          </label>
+          <div class="form-hint" style="margin-left:44px;margin-top:6px">When enabled, the super admin can log in regardless of OIDC status. Disable in production once OIDC is confirmed working.</div>
+        </div>
+        <div id="oidc-sa-warn-disabled" class="alert alert-warning" style="display:none"><div><strong style="display:block;margin-bottom:4px">⚠️ Super Admin Disabled</strong><p class="text-sm">Only OIDC-authenticated users can access the platform. If OIDC becomes unreachable, re-enable via <code>PARTHENON_SUPER_ADMIN_ENABLED=true</code> or DB access.</p></div></div>
+        <div id="oidc-sa-warn-enabled" class="alert alert-info"><div><strong style="display:block;margin-bottom:4px">Super Admin is Enabled</strong><p class="text-sm">Provides disaster recovery fallback. Disable once OIDC auth is confirmed working in production.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Platform Settings (preserved from original) -->
     <div class="card">
       <div class="card-header"><h3>Platform Settings</h3></div>
       <div class="card-body">
-        <div class="form-group">
-          <label>Platform Name</label>
-          <input class="form-control" value="Parthenon">
-        </div>
-        <div class="form-group">
-          <label>Default Agent Timeout (seconds)</label>
-          <input class="form-control" type="number" value="300">
-        </div>
-        <div class="form-group">
-          <label>Max Concurrent Executions</label>
-          <input class="form-control" type="number" value="50">
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label>Log Retention (days)</label>
-          <input class="form-control" type="number" value="90">
+        <div class="form-row">
+          <div class="form-group"><label>Platform Name</label><input class="form-control" value="Parthenon"></div>
+          <div class="form-group"><label>Default Agent Timeout (seconds)</label><input class="form-control" type="number" value="300"></div>
+          <div class="form-group"><label>Max Concurrent Executions</label><input class="form-control" type="number" value="50"></div>
+          <div class="form-group"><label>Log Retention (days)</label><input class="form-control" type="number" value="90"></div>
         </div>
       </div>
     </div>
+
+    <!-- Feature Flags -->
     <div class="card">
       <div class="card-header"><h3>Feature Flags</h3></div>
       <div class="card-body">
-        <div class="form-group">
-          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable Agent Delegation</label>
-        </div>
-        <div class="form-group">
-          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable MCP Passthrough Auth</label>
-        </div>
-        <div class="form-group">
-          <label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Audit Trail</label>
-        </div>
-        <div class="form-group">
-          <label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable Live Execution Stream</label>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Experimental Providers</label>
-        </div>
+        <div class="form-group"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable Agent Delegation</label></div>
+        <div class="form-group"><label class="toggle"><input type="checkbox" checked><span class="toggle-slider"></span> Enable MCP Passthrough Auth</label></div>
+        <div class="form-group"><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Audit Trail</label></div>
+        <div class="form-group" style="margin-bottom:0"><label class="toggle"><input type="checkbox"><span class="toggle-slider"></span> Enable Experimental Providers</label></div>
       </div>
     </div>
-  </div>
-  <div class="card" style="margin-top:0">
-    <div class="card-header"><h3>Notification Defaults</h3></div>
-    <div class="card-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Default Notification Channel</label>
-          <select class="form-control"><option>Email</option><option selected>Slack</option><option>Teams</option><option>Webhook</option></select>
-        </div>
-        <div class="form-group">
-          <label>Alert Severity Threshold</label>
-          <select class="form-control"><option>All</option><option selected>Warning & Error</option><option>Error Only</option></select>
+
+    <!-- Dev/Demo Setup Wizard -->
+    <div class="card">
+      <div class="card-header"><h3>💻 Dev/Demo Setup Wizard</h3></div>
+      <div class="card-body">
+        <div class="alert alert-info" style="margin-bottom:0">
+          <div><strong style="display:block;margin-bottom:4px">Setup Wizard Preserved</strong>
+            <p class="text-sm">The first-run setup wizard is preserved for dev/demo environments. On fresh deployments with no OIDC configured and no super admin enabled, the guided wizard appears automatically. Supports bundled Keycloak and external OIDC (Keycloak, Azure EntraID). Wizard output is now saved to the <strong>database system config</strong> instead of <code>config/identity.yaml</code>.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -4322,6 +4929,221 @@ Recommendations:
   </div>
 </div>
 
+<!-- ═══════════════════════════════ OIDC INTEGRATION SCRIPTS ═══════════════════════════════ -->
+<script>
+/* ── OIDC Global State ── */
+var oidcLoginState = 'loading';
+var oidcTestTarget = 'user';
+var oidcTestLoginTarget = 'user';
+var oidcSuperAdminEnabled = true;
+var oidcLoginTestRun = 0;
+var oidcLoggedInSA = false;
+
+/* ── OIDC Login State Machine ── */
+function oidcSetState(state) {
+  oidcLoginState = state;
+  document.querySelectorAll('.login-state').forEach(function(el){el.classList.remove('active');});
+  var t = document.getElementById('login-state-'+state);
+  if (t) t.classList.add('active');
+  if (state === 'loading') {
+    setTimeout(function(){ if (oidcLoginState==='loading') oidcSetState('saonly'); }, 1500);
+  }
+}
+
+function oidcShowSAForm() {
+  var f = document.getElementById('oidc-sa-inline-form');
+  f.style.display = f.style.display==='none'?'block':'none';
+}
+
+function oidcGoToSetup() {
+  document.getElementById('login-page').style.display='none';
+  showView('setup-wizard');
+  mcFlashToast('Redirecting to Setup Wizard...');
+  document.getElementById('oidc-demo-switcher').style.display='none';
+}
+
+function oidcLoginAsSuperAdmin() {
+  oidcLoggedInSA = true;
+  localStorage.setItem('super_admin_token','simulated');
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('oidc-sa-indicator').style.display='inline-flex';
+  document.querySelector('.avatar').textContent='SA';
+  mcFlashToast('Authenticated as Super Admin');
+  document.getElementById('oidc-demo-switcher').style.display='none';
+}
+
+function oidcSimulateLogin() {
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('oidc-sa-indicator').style.display='none';
+  document.querySelector('.avatar').textContent='JD';
+  oidcLoggedInSA = false;
+  mcFlashToast('Authenticated via Identity Provider (John Doe)');
+  document.getElementById('oidc-demo-switcher').style.display='none';
+}
+
+/* ── OIDC Config Tabs ── */
+function oidcSwitchConfigTab(tabEl, panelId) {
+  tabEl.parentElement.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  tabEl.classList.add('active');
+  document.querySelectorAll('#view-system-config .tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.getElementById(panelId).classList.add('active');
+}
+
+/* ── OIDC Advanced Toggle ── */
+function oidcToggleAdvanced(id) {
+  var p = document.getElementById(id);
+  var t = document.getElementById(id.replace('advanced','advanced-toggle'));
+  if (p.classList.contains('open')) { p.classList.remove('open'); if(t) t.innerHTML='▶ Advanced Options'; }
+  else { p.classList.add('open'); if(t) t.innerHTML='▼ Advanced Options'; }
+}
+
+/* ── Password Toggle ── */
+function oidcTogglePw(fieldId, btn) {
+  var f = document.getElementById(fieldId);
+  if (f.type==='password') { f.type='text'; btn.textContent='🙈'; }
+  else { f.type='password'; btn.textContent='👁️'; }
+}
+
+/* ── Badge Updates ── */
+function oidcUpdateBadges() {
+  var t = document.getElementById('oidc-user-type').value;
+  var b = document.getElementById('oidc-user-badge');
+  if (t) { b.textContent = t.replace(/_/g,' '); b.className='config-badge configured'; }
+  else { b.textContent='Not Configured'; b.className='config-badge not-configured'; }
+}
+function oidcUpdateAgentBadge() {
+  var t = document.getElementById('oidc-agent-type').value;
+  var b = document.getElementById('oidc-agent-badge');
+  if (t) { b.textContent = t.replace(/_/g,' '); b.className='config-badge configured'; }
+  else { b.textContent='Not Configured'; b.className='config-badge not-configured'; }
+}
+
+/* ── Sync Agent from User ── */
+function oidcSyncAgent() {
+  var c = document.getElementById('oidc-agent-same').checked;
+  var fields = ['type','name','issuer','ui-client','client-id','secret','scopes','claims'];
+  fields.forEach(function(f){
+    var a = document.getElementById('oidc-agent-'+f);
+    var u = document.getElementById('oidc-user-'+f);
+    if (a&&u) { if(c){ a.value=u.value; a.disabled=true; a.style.background='#F5F5F5'; } else { a.disabled=false; a.style.background=''; } }
+  });
+  if (c) oidcUpdateAgentBadge();
+}
+
+/* ── Save Provider ── */
+function oidcSaveProvider(scope) {
+  mcFlashToast(scope==='user'?'User identity provider saved.':'Agent identity provider saved.');
+  if (scope==='user') oidcUpdateBadges(); else oidcUpdateAgentBadge();
+}
+
+/* ── Super Admin Toggle ── */
+function oidcToggleSA() {
+  var t = document.getElementById('oidc-toggle-sa');
+  if (!t.checked) {
+    oidcSuperAdminEnabled = false;
+    document.getElementById('oidc-sa-warn-disabled').style.display='block';
+    document.getElementById('oidc-sa-warn-enabled').style.display='none';
+    document.getElementById('oidc-sa-indicator').style.display='none';
+    document.getElementById('oidc-sa-chip').textContent='Disabled';
+    document.getElementById('oidc-sa-chip').className='chip chip-red';
+    mcFlashToast('Super admin login disabled.');
+  } else {
+    oidcSuperAdminEnabled = true;
+    document.getElementById('oidc-sa-warn-disabled').style.display='none';
+    document.getElementById('oidc-sa-warn-enabled').style.display='block';
+    document.getElementById('oidc-sa-indicator').style.display=oidcLoggedInSA?'inline-flex':'none';
+    document.getElementById('oidc-sa-chip').textContent='Enabled';
+    document.getElementById('oidc-sa-chip').className='chip chip-green';
+    mcFlashToast('Super admin login enabled.');
+  }
+}
+
+/* ── Test Config Modal ── */
+function oidcTestConfig(target) {
+  oidcTestTarget = target;
+  var pre=document.getElementById('oidc-test-config-pre'), run=document.getElementById('oidc-test-config-running'), res=document.getElementById('oidc-test-config-result');
+  pre.style.display='block';run.style.display='none';res.style.display='none';
+  document.getElementById('oidc-btn-retry-test').style.display='none';
+  for (var i=1;i<=4;i++){ var s=document.getElementById('oidc-step-'+i); s.className='test-step'; s.querySelector('.step-icon').textContent='○'; }
+  document.getElementById('oidc-test-config-target').textContent = target==='user'?'User Identity Provider':'Agent Identity Provider';
+  document.getElementById('oidc-test-config-title').innerHTML = '🔍 Test OIDC Config &mdash; '+(target==='user'?'User':'Agent')+' Provider';
+  var p=target==='user'?'user':'agent';
+  document.getElementById('oidc-test-issuer').textContent=document.getElementById('oidc-'+p+'-issuer').value||'https://auth.example.com/realms/my-realm';
+  document.getElementById('oidc-test-client-id').textContent=document.getElementById('oidc-'+p+'-ui-client').value||'parthenon-api-ui';
+  openModal('oidc-modal-test-config');
+}
+
+function oidcRunTestConfig() {
+  document.getElementById('oidc-test-config-pre').style.display='none';
+  document.getElementById('oidc-test-config-running').style.display='block';
+  document.getElementById('oidc-test-config-result').style.display='none';
+  document.getElementById('oidc-btn-retry-test').style.display='none';
+  var rid=++oidcLoginTestRun;
+  var steps=[
+    {id:'oidc-step-1',d:800,t:'Discovery document fetched — issuer: https://auth.example.com/.well-known/openid-configuration',i:'✓',c:'done'},
+    {id:'oidc-step-2',d:1600,t:'Issuer URL matches discovery document — validation passed',i:'✓',c:'done'},
+    {id:'oidc-step-3',d:2400,t:'JWKS endpoint reachable — 3 keys found (RS256 x2, ES256 x1)',i:'✓',c:'done'},
+    {id:'oidc-step-4',d:3200,t:'Client credentials valid — token endpoint returned 200 OK',i:'✓',c:'done'}
+  ];
+  steps.forEach(function(s){setTimeout(function(){if(rid!==oidcLoginTestRun)return;var st=document.getElementById(s.id);st.className='test-step '+s.c;st.querySelector('.step-icon').textContent=s.i;st.querySelector('span:last-child').textContent=s.t;},s.d);});
+  setTimeout(function(){if(rid!==oidcLoginTestRun)return;
+    document.getElementById('oidc-test-config-running').style.display='none';
+    document.getElementById('oidc-test-config-result').style.display='block';
+    document.getElementById('oidc-btn-retry-test').style.display='inline-flex';
+    document.getElementById('oidc-test-config-result-content').innerHTML='<div class="alert alert-success" style="margin-bottom:16px"><div><strong style="display:block;margin-bottom:4px">✅ Configuration Valid</strong><p class="text-sm">All checks passed. The OIDC provider is reachable and correctly configured.</p></div></div><div class="section-title">Discovery Document</div><div class="test-result"><pre>{"issuer":"https://auth.example.com/realms/my-realm","authorization_endpoint":"https://auth.example.com/.../auth","token_endpoint":"https://auth.example.com/.../token","jwks_uri":"https://auth.example.com/.../certs"}</pre></div><div class="section-title">JWKS Status</div><div class="alert alert-info" style="margin-bottom:0"><div><p class="text-sm">JWKS endpoint returned 3 valid keys. All keys are not expired.</p></div></div>';
+  },3800);
+}
+
+/* ── Test Login Modal ── */
+function oidcTestLogin(target) {
+  oidcTestLoginTarget = target;
+  var pre=document.getElementById('oidc-test-login-pre'), run=document.getElementById('oidc-test-login-running'), res=document.getElementById('oidc-test-login-result');
+  pre.style.display='block';run.style.display='none';res.style.display='none';
+  document.getElementById('oidc-btn-retry-login').style.display='none';
+  for (var i=1;i<=4;i++){ var s=document.getElementById('oidc-login-step-'+i); s.className='test-step'; s.querySelector('.step-icon').textContent='○'; }
+  document.getElementById('oidc-test-login-target').textContent = target==='user'?'User Identity Provider':'Agent Identity Provider';
+  document.getElementById('oidc-test-login-title').innerHTML = '🔑 Test OIDC Login &mdash; '+(target==='user'?'User':'Agent')+' Provider';
+  openModal('oidc-modal-test-login');
+}
+
+function oidcRunTestLogin() {
+  document.getElementById('oidc-test-login-pre').style.display='none';
+  document.getElementById('oidc-test-login-running').style.display='block';
+  document.getElementById('oidc-test-login-result').style.display='none';
+  document.getElementById('oidc-btn-retry-login').style.display='none';
+  var rid=++oidcLoginTestRun;
+  var steps=[
+    {id:'oidc-login-step-1',d:1000,t:'Authorization code flow initiated — redirect to https://auth.example.com/...',i:'✓',c:'done'},
+    {id:'oidc-login-step-2',d:2000,t:'Callback completed — authorization code exchanged for tokens',i:'✓',c:'done'},
+    {id:'oidc-login-step-3',d:3000,t:'ID token validated — signature OK, not expired, audience matches',i:'✓',c:'done'},
+    {id:'oidc-login-step-4',d:4000,t:'User identity resolved — claims: preferred_username=jdoe, email=jdoe@example.com, roles=[admin,user]',i:'✓',c:'done'}
+  ];
+  steps.forEach(function(s){setTimeout(function(){if(rid!==oidcLoginTestRun)return;var st=document.getElementById(s.id);st.className='test-step '+s.c;st.querySelector('.step-icon').textContent=s.i;st.querySelector('span:last-child').textContent=s.t;},s.d);});
+  setTimeout(function(){if(rid!==oidcLoginTestRun)return;
+    document.getElementById('oidc-test-login-running').style.display='none';
+    document.getElementById('oidc-test-login-result').style.display='block';
+    document.getElementById('oidc-btn-retry-login').style.display='inline-flex';
+    document.getElementById('oidc-test-login-result-content').innerHTML='<div class="alert alert-success" style="margin-bottom:16px"><div><strong style="display:block;margin-bottom:4px">✅ Login Successful</strong><p class="text-sm">Full OIDC authorization code flow completed. User identity returned with valid claims.</p></div></div><div class="section-title">Token Response</div><div class="test-result"><pre>{"access_token":"eyJhbGciOiJSUzI1NiIs...","token_type":"Bearer","expires_in":3600,"id_token":"eyJhbGciOiJSUzI1NiIs..."}</pre></div><div class="section-title">ID Token Claims</div><div class="test-result"><pre>{"iss":"https://auth.example.com/realms/my-realm","sub":"a1b2c3d4-...","aud":"parthenon-api-ui","preferred_username":"jdoe","email":"jdoe@example.com","groups":["admin","user"]}</pre></div>';
+  },4600);
+}
+
+/* ── Init: Show login page on load ── */
+(function(){
+  function oidcInit(){
+    if (localStorage.getItem('super_admin_token')) {
+      document.getElementById('login-page').style.display='none';
+      document.getElementById('oidc-sa-indicator').style.display='inline-flex';
+      document.getElementById('oidc-demo-switcher').style.display='none';
+      return;
+    }
+    document.getElementById('login-page').style.display='flex';
+    oidcSetState('loading');
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', oidcInit);
+  else oidcInit();
+})();
+</script>
+
 <script>
 // ═══════════════════════════════ STATE ═══════════════════════════════
 var currentView = 'dashboard';
@@ -4357,7 +5179,8 @@ const viewTitles = {
   'intervene-requests': 'Intervene Requests',
   'data-types': 'Agent Data Types',
   'agent-outputs': 'Agent Outputs',
-  'project-showcase': 'Project Showcase'
+  'project-showcase': 'Project Showcase',
+  'api-keys': 'API Key Management'
 };
 
 
@@ -4931,12 +5754,12 @@ function showSuccess(mode, data) {
   
   if (mode === 'keycloak-new') {
     setText('successTitle', 'Keycloak Configured!');
-    setText('successSubtitle', 'A Keycloak instance has been provisioned.');
+    setText('successSubtitle', 'A Keycloak instance has been provisioned. Configuration saved to database.');
     grid.innerHTML += row('Provider', 'Keycloak (managed)') + row('Realm', data.realm) + row('Admin User', data.username);
   } else {
     var typeLabel = data.type === 'entra' ? 'Azure EntraID' : 'Keycloak';
     setText('successTitle', typeLabel + ' Connected!');
-    setText('successSubtitle', typeLabel + ' OIDC provider validated and saved.');
+    setText('successSubtitle', typeLabel + ' OIDC provider validated and saved to database.');
     grid.innerHTML += row('Provider', typeLabel) + row('Client ID', data.clientId) + row('Audience', data.audience);
   }
 }
@@ -7861,6 +8684,194 @@ mcRenderCascade('mcCascadeModalTree');
       }
     }
   });
+
+  // ═══════════════════════════════ API KEY MANAGEMENT ═══════════════════════════════
+  var AK_IDENTITIES = [
+    { id:'ident-001', name:'GitHub Copilot Agent' },
+    { id:'ident-002', name:'Claude Code Agent' },
+    { id:'ident-003', name:'Cursor Agent' },
+    { id:'ident-004', name:'Custom DevOps Agent' }
+  ];
+  var AK_ROLES = [
+    { id:'role-001', name:'Code Review' },
+    { id:'role-002', name:'Skill Discovery' },
+    { id:'role-003', name:'SOP Executor' },
+    { id:'role-004', name:'Read-Only Observer' }
+  ];
+  var AK_IDENTITY_ROLE_MAP = {
+    'ident-001': ['role-001','role-002'],
+    'ident-002': ['role-001','role-002','role-003'],
+    'ident-003': ['role-001','role-002'],
+    'ident-004': ['role-003','role-004']
+  };
+  var akKeys = [
+    { id:'key-001', name:'Claude Code Production', identityId:'ident-002', identityName:'Claude Code Agent', roleId:'role-001', roleName:'Code Review', status:'active', keyHint:'phn_sk_...a1b2', createdAt:'2026-07-15T10:30:00Z', lastUsedAt:'2026-07-29T14:22:00Z' },
+    { id:'key-002', name:'GitHub Copilot Dev', identityId:'ident-001', identityName:'GitHub Copilot Agent', roleId:'role-002', roleName:'Skill Discovery', status:'active', keyHint:'phn_sk_...c3d4', createdAt:'2026-07-20T08:15:00Z', lastUsedAt:'2026-07-29T11:05:00Z' },
+    { id:'key-003', name:'DevOps Pipeline Key', identityId:'ident-004', identityName:'Custom DevOps Agent', roleId:'role-003', roleName:'SOP Executor', status:'active', keyHint:'phn_sk_...e5f6', createdAt:'2026-07-25T16:45:00Z', lastUsedAt:'2026-07-28T09:30:00Z' },
+    { id:'key-004', name:'Old Cursor Integration', identityId:'ident-003', identityName:'Cursor Agent', roleId:'role-001', roleName:'Code Review', status:'revoked', keyHint:'phn_sk_...7890', createdAt:'2026-07-10T12:00:00Z', lastUsedAt:'2026-07-18T20:15:00Z' }
+  ];
+  var akRevokeTargetId = null;
+
+  function akInit() {
+    var sel = document.getElementById('akSelectIdentity');
+    sel.innerHTML = '<option value="">-- Select an agent identity --</option>';
+    AK_IDENTITIES.forEach(function(i){ var o=document.createElement('option');o.value=i.id;o.textContent=i.name;sel.appendChild(o); });
+    akRefreshTable();
+  }
+
+  function akOpenCreate() { akResetForm(); openModal('akCreateDialog'); }
+  function akCloseCreate() { closeModal('akCreateDialog'); akResetForm(); }
+
+  function akResetForm() {
+    document.getElementById('akCreateStepForm').style.display='block';
+    document.getElementById('akCreateStepSuccess').style.display='none';
+    document.getElementById('akCreateFooterForm').style.display='flex';
+    document.getElementById('akCreateFooterDone').style.display='none';
+    document.getElementById('akInputName').value='';
+    document.getElementById('akSelectIdentity').value='';
+    document.getElementById('akSelectRole').value='';
+    document.getElementById('akSelectRole').innerHTML='<option value="">-- Select a role --</option>';
+    document.getElementById('akSelectRole').disabled=true;
+    document.getElementById('akSelectRole').style.background='#F5F5F5';
+    document.getElementById('akRoleHint').textContent='First select an agent identity to see available roles';
+    document.querySelectorAll('#akCreateDialog .form-control').forEach(function(el){el.classList.remove('error');});
+    document.querySelectorAll('#akCreateDialog .form-error').forEach(function(el){el.classList.remove('visible');});
+    document.getElementById('akBtnSubmit').disabled=true;
+    document.getElementById('akKeyText').classList.add('masked');
+    document.getElementById('akKeyText').removeAttribute('data-full-key');
+    document.getElementById('akBtnCopy').removeAttribute('data-full-key');
+    document.getElementById('akBtnReveal').textContent='👁️ Reveal Key';
+    document.getElementById('akBtnReveal').setAttribute('data-revealed','false');
+  }
+
+  function akOnIdentityChange() {
+    var identityId=document.getElementById('akSelectIdentity').value;
+    var roleSel=document.getElementById('akSelectRole');
+    var hint=document.getElementById('akRoleHint');
+    roleSel.innerHTML='<option value="">-- Select a role --</option>';
+    if(!identityId){ roleSel.disabled=true;roleSel.style.background='#F5F5F5';hint.textContent='First select an agent identity to see available roles';akValidateForm();return; }
+    var allowed=(AK_IDENTITY_ROLE_MAP[identityId]||[]);
+    if(!allowed.length){ roleSel.disabled=true;roleSel.style.background='#F5F5F5';hint.textContent='No roles available for this identity';akValidateForm();return; }
+    allowed.forEach(function(rid){ var r=AK_ROLES.find(function(x){return x.id===rid;}); if(r){var o=document.createElement('option');o.value=r.id;o.textContent=r.name;roleSel.appendChild(o);}});
+    roleSel.disabled=false;roleSel.style.background='';hint.textContent=allowed.length+' role(s) available for this identity';
+    akValidateForm();
+  }
+
+  function akValidateForm() {
+    var ok=!!document.getElementById('akInputName').value.trim() && !!document.getElementById('akSelectIdentity').value && !!document.getElementById('akSelectRole').value;
+    document.getElementById('akBtnSubmit').disabled=!ok;
+  }
+
+  function akSubmitCreate() {
+    var name=document.getElementById('akInputName').value.trim();
+    var iId=document.getElementById('akSelectIdentity').value;
+    var rId=document.getElementById('akSelectRole').value;
+    var valid=true;
+    if(!name){ document.getElementById('akInputName').classList.add('error');document.getElementById('akErrName').classList.add('visible');valid=false; } else { document.getElementById('akInputName').classList.remove('error');document.getElementById('akErrName').classList.remove('visible'); }
+    if(!iId){ document.getElementById('akSelectIdentity').classList.add('error');document.getElementById('akErrIdentity').classList.add('visible');valid=false; } else { document.getElementById('akSelectIdentity').classList.remove('error');document.getElementById('akErrIdentity').classList.remove('visible'); }
+    if(!rId){ document.getElementById('akSelectRole').classList.add('error');document.getElementById('akErrRole').classList.add('visible');valid=false; } else { document.getElementById('akSelectRole').classList.remove('error');document.getElementById('akErrRole').classList.remove('visible'); }
+    if(!valid)return;
+    var btn=document.getElementById('akBtnSubmit');btn.innerHTML='<span class="spinner-sm"></span> Creating...';btn.disabled=true;
+    setTimeout(function(){
+      var chars='abcdefghijklmnopqrstuvwxyz0123456789',rnd='';for(var i=0;i<32;i++)rnd+=chars.charAt(Math.floor(Math.random()*chars.length));
+      var fullKey='phn_sk_'+rnd, hint='phn_sk_...'+rnd.slice(-4);
+      akKeys.unshift({ id:'key-'+Date.now(), name:name, identityId:iId, identityName:AK_IDENTITIES.find(function(x){return x.id===iId;}).name, roleId:rId, roleName:AK_ROLES.find(function(x){return x.id===rId;}).name, status:'active', keyHint:hint, createdAt:new Date().toISOString(), lastUsedAt:null });
+      document.getElementById('akCreateStepForm').style.display='none';
+      document.getElementById('akCreateStepSuccess').style.display='block';
+      document.getElementById('akCreateFooterForm').style.display='none';
+      document.getElementById('akCreateFooterDone').style.display='flex';
+      document.getElementById('akCreatedKeyLabel').textContent='Key "'+name+'" has been generated';
+      document.getElementById('akSummaryIdentity').textContent=akKeys[0].identityName;
+      document.getElementById('akSummaryRole').textContent=akKeys[0].roleName;
+      document.getElementById('akSummaryHint').textContent=hint;
+      document.getElementById('akKeyText').textContent=fullKey;
+      document.getElementById('akKeyText').classList.add('masked');
+      document.getElementById('akBtnReveal').textContent='👁️ Reveal Key';
+      document.getElementById('akBtnReveal').setAttribute('data-revealed','false');
+      document.getElementById('akKeyText').setAttribute('data-full-key',fullKey);
+      document.getElementById('akBtnCopy').setAttribute('data-full-key',fullKey);
+      schedToast('API key "'+name+'" created successfully','success');
+    },800);
+  }
+
+  function akToggleReveal() {
+    var kd=document.getElementById('akKeyText'), btn=document.getElementById('akBtnReveal');
+    if(btn.getAttribute('data-revealed')==='true'){ kd.classList.add('masked');btn.textContent='👁️ Reveal Key';btn.setAttribute('data-revealed','false'); }
+    else{ kd.classList.remove('masked');btn.textContent='🙈 Hide Key';btn.setAttribute('data-revealed','true'); }
+  }
+
+  function akCopyKey() {
+    var full=document.getElementById('akBtnCopy').getAttribute('data-full-key');
+    if(!full)return;
+    if(navigator.clipboard){ navigator.clipboard.writeText(full).then(function(){ akCopySuccess(); })['catch'](function(){ akFallbackCopy(full); }); }
+    else{ akFallbackCopy(full); }
+  }
+  function akFallbackCopy(text) {
+    var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');akCopySuccess();}catch(e){schedToast('Failed to copy. Please select and copy manually.','error');}
+    document.body.removeChild(ta);
+  }
+  function akCopySuccess() {
+    var btn=document.getElementById('akBtnCopy'), orig=btn.innerHTML;
+    btn.innerHTML='✓ Copied!';btn.style.background='rgba(76,175,80,.3)';btn.style.borderColor='rgba(76,175,80,.5)';
+    setTimeout(function(){btn.innerHTML=orig;btn.style.background='rgba(255,255,255,.12)';btn.style.borderColor='rgba(255,255,255,.2)';},2000);
+  }
+
+  function akOpenRevoke(keyId) {
+    var k=akKeys.find(function(x){return x.id===keyId;});if(!k)return;
+    akRevokeTargetId=keyId;
+    document.getElementById('akRevokeKeyName').textContent="'"+k.name+"'";
+    openModal('akRevokeDialog');
+  }
+  function akConfirmRevoke() {
+    if(!akRevokeTargetId)return;
+    var k=akKeys.find(function(x){return x.id===akRevokeTargetId;});if(!k)return;
+    k.status='revoked';closeModal('akRevokeDialog');akRevokeTargetId=null;akRefreshTable();
+    schedToast('API key "'+k.name+'" has been revoked. Agents using this key have lost access.','info');
+  }
+
+  function akDeleteKey(keyId) {
+    var k=akKeys.find(function(x){return x.id===keyId;});if(!k)return;
+    akKeys=akKeys.filter(function(x){return x.id!==keyId;});
+    akRefreshTable();schedToast('API key "'+k.name+'" has been deleted','info');
+  }
+
+  function akRefreshTable() {
+    var sf=document.getElementById('akFilterStatus').value;
+    var st=(document.getElementById('akSearchInput').value||'').toLowerCase();
+    var filtered=akKeys.slice();
+    if(sf!=='all')filtered=filtered.filter(function(k){return k.status===sf;});
+    if(st)filtered=filtered.filter(function(k){return k.name.toLowerCase().indexOf(st)>=0||k.identityName.toLowerCase().indexOf(st)>=0||k.roleName.toLowerCase().indexOf(st)>=0;});
+    document.getElementById('akResultCount').textContent=filtered.length+' key'+(filtered.length!==1?'s':'');
+    var tbody=document.getElementById('akTbody'),empty=document.getElementById('akEmptyState'),wrap=document.getElementById('akTableWrap');
+    if(!filtered.length){wrap.style.display='none';empty.style.display='block';return;}
+    wrap.style.display='';empty.style.display='none';
+    tbody.innerHTML='';
+    filtered.forEach(function(k){
+      var tr=document.createElement('tr');
+      if(k.status==='revoked')tr.classList.add('revoked-row');
+      var sc=k.status==='active'?'<span class="chip chip-green"><span class="status-dot dot-green" style="margin-right:4px"></span>Active</span>':'<span class="chip chip-red"><span class="status-dot dot-red" style="margin-right:4px"></span>Revoked</span>';
+      var acts='';
+      if(k.status==='active')acts='<button class="btn btn-sm btn-danger" onclick="akOpenRevoke(\''+k.id+'\')">Revoke</button><button class="btn btn-sm btn-secondary" onclick="akDeleteKey(\''+k.id+'\')" style="margin-left:4px">Delete</button>';
+      else acts='<button class="btn btn-sm btn-secondary" onclick="akDeleteKey(\''+k.id+'\')">Delete</button>';
+      tr.innerHTML='<td><strong>'+akEsc(k.name)+'</strong></td><td>'+akEsc(k.identityName)+'</td><td>'+akEsc(k.roleName)+'</td><td>'+sc+'</td><td><span class="key-hint">'+akEsc(k.keyHint)+'</span></td><td class="text-sm">'+akFmtDate(k.createdAt)+'</td><td class="text-sm">'+akFmtDate(k.lastUsedAt)+'</td><td class="actions-cell">'+acts+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function akFmtDate(iso) {
+    if(!iso)return'Never';
+    var d=new Date(iso),n=new Date(),dh=Math.floor((n-d)/(1000*60*60));
+    if(dh<1){var dm=Math.floor((n-d)/(1000*60));return dm<=0?'Just now':dm+'m ago';}
+    if(dh<24)return dh+'h ago';if(dh<48)return'Yesterday';
+    var mn=d.toLocaleString('en-US',{month:'short'}),dy=d.getDate(),yr=d.getFullYear(),hm=d.toLocaleString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+    return yr===n.getFullYear()?mn+' '+dy+' '+hm:mn+' '+dy+', '+yr+' '+hm;
+  }
+  function akEsc(t){if(!t)return'';var div=document.createElement('div');div.textContent=t;return div.innerHTML;}
+
+  // Init API keys on load
+  akInit();
+
 })();
 </script>
 
@@ -7936,6 +8947,520 @@ mcRenderCascade('mcCascadeModalTree');
     <div class="max-dialog-content" id="maxDialogContent"></div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════ API KEY MODALS ═══════════════════════════════ -->
+<!-- Create API Key Dialog -->
+<div class="modal-overlay" id="akCreateDialog" onclick="if(event.target===this)akCloseCreate()">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Create API Key</h3>
+      <button class="modal-close" onclick="akCloseCreate()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Form -->
+      <div id="akCreateStepForm">
+        <div class="form-group">
+          <label>Key Name <span style="color:var(--error)">*</span></label>
+          <input type="text" class="form-control" id="akInputName" placeholder="e.g. Claude Code Production Key" maxlength="128" oninput="akValidateForm()">
+          <div class="form-hint">A human-readable label to identify this API key</div>
+          <div class="form-error" id="akErrName">Key name is required</div>
+        </div>
+
+        <div class="form-group">
+          <label>Agent Identity <span style="color:var(--error)">*</span></label>
+          <select class="form-control" id="akSelectIdentity" onchange="akOnIdentityChange()">
+            <option value="">-- Select an agent identity --</option>
+          </select>
+          <div class="form-hint">The agent identity that will use this key to authenticate</div>
+          <div class="form-error" id="akErrIdentity">Agent identity is required</div>
+        </div>
+
+        <div class="form-group">
+          <label>Agent Role <span style="color:var(--error)">*</span></label>
+          <select class="form-control" id="akSelectRole" onchange="akValidateForm()" disabled style="background:#F5F5F5">
+            <option value="">-- Select a role --</option>
+          </select>
+          <div class="form-hint" id="akRoleHint">First select an agent identity to see available roles</div>
+          <div class="form-error" id="akErrRole">Agent role is required</div>
+        </div>
+
+        <div class="alert alert-info" style="margin-bottom:0">
+          <div>
+            <strong style="display:block;margin-bottom:2px">Key Scoping</strong>
+            <p class="text-sm">The API key inherits the full permission set of the selected role. The external agent will only have access to skills and tools granted by that role.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Key Created Success -->
+      <div id="akCreateStepSuccess" style="display:none">
+        <div class="key-created-success">
+          <div class="success-icon">✓</div>
+          <h4>API Key Created Successfully</h4>
+          <p id="akCreatedKeyLabel">Key has been generated</p>
+        </div>
+
+        <div class="key-reveal-box">
+          <div class="key-warning">
+            <span class="warn-icon">⚠️</span>
+            <span>Save this key now — it will not be shown again. You will not be able to retrieve it after closing this dialog.</span>
+          </div>
+
+          <div class="key-display">
+            <span class="key-text masked" id="akKeyText">phn_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</span>
+            <button class="copy-btn" id="akBtnCopy" onclick="akCopyKey()" title="Copy to clipboard">📋 Copy</button>
+          </div>
+
+          <div class="key-reveal-actions">
+            <button class="reveal-toggle" id="akBtnReveal" onclick="akToggleReveal()">👁️ Reveal Key</button>
+          </div>
+
+          <div class="key-format-hint">
+            Key format: <span class="font-mono" style="color:var(--primary-dark)">phn_sk_</span> + 32 random characters
+          </div>
+        </div>
+
+        <div style="margin-top:16px;font-size:13px;color:var(--text-secondary)">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0">
+            <span>Bound Identity</span>
+            <strong style="color:var(--text-primary)" id="akSummaryIdentity">—</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0">
+            <span>Bound Role</span>
+            <strong style="color:var(--text-primary)" id="akSummaryRole">—</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0">
+            <span>Key Hint</span>
+            <span class="key-hint" id="akSummaryHint">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="akCreateFooterForm">
+      <button class="btn btn-secondary" onclick="akCloseCreate()">Cancel</button>
+      <button class="btn btn-primary" id="akBtnSubmit" onclick="akSubmitCreate()" disabled>Create Key</button>
+    </div>
+    <div class="modal-footer" id="akCreateFooterDone" style="display:none">
+      <button class="btn btn-primary w-full" onclick="akCloseCreate();akRefreshTable()">Done — I have saved this key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Revoke Confirmation Dialog -->
+<div class="modal-overlay" id="akRevokeDialog" onclick="if(event.target===this)closeModal('akRevokeDialog')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>⚠️ Revoke API Key</h3>
+      <button class="modal-close" onclick="closeModal('akRevokeDialog')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning">
+        <div>
+          <p class="text-sm" style="font-size:14px;margin-bottom:8px">
+            Are you sure you want to revoke key <strong id="akRevokeKeyName">'Unnamed Key'</strong>?
+          </p>
+          <p class="text-sm" style="color:#92400E">
+            Any agent using this key will <strong>immediately lose access</strong>. This action cannot be undone. The key will remain visible in the list with "Revoked" status.
+          </p>
+        </div>
+      </div>
+      <p class="text-sm text-secondary mt-3">
+        Consider creating a replacement key before revoking if the agent still needs access.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('akRevokeDialog')">Cancel</button>
+      <button class="btn btn-danger" id="akBtnConfirmRevoke" onclick="akConfirmRevoke()">Revoke Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ OIDC TEST MODALS (refine-oidc-integration) ═══════════════════════════════ -->
+
+<!-- Test OIDC Configuration Modal -->
+<div id="oidc-modal-test-config" class="modal-overlay" onclick="closeModalIfOverlay(event,'oidc-modal-test-config')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="oidc-test-config-title">🔍 Test OIDC Configuration</h3>
+      <button class="modal-close" onclick="closeModal('oidc-modal-test-config')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="oidc-test-config-pre">
+        <p class="text-secondary" style="margin-bottom:16px">Testing connectivity for: <strong id="oidc-test-config-target">User Identity Provider</strong></p>
+        <div class="divider"></div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin-top:12px;font-size:13px">
+          <span style="color:var(--text-secondary)">Issuer URL:</span><span class="font-mono" id="oidc-test-issuer">—</span>
+          <span style="color:var(--text-secondary)">Client ID:</span><span class="font-mono" id="oidc-test-client-id">—</span>
+        </div>
+        <button class="btn btn-primary" onclick="oidcRunTestConfig()" id="oidc-btn-run-test" style="margin-top:16px">▶ Run Test</button>
+      </div>
+      <div id="oidc-test-config-running" style="display:none;text-align:center;padding:20px 0">
+        <div class="spinner" style="width:48px;height:48px;border-width:4px"></div>
+        <h4 style="margin-bottom:8px;font-weight:600">Testing Configuration...</h4>
+        <p class="text-secondary">Validating OIDC provider connectivity</p>
+        <div style="text-align:left;margin-top:24px;max-width:400px;margin:24px auto 0">
+          <div class="test-step active" id="oidc-step-1"><span class="step-icon"><span class="mini-spinner"></span></span><span>Fetching OIDC Discovery document...</span></div>
+          <div class="test-step" id="oidc-step-2"><span class="step-icon">○</span><span>Validating issuer match...</span></div>
+          <div class="test-step" id="oidc-step-3"><span class="step-icon">○</span><span>Verifying JWKS endpoint...</span></div>
+          <div class="test-step" id="oidc-step-4"><span class="step-icon">○</span><span>Validating client credentials...</span></div>
+        </div>
+      </div>
+      <div id="oidc-test-config-result" style="display:none"><div id="oidc-test-config-result-content"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('oidc-modal-test-config')">Close</button>
+      <button class="btn btn-primary" id="oidc-btn-retry-test" onclick="oidcRunTestConfig()" style="display:none">🔄 Retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test OIDC Login Modal -->
+<div id="oidc-modal-test-login" class="modal-overlay" onclick="closeModalIfOverlay(event,'oidc-modal-test-login')">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="oidc-test-login-title">🔑 Test OIDC Login</h3>
+      <button class="modal-close" onclick="closeModal('oidc-modal-test-login')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="oidc-test-login-pre">
+        <div class="alert alert-warning"><div><strong style="display:block;margin-bottom:4px">Full Authorization Code Flow</strong><p class="text-sm">Initiates a real OIDC authorization code flow with the configured provider. Validates the full authentication flow and claims response.</p></div></div>
+        <p class="text-secondary">Testing login for: <strong id="oidc-test-login-target">User Identity Provider</strong></p>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin-top:12px;font-size:13px">
+          <span style="color:var(--text-secondary)">Auth Endpoint:</span><span class="font-mono">https://auth.example.com/.../auth</span>
+          <span style="color:var(--text-secondary)">Redirect URI:</span><span class="font-mono">http://localhost:3000/callback</span>
+        </div>
+        <button class="btn btn-primary" onclick="oidcRunTestLogin()" id="oidc-btn-run-login" style="margin-top:16px">▶ Initiate Test Login</button>
+      </div>
+      <div id="oidc-test-login-running" style="display:none;text-align:center;padding:20px 0">
+        <div class="spinner" style="width:48px;height:48px;border-width:4px"></div>
+        <h4 style="margin-bottom:8px;font-weight:600">Performing OIDC Login...</h4>
+        <p class="text-secondary">Redirecting to provider, completing callback, validating tokens</p>
+        <div style="text-align:left;margin-top:24px;max-width:400px;margin:24px auto 0">
+          <div class="test-step active" id="oidc-login-step-1"><span class="step-icon"><span class="mini-spinner"></span></span><span>Initiating authorization code flow...</span></div>
+          <div class="test-step" id="oidc-login-step-2"><span class="step-icon">○</span><span>Completing callback and exchanging code...</span></div>
+          <div class="test-step" id="oidc-login-step-3"><span class="step-icon">○</span><span>Validating ID token and access token...</span></div>
+          <div class="test-step" id="oidc-login-step-4"><span class="step-icon">○</span><span>Resolving user identity from claims...</span></div>
+        </div>
+      </div>
+      <div id="oidc-test-login-result" style="display:none"><div id="oidc-test-login-result-content"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('oidc-modal-test-login')">Close</button>
+      <button class="btn btn-primary" id="oidc-btn-retry-login" onclick="oidcRunTestLogin()" style="display:none">🔄 Retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ DASHBOARD METRICS DEMO CONTROLS ═══════════════════════════════ -->
+<div class="demo-panel-d" id="dash-demo-panel">
+  <div class="demo-panel-title-d">Dashboard Demo Controls</div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">All Cards Loading</span>
+    <label class="toggle"><input type="checkbox" id="dash-toggle-loading" onchange="dashToggleLoading(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="demo-divider-d"></div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">Show Error Banner</span>
+    <label class="toggle"><input type="checkbox" id="dash-toggle-error" onchange="dashToggleError(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="demo-divider-d"></div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">Permission Simulation</span>
+  </div>
+  <div class="demo-role-preset-d" style="margin-bottom:6px">
+    <button class="demo-btn-d active" onclick="dashPermPreset('full')">Full Access</button>
+    <button class="demo-btn-d" onclick="dashPermPreset('operator')">Operator</button>
+    <button class="demo-btn-d" onclick="dashPermPreset('limited')">Limited</button>
+    <button class="demo-btn-d" onclick="dashPermPreset('none')">No Access</button>
+  </div>
+  <div class="demo-divider-d"></div>
+  <div class="demo-row-d">
+    <span class="demo-label-d">Zero Counts</span>
+    <label class="toggle"><input type="checkbox" id="dash-toggle-zero" onchange="dashToggleZero(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+</div>
+
+<!-- Dashboard Toast -->
+<div class="dash-toast-container" id="dash-toast-container"></div>
+
+<script>
+// ═══════════════════════════════ DASHBOARD METRICS SCRIPT ═══════════════════════════════
+(function() {
+  'use strict';
+  window.DASH = {
+    startTime: null,
+    endTime: null,
+    isLoading: false,
+    zeroMode: false,
+    permissionSet: {
+      agent_types:true, interventions:true, model_configs:true, schedules:true,
+      identities:true, roles:true, mcp_servers:true, guardrail_breaches:true,
+      executions:true, posture_breaches:true, permission_requests:true, notifications:true
+    }
+  };
+
+  var SNAPSHOT_DATA = {
+    'dash-card-agent-types':          {value:'12',type:'breakdowns',sub:'<span class="sub-breakdown-d" style="background:#DCFCE7;color:#15803D">8 active</span> <span class="sub-breakdown-d" style="background:#DBEAFE;color:#1D4ED8">3 running</span>'},
+    'dash-card-pending-interventions':{value:'5',type:'label',sub:'Pending'},
+    'dash-card-model-configs':        {value:'12',type:'label',sub:'7 Vendors'},
+    'dash-card-active-schedules':     {value:'14',type:'label',sub:'Active'},
+    'dash-card-agent-identities':     {value:'23',type:'label',sub:'Provisioned'},
+    'dash-card-agent-roles':          {value:'6',type:'label',sub:'Defined'},
+    'dash-card-mcp-servers':          {value:'9',type:'label',sub:'Registered'},
+    'dash-card-permission-requests':  {value:'3',type:'label',sub:'Pending'}
+  };
+
+  var TIME_DATA = {
+    hour:  {guardrail:'0',execCompleted:'8',execFailed:'1',posture:'0',notifDelivered:'22',notifFailed:'0'},
+    day:   {guardrail:'3',execCompleted:'42',execFailed:'3',posture:'1',notifDelivered:'128',notifFailed:'2'},
+    week:  {guardrail:'18',execCompleted:'312',execFailed:'21',posture:'6',notifDelivered:'872',notifFailed:'11'},
+    custom:{guardrail:'0',execCompleted:'0',execFailed:'0',posture:'0',notifDelivered:'0',notifFailed:'0'}
+  };
+
+  function getPresetKey() {
+    if (!DASH.startTime || !DASH.endTime) return 'day';
+    var durH = (DASH.endTime - DASH.startTime) / 3600000;
+    if (durH <= 1.05 && durH >= .95) return 'hour';
+    if (durH <= 24.5 && durH >= 23.5) return 'day';
+    if (durH <= 170 && durH >= 165) return 'week';
+    return 'custom';
+  }
+
+  function toDTLocal(d) {
+    var p = function(n){return String(n).padStart(2,'0')};
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+  }
+
+  function fmtRange(s,e) {
+    var o = {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'};
+    return s.toLocaleDateString('en-US',o).replace(',','') + ' \u2014 ' + e.toLocaleDateString('en-US',o).replace(',','');
+  }
+
+  function toast(msg,type) {
+    var c = document.getElementById('dash-toast-container');
+    var t = document.createElement('div');
+    t.className = 'dash-toast dash-toast-' + (type||'info');
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function(){t.style.opacity='0';t.style.transform='translateY(-12px)';t.style.transition='all .3s ease';setTimeout(function(){t.remove()},300)},2500);
+  }
+
+  // INIT
+  function dashInit() {
+    var now = new Date();
+    var ago = new Date(now.getTime() - 86400000);
+    DASH.startTime = ago; DASH.endTime = now;
+    var ds = document.getElementById('dash-draft-start');
+    var de = document.getElementById('dash-draft-end');
+    if (ds) ds.value = toDTLocal(ago);
+    if (de) de.value = toDTLocal(now);
+    var rl = document.getElementById('dash-range-label');
+    if (rl) rl.textContent = fmtRange(ago, now);
+    dashUpdatePresetBtns('day');
+  }
+
+  // Draft change => show Go button
+  window.dashOnDraftChange = function() {
+    var ds = document.getElementById('dash-draft-start');
+    var de = document.getElementById('dash-draft-end');
+    if (!ds || !de || !ds.value || !de.value) return;
+    var s = new Date(ds.value), e = new Date(de.value);
+    if (isNaN(s) || isNaN(e)) return;
+    var chg = DASH.startTime && DASH.endTime && (s.getTime() !== DASH.startTime.getTime() || e.getTime() !== DASH.endTime.getTime());
+    document.getElementById('dash-go-btn').classList.toggle('visible', chg);
+    if (chg) dashUpdatePresetBtns(null);
+  };
+
+  // Go button
+  window.dashHandleGo = function() {
+    var ds = document.getElementById('dash-draft-start');
+    var de = document.getElementById('dash-draft-end');
+    if (!ds || !de || !ds.value || !de.value) return;
+    var s = new Date(ds.value), e = new Date(de.value);
+    if (isNaN(s) || isNaN(e)) return;
+    DASH.startTime = s; DASH.endTime = e;
+    document.getElementById('dash-go-btn').classList.remove('visible');
+    document.getElementById('dash-range-label').textContent = fmtRange(s, e);
+    dashUpdatePresetBtns(null);
+    dashUpdateTimeCards();
+  };
+
+  // Presets
+  window.dashPreset = function(key) {
+    var now = new Date(), start;
+    switch(key) {
+      case 'hour': start = new Date(now.getTime() - 3600000); break;
+      case 'day':  start = new Date(now.getTime() - 86400000); break;
+      case 'week': start = new Date(now.getTime() - 604800000); break;
+      default: return;
+    }
+    DASH.startTime = start; DASH.endTime = now;
+    document.getElementById('dash-draft-start').value = toDTLocal(start);
+    document.getElementById('dash-draft-end').value = toDTLocal(now);
+    document.getElementById('dash-go-btn').classList.remove('visible');
+    document.getElementById('dash-range-label').textContent = fmtRange(start, now);
+    dashUpdatePresetBtns(key);
+    dashUpdateTimeCards();
+    toast('Range set: ' + fmtRange(start, now), 'info');
+  };
+
+  function dashUpdatePresetBtns(active) {
+    ['hour','day','week'].forEach(function(k){
+      var b = document.getElementById('dash-preset-'+k);
+      if (b) b.classList.toggle('active', k===active);
+    });
+  }
+
+  // Refresh button
+  window.dashRefresh = function() {
+    toast('Data refreshed', 'success');
+  };
+
+  // Click handler for cards
+  window.dashClick = function(name, path) {
+    if (path) toast('Navigate to: ' + path + ' (prototype only)', 'info');
+  };
+
+  // Error banner
+  window.dashToggleError = function(v) {
+    document.getElementById('dash-error').style.display = v ? 'flex' : 'none';
+  };
+  window.dashRetry = function() {
+    document.getElementById('dash-error').style.display = 'none';
+    toast('Retrying...', 'info');
+  };
+
+  // Loading
+  window.dashToggleLoading = function(v) {
+    DASH.isLoading = v;
+    document.querySelectorAll('.dash-card').forEach(function(c){
+      if (v) c.classList.add('loading');
+      else { c.classList.remove('loading'); dashApplyPermToCard(c); }
+    });
+  };
+
+  // Time-sensitive card update
+  function dashUpdateTimeCards() {
+    if (!DASH.startTime || !DASH.endTime) return;
+    var pk = getPresetKey();
+    var d = TIME_DATA[pk] || TIME_DATA.custom;
+    var z = DASH.zeroMode;
+
+    // Guardrail Breaches
+    var gv = z ? 0 : parseInt(d.guardrail);
+    var gc = document.getElementById('dash-card-guardrail-breaches');
+    if (gc) {
+      var gve = gc.querySelector('.dash-card-value');
+      if (gve) gve.textContent = String(gv);
+      gc.classList.toggle('dash-card-zero', gv===0 && !DASH.isLoading && !dashIsDenied('guardrail_breaches'));
+    }
+
+    // Agent Executions
+    var ec=z?0:parseInt(d.execCompleted), ef=z?0:parseInt(d.execFailed);
+    var ac = document.getElementById('dash-card-agent-executions');
+    if (ac) {
+      var cEl = ac.querySelector('.val-completed'); if(cEl) cEl.textContent = String(ec);
+      var fEl = ac.querySelector('.val-failed'); if(fEl) fEl.textContent = String(ef);
+      ac.classList.toggle('dash-card-zero', (ec===0&&ef===0) && !DASH.isLoading && !dashIsDenied('executions'));
+    }
+
+    // Posture Breaches
+    var pv = z?0:parseInt(d.posture);
+    var pc = document.getElementById('dash-card-posture-breaches');
+    if (pc) {
+      var pve = pc.querySelector('.dash-card-value');
+      if(pve) pve.textContent = String(pv);
+      pc.classList.toggle('dash-card-zero', pv===0 && !DASH.isLoading && !dashIsDenied('posture_breaches'));
+    }
+
+    // Notification Delivery
+    var nd=z?0:parseInt(d.notifDelivered), nf=z?0:parseInt(d.notifFailed);
+    var nc = document.getElementById('dash-card-notifications');
+    if (nc) {
+      var ndEl=nc.querySelector('.val-completed'); if(ndEl) ndEl.textContent = String(nd);
+      var nfEl=nc.querySelector('.val-failed'); if(nfEl) nfEl.textContent = String(nf);
+      nc.classList.toggle('dash-card-zero', (nd===0&&nf===0) && !DASH.isLoading && !dashIsDenied('notifications'));
+    }
+
+    dashApplyAllPerms();
+    if (DASH.isLoading) {
+      document.querySelectorAll('.dash-card').forEach(function(c){c.classList.add('loading')});
+    }
+  }
+
+  function setDashVal(cardId, val) {
+    var c = document.getElementById(cardId);
+    if (!c) return;
+    var v = c.querySelector('.dash-card-value');
+    if (v) v.textContent = val;
+  }
+
+  // Permission states
+  function dashIsDenied(key) { return DASH.permissionSet.hasOwnProperty(key) && !DASH.permissionSet[key]; }
+
+  window.dashPermPreset = function(name) {
+    document.querySelectorAll('.demo-role-preset-d .demo-btn-d').forEach(function(b){b.classList.remove('active')});
+    event.target.classList.add('active');
+    var sets = {
+      full:{agent_types:1,interventions:1,model_configs:1,schedules:1,identities:1,roles:1,mcp_servers:1,guardrail_breaches:1,executions:1,posture_breaches:1,permission_requests:1,notifications:1},
+      operator:{agent_types:1,interventions:1,model_configs:0,schedules:1,identities:0,roles:0,mcp_servers:0,guardrail_breaches:1,executions:1,posture_breaches:0,permission_requests:0,notifications:0},
+      limited:{agent_types:1,interventions:0,model_configs:1,schedules:0,identities:0,roles:0,mcp_servers:0,guardrail_breaches:0,executions:1,posture_breaches:0,permission_requests:0,notifications:0},
+      none:{agent_types:0,interventions:0,model_configs:0,schedules:0,identities:0,roles:0,mcp_servers:0,guardrail_breaches:0,executions:0,posture_breaches:0,permission_requests:0,notifications:0}
+    };
+    var s = sets[name];
+    Object.keys(s).forEach(function(k){DASH.permissionSet[k] = !!s[k]});
+    dashApplyAllPerms();
+    toast('Permission preset: ' + name, 'info');
+  };
+
+  function dashApplyPermToCard(card) {
+    var k = card.getAttribute('data-dash-perm');
+    if (k && dashIsDenied(k)) {
+      card.classList.add('permission-denied');
+      card.classList.remove('loading');
+      card.classList.remove('dash-card-zero');
+    } else {
+      card.classList.remove('permission-denied');
+    }
+  }
+
+  function dashApplyAllPerms() {
+    document.querySelectorAll('.dash-card[data-dash-perm]').forEach(dashApplyPermToCard);
+  }
+
+  // Zero counts
+  window.dashToggleZero = function(v) {
+    DASH.zeroMode = v;
+    if (v) {
+      Object.keys(SNAPSHOT_DATA).forEach(function(id){
+        setDashVal(id, '0');
+        var c = document.getElementById(id);
+        if (c) {
+          var sEl = c.querySelector('.dash-card-sub');
+          if (sEl) sEl.innerHTML = '<span class="sub-label-d">' + (SNAPSHOT_DATA[id].type==='label'?'none':'0 active / 0 running') + '</span>';
+          if (!dashIsDenied(c.getAttribute('data-dash-perm')) && !DASH.isLoading) c.classList.add('dash-card-zero');
+        }
+      });
+    } else {
+      Object.keys(SNAPSHOT_DATA).forEach(function(id){
+        var d = SNAPSHOT_DATA[id];
+        setDashVal(id, d.value);
+        var c = document.getElementById(id);
+        if (c) {
+          var sEl = c.querySelector('.dash-card-sub');
+          if (sEl) sEl.innerHTML = d.type==='label' ? '<span class="sub-label-d">'+d.sub+'</span>' : d.sub;
+          if (!dashIsDenied(c.getAttribute('data-dash-perm')) && !DASH.isLoading) c.classList.remove('dash-card-zero');
+        }
+      });
+    }
+    dashUpdateTimeCards();
+  };
+
+  // Boot
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dashInit);
+  else dashInit();
+})();
+</script>
 
 </body>
 </html>

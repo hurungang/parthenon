@@ -63,7 +63,7 @@ sequenceDiagram
 
 ## System Tools — Suspend-on-Call Pattern
 
-Most system tools (e.g., `system____save_result`, `system____send_notification`) execute synchronously and return a result to the agent's loop. The `system____human_intervene` tool follows a different pattern:
+Most system tools execute synchronously and return a result to the agent's loop. The `human_intervene` tool follows a different pattern:
 
 1. **Suspend-on-call** — When the agent calls `human_intervene`, execution suspends immediately. No result is returned at call time.
 2. **Out-of-band response** — An operator responds through the Web UI. The response is persisted to the `InterveneResponse` table.

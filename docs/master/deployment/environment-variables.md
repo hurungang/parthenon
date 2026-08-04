@@ -43,7 +43,7 @@ Update this file whenever a new service is added or a variable is changed or rem
 
 ## Agent Runtime
 
-Variables that control the Agent Runtime subsystem. Session-level variables (`AGENT_RUNTIME_MAX_CONCURRENT_SESSIONS`, `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS`, `AGENT_RUNTIME_OIDC_TOKEN_ENDPOINT`) apply to the `platform-api` container. Certificate identity variables (`AGENT_CERT_PATH`, `AGENT_KEY_PATH`, `CA_CERT_PATH`, `CONTROL_CENTER_URL`) apply to each isolated agent runtime instance (`agent-session-worker` or a dedicated agent container).
+Variables that control the Agent Runtime subsystem. Session-level variables (`AGENT_RUNTIME_MAX_CONCURRENT_SESSIONS`, `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS`, `AGENT_RUNTIME_OIDC_TOKEN_ENDPOINT`) apply to the `control-center` container. Certificate identity variables (`AGENT_CERT_PATH`, `AGENT_KEY_PATH`, `CA_CERT_PATH`, `CONTROL_CENTER_URL`) apply to each isolated agent runtime instance (`agent-session-worker` or a dedicated agent container).
 
 | Variable | Description | Secret |
 |----------|-------------|--------|
@@ -53,13 +53,13 @@ Variables that control the Agent Runtime subsystem. Session-level variables (`AG
 | `AGENT_CERT_PATH` | Filesystem path to the agent instance certificate PEM file issued by the Control Center CA. Required for certificate-based tool authentication. When absent, the agent runtime falls back to OIDC-only authentication. | |
 | `AGENT_KEY_PATH` | Filesystem path to the agent instance private key PEM file corresponding to `AGENT_CERT_PATH`. Must be readable only by the agent runtime process (`chmod 600`). | ✓ |
 | `CA_CERT_PATH` | Filesystem path to the CA public certificate PEM file used to verify the Control Center's identity and mutual TLS trust. Download from `GET /api/v1/certificates/ca`. | |
-| `CONTROL_CENTER_URL` | Base URL of the Control Center (Platform API), e.g. `http://platform-api:8000`. Used by the Agent Runtime to reach internal certificate and token endpoints. | |
+| `CONTROL_CENTER_URL` | Base URL of the Control Center (Platform API), e.g. `http://control-center:8000`. Used by the Agent Runtime to reach internal certificate and token endpoints. | |
 
 ---
 
 ## Agent Session Queue
 
-Variables that govern the Redis session dispatch queue shared between the `platform-api` and the `agent-session-worker` background process. Set identically on both containers.
+Variables that govern the Redis session dispatch queue shared between the `control-center` and the `agent-session-worker` background process. Set identically on both containers.
 
 | Variable | Description | Secret |
 |----------|-------------|--------|
@@ -73,7 +73,7 @@ Variables that govern the Redis session dispatch queue shared between the `platf
 
 ## Agent Permission Manager
 
-Variables for the Permission Manager's Redis permission cache. Apply to the `platform-api` container.
+Variables for the Permission Manager's Redis permission cache. Apply to the `control-center` container.
 
 | Variable | Description | Secret |
 |----------|-------------|--------|
@@ -84,13 +84,25 @@ Variables for the Permission Manager's Redis permission cache. Apply to the `pla
 
 ## Communication Hub
 
-Variables for the `communication-hub` container, including the Agent Gateway lifecycle protocol extension.
+Variables for the `communication-hub` container, including the Agent Gateway lifecycle protocol extension. The Communication Hub supports dual authentication paths: mTLS certificates (internal Agent Runtime agents) and API keys (external third-party agents). The `load_skills` system tool is hosted for external agent skill discovery with incremental sync support via the `since` parameter.
 
 | Variable | Description | Secret |
 |----------|-------------|--------|
 | `AGENT_GATEWAY_BASE_URL` | Public base URL at which the Agent Gateway lifecycle endpoints are reachable; used when constructing callback URIs returned to callers | |
 | `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | Timeout for inbound agent execution requests before the gateway returns a timeout error; should be greater than `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS` | |
-| `CONTROL_CENTER_URL` | Base URL of the Control Center (Platform API), e.g. `http://platform-api:8000`. Used by the Communication Hub to call internal certificate validation endpoints when forwarding tool-call requests from agent instances. | |
+| `CONTROL_CENTER_URL` | Base URL of the Control Center (Platform API), e.g. `http://control-center:8000`. Used by the Communication Hub to call internal certificate validation endpoints when forwarding tool-call requests from agent instances, and to call `POST /internal/auth/validate-api-key` for API key validation. | |
+| `CH_API_KEY_AUTH_ENABLED` | Feature flag to enable or disable API key authentication on the Communication Hub. When `false`, only mTLS certificate authentication is accepted. Default `false`. Set to `true` only after verifying the API key creation flow works end-to-end. | |
+
+---
+
+## API Key Authentication
+
+Variables for API key-based external agent access to the Communication Hub via MCP. API key hashing uses `API_KEY_HASH_SECRET` as an application-level pepper to prevent precomputed hash attacks. API keys are validated by the Communication Hub calling Control Center's internal `POST /internal/auth/validate-api-key` endpoint over existing mTLS.
+
+| Variable | Service | Description | Secret | Default |
+|----------|---------|-------------|--------|---------|
+| `API_KEY_HASH_SECRET` | CC | Application-level pepper/secret mixed into the API key hash. Must be a high-entropy random string (min 32 chars). Changing this value invalidates all previously issued API keys. | ✓ | — |
+| `API_KEY_PREFIX` | CC | Configurable prefix string prepended to generated API keys for visual identification. Prefix is stored in `agent_api_keys.key_prefix` and shown in clear-text at creation time. | | `phn_sk_` |
 
 ---
 
@@ -137,31 +149,71 @@ Rollout requirement notes:
 
 ---
 
-## OIDC / Identity
+## Super Admin Bootstrap
+
+Super admin credentials provide a local authentication path that bypasses OIDC. Use this path during initial platform bootstrap, database migrations, and emergency recovery when OIDC providers are unreachable. In production, disable after OIDC is verified working.
+
+| Variable | Description | Secret | Default |
+|----------|-------------|--------|---------|
+| `SUPER_ADMIN_ENABLED` | Enables super admin login path. Must be `true` for the super admin auth pipeline to be active. Start `true` during bootstrap, set `false` after OIDC is verified. | | `false` |
+| `SUPER_ADMIN_USERNAME` | Super admin username. Bootstrapped into the `super_admin_credentials` table on first launch. Immutable after initial seeding — changing the env var after bootstrap requires a direct DB update. | | `admin` |
+| `SUPER_ADMIN_PASSWORD_HASH` | Argon2id or bcrypt hash of the super admin password. Bootstrapped into `super_admin_credentials` on first launch. Never set a plaintext password — always supply a pre-computed hash. Generate with: `python -m app.cli hash-password`. | ✓ | _(none — required for super admin)_ |
+
+---
+
+## OIDC / Identity (Deprecated)
+
+> **All OIDC configuration is now stored in the database (`IdentityProviderConfig` table).** The environment variables below are **only read during the one-time `config/identity.yaml` → DB migration** and are ignored at runtime after the migration completes. Set them only when migrating from a pre-refinement deployment that used `config/identity.yaml`. New deployments configure OIDC providers via the System Config UI after super admin login.
+
+| Variable | Description | Replacement |
+|----------|-------------|-------------|
+| `IDENTITY_PROVIDER_TYPE` | Deprecated. Previously selected the active identity provider mode. | DB-stored `provider_type` in `IdentityProviderConfig`. Only read during the one-time migration. |
+| `OIDC_PROVIDER_URL` | Deprecated. Previously the base URL of the OIDC provider. | DB-stored `issuer_url` in `IdentityProviderConfig`. Only read during the one-time migration. |
+| `OIDC_ISSUER_URL` | Deprecated. Previously the issuer URL for JWT `iss` validation. | DB-stored `issuer_url`. Only read during the one-time migration. |
+| `OIDC_JWKS_URI` | Deprecated. Previously the JWKS endpoint URL. | Discovered automatically via `.well-known/openid-configuration` at the configured `issuer_url`. |
+| `OIDC_CLIENT_ID` | Deprecated. Previously the OAuth2 client ID. | DB-stored `client_id` in `IdentityProviderConfig`. Only read during the one-time migration. |
+| `OIDC_CLIENT_SECRET` | Deprecated. Previously the OAuth2 client secret. | DB-stored `encrypted_client_secret` in `IdentityProviderConfig`. Only read during the one-time migration. |
+| `OIDC_REALM` | Deprecated. Previously the Keycloak realm name. | Absorbed into `issuer_url` path. Only read during the one-time migration. |
+| `OIDC_AUDIENCE` | Deprecated. Previously the expected `aud` claim. | Absorbed into `scopes` / `claim_mappings` JSON configuration. Only read during the one-time migration. |
+| `OIDC_AGENT_CLIENT_PREFIX` | Deprecated (Keycloak-specific). Previously the agent client ID prefix. | No direct replacement. Agent identity provider is configured as a separate DB entry. |
+| `SERVICE_BOOTSTRAP_SOURCE_LOG` | Auto-enabled at INFO level on every service (CC, AR, CH) startup — logs which configuration source was resolved for every infrastructure connection. No action required; always active. | — |
+| `KEYCLOAK_ADMIN` | Username for the bundled Keycloak admin account. Still required when running the bundled Keycloak container for dev/demo. Set on the Keycloak service — **not on the Control Center runtime service.** | — |
+| `KEYCLOAK_ADMIN_PASSWORD` | Password for the bundled Keycloak admin account. Still required when running the bundled Keycloak container for dev/demo. Set on the Keycloak service — **not on the Control Center runtime service.** | ✓ |
+
+### Configuration Precedence (Post-Refinement)
+
+After the OIDC refinement change, the resolution order for identity provider settings is:
+
+1. **Database** (`IdentityProviderConfig` rows) — source of truth at runtime
+2. **Environment variables** — only read during the one-time migration; ignored at runtime after migration completes
+3. **`config/identity.yaml`** — only read during the one-time migration; **not read at runtime after migration completes**
+
+A missing `config/identity.yaml` after the migration has run is expected and does not cause an error. For new deployments that have never used the YAML file, OIDC providers are configured entirely via the System Config UI.
+
+---
+
+## Setup Tool
+
+These variables are consumed exclusively by the consolidated setup CLI (`setup/` directory). **Do not set any of these on runtime service containers.** The setup tool is invoked explicitly by an operator — it is never triggered by application startup.
 
 | Variable | Description | Secret |
 |----------|-------------|--------|
-| `IDENTITY_PROVIDER_TYPE` | Selects the active identity provider mode. Accepted values: `keycloak_bundled`, `keycloak_external`, `azure_entraid`. When not set, the setup wizard or CLI prompts on first run. | |
-| `OIDC_PROVIDER_URL` | Base URL of the OIDC provider (e.g., the Keycloak realm URL). Also readable from `config/identity.yaml`; defaults to `http://keycloak:8080/realms/parthenon` when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. | |
-| `OIDC_ISSUER_URL` | Issuer URL of the configured identity provider used for strict JWT `iss` claim validation (Keycloak realm URL or Azure EntraID tenant URL). Must exactly match the `iss` claim in issued tokens, including any trailing slash. | |
-| `OIDC_JWKS_URI` | JWKS endpoint URL for JWT signature verification; must be reachable from the Platform API container. | |
-| `OIDC_CLIENT_ID` | OAuth2 client ID for the Platform API as registered in the identity provider. For bundled Keycloak, resolved and written to `config/identity.yaml` automatically by the setup wizard or CLI. | |
-| `OIDC_CLIENT_SECRET` | OAuth2 client secret for the Platform API. For bundled Keycloak, resolved and stored encrypted in the database by the setup wizard or CLI — do not set manually when using the wizard. | ✓ |
-| `OIDC_REALM` | Keycloak realm name. Relevant for `keycloak_bundled` and `keycloak_external` provider types only. Resolved and written to `config/identity.yaml` by the setup wizard or CLI. | |
-| `OIDC_AUDIENCE` | Expected `aud` claim value for token validation; must match the client configuration in the identity provider. Supersedes the legacy `JWT_AUDIENCE` variable name — `JWT_AUDIENCE` continues to work as a fallback. | |
-| `OIDC_AGENT_CLIENT_PREFIX` | Prefix string applied when generating OIDC client IDs for agent types (e.g., `agent-`). | |
-| `KEYCLOAK_ADMIN` | Username for the bundled Keycloak admin account. Only required when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. Must be set before the Keycloak container first starts. | |
-| `KEYCLOAK_ADMIN_PASSWORD` | Password for the bundled Keycloak admin account. Only required when `IDENTITY_PROVIDER_TYPE=keycloak_bundled`. Must be set before the Keycloak container first starts. | ✓ |
+| `KEYCLOAK_ADMIN` | Username for the Keycloak admin account (bundled Keycloak only). Must match the value configured on the Keycloak container. | |
+| `KEYCLOAK_ADMIN_PASSWORD` | Password for the Keycloak admin account (bundled Keycloak only). Must match the value configured on the Keycloak container. | ✓ |
+| `KEYCLOAK_URL` | Keycloak admin API base URL; used by the setup tool to reach the Keycloak Admin REST API (e.g., `http://keycloak:8080`). | |
+| `SETUP_DEV_MODE` | Set to `true` to enable dev-mode data seeding. Skips realm bootstrap if the realm already exists. | |
 
-### Configuration Precedence
+### Setup Sub-Commands
 
-The Platform API resolves OIDC settings in the following priority order (highest to lowest):
+| Command | Responsibility |
+|---------|---------------|
+| `setup identity` | Keycloak realm, client, role, and admin user provisioning |
+| `setup database` | Database readiness verification, seeding of roles, permissions, and skills |
+| `setup certificates` | Certificate authority bootstrapping for mTLS |
+| `setup dev` | Full dev bootstrap: identity + database + certificates + test data |
+| `setup verify` | Read-only check of current state without making changes |
 
-1. Environment variable
-2. Value in `config/identity.yaml` (written automatically by the setup wizard or CLI)
-3. Hard-coded default
-
-A missing `config/identity.yaml` is treated as an empty configuration and does not cause an error. Teams that manage all configuration through environment variables can omit the YAML file entirely.
+> **Important:** The Control Center no longer auto-provisions Keycloak realms, clients, or roles at startup. Run the setup command BEFORE deploying backend services. All setup operations are idempotent — safe to run on an already-initialized environment.
 
 ---
 

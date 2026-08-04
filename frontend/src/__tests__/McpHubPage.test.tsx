@@ -138,8 +138,8 @@ describe('McpHubPage', () => {
   it('renders the servers from mock data', async () => {
     const { McpHubPage } = await import('../pages/mcp/McpHubPage')
     render(<McpHubPage />, { wrapper })
-    expect(screen.getAllByText('Server One')[0]).toBeDefined()
-    expect(screen.getAllByText('Server Two')[0]).toBeDefined()
+    expect(screen.getAllByText('server-one')[0]).toBeDefined()
+    expect(screen.getAllByText('server-two')[0]).toBeDefined()
   })
 
   it('renders server slugs', async () => {
@@ -212,8 +212,8 @@ describe('McpHubPage — System Entry', () => {
     const builtInChips = screen.queryAllByText('mcp.system.builtIn')
     expect(builtInChips.length).toBeGreaterThanOrEqual(1)
 
-    // System entry is the first row in the table
-    expect(screen.getByText('System')).toBeDefined()
+    // System entry is the first row in the table — slug shown as "system"
+    expect(screen.getByText('system')).toBeDefined()
   })
 
   it('System entry shows disabled actions and system-managed text', async () => {

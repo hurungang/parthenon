@@ -59,11 +59,11 @@ Check the backend startup log for the structured entry `permission_engine_mode=<
 
 **Docker Compose (self-hosted)**
 
-Update the `PERMISSION_ENGINE_MODE` value in the `.env` file (or the relevant Docker secrets file), then restart the `platform-api` container. The mode is read at startup; a restart is required.
+Update the `PERMISSION_ENGINE_MODE` value in the `.env` file (or the relevant Docker secrets file), then restart the `control-center` container. The mode is read at startup; a restart is required.
 
 **Kubernetes / Helm**
 
-Update the `PERMISSION_ENGINE_MODE` key in the relevant Kubernetes ConfigMap or Secret, then trigger a rolling restart of the `platform-api` Deployment. If the environment's Helm values support it, set the value via `helm upgrade --set` to avoid touching the base values file.
+Update the `PERMISSION_ENGINE_MODE` key in the relevant Kubernetes ConfigMap or Secret, then trigger a rolling restart of the `control-center` Deployment. If the environment's Helm values support it, set the value via `helm upgrade --set` to avoid touching the base values file.
 
 ### Post-switch verification
 
@@ -112,7 +112,7 @@ Capture the following baseline metrics **before** deploying any change that expa
 ### Post-deployment monitoring thresholds
 
 After deploying a Permission Engine change:
-- If the median response time increases by more than 20%, scale the `platform-api` replicas before switching to enforce mode
+- If the median response time increases by more than 20%, scale the `control-center` replicas before switching to enforce mode
 - If database connection pool utilisation exceeds 80%, review whether the user cache TTL should be extended or whether the group claim mapping query can be cached
 - Monitor for at least 15 minutes of representative traffic before considering the deployment stable
 
@@ -275,7 +275,7 @@ Reprovision the identity provider with the `force_reconfigure` flag set to `true
 
 **Via the CLI (headless):**
 
-Run inside the `platform-api` container:
+Run inside the `control-center` container:
 ```bash
 python -m app.cli provision-identity --force-reconfigure
 ```
