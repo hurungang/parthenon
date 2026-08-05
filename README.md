@@ -99,6 +99,10 @@ Parthenon/
 └── docs/           # Documentation
 ```
 
+## Built with easyspec
+
+Parthenon's documentation, architecture, and development workflow are managed using [easyspec](https://github.com/hurungang/easyspec) — an open source spec-driven development kit that orchestrates a team of AI agents (product owner, architect, developer, tester, etc.) through the full change lifecycle. Every feature in Parthenon goes through easyspec's propose → apply → update-master pipeline.
+
 ## License
 
 Parthenon is licensed under the GNU Affero General Public License v3.0 or any
