@@ -1,15 +1,24 @@
 # Parthenon — Enterprise AI Harness Framework
 
-Parthenon is a self-hosted framework for running enterprise AI agents with strong control, security, and observability.
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Status](https://img.shields.io/badge/status-active-success.svg)](https://github.com/hurungang/parthenon)
+
+**Self-hosted AI agents with enterprise-grade security, observability, and governed tool access — all running on your own infrastructure.**
 
 ## Why Parthenon
 
-- **Secure by design**: three isolated backend services, Agent Runtime-only execution, Control Center-only database access, and no sensitive token exposure to agents.
-- **Governed MCP access**: permissions resolve through `Role -> SOP -> Skill -> Tool`, enforcing least privilege at tool level.
-- **Dual identity model**: separate human and agent identities with clear audit boundaries.
-- **Flexible agent modes**: conversational, trigger-only, and argument-based execution patterns.
-- **Operational confidence**: built-in execution logs plus OpenTelemetry traces, metrics, and logs.
-- **Enterprise-ready deployment**: local Docker Compose workflow and production Kubernetes/Helm path.
+- **Run AI agents on your own infrastructure.** No third-party SaaS holding your data. Parthenon deploys on Docker Compose locally or Kubernetes in production — you control everything.
+- **Know exactly what your agents are doing.** Every action is logged. Every tool call is governed by Role → SOP → Skill → Tool permissions. OpenTelemetry traces, metrics, and logs out of the box.
+- **Agents and humans have separate identities.** No blurred lines. Dual identity model with clear audit boundaries — you always know who (or what) did what.
+- **Three isolated backend services.** Agent Runtime, Control Center, and Communication Hub run independently. Compromise the runtime, and your database stays safe.
+- **Bring your own LLM.** Parthenon connects to any OpenAI-compatible API — use GPT-4, Claude, open-source models, whatever you want. No vendor lock-in.
+
+## Screenshots
+
+![Parthenon Dashboard](docs/screenshot.png)
 
 ## Tech Stack
 
