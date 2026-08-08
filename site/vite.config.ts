@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './',
+  base: '/parthenon/',
   build: {
     // Keep generated Pages artifacts under docs/ without replacing project documentation.
     outDir: '../docs/site',
