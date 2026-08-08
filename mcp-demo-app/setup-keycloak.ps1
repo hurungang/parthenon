@@ -16,7 +16,8 @@ param(
     [string]$KeycloakUrl = "http://localhost:8082",
     [string]$Realm = "ai_agents",
     [string]$AdminUser = "admin",
-    [string]$AdminPassword = "admin"
+    [string]$AdminPassword = "admin",
+    [string]$UserRealm = "parthenon"
 )
 
 $ErrorActionPreference = "Stop"
@@ -147,6 +148,10 @@ KEYCLOAK_URL=$KeycloakUrl
 KEYCLOAK_REALM=$Realm
 KEYCLOAK_CLIENT_ID=mcp-demo-app
 KEYCLOAK_CLIENT_SECRET=$clientSecret
+
+# Keycloak User Realm (dual-identity validation)
+KEYCLOAK_USER_REALM=$UserRealm
+KEYCLOAK_USER_CLIENT_ID=mcp-demo-app
 
 # Parthenon MCP Hub
 HUB_BASE_URL=http://localhost:8000

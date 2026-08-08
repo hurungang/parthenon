@@ -200,6 +200,22 @@ async def seed_system_tools(db: "AsyncSession") -> None:
             )
             db.add(tool)
             logger.info("System tool seeded: %s (id=%s)", entry["name"], entry["id"])
+        else:
+            updated = False
+            if existing_tool.name != entry["name"]:
+                existing_tool.name = entry["name"]
+                updated = True
+            if existing_tool.original_name != entry["original_name"]:
+                existing_tool.original_name = entry["original_name"]
+                updated = True
+            if existing_tool.description != entry["description"]:
+                existing_tool.description = entry["description"]
+                updated = True
+            if updated:
+                logger.info(
+                    "System tool updated: %s → %s (id=%s)",
+                    existing_tool.original_name, entry["name"], entry["id"],
+                )
 
     await db.flush()
     await db.commit()

@@ -149,8 +149,9 @@ export function AddGuardrailForm({
         })
       } else {
         const payload: ModelUsageGuardrailCreatePayload = {
-          model_id: vendorConfigId,
+          model_id: model.model_name,
           model_name: model.model_name,
+          model_config_id: vendorConfigId,
           period,
           limit_value: Number(limitValue),
           unit,

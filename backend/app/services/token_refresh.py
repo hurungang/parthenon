@@ -67,22 +67,54 @@ class TokenRefreshResult(NamedTuple):
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-def _keycloak_base_url() -> str:
+def _legacy_token_config() -> tuple[str, str, str | None]:
+    """Legacy fallback using env vars / YAML settings (pre-DB-config era).
+    
+    Returns (token_url, client_id, client_secret).
+    """
     settings = get_settings()
     url = settings.oidc_provider_url.rstrip("/")
     if "/realms/" in url:
-        return url.split("/realms/")[0]
-    return url
+        keycloak_base = url.split("/realms/")[0]
+    else:
+        keycloak_base = url
+
+    realm = settings.agent_realm_name or "ai_agents"
+    client_id = settings.jwt_audience or "parthenon-api"
+    token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
+    return token_url, client_id, None
 
 
-def _agent_realm_name() -> str:
-    settings = get_settings()
-    return settings.agent_realm_name or "ai_agents"
+async def _resolve_agent_refresh_config(
+    db: AsyncSession,
+) -> tuple[str, str, str | None]:
+    """Resolve (token_url, client_id, client_secret) for agent token refresh.
 
+    Uses the DB IdentityProviderConfig for agent scope when available,
+    falling back to legacy env-var / YAML settings.
+    """
+    from app.db.models.identity_provider_config import IdentityProviderConfig
 
-def _agent_realm_client_id() -> str:
-    settings = get_settings()
-    return settings.jwt_audience or "parthenon-api"
+    result = await db.execute(
+        select(IdentityProviderConfig).where(
+            IdentityProviderConfig.provider_scope == "agent",
+            IdentityProviderConfig.is_enabled == True,
+        )
+    )
+    config = result.scalar_one_or_none()
+
+    if config is not None:
+        token_url = f"{config.issuer_url.rstrip('/')}/protocol/openid-connect/token"
+        client_id = config.client_id
+        client_secret: str | None = None
+        if config.encrypted_client_secret:
+            try:
+                client_secret = get_vault().decrypt(config.encrypted_client_secret)
+            except Exception:
+                logger.warning("Failed to decrypt agent provider client_secret; proceeding without")
+        return token_url, client_id, client_secret
+
+    return _legacy_token_config()
 
 
 # ── Core functions ────────────────────────────────────────────────────────────
@@ -160,26 +192,27 @@ async def refresh_oauth_token(
             f"Failed to decrypt refresh token for identity {identity_id}: {exc}"
         ) from exc
 
-    keycloak_base = _keycloak_base_url()
-    realm = _agent_realm_name()
-    client_id = _agent_realm_client_id()
-    token_url = f"{keycloak_base}/realms/{realm}/protocol/openid-connect/token"
+    token_url, client_id, client_secret = await _resolve_agent_refresh_config(db)
 
     last_error: str = "unknown"
     is_rate_limited = False
 
     for attempt, delay in enumerate(_RETRY_DELAYS, start=1):
         try:
+            token_data_payload: dict[str, str] = {
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "refresh_token": refresh_token_plain,
+            }
+            if client_secret:
+                token_data_payload["client_secret"] = client_secret
+
             async with httpx.AsyncClient(
                 timeout=30.0, verify=get_ssl_context()
             ) as http_client:
                 response = await http_client.post(
                     token_url,
-                    data={
-                        "grant_type": "refresh_token",
-                        "client_id": client_id,
-                        "refresh_token": refresh_token_plain,
-                    },
+                    data=token_data_payload,
                 )
 
             if response.status_code == 429:

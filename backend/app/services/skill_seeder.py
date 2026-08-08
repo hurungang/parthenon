@@ -45,18 +45,25 @@ class SkillSeeder:
     async def _seed_one(self, session: AsyncSession, skill_def: dict) -> str:
         name: str = skill_def["name"]
 
-        # Check existence — name is the idempotency key
         result = await session.execute(select(Skill).where(Skill.name == name))
         existing = result.scalar_one_or_none()
         if existing is not None:
+            updated = False
             if not existing.is_system:
                 existing.is_system = True
-                logger.info("SkillSeeder: fixed is_system=True for existing skill '%s'.", name)
+                updated = True
+            if skill_def.get("description") and existing.description != skill_def["description"]:
+                existing.description = skill_def["description"]
+                updated = True
+            if skill_def.get("instructions") and existing.instructions != skill_def["instructions"]:
+                existing.instructions = skill_def["instructions"]
+                updated = True
+            if updated:
+                logger.info("SkillSeeder: updated existing skill '%s'.", name)
             else:
-                logger.info("SkillSeeder: skill '%s' already exists — skipping.", name)
-            return "exists"
+                logger.info("SkillSeeder: skill '%s' already exists — checking bindings.", name)
+            return await self._ensure_bindings(session, existing, skill_def)
 
-        # Create the skill (system skills are read-only)
         skill = Skill(
             name=name,
             description=skill_def.get("description"),
@@ -65,11 +72,33 @@ class SkillSeeder:
             is_system=True,
         )
         session.add(skill)
-        await session.flush()  # populate skill.id
+        await session.flush()
 
-        # Bind platform tools by name (look up by original_name or namespaced name)
+        logger.info("SkillSeeder: created default skill '%s'.", name)
+        return await self._ensure_bindings(session, skill, skill_def)
+
+    async def _ensure_bindings(
+        self, session: AsyncSession, skill: Skill, skill_def: dict
+    ) -> str:
+        """Ensure ``SkillToolBinding`` records exist for the given skill.
+
+        Creates missing bindings for tool names listed in *skill_def*.
+        Returns ``'created'`` when bindings were added, ``'exists'`` otherwise.
+        """
         tool_names: list[str] = skill_def.get("tool_names", [])
+        binding_added = False
         for order, tool_name in enumerate(tool_names):
+            existing_binding_result = await session.execute(
+                select(SkillToolBinding)
+                .join(McpTool, SkillToolBinding.tool_id == McpTool.id)
+                .where(
+                    SkillToolBinding.skill_id == skill.id,
+                    (McpTool.original_name == tool_name) | (McpTool.name == tool_name),
+                )
+            )
+            if existing_binding_result.scalars().first() is not None:
+                continue
+
             tool_result = await session.execute(
                 select(McpTool).where(
                     (McpTool.original_name == tool_name) | (McpTool.name == tool_name)
@@ -81,11 +110,17 @@ class SkillSeeder:
                     "SkillSeeder: platform tool '%s' not found for skill '%s' — "
                     "binding skipped. Run a server sync to register the tool.",
                     tool_name,
-                    name,
+                    skill.name,
                 )
                 continue
             binding = SkillToolBinding(skill_id=skill.id, tool_id=tool.id, order=order)
             session.add(binding)
+            binding_added = True
+            logger.info(
+                "SkillSeeder: added binding skill='%s' → tool='%s' (id=%s).",
+                skill.name, tool_name, tool.id,
+            )
 
-        logger.info("SkillSeeder: created default skill '%s'.", name)
-        return "created"
+        if binding_added:
+            return "created"
+        return "exists"

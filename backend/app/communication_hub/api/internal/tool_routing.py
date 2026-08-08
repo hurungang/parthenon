@@ -374,7 +374,15 @@ async def _route_to_mcp_tool(body: ToolCallRequest, request: Request) -> ToolCal
         return ToolCallResponse(result=result.get("result", {}))
 
     except httpx.HTTPStatusError as exc:
+        cc_detail = ""
+        try:
+            cc_body = exc.response.json()
+            cc_detail = cc_body.get("detail", "")
+        except Exception:
+            cc_detail = exc.response.text[:200]
         error_msg = f"Control Center MCP proxy call failed: HTTP {exc.response.status_code}"
+        if cc_detail:
+            error_msg = cc_detail
         logger.error(
             "%s - %s",
             error_msg,

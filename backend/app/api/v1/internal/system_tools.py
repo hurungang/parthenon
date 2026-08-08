@@ -165,13 +165,17 @@ async def get_recipient_group_tool(
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
-        from app.db.models.notifications import RecipientGroup
+        from app.db.models.notifications import GroupChannelMapping, RecipientGroup
 
-        # Get the group with channels
+        # Get the group with channel mappings (channels are accessed via GroupChannelMapping)
         result = await db.execute(
             select(RecipientGroup)
             .where(RecipientGroup.slug == group_slug)
-            .options(selectinload(RecipientGroup.channels))
+            .options(
+                selectinload(RecipientGroup.channel_mappings).selectinload(
+                    GroupChannelMapping.channel
+                )
+            )
         )
         group = result.scalar_one_or_none()
 
@@ -187,11 +191,11 @@ async def get_recipient_group_tool(
             "description": group.description,
             "channels": [
                 {
-                    "id": str(ch.id),
-                    "name": ch.name,
-                    "channel_type": ch.channel_type.value,
+                    "id": str(mapping.channel.id),
+                    "name": mapping.channel.name,
+                    "channel_type": mapping.channel.channel_type.value,
                 }
-                for ch in group.channels
+                for mapping in group.channel_mappings
             ],
         }
 

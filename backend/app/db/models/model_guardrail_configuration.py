@@ -71,7 +71,7 @@ class ModelGuardrailConfiguration(Base):
 
     __tablename__ = "model_guardrail_configurations"
     __table_args__ = (
-        UniqueConstraint("model_id", "period", name="uq_guardrail_model_period"),
+        UniqueConstraint("model_id", "model_name", "period", name="uq_guardrail_vendor_model_period"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

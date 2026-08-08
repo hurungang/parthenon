@@ -473,11 +473,49 @@ async def _initialize_certificate_authority() -> None:
             ca_cert.serial_number,
             ca_cert.not_valid_after_utc,
         )
+        await _ensure_cc_service_certificate()
     except Exception:
         logger.exception(
             "Certificate Authority initialization failed; "
             "agent certificate issuance/validation will not work. "
             "Ensure CREDENTIAL_VAULT_KEY is set and the database is reachable."
+        )
+
+
+async def _ensure_cc_service_certificate() -> None:
+    """Ensure Control Center has its own service certificate for outbound calls.
+
+    The CommunicationHubClient requires a service certificate to make internal
+    calls to the Communication Hub.  If the certificate files do not exist on
+    disk, generate them now using the CA that was just initialized.
+    """
+    import os
+
+    from app.services.certificate_authority import issue_service_certificate
+
+    cert_dir = Path("certs/control-center")
+    cert_path = cert_dir / "service-cert.pem"
+    key_path = cert_dir / "service-key.pem"
+
+    if cert_path.exists() and key_path.exists():
+        logger.info("Control Center service certificate already exists")
+        return
+
+    try:
+        issued = await issue_service_certificate("control-center")
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        cert_path.write_text(issued.certificate_pem)
+        key_path.write_text(issued.private_key_pem)
+        logger.info(
+            "Control Center service certificate generated: serial=%s expires=%s",
+            issued.serial_number,
+            issued.expires_at,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to generate Control Center service certificate; "
+            "internal calls to Communication Hub will fail. "
+            "Ensure the Certificate Authority is initialized."
         )
 
 

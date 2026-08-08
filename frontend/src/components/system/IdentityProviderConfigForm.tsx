@@ -251,7 +251,7 @@ export function IdentityProviderConfigForm({
               size="small"
               fullWidth
               type={showSecret ? 'text' : 'password'}
-              placeholder={isConfigured ? '(unchanged)' : ''}
+              placeholder={currentConfig?.encrypted_client_secret ? '(configured)' : ''}
               helperText={t('systemConfig.identityProviders.clientSecretHint')}
               InputProps={{
                 endAdornment: (

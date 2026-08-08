@@ -18,12 +18,42 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
+# Platform detection
+$IsWindowsEnv = $IsWindows -or (-not (Test-Path Variable:IsWindows))
+$IsMacOSEnv = $IsMacOS
+
+# Find a Python 3.11+ interpreter
+$pythonCmd = $null
+$candidates = if ($IsWindowsEnv) { @("python") } else { @("python3.11", "python3") }
+foreach ($c in $candidates) {
+    try {
+        $versionOutput = & $c --version 2>&1
+        if ($LASTEXITCODE -eq 0 -and $versionOutput -match 'Python (\d+)\.(\d+)') {
+            $major = [int]$matches[1]
+            $minor = [int]$matches[2]
+            if ($major -gt 3 -or ($major -eq 3 -and $minor -ge 11)) {
+                $pythonCmd = $c
+                break
+            }
+        }
+    } catch {}
+}
+if (-not $pythonCmd) {
+    Write-Host "❌ Python 3.11+ is required but not found" -ForegroundColor Red
+    Write-Host "   Install Python 3.11+ from https://www.python.org/downloads/" -ForegroundColor Yellow
+    exit 1
+}
+
 Write-Host "🚀 Starting MCP Demo App..." -ForegroundColor Cyan
 Write-Host ""
 
 # Check if already running
 Write-Host "Checking if port 7001 is already in use..." -ForegroundColor Yellow
-$existingProcess = netstat -ano | Select-String ":7001.*LISTEN"
+if ($IsMacOSEnv) {
+    $existingProcess = lsof -ti :7001 2>$null
+} else {
+    $existingProcess = netstat -ano 2>$null | Select-String ":7001.*LISTEN"
+}
 if ($existingProcess) {
     Write-Host "⚠️  Port 7001 is already in use" -ForegroundColor Yellow
     Write-Host "Run .\stop.ps1 first to stop the existing instance" -ForegroundColor Yellow
@@ -51,7 +81,7 @@ if (-not (Test-Path ".env")) {
 # Check if virtual environment exists
 if (-not (Test-Path ".venv")) {
     Write-Host "📦 Creating virtual environment..." -ForegroundColor Yellow
-    python -m venv .venv
+    & $pythonCmd -m venv .venv
     if ($LASTEXITCODE -ne 0) {
         Write-Host "❌ Failed to create virtual environment" -ForegroundColor Red
         exit 1
@@ -60,8 +90,10 @@ if (-not (Test-Path ".venv")) {
 
 # Activate virtual environment and install dependencies
 Write-Host "📦 Installing dependencies..." -ForegroundColor Yellow
-& .\.venv\Scripts\Activate.ps1
-pip install -e . -q
+$venvActivate = if ($IsWindowsEnv) { ".\.venv\Scripts\Activate.ps1" } else { ".\.venv\bin\Activate.ps1" }
+& $venvActivate
+& $pythonCmd -m pip install --upgrade pip -q
+& $pythonCmd -m pip install -e .
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ Failed to install dependencies" -ForegroundColor Red
     exit 1
@@ -90,7 +122,7 @@ try {
     }
 } catch {
     Write-Host "  ⚠️  Backend not responding on port 8000" -ForegroundColor Yellow
-    Write-Host "     Start it with: cd backend && python -m uvicorn app.main:app --reload" -ForegroundColor Gray
+    Write-Host "     Start it with: cd backend && $pythonCmd -m uvicorn app.main:app --reload" -ForegroundColor Gray
 }
 
 Write-Host ""
