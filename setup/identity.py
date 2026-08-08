@@ -174,6 +174,40 @@ async def _setup_bundled_keycloak(
         )
         report.append(_r("agent_client", "created", f"Created public client '{agent_client_id}' in '{_agent_realm}'"))
 
+    # ── mcp_role user profile attribute (both realms) ─────────────────
+    report.extend(await _register_mcp_role_attribute(kc, token, keycloak_url, realm_name))
+    report.extend(await _register_mcp_role_attribute(kc, token, keycloak_url, _agent_realm))
+
+    # ── mcp_role claim mappers ───────────────────────────────────────
+    report.extend(await _add_mcp_role_claim_mapper(kc, token, keycloak_url, _agent_realm, agent_client_id))
+    report.extend(await _add_mcp_role_claim_mapper(kc, token, keycloak_url, realm_name, client_id))
+    report.extend(await _add_mcp_role_claim_mapper(kc, token, keycloak_url, realm_name, ui_client_id))
+
+    # ── offline_access scope for agent client ────────────────────────
+    report.extend(await _enable_offline_access_scope(kc, token, keycloak_url, _agent_realm, agent_client_id))
+
+    # ── Realm roles for MCP demo app ─────────────────────────────────
+    report.extend(await _ensure_realm_role(kc, token, keycloak_url, _agent_realm, "demo_agent", "Required mcp_role for helloAgent MCP tool"))
+    report.extend(await _ensure_realm_role(kc, token, keycloak_url, realm_name, "demo_user", "Required mcp_role for helloUser MCP tool"))
+
+    # ── Test agent identities (ai_agents realm) ──────────────────────
+    _TEST_AGENTS = [
+        {"username": "test_agent", "password": "test_agent", "roles": ["demo_agent"], "mcp_role": "demo_agent"},
+        {"username": "test_agent_2", "password": "test_agent_2", "roles": [], "mcp_role": None},
+    ]
+    for agent_info in _TEST_AGENTS:
+        report.extend(await _create_agent_identity(kc, token, keycloak_url, _agent_realm, agent_info))
+
+    # ── Test user (parthenon realm) ──────────────────────────────────
+    report.extend(await _create_test_user(kc, token, keycloak_url, realm_name, {"username": "testuser", "password": "testuser", "roles": [], "mcp_role": None}))
+
+    # ── Admin mcp_role assignment ────────────────────────────────────
+    report.extend(await _sync_user_roles(kc, token, keycloak_url, realm_name, "admin", ["admin", "demo_user", "offline_access"]))
+    report.extend(await _set_user_attribute(kc, token, keycloak_url, realm_name, "admin", "mcp_role", "demo_user"))
+
+    # ── mcp-demo-app confidential client (ai_agents realm) ───────────
+    report.extend(await _ensure_mcp_demo_app_client(kc, token, keycloak_url, _agent_realm))
+
     return report
 
 
@@ -287,6 +321,439 @@ async def _persist_oidc_config(
         report.append(_r("db_oidc_config", "error", str(exc)))
 
     return report
+
+
+async def _register_mcp_role_attribute(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+) -> list[dict[str, str]]:
+    """Register mcp_role in user profile attributes (idempotent)."""
+    import httpx
+
+    base = f"{keycloak_url}/admin/realms/{realm_name}"
+    h = {"Authorization": f"Bearer {token.access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{base}/users/profile", headers=h)
+        profile = resp.json() if resp.status_code == 200 else {"attributes": []}
+        existing_attrs = {a.get("name") for a in profile.get("attributes", [])}
+        if "mcp_role" in existing_attrs:
+            return [_r("mcp_role_attr", "exists", f"mcp_role attribute already in profile for '{realm_name}'")]
+
+        profile.setdefault("attributes", []).append({
+            "name": "mcp_role",
+            "displayName": "MCP Role",
+            "permissions": {"view": ["admin", "user"], "edit": ["admin"]},
+            "multivalued": False,
+            "validations": {},
+            "annotations": {},
+            "group": None,
+        })
+        resp = await client.put(f"{base}/users/profile", headers={**h, "Content-Type": "application/json"}, json=profile)
+        if resp.status_code in (200, 204):
+            return [_r("mcp_role_attr", "created", f"Registered mcp_role attribute in '{realm_name}'")]
+        return [_r("mcp_role_attr", "error", f"HTTP {resp.status_code} registering mcp_role in '{realm_name}'")]
+
+
+async def _add_mcp_role_claim_mapper(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    client_id: str,
+) -> list[dict[str, str]]:
+    """Add mcp_role claim mapper to an OIDC client (idempotent)."""
+    import httpx
+
+    base = f"{keycloak_url}/admin/realms/{realm_name}"
+    h = {"Authorization": f"Bearer {token.access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{base}/clients", params={"clientId": client_id}, headers=h)
+        clients = resp.json() if resp.status_code == 200 else []
+        if not clients:
+            return [_r("mcp_role_mapper", "error", f"Client '{client_id}' not found in '{realm_name}'")]
+        client_uuid = clients[0]["id"]
+
+        resp = await client.get(f"{base}/clients/{client_uuid}/protocol-mappers/models", headers=h)
+        mappers = resp.json() if resp.status_code == 200 else []
+        if any(m.get("name") == "mcp_role" for m in mappers):
+            return [_r("mcp_role_mapper", "exists", f"mcp_role mapper already on '{client_id}' in '{realm_name}'")]
+
+        mapper = {
+            "name": "mcp_role",
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-usermodel-attribute-mapper",
+            "config": {
+                "claim.name": "mcp_role",
+                "user.attribute": "mcp_role",
+                "access.token.claim": "true",
+                "id.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "jsonType.label": "String",
+            },
+        }
+        resp = await client.post(
+            f"{base}/clients/{client_uuid}/protocol-mappers/models",
+            headers=h, json=mapper,
+        )
+        if resp.status_code in (201, 204):
+            return [_r("mcp_role_mapper", "created", f"Added mcp_role mapper to '{client_id}' in '{realm_name}'")]
+        return [_r("mcp_role_mapper", "error", f"HTTP {resp.status_code} adding mcp_role mapper")]
+
+
+async def _enable_offline_access_scope(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    client_id: str,
+) -> list[dict[str, str]]:
+    """Enable offline_access scope for a client (idempotent)."""
+    import httpx
+
+    base = f"{keycloak_url}/admin/realms/{realm_name}"
+    h = {"Authorization": f"Bearer {token.access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{base}/clients", params={"clientId": client_id}, headers=h)
+        clients = resp.json() if resp.status_code == 200 else []
+        if not clients:
+            return [_r("offline_access", "error", f"Client '{client_id}' not found in '{realm_name}'")]
+        client_uuid = clients[0]["id"]
+
+        resp = await client.get(f"{base}/client-scopes", headers=h)
+        scopes = resp.json() if resp.status_code == 200 else []
+        offline_scope = next((s for s in scopes if s.get("name") == "offline_access"), None)
+        if not offline_scope:
+            return [_r("offline_access", "error", f"'offline_access' scope not found in '{realm_name}'")]
+
+        resp = await client.get(
+            f"{base}/clients/{client_uuid}/optional-client-scopes",
+            headers=h,
+        )
+        assigned = resp.json() if resp.status_code == 200 else []
+        if any(s.get("id") == offline_scope["id"] for s in assigned):
+            return [_r("offline_access", "exists", f"offline_access already assigned to '{client_id}'")]
+
+        resp = await client.put(
+            f"{base}/clients/{client_uuid}/optional-client-scopes/{offline_scope['id']}",
+            headers=h,
+        )
+        if resp.status_code in (204, 200):
+            return [_r("offline_access", "created", f"Enabled offline_access for '{client_id}' in '{realm_name}'")]
+        return [_r("offline_access", "error", f"HTTP {resp.status_code} enabling offline_access")]
+
+
+async def _ensure_realm_role(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    role_name: str,
+    description: str,
+) -> list[dict[str, str]]:
+    """Ensure a realm-level role exists (idempotent)."""
+    import httpx
+
+    base_url = f"{keycloak_url}/admin/realms/{realm_name}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        h = {"Authorization": f"Bearer {token.access_token}"}
+        resp = await client.get(f"{base_url}/roles/{role_name}", headers=h)
+    if resp.status_code == 200:
+        return [_r("realm_role", "exists", f"Role '{role_name}' already in '{realm_name}'")]
+
+    create_url = f"{keycloak_url}/admin/realms/{realm_name}/roles"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        h = {"Authorization": f"Bearer {token.access_token}"}
+        resp = await client.post(
+            create_url,
+            json={"name": role_name, "description": description},
+            headers=h,
+        )
+    if resp.status_code == 201:
+        return [_r("realm_role", "created", f"Created role '{role_name}' in '{realm_name}'")]
+    elif resp.status_code == 409:
+        return [_r("realm_role", "exists", f"Role '{role_name}' already in '{realm_name}' (409)")]
+    return [_r("realm_role", "error", f"HTTP {resp.status_code} creating role '{role_name}'")]
+
+
+async def _create_agent_identity(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    agent_info: dict,
+) -> list[dict[str, str]]:
+    """Create a test agent identity in Keycloak and the AgentIdentity DB record."""
+    username = agent_info["username"]
+    report: list[dict[str, str]] = []
+
+    try:
+        await kc.create_user(token, realm_name, username, agent_info["password"], roles=agent_info["roles"])
+    except KeycloakAdminError as exc:
+        report.append(_r("agent_identity", "error", f"Failed to create Keycloak user '{username}': {exc.detail}"))
+        return report
+
+    import httpx
+    user_id = await kc.get_user_by_username(token, realm_name, username)
+    if user_id:
+        reset_url = f"{keycloak_url}/admin/realms/{realm_name}/users/{user_id}/reset-password"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.put(
+                reset_url,
+                json={"type": "password", "value": agent_info["password"], "temporary": False},
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+
+    if agent_info.get("mcp_role"):
+        report.extend(await _set_user_attribute(kc, token, keycloak_url, realm_name, username, "mcp_role", agent_info["mcp_role"]))
+    else:
+        report.extend(await _remove_user_attribute(kc, token, keycloak_url, realm_name, username, "mcp_role"))
+
+    desired_roles = agent_info["roles"] + ["offline_access"]
+    report.extend(await _sync_user_roles(kc, token, keycloak_url, realm_name, username, desired_roles))
+
+    try:
+        from app.core.config import get_settings as _get_settings
+        _settings = _get_settings()
+        from app.db.models.agents import AgentIdentity as AgentIdentityModel, AgentIdentityType, AgentIdentityStatus
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
+        engine = create_async_engine(str(_settings.database_url))
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as db:
+            result = await db.execute(
+                select(AgentIdentityModel).where(AgentIdentityModel.name == f"{username}@{realm_name}")
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                report.append(
+                    _r("agent_identity_db", "exists",
+                       f"AgentIdentity '{username}@{realm_name}' (mcp_role={agent_info.get('mcp_role')})")
+                )
+            else:
+                identity = AgentIdentityModel(
+                    name=f"{username}@{realm_name}",
+                    identity_type=AgentIdentityType.realm_user,
+                    realm_name=realm_name,
+                    realm_username=username,
+                    status=AgentIdentityStatus.active,
+                )
+                db.add(identity)
+                await db.commit()
+                report.append(_r("agent_identity_db", "created", f"AgentIdentity '{username}@{realm_name}'"))
+        await engine.dispose()
+    except Exception as exc:
+        logger.exception("Failed to create AgentIdentity DB record for %r", username)
+        report.append(_r("agent_identity_db", "error", str(exc)))
+
+    return report
+
+
+async def _create_test_user(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    user_info: dict,
+) -> list[dict[str, str]]:
+    """Create a test user in Keycloak (idempotent)."""
+    username = user_info["username"]
+    report: list[dict[str, str]] = []
+
+    try:
+        await kc.create_user(token, realm_name, username, user_info["password"], roles=user_info["roles"])
+    except KeycloakAdminError as exc:
+        report.append(_r("test_user", "error", f"Failed to create user '{username}': {exc.detail}"))
+        return report
+
+    import httpx
+    user_id = await kc.get_user_by_username(token, realm_name, username)
+    if user_id:
+        reset_url = f"{keycloak_url}/admin/realms/{realm_name}/users/{user_id}/reset-password"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.put(
+                reset_url,
+                json={"type": "password", "value": user_info["password"], "temporary": False},
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+
+    if user_info.get("mcp_role"):
+        report.extend(await _set_user_attribute(kc, token, keycloak_url, realm_name, username, "mcp_role", user_info["mcp_role"]))
+    else:
+        report.extend(await _remove_user_attribute(kc, token, keycloak_url, realm_name, username, "mcp_role"))
+
+    report.extend(await _sync_user_roles(kc, token, keycloak_url, realm_name, username, user_info["roles"]))
+    report.append(_r("test_user", "created", f"Test user '{username}' in '{realm_name}' (mcp_role={user_info.get('mcp_role')})"))
+    return report
+
+
+async def _sync_user_roles(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    username: str,
+    desired_roles: list[str],
+) -> list[dict[str, str]]:
+    """Ensure a user has the desired realm roles (additive — never removes)."""
+    import httpx
+
+    user_id = await kc.get_user_by_username(token, realm_name, username)
+    if not user_id:
+        return [_r("user_roles", "error", f"User '{username}' not found in '{realm_name}'")]
+
+    base = f"{keycloak_url}/admin/realms/{realm_name}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        h = {"Authorization": f"Bearer {token.access_token}"}
+
+        resp = await client.get(f"{base}/users/{user_id}/role-mappings/realm", headers=h)
+        current_roles = resp.json() if resp.status_code == 200 else []
+        current_names = {r.get("name") for r in current_roles if isinstance(r, dict)}
+
+        to_add = set(desired_roles) - current_names
+        if not to_add:
+            return [_r("user_roles", "exists", f"Roles for '{username}' already correct in '{realm_name}'")]
+
+        resp = await client.get(f"{base}/roles", headers=h)
+        all_roles = resp.json() if resp.status_code == 200 else []
+        role_reprs = [r for r in all_roles if r.get("name") in to_add]
+        if role_reprs:
+            resp = await client.post(f"{base}/users/{user_id}/role-mappings/realm", headers=h, json=role_reprs)
+            if resp.status_code == 204:
+                return [_r("user_roles", "created", f"Assigned roles {list(to_add)} to '{username}' in '{realm_name}'")]
+    return [_r("user_roles", "error", f"Failed to sync roles for '{username}'")]
+
+
+async def _set_user_attribute(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    username: str,
+    attr_name: str,
+    attr_value: str,
+) -> list[dict[str, str]]:
+    """Set a single-valued user attribute via Keycloak admin API (idempotent)."""
+    import httpx
+
+    user_id = await kc.get_user_by_username(token, realm_name, username)
+    if not user_id:
+        return [_r("user_attr", "error", f"User '{username}' not found in '{realm_name}'")]
+
+    url = f"{keycloak_url}/admin/realms/{realm_name}/users/{user_id}"
+    h = {"Authorization": f"Bearer {token.access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=h)
+        if resp.status_code != 200:
+            return [_r("user_attr", "error", f"Failed to get user '{username}'")]
+        user_data = resp.json()
+
+        current = user_data.get("attributes", {}).get(attr_name)
+        if current == [attr_value]:
+            return [_r("user_attr", "exists", f"Attribute {attr_name}={attr_value} already set on '{username}'")]
+
+        if not user_data.get("email"):
+            user_data["email"] = f"{username}@test.local"
+        if not user_data.get("firstName"):
+            user_data["firstName"] = "Test"
+        if not user_data.get("lastName"):
+            user_data["lastName"] = "User"
+
+        attrs = dict(user_data.get("attributes", {}))
+        attrs[attr_name] = [attr_value]
+        user_data["attributes"] = attrs
+
+        resp = await client.put(url, headers={**h, "Content-Type": "application/json"}, json=user_data)
+        if resp.status_code == 204:
+            return [_r("user_attr", "created", f"Set {attr_name}={attr_value} on '{username}' in '{realm_name}'")]
+    return [_r("user_attr", "error", f"HTTP {resp.status_code} setting attribute for '{username}'")]
+
+
+async def _remove_user_attribute(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+    username: str,
+    attr_name: str,
+) -> list[dict[str, str]]:
+    """Remove a user attribute via Keycloak admin API (idempotent)."""
+    import httpx
+
+    user_id = await kc.get_user_by_username(token, realm_name, username)
+    if not user_id:
+        return [_r("user_attr", "error", f"User '{username}' not found in '{realm_name}'")]
+
+    url = f"{keycloak_url}/admin/realms/{realm_name}/users/{user_id}"
+    h = {"Authorization": f"Bearer {token.access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=h)
+        if resp.status_code != 200:
+            return [_r("user_attr", "error", f"Failed to get user '{username}'")]
+        user_data = resp.json()
+
+        if attr_name not in user_data.get("attributes", {}):
+            return [_r("user_attr", "exists", f"Attribute {attr_name} already absent on '{username}'")]
+
+        if not user_data.get("email"):
+            user_data["email"] = f"{username}@test.local"
+        if not user_data.get("firstName"):
+            user_data["firstName"] = "Test"
+        if not user_data.get("lastName"):
+            user_data["lastName"] = "User"
+
+        attrs = dict(user_data.get("attributes", {}))
+        attrs.pop(attr_name, None)
+        user_data["attributes"] = attrs
+
+        resp = await client.put(url, headers={**h, "Content-Type": "application/json"}, json=user_data)
+        if resp.status_code == 204:
+            return [_r("user_attr", "created", f"Removed {attr_name} from '{username}' in '{realm_name}'")]
+    return [_r("user_attr", "error", f"HTTP {resp.status_code} removing attribute from '{username}'")]
+
+
+async def _ensure_mcp_demo_app_client(
+    kc: KeycloakAdminClient,
+    token: Any,
+    keycloak_url: str,
+    realm_name: str,
+) -> list[dict[str, str]]:
+    """Create the mcp-demo-app confidential client in the agent realm (idempotent)."""
+    import httpx
+
+    client_id = "mcp-demo-app"
+    base = f"{keycloak_url}/admin/realms/{realm_name}"
+    h = {"Authorization": f"Bearer {token.access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{base}/clients", params={"clientId": client_id}, headers=h)
+        existing = resp.json() if resp.status_code == 200 else []
+        if existing:
+            return [_r("mcp_demo_app_client", "exists", f"Client '{client_id}' already in '{realm_name}'")]
+
+        client_config = {
+            "clientId": client_id,
+            "name": "MCP Demo App",
+            "description": "Demo MCP server for agent identity propagation",
+            "enabled": True,
+            "serviceAccountsEnabled": True,
+            "clientAuthenticatorType": "client-secret",
+            "standardFlowEnabled": False,
+            "directAccessGrantsEnabled": False,
+            "publicClient": False,
+            "protocol": "openid-connect",
+        }
+        resp = await client.post(f"{base}/clients", headers=h, json=client_config)
+        if resp.status_code in (201, 200):
+            return [_r("mcp_demo_app_client", "created", f"Created client '{client_id}' in '{realm_name}'")]
+        return [_r("mcp_demo_app_client", "error", f"HTTP {resp.status_code} creating '{client_id}' in '{realm_name}'")]
 
 
 def _r(step: str, status: str, detail: str = "") -> dict[str, str]:

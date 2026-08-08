@@ -6,7 +6,7 @@ Initialize the Parthenon local development environment.
 
 **Usage**: `/init-app [--external-postgres] [--external-redis] [--external-oidc] [--external-all]`
 
-- No flags → full docker-compose setup (all components provisioned locally)
+- No flags → full docker-compose setup (infrastructure in Docker, services run locally via parthenon.ps1)
 - `--external-postgres` → use an external PostgreSQL instance (configure via `POSTGRES_*` env vars)
 - `--external-redis` → use an external Redis instance (configure via `REDIS_*` env vars)
 - `--external-oidc` → use an external OIDC provider like Azure EntraID (configure via `OIDC_*` env vars)
@@ -14,10 +14,13 @@ Initialize the Parthenon local development environment.
 
 This command performs environment initialization using the consolidated `setup/` CLI:
 - Creates Keycloak **user realm** (`parthenon`) and **agent realm** (`ai_agents`) — skipped if `--external-oidc`
-- Configures OIDC clients (`parthenon-api`, `parthenon-api-ui`, agent client)
+- Configures OIDC clients (`parthenon-api`, `parthenon-api-ui`, agent client, `mcp-demo-app`)
 - Creates default admin user
+- Creates test agent identities (`test_agent`, `test_agent_2`) with MCP role support for mcp-demo-app
+- Registers `mcp_role` claim mappers and user profile attributes
 - Seeds database with `system_admin` role, wildcard policy, system tools
 - Bootstraps certificate authority for inter-service mTLS
+- Initializes the `mcp-demo-app` Keycloak client in the agent realm
 
 **Safe to run multiple times** — all operations are idempotent and skip already-completed steps.
 
@@ -37,7 +40,8 @@ If the user has **not specified flags** (no `--external-*`), ask them before pro
 What kind of local development environment do you need?
 
 1. **Full Docker Compose** (recommended for new developers)
-   → All components (PostgreSQL, Redis, Keycloak) run in Docker
+   → External infrastructure (PostgreSQL, Redis, Keycloak) runs in Docker Compose
+   → Parthenon services run locally via `parthenon.ps1`
    → One command bootstraps everything
    → No external dependencies
 
@@ -218,7 +222,7 @@ $exitCode = $LASTEXITCODE
 ```
 
 The `setup.main dev` command runs:
-1. `setup identity` — Keycloak realms, clients, admin user
+1. `setup identity` — Keycloak realms, OIDC clients, admin user, test agents, mcp-demo-app client
 2. `setup database` — Roles, permissions, skills, system tools
 3. `setup certificates` — Certificate authority
 
