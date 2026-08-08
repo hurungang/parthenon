@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -18,6 +19,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_claims, require_permission
@@ -1182,6 +1184,31 @@ async def agent_session_chat(
         await websocket.close(code=1011)
 
 
+async def _run_plan_generation_bg(agent_type_id: uuid.UUID) -> None:
+    """Background task: generate plan with its own DB session."""
+    from app.db.session import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            async with bg_db.begin():
+                result = await bg_db.execute(
+                    select(AgentType)
+                    .where(AgentType.id == agent_type_id)
+                    .options(
+                        selectinload(AgentType.sop_bindings),
+                        selectinload(AgentType.skill_bindings),
+                    )
+                )
+                agent_type = result.scalar_one_or_none()
+                if agent_type:
+                    await _plan_generation_service.generate_plan(agent_type, bg_db)
+        except Exception:
+            logger.exception(
+                "Background plan generation failed for agent_type=%s",
+                agent_type_id,
+            )
+
+
 # ── Agent Type Endpoints ───────────────────────────────────────────────────────
 
 @AgentTypeRouter.get("", response_model=list[AgentTypeRead])
@@ -1212,6 +1239,7 @@ async def create_agent_type(
     body: AgentTypeCreate,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentTypeRead:
     if not body.sop_bindings and not body.skill_bindings:
@@ -1234,22 +1262,29 @@ async def create_agent_type(
                 detail={"error": "binding_validation_failed", "messages": binding_errors},
             )
 
-    agent_type = AgentType(
-        name=body.name,
-        description=body.description,
-        identity_id=body.identity_id,
-        role_id=body.role_id,
-        model_id=body.model_id,
-        system_instruction=body.system_instruction,
-        input_type=body.input_type,
-        input_schema=body.input_schema,
-        output_type=body.output_type,
-        output_schema=body.output_schema,
-        output_data_type_id=body.output_data_type_id,
-    )
-    db.add(agent_type)
-    await db.flush()
-    await db.refresh(agent_type)
+    try:
+        agent_type = AgentType(
+            name=body.name,
+            description=body.description,
+            identity_id=body.identity_id,
+            role_id=body.role_id,
+            model_id=body.model_id,
+            system_instruction=body.system_instruction,
+            input_type=body.input_type,
+            input_schema=body.input_schema,
+            output_type=body.output_type,
+            output_schema=body.output_schema,
+            output_data_type_id=body.output_data_type_id,
+        )
+        db.add(agent_type)
+        await db.flush()
+        await db.refresh(agent_type)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An agent type with name '{body.name}' already exists.",
+        )
 
     # Save bindings
     await _agent_type_service.set_bindings(
@@ -1288,15 +1323,14 @@ async def create_agent_type(
             },
         )
 
-    # Generate plan after commit (non-blocking — failures are recorded, not raised)
-    await _plan_generation_service.generate_plan(agent_type, db)
+    # Schedule plan generation in background (non-blocking)
+    background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
 
-    # Reload with relationships eagerly loaded so the response includes plan and bindings
+    # Reload with relationships eagerly loaded so the response includes bindings
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
         .options(
-            selectinload(AgentType.plan),
             selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
@@ -1334,6 +1368,7 @@ async def update_agent_type(
     body: AgentTypeUpdate,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
 ) -> AgentTypeRead:
     agent_type = await db.get(AgentType, type_id)
@@ -1465,15 +1500,14 @@ async def update_agent_type(
             },
         )
 
-    # Regenerate plan after update (non-blocking — failures are recorded, not raised)
-    await _plan_generation_service.generate_plan(agent_type, db)
+    # Schedule plan regeneration in background (non-blocking)
+    background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
 
-    # Reload with relationships eagerly loaded so the response includes plan and bindings
+    # Reload with relationships eagerly loaded so the response includes bindings
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
         .options(
-            selectinload(AgentType.plan),
             selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),

@@ -128,6 +128,7 @@ class ModelUsageGuardrailService:
         existing = await db.execute(
             select(ModelGuardrailConfiguration).where(
                 ModelGuardrailConfiguration.model_id == config_uuid,
+                ModelGuardrailConfiguration.model_name == model_name,
                 ModelGuardrailConfiguration.period == period,
             )
         )
@@ -145,7 +146,7 @@ class ModelUsageGuardrailService:
                 or ModelGuardrailEnforcementPosture.terminate
             ),
             is_active=is_active,
-            details=details,
+            details=details or {},
         )
         db.add(config)
         try:

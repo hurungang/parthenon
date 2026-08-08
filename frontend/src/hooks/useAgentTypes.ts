@@ -52,3 +52,15 @@ export function useTerminateInstance() {
     },
   })
 }
+
+export function useDeleteAgentType() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: async (typeId) => {
+      await apiClient.delete(`/agents/types/${typeId}`)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+    },
+  })
+}

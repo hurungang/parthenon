@@ -23,11 +23,13 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import VisibilityIcon from '@mui/icons-material/Visibility'
-import { useAgentTypes } from '../../hooks/useAgentTypes'
+import { useAgentTypes, useDeleteAgentType } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import apiClient from '../../api/apiClient'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -104,6 +106,11 @@ export function AgentManagementPage() {
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
   const [conversationAgentType, setConversationAgentType] = useState<AgentType | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Delete confirmation state
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<AgentType | null>(null)
+  const deleteMutation = useDeleteAgentType()
   const invalidAgentName = !!form.name && !SLUG_PATTERN.test(form.name)
 
   // Auto-open dialog if navigated from chat page with openDialogFor state
@@ -226,6 +233,26 @@ export function AgentManagementPage() {
     }
   }
 
+  const handleDeleteClick = (at: AgentType) => {
+    setDeleteTarget(at)
+    setConfirmDeleteOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteMutation.mutateAsync(deleteTarget.id)
+      setConfirmDeleteOpen(false)
+      setDeleteTarget(null)
+      if (detailsDialogTypeId === deleteTarget.id) {
+        setDetailsDialogTypeId(null)
+        setDetailsDialogInitialTab(0)
+      }
+    } catch {
+      // error handled via PermissionDeniedAlert or deleteMutation.error
+    }
+  }
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -321,6 +348,11 @@ export function AgentManagementPage() {
                       <Tooltip title={t('app.edit')}>
                         <IconButton size="small" aria-label={t('app.edit')} onClick={() => handleOpenEdit(at)}>
                           <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('app.delete')}>
+                        <IconButton size="small" aria-label={t('app.delete')} onClick={() => handleDeleteClick(at)}>
+                          <DeleteIcon fontSize="small" color="error" />
                         </IconButton>
                       </Tooltip>
                     </Box>
@@ -451,6 +483,17 @@ export function AgentManagementPage() {
           }}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title={t('app.delete')}
+        message={t('agents.types.deleteConfirm', { name: deleteTarget?.name || '' })}
+        confirmText={t('app.delete')}
+        confirmColor="error"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => { setConfirmDeleteOpen(false); setDeleteTarget(null) }}
+      />
 
     </Box>
   )

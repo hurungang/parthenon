@@ -10,6 +10,7 @@ import type {
 export interface ModelUsageGuardrailCreatePayload {
   model_id: string
   model_name: string
+  model_config_id?: string
   period: ModelGuardrailPeriod
   limit_value: number
   unit: ModelUsageUnit

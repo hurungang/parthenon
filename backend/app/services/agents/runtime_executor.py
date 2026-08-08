@@ -1942,9 +1942,29 @@ class AgentRuntimeExecutor:
         # ToolStrategy uses tool calling — works on any model that supports tools.
         # LangChain auto-promotes to ProviderStrategy when the model capability
         # profile reports native structured-output support.
-        from langchain.agents.structured_output import ToolStrategy
+        #
+        # DeepSeek reasoning models (deepseek-reasoner / R1) activate "thinking
+        # mode" which does NOT support forced tool_choice.  ToolStrategy
+        # internally forces tool_choice on a hidden response tool, so we must
+        # skip it for these models and fall back to prompt-based output instead.
+        _prov_type = model_config_dict.get("provider_type", "")
+        _is_ds_reasoning = _prov_type == "deepseek" and "reasoner" in model_id.lower()
+        if output_json_schema and not _is_ds_reasoning:
+            from langchain.agents.structured_output import ToolStrategy
 
-        response_format: Any = ToolStrategy(schema=output_json_schema) if output_json_schema else None
+            response_format: Any = ToolStrategy(schema=output_json_schema)
+        else:
+            response_format: Any = None
+            if output_json_schema and _is_ds_reasoning:
+                schema_prompt: str | None = context.get("output_schema_prompt") if isinstance(context, dict) else None
+                if schema_prompt:
+                    base = system_instruction or ""
+                    system_instruction = f"{base}\n\n{schema_prompt}".strip()
+                    logger.info(
+                        "Session %s: DeepSeek reasoning model detected — "
+                        "injected output schema into system prompt (ToolStrategy skipped)",
+                        session_id,
+                    )
 
         # ── Capture prompt log (after final system instruction is known) ──────
         await data_client.log_prompt(
@@ -3047,14 +3067,24 @@ class AgentRuntimeExecutor:
 
             # Build response_format (task 9.8)
             # Skip for Gemini/Cohere — ToolStrategy conflicts with tool use.
+            # Skip for DeepSeek reasoning models — thinking mode rejects forced
+            # tool_choice (ToolStrategy / ProviderStrategy internally force it).
             _CC_PROVIDER_STRATEGY_KEYS: frozenset[str] = frozenset({
                 "openai", "azure_openai", "litellm_proxy",
                 "mistral", "groq", "together", "fireworks",
                 "perplexity", "deepseek", "anthropic",
             })
+            _is_ds_reasoning_cc = (
+                _pk == "deepseek"
+                and "reasoner" in (getattr(agent_type, "model_id", "") or "").lower()
+            )
             _cc_rf: Any = (
                 agent_type.output_schema
-                if (_pk in _CC_PROVIDER_STRATEGY_KEYS and agent_type.output_schema)
+                if (
+                    _pk in _CC_PROVIDER_STRATEGY_KEYS
+                    and agent_type.output_schema
+                    and not _is_ds_reasoning_cc
+                )
                 else None
             )
 
