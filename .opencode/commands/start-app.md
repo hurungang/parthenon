@@ -1,152 +1,135 @@
 ---
-description: Start Parthenon services using parthenon.ps1. Defaults to all services. Supports --infra, --backend, --frontend, --control-center, --agent-runtime, --communication-hub, --docker, and --force.
+description: Start Parthenon services using parthenon.ps1. Defaults to all services. Supports --infra, --backend, --frontend, --control-center, --agent-runtime, --communication-hub, --docker, --force, and --setup.
 ---
 
 Start the Parthenon application.
 
 **Usage**: `/start-app [--infra] [--backend] [--frontend] [--control-center] [--agent-runtime] [--communication-hub] [--docker] [--force] [--setup]`
 
-- No flags -> start all services (`infra,control-center,agent-runtime,communication-hub,frontend`)
-- `--infra` -> start infrastructure only (Keycloak, Postgres, Redis, OTEL)
-- `--backend` -> start backend stack (control-center, agent-runtime, communication-hub, frontend)
-- `--frontend` -> start frontend dev server only
-- `--control-center` -> start Control Center only (port 8000)
-- `--agent-runtime` -> start Agent Runtime only (port 8001)
-- `--communication-hub` -> start Communication Hub only (port 8002)
-- `--docker` -> start dockerized stack services supported by `parthenon.ps1` (equivalent service target in script)
-- `--force` -> pass `-Force` to `parthenon.ps1`
-- `--setup` -> run `python -m setup.main dev` first to bootstrap Keycloak realms, DB seeding, and CA before starting services
+- No flags → all services (infra + control-center + agent-runtime + communication-hub + frontend)
+- `--infra` → infrastructure only (Keycloak, Postgres, Redis, OTEL)
+- `--backend` → backend services: control-center + agent-runtime + communication-hub (excludes frontend)
+- `--frontend` → frontend dev server only
+- `--control-center` → Control Center only (port 8000)
+- `--agent-runtime` → Agent Runtime only (port 8001)
+- `--communication-hub` → Communication Hub only (port 8002)
+- `--docker` → same as `--infra`
+- `--force` → skip confirmation and force restart
+- `--setup` → pass `-RunSetup` to bootstraps Keycloak, DB, and CA before starting (fresh environments only; use `/init-app` for first-time setup)
+
+**Note**: `--backend` means backend services only. The old behavior where it included frontend was a bug — `parthenon.ps1`'s `-Services backend` alias misleadingly bundles frontend. This command always builds explicit service lists.
 
 ---
 
 ## Step 0: Ensure PowerShell Core
 
-`parthenon.ps1` requires PowerShell 7+. On macOS/Linux, install `pwsh` if not present:
+`parthenon.ps1` requires PowerShell 7+. Install `pwsh` if not present:
 
 ```bash
 brew install powershell   # macOS
-# or: sudo apt install powershell  # Ubuntu
-```
-
-Verify with `pwsh --version`. On Windows, PowerShell 7+ (`pwsh.exe`) is assumed.
-
-**All script invocations below use `pwsh` on macOS/Linux or `pwsh.exe` on Windows.**
-
----
-
-## Step 1: Parse Input
-
-Read the user's message and map flags to `-Services` values.
-
-Service mapping:
-- `--infra` -> `infra`
-- `--backend` -> `backend`
-- `--frontend` -> `frontend`
-- `--control-center` -> `control-center`
-- `--agent-runtime` -> `agent-runtime`
-- `--communication-hub` -> `communication-hub`
-- `--docker` -> `docker`
-
-If no service flags are provided, use `all`.
-
-If multiple service flags are present, combine as comma-separated values in dependency-safe order:
-`infra,control-center,agent-runtime,communication-hub,frontend`.
-
-If `--backend` is present with other backend-service flags, prefer `backend` (do not duplicate).
-
----
-
-## Step 2: Prerequisite Checks
-
-If requested services include `infra`, `backend`, `all`, or `docker`, verify Docker engine availability before starting:
-
-```bash
-docker info > /dev/null 2>&1 || echo "Docker not available"
-```
-
-If Docker is not ready, halt with a clear message.
-
-If frontend is requested, prevent stale preview confusion:
-- Frontend dev server must be `http://localhost:5173`
-- Port 4173 is Vite preview and should not be treated as frontend-ready for `/start-app`
-
-If `:4173` is listening and `:5173` is not, stop the stale preview process before start:
-
-```bash
-if lsof -ti :4173 -sTCP:LISTEN >/dev/null 2>&1 && ! lsof -ti :5173 -sTCP:LISTEN >/dev/null 2>&1; then
-  kill $(lsof -ti :4173 -sTCP:LISTEN) 2>/dev/null
-  echo "Stopped stale preview process on port 4173."
-fi
 ```
 
 ---
 
-## Step 3: Run Stack Command
+## Step 1: Parse Flags → Resolve Component Set
 
-From the project root, execute the management script via `pwsh`:
+Read the user's message and determine which **components** are requested:
+
+| Flag(s) | Components |
+|---|---|
+| (no flags) | `infra, control-center, agent-runtime, communication-hub, frontend` |
+| `--infra` or `--docker` | `infra` |
+| `--backend` | `control-center, agent-runtime, communication-hub` |
+| `--frontend` | `frontend` |
+| `--control-center` | `control-center` |
+| `--agent-runtime` | `agent-runtime` |
+| `--communication-hub` | `communication-hub` |
+
+If multiple flags are present, merge the component sets (e.g., `--backend --frontend` = `control-center, agent-runtime, communication-hub, frontend`).
+
+---
+
+## Step 2: Check Current State
+
+Run `pwsh ./parthenon.ps1 status` to see which services are already running.
+
+Compare the running services against the **resolved component set** from Step 1.
+
+### Build the Final Start List
+
+For each component in the resolved set:
+
+- **infra** is already running → **exclude** from start list (don't restart Docker unnecessarily)
+- **infra** is stopped → keep in list
+- Any backend service or frontend is already running → ask the user
+
+If any backend/frontend components are running, present:
+
+> `control-center` (or whatever) is already running. What would you like to do?
+
+Options:
+1. **Restart all** — force restart everything, including already-running services
+2. **Start only missing** — start only stopped services (Recommended)
+3. **Cancel**
+
+- Option 1 → keep the full component set and add `-Force` when calling parthenon.ps1
+- Option 2 → exclude already-running components from the start list
+- Option 3 → halt
+
+---
+
+## Step 3: Launch Detached (macOS/Linux)
+
+**CRITICAL**: On macOS/Linux, `parthenon.ps1 start` spawns background services. If the bash session that launched it ends, those services get killed. You must detach the start process so services survive independently.
+
+Convert the final component list to a comma-separated `-Services` argument. **Always use an explicit comma-separated list** — never use the `all` or `backend` shortcuts from parthenon.ps1.
+
+Append `-Force` if restarting (from user choice or `--force` flag).
+Append `-RunSetup` if `--setup` was passed.
+
+### Launch command (detached via nohup):
 
 ```bash
-pwsh ./parthenon.ps1 start -Services <resolved_services> <optional_force_flag>
+nohup pwsh ./parthenon.ps1 start -Services <comma,separated,list> [-Force] [-RunSetup] > /tmp/parthenon-start.log 2>&1 &
 ```
 
 Examples:
-
 ```bash
-pwsh ./parthenon.ps1 start -Services all
-pwsh ./parthenon.ps1 start -Services infra
-pwsh ./parthenon.ps1 start -Services backend -Force
-pwsh ./parthenon.ps1 start -Services control-center,agent-runtime
+# Infra already running, user typed /start-app with no flags → skip infra
+nohup pwsh ./parthenon.ps1 start -Services control-center,agent-runtime,communication-hub,frontend > /tmp/parthenon-start.log 2>&1 &
+
+# Fresh start from nothing
+nohup pwsh ./parthenon.ps1 start -Services infra,control-center,agent-runtime,communication-hub,frontend > /tmp/parthenon-start.log 2>&1 &
 ```
-
-`parthenon.ps1` handles:
-- Platform detection (Windows/macOS/Linux)
-- Dependency order (infra → control-center → agent-runtime → communication-hub → frontend)
-- Health-check waiting for each service
-- Port conflict detection and `-Force` restart
-
-**If `--setup` was specified**, pass `-RunSetup` to `parthenon.ps1`:
-
-```bash
-pwsh ./parthenon.ps1 start -Services all -RunSetup
-```
-
-This bootstraps Keycloak realms, database seeding, and certificate authority before starting services.
 
 ---
 
-## Step 4: Verify Service Health
+## Step 4: Poll Until Ready
 
-Always run status after start:
+After launching detached, poll `parthenon.ps1 status` in a loop until all requested services show as running (or timeout after 90s):
+
+```bash
+# Poll status every 5s, up to 90s timeout
+for i in $(seq 1 18); do
+  echo "--- Poll $i ---"
+  pwsh ./parthenon.ps1 status 2>/dev/null
+  # Count how many of the requested services show "Running"
+  RUNNING=$(pwsh ./parthenon.ps1 status 2>/dev/null | grep -c "Running" || true)
+  EXPECTED=<number_of_requested_services>
+  if [ "$RUNNING" -ge "$EXPECTED" ]; then
+    echo "All services running."
+    break
+  fi
+  sleep 5
+done
+```
+
+Replace `<number_of_requested_services>` with the count of services being started (e.g., 4 for `control-center,agent-runtime,communication-hub,frontend`).
+
+After the loop finishes, run one final status to confirm:
 
 ```bash
 pwsh ./parthenon.ps1 status
 ```
 
-Probe only services requested (or implied by `all` / `backend`):
-
-```bash
-# Health checks via curl (works cross-platform)
-curl -sf http://localhost:8082/health/ready  # Keycloak
-curl -sf http://localhost:8000/health         # Control Center
-curl -sf http://localhost:8001/health         # Agent Runtime
-curl -sf http://localhost:8002/health         # Communication Hub
-curl -sf http://localhost:5173                # Frontend
-```
-
-If any requested service fails health checks, report startup as incomplete and include the failed endpoint(s). Do not print a success summary until all requested probes pass.
-
----
-
-## Step 5: Report Outcome
-
-Provide a concise result with:
-
-- Executed command
-- Resolved service set
-- Status per requested service: Started / Already running / Failed / Skipped
-- Access URLs:
-  - Frontend: `http://localhost:5173`
-  - Control Center API: `http://localhost:8000/api/v1`
-  - Agent Runtime health: `http://localhost:8001/health`
-  - Communication Hub health: `http://localhost:8002/health`
-  - Keycloak: `http://localhost:8082`
+Report the outcome from the status output. If `grep -c "Stopped"` returns >0 for any requested service, report startup as incomplete with the failed services. Do not add additional curl probes.

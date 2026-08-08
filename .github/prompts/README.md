@@ -54,16 +54,21 @@ Starts services based on flags provided.
 ```
 /start-app                    # Start everything (infra + backend + frontend)
 /start-app --frontend         # Start only frontend dev server
-/start-app --backend          # Start only backend API + infra
+/start-app --backend          # Start backend services only (CC + AR + CH)
 /start-app --infra            # Start only infrastructure (postgres, redis, keycloak)
 /start-app --docker           # Start full stack via docker compose
+/start-app --force            # Force restart without confirmation
 /start-app --setup            # Run setup before starting services (fresh environment)
 ```
 
 **Services:**
-- Infrastructure: PostgreSQL, Redis, Keycloak, OTEL Collector (port 5432, 6379, 8082)
-- Backend: Control Center (port 8000)
+- Infrastructure: PostgreSQL (5432), Redis (6379), Keycloak (8082), OTEL Collector
+- Control Center: Backend API (port 8000)
+- Agent Runtime: Agent execution engine (port 8001)
+- Communication Hub: WebSocket hub (port 8002)
 - Frontend: Vite dev server (port 5173)
+
+**Smart startup**: `/start-app` checks what's running first. If infra is already up, it skips infra and only starts what's needed. If backend/frontend services are already running, it asks whether to restart or skip.
 
 ---
 
@@ -133,12 +138,11 @@ Launches interactive demo scenarios using Playwright in headed mode.
 
 ### Daily Development
 
-1. Start infrastructure (if not running): `/start-app --infra`
-2. Start backend: `/start-app --backend`
-3. Start frontend: `/start-app --frontend`
-4. Make changes...
-5. Run tests: `/test-app --filter "your feature"`
-6. Stop when done: `/stop-app`
+1. Start everything: `/start-app` (automatically skips infra if already running)
+2. Or start specific services: `/start-app --backend` or `/start-app --frontend`
+3. Make changes...
+4. Run tests: `/test-app --filter "your feature"`
+5. Stop when done: `/stop-app`
 
 ### After Pulling Changes
 
