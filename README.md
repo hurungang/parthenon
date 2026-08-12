@@ -1,55 +1,28 @@
 # Parthenon — Enterprise AI Harness Framework
 
-Parthenon is a full-stack Enterprise AI Harness that provides a unified platform for managing AI agents with fine-grained control, security, and observability.
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Status](https://img.shields.io/badge/status-active-success.svg)](https://github.com/hurungang/parthenon)
 
-## Vision
+**Self-hosted AI agents with enterprise-grade security, observability, and governed tool access — all running on your own infrastructure.**
 
-Parthenon provides a **unified platform to harness AI agents** with enterprise-grade controls:
+## Why Parthenon
 
-- **Fine-Grained Permission Control**: Skill-based MCP tool permission management via a communication hub, ensuring agents can only access the tools they need
-- **Dual Identity Support**: Agents can operate using their own identity or delegate the user's identity for actions
-- **Flexible Agent Input Models**: Support for conversational agents, trigger-only agents (no input required), and argument-based agents (e.g., correlation ID for troubleshooting)
-- **Standard Operating Procedures (SOPs)**: Define and standardize operational workflows based on one or multiple skills
+- **Run AI agents on your own infrastructure.** No third-party SaaS holding your data. Parthenon deploys on Docker Compose locally or Kubernetes in production — you control everything.
+- **Know exactly what your agents are doing.** Every action is logged. Every tool call is governed by Role → SOP → Skill → Tool permissions. OpenTelemetry traces, metrics, and logs out of the box.
+- **Agents and humans have separate identities.** No blurred lines. Dual identity model with clear audit boundaries — you always know who (or what) did what.
+- **Three isolated backend services.** Agent Runtime, Control Center, and Communication Hub run independently. Compromise the runtime, and your database stays safe.
+- **Bring your own LLM.** Parthenon connects to any OpenAI-compatible API — use GPT-4, Claude, open-source models, whatever you want. No vendor lock-in.
 
-## Core Capabilities
+## Demo
 
-### 🔐 Fine-Grained Access Control
+![Parthenon Feature Demo Teaser](docs/demo-teaser.gif)
 
-Parthenon implements skill-based permission management at the MCP tool level:
+**Full Feature Walkthrough on YouTube** — 59 minutes covering every major feature: architecture, IAM, MCP Hub, agents, HITL, notifications, and observability.
 
-- **Communication Hub**: Acts as a permission gateway between agents and MCP tool servers
-- **Skill-Based Permissions**: Control which MCP tools an agent can access based on assigned skills
-- **Least Privilege Principle**: Agents only get access to tools necessary for their specific function
-- **Centralized Policy Management**: Define and enforce access policies across all agents
-
-### 👤 Dual Identity Support
-
-Agents in Parthenon can operate with flexible identity models:
-
-- **Agent Identity**: Agent operates with its own service principal identity for autonomous operations
-- **User Identity Delegation**: Agent acts on behalf of the user, inheriting their permissions and audit trail
-- **Configurable per Agent Type**: Define identity behavior at the agent type level
-
-### 🤖 Multiple Agent Input Types
-
-Parthenon supports diverse agent interaction patterns:
-
-| Agent Type | Input Model | Use Case Example |
-|------------|-------------|------------------|
-| **Conversational** | Interactive dialogue | Help desk assistant, Q&A bot |
-| **Trigger-Only** | No input, event-triggered | Scheduled reports, monitoring alerts |
-| **Argument-Based** | Structured parameters | Troubleshooting with correlation ID, batch processing |
-
-### 📋 Standard Operating Procedures (SOPs)
-
-Define standardized workflows combining one or multiple skills:
-
-- **Multi-Skill Orchestration**: Chain skills together into repeatable procedures
-- **Standardized Operations**: Ensure consistent execution across teams
-- **Compliance & Audit**: Track SOP execution for regulatory requirements
-- **Version Control**: Maintain SOP definitions as code
-
-## Architecture
+## Tech Stack
 
 - **Backend**: Python 3.11+ / FastAPI / SQLAlchemy 2 (async) / PostgreSQL 16 / Redis
 - **Frontend**: React 19 / TypeScript / MUI 7 / React Router 7 / Vite
@@ -58,7 +31,41 @@ Define standardized workflows combining one or multiple skills:
 
 ## Getting Started
 
-### Using the Management Script (Recommended)
+### First-Time Setup
+
+1. **Start infrastructure** (PostgreSQL, Redis, Keycloak):
+   ```powershell
+   .\parthenon.ps1 start -Services infra
+   ```
+
+2. **Initialize local development environment**:
+   ```powershell
+   .\parthenon.ps1 init
+   ```
+   This creates:
+   - Keycloak realms (human users + agents)
+   - OIDC clients in both realms
+   - Admin user and database roles
+   
+   Safe to run multiple times.
+
+3. **Run database migrations**:
+   ```powershell
+   cd backend
+   alembic upgrade head
+   ```
+
+4. **Start all services**:
+   ```powershell
+   .\parthenon.ps1 start
+   ```
+
+5. **Access the application**:
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000/docs
+   - Login: `admin@parthenon.local` / `admin`
+
+### Using the Management Script
 
 ```powershell
 # Check status of all services
@@ -102,3 +109,25 @@ Parthenon/
 ├── infra/          # Docker Compose, Helm, nginx config
 └── docs/           # Documentation
 ```
+
+## Built with easyspec
+
+Parthenon's documentation, architecture, and development workflow are managed using [easyspec](https://github.com/hurungang/easyspec) — an open source spec-driven development kit that orchestrates a team of AI agents (product owner, architect, developer, tester, etc.) through the full change lifecycle. Every feature in Parthenon goes through easyspec's propose → apply → update-master pipeline.
+
+## License
+
+Parthenon is licensed under the GNU Affero General Public License v3.0 or any
+later version. See [LICENSE](LICENSE).
+
+For organizations that need to use Parthenon under proprietary or other
+commercial terms, separate commercial licensing may be available. See
+[LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+
+## Contributing
+
+Community contributions are welcome. By contributing, you agree that your
+contribution is provided under AGPL-3.0-or-later and may also be relicensed by
+the maintainers under separate commercial terms. Pull requests are gated by an
+explicit CLA acceptance check; if the bot asks you to sign, reply on the pull
+request with the exact acceptance text from [CLA.md](CLA.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md).

@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import require_permission
-from app.core.resource_types import RT_RESULT
+from app.core.resource_types import RT_AGENT_TRAILS
 from app.db.session import DbSession
 from app.schemas.notifications import ResultRecordRead
 from app.services.results.store import ResultStore
@@ -20,7 +20,7 @@ _store = ResultStore()
 @ResultRouter.get("", response_model=list[ResultRecordRead])
 async def list_results(
     db: DbSession,
-    _: dict = Depends(require_permission(RT_RESULT, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
     agent_type_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -37,7 +37,7 @@ async def list_results(
 async def get_result(
     result_id: uuid.UUID,
     db: DbSession,
-    _: dict = Depends(require_permission(RT_RESULT, "read")),
+    _: dict = Depends(require_permission(RT_AGENT_TRAILS, "read")),
 ):
     record = await _store.get(result_id, db)
     if not record:

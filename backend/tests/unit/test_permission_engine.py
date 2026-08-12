@@ -101,7 +101,7 @@ def _stmt(role_id=None):
     s = MagicMock()
     s.id = uuid.uuid4()
     s.role_id = role_id or uuid.uuid4()
-    s.module = "agent"
+    s.module = "agent::management"
     s.effect = PolicyEffect.allow
     return s
 
@@ -138,7 +138,7 @@ async def test_deny_when_no_roles():
     db = _mock_db()
     _setup_engine_db(db, role_ids=[])
     engine = PermissionEngine()
-    result = await engine.authorize(db, uuid.uuid4(), "agent", "delete", "agent_1", {})
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "delete", "agent_1", {})
     assert result.allowed is False
     assert "no assigned roles" in result.reason.lower()
 
@@ -150,7 +150,7 @@ async def test_deny_when_no_matching_statement():
     db = _mock_db()
     _setup_engine_db(db, role_ids=[role_id], statements=[])
     engine = PermissionEngine()
-    result = await engine.authorize(db, uuid.uuid4(), "agent", "delete", "agent_1", {})
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "delete", "agent_1", {})
     assert result.allowed is False
 
 
@@ -171,7 +171,7 @@ async def test_allow_matching_policy():
         conditions_per_stmt={stmt.id: []},
     )
     engine = PermissionEngine()
-    result = await engine.authorize(db, uuid.uuid4(), "agent", "delete", "agent_1", {})
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "delete", "agent_1", {})
     assert result.allowed is True
 
 
@@ -192,7 +192,7 @@ async def test_deny_when_action_not_in_policy():
         conditions_per_stmt={stmt.id: []},
     )
     engine = PermissionEngine()
-    result = await engine.authorize(db, uuid.uuid4(), "agent", "delete", "agent_1", {})
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "delete", "agent_1", {})
     assert result.allowed is False
 
 
@@ -214,7 +214,7 @@ async def test_deny_when_tag_condition_not_satisfied():
         conditions_per_stmt={stmt.id: [cond]},
     )
     engine = PermissionEngine()
-    result = await engine.authorize(db, uuid.uuid4(), "agent", "delete", "agent_1", {"env": "dev"})
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "delete", "agent_1", {"env": "dev"})
     assert result.allowed is False
 
 
@@ -236,7 +236,7 @@ async def test_allow_when_tag_condition_satisfied():
         conditions_per_stmt={stmt.id: [cond]},
     )
     engine = PermissionEngine()
-    result = await engine.authorize(db, uuid.uuid4(), "agent", "delete", "agent_1", {"env": "prod"})
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "delete", "agent_1", {"env": "prod"})
     assert result.allowed is True
 
 
@@ -265,3 +265,144 @@ def test_exact_match():
     engine = PermissionEngine()
     assert engine._match_resource_id("agent_abc", "agent_abc") is True
     assert engine._match_resource_id("agent_abc", "agent_xyz") is False
+
+
+# ---------------------------------------------------------------------------
+# Namespaced resource type tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_namespace_wildcard_star_colon_star_matches_all():
+    """*::* wildcard policy should match any namespaced module."""
+    role_id = uuid.uuid4()
+    stmt = _stmt(role_id)
+    stmt.module = "*::*"
+    act = _action(stmt.id, "read")
+    res = _resource(stmt.id, "*")
+    db = _mock_db()
+    _setup_engine_db(
+        db,
+        role_ids=[role_id],
+        statements=[stmt],
+        actions_per_stmt={stmt.id: [act]},
+        resources_per_stmt={stmt.id: [res]},
+        conditions_per_stmt={stmt.id: []},
+    )
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "read", "*", {})
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_module_level_wildcard_matches_submodule():
+    """agent::* wildcard policy should match agent::skills."""
+    role_id = uuid.uuid4()
+    stmt = _stmt(role_id)
+    stmt.module = "agent::*"
+    act = _action(stmt.id, "create")
+    res = _resource(stmt.id, "*")
+    db = _mock_db()
+    _setup_engine_db(
+        db,
+        role_ids=[role_id],
+        statements=[stmt],
+        actions_per_stmt={stmt.id: [act]},
+        resources_per_stmt={stmt.id: [res]},
+        conditions_per_stmt={stmt.id: []},
+    )
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "agent::skills", "create", "*", {})
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_integration_module_wildcard():
+    """integration::* wildcard policy should match integration::mcp_hub."""
+    role_id = uuid.uuid4()
+    stmt = _stmt(role_id)
+    stmt.module = "integration::*"
+    act = _action(stmt.id, "read")
+    res = _resource(stmt.id, "*")
+    db = _mock_db()
+    _setup_engine_db(
+        db,
+        role_ids=[role_id],
+        statements=[stmt],
+        actions_per_stmt={stmt.id: [act]},
+        resources_per_stmt={stmt.id: [res]},
+        conditions_per_stmt={stmt.id: []},
+    )
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "integration::mcp_hub", "read", "*", {})
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_system_module_wildcard():
+    """system::* wildcard policy should match system::observability."""
+    role_id = uuid.uuid4()
+    stmt = _stmt(role_id)
+    stmt.module = "system::*"
+    act = _action(stmt.id, "read")
+    res = _resource(stmt.id, "*")
+    db = _mock_db()
+    _setup_engine_db(
+        db,
+        role_ids=[role_id],
+        statements=[stmt],
+        actions_per_stmt={stmt.id: [act]},
+        resources_per_stmt={stmt.id: [res]},
+        conditions_per_stmt={stmt.id: []},
+    )
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "system::observability", "read", "*", {})
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_invalid_namespaced_module_rejected():
+    """Invalid namespaced module should return allowed=False."""
+    db = _mock_db()
+    role_id = uuid.uuid4()
+    _setup_engine_db(db, role_ids=[role_id], statements=[])
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "invalid::type", "read", "*", {})
+    assert result.allowed is False
+    assert "unknown resource type" in result.reason.lower()
+
+
+@pytest.mark.asyncio
+async def test_legacy_star_wildcard_still_matches():
+    """Legacy * wildcard policy should still match namespaced modules."""
+    role_id = uuid.uuid4()
+    stmt = _stmt(role_id)
+    stmt.module = "*"
+    act = _action(stmt.id, "read")
+    res = _resource(stmt.id, "*")
+    db = _mock_db()
+    _setup_engine_db(
+        db,
+        role_ids=[role_id],
+        statements=[stmt],
+        actions_per_stmt={stmt.id: [act]},
+        resources_per_stmt={stmt.id: [res]},
+        conditions_per_stmt={stmt.id: []},
+    )
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "agent::management", "read", "*", {})
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_action_validation_for_namespaced_module():
+    """Actions not in the manifest are allowed through — they are evaluated
+    during policy lookup, enabling wildcard policies (action="*") to grant
+    any action on any module. A request with no matching policies is denied
+    at the policy lookup stage, not at manifest validation."""
+    db = _mock_db()
+    role_id = uuid.uuid4()
+    _setup_engine_db(db, role_ids=[role_id], statements=[])
+    engine = PermissionEngine()
+    result = await engine.authorize(db, uuid.uuid4(), "system::observability", "delete", "*", {})
+    assert result.allowed is False
+    assert "no allow policy" in result.reason.lower()

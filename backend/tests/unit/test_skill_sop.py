@@ -79,7 +79,7 @@ async def test_sop_orchestrator_executes_steps_in_order():
     step1 = MagicMock(spec=SopStep)
     step1.id = uuid.uuid4()
     step1.order = 1
-    step1.step_type = SopStepType.skill
+    step1.step_type = SopStepType.skill_invocation
     step1.skill_id = uuid.uuid4()
     step1.name = "Step 1"
     step1.config = {}
@@ -87,7 +87,7 @@ async def test_sop_orchestrator_executes_steps_in_order():
     step2 = MagicMock(spec=SopStep)
     step2.id = uuid.uuid4()
     step2.order = 2
-    step2.step_type = SopStepType.skill
+    step2.step_type = SopStepType.skill_invocation
     step2.skill_id = uuid.uuid4()
     step2.name = "Step 2"
     step2.config = {}

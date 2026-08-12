@@ -1,0 +1,51 @@
+# Agent A2A Communication and Slug Enforcement
+
+## Overview
+This feature strengthens cross-agent collaboration by enabling reliable agent-to-agent communication through the Communication Hub while enforcing slug-based naming standards for routing-critical entities. It reduces failed handoffs, improves workflow continuity, and lowers naming-related operational risk.
+
+## Who Uses It
+- Platform Administrators: Define roles, agent scope, and governance boundaries
+- SOP Authors and AI Operations Engineers: Design delegated multi-agent workflows
+- Runtime Operators: Monitor dynamic receiver behavior and session outcomes
+- Compliance Stakeholders: Validate controlled delegation and auditable interactions
+
+## What It Does
+- Enables agent-to-agent requests using agent type slug as the target identifier
+- Automatically provisions a dynamic receiver instance when a target is unavailable
+- Keeps requester and receiver in the same session until requester-driven completion
+- Derives A2A target permissions from SOP delegation step definitions
+- Shows allowed target agent type slugs during role editing
+- Enforces slug-only values for agent type names, agent names, and MCP server names
+- Includes agent-delegation visibility in plan list and topology preview surfaces
+
+## Key Concepts
+- **A2A Invocation**: Agent-to-agent collaboration routed through the Communication Hub
+- **Dynamic Receiver**: On-demand target agent instance created to complete a delegation flow
+- **Session Continuity**: Shared requester/receiver session maintained until explicit disconnect
+- **Step-Derived Permissions**: Delegation rights derived from SOP step definitions
+- **Slug Enforcement**: Stable, integration-safe naming for routing and identity surfaces
+
+## Recursion and Dead-Loop Prevention
+- **Recursive delegation risk is validated** in SOP and delegation configuration at create and update entry points
+- Recursion-prone agent delegation configurations are **blocked before submission** with a clear user-visible error
+- **Recursion/dead-loop risk is validated at run initiation** and execution is prevented when risk conditions are detected
+- Validation outcomes are reflected in execution logs
+
+## Acceptance Criteria
+- A2A requests can target agents by agent type slug through the Communication Hub
+- If no active target exists, a dynamic receiver instance is created and connected to the active session
+- Requester and receiver can exchange messages in the same session until requester completion
+- Dynamic receiver instance is removed after completion and disconnect
+- Role editing surfaces show allowed target agent type slugs before save
+- Plan preview includes agent-delegation steps in both list and topology views
+- Non-slug values are rejected for agent type names, agent names, and MCP server names in create and update flows
+- **Recursive delegation risk is validated during agent create, update, and run flows; invalid configurations and dead-loop risks are blocked before execution**
+
+## Out of Scope
+- Dynamic slug allocation — slugs are assigned at registration and are immutable for the server's lifetime
+- Multi-tenant MCP server sharing across independent platform instances
+- A2A communication across separate Parthenon deployments
+
+## Dependencies & Constraints
+- Recursion validation depends on a stable SOP and delegation step graph; configuration changes that would create cycles must be rejected at create/update and again at run initiation
+- All changes must align with enterprise segregation and audit requirements

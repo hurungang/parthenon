@@ -81,8 +81,8 @@ test.describe('Tag Management - Allowed Values', () => {
     // Click "Add Tag" button
     await page.getByRole('button', { name: /add tag/i }).click()
 
-    // Wait for dialog to open
-    await page.waitForSelector('[role="dialog"]')
+    // Wait for dialog to open by checking for specific dialog content
+    await page.getByLabel(/key/i).first().waitFor({ state: 'visible', timeout: 10000 })
 
     // Fill in tag details
     await page.getByLabel(/key/i).first().fill('environment')
@@ -219,8 +219,8 @@ test.describe('Tag Management - Allowed Values', () => {
     // Click Edit button for the tag
     await page.locator('[data-testid="EditIcon"]').first().click()
 
-    // Wait for dialog to open
-    await page.waitForSelector('[role="dialog"]')
+    // Wait for dialog to open by checking for existing values
+    await page.locator('text=dev').first().waitFor({ state: 'visible', timeout: 10000 })
 
     // Verify existing values are shown
     await expect(page.locator('text=dev').first()).toBeVisible()
@@ -279,10 +279,12 @@ test.describe('Tag Management - Allowed Values', () => {
 
     // Click Edit button
     await page.locator('[data-testid="EditIcon"]').first().click()
-    await page.waitForSelector('[role="dialog"]')
+
+    // Wait for dialog to open by checking for placeholder
+    const valueInput = page.getByPlaceholder(/value/i).first()
+    await valueInput.waitFor({ state: 'visible', timeout: 10000 })
 
     // Try to add duplicate value
-    const valueInput = page.getByPlaceholder(/value/i).first()
     const addValueButton = page.getByRole('button', { name: /add value/i })
 
     await valueInput.fill('active')
@@ -305,9 +307,9 @@ test.describe('Tag Management - Allowed Values', () => {
 
     // Click "Add Tag" button
     await page.getByRole('button', { name: /add tag/i }).click()
-    await page.waitForSelector('[role="dialog"]')
-
+    
     const addValueButton = page.getByRole('button', { name: /add value/i })
+    await addValueButton.waitFor({ state: 'visible', timeout: 10000 })
 
     // Button should be disabled when input is empty
     await expect(addValueButton).toBeDisabled()

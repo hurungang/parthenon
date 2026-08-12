@@ -1,0 +1,869 @@
+
+ RUN  v4.1.6 C:/Users/rhu/source/personal/coding-workspace/Parthenon/frontend
+
+ Γ£ô src/__tests__/LogPresenter.test.ts (116 tests) 76ms
+ Γ¥» src/__tests__/useChatSession.test.ts (13 tests | 1 failed) 513ms
+     Γ£ô starts disconnected when sessionId is null 249ms
+     Γ£ô initializes with empty messages 11ms
+     Γ£ô sendMessage adds a user message to the queue 23ms
+     Γ£ô clearMessages resets messages array 12ms
+     Γ£ô applies delegating and waiting status from websocket events 14ms
+     ├ù applies using_tool status from websocket events 42ms
+     Γ£ô toggles folded delegation snippet state from true to false 6ms
+     Γ£ô preserves timeout_or_failed status after agent reply 7ms
+     Γ£ô clears non-terminal status after agent reply 8ms
+     Γ£ô streams execution log title snippets while delegation is active 87ms
+     Γ£ô starts a fresh delegation snippet cycle after a new user message 11ms
+     Γ£ô starts a fresh active delegation cycle after completion when user sends a new message 7ms
+     Γ£ô keeps rapid consecutive delegation statuses in a single cycle for one user turn 6ms
+ Γ£ô src/__tests__/useChatSession.intervention.test.ts (9 tests) 149ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders name field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders system_instruction field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders identity_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders role_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders input_type dropdown with all three options
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders output_type dropdown for non-conversation agents
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/InlineInterventionDialog.test.tsx (19 tests) 1799ms
+     Γ£ô renders approve and deny buttons for approval type  320ms
+     Γ£ô renders text input for text type  317ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render old mode field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render max_instances field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render sop_id field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/OutputTypeResultTab.test.tsx (17 tests) 721ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows input schema field when input_type is typed
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT show input schema field for input_type=none
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/ConversationDelegationVisibility.test.tsx (6 tests) 2158ms
+     Γ£ô renders exact delegation label and waiting indicator  973ms
+     Γ£ô shows delegation snippets folded by default and expands on demand  336ms
+     Γ£ô renders separate progress bubbles per delegation cycle and keeps active cycle isolated from prior content  318ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT show output_type field for input_type=conversation
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentSessionPage.test.tsx (10 tests) 15893ms
+     Γ£ô shows loading spinner initially  14569ms
+     Γ£ô renders chat interface for conversational agent session  311ms
+ Γ£ô src/__tests__/ConversationDialog.test.tsx (10 tests) 2998ms
+     Γ£ô waits for the WebSocket connection before sending the first message  1212ms
+     Γ£ô keeps conversational guardrail details hidden by default and opens floating hint on demand  326ms
+     Γ£ô shows policy snapshot id from resumed camelCase guardrail payload instead of unknown  328ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > keeps the guardrail editor collapsed by default
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentManagementPage.test.tsx > AgentManagementPage > opens dialog when Create Agent Type is clicked
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > switches the guardrail section copy for conversational agents
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/PlanPreviewModal.test.tsx (15 tests) 16464ms
+     Γ£ô renders plan steps when generation_status is success  15386ms
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx (21 tests | 2 failed) 18864ms
+     Γ£ô shows loading spinner when data is loading  15802ms
+     Γ£ô shows dialog title key when agent type is not loaded yet 78ms
+     Γ£ô renders agent type name in dialog title after loading  366ms
+     ├ù renders Details tab with correct field values 192ms
+     Γ£ô renders three tabs 213ms
+     Γ£ô keeps Start Chat action visible when switching tabs for conversation agents  658ms
+     Γ£ô shows no-plan placeholder on Agent Preview tab when plan is null  307ms
+     Γ£ô shows plan content on Agent Preview tab when plan is populated 234ms
+     Γ£ô shows regenerate plan button on Agent Preview tab  338ms
+     ├ù shows a stale plan warning when the role has newer updates 640ms
+     ┬╖ calls the regenerate-plan endpoint when the button is clicked
+     ┬╖ shows session list on Execution Logs tab
+     ┬╖ shows empty state on Execution Logs tab when no sessions
+     ┬╖ identity field shows dash when identity_id is null
+     ┬╖ clicking identity name opens AgentIdentityViewDialog
+     ┬╖ role field shows dash when role_id is null
+     ┬╖ clicking role name opens AgentRoleViewDialog
+     ┬╖ clicking role name opens AgentRoleViewDialog (duplicate guard)
+     ┬╖ shows PermissionDeniedAlert when agent type fetch fails
+     ┬╖ calls onClose when the close button is clicked
+     ┬╖ resets to Details tab when dialog re-opens
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx (23 tests | 1 failed | 20 skipped) 4592ms
+     ├ù shows CircularProgress when tools are loading 2411ms
+     Γ£ô does NOT show noToolsAvailable message while loading 286ms
+     Γ£ô does NOT show the server filter while loading 240ms
+     Γåô shows noToolsAvailable message when tools array is empty 1646ms [The test run was aborted by the user.]
+     Γåô does NOT show CircularProgress when tools loaded but empty [The test run was aborted by the user.]
+     Γåô does NOT show the server filter when tools array is empty [The test run was aborted by the user.]
+     Γåô does NOT show any tool checkboxes when tools is empty [The test run was aborted by the user.]
+     Γåô renders the Filter by Server Autocomplete label [The test run was aborted by the user.]
+     Γåô shows tools from ALL servers when no filter is selected [The test run was aborted by the user.]
+     Γåô shows both server slug chips in the tool list [The test run was aborted by the user.]
+     Γåô renders an Autocomplete input element for the server filter [The test run was aborted by the user.]
+     Γåô filter resets to empty when skill prop changes (useEffect) [The test run was aborted by the user.]
+     Γåô renders one checkbox per tool [The test run was aborted by the user.]
+     Γåô all tool checkboxes start unchecked for a new skill [The test run was aborted by the user.]
+     Γåô pre-checks tools that are in skill.tool_ids when editing [The test run was aborted by the user.]
+     Γåô toggling a tool checkbox changes its checked state [The test run was aborted by the user.]
+     Γåô tools are displayed grouped under their server slug chip [The test run was aborted by the user.]
+     Γåô renders the editor panel (not null) [The test run was aborted by the user.]
+     Γåô shows createSkill title for new skill [The test run was aborted by the user.]
+     Γåô shows editSkill title when editing an existing skill [The test run was aborted by the user.]
+     Γåô calls onClose when the X (close) icon button is clicked [The test run was aborted by the user.]
+     Γåô root element has a left border (panel separator) [The test run was aborted by the user.]
+     Γåô renders Cancel and Save buttons [The test run was aborted by the user.]
+ Γ£ô src/__tests__/RuntimeControlDashboardPage.test.tsx (4 tests | 3 skipped) 15824ms
+ Γ£ô src/__tests__/VendorModelGuardrailPanel.test.tsx (12 tests | 12 skipped) 16084ms
+ Γ£ô src/__tests__/ModelConfigDialog.test.tsx (23 tests | 2 skipped) 19048ms
+     Γ£ô renders provider type selector with all provider options  14321ms
+     Γ£ô shows PermissionDeniedAlert when save returns 403  456ms
+     Γ£ô clears error state when dialog is reopened  350ms
+     Γ£ô calls available-models API when Fetch Models is clicked and renders checkboxes  420ms
+     Γ£ô checking a model includes its identifier in enabled_models payload on save  550ms
+     Γ£ô save payload includes enabled_models array even when empty  341ms
+ Γ¥» src/__tests__/SkillEditor.test.tsx (16 tests | 1 failed | 12 skipped) 3558ms
+     Γ£ô renders the skill editor panel  1038ms
+     Γ£ô renders the instructions field 215ms
+     ├ù renders tool selection section grouped by server 1790ms
+     Γ£ô renders close button 263ms
+     Γåô renders save button 242ms [The test run was aborted by the user.]
+     Γåô pre-populates the name field [The test run was aborted by the user.]
+     Γåô pre-populates the instructions field [The test run was aborted by the user.]
+     Γåô renders role assignment sidebar with loaded roles [The test run was aborted by the user.]
+     Γåô renders without runtime errors [The test run was aborted by the user.]
+     Γåô renders Generated Tool Reference section label when editing an existing skill [The test run was aborted by the user.]
+     Γåô does not render Generated Tool Reference section for new skill (null prop) [The test run was aborted by the user.]
+     Γåô renders a collapsible toggle button next to the section label [The test run was aborted by the user.]
+     Γåô section content area uses a pre element (read-only, not a textarea or input) [The test run was aborted by the user.]
+     Γåô shows skills.noTools empty-state when skill has no tool section in instructions_with_tools [The test run was aborted by the user.]
+     Γåô shows tool section content when instructions_with_tools has ## Tools marker [The test run was aborted by the user.]
+     Γåô section is structurally distinct from the editable instructions textarea [The test run was aborted by the user.]
+ Γ¥» src/__tests__/McpSessionManager.test.tsx (23 tests | 1 failed | 14 skipped) 19602ms
+     Γ£ô renders the session manager title  13643ms
+     Γ£ô renders create session button 35ms
+     Γ£ô opens create dialog when create button is clicked  998ms
+     Γ£ô credential field is not pre-populated when editing a session  772ms
+     Γ£ô shows session identity_binding field in dialog 247ms
+     Γ£ô shows session credential_config field in dialog 253ms
+     Γ£ô displays session list from API 108ms
+     Γ£ô renders without runtime errors 21ms
+     Γåô oauth2 auth type shows Authenticate with OAuth button in dialog [The test run was aborted by the user.]
+     ├ù oauth2 auth type does not show manual credential fields 2758ms
+     Γåô OAuth button click calls oauth/authorize endpoint [The test run was aborted by the user.]
+     Γåô OAuth success postMessage refreshes session list [The test run was aborted by the user.]
+     Γåô passthrough is included in auth type options 750ms [The test run was aborted by the user.]
+     Γåô selecting passthrough hides credential fields and shows info alert [The test run was aborted by the user.]
+     Γåô passthrough session row shows Passthrough chip in table [The test run was aborted by the user.]
+     Γåô shows token status chip for oauth2 sessions and dash for non-oauth2 [The test run was aborted by the user.]
+     Γåô shows green refresh button when oauth refresh token is valid [The test run was aborted by the user.]
+     Γåô shows red reauth button when oauth refresh token is expired [The test run was aborted by the user.]
+     Γåô renders Default chip next to a session marked is_default=true [The test run was aborted by the user.]
+     Γåô shows radio-button indicator for each session [The test run was aborted by the user.]
+     Γåô shows auto-default info alert when only one session exists (isAutoDefault) [The test run was aborted by the user.]
+     Γåô shows Default chip for sole session even when is_default=false (auto-default logic) [The test run was aborted by the user.]
+     Γåô shows blocking delete prompt when deleting default with siblings [The test run was aborted by the user.]
+ Γ£ô src/__tests__/AgentRoleDialog.test.tsx (18 tests | 5 skipped) 20156ms
+     Γ£ô renders create dialog title when editRole is null  14513ms
+     Γ£ô calls onSaved after successful create  396ms
+     Γ£ô shows PermissionDeniedAlert when API call fails with 403  385ms
+     Γ£ô renders allowed agent type preview chips for selected SOPs in edit mode  908ms
+     Γ£ô requests allowed agent types using the selected SOP ids  764ms
+     Γ£ô refreshes the allowed agent type preview when SOP selection changes  1301ms
+ Γ£ô src/__tests__/AppShell.test.tsx (32 tests | 32 skipped) 15834ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows token enforcement controls for non-conversational agents
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AgentIdentityListPage.test.tsx (15 tests | 6 skipped) 17128ms
+     Γ£ô renders the page heading  14868ms
+     Γ£ô renders identity names from API data  375ms
+ Γ£ô src/__tests__/AgentManagementPage.test.tsx (23 tests | 15 skipped) 20091ms
+     Γ£ô renders the page heading  16662ms
+     Γ£ô renders Create Agent Type button  452ms
+     Γ£ô opens dialog when Create Agent Type is clicked  1707ms
+     Γ£ô opens AgentJobLaunchDialog when Launch is clicked  422ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > renders model_id dropdown
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > populates model_id dropdown from all model configs enabled_models
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+ Γ£ô src/__tests__/AddGuardrailForm.test.tsx (6 tests | 6 skipped) 11548ms
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > shows empty state hint when no models are enabled across any config
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render model_config_id field
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+stderr | src/__tests__/AgentTypeForm.test.tsx > AgentTypeForm > does NOT render model_name sub-selector
+Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["data-types","list"]
+
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 7 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > renders Details tab with correct field values
+TestingLibraryElementError: Unable to find an element with the text: 1000k tokens. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body
+  style="padding-right: 1024px; overflow: hidden;"
+>
+  <div
+    aria-hidden="true"
+  />
+  <div
+    class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+    role="presentation"
+  >
+    <div
+      aria-hidden="true"
+      class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+    />
+    <div
+      data-testid="sentinelStart"
+      tabindex="0"
+    />
+    <div
+      class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+      role="presentation"
+      style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      tabindex="-1"
+    >
+      <div
+        aria-labelledby="_r_c_"
+        aria-modal="true"
+        class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthXl MuiDialog-paperFullWidth css-nwbaqb-MuiPaper-root-MuiDialog-paper"
+        role="dialog"
+        style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+      >
+        <h2
+          class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1pm9s6p-MuiTypography-root-MuiDialogTitle-root"
+          id="_r_c_"
+        >
+          <span
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            Research Agent
+          </span>
+          <div
+            class="MuiBox-root css-axw7ok"
+          >
+            <button
+              aria-label="app.edit"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="EditIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"
+                />
+              </svg>
+            </button>
+            <button
+              aria-label="app.close"
+              class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+              data-mui-internal-clone-element="true"
+              tabindex="0"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="CloseIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                />
+              </svg>
+            </button>
+          </div>
+        </h2>
+        <div
+          class="MuiDialogContent-root MuiDialogContent-dividers css-1noi74-MuiDialogContent-root"
+        >
+          <div
+            class="MuiBox-root css-1yn5s25"
+          >
+            <div
+              class="MuiTabs-root css-jhczcq-MuiTabs-root"
+            >
+              <div
+                class="MuiTabs-scroller MuiTabs-fixed css-s2t35c-MuiTabs-scroller"
+                style="overflow: hidden; margin-bottom: 0px;"
+              >
+                <div
+                  aria-label="agents.types.dialogTitle"
+                  class="MuiTabs-list MuiTabs-flexContainer css-hzcega-MuiTabs-list"
+                  role="tablist"
+                >
+                  <button
+                    aria-controls="agent-details-tabpanel-0"
+                    aria-selected="true"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary Mui-selected css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-0"
+                    role="tab"
+                    tabindex="0"
+                    type="button"
+                  >
+                    agents.types.detailsTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-1"
+                    aria-selected="false"
+                    class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1usuzwp-MuiButtonBase-root-MuiTab-root"
+                    id="agent-details-tab-1"
+                    role="tab"
+                    tabindex="-1"
+                    type="button"
+                  >
+                    agents.types.agentPreviewTab
+                  </button>
+                  <button
+                    aria-controls="agent-details-tabpanel-2"
+                    aria-selected="false"[...
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/__tests__/AgentTypeDetailsDialog.test.tsx:227:19
+    225|     expect(screen.getByText('You are a research assistant.')).toBeDefiΓÇª
+    226|     // Guardrail budget should render in k-token units with default faΓÇª
+    227|     expect(screen.getByText('1000k tokens')).toBeDefined()
+       |                   ^
+    228|   })
+    229|
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/7]ΓÄ»
+
+ FAIL  src/__tests__/AgentTypeDetailsDialog.test.tsx > AgentTypeDetailsDialog > shows a stale plan warning when the role has newer updates
+TypeError: detail.steps is not iterable
+ Γ¥» src/components/agents/AgentTypeDetailsDialog.tsx:776:42
+    774|                           <List dense disablePadding sx={{ mb: 2 }}>
+    775|                             {(sopDetails ?? []).flatMap((detail) =>
+    776|                               [...detail.steps]
+       |                                          ^
+    777|                                 .sort((a, b) => a.order - b.order)
+    778|                                 .map((step) => {
+ Γ¥» AgentTypeDetailsDialog src/components/agents/AgentTypeDetailsDialog.tsx:775:49
+ Γ¥» Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ Γ¥» renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ Γ¥» updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ Γ¥» beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ Γ¥» runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ Γ¥» performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ Γ¥» workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/7]ΓÄ»
+
+ FAIL  src/__tests__/McpHubPage.test.tsx > McpHubPage ΓÇö Sync button visibility based on session_count > sync button is enabled when session_count > 0
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ Γ¥» src/__tests__/McpHubPage.test.tsx:288:36
+    286|     )
+    287|     // System entry sync is disabled = 1
+    288|     expect(disabledButtons.length).toBe(1)
+       |                                    ^
+    289|   })
+    290| })
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[3/7]ΓÄ»
+
+ FAIL  src/__tests__/McpSessionManager.test.tsx > McpSessionManager ΓÇö OAuth UI > oauth2 auth type does not show manual credential fields
+AssertionError: expected [ <label ΓÇª(4)></label>, <span></span> ] to have a length of +0 but got 2
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    >
+      <div
+        class="MuiBox-root css-0"
+      >
+        <div
+          class="MuiBox-root css-1kw3y0a"
+        >
+          <h6
+            class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+          >
+            mcp.sessions.title
+          </h6>
+          <button
+            class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeSmall MuiButton-containedSizeSmall MuiButton-colorPrimary css-tw6tsg-MuiButtonBase-root-MuiButton-root"
+            tabindex="0"
+            type="button"
+          >
+            <span
+              class="MuiButton-icon MuiButton-startIcon MuiButton-iconSizeSmall css-d8i980-MuiButton-startIcon"
+            >
+              <svg
+                aria-hidden="true"
+                class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                data-testid="AddIcon"
+                focusable="false"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"
+                />
+              </svg>
+            </span>
+            mcp.sessions.create
+          </button>
+        </div>
+        <div
+          class="MuiTableContainer-root css-70zvr5-MuiTableContainer-root"
+        >
+          <table
+            class="MuiTable-root css-1xwxv7r-MuiTable-root"
+          >
+            <thead
+              class="MuiTableHead-root css-1a7iywq-MuiTableHead-root"
+            >
+              <tr
+                class="MuiTableRow-root MuiTableRow-head css-1xtozoh-MuiTableRow-root"
+              >
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-29ut7y-MuiTableCell-root"
+                  scope="col"
+                />
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.name
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.authType
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  mcp.sessions.tokenStatus
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.status
+                </th>
+                <th
+                  class="MuiTableCell-root MuiTableCell-head MuiTableCell-sizeSmall css-g6bqb5-MuiTableCell-root"
+                  scope="col"
+                >
+                  app.actions
+                </th>
+              </tr>
+            </thead>
+            <tbody
+              class="MuiTableBody-root css-gmh7jj-MuiTableBody-root"
+            >
+              <tr
+                class="MuiTableRow-root css-1xtozoh-MuiTableRow-root"
+              >
+                <td
+                  class="MuiTableCell-root MuiTableCell-body MuiTableCell-alignCenter MuiTableCell-sizeSmall css-wsxt5g-MuiTableCell-root"
+                  colspan="6"
+                >
+                  app.noData
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          class="MuiBox-root css-xhfgrq"
+        >
+          <svg
+            aria-hidden="true"
+            class="MuiSvgIcon-root MuiSvgIcon-colorSecondary MuiSvgIcon-fontSizeSmall css-x4u0f7-MuiSvgIcon-root"
+            data-testid="StarIcon"
+            focusable="false"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+            />
+          </svg>
+          <span
+            class="MuiTypography-root MuiTypography-caption css-1374baf-MuiTypography-root"
+          >
+            mcp.sessions.defaultFooterHint
+          </span>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-hidden="true"
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelSta...
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ Γ¥» waitFor.timeout src/__tests__/McpSessionManager.test.tsx:213:28
+    211|       // api_key field key should not appear
+    212|       const apiKeyFields = screen.queryAllByText('mcp.sessions.apiKey')
+    213|       expect(apiKeyFields).toHaveLength(0)
+       |                            ^
+    214|
+    215|       const bearerFields = screen.queryAllByText('mcp.sessions.bearerTΓÇª
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[4/7]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.fixes.test.tsx > SkillEditor ΓÇö loading state > shows CircularProgress when tools are loading
+AssertionError: expected null not to be null
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_0_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_0_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_2_"
+                        id="_r_2_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_2_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_2_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                        [...
+ Γ¥» src/__tests__/SkillEditor.fixes.test.tsx:82:27
+     80|       // MUI CircularProgress renders with role="progressbar"
+     81|       const spinner = document.querySelector('[role="progressbar"]')
+     82|       expect(spinner).not.toBeNull()
+       |                           ^
+     83|     })
+     84|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[5/7]ΓÄ»
+
+ FAIL  src/__tests__/SkillEditor.test.tsx > SkillEditor ΓÇö new skill > renders tool selection section grouped by server
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+<html>
+  <head>
+    <meta
+      content=""
+      name="emotion-insertion-point"
+    />
+  </head>
+  <body
+    style="padding-right: 1024px; overflow: hidden;"
+  >
+    <div
+      aria-hidden="true"
+    />
+    <div
+      class="MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root"
+      role="presentation"
+    >
+      <div
+        aria-hidden="true"
+        class="MuiBackdrop-root MuiModal-backdrop MuiDialog-backdrop css-1cennmq-MuiBackdrop-root-MuiDialog-backdrop"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+      />
+      <div
+        data-testid="sentinelStart"
+        tabindex="0"
+      />
+      <div
+        class="MuiDialog-container MuiDialog-scrollPaper css-19do60a-MuiDialog-container"
+        role="presentation"
+        style="opacity: 1; transition: opacity 225ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;"
+        tabindex="-1"
+      >
+        <div
+          aria-labelledby="_r_q_"
+          aria-modal="true"
+          class="MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation24 MuiDialog-paper MuiDialog-paperScrollPaper MuiDialog-paperWidthLg MuiDialog-paperFullWidth css-18x6di2-MuiPaper-root-MuiDialog-paper"
+          role="dialog"
+          style="--Paper-shadow: 0px 11px 15px -7px rgba(0,0,0,0.2),0px 24px 38px 3px rgba(0,0,0,0.14),0px 9px 46px 8px rgba(0,0,0,0.12);"
+        >
+          <h2
+            class="MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-rvoa5x-MuiTypography-root-MuiDialogTitle-root"
+            id="_r_q_"
+          >
+            <div
+              class="MuiBox-root css-69i1ev"
+            >
+              <h6
+                class="MuiTypography-root MuiTypography-h6 css-1miy0lu-MuiTypography-root"
+              >
+                skills.createSkill
+              </h6>
+              <button
+                class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-155wbr6-MuiButtonBase-root-MuiIconButton-root"
+                tabindex="0"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1umw9bq-MuiSvgIcon-root"
+                  data-testid="CloseIcon"
+                  focusable="false"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </h2>
+          <div
+            class="MuiDialogContent-root MuiDialogContent-dividers css-10bxh4q-MuiDialogContent-root"
+          >
+            <div
+              class="MuiStack-root css-x6fbp7-MuiStack-root"
+            >
+              <div
+                class="MuiPaper-root MuiPaper-outlined MuiPaper-rounded MuiCard-root css-196bwzp-MuiPaper-root-MuiCard-root"
+              >
+                <div
+                  class="MuiCardContent-root css-1lt5qva-MuiCardContent-root"
+                >
+                  <h6
+                    class="MuiTypography-root MuiTypography-subtitle2 css-12fdlse-MuiTypography-root"
+                  >
+                    skills.editor.basicInfo
+                  </h6>
+                  <div
+                    class="MuiStack-root css-1sazv7p-MuiStack-root"
+                  >
+                    <div
+                      class="MuiFormControl-root MuiFormControl-fullWidth MuiTextField-root css-cmpglg-MuiFormControl-root-MuiTextField-root"
+                    >
+                      <label
+                        class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined MuiFormLabel-colorPrimary Mui-required MuiInputLabel-root MuiInputLabel-formControl MuiInputLabel-animated MuiInputLabel-sizeSmall MuiInputLabel-outlined css-1kfabtt-MuiFormLabel-root-MuiInputLabel-root"
+                        data-shrink="false"
+                        for="_r_s_"
+                        id="_r_s_-label"
+                      >
+                        app.name
+                        <span
+                          aria-hidden="true"
+                          class="MuiFormLabel-asterisk MuiInputLabel-asterisk css-1ljffdk-MuiFormLabel-asterisk"
+                        >
+                          ΓÇë
+                          *
+                        </span>
+                      </label>
+                      <div
+                        class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-colorPrimary MuiInputBase-fullWidth MuiInputBase-formControl MuiInputBase-sizeSmall css-1blp12k-MuiInputBase-root-MuiOutlinedInput-root"
+                      >
+                        <input
+                          aria-describedby="_r_s_-helper-text"
+                          aria-invalid="false"
+                          class="MuiInputBase-input MuiOutlinedInput-input MuiInputBase-inputSizeSmall css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input"
+                          id="_r_s_"
+                          required=""
+                          type="text"
+                          value=""
+                        />
+                        [...
+ Γ¥» src/__tests__/SkillEditor.test.tsx:101:33
+     99|     await waitFor(() => {
+    100|       const checkboxes = screen.queryAllByRole('checkbox')
+    101|       expect(checkboxes.length).toBeGreaterThan(0)
+       |                                 ^
+    102|     })
+    103|   })
+ Γ¥» runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ Γ¥» checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ Γ¥» Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[6/7]ΓÄ»
+
+ FAIL  src/__tests__/useChatSession.test.ts > useChatSession > applies using_tool status from websocket events
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ Γ¥» src/__tests__/useChatSession.test.ts:139:47
+    137|     expect(result.current.chatStatus?.kind).toBe('using_tool')
+    138|     expect(result.current.chatStatus?.toolName).toBe('send_notificatioΓÇª
+    139|     expect(result.current.delegationSnippets).toHaveLength(1)
+       |                                               ^
+    140|     expect(result.current.delegationSnippets[0]?.toolName).toBe('send_ΓÇª
+    141|   })
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[7/7]ΓÄ»
+
+
+ Test Files  5 failed | 16 passed (108)
+      Tests  7 failed | 316 passed | 127 skipped (486)
+   Start at  15:26:10
+   Duration  43.48s (transform 15.80s, setup 76.32s, import 119.32s, tests 223.10s, environment 293.36s)
+

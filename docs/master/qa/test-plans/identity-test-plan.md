@@ -165,9 +165,9 @@
 - `frontend/src/__tests__/AppShell.test.tsx`
 
 ### E2E Tests
-- `e2e/tests/auth.spec.ts`
+- `e2e/tests/auth-required/auth.spec.ts`
 - `e2e/tests/permissions.spec.ts`
 - `e2e/tests/tag-management.spec.ts`
 - `e2e/tests/role-policy-management.spec.ts`
-- `e2e/tests/access-control.spec.ts` — permission-denied scenarios, group-role assignment (assign/remove/permission-error), error message detail
+- `e2e/tests/auth-required/access-control.spec.ts` — permission-denied scenarios, group-role assignment (assign/remove/permission-error), error message detail
 - `e2e/tests/permission-errors.spec.ts` — structured 403 rendering across all pages and dialog contexts

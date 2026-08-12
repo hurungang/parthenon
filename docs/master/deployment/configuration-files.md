@@ -4,6 +4,12 @@ Parthenon supports file-based configuration as an alternative (or complement) to
 
 ---
 
+## Services With No Configuration Files
+
+**`mcp-demo-app`** — The MCP Demo App reads all configuration from environment variables. A template file at `mcp-demo-app/.env.example` documents all supported variables with defaults and commentary. The `.env.example` file includes the optional `KEYCLOAK_USER_REALM` and `KEYCLOAK_USER_CLIENT_ID` variables for dual-realm mode. See [environment-variables.md](environment-variables.md) for the full variable reference.
+
+---
+
 ## Resolution Order
 
 For all settings that support both environment variables and a configuration file, the resolution order is:
@@ -13,6 +19,8 @@ For all settings that support both environment variables and a configuration fil
 3. **Built-in defaults** — applied when neither an env var nor a file value is present
 
 This follows the [12-factor app](https://12factor.net/) principle: environment variables are the authoritative override mechanism.
+
+> **Scope:** This env-var-first resolution order now applies to **all** infrastructure connections — PostgreSQL (`POSTGRES_*` / `DATABASE_URL`), Redis (`REDIS_*` / `REDIS_URL`), OIDC identity provider (`OIDC_*`), and telemetry (`TELEMETRY_*`). Previously this was limited to telemetry configuration only. The `SERVICE_BOOTSTRAP_SOURCE_LOG` variable (always enabled at INFO level) logs the resolved configuration source for every infrastructure connection on startup.
 
 ---
 
@@ -68,3 +76,35 @@ In Kubernetes, create a ConfigMap from `config/telemetry.yaml` and mount it into
 - Making a quick targeted override without redeploying the config volume
 
 > **Security note**: `config/telemetry.yaml` must not contain secret values (e.g., `logfire.token`). Supply secrets via environment variables backed by Kubernetes Secrets. The ConfigMap is not encrypted at rest by default.
+
+---
+
+## `config/identity.yaml`
+
+**Purpose**: File-based identity provider configuration for deployments that use the bundled Keycloak provider. Written automatically by the consolidated setup tool (`setup identity`) — operators should NOT hand-edit this file.
+
+**Status**: Relevant for bundled Keycloak deployments (`IDENTITY_PROVIDER_TYPE=keycloak_bundled`). For greenfield deployments using external OIDC providers (non-bundled Keycloak), `config/identity.yaml` is not needed — all identity provider configuration is managed through the System Config UI and stored in the database. For existing deployments that previously used this file, migration to database-backed config is available.
+
+**Source file**: `config/identity.yaml` (generated at deploy time by the setup tool — not committed to the repository)
+
+**Loaded by**: `backend/app/core/config.py` (OIDC settings resolution). Environment variables always take precedence over file values.
+
+### When it is written
+
+The consolidated setup tool writes `config/identity.yaml` when running `setup identity` for bundled Keycloak deployments. The file contains:
+
+- `OIDC_CLIENT_ID` — the OAuth2 client ID provisioned in the Keycloak realm
+- `OIDC_CLIENT_SECRET` — stored encrypted in the database; the YAML file records the client ID for reference
+- `OIDC_REALM` — the Keycloak realm name (defaults to `parthenon`)
+- `OIDC_PROVIDER_URL` — the Keycloak realm base URL
+- `OIDC_AUDIENCE` — the token audience value
+
+### Resolution order (OIDC settings)
+
+1. **Environment variable** (`OIDC_*`) — highest precedence; always overrides file values
+2. **Value in `config/identity.yaml`** — applied when the corresponding env var is not set
+3. **Built-in default** — applied when neither source is present (e.g., Keycloak URL defaults to `http://keycloak:8080/realms/parthenon`)
+
+A missing `config/identity.yaml` is treated as an empty configuration and does not cause an error. Teams that manage all OIDC configuration through environment variables (typical for external providers) can omit the file entirely.
+
+> **Note on identity provider registration:** The `config/identity.yaml` file covers connection-level settings. Identity provider registration and discovery (OIDC Provider Registry) is managed in the database via the `IdentityProviderConfig` table and the System Config UI. The `config/identity.yaml` file is a separate concern — it provides the initial connection configuration that the Control Center uses during startup validation.

@@ -19,6 +19,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -29,6 +30,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PeopleIcon from '@mui/icons-material/People'
+import { usePagination } from '../../hooks/usePagination'
 import { useGroups, useCreateGroup, useUpdateGroup, useDeleteGroup, useGroupMembers } from '../../hooks/usePermissions'
 import { ManageGroupRolesModal } from '../../components/permissions/ManageGroupRolesModal'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
@@ -36,7 +38,8 @@ import type { Group } from '../../types/permissions'
 
 export function GroupsPage() {
   const { t } = useTranslation()
-  const { data: groups, isLoading, error } = useGroups()
+  const pag = usePagination({ initialRowsPerPage: 50 })
+  const { data: groups, isLoading, error } = useGroups(pag.page + 1, pag.rowsPerPage)
   const createGroup = useCreateGroup()
   const updateGroup = useUpdateGroup()
   const deleteGroup = useDeleteGroup()
@@ -172,6 +175,17 @@ export function GroupsPage() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
 
       {/* Add / Edit dialog */}
       <Dialog open={addOpen} onClose={() => { setAddOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>

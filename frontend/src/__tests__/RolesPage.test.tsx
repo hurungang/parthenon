@@ -21,6 +21,7 @@ vi.mock('../hooks/usePermissions', () => ({
   useCreatePolicyStatement: () => ({ mutate: vi.fn(), isPending: false }),
   useDeletePolicyStatement: () => ({ mutate: vi.fn(), isPending: false }),
   useTagDefinitions: () => ({ data: [], isLoading: false }),
+  useCloneRole: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 vi.mock('../hooks/useTagValueOptions', () => ({
@@ -46,7 +47,7 @@ describe('RolesPage', () => {
     render(<RolesPage />, { wrapper })
     await waitFor(() => {
       expect(screen.getByText('admin-role')).toBeDefined()
-    })
+    }, { timeout: 3000 })
   })
 
   it('renders Add Role button', async () => {

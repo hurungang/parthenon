@@ -59,11 +59,11 @@ Check the backend startup log for the structured entry `permission_engine_mode=<
 
 **Docker Compose (self-hosted)**
 
-Update the `PERMISSION_ENGINE_MODE` value in the `.env` file (or the relevant Docker secrets file), then restart the `platform-api` container. The mode is read at startup; a restart is required.
+Update the `PERMISSION_ENGINE_MODE` value in the `.env` file (or the relevant Docker secrets file), then restart the `control-center` container. The mode is read at startup; a restart is required.
 
 **Kubernetes / Helm**
 
-Update the `PERMISSION_ENGINE_MODE` key in the relevant Kubernetes ConfigMap or Secret, then trigger a rolling restart of the `platform-api` Deployment. If the environment's Helm values support it, set the value via `helm upgrade --set` to avoid touching the base values file.
+Update the `PERMISSION_ENGINE_MODE` key in the relevant Kubernetes ConfigMap or Secret, then trigger a rolling restart of the `control-center` Deployment. If the environment's Helm values support it, set the value via `helm upgrade --set` to avoid touching the base values file.
 
 ### Post-switch verification
 
@@ -112,6 +112,196 @@ Capture the following baseline metrics **before** deploying any change that expa
 ### Post-deployment monitoring thresholds
 
 After deploying a Permission Engine change:
-- If the median response time increases by more than 20%, scale the `platform-api` replicas before switching to enforce mode
+- If the median response time increases by more than 20%, scale the `control-center` replicas before switching to enforce mode
 - If database connection pool utilisation exceeds 80%, review whether the user cache TTL should be extended or whether the group claim mapping query can be cached
 - Monitor for at least 15 minutes of representative traffic before considering the deployment stable
+
+---
+
+## 5. Service Segregation Allowlist Rollout (Audit → Enforce)
+
+Use this runbook when deploying caller-specific Control Center internal API allowlists for `agent_runtime` and `communication_hub`.
+
+### Preconditions
+
+- mTLS is enabled for Agent Runtime and Communication Hub internal calls.
+- Service certificates and revocation checks are operational.
+- Control Center policy variables are configured, including `INTERNAL_API_POLICY_MODE`, `INTERNAL_API_DENY_AUDIT_ENABLED`, and `INTERNAL_API_REQUIRE_SERVICE_IDENTITY`.
+
+### Phase A — Audit Mode
+
+1. Deploy Control Center with `INTERNAL_API_POLICY_MODE=audit` and deny audit events enabled.
+2. Deploy Agent Runtime and Communication Hub with caller identity and mTLS variables aligned.
+3. Run representative workloads and verify all expected internal calls succeed.
+4. Confirm denied events are emitted only for non-contract paths.
+
+### Phase B — Contract Validation Window
+
+- Maintain audit mode for a minimum of one representative traffic cycle.
+- Resolve all allowlist drift before enforcement. Drift includes legitimate production traffic denied in audit mode.
+- Record allowlist version and validation evidence in deployment records.
+
+### Phase C — Enforce Cutover
+
+1. Set `INTERNAL_API_POLICY_MODE=enforce`.
+2. Verify normal agent execution, message routing, and tool-call workflows.
+3. Confirm deny events continue for blocked calls with stable error rates.
+4. Continue elevated monitoring through stabilization period.
+
+### Exit criteria
+
+- No unresolved allowlist drift.
+- No sustained failures on legitimate internal service paths.
+- Certificate renewal and revocation telemetry are healthy.
+
+---
+
+## 6. Deny-Event Triage and Escalation
+
+Use this runbook when deny events increase after allowlist rollout.
+
+### Triage steps
+
+1. Group deny events by caller type, route, method, and policy reason.
+2. Determine whether traffic is expected behavior or potential abuse.
+3. For expected behavior, validate caller identity mapping and allowlist version.
+4. For unexpected traffic, keep deny-by-default and open security incident review.
+
+### Escalation thresholds
+
+- Escalate immediately if denied calls exceed 5% of total internal calls for 5 consecutive minutes.
+- Escalate immediately if any deny reason indicates missing caller identity for a known service.
+- Escalate immediately if revocation-check failures are present during enforce mode.
+
+### Containment guidance
+
+- Do not disable mTLS or caller identity enforcement.
+- If legitimate traffic is impacted, downgrade policy mode to audit while investigation continues.
+- Preserve deny-event telemetry for forensic and compliance evidence.
+
+---
+
+## 7. Certificate and Revocation Failure Response
+
+Use this runbook for certificate bootstrap, renewal, handshake, or revocation-check failures affecting internal service calls.
+
+### Detection signals
+
+- Repeated mTLS handshake failures between Agent Runtime or Communication Hub and Control Center.
+- Certificate renewal failures approaching expiry threshold.
+- Revocation subsystem outages when `INTERNAL_API_FAIL_CLOSED_REVOCATION=true`.
+
+### Response sequence
+
+1. Confirm affected service identity and certificate chain status.
+2. Validate bootstrap key alignment between Control Center and caller service.
+3. Rotate affected service certificate and re-bootstrap identity if compromise or mismatch is suspected.
+4. Re-verify revocation-check health before restoring normal traffic expectations.
+
+### Operational guardrails
+
+- Do not switch revocation behavior to fail-open in production.
+- Do not bypass service certificate validation to recover traffic.
+- If service continuity is at risk, switch policy mode to audit and follow rollback runbook guidance.
+
+---
+
+## 8. Agent Execution Guardrails Rollout Verification Checklist
+
+Use this checklist immediately after deploying the `add-agent-execution-guardrails` change.
+
+### Preconditions
+
+- Control Center, Communication Hub, and Agent Runtime versions are guardrail-contract compatible.
+- Required guardrail environment variables are configured for all three services.
+- Approved default thresholds and fallback modes are documented for the target environment.
+
+### Verification sequence
+
+1. Validate policy snapshot readiness
+- Confirm Control Center resolves and serves effective guardrail policy snapshot fields in execution context payloads.
+
+2. Validate forwarding integrity
+- Run direct and delegated execution flows and confirm Communication Hub preserves guardrail policy snapshot and stop-reason metadata end-to-end.
+- Confirm conversational token visibility and continuation metadata are preserved in forwarded payloads.
+
+3. Validate pre-execution cycle detection
+- Execute a known recursive delegation scenario and confirm the run is blocked before execution with a cycle-classified stop reason.
+
+4. Validate cumulative iteration accounting
+- Execute multi-hop delegated sessions and confirm cumulative iteration limits account for local and delegated chain activity.
+
+5. Validate timeout and delegation limits
+- Confirm wall-clock timeout behavior is enforced and classified clearly.
+- Confirm delegation depth and delegated-step limits are enforced with distinct stop reasons.
+
+6. Validate mode-aware token behavior
+- Conversational mode: confirm current-session token usage is continuously visible and sessions continue at token threshold unless another hard guardrail triggers a stop.
+- Non-conversational and automated modes: confirm token-budget enforcement or configured fallback behavior is applied and classified clearly.
+
+7. Validate persistence and observability
+- Confirm structured stop reasons are persisted in session state and logs.
+- Confirm conversational token telemetry and continuation-path metadata are persisted and visible in observability pipelines.
+
+### Exit criteria
+
+- All guardrail stop classes are produced and persisted as expected.
+- No metadata loss is observed across direct or delegated routing paths.
+- No unexpected hard stops occur on known-good conversational workloads.
+
+---
+
+## 9. Keycloak Group Membership Mapper — Reprovisioning for Existing Installations
+
+Use this runbook to add the Group Membership protocol mapper to an existing bundled Keycloak installation that was provisioned before this capability was introduced. This is a one-time operation to enable group-based permission inheritance via the JWT `groups` claim.
+
+### When to use this runbook
+
+Apply this runbook when:
+- The Parthenon instance was provisioned before the group membership mapper was added to the provisioning flow
+- Users who are members of Keycloak groups are not receiving the expected Parthenon group roles on login
+- The JWT access token issued by Keycloak does not contain a `groups` claim
+
+### Background
+
+Prior to the addition of automatic group membership mapper creation, the `parthenon-api-ui` Keycloak client lacked a "Group Membership" protocol mapper. The `GroupClaimMapper` and `JWTAuthMiddleware` were designed to auto-assign users to Parthenon groups by matching JWT `groups` claims, but the claim was never present in tokens because the mapper was missing.
+
+### Procedure
+
+Reprovision the identity provider with the `force_reconfigure` flag set to `true`. This re-runs the bootstrap flow, which:
+1. Detects the existing realm and client (no duplication or re-creation)
+2. Adds the Group Membership protocol mapper to the `parthenon-api-ui` client
+3. Is idempotent — running multiple times will not create duplicate mappers
+
+**Via the CLI (headless):**
+
+Run inside the `control-center` container:
+```bash
+python -m app.cli provision-identity --force-reconfigure
+```
+The CLI uses the existing identity provider configuration stored in the database and re-provisions without prompting for credentials.
+
+**Via the API directly:**
+
+Call `POST /api/v1/setup/identity` with `"force_reconfigure": true` in the request body, supplying the same provider credentials used during initial provisioning.
+
+> **Note:** The `POST /setup/identity` endpoint returns HTTP 409 when setup is already configured and `force_reconfigure` is not set to `true`. Always include the `force_reconfigure` flag when reprovisioning.
+
+### Verification
+
+After reprovisioning:
+
+1. Check the Platform API logs for a confirmation message indicating the Group Membership mapper was created (or that an existing mapper was detected and skipped)
+2. Log in as a user who is a member of at least one Keycloak group that has a corresponding Parthenon group with a matching `idp_claim_value`
+3. Decode the user's JWT access token (e.g., via the browser developer tools or a JWT debugger) and confirm the `groups` claim is present and contains the expected Keycloak group names
+4. Verify that the user's Parthenon group memberships and inherited roles are reflected in the admin UI under the user's permission profile
+
+### Rollback
+
+No rollback is needed for this operation. The Group Membership mapper is additive — it does not modify any existing client configuration. If the mapper should be removed for any reason, delete it manually in the Keycloak Admin Console (`Clients` → `parthenon-api-ui` → `Client scopes` → `parthenon-api-ui-dedicated` → `Mappers`).
+
+### Compatibility
+
+- Works with all existing Parthenon group configurations — no changes to `idp_claim_value` or group-to-role mappings are needed
+- Does not affect users who are not members of any Keycloak groups — their tokens will include an empty `groups` claim
+- Applies only to the bundled Keycloak provider (`IDENTITY_PROVIDER_TYPE=keycloak_bundled`). External providers must be configured separately

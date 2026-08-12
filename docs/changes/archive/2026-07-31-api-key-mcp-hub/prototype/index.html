@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — API Key MCP Hub Prototype</title>
+<style>
+/* ═══════════════════════════════ DESIGN TOKENS (from master UX — light sidebar) ═══════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ═══════════════════════════════ APP SHELL ═══════════════════════════════ */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ═══════════════════════════════ SIDEBAR ═══════════════════════════════ */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-parent-group.active .nav-parent-group-label{color:var(--sidebar-active-text)}
+
+.nav-parent-group.locked-open .toggle-icon{display:none}
+.nav-parent-group.locked-open .nav-parent-group-label{cursor:default}
+.nav-parent-group.locked-open .nav-parent-group-label:hover{color:var(--text-secondary)}
+
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+/* ═══════════════════════════════ TOP BAR ═══════════════════════════════ */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ═══════════════════════════════ VIEWS ═══════════════════════════════ */
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ═══════════════════════════════ BUTTONS ═══════════════════════════════ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+
+/* ═══════════════════════════════ TABLE ═══════════════════════════════ */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody tr:nth-child(odd){background:#FDFDFD}
+tbody tr:nth-child(odd):hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ═══════════════════════════════ CHIPS / BADGES ═══════════════════════════════ */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-red{background:var(--error)}
+
+/* ═══════════════════════════════ CHANGE BANNER ═══════════════════════════════ */
+.change-banner{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:18px}
+.change-banner .cb-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.change-banner .cb-body{flex:1}
+.change-banner h4{font-size:14px;margin-bottom:4px;color:var(--primary-dark)}
+.change-banner p{font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+.change-banner .cb-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--primary);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-left:6px;vertical-align:middle}
+
+/* ═══════════════════════════════ FILTER BAR ═══════════════════════════════ */
+.filter-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.filter-bar select{padding:7px 28px 7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);outline:none;font-size:13px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
+.filter-bar select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.search-input{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;flex:1;max-width:280px}
+.search-input input{border:none;outline:none;background:none;flex:1;color:var(--text-primary);font-size:13px}
+.search-input input::placeholder{color:#94A3B8}
+.search-input .search-icon{color:var(--text-secondary);flex-shrink:0;font-size:15px}
+
+/* ═══════════════════════════════ EMPTY STATE ═══════════════════════════════ */
+.empty-state{text-align:center;padding:64px 24px;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:40px;margin-bottom:12px}
+.empty-state h3{font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.empty-state p{font-size:13px;margin-bottom:16px}
+
+/* ═══════════════════════════════ MODALS ═══════════════════════════════ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-lg{max-width:580px}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;transition:background var(--transition)}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;background:#FAFAFA}
+
+/* ═══════════════════════════════ FORMS ═══════════════════════════════ */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control::placeholder{color:#94A3B8}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 2px rgba(244,67,54,.15)}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.form-error.visible{display:block}
+
+/* ═══════════════════════════════ KEY REVEAL BOX ═══════════════════════════════ */
+.key-reveal-box{background:#F8FAFC;border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:16px;text-align:center}
+.key-reveal-box .key-warning{display:flex;align-items:center;gap:8px;background:#FEF3C7;color:#92400E;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13px;font-weight:600;text-align:left}
+.key-reveal-box .key-warning .warn-icon{font-size:20px;flex-shrink:0}
+.key-display{display:flex;align-items:center;gap:8px;background:#1E293B;color:#E2E8F0;border-radius:var(--radius-sm);padding:12px 16px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:.5px;word-break:break-all;text-align:left;position:relative;margin-bottom:12px}
+.key-display .key-text{flex:1;overflow-x:auto;white-space:nowrap}
+.key-display .key-text::-webkit-scrollbar{height:3px}.key-display .key-text::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px}
+.key-display .key-text.masked{filter:blur(6px);user-select:none}
+.key-display .copy-btn{flex-shrink:0;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#E2E8F0;padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.key-display .copy-btn:hover{background:rgba(255,255,255,0.2)}
+.key-reveal-actions{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.key-reveal-actions .reveal-toggle{font-size:13px;font-weight:600;color:var(--primary);background:none;border:none;cursor:pointer;padding:6px 12px;border-radius:var(--radius-sm);transition:background var(--transition)}
+.key-reveal-actions .reveal-toggle:hover{background:var(--primary-light)}
+.key-format-hint{font-size:11px;color:var(--text-secondary);margin-top:8px;font-family:'Courier New',monospace}
+
+/* ═══════════════════════════════ KEY HINT IN TABLE ═══════════════════════════════ */
+.key-hint{font-family:'Courier New',monospace;font-size:12px;color:#64748B;background:#F1F5F9;padding:3px 8px;border-radius:4px;display:inline-block}
+
+/* ═══════════════════════════════ TOAST ═══════════════════════════════ */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease;display:flex;align-items:center;gap:8px}
+.toast-success{background:#2E7D32}.toast-error{background:#C62828}.toast-info{background:#1565C0}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════════════ ALERT ═══════════════════════════════ */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+
+/* ═══════════════════════════════ REVOKED ROW ═══════════════════════════════ */
+tr.revoked-row{opacity:.65}
+tr.revoked-row td{color:#9CA3AF}
+
+/* ═══════════════════════════════ SECTION TITLE ═══════════════════════════════ */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:24px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ═══════════════════════════════ KEY CREATED SUCCESS ═══════════════════════════════ */
+.key-created-success{text-align:center;padding:16px 0}
+.key-created-success .success-icon{width:56px;height:56px;background:#DCFCE7;color:#15803D;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px}
+.key-created-success h4{font-size:16px;font-weight:600;margin-bottom:4px;color:var(--text-primary)}
+.key-created-success p{font-size:13px;color:var(--text-secondary)}
+
+/* ═══════════════════════════════ SPINNER ═══════════════════════════════ */
+.spinner-sm{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════════════════════ MISC ═══════════════════════════════ */
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}
+.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
+.font-mono{font-family:'Courier New',monospace}
+strong{font-weight:600}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.w-full{width:100%}
+
+/* ═══════════════════════════════ RESPONSIVE ═══════════════════════════════ */
+@media (max-width:1024px){
+  .sidebar{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ APP SHELL ═══════════════════════════════ -->
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ LIGHT SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" aria-label="Primary navigation">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <div class="nav-item" data-view="dashboard" onclick="appNav('dashboard')">
+    <span class="nav-icon">🏠</span>Dashboard
+  </div>
+
+  <div class="nav-parent-group" id="nav-agents">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="false" tabindex="0">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">👤</span>Agent Roles</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🆔</span>Agent Identities</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item"><span class="nav-icon">▶️</span>Agent Executions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">📅</span>Schedules</div>
+    </div>
+  </div>
+
+  <div class="nav-parent-group locked-open active" id="nav-integrations">
+    <div class="nav-parent-group-label">
+      <span>🔌 Integrations</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">🔌</span>MCP Hub</div>
+      <div class="nav-item sub-item active" data-view="api-keys" onclick="appNav('api-keys')">
+        <span class="nav-icon">🔑</span>API Keys
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-parent-group" id="nav-system">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" aria-expanded="false" tabindex="0">
+      <span>⚙️ System</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">📊</span>Observability</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔐</span>Permissions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">⚙️</span>System Config</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">API Key Management</div>
+    <div class="topbar-actions">
+      <div class="avatar" title="Platform Administrator">PA</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: DASHBOARD ═══════════════════════════════ -->
+<div id="view-dashboard" class="view">
+  <div class="view-header">
+    <div><h2>Dashboard</h2><div class="view-desc">Platform overview and quick actions</div></div>
+  </div>
+
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>API Key MCP Hub <span class="cb-tag">api-key-mcp-hub</span></h4>
+      <p>Create and manage API keys for third-party agents connecting to Parthenon's MCP Hub. Keys are bound to existing agent identities and roles—enabling secure external access with the same fine-grained permissions as internal agents.</p>
+    </div>
+  </div>
+
+  <div class="section-title">Quick Access</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="appNav('api-keys')">🔑 Manage API Keys</button>
+    <button class="btn btn-secondary">🔌 MCP Hub Status</button>
+    <button class="btn btn-secondary">📊 Observability</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ VIEW: API KEY MANAGEMENT ═══════════════════════════════ -->
+<div id="view-api-keys" class="view active">
+
+  <div class="view-header">
+    <div>
+      <h2>API Key Management</h2>
+      <div class="view-desc">Create and manage API keys for third-party agents connecting via the MCP Hub</div>
+    </div>
+    <button class="btn btn-primary" onclick="openCreateKeyModal()">
+      + Create API Key
+    </button>
+  </div>
+
+  <!-- Change Banner -->
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>External Agent Authentication <span class="cb-tag">new</span></h4>
+      <p>API keys enable external AI agents (Claude Code, Cursor, custom agents) to connect to Parthenon's Communication Hub via the standard MCP protocol. Each key is bound to a specific agent identity and role—access is governed by the same permission model used internally.</p>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <select id="filter-status" onchange="filterKeys()">
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="revoked">Revoked</option>
+    </select>
+    <div class="search-input">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-keys" placeholder="Search by name or identity..." oninput="filterKeys()">
+    </div>
+    <span class="text-sm text-secondary" id="result-count">4 keys</span>
+  </div>
+
+  <!-- API Keys Table -->
+  <div class="table-wrap" id="keys-table-wrap">
+    <table id="keys-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Agent Identity</th>
+          <th>Agent Role</th>
+          <th>Status</th>
+          <th>Key Hint</th>
+          <th>Created</th>
+          <th>Last Used</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="keys-tbody">
+        <!-- Rows rendered by JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Empty State (hidden by default) -->
+  <div id="empty-state" class="empty-state" style="display:none">
+    <div class="empty-icon">🔑</div>
+    <h3>No API Keys Yet</h3>
+    <p>Create your first API key to allow external agents to connect to the MCP Hub.</p>
+    <button class="btn btn-primary" onclick="openCreateKeyModal()">+ Create API Key</button>
+  </div>
+
+</div><!-- /api-keys view -->
+
+</div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ MODAL: CREATE API KEY ═══════════════════════════════ -->
+<div id="modal-create-key" class="modal-overlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Create API Key</h3>
+      <button class="modal-close" onclick="closeModal('modal-create-key')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Form -->
+      <div id="create-step-form">
+        <div class="form-group">
+          <label>Key Name <span style="color:var(--error)">*</span></label>
+          <input type="text" class="form-control" id="input-key-name" placeholder="e.g. Claude Code Production Key" maxlength="128" oninput="validateCreateForm()">
+          <div class="form-hint">A human-readable label to identify this API key</div>
+          <div class="form-error" id="error-key-name">Key name is required</div>
+        </div>
+
+        <div class="form-group">
+          <label>Agent Identity <span style="color:var(--error)">*</span></label>
+          <select class="form-control" id="select-agent-identity" onchange="onIdentityChange()">
+            <option value="">-- Select an agent identity --</option>
+          </select>
+          <div class="form-hint">The agent identity that will use this key to authenticate</div>
+          <div class="form-error" id="error-agent-identity">Agent identity is required</div>
+        </div>
+
+        <div class="form-group">
+          <label>Agent Role <span style="color:var(--error)">*</span></label>
+          <select class="form-control" id="select-agent-role" onchange="validateCreateForm()">
+            <option value="">-- Select a role --</option>
+          </select>
+          <div class="form-hint" id="role-hint">First select an agent identity to see available roles</div>
+          <div class="form-error" id="error-agent-role">Agent role is required</div>
+        </div>
+
+        <!-- Info alert -->
+        <div class="alert alert-info" style="margin-bottom:0">
+          <div>
+            <strong style="display:block;margin-bottom:2px">Key Scoping</strong>
+            <p class="text-sm">The API key inherits the full permission set of the selected role. The external agent will only have access to skills and tools granted by that role.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Key Created Success -->
+      <div id="create-step-success" style="display:none">
+        <div class="key-created-success">
+          <div class="success-icon">✓</div>
+          <h4>API Key Created Successfully</h4>
+          <p id="created-key-label">Key "Claude Code Production Key" has been generated</p>
+        </div>
+
+        <!-- Warning -->
+        <div class="key-reveal-box">
+          <div class="key-warning">
+            <span class="warn-icon">⚠️</span>
+            <span>Save this key now — it will not be shown again. You will not be able to retrieve it after closing this dialog.</span>
+          </div>
+
+          <!-- Key display -->
+          <div class="key-display">
+            <span class="key-text masked" id="key-text-display">phn_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</span>
+            <button class="copy-btn" id="btn-copy-key" onclick="copyKeyToClipboard()" title="Copy to clipboard">
+              📋 Copy
+            </button>
+          </div>
+
+          <div class="key-reveal-actions">
+            <button class="reveal-toggle" id="btn-reveal-key" onclick="toggleKeyReveal()">
+              👁️ Reveal Key
+            </button>
+          </div>
+
+          <div class="key-format-hint">
+            Key format: <span class="font-mono" style="color:var(--primary-dark)">phn_sk_</span> + 32 random characters
+          </div>
+        </div>
+
+        <!-- Summary info -->
+        <div style="margin-top:16px;font-size:13px;color:var(--text-secondary)">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0">
+            <span>Bound Identity</span>
+            <strong style="color:var(--text-primary)" id="summary-identity">—</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F0F0F0">
+            <span>Bound Role</span>
+            <strong style="color:var(--text-primary)" id="summary-role">—</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0">
+            <span>Key Hint</span>
+            <span class="key-hint" id="summary-hint">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="create-modal-footer-form">
+      <button class="btn btn-secondary" onclick="closeModal('modal-create-key')">Cancel</button>
+      <button class="btn btn-primary" id="btn-create-submit" onclick="submitCreateKey()" disabled>
+        Create Key
+      </button>
+    </div>
+    <div class="modal-footer" id="create-modal-footer-done" style="display:none">
+      <button class="btn btn-primary w-full" onclick="closeModal('modal-create-key'); refreshKeysTable();">
+        Done — I have saved this key
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MODAL: REVOKE CONFIRMATION ═══════════════════════════════ -->
+<div id="modal-revoke-confirm" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>⚠️ Revoke API Key</h3>
+      <button class="modal-close" onclick="closeModal('modal-revoke-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning">
+        <div>
+          <p class="text-sm" style="font-size:14px;margin-bottom:8px">
+            Are you sure you want to revoke key <strong id="revoke-key-name">'Unnamed Key'</strong>?
+          </p>
+          <p class="text-sm" style="color:#92400E">
+            Any agent using this key will <strong>immediately lose access</strong>. This action cannot be undone. The key will remain visible in the list with "Revoked" status.
+          </p>
+        </div>
+      </div>
+      <p class="text-sm text-secondary mt-3">
+        Consider creating a replacement key before revoking if the agent still needs access.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-revoke-confirm')">Cancel</button>
+      <button class="btn btn-danger" id="btn-confirm-revoke" onclick="confirmRevoke()">
+        Revoke Key
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ TOAST CONTAINER ═══════════════════════════════ -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+/* ═══════════════════════════════ MOCK DATA ═══════════════════════════════ */
+
+// Agent identities available in the system
+const AGENT_IDENTITIES = [
+  { id: 'ident-001', name: 'GitHub Copilot Agent' },
+  { id: 'ident-002', name: 'Claude Code Agent' },
+  { id: 'ident-003', name: 'Cursor Agent' },
+  { id: 'ident-004', name: 'Custom DevOps Agent' },
+];
+
+// Agent roles available in the system
+const AGENT_ROLES = [
+  { id: 'role-001', name: 'Code Review' },
+  { id: 'role-002', name: 'Skill Discovery' },
+  { id: 'role-003', name: 'SOP Executor' },
+  { id: 'role-004', name: 'Read-Only Observer' },
+];
+
+// Which roles each identity can assume
+const IDENTITY_ROLE_MAP = {
+  'ident-001': ['role-001', 'role-002'],              // GitHub Copilot: Code Review, Skill Discovery
+  'ident-002': ['role-001', 'role-002', 'role-003'],  // Claude Code: Code Review, Skill Discovery, SOP Executor
+  'ident-003': ['role-001', 'role-002'],              // Cursor: Code Review, Skill Discovery
+  'ident-004': ['role-003', 'role-004'],              // DevOps: SOP Executor, Read-Only Observer
+};
+
+// Existing API keys
+let apiKeys = [
+  {
+    id: 'key-001',
+    name: 'Claude Code Production',
+    identityId: 'ident-002',
+    identityName: 'Claude Code Agent',
+    roleId: 'role-001',
+    roleName: 'Code Review',
+    status: 'active',
+    keyHint: 'phn_sk_...a1b2',
+    createdAt: '2026-07-15T10:30:00Z',
+    lastUsedAt: '2026-07-29T14:22:00Z',
+  },
+  {
+    id: 'key-002',
+    name: 'GitHub Copilot Dev',
+    identityId: 'ident-001',
+    identityName: 'GitHub Copilot Agent',
+    roleId: 'role-002',
+    roleName: 'Skill Discovery',
+    status: 'active',
+    keyHint: 'phn_sk_...c3d4',
+    createdAt: '2026-07-20T08:15:00Z',
+    lastUsedAt: '2026-07-29T11:05:00Z',
+  },
+  {
+    id: 'key-003',
+    name: 'DevOps Pipeline Key',
+    identityId: 'ident-004',
+    identityName: 'Custom DevOps Agent',
+    roleId: 'role-003',
+    roleName: 'SOP Executor',
+    status: 'active',
+    keyHint: 'phn_sk_...e5f6',
+    createdAt: '2026-07-25T16:45:00Z',
+    lastUsedAt: '2026-07-28T09:30:00Z',
+  },
+  {
+    id: 'key-004',
+    name: 'Old Cursor Integration',
+    identityId: 'ident-003',
+    identityName: 'Cursor Agent',
+    roleId: 'role-001',
+    roleName: 'Code Review',
+    status: 'revoked',
+    keyHint: 'phn_sk_...7890',
+    createdAt: '2026-07-10T12:00:00Z',
+    lastUsedAt: '2026-07-18T20:15:00Z',
+  },
+];
+
+// State for revoke target
+let revokeTargetId = null;
+
+/* ═══════════════════════════════ INIT ═══════════════════════════════ */
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Nav groups start collapsed
+  document.getElementById('nav-agents').classList.add('collapsed');
+  document.getElementById('nav-system').classList.add('collapsed');
+
+  // Populate identity dropdown
+  const identitySelect = document.getElementById('select-agent-identity');
+  AGENT_IDENTITIES.forEach(function(ident) {
+    const opt = document.createElement('option');
+    opt.value = ident.id;
+    opt.textContent = ident.name;
+    identitySelect.appendChild(opt);
+  });
+
+  // Render keys table
+  refreshKeysTable();
+});
+
+/* ═══════════════════════════════ NAVIGATION ═══════════════════════════════ */
+
+function appNav(viewName) {
+  // Update nav
+  document.querySelectorAll('.sidebar .nav-item').forEach(function(el) { el.classList.remove('active'); });
+  const navItem = document.querySelector('.nav-item[data-view="' + viewName + '"]');
+  if (navItem) navItem.classList.add('active');
+
+  // Update parent group active state
+  document.querySelectorAll('.nav-parent-group').forEach(function(g) { g.classList.remove('active'); });
+  if (navItem) {
+    const parentGroup = navItem.closest('.nav-parent-group');
+    if (parentGroup) parentGroup.classList.add('active');
+  }
+
+  // Show view
+  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+  const view = document.getElementById('view-' + viewName);
+  if (view) view.classList.add('active');
+
+  // Update topbar
+  const titles = {
+    'dashboard': 'Dashboard',
+    'api-keys': 'API Key Management',
+  };
+  document.getElementById('topbar-title').textContent = titles[viewName] || viewName;
+}
+
+function toggleNavGroup(labelEl) {
+  const group = labelEl.parentElement;
+  group.classList.toggle('collapsed');
+  // Update aria-expanded
+  const expanded = !group.classList.contains('collapsed');
+  labelEl.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+/* ═══════════════════════════════ MODAL MANAGEMENT ═══════════════════════════════ */
+
+function openModal(modalId) {
+  document.getElementById(modalId).classList.add('open');
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.remove('open');
+
+  // If closing create modal, reset the form
+  if (modalId === 'modal-create-key') {
+    resetCreateForm();
+  }
+}
+
+// Close modal on overlay click
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal-overlay')) {
+    closeModal(e.target.id);
+  }
+});
+
+/* ═══════════════════════════════ CREATE API KEY ═══════════════════════════════ */
+
+function openCreateKeyModal() {
+  resetCreateForm();
+  openModal('modal-create-key');
+}
+
+function resetCreateForm() {
+  document.getElementById('create-step-form').style.display = 'block';
+  document.getElementById('create-step-success').style.display = 'none';
+  document.getElementById('create-modal-footer-form').style.display = 'flex';
+  document.getElementById('create-modal-footer-done').style.display = 'none';
+
+  document.getElementById('input-key-name').value = '';
+  document.getElementById('select-agent-identity').value = '';
+  document.getElementById('select-agent-role').value = '';
+  document.getElementById('select-agent-role').innerHTML = '<option value="">-- Select a role --</option>';
+  document.getElementById('select-agent-role').disabled = true;
+  document.getElementById('select-agent-role').style.background = '#F5F5F5';
+  document.getElementById('role-hint').textContent = 'First select an agent identity to see available roles';
+
+  // Clear errors
+  document.querySelectorAll('#modal-create-key .form-control').forEach(function(el) { el.classList.remove('error'); });
+  document.querySelectorAll('#modal-create-key .form-error').forEach(function(el) { el.classList.remove('visible'); });
+
+  // Reset submit button
+  document.getElementById('btn-create-submit').disabled = true;
+
+  // Reset key reveal
+  resetKeyReveal();
+}
+
+function onIdentityChange() {
+  const identityId = document.getElementById('select-agent-identity').value;
+  const roleSelect = document.getElementById('select-agent-role');
+  const roleHint = document.getElementById('role-hint');
+
+  // Clear existing role options
+  roleSelect.innerHTML = '<option value="">-- Select a role --</option>';
+
+  if (!identityId) {
+    roleSelect.disabled = true;
+    roleSelect.style.background = '#F5F5F5';
+    roleHint.textContent = 'First select an agent identity to see available roles';
+    document.getElementById('error-agent-identity').classList.remove('visible');
+    document.getElementById('select-agent-identity').classList.remove('error');
+    validateCreateForm();
+    return;
+  }
+
+  // Get allowed roles for this identity
+  const allowedRoleIds = IDENTITY_ROLE_MAP[identityId] || [];
+  if (allowedRoleIds.length === 0) {
+    roleSelect.disabled = true;
+    roleSelect.style.background = '#F5F5F5';
+    roleHint.textContent = 'No roles available for this identity';
+    document.getElementById('error-agent-identity').classList.remove('visible');
+    document.getElementById('select-agent-identity').classList.remove('error');
+    validateCreateForm();
+    return;
+  }
+
+  // Populate role dropdown with allowed roles
+  allowedRoleIds.forEach(function(roleId) {
+    const role = AGENT_ROLES.find(function(r) { return r.id === roleId; });
+    if (role) {
+      const opt = document.createElement('option');
+      opt.value = role.id;
+      opt.textContent = role.name;
+      roleSelect.appendChild(opt);
+    }
+  });
+
+  roleSelect.disabled = false;
+  roleSelect.style.background = '';
+  roleHint.textContent = allowedRoleIds.length + ' role(s) available for this identity';
+
+  document.getElementById('error-agent-identity').classList.remove('visible');
+  document.getElementById('select-agent-identity').classList.remove('error');
+  validateCreateForm();
+}
+
+function validateCreateForm() {
+  const keyName = document.getElementById('input-key-name').value.trim();
+  const identityId = document.getElementById('select-agent-identity').value;
+  const roleId = document.getElementById('select-agent-role').value;
+  const submitBtn = document.getElementById('btn-create-submit');
+
+  submitBtn.disabled = !(keyName && identityId && roleId);
+}
+
+function submitCreateKey() {
+  const keyName = document.getElementById('input-key-name').value.trim();
+  const identityId = document.getElementById('select-agent-identity').value;
+  const roleId = document.getElementById('select-agent-role').value;
+
+  // Validate
+  let valid = true;
+
+  if (!keyName) {
+    document.getElementById('input-key-name').classList.add('error');
+    document.getElementById('error-key-name').classList.add('visible');
+    valid = false;
+  } else {
+    document.getElementById('input-key-name').classList.remove('error');
+    document.getElementById('error-key-name').classList.remove('visible');
+  }
+
+  if (!identityId) {
+    document.getElementById('select-agent-identity').classList.add('error');
+    document.getElementById('error-agent-identity').classList.add('visible');
+    valid = false;
+  } else {
+    document.getElementById('select-agent-identity').classList.remove('error');
+    document.getElementById('error-agent-identity').classList.remove('visible');
+  }
+
+  if (!roleId) {
+    document.getElementById('select-agent-role').classList.add('error');
+    document.getElementById('error-agent-role').classList.add('visible');
+    valid = false;
+  } else {
+    document.getElementById('select-agent-role').classList.remove('error');
+    document.getElementById('error-agent-role').classList.remove('visible');
+  }
+
+  if (!valid) return;
+
+  // Show "creating" state briefly
+  const submitBtn = document.getElementById('btn-create-submit');
+  const originalText = submitBtn.innerHTML;
+  submitBtn.innerHTML = '<span class="spinner-sm"></span> Creating...';
+  submitBtn.disabled = true;
+
+  // Simulate API call
+  setTimeout(function() {
+    // Generate a fake API key
+    const randomChars = generateRandomKey(32);
+    const fullKey = 'phn_sk_' + randomChars;
+    const keyHint = 'phn_sk_...' + randomChars.slice(-4);
+
+    // Add to keys array
+    const newKey = {
+      id: 'key-' + Date.now(),
+      name: keyName,
+      identityId: identityId,
+      identityName: AGENT_IDENTITIES.find(function(i) { return i.id === identityId; }).name,
+      roleId: roleId,
+      roleName: AGENT_ROLES.find(function(r) { return r.id === roleId; }).name,
+      status: 'active',
+      keyHint: keyHint,
+      createdAt: new Date().toISOString(),
+      lastUsedAt: null,
+    };
+    apiKeys.unshift(newKey);
+
+    // Show success step
+    document.getElementById('create-step-form').style.display = 'none';
+    document.getElementById('create-step-success').style.display = 'block';
+    document.getElementById('create-modal-footer-form').style.display = 'none';
+    document.getElementById('create-modal-footer-done').style.display = 'flex';
+
+    // Fill success info
+    document.getElementById('created-key-label').textContent = 'Key "' + keyName + '" has been generated';
+    document.getElementById('summary-identity').textContent = newKey.identityName;
+    document.getElementById('summary-role').textContent = newKey.roleName;
+    document.getElementById('summary-hint').textContent = keyHint;
+
+    // Set key text
+    document.getElementById('key-text-display').textContent = fullKey;
+    document.getElementById('key-text-display').classList.add('masked');
+
+    // Reset reveal button
+    const revealBtn = document.getElementById('btn-reveal-key');
+    revealBtn.textContent = '👁️ Reveal Key';
+    revealBtn.setAttribute('data-revealed', 'false');
+
+    // Store key for clipboard
+    document.getElementById('key-text-display').setAttribute('data-full-key', fullKey);
+    document.getElementById('btn-copy-key').setAttribute('data-full-key', fullKey);
+
+    showToast('API key "' + keyName + '" created successfully', 'success');
+  }, 800);
+}
+
+function generateRandomKey(length) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+function resetKeyReveal() {
+  const keyDisplay = document.getElementById('key-text-display');
+  keyDisplay.textContent = '';
+  keyDisplay.classList.add('masked');
+  keyDisplay.removeAttribute('data-full-key');
+  document.getElementById('btn-reveal-key').textContent = '👁️ Reveal Key';
+  document.getElementById('btn-reveal-key').setAttribute('data-revealed', 'false');
+  document.getElementById('btn-copy-key').removeAttribute('data-full-key');
+}
+
+/* ═══════════════════════════════ KEY REVEAL / COPY ═══════════════════════════════ */
+
+function toggleKeyReveal() {
+  const keyDisplay = document.getElementById('key-text-display');
+  const revealBtn = document.getElementById('btn-reveal-key');
+  const isRevealed = revealBtn.getAttribute('data-revealed') === 'true';
+
+  if (isRevealed) {
+    keyDisplay.classList.add('masked');
+    revealBtn.textContent = '👁️ Reveal Key';
+    revealBtn.setAttribute('data-revealed', 'false');
+  } else {
+    keyDisplay.classList.remove('masked');
+    revealBtn.textContent = '🙈 Hide Key';
+    revealBtn.setAttribute('data-revealed', 'true');
+  }
+}
+
+function copyKeyToClipboard() {
+  const btn = document.getElementById('btn-copy-key');
+  const fullKey = btn.getAttribute('data-full-key');
+
+  if (!fullKey) return;
+
+  // Use Clipboard API
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(fullKey).then(function() {
+      showCopySuccess(btn);
+    }).catch(function() {
+      fallbackCopy(fullKey, btn);
+    });
+  } else {
+    fallbackCopy(fullKey, btn);
+  }
+}
+
+function fallbackCopy(text, btn) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showCopySuccess(btn);
+  } catch (e) {
+    showToast('Failed to copy. Please select and copy manually.', 'error');
+  }
+  document.body.removeChild(textarea);
+}
+
+function showCopySuccess(btn) {
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = '✓ Copied!';
+  btn.style.background = 'rgba(76,175,80,.3)';
+  btn.style.borderColor = 'rgba(76,175,80,.5)';
+  setTimeout(function() {
+    btn.innerHTML = originalHTML;
+    btn.style.background = 'rgba(255,255,255,.12)';
+    btn.style.borderColor = 'rgba(255,255,255,.2)';
+  }, 2000);
+}
+
+/* ═══════════════════════════════ REVOKE CONFIRMATION ═══════════════════════════════ */
+
+function openRevokeConfirm(keyId) {
+  const key = apiKeys.find(function(k) { return k.id === keyId; });
+  if (!key) return;
+
+  revokeTargetId = keyId;
+  document.getElementById('revoke-key-name').textContent = "'" + key.name + "'";
+  openModal('modal-revoke-confirm');
+}
+
+function confirmRevoke() {
+  if (!revokeTargetId) return;
+
+  const key = apiKeys.find(function(k) { return k.id === revokeTargetId; });
+  if (!key) return;
+
+  const keyName = key.name;
+
+  // Update status
+  key.status = 'revoked';
+
+  // Close modal
+  closeModal('modal-revoke-confirm');
+  revokeTargetId = null;
+
+  // Refresh table
+  refreshKeysTable();
+
+  showToast('API key "' + keyName + '" has been revoked. Agents using this key have lost access.', 'info');
+}
+
+/* ═══════════════════════════════ DELETE KEY ═══════════════════════════════ */
+
+function deleteKey(keyId) {
+  const key = apiKeys.find(function(k) { return k.id === keyId; });
+  if (!key) return;
+
+  const keyName = key.name;
+  apiKeys = apiKeys.filter(function(k) { return k.id !== keyId; });
+
+  refreshKeysTable();
+  showToast('API key "' + keyName + '" has been deleted', 'info');
+}
+
+/* ═══════════════════════════════ TABLE RENDERING ═══════════════════════════════ */
+
+function filterKeys() {
+  refreshKeysTable();
+}
+
+function refreshKeysTable() {
+  const statusFilter = document.getElementById('filter-status').value;
+  const searchTerm = (document.getElementById('search-keys') || {}).value || '';
+  const searchLower = searchTerm.toLowerCase();
+
+  // Filter
+  let filtered = apiKeys;
+  if (statusFilter !== 'all') {
+    filtered = filtered.filter(function(k) { return k.status === statusFilter; });
+  }
+  if (searchLower) {
+    filtered = filtered.filter(function(k) {
+      return k.name.toLowerCase().includes(searchLower) ||
+             k.identityName.toLowerCase().includes(searchLower) ||
+             k.roleName.toLowerCase().includes(searchLower);
+    });
+  }
+
+  // Update count
+  document.getElementById('result-count').textContent = filtered.length + ' key' + (filtered.length !== 1 ? 's' : '');
+
+  // Toggle empty state vs table
+  const tbody = document.getElementById('keys-tbody');
+  const emptyState = document.getElementById('empty-state');
+  const tableWrap = document.getElementById('keys-table-wrap');
+
+  if (filtered.length === 0) {
+    tableWrap.style.display = 'none';
+    emptyState.style.display = 'block';
+  } else {
+    tableWrap.style.display = '';
+    emptyState.style.display = 'none';
+
+    // Render rows
+    tbody.innerHTML = '';
+    filtered.forEach(function(key) {
+      const row = document.createElement('tr');
+      if (key.status === 'revoked') {
+        row.classList.add('revoked-row');
+      }
+
+      const createdDate = formatDate(key.createdAt);
+      const lastUsedDate = key.lastUsedAt ? formatDate(key.lastUsedAt) : 'Never';
+
+      // Status chip
+      let statusChip;
+      if (key.status === 'active') {
+        statusChip = '<span class="chip chip-green"><span class="status-dot dot-green" style="margin-right:4px"></span>Active</span>';
+      } else {
+        statusChip = '<span class="chip chip-red"><span class="status-dot dot-red" style="margin-right:4px"></span>Revoked</span>';
+      }
+
+      // Actions
+      let actionsHtml = '';
+      if (key.status === 'active') {
+        actionsHtml =
+          '<button class="btn btn-sm btn-danger" onclick="openRevokeConfirm(\'' + key.id + '\')" title="Revoke this key">Revoke</button>' +
+          '<button class="btn btn-sm btn-secondary" onclick="deleteKey(\'' + key.id + '\')" title="Delete this key" style="margin-left:4px">Delete</button>';
+      } else {
+        actionsHtml =
+          '<button class="btn btn-sm btn-secondary" onclick="deleteKey(\'' + key.id + '\')" title="Delete this key">Delete</button>';
+      }
+
+      row.innerHTML =
+        '<td><strong>' + escapeHtml(key.name) + '</strong></td>' +
+        '<td>' + escapeHtml(key.identityName) + '</td>' +
+        '<td>' + escapeHtml(key.roleName) + '</td>' +
+        '<td>' + statusChip + '</td>' +
+        '<td><span class="key-hint">' + escapeHtml(key.keyHint) + '</span></td>' +
+        '<td class="text-sm">' + createdDate + '</td>' +
+        '<td class="text-sm">' + lastUsedDate + '</td>' +
+        '<td class="actions-cell">' + actionsHtml + '</td>';
+
+      tbody.appendChild(row);
+    });
+  }
+}
+
+function formatDate(isoString) {
+  if (!isoString) return 'Never';
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (diffHours < 24) {
+    if (diffHours < 1) {
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      return diffMins <= 0 ? 'Just now' : diffMins + 'm ago';
+    }
+    return diffHours + 'h ago';
+  }
+  if (diffHours < 48) return 'Yesterday';
+
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const currentYear = now.getFullYear();
+  const hourMin = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  if (year === currentYear) {
+    return month + ' ' + day + ' ' + hourMin;
+  }
+  return month + ' ' + day + ', ' + year + ' ' + hourMin;
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/* ═══════════════════════════════ TOAST ═══════════════════════════════ */
+
+function showToast(message, type) {
+  type = type || 'info';
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  const icons = { success: '✓', error: '✗', info: 'ℹ' };
+  toast.innerHTML = '<span style="font-weight:700">' + (icons[type] || '') + '</span>' + message;
+  container.appendChild(toast);
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    toast.style.transform = 'translateY(-8px)';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 3500);
+}
+
+/* ═══════════════════════════════ KEYBOARD SUPPORT ═══════════════════════════════ */
+
+document.addEventListener('keydown', function(e) {
+  // ESC to close modals
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
+      closeModal(m.id);
+    });
+  }
+});
+</script>
+
+</body>
+</html>

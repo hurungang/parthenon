@@ -2,6 +2,16 @@
 
 Covers frontend component tests and E2E UI tests for all frontend-specific concerns including theming, accessibility, and visual consistency.
 
+## WHEN/THEN Scenarios
+
+| # | WHEN | THEN |
+|---|---|---|
+| SC1 | The global theme is applied | Inter font is used globally, primary color is indigo, cards use 12px border radius, and Roboto is absent |
+| SC2 | An interactive element receives focus | A visible focus indicator appears |
+| SC3 | All themed pages are checked for color contrast | Foreground/background pairs meet WCAG AA contrast ratios (≥ 4.5:1 normal, ≥ 3:1 large text) |
+| SC4 | A page with themed components loads | All component overrides (AppBar, Drawer, Button, Card, TextField, Chip, Dialog) match design specification |
+| SC5 | Major application pages are navigated | Theme is consistent across all pages with no visual regressions |
+
 ---
 
 ## Coverage Areas
@@ -53,8 +63,9 @@ Core pages and flows verified to render correctly:
 
 | Area | Spec File |
 |------|-----------|
-| Authentication flows | e2e/tests/auth.spec.ts |
+| Authentication flows | e2e/tests/test-login-flow.spec.ts |
 | Dashboard / app shell | e2e/tests/dashboard.spec.ts |
+| Sidebar navigation: 3-group structure (Agents: 11 children, Integrations: 5 children, System: 3 children) + Dashboard standalone | frontend/src/__tests__/AppShell.test.tsx (34 tests), e2e/tests/agent-navigation.spec.ts |
 | Agent Management | e2e/tests/agent-management.spec.ts |
 | Chat | e2e/tests/chat.spec.ts |
 | Conversations | e2e/tests/conversations.spec.ts |
@@ -62,6 +73,46 @@ Core pages and flows verified to render correctly:
 | Skills & SOPs | e2e/tests/skills-sops.spec.ts |
 | Permissions (Tags, Roles, Groups, Users, Access) | e2e/tests/permissions.spec.ts |
 | Setup Wizard | e2e/tests/setup-wizard.spec.ts |
+
+---
+
+### 4. Passthrough Session UI
+
+**What is tested:**
+- McpSessionManager: passthrough option present in auth type selector; all credential input fields hidden when selected; informational alert displayed; submit payload omits credentials; passthrough chip shown in session table
+- McpSessionManager: switching between passthrough and credential auth types toggles credential field visibility without page reload
+- TestMcpToolDialog: for a server whose active session has `auth_type === 'passthrough'`, session picker is replaced by an agent identity picker; submit payload includes `session_id` and `agent_subject`
+- TestMcpToolDialog: for a server with a non-passthrough session, existing session picker renders unchanged
+- AssignMcpSessionsToRoleDialog: passthrough sessions display a "Passthrough" chip badge; sessions remain selectable; one-session-per-server toggle UI not shown for passthrough sessions
+
+**Acceptance criteria:**
+- Credential fields are completely hidden (not just disabled) when passthrough is selected
+- Identity picker in TestMcpToolDialog is populated from the agents API
+- Passthrough chip rendered in all relevant session lists without page reload
+- No regression in non-passthrough session flows
+
+**Test files:**
+- [frontend/src/__tests__/McpSessionManager.test.tsx](../../../../frontend/src/__tests__/McpSessionManager.test.tsx) — credential field hiding, informational alert, passthrough chip, submit payload, auth type toggle
+- [frontend/src/__tests__/TestMcpToolDialog.test.tsx](../../../../frontend/src/__tests__/TestMcpToolDialog.test.tsx) — identity picker rendered for passthrough server; session picker absent; correct payload on submit
+- [frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx](../../../../frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx) — **REMOVED** — component deleted; passthrough tests migrated to `AgentRoleDialog.test.tsx`
+- [e2e/tests/passthrough-sessions.spec.ts](../../../../e2e/tests/passthrough-sessions.spec.ts) — mocked UI flow: admin creates passthrough session, chip displayed, identity picker shown in tool test dialog; `test.describe('Real Backend Integration')`: unauthenticated tool test returns correct status, passthrough+credentials rejected
+
+---
+
+### 5. Service Segregation Security Audit (UI Boundary)
+
+**What is tested:**
+- Browser traffic for dashboard/user flows remains on API and WebSocket boundaries only
+- Frontend does not attempt direct database channels (`postgres`, `supabase`, or `:5432` network targets)
+- Boundary-safe client behavior remains consistent while backend deny-path hardening is in effect
+
+**Acceptance criteria:**
+- At least one dashboard journey shows API boundary calls and zero direct database traffic attempts
+- Frontend boundary assertions remain green alongside real-backend internal deny-path probes
+
+**Test files:**
+- [frontend/src/__tests__/service-segregation-security-audit.test.ts](../../../../frontend/src/__tests__/service-segregation-security-audit.test.ts) — boundary-safe client behavior checks for service segregation assumptions
+- [e2e/tests/service-segregation-security-audit.spec.ts](../../../../e2e/tests/service-segregation-security-audit.spec.ts) — browser API/WS-only boundary verification and real-backend deny-path wiring checks
 
 ---
 
@@ -80,3 +131,8 @@ Core pages and flows verified to render correctly:
 | Change | Description | Added |
 |--------|-------------|-------|
 | apply-material-theme | Material UI theming: Inter font, indigo palette, component overrides, WCAG AA | 2026-04-30 |
+| unified-agent-navigation | Added agent-navigation.spec.ts to General UI Smoke table | 2026-05-10 |
+| passthrough-sessions | Added section 4: Passthrough Session UI (McpSessionManager, TestMcpToolDialog, AssignMcpSessionsToRoleDialog) | 2026-05-12 |
+| service-segregation-security-audit | Added section 5: Service Segregation Security Audit (UI boundary enforcement and deny-path integration checks) | 2026-05-22 |
+| reorg-navigation-menu | Updated sidebar navigation from "AI Agent" group + "Notifications" submenu to 3-group structure (Agents: 11 children, Integrations: 5 children, System: 3 children) + Dashboard standalone. AppShell test suite expanded from 5 to 34 tests covering the new structure. | 2026-06-04 |
+| improve-role-mcp-session-assignment | Removed `AssignMcpSessionsToRoleDialog.test.tsx` reference (component deleted); inline MCP session assignment tests in `AgentRoleDialog.test.tsx` | 2026-06-20 |

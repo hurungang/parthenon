@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Skill and SOP Configuration UI placeholder">
+  <rect width="800" height="500" fill="#161d35" />
+  <rect x="20" y="20" width="760" height="460" fill="none" stroke="#7c5cfc" stroke-width="2" stroke-dasharray="8 4" rx="14" />
+  <text x="400" y="180" text-anchor="middle" font-size="48" fill="#a285fd">[camera]</text>
+  <text x="400" y="250" text-anchor="middle" font-size="20" font-weight="600" fill="#f0f2ff" font-family="Inter, sans-serif">Skill and SOP Configuration UI</text>
+  <text x="400" y="282" text-anchor="middle" font-size="14" font-style="italic" fill="#5c6b8a" font-family="Inter, sans-serif">Replace with actual screenshot</text>
+  <text x="400" y="330" text-anchor="middle" font-size="12" fill="#a285fd" font-family="monospace">placeholder-skill-sop.svg</text>
+</svg>

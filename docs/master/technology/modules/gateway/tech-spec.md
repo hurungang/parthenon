@@ -2,7 +2,7 @@
 
 ## Overview
 
-The gateway module exposes registered agent types to external consumers through a stateful lifecycle protocol. Consumers interact with an agent instance through a five-operation sequence: initialise a session, submit a request prompt, long-poll for an agent question, provide an answer, and close the session. The protocol is available over both plain HTTP (via `HttpGatewayTransport`) and as four MCP tools (via `McpGatewayTransport`). The `GatewayLifecycleHandler` orchestrates the state machine while `GatewayEndpointRegistry` maintains the routing table of gateway paths per agent type.
+The gateway module exposes registered agent types to external consumers through a stateful lifecycle protocol. Consumers interact with an agent instance through a five-operation sequence: initialise a session, submit a request prompt, long-poll for an agent question, provide an answer, and close the session. The protocol is available over both plain HTTP (via `HttpGatewayTransport`) and as four MCP tools (via `McpGatewayTransport`). The `GatewayLifecycleHandler` orchestrates the state machine while `GatewayEndpointRegistry` maintains the routing table of gateway paths per agent type. Launch requests are routed through `AgentSessionService.enqueue` (asynchronous job queue); `validate_agent_identity_token()` enforces OAuth token presence, expiry, and identity-type compatibility against the role's configuration; `get_role_tools_for_agent()` returns tool stubs without descriptions or schemas for role-based exposure; `AgentAuthError` is raised on any validation failure.
 
 ---
 
@@ -37,7 +37,8 @@ The gateway module exposes registered agent types to external consumers through 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `GatewayRouter` | router | Lifecycle protocol endpoints (init/request/question/answer/close) | `backend/app/api/gateway/lifecycle.py` |
-| `GatewayLifecycleHandler` | class | Orchestrates gateway state machine: session creation, prompt routing, question/answer pause-resume, and teardown | `backend/app/services/gateway/lifecycle_handler.py` |
+| `GatewayLifecycleHandler` | class | Orchestrates gateway state machine: routes launch requests through `AgentSessionService.enqueue`; `validate_agent_identity_token()` validates OAuth token presence, expiry, and identity type; `get_role_tools_for_agent()` returns tool stubs without descriptions/schemas; `AgentAuthError` raised on validation failure | `backend/app/services/gateway/lifecycle_handler.py` |
+| `AgentAuthError` | exception | Raised by `GatewayLifecycleHandler` when agent identity token validation fails | `backend/app/services/gateway/lifecycle_handler.py` |
 | `GatewayEndpointRegistry` | class | Persists and resolves gateway route mappings per agent type | `backend/app/services/gateway/registry.py` |
 | `HttpGatewayTransport` | class | HTTP adapter marshalling FastAPI requests to GatewayLifecycleHandler | `backend/app/services/gateway/transports/http.py` |
 | `McpGatewayTransport` | class | MCP tool adapter exposing lifecycle operations as four MCP tools for agent-to-agent invocation | `backend/app/services/gateway/transports/mcp.py` |

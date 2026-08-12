@@ -1,0 +1,1835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Agent Output System Prototype</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Parthenon Design Tokens (from master prototype) ─────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-item.sub-item{padding-left:32px;font-size:12px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:12px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary);display:flex;align-items:center;gap:10px}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-primary:disabled{background:#93C5FD;color:#BFDBFE;cursor:not-allowed;box-shadow:none}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff;box-shadow:var(--shadow)}.btn-danger:hover{background:#C62828;box-shadow:var(--shadow-md)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── CHIPS / BADGES ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-teal{background:#D1FAE5;color:#065F46}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-high{background:#FEE2E2;color:#B91C1C}
+.chip-medium{background:#FEF3C7;color:#92400E}
+.chip-low{background:#DCFCE7;color:#15803D}
+
+/* ── MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:620px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-lg{max-width:720px}
+.modal-xl{max-width:860px}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:20px;line-height:1;transition:background var(--transition);width:32px;height:32px;display:flex;align-items:center;justify-content:center}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;align-items:center}
+.modal-footer-left{flex:1;display:flex;justify-content:flex-start}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 3px rgba(244,67,54,0.12)}
+.form-control::placeholder{color:#94A3B8}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
+select.form-control[multiple]{appearance:none;background-image:none;padding-right:12px;min-height:80px}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-error{font-size:11px;color:var(--error);margin-top:4px}
+
+/* ── SECTION TITLE ── */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:20px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ── FIELD ROWS ── */
+.field-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #F1F5F9}
+.field-row:last-child{border-bottom:none}
+.field-row .field-name{flex:2;min-width:0}
+.field-row .field-type{flex:2;min-width:0}
+.field-row .field-required{flex:0 0 80px;text-align:center}
+.field-row .field-actions{flex:0 0 40px;text-align:right}
+
+/* ── EMPTY STATE ── */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:56px;margin-bottom:16px;color:#CBD5E1}
+.empty-state h3{font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.empty-state p{font-size:13px;color:var(--text-secondary);margin-bottom:20px;max-width:360px;text-align:center}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:20px;flex-wrap:wrap}
+.filter-bar .filter-group{display:flex;flex-direction:column;gap:2px}
+.filter-bar .filter-group label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.filter-bar .filter-group select,.filter-bar .filter-group input{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;min-width:160px;background:var(--surface);color:var(--text-primary);outline:none}
+.filter-bar .filter-group select:focus,.filter-bar .filter-group input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+
+/* ── PAGINATION ── */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);background:#F8FAFC}
+.pagination-info{font-size:12px;color:var(--text-secondary)}
+.pagination-btns{display:flex;gap:4px}
+.pagination-btn{background:var(--surface);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-primary);cursor:pointer;transition:all var(--transition)}
+.pagination-btn:hover{background:var(--bg);border-color:var(--primary)}
+.pagination-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pagination-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── DRAWER ── */
+.drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:900;display:none}
+.drawer{position:fixed;top:0;right:0;width:520px;height:100vh;background:var(--surface);box-shadow:-4px 0 20px rgba(0,0,0,0.15);z-index:950;display:none;flex-direction:column;overflow:hidden}
+.drawer-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-header h3{font-size:17px;font-weight:600}
+.drawer-body{padding:24px;overflow-y:auto;flex:1}
+.drawer-body::-webkit-scrollbar{width:4px}.drawer-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ── EXEC LOG TABS ── */
+.exec-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px}
+.exec-tab{padding:10px 20px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;transition:all var(--transition);background:none;border-top:none;border-left:none;border-right:none}
+.exec-tab:hover{color:var(--text-primary)}
+.exec-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.exec-tab-content{display:none}.exec-tab-content.active{display:block}
+
+/* ── TYPED OUTPUT RENDERING ── */
+.typed-field{display:flex;padding:10px 0;border-bottom:1px solid #F1F5F9}
+.typed-field:last-child{border-bottom:none}
+.typed-field-label{flex:0 0 160px;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;padding-top:4px}
+.typed-field-value{flex:1;font-size:14px;color:var(--text-primary)}
+.typed-field-value .bool-true{color:var(--success);display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.typed-field-value .bool-false{color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px}
+
+/* ── VALIDATION ERROR BANNER ── */
+.valid-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);margin-bottom:16px}
+.valid-banner .valid-icon{color:var(--error);font-size:20px;flex-shrink:0;margin-top:1px}
+.valid-banner .valid-content{flex:1}
+.valid-banner .valid-title{font-weight:600;color:#B91C1C;font-size:13px}
+.valid-banner .valid-desc{font-size:12px;color:#991B1B;margin-top:4px}
+.valid-banner .valid-raw{font-family:'Courier New',monospace;font-size:11px;background:#FFF;padding:10px;border:1px solid #FECACA;border-radius:var(--radius-sm);margin-top:8px;white-space:pre-wrap;max-height:120px;overflow-y:auto}
+
+/* ── STAT BADGE ── */
+.stat-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.stat-valid{background:#DCFCE7;color:#15803D}
+.stat-error{background:#FEE2E2;color:#B91C1C}
+
+/* ── SCENARIO TOGGLE BAR ── */
+.scenario-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.scenario-bar span{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.scenario-btn{padding:4px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition);background:var(--surface);color:var(--text-secondary)}
+.scenario-btn:hover{border-color:var(--primary);color:var(--primary)}
+.scenario-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* ── TOAST ── */
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
+.toast-success{background:#2E7D32}
+.toast-error{background:#C62828}
+.toast-info{background:#1565C0}
+
+/* ── PROTOTYPE BADGE ── */
+.prototype-label{position:fixed;bottom:12px;left:12px;z-index:3000;background:#1E293B;color:#fff;font-size:10px;font-weight:600;padding:4px 10px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase}
+
+/* ── PAGE TRANSITIONS ── */
+.page{display:none}.page.active{display:block}
+
+/* ── CHECKBOX ── */
+.checkbox-inline{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:13px}
+.checkbox-inline input{width:15px;height:15px;cursor:pointer;accent-color:var(--primary)}
+
+/* ── TOOLTIP ── */
+.tooltip-wrap{position:relative;display:inline-flex;align-items:center}
+.tooltip-icon{color:var(--text-secondary);font-size:16px;cursor:help;margin-left:4px}
+.tooltip-text{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;font-size:11px;padding:6px 12px;border-radius:var(--radius-sm);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10;max-width:280px;white-space:normal;text-align:center;line-height:1.4}
+.tooltip-wrap:hover .tooltip-text{opacity:1}
+
+/* ── MISC ── */
+.ml-auto{margin-left:auto}
+.flex-center{display:flex;align-items:center;gap:8px}
+.text-secondary{color:var(--text-secondary)}
+.font-mono{font-family:'Courier New',monospace}
+.gap-4{gap:4px}
+.mt-8{margin-top:8px}
+.mb-12{margin-bottom:12px}
+
+/* ── DRAWER CLOSE BUTTON ── */
+.drawer-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:20px;line-height:1;transition:background var(--transition);width:32px;height:32px;display:flex;align-items:center;justify-content:center}.drawer-close:hover{background:var(--bg)}
+
+/* ── SEARCH INPUT ── */
+.search-input{position:relative}
+.search-input .material-icons{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--text-secondary);pointer-events:none}
+.search-input input{padding-left:32px}
+
+/* ── INLINE ERROR ── */
+.inline-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+
+/* ── BADGE FOR DATA TYPE ── */
+.dt-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.dt-badge-typed{background:#EDE9FE;color:#6D28D9}
+.dt-badge-untyped{background:#F1F5F9;color:#475569}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1><span style="margin-right:4px">⚡</span>Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="nav-item" data-view="dashboard" onclick="switchPage('dashboard')">
+    <span class="nav-icon material-icons" style="font-size:16px">dashboard</span>Dashboard
+  </div>
+
+  <!-- Agents group -->
+  <div class="nav-parent-group" data-group="agents">
+    <div class="nav-parent-group-label">
+      <span><span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:4px">smart_toy</span> Agents</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="agents">
+        <span class="nav-icon material-icons" style="font-size:14px">people</span>Agent Types
+      </div>
+      <div class="nav-item sub-item" data-view="identities">
+        <span class="nav-icon material-icons" style="font-size:14px">badge</span>Identities
+      </div>
+      <div class="nav-item sub-item" data-view="roles">
+        <span class="nav-icon material-icons" style="font-size:14px">assignment_ind</span>Roles
+      </div>
+      <div class="nav-item sub-item" data-view="skills">
+        <span class="nav-icon material-icons" style="font-size:14px">handyman</span>Skills
+      </div>
+      <div class="nav-item sub-item" data-view="sops">
+        <span class="nav-icon material-icons" style="font-size:14px">description</span>SOPs
+      </div>
+      <div class="nav-item sub-item" data-view="models">
+        <span class="nav-icon material-icons" style="font-size:14px">settings</span>Model Configs
+      </div>
+      <!-- NEW: Data Types under Agents/Configuration -->
+      <div class="nav-item sub-item active" data-view="data-types" onclick="switchPage('data-types')">
+        <span class="nav-icon material-icons" style="font-size:14px">schema</span>Data Types
+      </div>
+    </div>
+  </div>
+
+  <!-- Integrations group -->
+  <div class="nav-parent-group" data-group="integrations">
+    <div class="nav-parent-group-label">
+      <span><span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:4px">link</span> Integrations</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="mcp-hub">
+        <span class="nav-icon material-icons" style="font-size:14px">cable</span>MCP Hub
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW: Results/Monitoring group -->
+  <div class="nav-parent-group" data-group="monitoring">
+    <div class="nav-parent-group-label">
+      <span><span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:4px">monitoring</span> Results</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="agent-outputs" onclick="switchPage('agent-outputs')">
+        <span class="nav-icon material-icons" style="font-size:14px">output</span>Agent Outputs
+      </div>
+      <div class="nav-item sub-item" data-view="execution-logs">
+        <span class="nav-icon material-icons" style="font-size:14px">history</span>Execution Logs
+      </div>
+    </div>
+  </div>
+
+  <!-- System group -->
+  <div class="nav-parent-group" data-group="system">
+    <div class="nav-parent-group-label">
+      <span><span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:4px">settings</span> System</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="audit">
+        <span class="nav-icon material-icons" style="font-size:14px">security</span>Audit Log
+      </div>
+      <div class="nav-item sub-item" data-view="users">
+        <span class="nav-icon material-icons" style="font-size:14px">group</span>Users
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<div class="main-wrapper">
+
+  <!-- Scenario bar -->
+  <div class="scenario-bar">
+    <span>Demo Flow:</span>
+    <button class="scenario-btn active" onclick="setScenario(0)">1 · Data Types CRUD</button>
+    <button class="scenario-btn" onclick="setScenario(1)">2 · Agent Type Assignment</button>
+    <button class="scenario-btn" onclick="setScenario(2)">3 · Execution Log (Typed)</button>
+    <button class="scenario-btn" onclick="setScenario(3)">4 · Agent Outputs Browse</button>
+    <span style="margin-left:auto;font-size:10px;color:var(--text-secondary)">Click to navigate through each flow</span>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">
+      <span class="material-icons" style="font-size:20px;color:var(--primary)">schema</span>
+      Agent Data Types
+    </div>
+    <div class="topbar-actions">
+      <span style="font-size:12px;color:var(--text-secondary)">Alex Harper</span>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 1: AGENT DATA TYPES REGISTRY (CRUD)                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="page active" id="page-data-types">
+      <div class="view-header">
+        <div>
+          <h2>Agent Data Types</h2>
+          <div class="view-desc">Define reusable typed schemas for agent outputs</div>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateDataTypeDialog()">
+          <span class="material-icons" style="font-size:16px">add</span> Create Data Type
+        </button>
+      </div>
+
+      <div class="table-wrap" id="dataTypesTableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Slug</th>
+              <th>Fields</th>
+              <th>Used By</th>
+              <th>Created</th>
+              <th style="text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="dataTypesTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty state (shown when no data types) -->
+      <div class="empty-state" id="dataTypesEmpty" style="display:none">
+        <span class="empty-icon material-icons">schema</span>
+        <h3>No data types yet</h3>
+        <p>Create your first data type to define a reusable schema for agent outputs. Data types let you enforce structure and enable typed result queries.</p>
+        <button class="btn btn-primary" onclick="openCreateDataTypeDialog()">
+          <span class="material-icons" style="font-size:16px">add</span> Create Data Type
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 2: AGENT TYPE FORM (Data Type Selector)                       -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-agent-type-form">
+      <div class="view-header">
+        <div>
+          <h2>Edit Agent Type — Incident Analyzer</h2>
+          <div class="view-desc">Configure agent type with typed output assignment</div>
+        </div>
+        <div>
+          <button class="btn btn-secondary" onclick="showToast('Changes discarded','info')">Cancel</button>
+          <button class="btn btn-primary" onclick="saveAgentType()">
+            <span class="material-icons" style="font-size:16px">save</span> Save Agent Type
+          </button>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:800px">
+        <div class="card-header"><h3>General Settings</h3></div>
+        <div class="card-body">
+          <!-- Name -->
+          <div class="form-group">
+            <label for="at-name">Agent Type Name</label>
+            <input type="text" class="form-control" id="at-name" value="Incident Analyzer">
+          </div>
+
+          <!-- Identity & Role -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="at-identity">Agent Identity</label>
+              <select class="form-control" id="at-identity">
+                <option>incident-analyzer-bot</option>
+                <option>report-generator-svc</option>
+                <option>monitor-agent-01</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="at-role">Agent Role</label>
+              <select class="form-control" id="at-role">
+                <option>Incident Analyst</option>
+                <option>Report Generator</option>
+                <option>System Monitor</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Model -->
+          <div class="form-group">
+            <label for="at-model">Model Configuration</label>
+            <select class="form-control" id="at-model">
+              <option>gpt-4o (default)</option>
+              <option>gpt-4o-mini</option>
+              <option>claude-3-opus</option>
+              <option>claude-3-sonnet</option>
+            </select>
+          </div>
+
+          <!-- Type -->
+          <div class="form-group">
+            <label for="at-type">Type</label>
+            <select class="form-control" id="at-type" onchange="onAgentTypeChange()">
+              <option value="conversational">Conversational</option>
+              <option value="non-conversational" selected>Non-Conversational</option>
+            </select>
+            <div class="form-hint">Non-conversational agents support structured output data types</div>
+          </div>
+
+          <!-- Output Data Type (shown only for non-conversational) -->
+          <div class="form-group" id="outputDataTypeGroup">
+            <label>
+              Output Data Type
+              <span class="tooltip-wrap">
+                <span class="material-icons tooltip-icon">info_outline</span>
+                <span class="tooltip-text">Assign a data type to validate and structure this agent's outputs. If not set, the agent runs untyped and results are stored as raw JSON.</span>
+              </span>
+            </label>
+            <div class="search-input">
+              <span class="material-icons">search</span>
+              <input type="text" class="form-control" id="dt-search" placeholder="Search data types..." oninput="filterDataTypes()" style="padding-left:32px">
+            </div>
+            <div style="margin-top:4px;border:1px solid var(--border);border-radius:var(--radius-sm);max-height:150px;overflow-y:auto" id="dt-dropdown-list">
+              <!-- Populated by JS -->
+            </div>
+            <div class="form-hint">Optional. If not set, the agent output will be stored as untyped JSON.</div>
+            <div style="margin-top:8px;display:flex;gap:6px;align-items:center" id="selectedDtBadge">
+              <!-- Selected data type badge shown here -->
+            </div>
+          </div>
+
+          <!-- Instruction -->
+          <div class="form-group">
+            <label for="at-instruction">System Instruction</label>
+            <textarea class="form-control" id="at-instruction" rows="6">You are an incident analyzer. Your task is to analyze incoming incident reports, classify their priority, and output structured incident data as defined by the assigned output schema.</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Types List table (for context) -->
+      <div style="margin-top:32px">
+        <div class="view-header" style="margin-bottom:12px">
+          <div><h2 style="font-size:18px">Agent Types</h2><div class="view-desc">Current agent types and their output type assignments</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent Type</th>
+                <th>Type</th>
+                <th>Output Type</th>
+                <th>Data Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight:600">Incident Analyzer</td>
+                <td><span class="chip chip-purple">Non-Conversational</span></td>
+                <td><span class="chip chip-teal">Typed</span></td>
+                <td><span class="dt-badge dt-badge-typed"><span class="material-icons" style="font-size:12px">check_circle</span> IncidentReport</span></td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Customer Support Agent</td>
+                <td><span class="chip chip-blue">Conversational</span></td>
+                <td><span class="chip chip-gray">—</span></td>
+                <td><span class="dt-badge dt-badge-untyped">N/A</span></td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Report Generator</td>
+                <td><span class="chip chip-purple">Non-Conversational</span></td>
+                <td><span class="chip chip-gray">Untyped</span></td>
+                <td><span class="dt-badge dt-badge-untyped">Not assigned</span></td>
+              </tr>
+              <tr>
+                <td style="font-weight:600">Data Enrichment Agent</td>
+                <td><span class="chip chip-purple">Non-Conversational</span></td>
+                <td><span class="chip chip-teal">Typed</span></td>
+                <td><span class="dt-badge dt-badge-typed"><span class="material-icons" style="font-size:12px">check_circle</span> EnrichmentResult</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 3: EXECUTION LOG (TYPED OUTPUT)                               -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-execution-log">
+      <div class="view-header">
+        <div>
+          <h2>Execution Log</h2>
+          <div class="view-desc">Agent execution details with typed output rendering</div>
+        </div>
+        <div>
+          <button class="btn btn-secondary" onclick="showToast('Log exported as JSON','success')">
+            <span class="material-icons" style="font-size:16px">download</span> Export
+          </button>
+        </div>
+      </div>
+
+      <!-- Execution header -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="display:flex;flex-wrap:wrap;gap:20px">
+          <div><span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Agent Type</span><div style="font-weight:600;margin-top:2px">Incident Analyzer</div></div>
+          <div><span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Session ID</span><div class="font-mono" style="font-size:12px;margin-top:2px">sess-20260115-abc123</div></div>
+          <div><span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Status</span><div style="margin-top:2px"><span class="chip chip-green">Completed</span></div></div>
+          <div><span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Started</span><div style="margin-top:2px">Jan 15, 2026 14:32:18 UTC</div></div>
+          <div><span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Duration</span><div style="margin-top:2px">5.3s</div></div>
+        </div>
+      </div>
+
+      <!-- Schema validation failure scenario banner (hidden by default) -->
+      <div class="valid-banner" id="validBanner" style="display:none">
+        <span class="material-icons valid-icon">warning</span>
+        <div class="valid-content">
+          <div class="valid-title">Schema Validation Failed</div>
+          <div class="valid-desc">The agent output did not match the expected schema for <strong>IncidentReport</strong>. Field 'priority' expects enum value (high|medium|low), received 'critical'.</div>
+          <div class="valid-raw">{
+  "priority": "critical",
+  "incident_date": "2026-01-15T10:30:00Z",
+  "summary": "Critical system failure detected",
+  "resolved": false
+}</div>
+        </div>
+      </div>
+
+      <!-- Execution Log Tabs -->
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          <div class="exec-tabs" style="padding:0 20px;padding-top:4px">
+            <button class="exec-tab" onclick="switchExecTab('prompt', this)">Prompt</button>
+            <button class="exec-tab active" onclick="switchExecTab('result', this)">Result <span class="chip chip-purple" style="margin-left:6px;padding:1px 8px;font-size:10px">IncidentReport</span></button>
+            <button class="exec-tab" onclick="switchExecTab('tools', this)">Tools</button>
+          </div>
+
+          <!-- Prompt tab -->
+          <div class="exec-tab-content" id="exec-tab-prompt" style="padding:20px">
+            <div class="form-group">
+              <label>System Instruction</label>
+              <div style="background:#F8FAFC;padding:12px;border-radius:var(--radius-sm);font-size:13px;line-height:1.6;font-family:'Courier New',monospace;white-space:pre-wrap">You are an incident analyzer. Analyze the incoming incident report and output structured incident data.</div>
+            </div>
+            <div class="form-group">
+              <label>User Prompt</label>
+              <div style="background:#F8FAFC;padding:12px;border-radius:var(--radius-sm);font-size:13px;line-height:1.6;font-family:'Courier New',monospace;white-space:pre-wrap">Analyze this incident: Database server db-01 is experiencing high CPU usage and connection timeouts. Impact: all read operations failing. Reported by monitoring-alerts@internal.</div>
+            </div>
+          </div>
+
+          <!-- Result tab -->
+          <div class="exec-tab-content active" id="exec-tab-result" style="padding:20px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+              <span class="dt-badge dt-badge-typed" style="font-size:12px;gap:4px">
+                <span class="material-icons" style="font-size:14px">check_circle</span> IncidentReport
+              </span>
+              <span style="font-size:12px;color:var(--text-secondary)">— Schema validated output</span>
+            </div>
+
+            <!-- Typed fields -->
+            <div id="typedFieldsContainer">
+              <div class="typed-field">
+                <div class="typed-field-label">Priority</div>
+                <div class="typed-field-value">
+                  <span class="chip chip-high">
+                    <span class="material-icons" style="font-size:12px">priority_high</span> High
+                  </span>
+                </div>
+              </div>
+              <div class="typed-field">
+                <div class="typed-field-label">Incident Date</div>
+                <div class="typed-field-value">Jan 15, 2026</div>
+              </div>
+              <div class="typed-field">
+                <div class="typed-field-label">Summary</div>
+                <div class="typed-field-value">Database server db-01 experiencing high CPU usage and connection timeouts. All read operations affected. Requires immediate investigation.</div>
+              </div>
+              <div class="typed-field">
+                <div class="typed-field-label">Resolved</div>
+                <div class="typed-field-value">
+                  <span class="bool-false">
+                    <span class="material-icons" style="font-size:18px;color:var(--error)">cancel</span> No
+                  </span>
+                </div>
+              </div>
+              <div class="typed-field">
+                <div class="typed-field-label">Category</div>
+                <div class="typed-field-value">
+                  <span class="chip chip-blue">Infrastructure</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Legacy untyped fallback (hidden) -->
+            <div id="untypedFallback" style="display:none">
+              <div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:var(--radius-sm);padding:12px;margin-bottom:16px">
+                <span class="material-icons" style="font-size:16px;vertical-align:middle;color:#F57F17">info</span>
+                <span style="font-size:12px;margin-left:4px">No data type assigned — showing raw JSON output</span>
+              </div>
+              <pre class="font-mono" style="background:#F8FAFC;padding:16px;border-radius:var(--radius-sm);font-size:12px;overflow-x:auto;white-space:pre-wrap">{"priority":"high","incident_date":"2026-01-15","summary":"Database server db-01 experiencing high CPU...","resolved":false}</pre>
+            </div>
+          </div>
+
+          <!-- Tools tab -->
+          <div class="exec-tab-content" id="exec-tab-tools" style="padding:20px">
+            <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Tool calls made during this execution</div>
+            <div style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px">
+              <div style="padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #F1F5F9;cursor:pointer" onclick="toggleToolDetail(this)">
+                <span class="material-icons" style="font-size:16px;color:var(--primary)">terminal</span>
+                <span style="font-weight:500;flex:1">get_incident_details</span>
+                <span style="font-size:11px;color:var(--text-secondary)">320ms</span>
+                <span class="chip chip-green">Success</span>
+                <span class="material-icons" style="font-size:16px;color:var(--text-secondary)">expand_more</span>
+              </div>
+              <div style="padding:0 14px 10px;display:none;background:#F8FAFC;border-bottom:1px solid #F1F5F9">
+                <div class="font-mono" style="font-size:11px;padding:8px;white-space:pre-wrap">Input: {"incident_id": "INC-2026-0015"}
+Output: {"title":"DB-01 High CPU","severity":"HIGH","reported_at":"2026-01-15T10:28:00Z"}</div>
+              </div>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px">
+              <div style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="toggleToolDetail(this)">
+                <span class="material-icons" style="font-size:16px;color:var(--primary)">terminal</span>
+                <span style="font-weight:500;flex:1">save_result</span>
+                <span style="font-size:11px;color:var(--text-secondary)">180ms</span>
+                <span class="chip chip-green">Success</span>
+                <span class="material-icons" style="font-size:16px;color:var(--text-secondary)">expand_more</span>
+              </div>
+              <div style="padding:0 14px 10px;display:none;background:#F8FAFC">
+                <div class="font-mono" style="font-size:11px;padding:8px;white-space:pre-wrap">Input: {"type":"IncidentReport","data":{"priority":"high","incident_date":"2026-01-15T10:30:00Z","summary":"Database server db-01...","resolved":false,"category":"infrastructure"}}
+Output: {"result_id":"res-20260115-abc123","status":"saved","validated":true}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scenario toggle buttons for validation state -->
+      <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Execution Scenario:</span>
+        <button class="btn btn-sm btn-secondary" onclick="setExecScenario('valid')" style="border-radius:20px">Valid Output</button>
+        <button class="btn btn-sm btn-secondary" onclick="setExecScenario('validation-error')" style="border-radius:20px">Validation Error</button>
+        <button class="btn btn-sm btn-secondary" onclick="setExecScenario('untyped')" style="border-radius:20px">Untyped Output</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 4: AGENT OUTPUTS ADMIN PAGE                                   -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-agent-outputs">
+      <div class="view-header">
+        <div>
+          <h2>Agent Outputs</h2>
+          <div class="view-desc">Browse, filter, and export past agent execution results</div>
+        </div>
+        <button class="btn btn-primary" onclick="exportCsv()">
+          <span class="material-icons" style="font-size:16px">file_download</span> Export CSV
+        </button>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Data Type</label>
+          <select id="filter-data-type" onchange="applyFilters()">
+            <option value="">All data types</option>
+            <option value="IncidentReport" selected>IncidentReport</option>
+            <option value="EnrichmentResult">EnrichmentResult</option>
+            <option value="ComplianceReport">ComplianceReport</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Agent Type</label>
+          <select id="filter-agent-type" onchange="applyFilters()">
+            <option value="">All agent types</option>
+            <option value="Incident Analyzer" selected>Incident Analyzer</option>
+            <option value="Data Enrichment Agent">Data Enrichment Agent</option>
+            <option value="Compliance Auditor">Compliance Auditor</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>From</label>
+          <input type="date" id="filter-date-from" value="2026-01-01" onchange="applyFilters()">
+        </div>
+        <div class="filter-group">
+          <label>To</label>
+          <input type="date" id="filter-date-to" value="2026-01-31" onchange="applyFilters()">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="applyFilters()" style="margin-top:16px">
+          <span class="material-icons" style="font-size:16px">filter_alt</span> Apply Filters
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="clearFilters()" style="margin-top:16px">
+          Clear
+        </button>
+      </div>
+
+      <!-- Results table -->
+      <div class="table-wrap" id="outputsTableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Agent Type</th>
+              <th>Priority</th>
+              <th>Incident Date</th>
+              <th>Summary</th>
+              <th>Resolved</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="outputsTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="outputsEmpty" style="display:none;padding:40px">
+          <span class="empty-icon material-icons">search_off</span>
+          <h3>No outputs match the selected filters</h3>
+          <p>Try adjusting your filter criteria or selecting a different data type.</p>
+          <button class="btn btn-secondary" onclick="clearFilters()">Clear Filters</button>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination" id="outputsPagination">
+          <div class="pagination-info">Showing 1–5 of 12 results</div>
+          <div class="pagination-btns">
+            <button class="pagination-btn" disabled><span class="material-icons" style="font-size:14px">chevron_left</span></button>
+            <button class="pagination-btn active">1</button>
+            <button class="pagination-btn">2</button>
+            <button class="pagination-btn">3</button>
+            <button class="pagination-btn"><span class="material-icons" style="font-size:14px">chevron_right</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 5: DASHBOARD (placeholder)                                    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="page-dashboard">
+      <div class="view-header">
+        <div>
+          <h2>Dashboard</h2>
+          <div class="view-desc">Platform overview and recent activity</div>
+        </div>
+      </div>
+      <div class="empty-state" style="padding:80px">
+        <span class="empty-icon material-icons">dashboard</span>
+        <h3>Dashboard</h3>
+        <p>Platform dashboard view — use the sidebar to navigate to Data Types or Agent Outputs.</p>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: Create/Edit Data Type                                          -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="dataTypeModal">
+  <div class="modal modal-lg" style="max-width:660px">
+    <div class="modal-header">
+      <h3 id="dtModalTitle">Create Data Type</h3>
+      <button class="modal-close" onclick="closeDataTypeDialog()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Name & Slug -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="dt-name">Name</label>
+          <input type="text" class="form-control" id="dt-name" placeholder="e.g. Incident Report" oninput="onDtNameChange()">
+          <div class="form-error" id="dt-name-error"></div>
+        </div>
+        <div class="form-group">
+          <label for="dt-slug">Slug</label>
+          <input type="text" class="form-control" id="dt-slug" placeholder="e.g. incident-report" oninput="clearDtError('dt-slug-error')">
+          <div class="form-hint">Auto-generated from name, may be edited</div>
+          <div class="form-error" id="dt-slug-error"></div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label for="dt-desc">Description</label>
+        <textarea class="form-control" id="dt-desc" rows="2" placeholder="Describe the purpose and structure of this data type"></textarea>
+      </div>
+
+      <!-- Fields section -->
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+        <span>Fields</span>
+        <button class="btn btn-sm btn-secondary" onclick="addField()">
+          <span class="material-icons" style="font-size:14px">add</span> Add Field
+        </button>
+      </div>
+      <div class="form-hint" style="margin-bottom:8px">Define the typed fields for this data type. At least one field is required.</div>
+
+      <div class="form-error" id="dt-fields-error" style="margin-bottom:8px"></div>
+
+      <!-- Fields list header -->
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)">
+        <div style="flex:2">Field Name</div>
+        <div style="flex:2">Type</div>
+        <div style="flex:0 0 80px;text-align:center">Required</div>
+        <div style="flex:0 0 40px"></div>
+      </div>
+      <div id="fieldsContainer">
+        <!-- Populated by JS -->
+      </div>
+      <div id="fieldsEmpty" style="padding:16px;text-align:center;font-size:13px;color:var(--text-secondary);border:1px dashed var(--border);border-radius:var(--radius-sm);margin-top:4px">
+        No fields yet. Click "Add Field" to define the schema.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDataTypeDialog()">Cancel</button>
+      <button class="btn btn-primary" id="dt-save-btn" onclick="saveDataType()">Save Data Type</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: Delete Confirmation                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h3>Delete Data Type</h3>
+      <button class="modal-close" onclick="closeDeleteDialog()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <span class="material-icons" style="font-size:32px;color:var(--warning);flex-shrink:0">warning_amber</span>
+        <div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px" id="deleteMsg">Are you sure you want to delete '<span id="deleteName">IncidentReport</span>'?</div>
+          <div style="font-size:13px;color:var(--text-secondary)" id="deleteWarningBlock">
+            <span id="deleteWarning">This action cannot be undone. All agent outputs using this data type will retain their schema snapshot.</span>
+          </div>
+          <div id="deleteRefWarning" style="display:none;margin-top:10px;padding:10px;background:#FFF5F5;border:1px solid #FECACA;border-radius:var(--radius-sm);font-size:12px;color:#B91C1C">
+            <span class="material-icons" style="font-size:14px;vertical-align:middle;margin-right:4px">block</span>
+            <span id="deleteRefText">Cannot delete: referenced by 2 agent type(s): Incident Analyzer, Report Generator</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDeleteDialog()">Cancel</button>
+      <button class="btn btn-danger" id="deleteConfirmBtn" onclick="confirmDelete()">
+        <span class="material-icons" style="font-size:16px">delete</span> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- DRAWER: Agent Output Detail                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="detailDrawer">
+  <div class="drawer-header">
+    <h3>Agent Output Detail</h3>
+    <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+  </div>
+  <div class="drawer-body" id="drawerBody">
+    <!-- Populated by JS -->
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Toast container                                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+<div class="prototype-label">UX Prototype — not for production</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* DATA                                                                   */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+var dataTypes = [
+  {
+    id: 'dt-1',
+    name: 'IncidentReport',
+    slug: 'incident-report',
+    description: 'Schema for incident analysis results, including priority, date, summary, and resolution status.',
+    fields: [
+      { name: 'priority', type: 'enum', enumValues: ['high','medium','low'], required: true },
+      { name: 'incident_date', type: 'date', required: true },
+      { name: 'summary', type: 'string', required: true },
+      { name: 'resolved', type: 'boolean', required: true },
+      { name: 'category', type: 'enum', enumValues: ['infrastructure','security','application','network'], required: false }
+    ],
+    created: '2026-01-10',
+    usedBy: ['Incident Analyzer']
+  },
+  {
+    id: 'dt-2',
+    name: 'EnrichmentResult',
+    slug: 'enrichment-result',
+    description: 'Schema for data enrichment agent results.',
+    fields: [
+      { name: 'source_field', type: 'string', required: true },
+      { name: 'enriched_value', type: 'string', required: true },
+      { name: 'confidence', type: 'number', required: true },
+      { name: 'processed_at', type: 'date', required: true }
+    ],
+    created: '2026-01-12',
+    usedBy: ['Data Enrichment Agent']
+  },
+  {
+    id: 'dt-3',
+    name: 'ComplianceReport',
+    slug: 'compliance-report',
+    description: 'Schema for compliance audit agent outputs.',
+    fields: [
+      { name: 'check_name', type: 'string', required: true },
+      { name: 'status', type: 'enum', enumValues: ['pass','fail','warning'], required: true },
+      { name: 'details', type: 'string', required: false },
+      { name: 'checked_at', type: 'date', required: true },
+      { name: 'remediated', type: 'boolean', required: false }
+    ],
+    created: '2026-01-14',
+    usedBy: ['Compliance Auditor']
+  }
+];
+
+var fieldTypes = [
+  { value: 'string', label: 'String' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'date', label: 'Date' },
+  { value: 'enum', label: 'Enum' }
+];
+
+var editingDtId = null; // null = creating, string = editing
+
+var agentOutputs = [
+  { id: 'out-1', timestamp: '2026-01-15 14:32:18', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'valid', fields: { priority: 'high', incident_date: '2026-01-15', summary: 'Database server db-01 experiencing high CPU usage and connection timeouts. All read operations affected.', resolved: false, category: 'infrastructure' } },
+  { id: 'out-2', timestamp: '2026-01-15 13:10:05', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'valid', fields: { priority: 'medium', incident_date: '2026-01-15', summary: 'API rate limit exceeded on payment gateway. 429 errors in 15% of requests.', resolved: true, category: 'application' } },
+  { id: 'out-3', timestamp: '2026-01-14 09:22:44', agentType: 'Data Enrichment Agent', dataType: 'EnrichmentResult', status: 'valid', fields: { source_field: 'user.email', enriched_value: 'john@acme.com', confidence: 0.97, processed_at: '2026-01-14' } },
+  { id: 'out-4', timestamp: '2026-01-14 07:15:30', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'validation_error', fields: { priority: 'critical', incident_date: '2026-01-14', summary: 'Security breach detected — unauthorized access to admin panel.', resolved: false, category: 'security' } },
+  { id: 'out-5', timestamp: '2026-01-13 16:45:12', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'valid', fields: { priority: 'low', incident_date: '2026-01-13', summary: 'SSL certificate expiring in 14 days for *.parthenon.internal.', resolved: false, category: 'infrastructure' } },
+  { id: 'out-6', timestamp: '2026-01-13 11:30:00', agentType: 'Compliance Auditor', dataType: 'ComplianceReport', status: 'valid', fields: { check_name: 'SOC2 Access Control', status: 'pass', details: 'All access controls properly configured and audited.', checked_at: '2026-01-13', remediated: false } },
+  { id: 'out-7', timestamp: '2026-01-12 08:05:22', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'valid', fields: { priority: 'high', incident_date: '2026-01-12', summary: 'Production deployment failed — build pipeline timeout in staging.', resolved: true, category: 'infrastructure' } },
+  { id: 'out-8', timestamp: '2026-01-11 22:18:09', agentType: 'Data Enrichment Agent', dataType: 'EnrichmentResult', status: 'validation_error', fields: { source_field: 'company.website', enriched_value: 'https://example.com', confidence: 1.5, processed_at: '2026-01-11' } },
+  { id: 'out-9', timestamp: '2026-01-10 15:42:33', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'valid', fields: { priority: 'medium', incident_date: '2026-01-10', summary: 'Memory leak in worker process — consuming 4.2GB RSS after 6 hours.', resolved: false, category: 'application' } },
+  { id: 'out-10', timestamp: '2026-01-10 10:00:00', agentType: 'Compliance Auditor', dataType: 'ComplianceReport', status: 'valid', fields: { check_name: 'Data Retention Policy', status: 'warning', details: '3 records exceed 90-day retention period.', checked_at: '2026-01-10', remediated: false } },
+  { id: 'out-11', timestamp: '2026-01-09 14:30:00', agentType: 'Incident Analyzer', dataType: 'IncidentReport', status: 'valid', fields: { priority: 'low', incident_date: '2026-01-09', summary: 'Deprecated API endpoint /v1/query still receiving 200 req/min.', resolved: true, category: 'application' } },
+  { id: 'out-12', timestamp: '2026-01-08 09:15:45', agentType: 'Data Enrichment Agent', dataType: 'EnrichmentResult', status: 'valid', fields: { source_field: 'user.phone', enriched_value: '+1-555-0199', confidence: 0.88, processed_at: '2026-01-08' } }
+];
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* UTILITIES                                                              */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function showToast(msg, type) {
+  var c = document.getElementById('toastContainer');
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + (type || 'info');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 3000);
+}
+
+function makeSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* PAGE SWITCHING                                                         */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function switchPage(view) {
+  // Update sidebar
+  document.querySelectorAll('.nav-item').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.nav-item[data-view="' + view + '"]').forEach(function(el) { el.classList.add('active'); });
+
+  // Update page
+  document.querySelectorAll('.page').forEach(function(el) { el.classList.remove('active'); });
+  var page = document.getElementById('page-' + view);
+  if (page) page.classList.add('active');
+
+  // Update topbar title
+  var titles = {
+    'data-types': ['schema', 'Agent Data Types'],
+    'agent-type-form': ['edit_note', 'Edit Agent Type — Incident Analyzer'],
+    'execution-log': ['history', 'Execution Log'],
+    'agent-outputs': ['output', 'Agent Outputs'],
+    'dashboard': ['dashboard', 'Dashboard']
+  };
+  var t = titles[view] || ['circle', view];
+  document.getElementById('pageTitle').innerHTML = '<span class="material-icons" style="font-size:20px;color:var(--primary)">' + t[0] + '</span> ' + t[1];
+
+  // If switching to agent-outputs, refresh
+  if (view === 'agent-outputs') applyFilters();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* SIDEBAR NAVIGATION (clicking items that aren't sub-items with data-view)*/
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+document.querySelectorAll('.nav-item[data-view]').forEach(function(el) {
+  el.addEventListener('click', function() {
+    switchPage(this.dataset.view);
+  });
+});
+
+// Sidebar group collapse/expand
+document.querySelectorAll('.nav-parent-group-label').forEach(function(label) {
+  label.addEventListener('click', function() {
+    this.parentElement.classList.toggle('collapsed');
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* PAGE 1: DATA TYPE CRUD                                                */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function renderDataTypes() {
+  var body = document.getElementById('dataTypesTableBody');
+  var empty = document.getElementById('dataTypesEmpty');
+  var wrap = document.getElementById('dataTypesTableWrap');
+
+  if (dataTypes.length === 0) {
+    empty.style.display = 'flex';
+    wrap.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.style.display = 'block';
+
+  body.innerHTML = dataTypes.map(function(dt) {
+    var fieldsCount = dt.fields.length;
+    var usedByText = dt.usedBy && dt.usedBy.length > 0 ? dt.usedBy.join(', ') : '—';
+    return '<tr>' +
+      '<td style="font-weight:600">' + dt.name + '</td>' +
+      '<td><code style="font-size:12px;background:#F1F5F9;padding:2px 6px;border-radius:3px">' + dt.slug + '</code></td>' +
+      '<td><span class="count-badge">' + fieldsCount + ' field' + (fieldsCount !== 1 ? 's' : '') + '</span></td>' +
+      '<td style="font-size:12px;color:var(--text-secondary)">' + usedByText + '</td>' +
+      '<td style="font-size:13px">' + dt.created + '</td>' +
+      '<td class="actions-cell" style="text-align:right">' +
+        '<button class="btn btn-ghost btn-sm" onclick="openEditDataType(\'' + dt.id + '\')">Edit</button>' +
+        '<button class="btn btn-ghost btn-sm" style="color:var(--error)" onclick="openDeleteDialog(\'' + dt.id + '\')">Delete</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+function onDtNameChange() {
+  var nameInput = document.getElementById('dt-name');
+  var slugInput = document.getElementById('dt-slug');
+  clearDtError('dt-name-error');
+  // Only auto-generate if slug is empty or matches a previous auto-generation
+  if (!slugInput.dataset.manuallyEdited) {
+    slugInput.value = makeSlug(nameInput.value);
+  }
+}
+
+document.getElementById('dt-slug').addEventListener('input', function() {
+  this.dataset.manuallyEdited = 'true';
+  clearDtError('dt-slug-error');
+});
+
+function clearDtError(id) {
+  document.getElementById(id).textContent = '';
+}
+
+function openCreateDataTypeDialog() {
+  editingDtId = null;
+  document.getElementById('dtModalTitle').textContent = 'Create Data Type';
+  document.getElementById('dt-name').value = '';
+  document.getElementById('dt-slug').value = '';
+  document.getElementById('dt-slug').dataset.manuallyEdited = '';
+  document.getElementById('dt-desc').value = '';
+  document.getElementById('dt-save-btn').textContent = 'Save Data Type';
+  clearDtError('dt-name-error');
+  clearDtError('dt-slug-error');
+  document.getElementById('dt-fields-error').textContent = '';
+  renderFields();
+  document.getElementById('dataTypeModal').style.display = 'flex';
+}
+
+function openEditDataType(id) {
+  var dt = dataTypes.find(function(d) { return d.id === id; });
+  if (!dt) return;
+  editingDtId = id;
+  document.getElementById('dtModalTitle').textContent = 'Edit Data Type — ' + dt.name;
+  document.getElementById('dt-name').value = dt.name;
+  document.getElementById('dt-slug').value = dt.slug;
+  document.getElementById('dt-slug').dataset.manuallyEdited = 'true';
+  document.getElementById('dt-desc').value = dt.description;
+  document.getElementById('dt-save-btn').textContent = 'Update Data Type';
+  clearDtError('dt-name-error');
+  clearDtError('dt-slug-error');
+  document.getElementById('dt-fields-error').textContent = '';
+  renderFields(dt.fields);
+  document.getElementById('dataTypeModal').style.display = 'flex';
+}
+
+function closeDataTypeDialog() {
+  document.getElementById('dataTypeModal').style.display = 'none';
+}
+
+var fieldCounter = 0;
+
+function renderFields(fields) {
+  var container = document.getElementById('fieldsContainer');
+  var empty = document.getElementById('fieldsEmpty');
+  var currentFields = fields || [];
+
+  if (currentFields.length === 0) {
+    empty.style.display = 'block';
+    container.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  container.innerHTML = currentFields.map(function(f, idx) {
+    var typeOptions = fieldTypes.map(function(ft) {
+      return '<option value="' + ft.value + '"' + (f.type === ft.value ? ' selected' : '') + '>' + ft.label + '</option>';
+    }).join('');
+
+    var checked = f.required ? 'checked' : '';
+
+    var enumInput = '';
+    if (f.type === 'enum') {
+      enumInput = '<div id="enum-values-' + idx + '" style="margin-top:4px">' +
+        '<input type="text" class="form-control" style="font-size:12px;padding:5px 8px" placeholder="e.g. high,medium,low" value="' + ((f.enumValues || []).join(', ')) + '" onchange="setEnumValues(' + idx + ', this.value)">' +
+        '<div class="form-hint">Comma-separated values</div></div>';
+    }
+
+    return '<div class="field-row" data-field-idx="' + idx + '">' +
+      '<div class="field-name">' +
+        '<input type="text" class="form-control" style="font-size:13px;padding:6px 8px" value="' + (f.name || '') + '" placeholder="Field name" onchange="updateField(' + idx + ', \'name\', this.value)">' +
+        enumInput +
+      '</div>' +
+      '<div class="field-type">' +
+        '<select class="form-control" style="font-size:13px;padding:6px 8px" onchange="onFieldTypeChange(' + idx + ', this.value)">' +
+          typeOptions +
+        '</select>' +
+      '</div>' +
+      '<div class="field-required">' +
+        '<input type="checkbox" class="form-control" style="width:auto;padding:0;border:none;accent-color:var(--primary)" ' + checked + ' onchange="updateField(' + idx + ', \'required\', this.checked)">' +
+      '</div>' +
+      '<div class="field-actions">' +
+        '<button class="btn-icon-sm" onclick="removeField(' + idx + ')" title="Remove field"><span class="material-icons" style="font-size:16px;color:var(--error)">delete_outline</span></button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function addField() {
+  var container = document.getElementById('fieldsContainer');
+  var empty = document.getElementById('fieldsEmpty');
+  empty.style.display = 'none';
+
+  var existingRows = container.querySelectorAll('.field-row');
+  var idx = existingRows.length;
+
+  var typeOptions = fieldTypes.map(function(ft) {
+    return '<option value="' + ft.value + '">' + ft.label + '</option>';
+  }).join('');
+
+  var row = document.createElement('div');
+  row.className = 'field-row';
+  row.dataset.fieldIdx = idx;
+  row.innerHTML =
+    '<div class="field-name">' +
+      '<input type="text" class="form-control" style="font-size:13px;padding:6px 8px" value="" placeholder="Field name" onchange="updateField(' + idx + ', \'name\', this.value)">' +
+    '</div>' +
+    '<div class="field-type">' +
+      '<select class="form-control" style="font-size:13px;padding:6px 8px" onchange="onFieldTypeChange(' + idx + ', this.value)">' +
+        typeOptions +
+      '</select>' +
+    '</div>' +
+    '<div class="field-required">' +
+      '<input type="checkbox" class="form-control" style="width:auto;padding:0;border:none;accent-color:var(--primary)" checked onchange="updateField(' + idx + ', \'required\', this.checked)">' +
+    '</div>' +
+    '<div class="field-actions">' +
+      '<button class="btn-icon-sm" onclick="removeField(this.parentElement.parentElement.dataset.fieldIdx)" title="Remove field"><span class="material-icons" style="font-size:16px;color:var(--error)">delete_outline</span></button>' +
+    '</div>';
+
+  container.appendChild(row);
+}
+
+function removeField(idx) {
+  var container = document.getElementById('fieldsContainer');
+  var row = container.querySelector('.field-row[data-field-idx="' + idx + '"]');
+  if (row) row.remove();
+
+  // Re-index
+  var rows = container.querySelectorAll('.field-row');
+  rows.forEach(function(r, i) {
+    r.dataset.fieldIdx = i;
+    var nameInput = r.querySelector('input[placeholder="Field name"]');
+    if (nameInput) nameInput.onchange = function() { updateField(i, 'name', this.value); };
+    var typeSelect = r.querySelector('select');
+    if (typeSelect) typeSelect.onchange = function() { onFieldTypeChange(i, this.value); };
+    var delBtn = r.querySelector('.btn-icon-sm');
+    if (delBtn) delBtn.onclick = function() { removeField(i); };
+  });
+
+  if (rows.length <= 1) {
+    document.getElementById('fieldsEmpty').style.display = 'block';
+  }
+}
+
+function updateField(idx, prop, value) {
+  var container = document.getElementById('fieldsContainer');
+  var rows = container.querySelectorAll('.field-row');
+  // Works with current DOM state
+}
+
+function onFieldTypeChange(idx, value) {
+  var container = document.getElementById('fieldsContainer');
+  var rows = container.querySelectorAll('.field-row');
+  var row = rows[idx];
+  if (!row) return;
+
+  var nameCol = row.querySelector('.field-name');
+  // Remove existing enum input if any
+  var existingEnum = nameCol.querySelector('#enum-values-' + idx);
+  if (existingEnum) existingEnum.remove();
+
+  if (value === 'enum') {
+    var enumDiv = document.createElement('div');
+    enumDiv.id = 'enum-values-' + idx;
+    enumDiv.style.marginTop = '4px';
+    enumDiv.innerHTML =
+      '<input type="text" class="form-control" style="font-size:12px;padding:5px 8px" placeholder="e.g. high,medium,low" onchange="setEnumValues(' + idx + ', this.value)">' +
+      '<div class="form-hint">Comma-separated values</div>';
+    nameCol.appendChild(enumDiv);
+  }
+}
+
+function setEnumValues(idx, value) {
+  // stored in field state implicitly — used at save time
+}
+
+function getFieldsFromDom() {
+  var fields = [];
+  var rows = document.querySelectorAll('#fieldsContainer .field-row');
+  rows.forEach(function(row, idx) {
+    var nameInput = row.querySelector('.field-name input[type="text"]');
+    var typeSelect = row.querySelector('.field-type select');
+    var reqCheckbox = row.querySelector('.field-required input[type="checkbox"]');
+    var enumInputEl = document.getElementById('enum-values-' + idx);
+
+    var field = {
+      name: nameInput ? nameInput.value : '',
+      type: typeSelect ? typeSelect.value : 'string',
+      required: reqCheckbox ? reqCheckbox.checked : true
+    };
+
+    if (field.type === 'enum' && enumInputEl) {
+      var vals = enumInputEl.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      field.enumValues = vals;
+    }
+
+    if (field.name) fields.push(field);
+  });
+  return fields;
+}
+
+function saveDataType() {
+  var name = document.getElementById('dt-name').value.trim();
+  var slug = document.getElementById('dt-slug').value.trim();
+  var desc = document.getElementById('dt-desc').value.trim();
+  var fields = getFieldsFromDom();
+  var hasError = false;
+
+  // Validation
+  if (!name) {
+    document.getElementById('dt-name-error').textContent = 'Name is required';
+    hasError = true;
+  }
+
+  // Check duplicate name (exclude current editing)
+  var duplicate = dataTypes.some(function(dt) { return dt.name.toLowerCase() === name.toLowerCase() && dt.id !== editingDtId; });
+  if (duplicate) {
+    document.getElementById('dt-name-error').textContent = 'A data type with this name already exists';
+    hasError = true;
+  }
+
+  if (!slug) {
+    document.getElementById('dt-slug-error').textContent = 'Slug is required';
+    hasError = true;
+  }
+
+  if (fields.length === 0) {
+    document.getElementById('dt-fields-error').textContent = 'At least one field is required';
+    hasError = true;
+  }
+
+  // Validate field names not empty
+  var emptyFieldNames = fields.filter(function(f) { return !f.name; });
+  if (emptyFieldNames.length > 0) {
+    document.getElementById('dt-fields-error').textContent = 'All fields must have a name';
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  if (editingDtId) {
+    // Edit existing
+    var dt = dataTypes.find(function(d) { return d.id === editingDtId; });
+    if (dt) {
+      dt.name = name;
+      dt.slug = slug;
+      dt.description = desc;
+      dt.fields = fields;
+    }
+    showToast('Data type "' + name + '" updated successfully', 'success');
+  } else {
+    // Create new
+    dataTypes.push({
+      id: 'dt-' + Date.now(),
+      name: name,
+      slug: slug,
+      description: desc,
+      fields: fields,
+      created: new Date().toISOString().split('T')[0],
+      usedBy: []
+    });
+    showToast('Data type "' + name + '" created successfully', 'success');
+  }
+
+  closeDataTypeDialog();
+  renderDataTypes();
+}
+
+function openDeleteDialog(id) {
+  var dt = dataTypes.find(function(d) { return d.id === id; });
+  if (!dt) return;
+  document.getElementById('deleteName').textContent = dt.name;
+  document.getElementById('deleteMsg').innerHTML = "Are you sure you want to delete '<span id=\"deleteName\">" + dt.name + "</span>'?";
+
+  var refWarning = document.getElementById('deleteRefWarning');
+  var deleteBtn = document.getElementById('deleteConfirmBtn');
+  var warning = document.getElementById('deleteWarning');
+
+  if (dt.usedBy && dt.usedBy.length > 0) {
+    refWarning.style.display = 'block';
+    document.getElementById('deleteRefText').textContent = 'Cannot delete: referenced by ' + dt.usedBy.length + ' agent type(s): ' + dt.usedBy.join(', ') + '. Remove the data type assignment from these agent types first.';
+    deleteBtn.disabled = true;
+    deleteBtn.style.opacity = '0.5';
+    warning.textContent = 'This data type is currently in use. Deletion is blocked until all references are removed.';
+  } else {
+    refWarning.style.display = 'none';
+    deleteBtn.disabled = false;
+    deleteBtn.style.opacity = '1';
+    warning.textContent = 'This action cannot be undone. All agent outputs using this data type will retain their schema snapshot.';
+  }
+
+  // Store id for confirm
+  document.getElementById('deleteModal').dataset.deleteId = id;
+  document.getElementById('deleteModal').style.display = 'flex';
+}
+
+function closeDeleteDialog() {
+  document.getElementById('deleteModal').style.display = 'none';
+}
+
+function confirmDelete() {
+  var id = document.getElementById('deleteModal').dataset.deleteId;
+  var dt = dataTypes.find(function(d) { return d.id === id; });
+  if (!dt) return;
+
+  if (dt.usedBy && dt.usedBy.length > 0) {
+    showToast('Cannot delete: data type is referenced by agent types', 'error');
+    return;
+  }
+
+  dataTypes = dataTypes.filter(function(d) { return d.id !== id; });
+  showToast('Data type "' + dt.name + '" deleted', 'success');
+  closeDeleteDialog();
+  renderDataTypes();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* PAGE 2: AGENT TYPE FORM — Data Type Selector                           */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function onAgentTypeChange() {
+  var typeSelect = document.getElementById('at-type');
+  var group = document.getElementById('outputDataTypeGroup');
+  if (typeSelect.value === 'non-conversational') {
+    group.style.display = 'block';
+  } else {
+    group.style.display = 'none';
+  }
+}
+
+var selectedDtForAgent = 'IncidentReport'; // pre-selected
+
+function filterDataTypes() {
+  var q = document.getElementById('dt-search').value.toLowerCase();
+  var list = document.getElementById('dt-dropdown-list');
+  var options = list.querySelectorAll('.dt-option');
+  options.forEach(function(opt) {
+    var name = opt.textContent.toLowerCase();
+    opt.style.display = name.indexOf(q) === -1 ? 'none' : 'flex';
+  });
+}
+
+function renderDataTypeDropdown() {
+  var list = document.getElementById('dt-dropdown-list');
+  var html = '';
+  dataTypes.forEach(function(dt) {
+    var active = dt.name === selectedDtForAgent ? ' style="background:var(--primary-light);color:var(--primary);font-weight:500"' : '';
+    html += '<div class="dt-option" data-slug="' + dt.slug + '" onclick="selectDataType(\'' + dt.name + '\')"' + active + '>' +
+      '<span>' + dt.name + '</span>' +
+      '<span style="font-size:11px;color:var(--text-secondary);margin-left:auto">' + dt.fields.length + ' fields</span>' +
+      '</div>';
+  });
+  list.innerHTML = html;
+  updateSelectedDtBadge();
+}
+
+function selectDataType(name) {
+  selectedDtForAgent = name;
+  document.getElementById('dt-search').value = name;
+  // Highlight selected
+  var options = document.querySelectorAll('#dt-dropdown-list .dt-option');
+  options.forEach(function(opt) {
+    opt.style.background = '';
+    opt.style.color = '';
+    opt.style.fontWeight = '';
+    if (opt.textContent.trim().indexOf(name) === 0) {
+      opt.style.background = 'var(--primary-light)';
+      opt.style.color = 'var(--primary)';
+      opt.style.fontWeight = '500';
+    }
+  });
+  updateSelectedDtBadge();
+  showToast('Data type "' + name + '" selected', 'info');
+}
+
+function updateSelectedDtBadge() {
+  var badge = document.getElementById('selectedDtBadge');
+  if (selectedDtForAgent) {
+    badge.innerHTML = '<span class="dt-badge dt-badge-typed"><span class="material-icons" style="font-size:14px">check_circle</span> ' + selectedDtForAgent + '</span>' +
+      '<button class="btn btn-ghost btn-sm" onclick="clearSelectedDt()" style="color:var(--text-secondary);font-size:11px">Clear</button>';
+  } else {
+    badge.innerHTML = '<span style="font-size:12px;color:var(--text-secondary)">No data type assigned — agent will run untyped</span>';
+  }
+}
+
+function clearSelectedDt() {
+  selectedDtForAgent = null;
+  document.getElementById('dt-search').value = '';
+  updateSelectedDtBadge();
+  var options = document.querySelectorAll('#dt-dropdown-list .dt-option');
+  options.forEach(function(opt) { opt.style.background = ''; opt.style.color = ''; opt.style.fontWeight = ''; });
+}
+
+function saveAgentType() {
+  var name = document.getElementById('at-name').value;
+  var type = document.getElementById('at-type').value;
+  var outType = type === 'non-conversational' && selectedDtForAgent ? 'Typed' : 'Untyped';
+  showToast('Agent type "' + name + '" saved. Output type: ' + outType + (selectedDtForAgent ? ' (' + selectedDtForAgent + ')' : ''), 'success');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* PAGE 3: EXECUTION LOG — Typed Output Display                           */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function switchExecTab(tab, btn) {
+  document.querySelectorAll('.exec-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.exec-tab-content').forEach(function(c) { c.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('exec-tab-' + tab).classList.add('active');
+}
+
+function toggleToolDetail(header) {
+  var detail = header.nextElementSibling;
+  var icon = header.querySelector('.material-icons:last-child');
+  if (detail.style.display === 'none' || !detail.style.display) {
+    detail.style.display = 'block';
+    if (icon) icon.textContent = 'expand_less';
+  } else {
+    detail.style.display = 'none';
+    if (icon) icon.textContent = 'expand_more';
+  }
+}
+
+function setExecScenario(scenario) {
+  var validBanner = document.getElementById('validBanner');
+  var typedFields = document.getElementById('typedFieldsContainer');
+  var untypedFallback = document.getElementById('untypedFallback');
+
+  validBanner.style.display = 'none';
+  typedFields.style.display = 'block';
+  untypedFallback.style.display = 'none';
+
+  if (scenario === 'validation-error') {
+    validBanner.style.display = 'flex';
+  } else if (scenario === 'untyped') {
+    typedFields.style.display = 'none';
+    untypedFallback.style.display = 'block';
+  }
+
+  // Update scenario buttons
+  document.querySelectorAll('.scenario-bar .scenario-btn').forEach(function(btn, idx) {
+    // Only clear buttons on the execution log page specifically
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* PAGE 4: AGENT OUTPUTS ADMIN PAGE                                       */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function getFilteredOutputs() {
+  var dataType = document.getElementById('filter-data-type').value;
+  var agentType = document.getElementById('filter-agent-type').value;
+  var from = document.getElementById('filter-date-from').value;
+  var to = document.getElementById('filter-date-to').value;
+
+  return agentOutputs.filter(function(out) {
+    if (dataType && out.dataType !== dataType) return false;
+    if (agentType && out.agentType !== agentType) return false;
+    if (from) {
+      var outDate = out.timestamp.split(' ')[0];
+      if (outDate < from) return false;
+    }
+    if (to) {
+      var outDate = out.timestamp.split(' ')[0];
+      if (outDate > to) return false;
+    }
+    return true;
+  });
+}
+
+function applyFilters() {
+  var results = getFilteredOutputs();
+  var body = document.getElementById('outputsTableBody');
+  var empty = document.getElementById('outputsEmpty');
+  var wrap = document.getElementById('outputsTableWrap');
+  var pagination = document.getElementById('outputsPagination');
+
+  if (results.length === 0) {
+    empty.style.display = 'flex';
+    body.innerHTML = '';
+    pagination.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  pagination.style.display = 'flex';
+
+  // Check data type for column rendering
+  var selectedDt = document.getElementById('filter-data-type').value;
+  // For simplicity, if IncidentReport is selected, show those columns
+  // Otherwise show generic view
+
+  var html = results.map(function(out) {
+    var f = out.fields;
+    var statusBadge = out.status === 'valid'
+      ? '<span class="stat-badge stat-valid"><span class="material-icons" style="font-size:14px">check_circle</span> Valid</span>'
+      : '<span class="stat-badge stat-error"><span class="material-icons" style="font-size:14px">error</span> Validation Error</span>';
+
+    var priorityChip = '';
+    if (f.priority) {
+      var pClass = 'chip-' + f.priority;
+      priorityChip = '<span class="chip ' + pClass + '">' + f.priority.charAt(0).toUpperCase() + f.priority.slice(1) + '</span>';
+    }
+
+    var incidentDate = f.incident_date || f.processed_at || f.checked_at || '';
+    if (incidentDate) {
+      var d = new Date(incidentDate);
+      if (!isNaN(d)) incidentDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    var summary = f.summary || f.source_field || f.check_name || '';
+    if (summary && summary.length > 60) summary = summary.substring(0, 60) + '...';
+
+    var resolved = '';
+    if (f.resolved !== undefined) {
+      resolved = f.resolved
+        ? '<span class="bool-true"><span class="material-icons" style="font-size:16px;color:var(--success)">check_circle</span></span>'
+        : '<span class="bool-false"><span class="material-icons" style="font-size:16px;color:var(--text-secondary)">radio_button_unchecked</span></span>';
+    } else if (f.remediated !== undefined) {
+      resolved = f.remediated
+        ? '<span class="bool-true"><span class="material-icons" style="font-size:16px;color:var(--success)">check_circle</span></span>'
+        : '<span class="bool-false"><span class="material-icons" style="font-size:16px;color:var(--text-secondary)">radio_button_unchecked</span></span>';
+    } else {
+      resolved = '—';
+    }
+
+    return '<tr style="cursor:pointer" onclick="openDrawer(\'' + out.id + '\')">' +
+      '<td style="font-size:12px">' + out.timestamp + '</td>' +
+      '<td style="font-weight:500">' + out.agentType + '</td>' +
+      '<td>' + (priorityChip || '—') + '</td>' +
+      '<td style="font-size:12px">' + (incidentDate || '—') + '</td>' +
+      '<td style="font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + summary + '</td>' +
+      '<td>' + resolved + '</td>' +
+      '<td>' + statusBadge + '</td></tr>';
+  }).join('');
+
+  body.innerHTML = html;
+
+  // Update pagination info
+  document.querySelector('.pagination-info').textContent = 'Showing 1–' + results.length + ' of ' + agentOutputs.length + ' results';
+}
+
+function clearFilters() {
+  document.getElementById('filter-data-type').value = '';
+  document.getElementById('filter-agent-type').value = '';
+  document.getElementById('filter-date-from').value = '';
+  document.getElementById('filter-date-to').value = '';
+  applyFilters();
+}
+
+function exportCsv() {
+  var results = getFilteredOutputs();
+  if (results.length === 0) {
+    showToast('No results to export', 'error');
+    return;
+  }
+  showToast('CSV export initiated — ' + results.length + ' rows downloaded', 'success');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* DRAWER: Agent Output Detail                                            */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function openDrawer(id) {
+  var out = agentOutputs.find(function(o) { return o.id === id; });
+  if (!out) return;
+
+  document.getElementById('drawerOverlay').style.display = 'block';
+  document.getElementById('detailDrawer').style.display = 'flex';
+
+  var body = document.getElementById('drawerBody');
+  var f = out.fields;
+
+  var html = '<div style="margin-bottom:16px">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+    '<span class="dt-badge dt-badge-typed">' + out.dataType + '</span>' +
+    (out.status === 'valid' ? '<span class="stat-badge stat-valid">Valid</span>' : '<span class="stat-badge stat-error">Validation Error</span>') +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary)">' +
+    '<div>Agent Type: <strong>' + out.agentType + '</strong></div>' +
+    '<div>Timestamp: <strong>' + out.timestamp + '</strong></div>' +
+    '</div></div>';
+
+  if (out.status === 'validation_error') {
+    html += '<div class="valid-banner" style="margin-bottom:16px">' +
+      '<span class="material-icons valid-icon">warning</span>' +
+      '<div class="valid-content">' +
+      '<div class="valid-title">Schema Validation Failed</div>' +
+      '<div class="valid-desc">The output does not match the expected schema. Field errors: confidence (0–1 range expected, got 1.5).</div>' +
+      '</div></div>';
+  }
+
+  html += '<div class="section-title" style="margin-top:0">Field Values</div>';
+
+  for (var key in f) {
+    var val = f[key];
+    var displayVal = val;
+    var extraClass = '';
+
+    // Type-aware rendering
+    if (typeof val === 'boolean') {
+      displayVal = val
+        ? '<span class="bool-true"><span class="material-icons" style="font-size:18px;color:var(--success)">check_circle</span> Yes</span>'
+        : '<span class="bool-false"><span class="material-icons" style="font-size:18px;color:var(--text-secondary)">cancel</span> No</span>';
+    } else if (key === 'priority') {
+      var pClass = 'chip-' + val;
+      displayVal = '<span class="chip ' + pClass + '">' + val.charAt(0).toUpperCase() + val.slice(1) + '</span>';
+    } else if (key === 'incident_date' || key === 'checked_at' || key === 'processed_at') {
+      var d = new Date(val);
+      if (!isNaN(d)) displayVal = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } else if (key === 'status' && val) {
+      var sClass = val === 'pass' ? 'chip-green' : (val === 'warning' ? 'chip-yellow' : 'chip-red');
+      displayVal = '<span class="chip ' + sClass + '">' + val.charAt(0).toUpperCase() + val.slice(1) + '</span>';
+    } else if (key === 'confidence' && typeof val === 'number') {
+      displayVal = (val * 100).toFixed(0) + '%';
+    }
+
+    html += '<div class="typed-field">' +
+      '<div class="typed-field-label">' + key.replace(/_/g, ' ') + '</div>' +
+      '<div class="typed-field-value">' + displayVal + '</div></div>';
+  }
+
+  html += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">' +
+    '<button class="btn btn-secondary btn-sm" onclick="closeDrawer();showToast(\'Raw JSON copied to clipboard\', \'info\')">' +
+    '<span class="material-icons" style="font-size:14px">content_copy</span> Copy Raw JSON</button></div>';
+
+  body.innerHTML = html;
+}
+
+function closeDrawer() {
+  document.getElementById('drawerOverlay').style.display = 'none';
+  document.getElementById('detailDrawer').style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* SCENARIO FLOW SWITCHING                                                */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+function setScenario(idx) {
+  var btns = document.querySelectorAll('.scenario-bar .scenario-btn');
+  btns.forEach(function(b, i) { b.classList.toggle('active', i === idx); });
+
+  switch (idx) {
+    case 0: // Data Types CRUD
+      switchPage('data-types');
+      break;
+    case 1: // Agent Type Assignment
+      switchPage('agent-type-form');
+      renderDataTypeDropdown();
+      break;
+    case 2: // Execution Log
+      switchPage('execution-log');
+      setExecScenario('valid');
+      break;
+    case 3: // Agent Outputs Browse
+      switchPage('agent-outputs');
+      break;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* KEYBOARD SHORTCUTS                                                     */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (document.getElementById('dataTypeModal').style.display === 'flex') closeDataTypeDialog();
+    if (document.getElementById('deleteModal').style.display === 'flex') closeDeleteDialog();
+    if (document.getElementById('detailDrawer').style.display === 'flex') closeDrawer();
+  }
+});
+
+// Close modals on overlay click
+document.getElementById('dataTypeModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDataTypeDialog();
+});
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDeleteDialog();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* INITIALISE                                                             */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+// Render initial data
+renderDataTypes();
+renderDataTypeDropdown();
+onAgentTypeChange();
+
+// Handle initial scenario
+setScenario(0);
+
+</script>
+</body>
+</html>

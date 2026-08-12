@@ -80,6 +80,26 @@ async def _run_setup_identity(args: argparse.Namespace) -> int:
         return 1
 
 
+async def _run_seed_skills() -> int:
+    """Execute the skill seeder and return exit code 0/1."""
+    from app.db.session import AsyncSessionLocal
+    from app.services.skill_seeder import SkillSeeder
+
+    async with AsyncSessionLocal() as db:
+        try:
+            summary = await SkillSeeder().run(db)
+            await db.commit()
+        except Exception as exc:
+            logger.error("Skill seeder raised an unexpected error: %s", exc)
+            return 1
+
+    for skill_name, action in summary.items():
+        logger.info("  %s: %s", skill_name, action)
+
+    print(json.dumps({"status": "ok", "skills": summary}, indent=2))
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m app.cli",
@@ -135,6 +155,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Full /.well-known/openid-configuration URL (external OIDC providers).",
     )
 
+    # ── seed-skills sub-command ─────────────────────────────────────────
+    subparsers.add_parser(
+        "seed-skills",
+        help="Seed default platform skills (save_result, send_notification).",
+        description=(
+            "Idempotently creates the default platform skills if they do not already exist.\n\n"
+            "Example:\n"
+            "  python -m app.cli seed-skills"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
     return parser
 
 
@@ -145,6 +177,9 @@ def main() -> None:
 
     if args.command == "setup-identity":
         exit_code = asyncio.run(_run_setup_identity(args))
+        sys.exit(exit_code)
+    elif args.command == "seed-skills":
+        exit_code = asyncio.run(_run_seed_skills())
         sys.exit(exit_code)
     else:
         parser.print_help()

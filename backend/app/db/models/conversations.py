@@ -23,6 +23,7 @@ class ConversationStatus(str, enum.Enum):
 
     active = "active"
     closed = "closed"
+    archived = "archived"
     error = "error"
 
 
@@ -35,6 +36,14 @@ class TurnRole(str, enum.Enum):
     system = "system"
 
 
+class TurnType(str, enum.Enum):
+    """Type of conversation turn — distinguishes regular messages from intervention events."""
+
+    message = "message"
+    intervene_request = "intervene_request"
+    intervene_response = "intervene_response"
+
+
 class ConversationSession(Base):
     """A bounded interaction context between an initiator and an agent."""
 
@@ -43,15 +52,22 @@ class ConversationSession(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    agent_instance_id: Mapped[uuid.UUID | None] = mapped_column(
+    agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("agent_instances.id", ondelete="SET NULL"),
+        ForeignKey("agent_types.id", ondelete="SET NULL"),
         nullable=True,
     )
-    agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+    triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identities.id", ondelete="SET NULL"),
+        nullable=True,
     )
-    initiator_subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    agent_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     channel: Mapped[str] = mapped_column(String(50), nullable=False, default="web")
     status: Mapped[ConversationStatus] = mapped_column(
         Enum(ConversationStatus, name="conversation_status_enum"),
@@ -62,7 +78,14 @@ class ConversationSession(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    guardrail_usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     turns: Mapped[list["ConversationTurn"]] = relationship(
@@ -70,6 +93,9 @@ class ConversationSession(Base):
         back_populates="session",
         cascade="all, delete-orphan",
         order_by="ConversationTurn.created_at",
+    )
+    intervene_requests: Mapped[list["InterveneRequest"]] = relationship(
+        "InterveneRequest", back_populates="conversation_session"
     )
 
     def __repr__(self) -> str:
@@ -92,7 +118,17 @@ class ConversationTurn(Base):
     role: Mapped[TurnRole] = mapped_column(
         Enum(TurnRole, name="turn_role_enum"), nullable=False
     )
+    turn_type: Mapped[TurnType] = mapped_column(
+        Enum(TurnType, name="turn_type_enum"),
+        nullable=False,
+        default=TurnType.message,
+    )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    intervene_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("intervene_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -101,6 +137,9 @@ class ConversationTurn(Base):
     # Relationships
     session: Mapped["ConversationSession"] = relationship(
         "ConversationSession", back_populates="turns"
+    )
+    intervene_request: Mapped["InterveneRequest | None"] = relationship(
+        "InterveneRequest", back_populates="conversation_turns"
     )
     tool_calls: Mapped[list["ToolCallRecord"]] = relationship(
         "ToolCallRecord", back_populates="turn", cascade="all, delete-orphan"
@@ -139,3 +178,7 @@ class ToolCallRecord(Base):
 
     def __repr__(self) -> str:
         return f"<ToolCallRecord id={self.id} tool_name={self.tool_name}>"
+
+
+# Resolve forward references
+from app.db.models.intervene import InterveneRequest  # noqa: E402, F401

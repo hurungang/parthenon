@@ -1,11 +1,12 @@
 """Agent Instance Manager — spawns and destroys agent instances with max_instances enforcement."""
+from __future__ import annotations
+
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.db.models.agents import AgentInstance, AgentInstanceStatus, AgentType
 
@@ -40,22 +41,7 @@ class AgentInstanceManager:
         if not agent_type.is_active:
             raise ValueError(f"AgentType '{agent_type.name}' is not active")
 
-        # Count current active instances
-        count_result = await db.execute(
-            select(func.count(AgentInstance.id)).where(
-                AgentInstance.agent_type_id == agent_type_id,
-                AgentInstance.status.in_(
-                    [AgentInstanceStatus.created, AgentInstanceStatus.active]
-                ),
-            )
-        )
-        current_count = count_result.scalar_one()
-
-        if current_count >= agent_type.max_instances:
-            raise InstanceLimitError(
-                f"AgentType '{agent_type.name}' has reached its max_instances limit "
-                f"({agent_type.max_instances})"
-            )
+        # NOTE: max_instances enforcement removed; capacity is now managed by the AgentJob queue.
 
         instance = AgentInstance(
             agent_type_id=agent_type_id,

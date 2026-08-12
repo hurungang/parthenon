@@ -6,6 +6,7 @@ import apiClient from './apiClient'
 import type {
   AccessRequest,
   AccessRequestBatch,
+  BatchPolicySaveRequest,
   Group,
   GroupCreate,
   GroupMember,
@@ -27,7 +28,7 @@ import type {
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
 export async function listTagDefinitions(
-  filters?: { scope?: string; resource_type?: string }
+  filters?: { scope?: string; resource_type?: string; limit?: number; offset?: number }
 ): Promise<TagDefinition[]> {
   const response = await apiClient.get<TagDefinition[]>('/user-tags/definitions', { params: filters })
   return response.data
@@ -100,6 +101,17 @@ export async function updatePolicyStatement(
 ): Promise<PolicyStatement> {
   const response = await apiClient.patch<PolicyStatement>(
     `/user-roles/${roleId}/policies/${policyId}`,
+    data
+  )
+  return response.data
+}
+
+export async function batchSaveRolePolicies(
+  roleId: string,
+  data: BatchPolicySaveRequest
+): Promise<PolicyStatement[]> {
+  const response = await apiClient.put<PolicyStatement[]>(
+    `/user-roles/${roleId}/policies/batch`,
     data
   )
   return response.data
@@ -218,6 +230,10 @@ export async function removeUserFromGroup(userId: string, groupId: string): Prom
   await apiClient.delete(`/platform-users/${userId}/groups/${groupId}`)
 }
 
+export async function deletePlatformUser(id: string): Promise<void> {
+  await apiClient.delete(`/platform-users/${id}`, { params: { force: true } })
+}
+
 // ── Access Requests ───────────────────────────────────────────────────────────
 
 export async function submitAccessRequest(
@@ -231,13 +247,19 @@ export async function submitAccessRequest(
   return response.data
 }
 
-export async function listMyAccessRequests(): Promise<AccessRequestBatch[]> {
-  const response = await apiClient.get<AccessRequestBatch[]>('/user-access-requests/my')
+export async function listMyAccessRequests(limit?: number, offset?: number): Promise<AccessRequestBatch[]> {
+  const params: Record<string, number> = {}
+  if (limit !== undefined) params.limit = limit
+  if (offset !== undefined) params.offset = offset
+  const response = await apiClient.get<AccessRequestBatch[]>('/user-access-requests/my', { params })
   return response.data
 }
 
-export async function listPendingRequests(): Promise<AccessRequest[]> {
-  const response = await apiClient.get<AccessRequest[]>('/user-access-requests/pending')
+export async function listPendingRequests(limit?: number, offset?: number): Promise<AccessRequest[]> {
+  const params: Record<string, number> = {}
+  if (limit !== undefined) params.limit = limit
+  if (offset !== undefined) params.offset = offset
+  const response = await apiClient.get<AccessRequest[]>('/user-access-requests/pending', { params })
   return response.data
 }
 

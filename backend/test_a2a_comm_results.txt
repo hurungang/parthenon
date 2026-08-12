@@ -1,0 +1,91 @@
+2026-05-21 15:28:55,156 - app.main - INFO - Starting Parthenon backend in test mode
+2026-05-21 15:28:55,159 - app.core.telemetry - INFO - Traces disabled ù no-op TracerProvider registered
+2026-05-21 15:28:55,159 - app.core.telemetry - INFO - Metrics disabled ù no-op MeterProvider registered
+2026-05-21 15:28:55,253 - app.core.telemetry - DEBUG - FastAPI instrumented
+2026-05-21 15:28:55,260 - app.core.telemetry - DEBUG - SQLAlchemy instrumented
+2026-05-21 15:28:55,324 - app.core.telemetry - DEBUG - Redis instrumented
+2026-05-21 15:28:55,330 - app.core.telemetry - DEBUG - httpx instrumented
+2026-05-21 15:28:55,330 - app.core.telemetry - INFO - OpenTelemetry initialised ù service=parthenon-api exporters=['file']
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.3, pluggy-1.5.0 -- C:\Users\rhu\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend
+configfile: pyproject.toml
+plugins: anyio-4.9.0, devtools-0.12.2, Faker-40.15.0, langsmith-0.8.2, asyncio-1.3.0, cov-7.1.0, env-1.1.3, mock-3.14.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 14 items
+
+tests/unit/test_a2a_communication.py::test_a2a_request_denied_when_agent_type_not_in_allowed_list 2026-05-21 15:28:57,728 - app.communication_hub.api.a2a - WARNING - A2A request denied: role=d8439141-d224-47b8-b081-87332d869b12 target=forbidden-target allowed=['allowed-target']
+PASSED
+tests/unit/test_a2a_communication.py::test_a2a_request_allowed_when_target_in_role_delegation_steps 2026-05-21 15:28:57,741 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-allowed receiver=agent_e9697e2e-965e-485f-a531-cb8e4f70619e_88c5cfe9-2f60-4920-9742-b80dbdf419c2 session_id=0715dc35-f236-483b-a03e-0702dfc6fed2 is_dynamic=True
+2026-05-21 15:28:57,742 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=role-delegation-target receiver=agent_e9697e2e-965e-485f-a531-cb8e4f70619e_88c5cfe9-2f60-4920-9742-b80dbdf419c2 session=0715dc35-f236-483b-a03e-0702dfc6fed2
+2026-05-21 15:28:57,742 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=role-delegation-target requester=req-allowed receiver=agent_e9697e2e-965e-485f-a531-cb8e4f70619e_88c5cfe9-2f60-4920-9742-b80dbdf419c2 session=0715dc35-f236-483b-a03e-0702dfc6fed2
+2026-05-21 15:28:57,754 - app.services.agents.session_service - INFO - Enqueued AgentJob ffb24912-fc00-4007-92fe-122855e1ab3e for type e9697e2e-965e-485f-a531-cb8e4f70619e (user=None)
+2026-05-21 15:28:57,755 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_e9697e2e-965e-485f-a531-cb8e4f70619e_88c5cfe9-2f60-4920-9742-b80dbdf419c2, session_link_id=0715dc35-f236-483b-a03e-0702dfc6fed2, target_agent_type=role-delegation-target, job_id=ffb24912-fc00-4007-92fe-122855e1ab3e
+2026-05-21 15:28:57,757 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:29:09,090 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:29:09,091 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=agent_e9697e2e-965e-485f-a531-cb8e4f70619e_88c5cfe9-2f60-4920-9742-b80dbdf419c2, session_id=ffb24912-fc00-4007-92fe-122855e1ab3e): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+PASSED
+tests/unit/test_a2a_communication.py::test_a2a_permission_cache_invalidates_on_sop_change 2026-05-21 15:29:09,098 - app.services.agents.permission_manager - INFO - Resolved 1 allowed agent types for role a527c5b7-d101-46ad-b7a2-2b93ec7045f7: ['planner-agent']
+2026-05-21 15:29:09,099 - app.services.agents.permission_manager - INFO - Resolved 1 allowed agent types for role a527c5b7-d101-46ad-b7a2-2b93ec7045f7: ['reviewer-agent']
+PASSED
+tests/unit/test_a2a_communication.py::test_dynamic_receiver_provisioned_when_unavailable 2026-05-21 15:29:09,105 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-dynamic receiver=agent_8144b0e2-2f82-4bf6-89d7-6816887e9444_8c648d71-1b69-46ff-b504-816b73f07ec7 session_id=e4c0d771-7c10-460a-a649-73f37500197b is_dynamic=True
+2026-05-21 15:29:09,106 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=dynamic-target receiver=agent_8144b0e2-2f82-4bf6-89d7-6816887e9444_8c648d71-1b69-46ff-b504-816b73f07ec7 session=e4c0d771-7c10-460a-a649-73f37500197b
+2026-05-21 15:29:09,106 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=dynamic-target requester=req-dynamic receiver=agent_8144b0e2-2f82-4bf6-89d7-6816887e9444_8c648d71-1b69-46ff-b504-816b73f07ec7 session=e4c0d771-7c10-460a-a649-73f37500197b
+2026-05-21 15:29:09,109 - app.services.agents.session_service - INFO - Enqueued AgentJob c3265b24-d8ee-40dd-98c5-7b1cd11f542c for type 8144b0e2-2f82-4bf6-89d7-6816887e9444 (user=None)
+2026-05-21 15:29:09,110 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_8144b0e2-2f82-4bf6-89d7-6816887e9444_8c648d71-1b69-46ff-b504-816b73f07ec7, session_link_id=e4c0d771-7c10-460a-a649-73f37500197b, target_agent_type=dynamic-target, job_id=c3265b24-d8ee-40dd-98c5-7b1cd11f542c
+2026-05-21 15:29:09,110 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:29:20,345 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:29:20,345 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=agent_8144b0e2-2f82-4bf6-89d7-6816887e9444_8c648d71-1b69-46ff-b504-816b73f07ec7, session_id=c3265b24-d8ee-40dd-98c5-7b1cd11f542c): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+PASSED
+tests/unit/test_a2a_communication.py::test_dynamic_receiver_assigned_to_available_agent_type 2026-05-21 15:29:20,355 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-existing receiver=receiver-live-001 session_id=06781672-3ae6-41d7-b137-a589909c9e81 is_dynamic=False
+2026-05-21 15:29:20,356 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=available-target requester=req-existing receiver=receiver-live-001 session=06781672-3ae6-41d7-b137-a589909c9e81
+2026-05-21 15:29:20,359 - app.services.agents.session_service - INFO - Enqueued AgentJob b76cbe79-9a63-4c49-8004-852e25031456 for type c50b1e18-7b21-4e3f-bd67-0dfc1244969c (user=None)
+2026-05-21 15:29:20,359 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=receiver-live-001, session_link_id=06781672-3ae6-41d7-b137-a589909c9e81, target_agent_type=available-target, job_id=b76cbe79-9a63-4c49-8004-852e25031456
+2026-05-21 15:29:20,361 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:29:31,419 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:29:31,420 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=receiver-live-001, session_id=b76cbe79-9a63-4c49-8004-852e25031456): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+PASSED
+tests/unit/test_a2a_communication.py::test_dynamic_receiver_marked_with_lifecycle_metadata 2026-05-21 15:29:31,431 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-metadata receiver=agent_60b957b7-01ac-4b71-bc06-336a38643ef8_217eb7d9-152d-401d-9df7-0fc7217a2970 session_id=01037372-33e9-4497-ae69-7891553b1a69 is_dynamic=True
+2026-05-21 15:29:31,431 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=metadata-target receiver=agent_60b957b7-01ac-4b71-bc06-336a38643ef8_217eb7d9-152d-401d-9df7-0fc7217a2970 session=01037372-33e9-4497-ae69-7891553b1a69
+2026-05-21 15:29:31,431 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=metadata-target requester=req-metadata receiver=agent_60b957b7-01ac-4b71-bc06-336a38643ef8_217eb7d9-152d-401d-9df7-0fc7217a2970 session=01037372-33e9-4497-ae69-7891553b1a69
+2026-05-21 15:29:31,434 - app.services.agents.session_service - INFO - Enqueued AgentJob 60376b9d-ac11-440b-8c7b-b1552ef0666a for type 60b957b7-01ac-4b71-bc06-336a38643ef8 (user=None)
+2026-05-21 15:29:31,434 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_60b957b7-01ac-4b71-bc06-336a38643ef8_217eb7d9-152d-401d-9df7-0fc7217a2970, session_link_id=01037372-33e9-4497-ae69-7891553b1a69, target_agent_type=metadata-target, job_id=60376b9d-ac11-440b-8c7b-b1552ef0666a
+2026-05-21 15:29:31,435 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:29:42,665 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:29:42,666 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=agent_60b957b7-01ac-4b71-bc06-336a38643ef8_217eb7d9-152d-401d-9df7-0fc7217a2970, session_id=60376b9d-ac11-440b-8c7b-b1552ef0666a): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+PASSED
+tests/unit/test_a2a_communication.py::test_dynamic_receiver_removed_on_a2a_session_complete 2026-05-21 15:29:42,681 - app.communication_hub.api.a2a - INFO - A2A session disconnected: session=session-cleanup receiver=recv-cleanup receiver_is_dynamic=True
+2026-05-21 15:29:42,682 - app.communication_hub.api.a2a - INFO - Dynamic A2A receiver cleanup completed: session=session-cleanup receiver=recv-cleanup
+PASSED
+tests/unit/test_a2a_communication.py::test_no_orphan_receivers_after_disconnect 2026-05-21 15:29:42,693 - app.communication_hub.api.a2a - INFO - A2A session disconnected: session=session-orphan receiver=recv-orphan receiver_is_dynamic=True
+2026-05-21 15:29:42,693 - app.communication_hub.api.a2a - INFO - Dynamic A2A receiver cleanup completed: session=session-orphan receiver=recv-orphan
+PASSED
+tests/unit/test_a2a_communication.py::test_cleanup_logs_lifecycle_events 2026-05-21 15:29:42,706 - app.communication_hub.api.a2a - INFO - A2A session disconnected: session=session-log receiver=recv-log receiver_is_dynamic=True
+2026-05-21 15:29:42,706 - app.communication_hub.api.a2a - INFO - Dynamic A2A receiver cleanup completed: session=session-log receiver=recv-log
+PASSED
+tests/unit/test_a2a_communication.py::test_shared_session_persists_across_multi_turn_a2a_messages 2026-05-21 15:29:42,716 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-shared receiver=agent_8bcc2e87-cf26-442c-8b02-e0acfe0f45a9_96d37c8d-37ce-4ce3-9fd8-63c26fa9b446 session_id=90cdb27b-a5d6-4ccd-b628-ee2c631f1267 is_dynamic=True
+2026-05-21 15:29:42,717 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=session-target receiver=agent_8bcc2e87-cf26-442c-8b02-e0acfe0f45a9_96d37c8d-37ce-4ce3-9fd8-63c26fa9b446 session=90cdb27b-a5d6-4ccd-b628-ee2c631f1267
+2026-05-21 15:29:42,718 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=session-target requester=req-shared receiver=agent_8bcc2e87-cf26-442c-8b02-e0acfe0f45a9_96d37c8d-37ce-4ce3-9fd8-63c26fa9b446 session=90cdb27b-a5d6-4ccd-b628-ee2c631f1267
+2026-05-21 15:29:42,720 - app.services.agents.session_service - INFO - Enqueued AgentJob f993cc83-7900-4f37-84a5-3531d066a303 for type 8bcc2e87-cf26-442c-8b02-e0acfe0f45a9 (user=None)
+2026-05-21 15:29:42,721 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_8bcc2e87-cf26-442c-8b02-e0acfe0f45a9_96d37c8d-37ce-4ce3-9fd8-63c26fa9b446, session_link_id=90cdb27b-a5d6-4ccd-b628-ee2c631f1267, target_agent_type=session-target, job_id=f993cc83-7900-4f37-84a5-3531d066a303
+2026-05-21 15:29:42,723 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:29:53,842 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:29:53,842 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=agent_8bcc2e87-cf26-442c-8b02-e0acfe0f45a9_96d37c8d-37ce-4ce3-9fd8-63c26fa9b446, session_id=f993cc83-7900-4f37-84a5-3531d066a303): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+2026-05-21 15:29:53,845 - app.communication_hub.api.a2a - INFO - A2A request resumed existing session: target=session-target requester=req-shared receiver=agent_8bcc2e87-cf26-442c-8b02-e0acfe0f45a9_96d37c8d-37ce-4ce3-9fd8-63c26fa9b446 session=90cdb27b-a5d6-4ccd-b628-ee2c631f1267
+PASSED
+tests/unit/test_a2a_communication.py::test_session_link_records_both_requester_and_receiver 2026-05-21 15:29:53,852 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-link receiver=agent_3c07c699-566f-4361-818c-ed42690437c4_41eacf32-7f07-4486-844b-9db8d6fb6be7 session_id=5be43324-41dc-4615-b4d5-ba54dcebaf3f is_dynamic=True
+2026-05-21 15:29:53,853 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=link-target receiver=agent_3c07c699-566f-4361-818c-ed42690437c4_41eacf32-7f07-4486-844b-9db8d6fb6be7 session=5be43324-41dc-4615-b4d5-ba54dcebaf3f
+2026-05-21 15:29:53,853 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=link-target requester=req-link receiver=agent_3c07c699-566f-4361-818c-ed42690437c4_41eacf32-7f07-4486-844b-9db8d6fb6be7 session=5be43324-41dc-4615-b4d5-ba54dcebaf3f
+2026-05-21 15:29:53,854 - app.services.agents.session_service - INFO - Enqueued AgentJob c0c6dd8e-cf0d-44d9-8a1c-8f35f89ae25d for type 3c07c699-566f-4361-818c-ed42690437c4 (user=None)
+2026-05-21 15:29:53,855 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_3c07c699-566f-4361-818c-ed42690437c4_41eacf32-7f07-4486-844b-9db8d6fb6be7, session_link_id=5be43324-41dc-4615-b4d5-ba54dcebaf3f, target_agent_type=link-target, job_id=c0c6dd8e-cf0d-44d9-8a1c-8f35f89ae25d
+2026-05-21 15:29:53,856 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection
+2026-05-21 15:30:05,371 - httpx - INFO - HTTP Request: POST http://localhost:8002/internal/agent/execute "HTTP/1.1 502 Bad Gateway"
+2026-05-21 15:30:05,371 - app.communication_hub.api.a2a - ERROR - Failed to trigger receiver execution via Communication Hub (receiver_id=agent_3c07c699-566f-4361-818c-ed42690437c4_41eacf32-7f07-4486-844b-9db8d6fb6be7, session_id=c0c6dd8e-cf0d-44d9-8a1c-8f35f89ae25d): Communication Hub returned 502: {"detail":"Failed to trigger agent execution after 3 retries: Server error '502 Bad Gateway' for url 'http://localhost:8001/execute'\nFor more information check: https://developer.mozilla.org/en-US/do. Falling back to SessionDispatcher polling (30s delay).
+PASSED
+tests/unit/test_a2a_communication.py::test_session_status_transitions_correctly 2026-05-21 15:30:05,389 - app.communication_hub.api.a2a - INFO - A2A session created: requester=req-transition receiver=agent_c92d907d-52a2-42b9-b7bb-5b785c751f8f_f0bce77d-d944-4e2e-8497-d1effedb9d76 session_id=771d83db-c572-430f-a856-02aaafe7df82 is_dynamic=True
+2026-05-21 15:30:05,390 - app.communication_hub.api.a2a - INFO - A2A dynamic receiver provisioned: target=transition-target receiver=agent_c92d907d-52a2-42b9-b7bb-5b785c751f8f_f0bce77d-d944-4e2e-8497-d1effedb9d76 session=771d83db-c572-430f-a856-02aaafe7df82
+2026-05-21 15:30:05,390 - app.communication_hub.api.a2a - INFO - A2A request accepted: target=transition-target requester=req-transition receiver=agent_c92d907d-52a2-42b9-b7bb-5b785c751f8f_f0bce77d-d944-4e2e-8497-d1effedb9d76 session=771d83db-c572-430f-a856-02aaafe7df82
+2026-05-21 15:30:05,394 - app.services.agents.session_service - INFO - Enqueued AgentJob 9b71c829-ec27-49d1-91d6-dca78200e6db for type c92d907d-52a2-42b9-b7bb-5b785c751f8f (user=None)
+2026-05-21 15:30:05,395 - app.communication_hub.api.a2a - INFO - Receiver execution prepared: receiver_id=agent_c92d907d-52a2-42b9-b7bb-5b785c751f8f_f0bce77d-d944-4e2e-8497-d1effedb9d76, session_link_id=771d83db-c572-430f-a856-02aaafe7df82, target_agent_type=transition-target, job_id=9b71c829-ec27-49d1-91d6-dca78200e6db
+2026-05-21 15:30:05,397 - app.services.control_center.comm_hub_client - INFO - Using X-Client-Certificate header for HTTP Communication Hub connection

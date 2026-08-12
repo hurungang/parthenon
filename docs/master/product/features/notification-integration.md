@@ -1,28 +1,88 @@
 # Notification Integration
 
 ## Overview
-Notification Integration enables Parthenon to send alerts and updates through multiple channels, such as email, Slack, Teams, and webhooks. It allows agents and workflows to trigger notifications as part of automated processes, supporting timely communication and operational awareness.
+Notification Integration enables Parthenon agents, SOPs, and platform workflows to deliver timely, actionable messages to users and teams across multiple external channels. Platform administrators configure the available channels and recipient groups; agents and SOPs address notifications by recipient group slug, and the platform resolves delivery across all channels assigned to that group. Every notification attempt is logged for audit.
 
 ## Who Uses It
-- Enterprise Admins: Configure notification channels and monitor event history
-- AI Agents: Trigger notifications as part of workflows
-- Business Users: Receive alerts and updates from the platform
+- **Platform Administrators**: Configure notification channels and recipient groups; monitor delivery logs
+- **SOP Authors**: Define notification steps within agent workflows, targeting groups by slug
+- **Agent Runtime**: Executes SOPs and triggers notifications via the `send_notification` tool
+- **Support / Operations Teams**: Receive actionable alerts and updates through their preferred channels
 
-## What It Does
-- Supports configuration of multiple notification channel types (email, Slack, Teams, webhook)
-- Exposes notification channels as invocable MCP tools
-- Enables agents and workflows to trigger notifications at any workflow step
-- Tracks notification events and provides event history for audit
+## Notification Channels
 
-## Key Concepts
-- **Notification Channel**: A configured method for sending alerts (email, Slack, etc.)
-- **MCP Tool Exposure**: Making notification channels available as tools
-- **Event History**: Recording all notification events for review
-- **Notification Triggering**: Allowing agents and workflows to send notifications
+Four channel types are supported. Each channel is configured independently with its own credentials and settings.
+
+| Channel Type | Description |
+|---|---|
+| **SMTP Email** | Delivers via an SMTP relay (supports STARTTLS and SMTPS) |
+| **Email API** | Delivers via an external email API provider (e.g., SendGrid, Mailgun) |
+| **Webhook** | HTTP POST to a configured endpoint; supports HMAC signing for verification |
+| **Instant Messenger** | Delivers to Microsoft Teams or Slack using their respective webhook/connector formats |
+
+Secret credentials (passwords, API keys, signing secrets) for each channel are stored encrypted at rest and decrypted only at the moment of dispatch.
+
+## Recipient Groups
+
+A recipient group is a named, addressable audience that can be assigned one or more notification channels.
+
+- Groups have a **display name** and a unique **slug** (auto-generated from the name)
+- Agents and SOP instructions target a group by **slug** — the platform resolves all assigned channels and delivers to each
+- One group may use multiple channels simultaneously (e.g., email + Slack)
+- One channel may be shared across multiple groups
+
+Administrators manage groups through the **Recipient Groups** admin page. The page displays a slug reminder for SOP authors: the `send_notification` and `get_recipient_group` tools use the group slug as their parameter, not the display name.
+
+## Agent and SOP Notification
+
+Agents and SOPs trigger notifications by calling the `send_notification` tool with:
+- **Recipient group slug** — identifies the target audience
+- **Message content** — the notification body to deliver
+
+The platform records the source of each notification (`AGENT`, `SOP`, or `MANUAL`) alongside the session or SOP identifiers, providing a full audit trail from the instruction to the delivery attempt.
+
+## Admin Management
+
+Administrators manage the notification system through three dedicated admin pages:
+
+- **Notification Channels** — Create, edit, and delete channel configurations; test-send to verify credentials
+- **Recipient Groups** — Create, edit, and delete groups; assign/remove channels from a group; view channel count per group
+- **Notification Log** — Browse all delivery attempts with filtering by status, date, and group; click any row for full delivery detail
+
+## Delivery Audit
+
+Every channel delivery attempt is recorded as an immutable log entry with:
+- Source type and identifier (SOP, agent session, or manual trigger)
+- Recipient group and channel used
+- Delivery status: `DELIVERED` or `FAILED`
+- Error detail on failure
+- Timestamp of request and delivery
+
+Partial failures (one channel fails, others succeed) are recorded individually — a group notification never silently drops a channel.
+
+## Intervene Request Notifications
+
+When an agent calls `system____human_intervene`, two new notification trigger types are emitted:
+
+- **`intervene_request_created`** — Fired when a new intervene request is persisted; notification body includes the agent name, request reason, and execution link
+- **`intervene_request_responded`** — Fired when an operator responds to a pending request; notification body includes the response value and operator name
+
+These triggers follow the same dispatch pattern as existing notification types and can be routed through any configured channel (email, Slack, Teams, webhook).
 
 ## Acceptance Criteria
-- Admins can configure and manage notification channels
-- Agents and workflows can trigger notifications via MCP tools
-- All notification events are logged and accessible for audit
-- Event history is available from the UI
-- Notification delivery is reliable and monitored
+- Admin can create, edit, and delete notification channels for all four channel types
+- Admin can configure channel-specific credentials (encrypted at rest); credentials are never exposed in API responses
+- Admin can create, edit, and delete recipient groups; each group can be assigned one or more channels
+- Admins can perform a test send from any channel's edit view
+- SOP authors can reference recipient groups by slug in SOP instructions
+- Agents can trigger notifications by calling the `send_notification` tool with a group slug
+- Notifications are delivered to all channels assigned to the target group; a failure on one channel does not block others
+- Every delivery attempt is logged with source, status, and error detail
+- Delivery log is filterable and accessible from the admin UI
+
+## Out of Scope
+- In-app (UI) notification banners or popups for end users
+- SMS or voice call channels
+- End-user self-service notification preferences
+- Custom message templates or branding
+- Bulk marketing or promotional messaging

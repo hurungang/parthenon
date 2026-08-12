@@ -1,4 +1,4 @@
-"""SQLAlchemy models for Agent management: AgentType, AgentInstance, AgentSkillAssignment."""
+"""SQLAlchemy models for Agent management: AgentRole, AgentIdentity, AgentType, AgentJob."""
 import enum
 import uuid
 from datetime import datetime
@@ -8,27 +8,92 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
 
-class AgentMode(str, enum.Enum):
-    """Operating mode of an agent type."""
+# ── Enums ─────────────────────────────────────────────────────────────────────
 
-    sop_agent = "sop-agent"
-    skillful_agent = "skillful-agent"
+
+class AgentIdentityType(str, enum.Enum):
+    """Type of OIDC principal representing an agent's credentials."""
+
+    realm_user = "realm_user"
+    # Legacy values retained for migration compatibility
+    oauth = "oauth"
+    service_account = "service_account"
+    user_delegate = "user_delegate"
+
+
+class AgentIdentityStatus(str, enum.Enum):
+    """Lifecycle status of an agent identity."""
+
+    active = "active"
+    suspended = "suspended"
+    deprovisioned = "deprovisioned"
+
+
+class AgentInputType(str, enum.Enum):
+    """How an agent accepts input."""
+
+    none = "none"
+    typed = "typed"
+    conversation = "conversation"
+
+
+class AgentOutputType(str, enum.Enum):
+    """How an agent produces output."""
+
+    auto = "auto"
+    typed = "typed"
+    markdown = "markdown"
+
+
+class AgentJobStatus(str, enum.Enum):
+    """Lifecycle status of an agent job.
+
+    Allowed transitions:
+      queued -> running
+      running -> completed | failed | terminated | waiting_for_human
+      waiting_for_human -> running | terminated | failed
+    """
+
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+    terminated = "terminated"
+    waiting_for_human = "waiting_for_human"
+
+
+class ModelProvider(str, enum.Enum):
+    """LLM provider type for a ModelConfig."""
+
+    openai = "openai"
+    anthropic = "anthropic"
+    litellm_proxy = "litellm_proxy"
+    azure_openai = "azure_openai"
+    gemini = "gemini"
+    mistral = "mistral"
+    cohere = "cohere"
+    groq = "groq"
+    together = "together"
+    fireworks = "fireworks"
+    perplexity = "perplexity"
+    deepseek = "deepseek"
 
 
 class AgentInstanceStatus(str, enum.Enum):
-    """Lifecycle status of an agent instance."""
+    """Lifecycle status of a legacy agent instance."""
 
     created = "created"
     active = "active"
@@ -36,36 +101,104 @@ class AgentInstanceStatus(str, enum.Enum):
     error = "error"
 
 
-class AgentType(Base):
-    """
-    Definition of an agent: operating mode, identity, model binding, and instance limits.
-    """
+class AgentPlanStatus(str, enum.Enum):
+    """Lifecycle status of an agent plan generation attempt."""
 
-    __tablename__ = "agent_types"
+    pending = "pending"
+    success = "success"
+    failed = "failed"
+
+
+class GuardrailTokenEnforcementMode(str, enum.Enum):
+    """Token budget behavior for non-conversational and automated execution modes."""
+
+    observe = "observe"
+    enforce = "enforce"
+
+
+class GuardrailTokenFallbackMode(str, enum.Enum):
+    """Fallback behavior when provider hard token enforcement is unavailable."""
+
+    observe_and_log = "observe_and_log"
+    stop_on_next_hard_guardrail = "stop_on_next_hard_guardrail"
+
+
+class GuardrailConversationalTokenVisibilityMode(str, enum.Enum):
+    """Whether conversational token usage snapshots are emitted."""
+
+    enabled = "enabled"
+    disabled = "disabled"
+
+
+class GuardrailConversationalContinuationPolicy(str, enum.Enum):
+    """Conversational continuation behavior after token threshold is reached."""
+
+    allow = "allow"
+
+
+class SessionStopCategory(str, enum.Enum):
+    """Session terminal category used for operational triage."""
+
+    functional_failure = "functional_failure"
+    guardrail_stop = "guardrail_stop"
+
+
+class SessionStopReason(str, enum.Enum):
+    """Canonical stop-reason taxonomy for runtime/session propagation."""
+
+    cycle_detected = "cycle_detected"
+    iteration_limit_exceeded = "iteration_limit_exceeded"
+    delegation_depth_exceeded = "delegation_depth_exceeded"
+    delegated_steps_exceeded = "delegated_steps_exceeded"
+    execution_timeout_exceeded = "execution_timeout_exceeded"
+    token_budget_exceeded_non_conversational = "token_budget_exceeded_non_conversational"
+    token_guardrail_fallback_applied = "token_guardrail_fallback_applied"
+
+
+class AgentTerminationCategory(str, enum.Enum):
+    """Normalized termination attribution for runtime dashboards."""
+
+    none = "none"
+    user_requested = "user_requested"
+    cascade_parent_terminated = "cascade_parent_terminated"
+    policy_blocked = "policy_blocked"
+
+
+class AgentRecursionValidationMode(str, enum.Enum):
+    """Recursion validation behavior used by create/update/run prechecks."""
+
+    strict_block = "strict_block"
+    warn_only = "warn_only"
+
+
+class AgentRecursionValidationStatus(str, enum.Enum):
+    """Most recent recursion validation result snapshot."""
+
+    pass_ = "pass"
+    fail = "fail"
+
+
+class AgentTokenStatus(str, enum.Enum):
+    """Status of the stored OAuth token for an agent identity."""
+
+    active = "active"
+    expired = "expired"
+    refresh_failed = "refresh_failed"
+
+
+# ── Role Models ───────────────────────────────────────────────────────────────
+
+
+class AgentRole(Base):
+    """A named permission set granting access to specific SOPs and/or Skills."""
+
+    __tablename__ = "agent_roles"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    mode: Mapped[AgentMode] = mapped_column(
-        Enum(AgentMode, name="agent_mode_enum"), nullable=False
-    )
-    # LLM provider configuration
-    llm_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="openai")
-    llm_model: Mapped[str] = mapped_column(String(200), nullable=False, default="gpt-4o")
-    # AES-encrypted LLM API credentials
-    encrypted_llm_credentials: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # For sop-agent: bound SOP
-    sop_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sops.id", ondelete="SET NULL"), nullable=True
-    )
-    max_instances: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # System prompt override
-    system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # OIDC identity subject for this agent type (provisioned after creation)
-    identity_subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -77,20 +210,510 @@ class AgentType(Base):
     )
 
     # Relationships
-    sop: Mapped["Sop | None"] = relationship("Sop")
-    instances: Mapped[list["AgentInstance"]] = relationship(
-        "AgentInstance", back_populates="agent_type", cascade="all, delete-orphan"
+    sop_assignments: Mapped[list["AgentRoleSOP"]] = relationship(
+        "AgentRoleSOP", back_populates="role", cascade="all, delete-orphan"
     )
-    skill_assignments: Mapped[list["AgentSkillAssignment"]] = relationship(
-        "AgentSkillAssignment", back_populates="agent_type", cascade="all, delete-orphan"
+    skill_assignments: Mapped[list["AgentRoleSkill"]] = relationship(
+        "AgentRoleSkill", back_populates="role", cascade="all, delete-orphan"
+    )
+    identity_assignments: Mapped[list["AgentRoleIdentity"]] = relationship(
+        "AgentRoleIdentity", back_populates="role", cascade="all, delete-orphan"
+    )
+    mcp_session_assignments: Mapped[list["AgentRoleMcpSession"]] = relationship(
+        "AgentRoleMcpSession", back_populates="role", cascade="all, delete-orphan"
+    )
+    agent_types: Mapped[list["AgentType"]] = relationship(
+        "AgentType", back_populates="role"
     )
 
     def __repr__(self) -> str:
-        return f"<AgentType id={self.id} name={self.name} mode={self.mode}>"
+        return f"<AgentRole id={self.id} name={self.name}>"
+
+
+class AgentRoleSOP(Base):
+    """Join table linking an AgentRole to a Sop."""
+
+    __tablename__ = "agent_role_sops"
+    __table_args__ = (
+        UniqueConstraint("role_id", "sop_id", name="uq_agent_role_sop"),
+    )
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    sop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sops.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    # Relationships
+    role: Mapped["AgentRole"] = relationship("AgentRole", back_populates="sop_assignments")
+    sop: Mapped["Sop"] = relationship("Sop")
+
+    def __repr__(self) -> str:
+        return f"<AgentRoleSOP role_id={self.role_id} sop_id={self.sop_id}>"
+
+
+class AgentRoleSkill(Base):
+    """Join table linking an AgentRole to a Skill."""
+
+    __tablename__ = "agent_role_skills"
+    __table_args__ = (
+        UniqueConstraint("role_id", "skill_id", name="uq_agent_role_skill"),
+    )
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    skill_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    # Relationships
+    role: Mapped["AgentRole"] = relationship("AgentRole", back_populates="skill_assignments")
+    skill: Mapped["Skill"] = relationship("Skill")
+
+    def __repr__(self) -> str:
+        return f"<AgentRoleSkill role_id={self.role_id} skill_id={self.skill_id}>"
+
+
+class AgentRoleIdentity(Base):
+    """Join table: explicit assignment of an AgentIdentity to an AgentRole.
+
+    This is the authoritative source for identity-role access control.
+    Only identities listed here can use the role for agent execution.
+    """
+
+    __tablename__ = "agent_role_identities"
+    __table_args__ = (
+        UniqueConstraint("role_id", "identity_id", name="uq_agent_role_identity"),
+    )
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    identity_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_identities.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    # Relationships
+    role: Mapped["AgentRole"] = relationship("AgentRole", back_populates="identity_assignments")
+    identity: Mapped["AgentIdentity"] = relationship("AgentIdentity", back_populates="role_assignments")
+
+    def __repr__(self) -> str:
+        return f"<AgentRoleIdentity role_id={self.role_id} identity_id={self.identity_id}>"
+
+
+class AgentRoleMcpSession(Base):
+    """Join table: explicit assignment of an MCP Session to an AgentRole.
+
+    Each role can have at most one session per MCP server (enforced by constraint).
+    This provides the MCP resource context (credentials, project IDs, etc.) when
+    agents execute with this role.
+    """
+
+    __tablename__ = "agent_role_mcp_sessions"
+    __table_args__ = (
+        UniqueConstraint("role_id", "server_id", name="uq_agent_role_mcp_session_server"),
+    )
+
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    mcp_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("mcp_sessions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Denormalized for constraint: which MCP server this session belongs to
+    server_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("mcp_servers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    # Relationships
+    role: Mapped["AgentRole"] = relationship("AgentRole", back_populates="mcp_session_assignments")
+    mcp_session: Mapped["McpSession"] = relationship("McpSession")
+    server: Mapped["McpServer"] = relationship("McpServer")
+
+    def __repr__(self) -> str:
+        return f"<AgentRoleMcpSession role_id={self.role_id} session_id={self.mcp_session_id}>"
+
+
+# ── Identity Model ────────────────────────────────────────────────────────────
+
+
+class AgentIdentity(Base):
+    """A first-class OIDC principal representing an agent's credentials in the identity provider."""
+
+    __tablename__ = "agent_identities"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    identity_type: Mapped[AgentIdentityType] = mapped_column(
+        Enum(AgentIdentityType, name="agent_identity_type_enum"), nullable=False
+    )
+    # OAuth agent realm fields (used when identity_type = realm_user)
+    realm_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    realm_username: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # AES-256 encrypted OAuth tokens (nullable until OAuth flow completes)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Encrypted refresh token for automatic token renewal (agent-runtime-security-segregation)
+    encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_token_refresh_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    token_status: Mapped[AgentTokenStatus | None] = mapped_column(
+        Enum(AgentTokenStatus, name="agent_token_status_enum"), nullable=True
+    )
+    # Legacy fields (kept for backward compatibility with existing records)
+    client_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    auth_provider: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[AgentIdentityStatus] = mapped_column(
+        Enum(AgentIdentityStatus, name="agent_identity_status_enum"),
+        nullable=False,
+        default=AgentIdentityStatus.active,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    agent_types: Mapped[list["AgentType"]] = relationship(
+        "AgentType", back_populates="identity"
+    )
+    role_assignments: Mapped[list["AgentRoleIdentity"]] = relationship(
+        "AgentRoleIdentity", back_populates="identity", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentIdentity id={self.id} name={self.name} status={self.status}>"
+
+
+# ── ModelConfig ──────────────────────────────────────────────────────────────
+
+
+class ModelConfig(Base):
+    """LLM provider configuration: credentials and endpoint for a specific provider."""
+
+    __tablename__ = "model_configs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    provider_type: Mapped[ModelProvider] = mapped_column(
+        Enum(ModelProvider, name="model_provider_enum"), nullable=False
+    )
+    api_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # AES-256 encrypted JSON of provider-specific API credentials (e.g., {"api_key": "..."})
+    encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Allowlist of model IDs available through this config (empty = all models allowed by provider)
+    enabled_models: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # Vendor-level enable/disable toggle (Phase 3.8). When true, every
+    # ModelAvailability row for this vendor cascades to is_disabled=True and
+    # disabled_reason=vendor_cascaded. Pre-execution availability checks
+    # block dispatch on the cascaded models.
+    is_disabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ModelConfig id={self.id} display_name={self.display_name} "
+            f"provider_type={self.provider_type} is_disabled={self.is_disabled}>"
+        )
+
+
+# ── AgentType ─────────────────────────────────────────────────────────────────
+
+
+class AgentType(Base):
+    """Definition of an agent: role, identity, model binding, and input/output configuration."""
+
+    __tablename__ = "agent_types"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Identity and role
+    identity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_identities.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_roles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Model identifier — a provider-scoped model name (e.g., "gpt-4o") resolved by ModelBindingLayer
+    # to a ModelConfig that lists it in its enabled_models allowlist.
+    model_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Instruction and I/O configuration
+    system_instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    input_type: Mapped[AgentInputType] = mapped_column(
+        Enum(AgentInputType, name="agent_input_type_enum"),
+        nullable=False,
+        default=AgentInputType.none,
+    )
+    input_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    output_type: Mapped[AgentOutputType] = mapped_column(
+        Enum(AgentOutputType, name="agent_output_type_enum"),
+        nullable=False,
+        default=AgentOutputType.auto,
+    )
+    output_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Typed output data type reference (non-conversational agents)
+    output_data_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_data_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Guardrail policy profile (owned by Control Center and resolved by runtime context)
+    guardrail_max_iterations: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+    )
+    guardrail_max_delegation_depth: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+    )
+    guardrail_max_delegated_steps: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=20,
+    )
+    guardrail_execution_timeout_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=300,
+    )
+    guardrail_token_budget: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    guardrail_token_enforcement_mode: Mapped[GuardrailTokenEnforcementMode] = mapped_column(
+        Enum(GuardrailTokenEnforcementMode, name="guardrail_token_enforcement_mode_enum"),
+        nullable=False,
+        default=GuardrailTokenEnforcementMode.observe,
+    )
+    guardrail_token_fallback_mode: Mapped[GuardrailTokenFallbackMode] = mapped_column(
+        Enum(GuardrailTokenFallbackMode, name="guardrail_token_fallback_mode_enum"),
+        nullable=False,
+        default=GuardrailTokenFallbackMode.observe_and_log,
+    )
+    guardrail_conversational_token_visibility_mode: Mapped[
+        GuardrailConversationalTokenVisibilityMode
+    ] = mapped_column(
+        Enum(
+            GuardrailConversationalTokenVisibilityMode,
+            name="guardrail_conversational_token_visibility_mode_enum",
+        ),
+        nullable=False,
+        default=GuardrailConversationalTokenVisibilityMode.enabled,
+    )
+    guardrail_conversational_continuation_policy: Mapped[
+        GuardrailConversationalContinuationPolicy
+    ] = mapped_column(
+        Enum(
+            GuardrailConversationalContinuationPolicy,
+            name="guardrail_conversational_continuation_policy_enum",
+        ),
+        nullable=False,
+        default=GuardrailConversationalContinuationPolicy.allow,
+    )
+    recursion_validation_mode: Mapped[AgentRecursionValidationMode] = mapped_column(
+        Enum(AgentRecursionValidationMode, name="agent_recursion_validation_mode_enum"),
+        nullable=False,
+        default=AgentRecursionValidationMode.strict_block,
+        server_default=AgentRecursionValidationMode.strict_block.value,
+    )
+    last_recursion_validation_status: Mapped[AgentRecursionValidationStatus | None] = mapped_column(
+        Enum(
+            AgentRecursionValidationStatus,
+            name="agent_last_recursion_validation_status_enum",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=True,
+    )
+    last_recursion_validation_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    identity: Mapped["AgentIdentity | None"] = relationship(
+        "AgentIdentity", back_populates="agent_types"
+    )
+    role: Mapped["AgentRole | None"] = relationship(
+        "AgentRole", back_populates="agent_types"
+    )
+    sop_bindings: Mapped[list["AgentTypeSopBinding"]] = relationship(
+        "AgentTypeSopBinding", back_populates="agent_type", cascade="all, delete-orphan"
+    )
+    skill_bindings: Mapped[list["AgentTypeSkillBinding"]] = relationship(
+        "AgentTypeSkillBinding", back_populates="agent_type", cascade="all, delete-orphan"
+    )
+    instances: Mapped[list["AgentInstance"]] = relationship(
+        "AgentInstance", back_populates="agent_type", cascade="all, delete-orphan"
+    )
+    jobs: Mapped[list["AgentJob"]] = relationship(
+        "AgentJob", back_populates="agent_type", cascade="all, delete-orphan"
+    )
+    plan: Mapped["AgentPlan | None"] = relationship(
+        "AgentPlan", back_populates="agent_type", uselist=False, cascade="all, delete-orphan"
+    )
+    output_data_type: Mapped["AgentDataType | None"] = relationship(
+        "AgentDataType", back_populates="agent_types", foreign_keys=[output_data_type_id]
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentType id={self.id} name={self.name}>"
+
+
+# ── AgentType Binding Join Tables ─────────────────────────────────────────────
+
+
+class AgentTypeSopBinding(Base):
+    """Join entity linking an AgentType to a Sop with ordering."""
+
+    __tablename__ = "agent_type_sop_bindings"
+    __table_args__ = (
+        UniqueConstraint("agent_type_id", "sop_id", name="uq_agent_type_sop_binding"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    agent_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sop_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sops.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="sop_bindings")
+    sop: Mapped["Sop"] = relationship("Sop")
+
+    def __repr__(self) -> str:
+        return f"<AgentTypeSopBinding agent_type_id={self.agent_type_id} sop_id={self.sop_id}>"
+
+
+class AgentTypeSkillBinding(Base):
+    """Join entity linking an AgentType to a Skill with ordering."""
+
+    __tablename__ = "agent_type_skill_bindings"
+    __table_args__ = (
+        UniqueConstraint("agent_type_id", "skill_id", name="uq_agent_type_skill_binding"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    agent_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    skill_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    order: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="skill_bindings")
+    skill: Mapped["Skill"] = relationship("Skill")
+
+    def __repr__(self) -> str:
+        return f"<AgentTypeSkillBinding agent_type_id={self.agent_type_id} skill_id={self.skill_id}>"
+
+
+# ── AgentInstance (legacy — superseded by AgentJob in Phase 5) ───────────────
 
 
 class AgentInstance(Base):
-    """A runtime instance of an AgentType with lifecycle status."""
+    """Legacy runtime instance of an AgentType. Superseded by AgentJob in Phase 5."""
 
     __tablename__ = "agent_instances"
 
@@ -123,13 +746,13 @@ class AgentInstance(Base):
         return f"<AgentInstance id={self.id} type_id={self.agent_type_id} status={self.status}>"
 
 
-class AgentSkillAssignment(Base):
-    """Links a Skill to a skillful-agent AgentType."""
+# ── AgentJob ──────────────────────────────────────────────────────────────────
 
-    __tablename__ = "agent_skill_assignments"
-    __table_args__ = (
-        UniqueConstraint("agent_type_id", "skill_id", name="uq_agent_skill_assignment"),
-    )
+
+class AgentJob(Base):
+    """Tracks a single agent execution session from submission through completion."""
+
+    __tablename__ = "agent_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -137,23 +760,203 @@ class AgentSkillAssignment(Base):
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_types.id", ondelete="CASCADE"), nullable=False
     )
-    skill_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
+    triggered_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("identities.id", ondelete="SET NULL"), nullable=True
     )
+    parent_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    root_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    delegation_depth: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    model_guardrail_configuration_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("model_guardrail_configurations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    terminated_by_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("termination_requests.id", ondelete="SET NULL"), nullable=True
+    )
+    # Convenience FK link to the typed output record for this session
+    output_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_outputs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    termination_category: Mapped[AgentTerminationCategory] = mapped_column(
+        Enum(AgentTerminationCategory, name="agent_termination_category_enum"),
+        nullable=False,
+        default=AgentTerminationCategory.none,
+        server_default=AgentTerminationCategory.none.value,
+    )
+    input_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[AgentJobStatus] = mapped_column(
+        Enum(AgentJobStatus, name="agent_job_status_enum"),
+        nullable=False,
+        default=AgentJobStatus.queued,
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    output_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stop_category: Mapped[SessionStopCategory | None] = mapped_column(
+        Enum(SessionStopCategory, name="agent_job_stop_category_enum"),
+        nullable=True,
+    )
+    stop_reason: Mapped[SessionStopReason | None] = mapped_column(
+        Enum(SessionStopReason, name="agent_job_stop_reason_enum"),
+        nullable=True,
+    )
+    stop_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Ordered message thread for conversational sessions: [{"role": "user"|"assistant"|"tool", "content": "..."}]
+    conversation_history: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
-    agent_type: Mapped["AgentType"] = relationship(
-        "AgentType", back_populates="skill_assignments"
+    agent_type: Mapped["AgentType"] = relationship("AgentType", back_populates="jobs")
+    output: Mapped["AgentOutput | None"] = relationship(
+        "AgentOutput", back_populates="agent_jobs", foreign_keys=[output_id]
     )
-    skill: Mapped["Skill"] = relationship("Skill")
+    intervene_requests: Mapped[list["InterveneRequest"]] = relationship(
+        "InterveneRequest", back_populates="agent_session", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
-        return (
-            f"<AgentSkillAssignment agent_type_id={self.agent_type_id} skill_id={self.skill_id}>"
-        )
+        return f"<AgentJob id={self.id} type_id={self.agent_type_id} status={self.status}>"
+
+
+# ── AgentPromptLog ────────────────────────────────────────────────────────────
+
+
+class AgentPromptLog(Base):
+    """Captures the full system instruction and user prompt before the first LLM call.
+
+    Written by AgentRuntimeExecutor once per session immediately before the first
+    Reason phase.  Enables complete auditability of what was sent to the LLM.
+    """
+
+    __tablename__ = "execution_logs"
+    __table_args__ = (
+        Index("ix_execution_logs_session_id", "session_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    system_instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    logged_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentPromptLog id={self.id} session_id={self.session_id}>"
+
+
+# ── AgentPlan ─────────────────────────────────────────────────────────────────
+
+
+class AgentPlan(Base):
+    """Stores the most recent LLM-generated implementation plan for an agent type."""
+
+    __tablename__ = "agent_plans"
+    __table_args__ = (
+        UniqueConstraint("agent_type_id", name="uq_agent_plans_agent_type_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    agent_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    plan_steps: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    topology: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    generation_status: Mapped[AgentPlanStatus] = mapped_column(
+        Enum(AgentPlanStatus, name="agent_plan_status_enum"), nullable=False
+    )
+    generation_error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    agent_config_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    agent_type: Mapped["AgentType"] = relationship(
+        "AgentType", back_populates="plan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentPlan id={self.id} agent_type_id={self.agent_type_id} status={self.generation_status}>"
+
+
+# ── A2A Session Link Model ────────────────────────────────────────────────────
+
+
+class A2ASessionStatus(str, enum.Enum):
+    """Lifecycle status of an A2A session link."""
+
+    active = "active"
+    completed = "completed"
+    failed = "failed"
+
+
+class AgentA2ASession(Base):
+    """Tracks A2A (Agent-to-Agent) communication sessions linking requester and receiver agents.
+
+    Used to maintain shared session context across delegation steps and manage cleanup
+    of dynamically provisioned receiver agents.
+    """
+
+    __tablename__ = "agent_a2a_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    requester_instance_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    receiver_instance_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    receiver_is_dynamic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    session_link_id: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    status: Mapped[A2ASessionStatus] = mapped_column(
+        Enum(A2ASessionStatus, name="a2a_session_status_enum"),
+        nullable=False,
+        default=A2ASessionStatus.active,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    disconnect_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_agent_a2a_sessions_requester", "requester_instance_id"),
+        Index("ix_agent_a2a_sessions_receiver", "receiver_instance_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentA2ASession id={self.id} requester={self.requester_instance_id} receiver={self.receiver_instance_id} status={self.status}>"
 
 
 # Resolve forward references

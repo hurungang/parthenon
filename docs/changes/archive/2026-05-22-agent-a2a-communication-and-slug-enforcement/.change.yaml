@@ -1,0 +1,17 @@
+name: agent-a2a-communication-and-slug-enforcement
+created_at: 2026-05-20
+status: master-updated
+master_updated_at: 2026-05-22
+scope:
+  has_ui_changes: true
+  has_architecture_changes: true
+  has_db_changes: true
+  has_deployment_changes: false
+  has_operations_changes: false
+agents_complete:
+  product_owner: true
+  ux_specialist: true
+  architect: true
+  database_designer: true
+  developer: true
+  tester: true

@@ -27,24 +27,35 @@ class ConversationTurnRead(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID
     role: TurnRole
+    turn_type: str
     content: str
+    intervene_request_id: uuid.UUID | None = None
     token_count: int | None
     created_at: datetime
     tool_calls: list[ToolCallRecordRead] = []
+
+
+class ConversationSessionCreate(BaseModel):
+    """Request body for POST /conversations."""
+
+    agent_type_id: uuid.UUID
 
 
 class ConversationSessionRead(BaseModel):
     model_config = {"from_attributes": True}
 
     id: uuid.UUID
-    agent_instance_id: uuid.UUID | None
     agent_type_id: uuid.UUID | None
-    initiator_subject: str | None
+    triggered_by_user_id: uuid.UUID | None
+    agent_job_id: uuid.UUID | None
+    title: str | None
     channel: str
     status: ConversationStatus
     turn_count: int
     created_at: datetime
+    updated_at: datetime
     closed_at: datetime | None
+    guardrail_usage: dict[str, Any] | None = None
 
 
 class ConversationSessionDetailRead(ConversationSessionRead):

@@ -75,8 +75,16 @@ custom:
 #   uvicorn: ERROR         — silence uvicorn access logs
 log_levels:
   root: "INFO"
+  app.api.deps: "DEBUG"
   # app.services: "DEBUG"
   # uvicorn.access: "WARNING"
+
+# ── HTTP client log level ────────────────────────────────────────────────────
+# Controls httpx and httpcore loggers across all three services.
+# Valid levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Default: WARNING (silent). Set to DEBUG to trace full HTTP wire traffic.
+# Override via env: TELEMETRY__HTTP_CLIENT_LOG_LEVEL=DEBUG
+http_client_log_level: "WARNING"
 
 # ============================================================
 # Multiple-exporter example (console + OTLP for local dev):

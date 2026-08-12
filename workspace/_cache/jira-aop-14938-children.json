@@ -1,0 +1,470 @@
+{
+  "expand": "schema,names",
+  "startAt": 0,
+  "maxResults": 100,
+  "total": 9,
+  "issues": [
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "11369976",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/11369976",
+      "key": "PSST-13602",
+      "fields": {
+        "summary": "[AP - PE] - Third-Party SSO Integration via Keycloak",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2025-11-18T22:49:24.000+0000",
+        "description": "After the integration of Keycloak with the Agent Portal internally for centralized authentication (AOP-16542), this Feature aims to extend the authentication process with the inclusion of the customer-managed identity providers (e.g. Active Directory, Azure AD, etc) through Keycloak. This development will first be done for the Western Sydney International customer, with the potential to scale with other customers who may require the same functionality.\r\n\r\n \r\nh3. *Objectives*\r\n * Enable customers to log in with their corporate identity provider.\r\n\r\n * Use Keycloak as an intermediary that connects Agent Portal with external identity providers like Azure AD or Active Directory.\r\n\r\n * Ensure the centralized user management system remains intact with the support of Keycloak and that it supports Agent Portal functionalities such as: PIN management, role management, etc.\r\n\r\n * Ensure an uninterrupted login experience whether the customer is with or without SSO.\r\n\r\nh3. *Scope*\r\n * Integrate the WSI Active Directory with Keycloak using OpenID Connect or SAML SSO.\r\n\r\n * Reuse the existing Keycloak integration as a gateway.\r\n\r\n * Setup Keycloak authentication brokering with external Identity Provider on a per-tenant base.\r\n\r\n * Support multiple identity providers through dynamic realm configuration.\r\n\r\n * Customize login page behavior to avoid confusion and maintain Agent Portal Branding.\r\n\r\n * Enable fallback on internal Keycloak users (for super-admins, internal testers, etc.)\r\n\r\nh3. *Deliverables*\r\n * Keycloak realm definition with WSI.\r\n * Login flow that routes authentication to WSI’s AD through Keycloak.\r\n\r\n * User interface support for customer login path identification.\r\n\r\n * Customer Onboarding Documentation for Future with External Identity Providers.\r\n\r\n * Audit log records of SSO login records.\r\n\r\n \r\n\r\n*Acceptance Criteria*\r\n * WSI users can log into Agent Portal with AD credentials through Keycloak.\r\n * Keycloak properly authenticates with the Identity Providers of WSI’s.\r\n * Internal users can still authenticate with their Keycloak accounts.\r\n * Login page provides a clear and well-designed experience and redirects properly.\r\n * Only authentic and authorized users can access the Agent Portal functionalities.",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=lrondon",
+          "name": "lrondon",
+          "key": "JIRAUSER107456",
+          "emailAddress": "leo.rondon@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=JIRAUSER107456&avatarId=58358",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=JIRAUSER107456&avatarId=58358",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=JIRAUSER107456&avatarId=58358",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=JIRAUSER107456&avatarId=58358"
+          },
+          "displayName": "Leo RONDON",
+          "active": true,
+          "timeZone": "Europe/Berlin"
+        },
+        "updated": "2026-05-01T00:40:34.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10022",
+          "description": "",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/statuses/generic.png",
+          "name": "Blocked",
+          "id": "10022",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/2",
+            "id": 2,
+            "key": "new",
+            "colorName": "default",
+            "name": "To Do"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "11181582",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/11181582",
+      "key": "PSST-13217",
+      "fields": {
+        "summary": "PSS - K8s - Auth - KeyCloak  integration with P Account",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2025-10-07T09:26:33.000+0000",
+        "description": "*Description:*\r\n\r\nDuring the keycloak integration with ICM AD , the architectural recommendation is to use the P-Account integration instead of ICM AD. \r\n\r\nNeed to integrate Keycloak with Amadeus P-Account .\r\n\r\n \r\n\r\n*Acceptance Criteria:*\r\n * Keycloak should be authenticated through P account.\r\n\r\n ",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=tasharma",
+          "name": "tasharma",
+          "key": "JIRAUSER121552",
+          "emailAddress": "tapish.sharma@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?avatarId=20028",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&avatarId=20028",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&avatarId=20028",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&avatarId=20028"
+          },
+          "displayName": "Tapish SHARMA",
+          "active": true,
+          "timeZone": "Europe/Berlin"
+        },
+        "updated": "2026-01-30T03:52:06.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/6",
+          "description": "The issue is considered finished, the resolution is correct. Issues which are closed can be reopened.",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/statuses/closed.png",
+          "name": "Closed",
+          "id": "6",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "10839809",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/10839809",
+      "key": "PSST-12888",
+      "fields": {
+        "summary": "[AP - IMP - WSI] - Permission Management Module via Agent Portal (NFC Solution)",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2025-07-28T23:23:45.000+0000",
+        "description": "Implement a secure, role-based NFC card authentication mechanism integrated with WSI’s IAM and Microsoft Entra ID to allow authorised agents to perform override actions on Kiosks and Automated Bag Drops (ABDs) via Agent Portal.\r\n\r\n \r\nh3. *Scope*\r\n * Enable WSI staff to authenticate and access override functionality using NFC staff cards.\r\n\r\n * Replace the legacy barcode+PIN method with a secure and personalised credentialing process.\r\n\r\n * Ensure that only valid and authorised users can access override functions.\r\n\r\n * Store and manage roles and PINs in Agent Portal.\r\n\r\n * Integrate with WSI IAM via LDAP for real-time validation of user status.\r\n\r\n * Provide self-service signup for users via Agent Portal, backed by IAM authentication.\r\n\r\n \r\nh3. *Key Capabilities*\r\n * {*}NFC Card-Based Authentication{*}:\r\n ** NFC card readers installed on Kiosks and ABDs to read User IDs.\r\n ** PIN entry on interface for additional security.\r\n ** PIN validation handled by Agent Portal.\r\n ** User validity checked in real time against WSI IAM (via LDAP).\r\n * {*}User Roles & Permissions{*}:\r\n ** Roles managed in Agent Portal (e.g., CSA, Supervisor, Maintenance).\r\n ** Role determines the actions a user can perform during override.\r\n * {*}Integration{*}:\r\n ** Microsoft Entra ID (via LDAP) used to validate user activity status.\r\n ** Mivada CMS provides the user identity and card details.\r\n ** Scheduled sync of user details and ad-hoc removal supported.\r\n * {*}Signup Flow{*}:\r\n ** Users authenticate using WSI IAM credentials.\r\n ** Enter unique User ID and PIN to register.\r\n ** Admin or delegated users assign roles via Agent Portal.\r\n * {*}Override Process Flow{*}:\r\n ** Agent taps NFC card on Kiosk/ABD reader.\r\n ** Enters PIN on-screen.\r\n ** Agent Portal validates PIN and checks role.\r\n ** Portal queries IAM for user validity.\r\n ** If valid + authorised, grants access to override functions.\r\n * {*}Audit & Security{*}:\r\n ** Incorrect PIN and invalid user attempts logged.\r\n ** Option to support future MFA requirements.\r\n ** PIN expiry, reset, and lockout mechanisms (TBD).\r\n\r\n \r\nh3. *Dependencies*\r\n * NFC card reader installation on kiosks and ABDs (Handled by WSI).\r\n\r\n * Mivada CMS provisioning and availability of user APIs.\r\n\r\n * Integration agreement and schema from WSI IAM.\r\n\r\n * LDAP configuration and test credentials from WSI.\r\n\r\n * Role management interface in Agent Portal.\r\n\r\n \r\n\r\n[WSI NFC Card Solution for Agent Override.pptx|https://amadeusworkplace.sharepoint.com/:p:/r/sites/1AAirportITBusDev/Shared%20Documents/03%20-%20Regions/APAC/01%20-%20Australia%20and%20New%20Zealand/WSA-WesternSydneyAirport/2025-WSA-AgentOverrideNFC/WSI%20NFC%20Card%20Solution%20for%20Agent%20Override.pptx?d=w812010e0e36f42478af534facf42d437&csf=1&web=1&e=LeIUSS]\r\n\r\n \r\n\r\n[https://amadeus.atlassian.net/wiki/x/1uunZw] \r\n\r\n \r\n\r\n[https://amadeus.atlassian.net/wiki/spaces/ICM/pages/1739058134/PPS+Change+Request+2024-05-09+-+CSA+Portal+with+an+Authentication+Microservice+integrated+into+WSI+s+Active+Directory]",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=lrondon",
+          "name": "lrondon",
+          "key": "JIRAUSER107456",
+          "emailAddress": "leo.rondon@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=JIRAUSER107456&avatarId=58358",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=JIRAUSER107456&avatarId=58358",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=JIRAUSER107456&avatarId=58358",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=JIRAUSER107456&avatarId=58358"
+          },
+          "displayName": "Leo RONDON",
+          "active": true,
+          "timeZone": "Europe/Berlin"
+        },
+        "updated": "2026-04-16T20:44:39.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/18150",
+          "description": "This status is managed internally by JIRA Software",
+          "iconUrl": "https://jira.amadeus.com/agile/",
+          "name": "Implementing",
+          "id": "18150",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/4",
+            "id": 4,
+            "key": "indeterminate",
+            "colorName": "inprogress",
+            "name": "In Progress"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "9600556",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/9600556",
+      "key": "AOP-18388",
+      "fields": {
+        "summary": "PSS - K8s - Auth - KeyCloak POC with integration with 3rd party LDAP Phase 1",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2024-11-18T04:07:05.000+0000",
+        "description": "*Deliverable:*\r\n * Evaluate plugin options for integrating with Keycloak and determine whether to build inside or outside of Keycloak. \r\n * Integrate Test KeyCloak with ICM AD Server\r\n\r\n*Acceptance Criteria:*\r\n * PoC - AD server integration as a 3rd party identity provider.\r\n * Conduct a fundamental training session about to Keycloak to Agent portal developers.\r\n\r\n ",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=tasharma",
+          "name": "tasharma",
+          "key": "JIRAUSER121552",
+          "emailAddress": "tapish.sharma@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?avatarId=20028",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&avatarId=20028",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&avatarId=20028",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&avatarId=20028"
+          },
+          "displayName": "Tapish SHARMA",
+          "active": true,
+          "timeZone": "Europe/Berlin"
+        },
+        "updated": "2025-11-18T01:14:16.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10002",
+          "description": "",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/statuses/closed.png",
+          "name": "Done",
+          "id": "10002",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "9564067",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/9564067",
+      "key": "AOP-18090",
+      "fields": {
+        "summary": "Keycloak Integration",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2024-11-08T02:23:36.000+0000",
+        "description": "*Deliverable:*\r\n * *Keycloak Integration -* Evaluate plugin options for integrating with Keycloak and determine whether to build inside or outside of Keycloak. \r\n\r\n \r\n\r\n*Acceptance Criteria:*\r\n * PoC - AD server integration as a 3rd party identity provider.\r\n\r\n \r\n\r\n*OOM:*\r\n\r\n10eD ",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=msteyn",
+          "name": "msteyn",
+          "key": "JIRAUSER93329",
+          "emailAddress": "michal.steyn@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=JIRAUSER93329&avatarId=39727",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=JIRAUSER93329&avatarId=39727",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=JIRAUSER93329&avatarId=39727",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=JIRAUSER93329&avatarId=39727"
+          },
+          "displayName": "Michal STEYN (contractor)",
+          "active": true,
+          "timeZone": "America/Los_Angeles"
+        },
+        "updated": "2025-03-03T01:14:42.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10339",
+          "description": "This status is managed internally by JIRA Software",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/subtask.gif",
+          "name": "Archived",
+          "id": "10339",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "9564060",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/9564060",
+      "key": "AOP-18089",
+      "fields": {
+        "summary": "PSS - Auth - Keycloak Provision",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2024-11-08T02:18:32.000+0000",
+        "description": "*Deliverable:*\r\n * *Keycloak provision -* to be installed and provision to be done. \r\n\r\n \r\n\r\n*Acceptance Criteria:*\r\n * Keycloak that can be accessed in testing env.\r\n * Conduct a fundamental training session about to Keycloak to Agent portal developers.\r\n\r\n \r\n\r\n*OOM:*\r\n\r\n5eD ",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=msteyn",
+          "name": "msteyn",
+          "key": "JIRAUSER93329",
+          "emailAddress": "michal.steyn@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=JIRAUSER93329&avatarId=39727",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=JIRAUSER93329&avatarId=39727",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=JIRAUSER93329&avatarId=39727",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=JIRAUSER93329&avatarId=39727"
+          },
+          "displayName": "Michal STEYN (contractor)",
+          "active": true,
+          "timeZone": "America/Los_Angeles"
+        },
+        "updated": "2025-02-11T00:34:26.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10002",
+          "description": "",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/statuses/closed.png",
+          "name": "Done",
+          "id": "10002",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "9198498",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/9198498",
+      "key": "AOP-16543",
+      "fields": {
+        "summary": "Backend service integration of Agent Portal Login",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2024-08-20T02:19:36.000+0000",
+        "description": null,
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=rhu",
+          "name": "rhu",
+          "key": "JIRAUSER92902",
+          "emailAddress": "Rungang.Hu@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=JIRAUSER92902&avatarId=47843",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=JIRAUSER92902&avatarId=47843",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=JIRAUSER92902&avatarId=47843",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=JIRAUSER92902&avatarId=47843"
+          },
+          "displayName": "Rungang HU",
+          "active": true,
+          "timeZone": "Australia/Melbourne"
+        },
+        "updated": "2024-12-02T04:49:29.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10339",
+          "description": "This status is managed internally by JIRA Software",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/subtask.gif",
+          "name": "Archived",
+          "id": "10339",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "9198496",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/9198496",
+      "key": "AOP-16542",
+      "fields": {
+        "summary": "[AP - PE] - Keycloak/User management",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2024-08-20T02:18:07.000+0000",
+        "description": "This Feature delivers a unified user management framework for Agent Portal by:\r\n * Integrating Keycloak as the identity provider for authentication and SSO\r\n * Designing the integration to be standards-based (OIDC/SAML2) to support other providers in the future (e.g., Azure AD, Okta, Ping).\r\n * Building a User Management UI within Agent Portal to manage user roles, PINs, and business-specific attributes\r\n * Implementing role-based access control (RBAC) logic for feature-level security\r\n * Improving administrative efficiency through centralized control and audit trails\r\n\r\n \r\nh3. *Objectives*\r\n * Enable secure, token-based login via Keycloak (OIDC)\r\n * Abstract identity provider logic so that swapping/adding providers does not impact AP core.\r\n * Centralize identity management through Keycloak\r\n * Preserve Agent Portal’s ability to manage roles, PINs, and access levels\r\n * Provide a clean and intuitive interface for user and role administration\r\n * Ensure accountability through audit logging\r\n\r\n \r\nh3. *Deliverables*\r\n\r\n \r\n\r\n*Authentication (Keycloak)*\r\n * Integrate Keycloak as the authentication provider for Agent Portal\r\n\r\n * Configure Agent Portal as a client in Keycloak using OpenID Connect (?)\r\n\r\n * Handle login, logout, token validation, and session expiration\r\n\r\n * Ensure disabled users in Keycloak cannot access Agent Portal\r\n\r\n \r\n\r\n*User Management (Agent Portal)*\r\n * Develop a User Management UI:\r\n\r\n * \r\n ** List users from Keycloak\r\n\r\n * \r\n ** Filter and search users\r\n\r\n * \r\n ** Display user roles, status, and extended attributes\r\n\r\n * Enable editing of:\r\n\r\n * \r\n ** Agent Portal-specific roles and permissions\r\n\r\n * \r\n ** PIN codes\r\n\r\n * \r\n ** Optional fields (e.g., unit assignment, terminal access)\r\n\r\n * Store extended attributes in Agent Portal’s local database\r\n * *Design pluggable interface* for additional providers (e.g., metadata-driven config, discovery endpoints).\r\n\r\n*Access Control and Security*\r\n * Roles are managed within Agent Portal.\r\n * Enforce access restrictions at both UI and backend levels\r\n\r\n * Allow customizable role definitions if needed for different customers or airports\r\n\r\n*Audit and Traceability*\r\n * Log all changes to user roles, PINs, and attributes\r\n\r\n * Provide an interface or export mechanism to access audit history\r\n\r\nh3. *Out of Scope*\r\n * User credential or password management (this is handled by Keycloak)\r\n\r\n \r\nh3. *Acceptance Criteria*\r\n\r\n \r\n||Area||Criteria||\r\n|Authentication|Agent Portal authenticates users through Keycloak. Users with valid tokens gain access.|\r\n|UI|Admins can view, search, and filter users through the Agent Portal interface.|\r\n|Role and Attribute Management|Admins can assign roles, edit PINs, and manage extended user attributes.|\r\n|RBAC Enforcement|Portal restricts feature access based on user roles.|\r\n|Audit Logging|All role or attribute changes are logged and available for review.|\r\n\r\n \r\n\r\n \r\n\r\n \r\n\r\n*OOM:*\r\n\r\n20eD",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=lrondon",
+          "name": "lrondon",
+          "key": "JIRAUSER107456",
+          "emailAddress": "leo.rondon@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=JIRAUSER107456&avatarId=58358",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=JIRAUSER107456&avatarId=58358",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=JIRAUSER107456&avatarId=58358",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=JIRAUSER107456&avatarId=58358"
+          },
+          "displayName": "Leo RONDON",
+          "active": true,
+          "timeZone": "Europe/Berlin"
+        },
+        "updated": "2025-12-08T04:21:57.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10002",
+          "description": "",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/statuses/closed.png",
+          "name": "Done",
+          "id": "10002",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    },
+    {
+      "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+      "id": "8748598",
+      "self": "https://jira.amadeus.com/agile/rest/api/2/issue/8748598",
+      "key": "AOP-14939",
+      "fields": {
+        "summary": "Study - Auditing capability per individual user on override screen",
+        "issuetype": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/issuetype/6",
+          "id": "6",
+          "description": "Created by Jira Software - do not edit or delete. Issue type for a big user story that needs to be broken down.",
+          "iconUrl": "https://jira.amadeus.com/agile/secure/viewavatar?size=xsmall&avatarId=12607&avatarType=issuetype",
+          "name": "Epic",
+          "subtask": false,
+          "avatarId": 12607
+        },
+        "created": "2024-05-15T03:19:27.000+0000",
+        "description": "Upgrade to the existing override screen on CUSS/WLA to support auditing individual users (agents, maintenance staff, etc.). \r\n\r\nToday solution only allows for a shared override card to be used to access the override menu and features, which is frowned upon by Security teams (Amadeus internal and customer side).\r\n\r\nThe WLA/CUSS override menu today is also missing override functionality such as 3D override, Excess override, Passport etc due to many factors, but one of which is the lack of auditing capabilities per user. \r\n\r\nCurrent suggestions are to explore linking access to individuals via Active Directory or via DCS. TBD.\r\n\r\n \r\n\r\n*CR Assessment:* [https://amadeus.atlassian.net/wiki/spaces/ICM/pages/1739058134]\r\n\r\n*+6 existing solutions:+*\r\n # Shared card (shared barcode) + share PIN – default solution\r\n # Unique ASIC card & separate ASIC card reader & *shared PIN* & external security system & 3x PLC inputs (QF domestic ABDs + JFK)\r\n # AirNZ staff card RFID (no PIN), *unique* -> Staff ID -> _AirNZ Webservice_ -> Auth -> CUSS\r\n # BA staff barcode *unique* & 2-digits of PIN, via PIN challenge (e.g. position 2 & 4) -> _BA Webservice_ -> Auth -> CUSS\r\n # Card with unique QR code + Unique PIN & CSA Portal & Access Control Microservice & DCS Authentication ({_}Altea{_}) (QF International ABDs + Kiosks + SYD T1)\r\n # Cards are pre-printed (2000 were pre-printed in 2017)\r\n\r\n # VA solution developed by Vedaleon, authentication with _VA’s LDAP_\r\n # Similar to CSA Portal\r\n # Uses Agent Portal v1\r\n # LDAP authentication -> _VA’s LDAP_\r\n # PIN stored (not encrypted) in Subscription Service Identity DB\r\n # No extra AUTH with LDAP when card is scanned at kiosk\r\n # *Manual process* (Airline’s responsibility) when Agent leaves airline to remove agent. Risk that people will forget and leave door open. Sometimes airline sends list of 100 users, requesting a batch delete, which is a manual process done by Vedaleon via DB script.\r\n # Cards are pre-printed, similarly to #5 above (CSA portal)\r\n # used wherever Vedaleon VA ABD & Kiosk is used, even on 3{_}rd{_} party hardware\r\n\r\n # Similar to #6 above, JQ solution developed by Vedaleon, authentication with _New Skies_ (Navitaire) – used wherever Vedaleon JQ ABD & Kiosk is used.\r\n # Copy paste #6 above\r\n\r\n*New WSI – _WSI LDAP_*\r\n * Card scan & PIN\r\n * Card scan / beam sync & PIN / Face biometrics\r\n * Agent Portal continue to perform override functions\r\n * Do we get rid of override screens altogether and replace with Agent Portal only?\r\n *  \r\n * QR code (possibly dynamic) showing in Agent Portal, potentially removes need to store DCS/LDAP credentials in Amadeus DB.\r\n * Pre-authenticated, rotate often, based on policy\r\n\r\n * Must support users without phones, i.e. support physical cards\r\n * Must integrate with 3{_}rd{_} party ID providers, e.g. LDAP & multi-DCS",
+        "assignee": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/user?username=oribeiro",
+          "name": "oribeiro",
+          "key": "oribeiro",
+          "emailAddress": "oribeiro@amadeus.com",
+          "avatarUrls": {
+            "48x48": "https://jira.amadeus.com/agile/secure/useravatar?ownerId=oribeiro&avatarId=16342",
+            "24x24": "https://jira.amadeus.com/agile/secure/useravatar?size=small&ownerId=oribeiro&avatarId=16342",
+            "16x16": "https://jira.amadeus.com/agile/secure/useravatar?size=xsmall&ownerId=oribeiro&avatarId=16342",
+            "32x32": "https://jira.amadeus.com/agile/secure/useravatar?size=medium&ownerId=oribeiro&avatarId=16342"
+          },
+          "displayName": "Oscar ARTURO RIBEIRO",
+          "active": true,
+          "timeZone": "Pacific/Auckland"
+        },
+        "updated": "2026-03-10T22:12:26.000+0000",
+        "status": {
+          "self": "https://jira.amadeus.com/agile/rest/api/2/status/10339",
+          "description": "This status is managed internally by JIRA Software",
+          "iconUrl": "https://jira.amadeus.com/agile/images/icons/subtask.gif",
+          "name": "Archived",
+          "id": "10339",
+          "statusCategory": {
+            "self": "https://jira.amadeus.com/agile/rest/api/2/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "success",
+            "name": "Done"
+          }
+        }
+      },
+      "renderedFields": null
+    }
+  ],
+  "warningMessages": null,
+  "names": null,
+  "schema": null
+}

@@ -1,136 +1,19 @@
----
-description: Stop the Parthenon application. By default stops everything (frontend, backend, infrastructure). Supports --frontend, --backend, --infra flags to stop only specific parts. Use --docker to stop docker compose services. Named terminals remain open for reuse.
----
+# /stop-app
 
-Stop the Parthenon application.
+Stop the Parthenon full-stack application.
 
-**Usage**: `/stop-app [--frontend] [--backend] [--infra] [--docker]`
+## Steps
 
-- No flags → stop everything (frontend, backend, infra containers)
-- `--frontend` → stop only the frontend dev/preview server
-- `--backend` → stop only the backend API process
-- `--infra` → stop only infrastructure containers (postgres, redis)
-- `--docker` → stop all docker compose services
+1. **Frontend**: Kill the Vite dev server (process on port 5173)
+2. **Backend services**: Stop Control Center (8000), Agent Runtime (8001), Communication Hub (8002)
+   - On Windows, use: `.\parthenon.ps1 stop -Services backend -Force`
+   - On macOS/Linux: `kill $(lsof -ti:8000,8001,8002)`
+3. **Infrastructure** (optional): `docker compose down` from project root
+4. **Verify**: All ports 5173, 8000, 8001, 8002, 8082, 5432 are free
 
-**Note**: Terminals remain open after stopping processes and can be reused:
-- **"Parthenon Backend"** terminal
-- **"Parthenon Frontend"** terminal
-- **"Parthenon Preview"** terminal
+## Flags
 
----
-
-## Step 1: Parse Input
-
-Read the user's message for flags: `--frontend`, `--backend`, `--infra`, `--docker`.
-
-If no flags, default mode = stop everything.
-
----
-
-## Step 2: Check What Is Running
-
-```powershell
-# Check backend (port 8000)
-$backend = netstat -ano | Select-String ":8000 .*LISTEN"
-
-# Check frontend (port 5173 or 4173)
-$frontend5173 = netstat -ano | Select-String ":5173 .*LISTEN"
-$frontend4173 = netstat -ano | Select-String ":4173 .*LISTEN"
-
-# Check docker containers
-docker ps --format "{{.Names}}\t{{.Status}}" 2>$null | Select-String "parthenon"
-```
-
-Report what is found running before stopping.
-
----
-
-## Step 3: Stop Frontend (if applicable)
-
-**Skip if `--backend` or `--infra` only.**
-
-Find and stop the Vite dev server or preview server:
-```powershell
-# Find PID listening on 5173 or 4173
-$pids = (netstat -ano | Select-String ":(5173|4173) .*LISTEN" | ForEach-Object {
-    ($_ -split '\s+')[-1]
-}) | Sort-Object -Unique
-
-if ($pids) {
-    Write-Host "Stopping frontend server(s)..."
-    $pids | ForEach-Object { 
-        Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue 
-        Write-Host "  Stopped PID $_"
-    }
-    Write-Host "✅ Frontend stopped (terminals 'Parthenon Frontend' and 'Parthenon Preview' can be reused)"
-} else {
-    Write-Host "Frontend not running"
-}
-```
-
-Confirm port 5173/4173 is no longer listening.
-
----
-
-## Step 4: Stop Backend (if applicable)
-
-**Skip if `--frontend` or `--infra` only.**
-
-Find and stop the uvicorn process:
-```powershell
-# Find PID listening on 8000
-$pids = (netstat -ano | Select-String ":8000 .*LISTEN" | ForEach-Object {
-    ($_ -split '\s+')[-1]
-}) | Sort-Object -Unique
-
-if ($pids) {
-    Write-Host "Stopping backend server..."
-    $pids | ForEach-Object { 
-        Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue 
-        Write-Host "  Stopped PID $_"
-    }
-    Write-Host "✅ Backend stopped (terminal 'Parthenon Backend' can be reused)"
-} else {
-    Write-Host "Backend not running"
-}
-```
-
-Confirm port 8000 is no longer listening.
-
----
-
-## Step 5: Stop Infrastructure Containers (if applicable)
-
-**Skip if `--frontend` or `--backend` only.**
-
-```powershell
-cd <project_root>
-docker compose stop postgres redis keycloak
-```
-
----
-
-## Step 6: Docker Mode (--docker flag)
-
-**Instead of Steps 3–5**, stop all compose services:
-
-```powershell
-cd <project_root>
-docker compose down
-```
-
----
-
-## Step 7: Report Status
-
-```
-## 🛑 Parthenon Application Stopped
-
-| Component     | Action                    |
-|---------------|---------------------------|
-| Frontend      | ✅ Stopped / ⏭️ Not running |
-| Backend API   | ✅ Stopped / ⏭️ Not running |
-| PostgreSQL    | ✅ Stopped / ⏭️ Not running |
-| Redis         | ✅ Stopped / ⏭️ Not running |
-| Keycloak      | ✅ Stopped / ⏭️ Not running |
-```
+- `--frontend` — Stop only the frontend
+- `--backend` — Stop only the backend services
+- `--infra` or `--docker` — Stop Docker services
+- `--all` — Stop everything (default)

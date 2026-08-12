@@ -23,12 +23,16 @@ class TagRegistry:
         db: AsyncSession,
         scope: str | None = None,
         resource_type: str | None = None,
+        limit: int = 25,
+        offset: int = 0,
     ) -> List[TagDefinition]:
         """Return tag definitions, optionally filtered by scope or resource_type."""
         stmt = (
             select(TagDefinition)
             .options(selectinload(TagDefinition.tag_values))
             .order_by(TagDefinition.key)
+            .offset(offset)
+            .limit(limit)
         )
         if scope is not None:
             stmt = stmt.where(TagDefinition.scope == scope)

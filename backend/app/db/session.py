@@ -1,4 +1,6 @@
 """Async SQLAlchemy session factory."""
+import asyncio
+import logging
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
@@ -8,10 +10,12 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 settings = get_settings()
 
 engine = create_async_engine(
-    settings.database_url,
+    settings.computed_database_url,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,
@@ -35,15 +39,24 @@ class Base(DeclarativeBase):
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency providing an async database session."""
-    async with AsyncSessionLocal() as session:
+    session = AsyncSessionLocal()
+    try:
+        yield session
+        await session.commit()
+    except (asyncio.CancelledError, GeneratorExit):
+        await session.rollback()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
         try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
             await session.close()
+        except (asyncio.CancelledError, GeneratorExit):
+            # anyio cancellation scopes can override asyncio.shield(), so
+            # session.close() (which returns the connection to the pool) may
+            # get CancelledError when the client disconnects from a streaming
+            # response while the middleware's cancellation scope is active.
+            logger.debug("Session close interrupted by task cancellation")
 
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]

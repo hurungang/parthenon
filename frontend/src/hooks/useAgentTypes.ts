@@ -4,11 +4,15 @@ import type { AgentType, AgentInstance } from '../types'
 
 const AGENT_TYPES_KEY = ['agents', 'types']
 
-export function useAgentTypes() {
+export function useAgentTypes(limit?: number, offset?: number) {
+  const params: Record<string, number> = {}
+  if (limit !== undefined) params.limit = limit
+  if (offset !== undefined) params.offset = offset
+  const hasPagination = limit !== undefined && offset !== undefined
   return useQuery<AgentType[]>({
-    queryKey: AGENT_TYPES_KEY,
+    queryKey: hasPagination ? [...AGENT_TYPES_KEY, { limit, offset }] : AGENT_TYPES_KEY,
     queryFn: async () => {
-      const { data } = await apiClient.get<AgentType[]>('/agents/types')
+      const { data } = await apiClient.get<AgentType[]>('/agents/types', { params })
       return data
     },
   })
@@ -42,6 +46,18 @@ export function useTerminateInstance() {
   return useMutation<void, Error, string>({
     mutationFn: async (instanceId) => {
       await apiClient.delete(`/agents/instances/${instanceId}`)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+    },
+  })
+}
+
+export function useDeleteAgentType() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: async (typeId) => {
+      await apiClient.delete(`/agents/types/${typeId}`)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })

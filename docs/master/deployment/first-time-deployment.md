@@ -16,14 +16,14 @@ Start PostgreSQL, Redis, and (when using bundled Keycloak) the Keycloak containe
 
 **Before starting services**, ensure:
 - `KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD` are set in the environment configuration if `IDENTITY_PROVIDER_TYPE=keycloak_bundled`
-- Host port `8080` is free (required by the bundled Keycloak container)
+- Host port `8082` is free (required by the bundled Keycloak container; the container internally uses port 8080 but Docker maps it to host port 8082)
 
 In Docker Compose, bring up the `postgres`, `redis`, and `keycloak` services first. In Kubernetes, apply or install the `postgres`, `redis`, and `keycloak` Helm components. If using an external identity provider (`keycloak_external` or `azure_entraid`), omit the Keycloak service.
 
 Confirm connectivity:
 - PostgreSQL is accepting connections on the configured host and port
 - Redis is accepting connections on the configured host and port
-- When using bundled Keycloak: Keycloak admin console is reachable at `http://localhost:8080` and the `/health/ready` endpoint returns healthy
+- When using bundled Keycloak: Keycloak admin console is reachable at `http://localhost:8082` and the `/health/ready` endpoint returns healthy
 - All are reachable from the network namespace that backend services will use
 
 Do not proceed until all relevant health checks pass.
@@ -48,27 +48,28 @@ The Platform API will refuse to start if it cannot reach the database with the e
 
 ---
 
-## Step 4 — Configure the Identity Provider
+## Step 4 — Prepare Identity Provider Dependencies
 
-How this step is completed depends on the selected identity provider type.
+Identity provider configuration is now stored in the database (`IdentityProviderConfig` table) and managed via the System Config UI after super admin login. The platform follows a three-tier bootstrap: (1) super admin login, (2) configure OIDC providers via UI, (3) optionally disable super admin.
 
-**Bundled Keycloak (`IDENTITY_PROVIDER_TYPE=keycloak_bundled`)**
+**Bundled Keycloak (dev/demo)**
 
-Do not manually register a client. The Bootstrap Service provisions the Keycloak realm and client automatically during the setup wizard or CLI run in Step 10. Proceed to Step 5 without setting `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REALM`, or `OIDC_AUDIENCE` — the wizard or CLI will populate these. Confirm that the JWKS endpoint (`http://keycloak:8080/realms/parthenon/protocol/openid-connect/certs`) will be accessible from the Platform API container's network.
+If using the bundled Keycloak for dev/demo, start the Keycloak container along with PostgreSQL and Redis in Step 1. The bundled Keycloak is provisioned by the consolidated setup tool in Step 6 — no manual client registration is needed. Confirm that the JWKS endpoint (`http://keycloak:8082/realms/parthenon/protocol/openid-connect/certs`) will be accessible from the Control Center container's network.
 
-**External Keycloak (`IDENTITY_PROVIDER_TYPE=keycloak_external`)**
+> **Note:** Keycloak is optional in production — only start it for dev/demo deployments or when the platform bootstraps without external OIDC providers.
 
-Manually register the Parthenon Platform API as a confidential OAuth2 client in the external Keycloak instance:
-- Set the allowed redirect URI to `{PLATFORM_API_BASE_URL}/api/v1/auth/callback`
-- Enable the `client_credentials` and `authorization_code` grant types
-- Set the token audience to the intended value for `OIDC_AUDIENCE`
-- Note the issued `client_id` and `client_secret` — these will be required when running the setup wizard or CLI in Step 10
+**External OIDC providers (production)**
 
-Confirm that the JWKS endpoint (`OIDC_JWKS_URI`) is accessible from the Platform API container's network.
+If using external OIDC providers (Keycloak external, Azure EntraID, or any OIDC-compliant provider), ensure they are running and accessible from the Control Center container's network. You will need:
+- The provider's issuer URL (for `.well-known/openid-configuration` discovery)
+- A registered OAuth2 client ID and client secret with `{PLATFORM_API_BASE_URL}/api/v1/auth/callback` as the allowed redirect URI
+- The client must support `authorization_code` grant type
 
-**Azure EntraID (`IDENTITY_PROVIDER_TYPE=azure_entraid`)**
+These values are entered via the System Config UI after super admin login in Step 11 — no environment variables are needed for OIDC at launch.
 
-Register the application in the Azure portal and follow the same pattern as External Keycloak above: note the `client_id`, `client_secret`, and tenant-specific OIDC/JWKS URLs before proceeding.
+**Deployments migrating from pre-refinement (existing `config/identity.yaml`)**
+
+If you are upgrading an existing deployment that used `config/identity.yaml`, ensure the file is still accessible from the Control Center container. The Bootstrap Service will automatically migrate its contents to the database on first startup. Keep the deprecated `OIDC_*` environment variables set for the migration — they are read only during this one-time migration. After migration is verified, remove the `OIDC_*` vars and the `config/identity.yaml` mount.
 
 ---
 
@@ -81,15 +82,61 @@ For sensitive values (all variables marked **secret** in the reference), use:
 - **Kubernetes**: Kubernetes Secrets referenced by the `secrets.yaml` Helm template
 
 Pay special attention to:
-- `OIDC_ISSUER_URL` — must exactly match the `iss` claim in issued tokens, including any trailing slash
+- **`SUPER_ADMIN_ENABLED`, `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD_HASH`** — required for the super admin bootstrap login path. Set `SUPER_ADMIN_ENABLED=true` during initial deployment, then set to `false` after OIDC is verified working. `SUPER_ADMIN_PASSWORD_HASH` must be a pre-computed Argon2id or bcrypt hash — never set a plaintext password. Generate with: `python -m app.cli hash-password`.
+- **`OIDC_*` variables** — **Migration only.** All `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_PROVIDER_URL`, `OIDC_REALM`, `OIDC_AUDIENCE`, `IDENTITY_PROVIDER_TYPE`, and `OIDC_AGENT_CLIENT_PREFIX` variables are only read during the one-time `config/identity.yaml` → DB migration. They are ignored at runtime after the migration completes. New deployments that have never used `config/identity.yaml` do not need any `OIDC_*` variables — OIDC providers are configured via the System Config UI.
 - `MCP_HUB_CREDENTIAL_ENCRYPTION_KEY` — must be set before the first MCP session is created; changing this key after credentials are stored requires re-encrypting all stored credentials
+- `API_KEY_HASH_SECRET` — must be set before the first API key is created. Generate a cryptographically random 32+ character string and store it in your secrets manager. Changing this value later invalidates all previously issued API keys.
 - `OTEL_SERVICE_NAME` — set uniquely per container so telemetry can be filtered per service
 
-> **Note on `config/identity.yaml`:** For bundled Keycloak, OIDC settings (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REALM`, `OIDC_AUDIENCE`, `OIDC_PROVIDER_URL`) are written automatically to `config/identity.yaml` by the setup wizard or CLI (Step 10). Do not hand-edit this file for settings managed by the Bootstrap Service. Environment variables always take precedence over `config/identity.yaml` values — teams managing configuration exclusively via environment variables can omit the YAML file.
+> **Critical — Setup-only variables:** `KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD` must **NOT** be set on the Control Center runtime service. These are consumed exclusively by the consolidated setup tool (Step 6). The Control Center no longer receives or uses Keycloak admin credentials — set them only in the setup tool's environment or a one-shot setup Job.
+
+> **Note on `config/identity.yaml`:** For bundled Keycloak deployments, `config/identity.yaml` is written automatically by the consolidated setup tool in Step 6. For external provider deployments, all OIDC configuration is provided via environment variables — the YAML file can be omitted entirely. Environment variables always take precedence over YAML values. Operators should NOT hand-edit this file for settings managed by the setup tool. See [configuration-files.md](configuration-files.md) for the full reference.
 
 ---
 
-## Step 6 — Deploy the OTEL Collector
+## Step 6 — Run the Consolidated Setup Command
+
+Run the consolidated setup command BEFORE deploying backend services. The setup tool handles all bootstrapping that was previously done at CC startup.
+
+**For bundled Keycloak deployments:**
+
+```bash
+# Provision the Keycloak realm, clients, roles, and admin user
+python -m setup.main identity
+
+# Verify the database is reachable and seed roles, permissions, and skills
+python setup/main.py database
+
+# Bootstrap the certificate authority for mTLS
+python setup/main.py certificates
+
+# Run a read-only check to confirm all components are in the expected state
+python setup/main.py verify
+```
+
+All operations are idempotent — safe to run on an already-initialized environment.
+
+**For external provider deployments (`keycloak_external` or `azure_entraid`):**
+
+- Ensure the external OIDC client is registered in the identity provider (Step 4)
+- All OIDC configuration is provided via environment variables (Step 5)
+- Run `setup verify` to confirm the new configuration is valid — this does not attempt to provision anything in the external provider
+
+**Docker Compose:** The setup tool can be run as a one-shot service with `profiles: [setup]`:
+
+```bash
+docker compose --profile setup run --rm setup
+```
+
+This service requires the Keycloak admin environment variables but runs independently of the runtime services and exits after completing.
+
+**Kubernetes / Helm:** Run the setup command as a Kubernetes Job (with `helm.sh/hook: post-install` or a pre-deployment Job). The setup Job requires Keycloak admin credentials via Kubernetes Secrets.
+
+> **Verification:** After running the setup command, confirm `setup verify` reports all components as configured. If any service reports `NOT_CONFIGURED`, resolve the missing configuration before proceeding to Step 8.
+
+---
+
+## Step 7 — Deploy the OTEL Collector
 
 Start the OTEL Collector with the pipeline configuration defined in `infra/otel-collector-config.yaml`.
 
@@ -114,37 +161,53 @@ For deployments that use a declarative config file instead of individual env var
 
 ---
 
-## Step 7 — Deploy Backend Services
+## Step 8 — Deploy Backend Services
 
 Start backend services in the following strict order. Each service must reach a healthy state before the next is started.
 
-1. `platform-api` — Verify the `/health` endpoint responds through its port before proceeding
-2. `mcp-hub` — Depends on `platform-api` for internal API calls
-3. `skill-engine` — Depends on `platform-api` and `mcp-hub`
-4. `agent-engine` — Depends on `platform-api`, `mcp-hub`, and `skill-engine`
-5. `scheduling-engine` — Depends on `platform-api` and `agent-engine`
-6. `notification-engine` — Depends on `platform-api` and `mcp-hub` (for MCP tool registration)
-7. `communication-hub` — Depends on `redis` and `platform-api`
-8. `agent-gateway` — Depends on `agent-engine` and `communication-hub`
+1. **`control-center`** (port 8000) — Verify the `/health` endpoint responds before proceeding. After the health check passes, confirm that the Certificate Authority has initialised by calling `GET /api/v1/certificates/ca` — the response should include a `certificate_pem` field. The CA is generated automatically on first startup and logged with the serial number and expiry.
+
+   **Startup validation:** Review the Control Center startup log to confirm:
+   - **Configuration source logging** is emitted for every infrastructure connection (e.g., `config: database_host resolved from env var POSTGRES_HOST` or `config: database_host resolved from YAML`)
+   - **Super admin credentials seeded** — if `SUPER_ADMIN_ENABLED=true`, the log should show "Super admin credentials seeded" confirming the `super_admin_credentials` table is populated
+   - **OIDC Provider Registry initialized** — the log should show "OIDC Provider Registry initialized" with either discovered providers from the database or an empty cache
+   - The log does **NOT** contain `KEYCLOAK_ADMIN` or any admin credential reference
+
+   If the startup log shows a validation failure for any infrastructure dependency (PostgreSQL, Keycloak, Redis), resolve the configuration issue before proceeding — do NOT revert to the old auto-provisioning behaviour.
+
+   **Bundled Keycloak startup:** Bundled Keycloak is now conditional — only required for dev/demo deployments or when `SUPER_ADMIN_ENABLED=true` with no OIDC config in the database. For production deployments with external OIDC providers, the Keycloak container can be omitted entirely.
+
+2. **`agent-runtime`** (port 8001) — Depends on `control-center` and `communication-hub` for certificate bootstrap. Agent instances present mTLS certificates to Communication Hub for tool calls. Ensure `CONTROL_CENTER_URL` is set.
+
+3. **`communication-hub`** (port 8002) — Depends on `redis` and `control-center`. Ensure `CONTROL_CENTER_URL` is set to the `control-center` base URL before starting. Note: `CH_API_KEY_AUTH_ENABLED` defaults to `false` on first deployment — API key authentication is disabled by default. Enable it by setting `CH_API_KEY_AUTH_ENABLED=true` only after verifying the platform is operational and the API key creation flow works end-to-end.
+
+All MCP Hub, Skill Engine, Agent Engine, Scheduling Engine, and Notification Engine logic runs within `control-center` and `agent-runtime` — there are no separate services for these components. Agent-to-agent communication and MCP tool proxy routing is handled by `communication-hub`.
+
+**Agent instance certificate provisioning** — Before starting any agent instance, provision a TLS certificate for each agent type:
+1. Obtain an admin JWT token.
+2. Call `POST /api/v1/certificates/issue` with the `agent_type_id` and a unique `instance_id` (hostname or job ID).
+3. Save the returned `certificate_pem` to the path set in `AGENT_CERT_PATH` and `private_key_pem` to `AGENT_KEY_PATH` (set permissions to `600`).
+4. Download the CA certificate: `GET /api/v1/certificates/ca` → save `certificate_pem` to `CA_CERT_PATH`.
+5. Set `CONTROL_CENTER_URL` to the `control-center` base URL on the agent runtime container.
 
 If any service fails to start, check its logs for connection errors to PostgreSQL, Redis, or the OIDC JWKS endpoint before attempting to restart it.
 
 ---
 
-## Step 8 — Deploy the API Gateway
+## Step 9 — Deploy the API Gateway
 
 Start the `nginx` reverse proxy with routing rules configured to point to the deployed backend services.
 
 Confirm:
-- Health endpoints for `platform-api` and `agent-gateway` respond through the nginx proxy
+- Health endpoints for `control-center` and `agent-runtime` respond through the nginx proxy
 - WebSocket path `/ws/` is proxied to `communication-hub` with appropriate timeout settings (`proxy_read_timeout` must be set high enough for long-lived connections)
-- `/api/` is proxied to `platform-api`
+- `/api/` is proxied to `control-center`
 - `/gateway/` is proxied to `agent-gateway`
 - TLS is terminated at nginx in production deployments
 
 ---
 
-## Step 9 — Deploy the Web UI
+## Step 10 — Deploy the Web UI
 
 Start the `web-ui` container with the API Gateway base URL configured.
 
@@ -155,24 +218,59 @@ Confirm:
 
 ---
 
-## Step 10 — Seed Platform Configuration
+## Step 11 — Seed Platform Configuration
 
-Perform initial platform setup via the admin UI or the Platform API directly:
+Perform initial platform setup using the three-tier bootstrap: super admin login → configure OIDC providers via UI → verify OIDC login → optionally disable super admin.
 
-1. **Complete identity provider provisioning.** After the Platform API starts, it will return a `NOT_CONFIGURED` state from `GET /api/v1/setup/identity-status`. Use one of the two supported paths to provision the identity provider:
-   - **Setup Wizard (UI):** Start the frontend service. The first-run redirect guard redirects all navigation to `/setup`. Follow the wizard to select a provider, enter credentials, and complete provisioning. On success, `GET /api/v1/setup/identity-status` returns `CONFIGURED`.
-   - **CLI (headless):** Run `python -m app.cli` inside the `api` container, passing all required provisioning parameters as flags. Exits with code 0 on success.
-2. Call `POST /api/v1/setup/init` (public endpoint) to create the first administrator role and identity — this only needs to be done once
-3. **Seed the Permission Engine.** Execute the role-seeding script (or CLI command) against the database. The seed creates the built-in `platform_admin` role with unrestricted policy statements, a `PlatformUser` record for the designated administrator, and assigns the `platform_admin` role via a `UserRole` record. Optionally set `PERMISSION_ENGINE_SEED_ADMIN_EMAIL` before running the script to pre-select the admin email without interactive prompting — remove the variable afterwards. Verify by querying the `roles`, `platform_users`, and `user_roles` tables. See [operational-runbooks.md](operational-runbooks.md) §3 for full details.
-4. Log in to the Web UI using the administrator identity
-5. Register at least one MCP server via the MCP Hub admin page
-6. Trigger a tool sync for the registered MCP server to populate the tool catalogue
-7. Define initial roles and permissions appropriate for the deployment
-8. Configure at least one notification channel if notifications are required
+### Tier 1 — Super Admin Login
+
+1. Navigate to the Web UI login page. Confirm the page shows both a username/password form (super admin) and OIDC login buttons (if OIDC providers are discovered from auto-migration).
+2. Log in using the super admin credentials set in Step 5 (`SUPER_ADMIN_USERNAME` and the password for `SUPER_ADMIN_PASSWORD_HASH`).
+3. Confirm the System Config admin page is accessible from the super admin session.
+
+**Verification:** Super admin can access all admin pages. Control Center logs show "super admin authentication successful."
+
+### Tier 2 — Configure OIDC Providers via System Config UI
+
+Using the super admin session:
+
+1. Navigate to **System Config → Identity Providers**.
+2. For each identity provider (user-scoped and optionally agent-scoped):
+   - Enter the **issuer URL**, **client ID**, **client secret**, **scopes**, and optional **claims mapping**.
+   - Use the **"Test Connection"** button to validate OIDC discovery reachability before saving.
+   - Use the **"Test Login"** button to perform a full authentication flow and verify claims response.
+   - Save each provider configuration.
+3. Confirm each provider is persisted with `is_enabled=true`.
+
+> **For bundled Keycloak dev/demo.** The bundled Keycloak is auto-configured by the setup tool in Step 6. Its config is automatically migrated to the database on first startup. The System Config UI shows it as an imported provider — use "Test Connection" to verify, then enable it.
+
+**Verification:** `identity_provider_config_audits` table contains audit entries for each operation. OIDC discovery logs show "OIDC discovery successful" for each enabled provider.
+
+### Tier 3 — Verify OIDC Login & Optionally Disable Super Admin
+
+1. Log out of the super admin session.
+2. From the login page, click the OIDC login button for the configured user identity provider.
+3. Complete the OIDC authentication flow and confirm successful login with the appropriate role/permissions.
+4. If an agent identity provider is configured separately, trigger an agent execution and confirm the agent identity token is resolved correctly.
+
+**Verification:** OIDC-authenticated user can access all permitted features. Agent execution uses the correct identity token.
+
+5. Once OIDC is confirmed working: set `SUPER_ADMIN_ENABLED=false`, restart the Control Center, and verify the super admin login form no longer appears. OIDC login continues to work.
+
+### Post-Bootstrap Configuration
+
+After the three-tier bootstrap:
+
+6. Call `POST /api/v1/setup/init` (public endpoint) to create the first administrator role and identity — this only needs to be done once
+7. **Seed the Permission Engine.** Execute the role-seeding script (or CLI command) against the database. The seed creates the built-in `platform_admin` role with unrestricted policy statements, a `PlatformUser` record for the designated administrator, and assigns the `platform_admin` role via a `UserRole` record. Optionally set `PERMISSION_ENGINE_SEED_ADMIN_EMAIL` before running the script to pre-select the admin email without interactive prompting — remove the variable afterwards. Verify by querying the `roles`, `platform_users`, and `user_roles` tables. See [operational-runbooks.md](operational-runbooks.md) §3 for full details.
+8. Register at least one MCP server via the MCP Hub admin page
+9. Trigger a tool sync for the registered MCP server to populate the tool catalogue
+10. Define initial roles and permissions appropriate for the deployment
+11. Configure at least one notification channel if notifications are required
 
 ---
 
-## Step 11 — Smoke Test
+## Step 12 — Smoke Test
 
 Execute a complete end-to-end test to confirm all components are functioning:
 
@@ -185,4 +283,6 @@ Execute a complete end-to-end test to confirm all components are functioning:
 
 If all six checks pass, the deployment is complete.
 
-> **Permission Engine latency baseline:** Before switching the Permission Engine from audit mode to enforce mode, record the median and P95 backend response times for authenticated endpoints. The auth middleware adds two async database calls per request (user cache upsert and group claim mapping). If median response time increases by more than 20% after enabling enforce mode, scale `platform-api` replicas before proceeding. See [operational-runbooks.md](operational-runbooks.md) §4 for full monitoring guidance.
+> **Optional: API key MCP verification.** If API key authentication is enabled (`CH_API_KEY_AUTH_ENABLED=true`), create an API key for an agent identity and verify external MCP connectivity: call `load_skills` via the Communication Hub MCP endpoint using the API key as a Bearer token, confirm skills are returned with `updated_at` timestamps, and verify tool calls execute correctly through the proxy.
+
+> **Permission Engine latency baseline:** Before switching the Permission Engine from audit mode to enforce mode, record the median and P95 backend response times for authenticated endpoints. The auth middleware adds two async database calls per request (user cache upsert and group claim mapping). If median response time increases by more than 20% after enabling enforce mode, scale `control-center` replicas before proceeding. See [operational-runbooks.md](operational-runbooks.md) §4 for full monitoring guidance.

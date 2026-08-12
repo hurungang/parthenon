@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Agent Delegation Visibility &amp; HITL Prototype</title>
+<style>
+/* ── Parthenon Design Tokens (from master prototype) ─────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:rgba(0,0,0,0.06);
+  --sidebar-hover-bg:rgba(0,0,0,0.03);--sidebar-active-text:#2563EB;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+  /* delegation-specific tones */
+  --delegating:#7C3AED;--delegating-bg:#EDE9FE;--delegating-border:#DDD6FE;
+  --waiting:#D97706;--waiting-bg:#FFFBEB;--waiting-border:#FDE68A;
+  --resumed:#166534;--resumed-bg:#DCFCE7;--resumed-border:#BBF7D0;
+  --blocked:#B91C1C;--blocked-bg:#FEE2E2;--blocked-border:#FECACA;
+  --tool-call:#475569;--tool-call-bg:#F1F5F9;
+  --llm:#0D47A1;--llm-bg:#E3F2FD;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:var(--radius);margin:1px 6px;color:var(--sidebar-text);font-size:13px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+.nav-item .nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.nav-parent-group{margin-top:2px}
+.nav-parent-group-label{padding:8px 14px 4px;font-size:11px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition);text-transform:none;letter-spacing:normal}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px;color:var(--text-secondary)}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-item.sub-item{padding-left:32px;font-size:11px;margin:0 6px;padding-top:5px;padding-bottom:5px;gap:6px;color:var(--text-secondary)}
+.nav-item.sub-item .nav-icon{font-size:11px;width:14px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg);color:var(--text-primary)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:500}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.btn-icon{background:none;border:none;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);transition:background var(--transition);position:relative}
+.btn-icon:hover{background:var(--bg)}
+.badge{position:absolute;top:2px;right:2px;background:var(--error);color:#fff;font-size:10px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN WRAPPER ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+.dot-purple{background:var(--delegating)}.dot-blue{background:var(--info)}
+
+/* ── SECTION TITLE ── */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:20px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ── SCENARIO BAR ── */
+.scenario-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.scenario-bar span{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.scenario-btn{padding:4px 12px;border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition);background:var(--surface);color:var(--text-secondary)}
+.scenario-btn:hover{border-color:var(--primary);color:var(--primary)}
+.scenario-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.scenario-desc{font-size:11px;color:var(--text-secondary);margin-left:6px;font-weight:400;font-style:italic}
+
+/* ── EXECUTION HEADER ── */
+.exec-header{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
+.exec-header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.exec-header-top h2{font-size:17px;font-weight:600}
+.exec-status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600}
+.exec-status.running{background:#DBEAFE;color:#1D4ED8}
+.exec-status.running::before{content:'';width:6px;height:6px;border-radius:50%;background:#1D4ED8;animation:pulse 1.2s infinite}
+.exec-status.waiting-intervention{background:#FEF3C7;color:#92400E}
+.exec-status.waiting-intervention::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--warning);animation:pulse 1.2s infinite}
+.exec-status.completed{background:#DCFCE7;color:#15803D}
+.exec-header-meta{display:flex;gap:24px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary)}
+.exec-header-meta strong{color:var(--text-primary);font-weight:600}
+.exec-header-actions{display:flex;gap:8px;margin-top:10px}
+
+/* ── INTERVENTION PENDING BANNER (sticky) ── */
+.iv-pending-banner{display:none;align-items:center;gap:12px;padding:12px 20px;background:#FFF8E1;border:1px solid #FFE0B2;border-bottom:2px solid var(--warning);border-radius:var(--radius-sm);margin-bottom:16px;position:sticky;top:0;z-index:40;animation:ivBannerIn 0.35s ease}
+.iv-pending-banner.visible{display:flex}
+@keyframes ivBannerIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.iv-pending-banner .iv-spinner{width:20px;height:20px;border:3px solid #FFE0B2;border-top-color:var(--warning);border-radius:50%;animation:ivSpin 0.9s linear infinite;flex-shrink:0}
+@keyframes ivSpin{to{transform:rotate(360deg)}}
+.iv-pending-banner .iv-banner-body{flex:1}
+.iv-pending-banner .iv-banner-title{font-size:13px;font-weight:600;color:#92400E}
+.iv-pending-banner .iv-banner-sub{font-size:11px;color:#A16207}
+.iv-pending-banner .iv-banner-action{padding:6px 14px;background:var(--warning);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;transition:opacity var(--transition)}
+.iv-pending-banner .iv-banner-action:hover{opacity:.85}
+
+/* ── EXECUTION LOG TIMELINE ── */
+.log-container{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.log-toolbar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:#FAFBFC;flex-wrap:wrap}
+.log-toolbar .filter-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-right:4px}
+.log-filter{display:flex;align-items:center;gap:4px}
+.log-filter input{display:none}
+.log-filter label{padding:3px 10px;border:1px solid var(--border);border-radius:20px;font-size:10.5px;font-weight:600;cursor:pointer;transition:all var(--transition);color:var(--text-secondary);user-select:none}
+.log-filter input:checked+label{background:var(--primary);color:#fff;border-color:var(--primary)}
+.log-live-indicator{display:inline-flex;align-items:center;gap:6px;color:#1D4ED8;font-weight:600;font-size:12px;margin-left:auto}
+.log-live-indicator .live-dot{width:7px;height:7px;border-radius:50%;background:#60A5FA;animation:livepulse 1.1s infinite}
+@keyframes livepulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+@keyframes pulse{0%,80%,100%{opacity:.2}40%{opacity:.85}}
+
+.log-timeline{padding:8px 0;max-height:calc(100vh - 340px);overflow-y:auto}
+.log-timeline::-webkit-scrollbar{width:5px}.log-timeline::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── INDIVIDUAL LOG EVENT ── */
+.log-event{display:flex;gap:10px;padding:8px 20px;position:relative;transition:background var(--transition)}
+.log-event:hover{background:#F8FAFC}
+.log-event+.log-event{border-top:1px solid #F0F0F0}
+.log-event-time{width:72px;flex-shrink:0;font-size:11px;color:var(--text-secondary);font-family:'Courier New',monospace;padding-top:2px}
+.log-event-icon{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px}
+.log-event-body{flex:1;min-width:0}
+.log-event-type{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.log-event-msg{font-size:13px;color:var(--text-primary);line-height:1.45;word-break:break-word}
+.log-event-extra{font-size:11px;color:var(--text-secondary);margin-top:2px;font-family:'Courier New',monospace}
+
+/* event colour variants */
+.ev-system .log-event-icon{background:#E3F2FD;color:#0D47A1}
+.ev-system .log-event-type{color:#0D47A1}
+.ev-delegating .log-event-icon{background:var(--delegating-bg);color:var(--delegating)}
+.ev-delegating .log-event-type{color:var(--delegating)}
+.ev-waiting .log-event-icon{background:var(--waiting-bg);color:var(--waiting)}
+.ev-waiting .log-event-type{color:var(--waiting)}
+.ev-resumed .log-event-icon{background:var(--resumed-bg);color:var(--resumed)}
+.ev-resumed .log-event-type{color:var(--resumed)}
+.ev-blocked .log-event-icon{background:var(--blocked-bg);color:var(--blocked)}
+.ev-blocked .log-event-type{color:var(--blocked)}
+.ev-tool .log-event-icon{background:var(--tool-call-bg);color:var(--tool-call)}
+.ev-tool .log-event-type{color:var(--tool-call)}
+.ev-llm .log-event-icon{background:var(--llm-bg);color:var(--llm)}
+.ev-llm .log-event-type{color:var(--llm)}
+.ev-intervene .log-event-icon{background:#FFF8E1;color:#FF9800}
+.ev-intervene .log-event-type{color:#92400E}
+.ev-response .log-event-icon{background:#EDE9FE;color:#7C3AED}
+.ev-response .log-event-type{color:#6D28D9}
+.ev-error .log-event-icon{background:#FFEBEE;color:#B71C1C}
+.ev-error .log-event-type{color:#B91C1C}
+
+/* pulsing waiting animation */
+.ev-waiting .log-event-icon{animation:pulse 1.5s infinite}
+/* loading bar inside delegating/waiting events */
+.ev-loading-bar{height:2px;background:#E0E0E0;border-radius:2px;margin-top:6px;overflow:hidden}
+.ev-loading-bar .ev-lb-inner{height:100%;width:0;border-radius:2px;animation:lbAnim 2s ease-in-out infinite}
+.ev-delegating .ev-loading-bar .ev-lb-inner{background:var(--delegating)}
+.ev-waiting .ev-loading-bar .ev-lb-inner{background:var(--warning)}
+@keyframes lbAnim{0%{width:0;margin-left:0}50%{width:65%;margin-left:17%}100%{width:0;margin-left:100%}}
+
+/* delegation sub-agent inline card */
+.delegation-card{border:1px solid var(--delegating-border);border-radius:var(--radius);background:var(--delegating-bg);padding:10px 14px;margin-top:6px;display:flex;align-items:center;gap:10px}
+.delegation-card .dc-icon{width:32px;height:32px;border-radius:50%;background:var(--delegating);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.delegation-card .dc-info{flex:1;min-width:0}
+.delegation-card .dc-name{font-size:13px;font-weight:600;color:var(--delegating)}
+.delegation-card .dc-meta{font-size:11px;color:#6D28D9}
+.delegation-card .dc-state{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;flex-shrink:0}
+.dc-state-running{background:#EDE9FE;color:#6D28D9;animation:pulse 1.5s infinite}
+.dc-state-done{background:var(--resumed-bg);color:var(--resumed)}
+.dc-state-failed{background:var(--blocked-bg);color:var(--blocked)}
+
+/* ── INLINE INTERVENTION DIALOG ── */
+.intervene-inline{border:2px solid var(--warning);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);background:var(--surface);margin:8px 0 4px;animation:interveneSlide 0.35s ease;max-width:560px}
+@keyframes interveneSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.intervene-inline-header{background:#FFF8E1;padding:14px 18px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid #FFE0B2}
+.intervene-inline-icon{width:36px;height:36px;border-radius:50%;background:var(--warning);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.intervene-inline-info{flex:1}
+.intervene-inline-info h4{font-size:14px;font-weight:600;color:#92400E;margin-bottom:2px}
+.intervene-inline-info .iv-meta{font-size:12px;color:#A16207;line-height:1.4}
+.iv-type-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.iv-type-approval{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+.iv-type-choice{background:#DBEAFE;color:#1D4ED8;border:1px solid #BFDBFE}
+.iv-type-text{background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0}
+.intervene-inline-body{padding:18px}
+.intervene-inline-body .iv-reason{font-size:13.5px;color:var(--text-primary);margin-bottom:16px;line-height:1.5}
+.iv-approval-btns{display:flex;gap:10px}
+.iv-approval-btns .btn{flex:1;justify-content:center;padding:12px}
+.iv-btn-approve{background:var(--success)!important;color:#fff!important;font-weight:600;font-size:14px;border:none!important}
+.iv-btn-deny{background:var(--surface)!important;color:var(--error)!important;border:2px solid var(--error)!important;font-weight:600;font-size:14px}
+.iv-choices{display:flex;flex-direction:column;gap:8px}
+.iv-choice-opt{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all var(--transition);font-size:13.5px;font-weight:500}
+.iv-choice-opt:hover{border-color:var(--primary);background:var(--primary-light)}
+.iv-choice-opt.sel{border-color:var(--primary);background:var(--primary-light);color:var(--primary);font-weight:600}
+.iv-choice-opt .iv-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;position:relative}
+.iv-choice-opt.sel .iv-radio{border-color:var(--primary)}
+.iv-choice-opt.sel .iv-radio::after{content:'';position:absolute;width:8px;height:8px;border-radius:50%;background:var(--primary);top:3px;left:3px}
+.iv-text-input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius);outline:none;font-size:13.5px;resize:vertical;min-height:80px;transition:border-color var(--transition);font-family:inherit}
+.iv-text-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.intervene-inline-footer{padding:0 18px 14px;display:flex;justify-content:space-between;align-items:center}
+.intervene-inline-footer .iv-dismiss{background:none;border:none;color:var(--text-secondary);font-size:12px;padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;transition:all var(--transition)}
+.intervene-inline-footer .iv-dismiss:hover{background:#F5F5F5;color:var(--error)}
+.intervene-inline-footer .iv-submit{padding:7px 18px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition)}
+.intervene-inline-footer .iv-submit:hover{background:var(--primary-dark)}
+/* disabled versions as visual feedback */
+.intervene-inline.resolved{opacity:.7;pointer-events:none;border-color:#D1D5DB}
+.intervene-inline.resolved .intervene-inline-header{background:#F5F5F5}
+.intervene-inline.expired{border-color:#FCA5A5;opacity:.6;pointer-events:none}
+.intervene-inline.expired .intervene-inline-header{background:#FEF2F2}
+.intervene-inline.expired .iv-type-badge{background:#FEE2E2;color:#B91C1C;border-color:#FECACA}
+
+/* expired overlay */
+.expired-overlay{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--radius-sm);margin:6px 18px 14px;font-size:12px;color:#B91C1C;font-weight:500}
+
+/* ── PROTOTYPE LABEL ── */
+.prototype-label{position:fixed;bottom:12px;left:12px;z-index:3000;background:#1E293B;color:#fff;font-size:10px;font-weight:600;padding:4px 10px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase}
+
+/* ── COLOUR LEGEND ── */
+.legend-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.legend-item{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--text-secondary)}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ld-system{background:#0D47A1}.ld-delegating{background:var(--delegating)}
+.ld-waiting{background:var(--warning)}.ld-resumed{background:var(--success)}
+.ld-tool{background:var(--tool-call)}.ld-llm{background:var(--llm)}
+.ld-intervene{background:#FF9800}.ld-response{background:#7C3AED}
+.ld-error{background:var(--error)}.ld-blocked{background:#B91C1C}
+
+/* ── EMPTY LOG STATE (for blocked scenario) ── */
+.empty-log{text-align:center;padding:40px 20px;color:var(--text-secondary)}
+.empty-log .empty-icon{font-size:32px;margin-bottom:8px}
+
+/* ── LIVE LOG ANIMATION HIGHLIGHT ── */
+@keyframes logHighlight{from{background:#E3F2FD}to{background:transparent}}
+.log-event.just-added{animation:logHighlight 1.5s ease}
+
+/* toast */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease}
+.toast-success{background:#2E7D32}.toast-error{background:#C62828}.toast-info{background:#1565C0}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── LOG TAB BAR ── */
+.log-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:#FAFBFC;padding:0 4px}
+.log-tab{padding:10px 20px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;color:var(--text-secondary);transition:all var(--transition);display:inline-flex;align-items:center;gap:7px;user-select:none}
+.log-tab:hover{color:var(--text-primary);background:rgba(0,0,0,0.02)}
+.log-tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.log-tab .tab-badge{font-size:9.5px;padding:2px 8px;border-radius:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;line-height:1.4}
+.tab-badge-markdown{background:var(--delegating-bg);color:var(--delegating)}
+.tab-badge-typed{background:#DBEAFE;color:#1D4ED8}
+.tab-badge-auto{background:#DCFCE7;color:#15803D}
+.log-tab.result-tab-hidden{display:none}
+
+/* ── RESULT PANEL ── */
+.result-panel{padding:24px 28px;max-height:calc(100vh - 340px);overflow-y:auto;display:none}
+.result-panel::-webkit-scrollbar{width:5px}.result-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.result-panel.visible{display:block}
+
+/* ── MARKDOWN RESULT ── */
+.result-markdown h2{font-size:20px;font-weight:700;color:var(--text-primary);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--border)}
+.result-markdown h3{font-size:16px;font-weight:600;color:var(--text-primary);margin:22px 0 10px}
+.result-markdown h4{font-size:14px;font-weight:600;color:var(--text-primary);margin:16px 0 8px}
+.result-markdown p{font-size:14px;line-height:1.65;margin-bottom:12px;color:var(--text-primary)}
+.result-markdown strong{color:var(--text-primary);font-weight:700}
+.result-markdown ul,.result-markdown ol{padding-left:24px;margin-bottom:14px}
+.result-markdown li{font-size:14px;line-height:1.65;margin-bottom:5px}
+.result-markdown code{background:#F1F5F9;padding:2px 6px;border-radius:3px;font-size:13px;font-family:'Courier New',monospace;color:#C2410C}
+.result-markdown pre{background:#1E293B;color:#E2E8F0;padding:16px;border-radius:var(--radius);overflow-x:auto;font-size:13px;line-height:1.5;margin-bottom:14px}
+.result-markdown pre code{background:none;color:inherit;padding:0;font-size:13px}
+.result-markdown em{font-style:italic;color:var(--text-secondary)}
+.result-markdown blockquote{border-left:4px solid var(--primary);padding:8px 16px;margin:12px 0;background:var(--primary-light);border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-style:italic;color:var(--text-secondary)}
+.result-markdown hr{border:none;border-top:1px solid var(--border);margin:20px 0}
+
+/* ── JSON TREE VIEW ── */
+.result-json-container{margin-bottom:12px}
+.result-json-meta{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.result-json-meta .json-meta-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.result-json-meta .json-meta-chip{font-size:11px;padding:3px 10px;border-radius:12px;background:#F1F5F9;color:#475569;font-weight:500}
+.json-tree{font-family:'Courier New',monospace;font-size:13px;line-height:1.7;background:#FAFBFC;border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;overflow-x:auto}
+.json-tree .json-line{white-space:nowrap;padding-left:0;transition:background var(--transition)}
+.json-tree .json-line:hover{background:rgba(0,0,0,0.02)}
+.json-tree .json-key{color:#1D4ED8}
+.json-tree .json-string{color:#15803D}
+.json-tree .json-number{color:#C2410C}
+.json-tree .json-boolean{color:#6D28D9}
+.json-tree .json-null{color:#9CA3AF;font-style:italic}
+.json-tree .json-toggle{cursor:pointer;user-select:none;display:inline-block;width:18px;color:var(--text-secondary);text-align:center;font-size:12px;transition:transform .15s ease;flex-shrink:0}
+.json-tree .json-toggle.collapsed{transform:rotate(-90deg)}
+.json-tree .json-hidden{display:none}
+.json-tree .json-brace{color:#94A3B8}
+.json-tree .json-comma{color:#94A3B8}
+.json-tree .json-block{display:inline}
+
+/* ── SCHEMA SECTION ── */
+.schema-section{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+.schema-toggle-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--text-secondary);transition:all var(--transition)}
+.schema-toggle-btn:hover{border-color:var(--primary);color:var(--primary)}
+.schema-toggle-btn.active{background:var(--primary-light);color:var(--primary);border-color:var(--primary)}
+.schema-toggle-btn .schema-arrow{font-size:10px;transition:transform var(--transition)}
+.schema-toggle-btn.active .schema-arrow{transform:rotate(180deg)}
+.schema-content{margin-top:12px;display:none}
+.schema-content.visible{display:block}
+.schema-content .json-tree{max-height:400px;overflow-y:auto}
+.schema-content .json-tree::-webkit-scrollbar{width:5px}.schema-content .json-tree::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── AUTO RESULT (raw JSON) ── */
+.result-auto pre{background:#FAFBFC;border:1px solid var(--border);border-radius:var(--radius);padding:20px;font-family:'Courier New',monospace;font-size:13px;line-height:1.6;color:var(--text-primary);overflow-x:auto;white-space:pre}
+.result-auto pre .json-hl-key{color:#1D4ED8}
+.result-auto pre .json-hl-str{color:#15803D}
+.result-auto pre .json-hl-num{color:#C2410C}
+.result-auto pre .json-hl-bool{color:#6D28D9}
+.result-auto-meta{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.result-auto-meta .auto-meta-label{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px}
+.result-auto-meta .chip{font-size:11px}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>⚡ Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+  <div class="nav-item"><span class="nav-icon">🏠</span>Dashboard</div>
+  <div class="nav-parent-group">
+    <div class="nav-parent-group-label">
+      <span>🤖 Agents</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">👤</span>Agent Roles</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🆔</span>Agent Identities</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item active"><span class="nav-icon">▶️</span>Agent Executions</div>
+      <div class="nav-item sub-item"><span class="nav-icon">📋</span>SOPs</div>
+      <div class="nav-item sub-item"><span class="nav-icon">🔧</span>Skills</div>
+    </div>
+  </div>
+  <div class="nav-parent-group">
+    <div class="nav-parent-group-label">
+      <span>🌐 Integrations</span>
+      <span class="toggle-icon">▼</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item"><span class="nav-icon">🔌</span>MCP Hub</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title" id="topbarTitle">Agent Execution — Compliance Audit Workflow</div>
+    <div class="topbar-actions">
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <!-- Scenario Bar -->
+  <div class="scenario-bar">
+    <span>Scenario:</span>
+    <button class="scenario-btn active" onclick="setScenario(0)">1. Normal Delegation</button>
+    <button class="scenario-btn" onclick="setScenario(1)">2. Intervention — Approval</button>
+    <button class="scenario-btn" onclick="setScenario(2)">3. Intervention — Choice</button>
+    <button class="scenario-btn" onclick="setScenario(3)">4. Intervention — Text</button>
+    <button class="scenario-btn" onclick="setScenario(4)">5. Delegation Blocked</button>
+    <button class="scenario-btn" onclick="setScenario(5)">6. Delegation Failed</button>
+    <span class="scenario-desc" id="scenarioDesc">Full delegation flow: delegating → waiting → completed</span>
+  </div>
+
+  <!-- Colour Legend -->
+  <div class="legend-strip" style="padding:8px 24px">
+    <span style="font-size:10.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-right:6px">Events:</span>
+    <span class="legend-item"><span class="legend-dot ld-system"></span> System</span>
+    <span class="legend-item"><span class="legend-dot ld-delegating"></span> Delegating</span>
+    <span class="legend-item"><span class="legend-dot ld-waiting"></span> Waiting</span>
+    <span class="legend-item"><span class="legend-dot ld-resumed"></span> Resumed</span>
+    <span class="legend-item"><span class="legend-dot ld-tool"></span> Tool</span>
+    <span class="legend-item"><span class="legend-dot ld-llm"></span> LLM</span>
+    <span class="legend-item"><span class="legend-dot ld-intervene"></span> Intervention</span>
+    <span class="legend-item"><span class="legend-dot ld-response"></span> Response</span>
+    <span class="legend-item"><span class="legend-dot ld-blocked"></span> Blocked</span>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+
+    <!-- Execution Header -->
+    <div class="exec-header">
+      <div class="exec-header-top">
+        <h2>Compliance Audit Workflow <span style="font-size:12px;font-weight:400;color:var(--text-secondary);margin-left:8px">#RUN-4829</span></h2>
+        <span class="exec-status" id="execStatusBadge">running</span>
+      </div>
+      <div class="exec-header-meta">
+        <div><strong>Agent Type:</strong> Compliance Auditor (Non-Conversational)</div>
+        <div><strong>SOP:</strong> Monthly Compliance Check</div>
+        <div><strong>Started:</strong> 2026-06-17 14:32:11</div>
+        <div><strong>Elapsed:</strong> <span id="elapsedTime">0:00</span></div>
+      </div>
+      <div class="exec-header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="showToast('Log export queued','info')">📥 Export Log</button>
+        <button class="btn btn-secondary btn-sm" onclick="showToast('Log view refreshed','info')">🔄 Refresh</button>
+        <button class="btn btn-danger btn-sm" onclick="terminateRun()">⏹ Terminate</button>
+      </div>
+    </div>
+
+    <!-- Intervention Pending Banner (sticky) -->
+    <div class="iv-pending-banner" id="ivPendingBanner">
+      <div class="iv-spinner"></div>
+      <div class="iv-banner-body">
+        <div class="iv-banner-title" id="ivBannerTitle">Intervention Required — Delegated sub-agent needs input</div>
+        <div class="iv-banner-sub" id="ivBannerSub">Approval requested by Fraud Analysis Agent · pending since 14:34:52</div>
+      </div>
+      <button class="iv-banner-action" onclick="scrollToIntervention()">Respond Now ↓</button>
+    </div>
+
+    <!-- Execution Log Container -->
+    <div class="log-container">
+      <!-- Tab Bar -->
+      <div class="log-tabs" id="logTabs">
+        <div class="log-tab active" data-tab="log" onclick="switchTab('log')">Log</div>
+        <div class="log-tab result-tab-hidden" data-tab="result" id="resultTab" onclick="switchTab('result')">Result <span class="tab-badge" id="resultBadge">Markdown</span></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="log-toolbar" id="logToolbar">
+        <span class="filter-label">Filter:</span>
+        <span class="log-filter"><input type="checkbox" id="flt-all" checked onchange="toggleFilter('all',this)"><label for="flt-all">All</label></span>
+        <span class="log-filter"><input type="checkbox" id="flt-delegation" checked onchange="toggleFilter('delegation',this)"><label for="flt-delegation">Delegation</label></span>
+        <span class="log-filter"><input type="checkbox" id="flt-intervention" checked onchange="toggleFilter('intervention',this)"><label for="flt-intervention">Intervention</label></span>
+        <span class="log-filter"><input type="checkbox" id="flt-tool" checked onchange="toggleFilter('tool',this)"><label for="flt-tool">Tool Calls</label></span>
+        <span class="log-filter"><input type="checkbox" id="flt-error" checked onchange="toggleFilter('error',this)"><label for="flt-error">Errors</label></span>
+        <span class="log-live-indicator" id="liveIndicator"><span class="live-dot"></span> LIVE</span>
+      </div>
+
+      <!-- Timeline -->
+      <div class="log-timeline" id="logTimeline">
+        <!-- Events injected by JS -->
+      </div>
+
+      <!-- Result Panel -->
+      <div class="result-panel" id="resultPanel">
+        <!-- Content injected by JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app-shell -->
+
+<!-- Prototype label -->
+<div class="prototype-label">Prototype — not for production</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ═══════════════════════════════ SCENARIO DATA ═══════════════════════════════ */
+
+var scenarios = [
+  // 0 — Normal Delegation
+  {
+    name: 'Normal Delegation',
+    desc: 'Full delegation flow: delegating → waiting → completed',
+    status: 'completed',
+    intervention: false,
+    events: [
+      {type:'system', time:'14:32:11', msg:'Agent session started — Compliance Auditor (non-conversational)', extra:'session_id: sess_a7f3b2 · agent_type: compliance-auditor'},
+      {type:'system', time:'14:32:11', msg:'System instruction loaded: "Perform monthly compliance audit across financial records and generate remediation report"'},
+      {type:'llm',   time:'14:32:14', msg:'LLM call: Observe — analysing input context and SOP steps', extra:'model: claude-sonnet-4 · tokens: 1,247'},
+      {type:'tool',  time:'14:32:18', msg:'Tool call: database____execute_query — Fetch transaction records for May 2026', extra:'rows: 152,431 · duration: 2.1s'},
+      {type:'tool',  time:'14:32:22', msg:'Tool call: database____execute_query — Fetch policy violation flags', extra:'rows: 892 · duration: 1.4s'},
+      {type:'llm',   time:'14:32:26', msg:'LLM call: Reason — identified 47 high-risk transactions requiring deeper analysis', extra:'model: claude-sonnet-4 · tokens: 3,892'},
+      {type:'delegating', time:'14:32:28', msg:'Delegating to Fraud Analysis Agent for deep-transaction-review', extra:'sub_agent: fraud-analysis-agent · delegation_id: dlg_k93x'},
+      {type:'system', time:'14:32:28', msg:'Sub-agent session created — fraud-analysis-agent (dlg_k93x)', extra:'input: 47 transaction records · depth: 1/1'},
+      {type:'waiting', time:'14:32:28', msg:'Waiting for Fraud Analysis Agent to complete...', extra:'estimated completion: 15–30 seconds', card:{name:'Fraud Analysis Agent',state:'running'}},
+      {type:'system', time:'14:32:45', msg:'Sub-agent progress: fraud-analysis-agent — 12/47 transactions analysed', extra:'phase: analysis'},
+      {type:'system', time:'14:32:58', msg:'Sub-agent progress: fraud-analysis-agent — 35/47 transactions analysed', extra:'phase: analysis'},
+      {type:'resumed', time:'14:33:09', msg:'Delegation complete — Fraud Analysis Agent finished successfully', extra:'exit_code: completed · 47/47 analysed · 9 flagged anomalies · duration: 41s', card:{name:'Fraud Analysis Agent',state:'done'}},
+      {type:'tool',  time:'14:33:11', msg:'Tool call: filesystem____write_file — Generate compliance_audit_report_Q2.md', extra:'size: 18.4 KB · duration: 0.3s'},
+      {type:'tool',  time:'14:33:13', msg:'Tool call: slack____send_message — Notify #compliance channel: audit complete', extra:'channel: #compliance · duration: 0.4s'},
+      {type:'system', time:'14:33:14', msg:'Agent session completed successfully', extra:'total_duration: 63s · exit_code: completed'},
+    ]
+  },
+  // 1 — Intervention: Approval
+  {
+    name: 'Intervention — Approval',
+    desc: 'Sub-agent requests approval before proceeding with account freeze action',
+    status: 'waiting-intervention',
+    intervention: {type:'approval', pending:true, agent:'Fraud Analysis Agent', reason:'Account-3842 shows suspicious transaction pattern exceeding £50,000 threshold. Recommend freezing account pending manual review. Proceed with freeze?', context:'Transaction volume: 487 in 24h · Average: 12 · Risk score: 94/100'},
+    events: [
+      {type:'system', time:'14:32:11', msg:'Agent session started — Compliance Auditor (non-conversational)', extra:'session_id: sess_b2k8m · agent_type: compliance-auditor'},
+      {type:'system', time:'14:32:11', msg:'System instruction loaded: "Perform automated compliance audit with escalation for high-risk findings"'},
+      {type:'tool',  time:'14:32:14', msg:'Tool call: database____execute_query — Fetch transaction records for flagged accounts', extra:'rows: 2,314 · duration: 3.2s'},
+      {type:'llm',   time:'14:32:19', msg:'LLM call: Observe — scanning for compliance violations', extra:'model: claude-sonnet-4 · tokens: 1,892'},
+      {type:'delegating', time:'14:32:22', msg:'Delegating to Fraud Analysis Agent for high-risk transaction review', extra:'sub_agent: fraud-analysis-agent · delegation_id: dlg_m74p'},
+      {type:'system', time:'14:32:22', msg:'Sub-agent session created — fraud-analysis-agent (dlg_m74p)', extra:'input: flagged accounts list · depth: 1/1'},
+      {type:'waiting', time:'14:32:22', msg:'Waiting for Fraud Analysis Agent to complete...', extra:'estimated completion: 20–40 seconds', card:{name:'Fraud Analysis Agent',state:'running'}},
+      {type:'system', time:'14:32:40', msg:'Sub-agent progress: fraud-analysis-agent — analysing Account-3842', extra:'phase: deep analysis'},
+      {type:'intervene', time:'14:32:52', msg:'Intervention requested by Fraud Analysis Agent', extra:'type: approval · agent: fraud-analysis-agent', intervention:true, interventionData:{type:'approval', agent:'Fraud Analysis Agent', reason:'Account-3842 shows suspicious transaction pattern exceeding £50,000 threshold. Recommend freezing account pending manual review. Proceed with freeze?', context:'Transaction volume: 487 in 24h · Average: 12 · Risk score: 94/100', pending:true}},
+    ]
+  },
+  // 2 — Intervention: Choice
+  {
+    name: 'Intervention — Choice',
+    desc: 'Sub-agent needs operator to choose an escalation path',
+    status: 'waiting-intervention',
+    intervention: {type:'choice', pending:true, agent:'Incident Response Agent', reason:'Multiple compliance violations detected across 3 regions. Select the escalation priority.', options:['Escalate to regional compliance officer (EU)', 'Escalate to global compliance team (HQ)', 'Auto-generate remediation tickets only', 'Defer to next audit cycle'], context:'Violations: EU-GDPR (12), US-SOX (5), APAC-PDPA (3)'},
+    events: [
+      {type:'system', time:'09:15:03', msg:'Agent session started — Compliance Auditor (non-conversational)', extra:'session_id: sess_p9w2x · agent_type: compliance-auditor'},
+      {type:'system', time:'09:15:03', msg:'System instruction loaded: "Cross-regional compliance scan with quarterly reporting"'},
+      {type:'tool',  time:'09:15:06', msg:'Tool call: database____execute_query — Fetch all Q2 compliance audit records', extra:'rows: 8,921 · duration: 4.8s'},
+      {type:'tool',  time:'09:15:14', msg:'Tool call: filesystem____read_file — Load regional compliance thresholds', extra:'files: eu_thresholds.yaml, us_thresholds.yaml · duration: 0.6s'},
+      {type:'llm',   time:'09:15:19', msg:'LLM call: Reason — cross-referencing records against regional policies', extra:'model: claude-sonnet-4 · tokens: 5,621'},
+      {type:'delegating', time:'09:15:22', msg:'Delegating to Incident Response Agent for multi-region violation assessment', extra:'sub_agent: incident-response-agent · delegation_id: dlg_r81q'},
+      {type:'system', time:'09:15:22', msg:'Sub-agent session created — incident-response-agent (dlg_r81q)', extra:'input: 3 regional violation sets · depth: 1/1'},
+      {type:'waiting', time:'09:15:22', msg:'Waiting for Incident Response Agent to complete...', extra:'estimated completion: 30–60 seconds', card:{name:'Incident Response Agent',state:'running'}},
+      {type:'intervene', time:'09:15:38', msg:'Intervention requested by Incident Response Agent', extra:'type: choice · agent: incident-response-agent', intervention:true, interventionData:{type:'choice', agent:'Incident Response Agent', reason:'Multiple compliance violations detected across 3 regions. Select the escalation priority.', options:['Escalate to regional compliance officer (EU)', 'Escalate to global compliance team (HQ)', 'Auto-generate remediation tickets only', 'Defer to next audit cycle'], context:'Violations: EU-GDPR (12), US-SOX (5), APAC-PDPA (3)', pending:true}},
+    ]
+  },
+  // 3 — Intervention: Text
+  {
+    name: 'Intervention — Text',
+    desc: 'Sub-agent needs operator to provide a written justification',
+    status: 'waiting-intervention',
+    intervention: {type:'text', pending:true, agent:'Report Generator Agent', reason:'The audit found 3 policy exception cases that need written justification before the report can be finalised. Please provide the justification text for why these exceptions are being waived.', context:'Exception cases: EXC-882 (data retention override), EXC-883 (temporary access grant), EXC-891 (vendor data share)'},
+    events: [
+      {type:'system', time:'16:08:42', msg:'Agent session started — Compliance Auditor (non-conversational)', extra:'session_id: sess_e4h9j · agent_type: compliance-auditor'},
+      {type:'system', time:'16:08:42', msg:'System instruction loaded: "Finalise quarterly compliance report with exception documentation"'},
+      {type:'tool',  time:'16:08:44', msg:'Tool call: database____execute_query — Retrieve exception records for Q2', extra:'rows: 23 · duration: 1.1s'},
+      {type:'tool',  time:'16:08:47', msg:'Tool call: filesystem____read_file — Load policy exception template', extra:'file: exception_template.md · duration: 0.2s'},
+      {type:'llm',   time:'16:08:51', msg:'LLM call: Reason — evaluating each exception against policy', extra:'model: claude-sonnet-4 · tokens: 2,340'},
+      {type:'delegating', time:'16:08:53', msg:'Delegating to Report Generator Agent for exception justification drafting', extra:'sub_agent: report-gen-agent · delegation_id: dlg_n55k'},
+      {type:'system', time:'16:08:53', msg:'Sub-agent session created — report-gen-agent (dlg_n55k)', extra:'input: 23 exception records · depth: 1/1'},
+      {type:'waiting', time:'16:08:53', msg:'Waiting for Report Generator Agent to complete...', extra:'estimated completion: 45–90 seconds', card:{name:'Report Generator Agent',state:'running'}},
+      {type:'intervene', time:'16:09:03', msg:'Intervention requested by Report Generator Agent', extra:'type: text · agent: report-gen-agent', intervention:true, interventionData:{type:'text', agent:'Report Generator Agent', reason:'The audit found 3 policy exception cases that need written justification before the report can be finalised. Please provide the justification text for why these exceptions are being waived.', context:'Exception cases: EXC-882 (data retention override), EXC-883 (temporary access grant), EXC-891 (vendor data share)', pending:true}},
+    ]
+  },
+  // 4 — Delegation Blocked (depth limit)
+  {
+    name: 'Delegation Blocked',
+    desc: 'Sub-agent attempts to delegate further but is blocked at depth 1',
+    status: 'running',
+    intervention: false,
+    events: [
+      {type:'system', time:'11:22:05', msg:'Agent session started — Compliance Auditor (non-conversational)', extra:'session_id: sess_c3v7f · agent_type: compliance-auditor'},
+      {type:'system', time:'11:22:05', msg:'System instruction loaded: "Execute end-to-end compliance verification with delegated deep review"'},
+      {type:'tool',  time:'11:22:08', msg:'Tool call: database____execute_query — Fetch all policy documents', extra:'rows: 67 · duration: 1.8s'},
+      {type:'llm',   time:'11:22:12', msg:'LLM call: Observe — analysing policy structure and coverage', extra:'model: claude-sonnet-4 · tokens: 1,420'},
+      {type:'delegating', time:'11:22:14', msg:'Delegating to Policy Review Agent for deep-document-analysis', extra:'sub_agent: policy-review-agent · delegation_id: dlg_t22v'},
+      {type:'system', time:'11:22:14', msg:'Sub-agent session created — policy-review-agent (dlg_t22v)', extra:'input: 67 policy documents · depth: 1/1'},
+      {type:'waiting', time:'11:22:14', msg:'Waiting for Policy Review Agent to complete...', extra:'estimated completion: 60–120 seconds', card:{name:'Policy Review Agent',state:'running'}},
+      {type:'system', time:'11:22:25', msg:'Policy Review Agent attempting to delegate to Document Compare Agent', extra:'depth_check: current depth=1, new depth would be=2'},
+      {type:'blocked', time:'11:22:25', msg:'Delegation blocked — depth limit exceeded', extra:'reason: Non-conversational agents are limited to 1 level of delegation. Policy Review Agent (depth 1) attempted to delegate to Document Compare Agent (would be depth 2). Delegation denied.'},
+      {type:'tool',  time:'11:22:26', msg:'Tool call: Policy Review Agent fallback — executing comparison inline', extra:'method: direct tool call (no delegation) · duration: 8.4s'},
+      {type:'resumed', time:'11:23:12', msg:'Delegation complete — Policy Review Agent finished (with fallback)', extra:'exit_code: completed · warnings: delegation_blocked · duration: 58s', card:{name:'Policy Review Agent',state:'done'}},
+      {type:'tool',  time:'11:23:14', msg:'Tool call: filesystem____write_file — Save compliance_verification_result.json', extra:'size: 22.1 KB · duration: 0.4s'},
+      {type:'system', time:'11:23:15', msg:'Agent session completed with warnings', extra:'total_duration: 70s · exit_code: completed_with_warnings · blocked_delegations: 1'},
+    ]
+  },
+  // 5 — Delegation Failed (timeout + error)
+  {
+    name: 'Delegation Failed',
+    desc: 'Sub-agent times out and another errors — both shown in log',
+    status: 'running',
+    intervention: false,
+    events: [
+      {type:'system', time:'08:44:30', msg:'Agent session started — Compliance Auditor (non-conversational)', extra:'session_id: sess_j6h2d · agent_type: compliance-auditor'},
+      {type:'system', time:'08:44:30', msg:'System instruction loaded: "Run multi-source compliance verification with external data"'},
+      {type:'tool',  time:'08:44:32', msg:'Tool call: database____execute_query — Fetch external vendor compliance records', extra:'rows: 4,201 · duration: 5.1s'},
+      {type:'llm',   time:'08:44:40', msg:'LLM call: Observe — identifying data quality issues', extra:'model: claude-sonnet-4 · tokens: 2,813'},
+      {type:'delegating', time:'08:44:42', msg:'Delegating to External Data Verifier agent for vendor record validation', extra:'sub_agent: external-data-verifier · delegation_id: dlg_w09r'},
+      {type:'system', time:'08:44:42', msg:'Sub-agent session created — external-data-verifier (dlg_w09r)', extra:'input: 4,201 vendor records · depth: 1/1'},
+      {type:'waiting', time:'08:44:42', msg:'Waiting for External Data Verifier to complete...', extra:'estimated completion: 90–180 seconds', card:{name:'External Data Verifier',state:'running'}},
+      {type:'system', time:'08:45:52', msg:'Sub-agent timeout warning — external-data-verifier has exceeded estimated runtime', extra:'elapsed: 70s · estimated: 90-180s · timeout threshold: 120s'},
+      {type:'error', time:'08:46:42', msg:'Delegation timeout — External Data Verifier exceeded 120s timeout', extra:'reason: External API unresponsive · retries: 3 · exit_code: timed_out', card:{name:'External Data Verifier',state:'failed'}},
+      {type:'llm',   time:'08:46:44', msg:'LLM call: Reason — evaluating fallback strategy after delegation timeout', extra:'model: claude-sonnet-4 · tokens: 1,602'},
+      {type:'delegating', time:'08:46:45', msg:'Delegating to Report Compiler Agent for partial results assembly', extra:'sub_agent: report-compiler · delegation_id: dlg_f66m'},
+      {type:'system', time:'08:46:45', msg:'Sub-agent session created — report-compiler (dlg_f66m)', extra:'input: partial vendor data + timeout notice · depth: 1/1'},
+      {type:'waiting', time:'08:46:45', msg:'Waiting for Report Compiler to complete...', extra:'estimated completion: 10–20 seconds', card:{name:'Report Compiler',state:'running'}},
+      {type:'error', time:'08:46:53', msg:'Delegation failure — Report Compiler encountered runtime error', extra:'reason: ValueError("Cannot compile report: missing vendor validation data for 3,128/4,201 records") · exit_code: error', card:{name:'Report Compiler',state:'failed'}},
+      {type:'system', time:'08:46:54', msg:'Agent session completed with partial results', extra:'total_duration: 144s · exit_code: completed_with_errors · failed_delegations: 2 · warnings: timeout, runtime_error'},
+    ]
+  }
+];
+
+/* ═══════════════════════════════ STATE ═══════════════════════════════ */
+
+var currentScenario = 0;
+var interventionResponded = {};
+var elapsedInterval = null;
+var activeTab = 'log'; /* 'log' | 'result' */
+
+/* output type mapping per scenario */
+var outputTypeMap = {
+  0: { type: 'markdown', badge: 'Markdown', badgeClass: 'tab-badge-markdown' },
+  2: { type: 'typed',    badge: 'Typed',    badgeClass: 'tab-badge-typed' },
+  3: { type: 'auto',     badge: 'Auto',     badgeClass: 'tab-badge-auto' }
+};
+
+function hasResultTab(idx) {
+  var s = scenarios[idx];
+  var ot = outputTypeMap[idx];
+  if (!ot) return false;
+  if (s.status !== 'completed') return false;
+  if (idx === 2 || idx === 3) {
+    return !s.intervention || !s.intervention.pending;
+  }
+  return true;
+}
+
+function switchTab(tabName) {
+  if (tabName === activeTab) return;
+  if (tabName === 'result' && !hasResultTab(currentScenario)) return;
+
+  activeTab = tabName;
+
+  var logTabEl = document.querySelector('.log-tab[data-tab="log"]');
+  var resultTabEl = document.querySelector('.log-tab[data-tab="result"]');
+  var toolbar = document.getElementById('logToolbar');
+  var timeline = document.getElementById('logTimeline');
+  var resultPanel = document.getElementById('resultPanel');
+  var liveIndicator = document.getElementById('liveIndicator');
+  var s = scenarios[currentScenario];
+
+  logTabEl.classList.toggle('active', tabName === 'log');
+  resultTabEl.classList.toggle('active', tabName === 'result');
+
+  if (tabName === 'log') {
+    toolbar.style.display = '';
+    timeline.style.display = '';
+    resultPanel.classList.remove('visible');
+    if (s.status !== 'completed') liveIndicator.style.display = '';
+  } else {
+    toolbar.style.display = 'none';
+    timeline.style.display = 'none';
+    resultPanel.classList.add('visible');
+    liveIndicator.style.display = 'none';
+    renderResult(currentScenario);
+  }
+}
+
+function updateTabs(idx) {
+  var resultTabEl = document.getElementById('resultTab');
+  var ot = outputTypeMap[idx];
+  var available = hasResultTab(idx);
+
+  if (ot && available) {
+    resultTabEl.classList.remove('result-tab-hidden');
+    var badge = document.getElementById('resultBadge');
+    badge.textContent = ot.badge;
+    badge.className = 'tab-badge ' + ot.badgeClass;
+  } else {
+    resultTabEl.classList.add('result-tab-hidden');
+  }
+
+  /* if currently on result tab but it's no longer available, switch to log */
+  if (activeTab === 'result' && !available) {
+    switchTab('log');
+  }
+}
+
+function renderResult(idx) {
+  var panel = document.getElementById('resultPanel');
+  var ot = outputTypeMap[idx];
+  if (!ot) { panel.innerHTML = '<div class="empty-log"><div class="empty-icon">📋</div><div>No result available for this scenario.</div></div>'; return; }
+
+  if (ot.type === 'markdown') renderMarkdownResult(panel);
+  else if (ot.type === 'typed') renderTypedJSONResult(panel);
+  else if (ot.type === 'auto') renderAutoResult(panel);
+}
+
+/* ── MARKDOWN RESULT (Scenario 0) ── */
+function renderMarkdownResult(panel) {
+  panel.innerHTML = '<div class="result-markdown">'
+    + '<h2>Compliance Audit — Analysis Complete</h2>'
+    + '<p><strong>Summary:</strong> All <strong>47 high-risk transactions</strong> have been analysed by the Fraud Analysis Agent. <strong>9 anomalies</strong> were flagged for further investigation, and <strong>3 critical findings</strong> require immediate action.</p>'
+    + '<h3>Key Findings</h3>'
+    + '<ul>'
+    + '<li><strong>Critical:</strong> Account-3842 exceeded £50,000 threshold with 487 transactions in 24 hours <span style="font-size:12px;color:var(--text-secondary)">(Risk Score: 94/100)</span></li>'
+    + '<li><strong>High:</strong> 12 GDPR compliance gaps identified in EU regional data processing workflows</li>'
+    + '<li><strong>Medium:</strong> 47 transactions showing unusual cross-border patterns across 3 corridors</li>'
+    + '<li><strong>Low:</strong> 3 vendor data access logs with incomplete audit trails</li>'
+    + '</ul>'
+    + '<h3>Recommended Actions</h3>'
+    + '<ol>'
+    + '<li><strong>Freeze Account-3842</strong> pending manual review by the fraud investigation team</li>'
+    + '<li><strong>Escalate GDPR findings</strong> to EU regional compliance officer within 72 hours</li>'
+    + '<li><strong>Generate automated remediation tickets</strong> for medium-risk cross-border patterns</li>'
+    + '<li>File low-risk vendor audit gaps for next quarterly review cycle</li>'
+    + '</ol>'
+    + '<h3>Generated Artifacts</h3>'
+    + '<pre><code>compliance_audit_report_Q2.md         18.4 KB\nremediation_tickets_batch_2026-06-17.json   4.2 KB\nfraud_analysis_findings.pdf               1.8 MB</code></pre>'
+    + '<h3>Execution Metrics</h3>'
+    + '<p>'
+    + '<strong>Total Duration:</strong> 63 seconds<br>'
+    + '<strong>LLM Calls:</strong> 2 (total tokens: 5,139)<br>'
+    + '<strong>Tool Calls:</strong> 4 (database queries, file writes, messaging)<br>'
+    + '<strong>Delegations:</strong> 1 (Fraud Analysis Agent — completed successfully)<br>'
+    + '<strong>Exit Code:</strong> completed'
+    + '</p>'
+    + '<hr>'
+    + '<p><em>Report generated at 2026-06-17 14:33:14 UTC by Compliance Auditor Agent</em></p>'
+    + '</div>';
+}
+
+/* ── TYPED JSON RESULT (Scenario 2) ── */
+var typedResultData = {
+  escalation_decision: {
+    approval_status: "approved",
+    risk_score: 3,
+    selected_path: "Escalate to global compliance team (HQ)",
+    reason: "Cross-regional violations require centralized coordination across EU, US, and APAC jurisdictions. Fragmented escalation would risk inconsistent remediation.",
+    affected_regions: ["EU", "US", "APAC"],
+    violation_counts: { "EU-GDPR": 12, "US-SOX": 5, "APAC-PDPA": 3 },
+    auto_remediation: false
+  },
+  operator_response: {
+    responded_by: "Alex Harper",
+    response_timestamp: "2026-06-17T09:16:05Z",
+    selected_option_index: 1,
+    response_latency_seconds: 27
+  }
+};
+
+var typedResultSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    escalation_decision: {
+      "type": "object",
+      "properties": {
+        approval_status: { "type": "string", "enum": ["approved", "denied", "pending"] },
+        risk_score: { "type": "integer", "minimum": 0, "maximum": 5 },
+        selected_path: { "type": "string", "description": "Chosen escalation route" },
+        reason: { "type": "string" },
+        affected_regions: { "type": "array", "items": { "type": "string" } },
+        violation_counts: { "type": "object", "additionalProperties": { "type": "integer" } },
+        auto_remediation: { "type": "boolean" }
+      },
+      "required": ["approval_status", "risk_score", "selected_path", "reason"]
+    },
+    operator_response: {
+      "type": "object",
+      "properties": {
+        responded_by: { "type": "string" },
+        response_timestamp: { "type": "string", "format": "date-time" },
+        selected_option_index: { "type": "integer", "minimum": 0 },
+        response_latency_seconds: { "type": "integer" }
+      }
+    }
+  }
+};
+
+function renderTypedJSONResult(panel) {
+  var h = '<div class="result-json-container">';
+  h += '<div class="result-json-meta">';
+  h += '<span class="json-meta-label">Output Schema:</span>';
+  h += '<span class="json-meta-chip">Typed JSON</span>';
+  h += '<span class="json-meta-chip">escalation_decision</span>';
+  h += '<span class="json-meta-chip">Validated ✓</span>';
+  h += '</div>';
+
+  h += '<h4 style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Structured Output</h4>';
+  h += '<div class="json-tree" id="typedJsonTree"></div>';
+
+  h += '<div class="schema-section">';
+  h += '<button class="schema-toggle-btn" id="schemaToggleBtn" onclick="toggleSchema()"><span>📋</span> Show Output Schema <span class="schema-arrow">▾</span></button>';
+  h += '<div class="schema-content" id="schemaContent">';
+  h += '<div class="json-tree" id="schemaJsonTree"></div>';
+  h += '</div>';
+  h += '</div>';
+
+  h += '</div>';
+  panel.innerHTML = h;
+
+  /* render the data tree */
+  document.getElementById('typedJsonTree').innerHTML = renderJSONTree(typedResultData, 0);
+
+  /* render the schema tree */
+  document.getElementById('schemaJsonTree').innerHTML = renderJSONTree(typedResultSchema, 0);
+}
+
+/* ── AUTO RESULT (Scenario 3) ── */
+var autoResultData = {
+  exception_justification: "Audit exceptions EXC-882, EXC-883, and EXC-891 have been reviewed and waived under the Q2 2026 temporary override policy (ref: POL-2026-042). These exceptions relate to data retention overrides necessitated by the ongoing system migration project, which is scheduled for completion by 2026-09-15. All waivers are time-limited and will automatically expire. The business impact has been assessed as low-risk for the waiver period.",
+  exception_ids: ["EXC-882", "EXC-883", "EXC-891"],
+  waiver_policy_ref: "POL-2026-042",
+  expiry_date: "2026-09-30",
+  operator: "Alex Harper",
+  timestamp: "2026-06-17T16:09:45Z",
+  justification_length_chars: 487,
+  approved: true
+};
+
+function renderAutoResult(panel) {
+  var h = '<div class="result-auto">';
+  h += '<div class="result-auto-meta">';
+  h += '<span class="auto-meta-label">Output Type:</span>';
+  h += '<span class="chip chip-green">Auto (Raw JSON)</span>';
+  h += '<span class="chip chip-gray">7 keys</span>';
+  h += '<span class="chip chip-blue">Validated ✓</span>';
+  h += '</div>';
+  h += '<h4 style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Agent Output</h4>';
+  h += '<pre>' + syntaxHighlightJSON(JSON.stringify(autoResultData, null, 2)) + '</pre>';
+  h += '</div>';
+  panel.innerHTML = h;
+}
+
+/* ── JSON TREE RENDERER ── */
+function renderJSONTree(obj, depth) {
+  var indent = '  '.repeat(depth);
+  var html = '';
+
+  if (obj === null) {
+    return '<span class="json-null">null</span>';
+  }
+
+  if (typeof obj === 'boolean') {
+    return '<span class="json-boolean">' + obj + '</span>';
+  }
+
+  if (typeof obj === 'number') {
+    return '<span class="json-number">' + obj + '</span>';
+  }
+
+  if (typeof obj === 'string') {
+    return '<span class="json-string">"' + escapeHTML(obj) + '"</span>';
+  }
+
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '<span class="json-brace">[]</span>';
+    var arrId = 'arr_' + Math.random().toString(36).slice(2, 9);
+    html += '<span class="json-toggle" onclick="toggleJSONNode(\'' + arrId + '\',this)" id="toggle_' + arrId + '">▼</span>';
+    html += '<span class="json-brace">[</span>';
+    html += '<span class="json-block" id="' + arrId + '">';
+    obj.forEach(function(item, i) {
+      html += '<div class="json-line" style="padding-left:' + ((depth + 1) * 20) + 'px">';
+      html += renderJSONTree(item, depth + 1);
+      if (i < obj.length - 1) html += '<span class="json-comma">,</span>';
+      html += '</div>';
+    });
+    html += '</span>';
+    html += '<span class="json-brace">]</span>';
+    return html;
+  }
+
+  if (typeof obj === 'object') {
+    var keys = Object.keys(obj);
+    if (keys.length === 0) return '<span class="json-brace">{}</span>';
+    var objId = 'obj_' + Math.random().toString(36).slice(2, 9);
+    html += '<span class="json-toggle" onclick="toggleJSONNode(\'' + objId + '\',this)" id="toggle_' + objId + '">▼</span>';
+    html += '<span class="json-brace">{</span>';
+    html += '<span class="json-block" id="' + objId + '">';
+    keys.forEach(function(key, i) {
+      html += '<div class="json-line" style="padding-left:' + ((depth + 1) * 20) + 'px">';
+      html += '<span class="json-key">"' + escapeHTML(key) + '"</span>';
+      html += '<span>: </span>';
+      html += renderJSONTree(obj[key], depth + 1);
+      if (i < keys.length - 1) html += '<span class="json-comma">,</span>';
+      html += '</div>';
+    });
+    html += '</span>';
+    html += '<span class="json-brace">}</span>';
+    return html;
+  }
+
+  return String(obj);
+}
+
+function toggleJSONNode(nodeId, toggleEl) {
+  var block = document.getElementById(nodeId);
+  if (!block) return;
+  var isHidden = block.classList.contains('json-hidden');
+  if (isHidden) {
+    block.classList.remove('json-hidden');
+    toggleEl.classList.remove('collapsed');
+    toggleEl.textContent = '▼';
+  } else {
+    block.classList.add('json-hidden');
+    toggleEl.classList.add('collapsed');
+    toggleEl.textContent = '▶';
+  }
+}
+
+function toggleSchema() {
+  var content = document.getElementById('schemaContent');
+  var btn = document.getElementById('schemaToggleBtn');
+  var isVisible = content.classList.contains('visible');
+  if (isVisible) {
+    content.classList.remove('visible');
+    btn.classList.remove('active');
+    btn.innerHTML = '<span>📋</span> Show Output Schema <span class="schema-arrow">▾</span>';
+  } else {
+    content.classList.add('visible');
+    btn.classList.add('active');
+    btn.innerHTML = '<span>📋</span> Hide Output Schema <span class="schema-arrow">▾</span>';
+  }
+}
+
+/* ── SYNTAX HIGHLIGHT RAW JSON ── */
+function syntaxHighlightJSON(json) {
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(match) {
+    var cls = 'json-hl-num';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'json-hl-key';
+      } else {
+        cls = 'json-hl-str';
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'json-hl-bool';
+    } else if (/null/.test(match)) {
+      cls = 'json-hl-num';
+    }
+    return '<span class="' + cls + '">' + match + '</span>';
+  });
+}
+
+function escapeHTML(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ═══════════════════════════════ RENDER ═══════════════════════════════ */
+
+function renderLog(scenarioIdx) {
+  var s = scenarios[scenarioIdx];
+  var timeline = document.getElementById('logTimeline');
+  var html = '';
+
+  s.events.forEach(function(ev, i) {
+    var showIntervention = ev.intervention && !interventionResponded['s' + scenarioIdx + '_e' + i];
+
+    html += '<div class="log-event ev-' + ev.type + '" data-type="' + ev.type + '" id="log-event-' + i + '">';
+    html += '  <div class="log-event-time">' + ev.time + '</div>';
+    html += '  <div class="log-event-icon">' + eventIcon(ev.type) + '</div>';
+    html += '  <div class="log-event-body">';
+    html += '    <div class="log-event-type">' + eventLabel(ev.type) + '</div>';
+    html += '    <div class="log-event-msg">' + ev.msg + '</div>';
+    if (ev.extra) {
+      html += '    <div class="log-event-extra">' + ev.extra + '</div>';
+    }
+    // delegation card
+    if (ev.card && ev.card.name) {
+      var cs = '';
+      if (ev.card.state === 'running') cs = 'dc-state-running';
+      else if (ev.card.state === 'done') cs = 'dc-state-done';
+      else if (ev.card.state === 'failed') cs = 'dc-state-failed';
+      var cstateLabel = ev.card.state === 'running' ? 'Running' : ev.card.state === 'done' ? 'Completed' : 'Failed';
+      html += '<div class="delegation-card">';
+      html += '  <div class="dc-icon">🤖</div>';
+      html += '  <div class="dc-info"><div class="dc-name">' + ev.card.name + '</div><div class="dc-meta">' + (ev.card.state === 'running' ? 'Sub-agent executing...' : 'Sub-agent ' + (ev.card.state === 'done' ? 'completed' : 'failed')) + '</div></div>';
+      html += '  <div class="dc-state ' + cs + '">' + cstateLabel + '</div>';
+      html += '</div>';
+    }
+    // loading bar for delegating / waiting
+    if (ev.type === 'delegating' || ev.type === 'waiting') {
+      html += '<div class="ev-loading-bar"><div class="ev-lb-inner"></div></div>';
+    }
+    // intervention inline
+    if (showIntervention) {
+      html += renderInterventionInline(scenarioIdx, i, ev.interventionData);
+    }
+    html += '  </div>';
+    html += '</div>';
+  });
+
+  // If no events (shouldn't happen)
+  if (s.events.length === 0) {
+    html = '<div class="empty-log"><div class="empty-icon">📋</div><div>No execution log events to display.</div></div>';
+  }
+
+  timeline.innerHTML = html;
+
+  // highlight last few events as "just added"
+  var lastEvents = timeline.querySelectorAll('.log-event');
+  var start = Math.max(0, lastEvents.length - 4);
+  for (var j = start; j < lastEvents.length; j++) {
+    lastEvents[j].classList.add('just-added');
+  }
+
+  applyFilters();
+}
+
+function renderInterventionInline(scenarioIdx, eventIdx, data) {
+  var respKey = 's' + scenarioIdx + '_e' + eventIdx;
+  var responded = interventionResponded[respKey];
+  var expired = interventionResponded[respKey + '_expired'];
+
+  var extraClass = '';
+  if (responded) extraClass = ' resolved';
+  if (expired) extraClass = ' expired';
+
+  var h = '';
+  h += '<div class="intervene-inline' + extraClass + '" id="iv-inline-' + scenarioIdx + '-' + eventIdx + '">';
+
+  // Header
+  h += '<div class="intervene-inline-header">';
+  h += '  <div class="intervene-inline-icon">⚠</div>';
+  h += '  <div class="intervene-inline-info">';
+  h += '    <h4>Intervention Required</h4>';
+  h += '    <div class="iv-meta">Requested by <strong>' + data.agent + '</strong> during delegation</div>';
+  var typeBadgeClass = data.type === 'approval' ? 'iv-type-approval' : data.type === 'choice' ? 'iv-type-choice' : 'iv-type-text';
+  var typeLabel = data.type === 'approval' ? 'Approval' : data.type === 'choice' ? 'Choice' : 'Text Input';
+  h += '    <span class="iv-type-badge ' + typeBadgeClass + '">' + typeLabel + '</span>';
+  h += '  </div>';
+  h += '</div>';
+
+  // Body
+  h += '<div class="intervene-inline-body">';
+  h += '  <div class="iv-reason">' + data.reason + '</div>';
+  if (data.context) {
+    h += '  <div class="iv-meta" style="margin-bottom:16px;font-size:11px;color:var(--text-secondary)">' + data.context + '</div>';
+  }
+
+  if (responded) {
+    h += '<div style="padding:8px 12px;background:#E8F5E9;border-radius:6px;font-size:12px;color:#1B5E20;font-weight:500">✓ Response submitted — ' + responded + '</div>';
+  } else if (expired) {
+    h += '<div class="expired-overlay">⏱ This intervention request has expired (sub-agent timed out). No further action possible.</div>';
+  } else {
+    if (data.type === 'approval') {
+      h += '<div class="iv-approval-btns">';
+      h += '  <button class="btn iv-btn-approve" onclick="respondIntervention(' + scenarioIdx + ',' + eventIdx + ',\'approved\')">✓ Approve</button>';
+      h += '  <button class="btn iv-btn-deny" onclick="respondIntervention(' + scenarioIdx + ',' + eventIdx + ',\'denied\')">✗ Deny</button>';
+      h += '</div>';
+    } else if (data.type === 'choice') {
+      h += '<div class="iv-choices" id="iv-choices-' + scenarioIdx + '-' + eventIdx + '">';
+      (data.options || []).forEach(function(opt, oi) {
+        h += '  <div class="iv-choice-opt" onclick="selectChoice(' + scenarioIdx + ',' + eventIdx + ',' + oi + ',this)" data-idx="' + oi + '">';
+        h += '    <div class="iv-radio"></div>';
+        h += '    <span>' + opt + '</span>';
+        h += '  </div>';
+      });
+      h += '</div>';
+    } else if (data.type === 'text') {
+      h += '<textarea class="iv-text-input" id="iv-text-' + scenarioIdx + '-' + eventIdx + '" placeholder="Enter your justification text here..."></textarea>';
+    }
+  }
+
+  h += '</div>';
+
+  // Footer (only when not resolved/expired)
+  if (!responded && !expired) {
+    h += '<div class="intervene-inline-footer">';
+    h += '  <button class="iv-dismiss" onclick="dismissIntervention(' + scenarioIdx + ',' + eventIdx + ')">Dismiss (banner stays)</button>';
+    if (data.type === 'choice' || data.type === 'text') {
+      h += '  <button class="iv-submit" onclick="respondIntervention(' + scenarioIdx + ',' + eventIdx + ')">Submit Response</button>';
+    }
+    h += '</div>';
+  }
+
+  h += '</div>';
+  return h;
+}
+
+function eventIcon(type) {
+  var map = {system:'ℹ',delegating:'↗',waiting:'⏳',resumed:'✓',tool:'🔧',llm:'🧠',intervene:'⚠',error:'✗',blocked:'🚫',response:'↩'};
+  return map[type] || '•';
+}
+
+function eventLabel(type) {
+  var map = {system:'SYSTEM',delegating:'DELEGATING',waiting:'WAITING',resumed:'DELEGATION RESUMED',tool:'TOOL CALL',llm:'LLM CALL',intervene:'INTERVENTION REQUIRED',error:'ERROR',blocked:'DELEGATION BLOCKED',response:'INTERVENTION RESPONSE'};
+  return map[type] || type.toUpperCase();
+}
+
+/* ═══════════════════════════════ FILTERS ═══════════════════════════════ */
+
+var activeFilters = {all:true, delegation:true, intervention:true, tool:true, error:true};
+
+function toggleFilter(name, el) {
+  if (name === 'all') {
+    activeFilters.all = el.checked;
+    document.querySelectorAll('.log-filter input').forEach(function(cb) {
+      if (cb.id !== 'flt-all') cb.checked = el.checked;
+    });
+    activeFilters.delegation = el.checked;
+    activeFilters.intervention = el.checked;
+    activeFilters.tool = el.checked;
+    activeFilters.error = el.checked;
+  } else {
+    activeFilters[name] = el.checked;
+    // uncheck "all" if any individual filter is off
+    if (!el.checked) {
+      document.getElementById('flt-all').checked = false;
+      activeFilters.all = false;
+    }
+    // check "all" if everything else is on
+    if (activeFilters.delegation && activeFilters.intervention && activeFilters.tool && activeFilters.error) {
+      document.getElementById('flt-all').checked = true;
+      activeFilters.all = true;
+    }
+  }
+  applyFilters();
+}
+
+function applyFilters() {
+  var typeMap = {
+    delegation: ['delegating','waiting','resumed','blocked'],
+    intervention: ['intervene','response'],
+    tool: ['tool','llm'],
+    error: ['error']
+  };
+  document.querySelectorAll('.log-event').forEach(function(el) {
+    var t = el.getAttribute('data-type');
+    var show = false;
+
+    // system events always show when "all" is on
+    if (t === 'system' && activeFilters.all) show = true;
+
+    for (var cat in typeMap) {
+      if (typeMap[cat].indexOf(t) !== -1 && activeFilters[cat]) show = true;
+    }
+
+    el.style.display = show ? '' : 'none';
+  });
+}
+
+/* ═══════════════════════════════ SCENARIO SWITCHING ═══════════════════════════════ */
+
+function setScenario(idx) {
+  currentScenario = idx;
+  var s = scenarios[idx];
+
+  // Update buttons
+  document.querySelectorAll('.scenario-btn').forEach(function(b, i) { b.classList.toggle('active', i === idx); });
+  document.getElementById('scenarioDesc').textContent = s.desc;
+
+  // Update status badge
+  var badge = document.getElementById('execStatusBadge');
+  badge.className = 'exec-status';
+  if (s.status === 'running') badge.classList.add('running');
+  else if (s.status === 'waiting-intervention') badge.classList.add('waiting-intervention');
+  else if (s.status === 'completed') badge.classList.add('completed');
+  badge.textContent = s.status === 'running' ? 'Running' : s.status === 'waiting-intervention' ? 'Waiting for Input' : 'Completed';
+
+  // Update live indicator
+  var live = document.getElementById('liveIndicator');
+  if (s.status === 'completed') {
+    live.style.display = 'none';
+  } else {
+    live.style.display = '';
+  }
+
+  // Intervention banner
+  var banner = document.getElementById('ivPendingBanner');
+  if (s.intervention && s.intervention.pending) {
+    banner.classList.add('visible');
+    document.getElementById('ivBannerTitle').textContent = 'Intervention Required — Delegated sub-agent needs input';
+    document.getElementById('ivBannerSub').textContent = s.intervention.type.charAt(0).toUpperCase() + s.intervention.type.slice(1) + ' requested by ' + s.intervention.agent + ' · pending since ' + (s.events.find(function(e){return e.intervention})||{}).time;
+  } else {
+    banner.classList.remove('visible');
+  }
+
+  // Reset elapsed
+  updateElapsed();
+
+  // Render
+  renderLog(idx);
+
+  // Update tabs
+  updateTabs(idx);
+}
+
+/* ═══════════════════════════════ INTERVENTION RESPONSE ═══════════════════════════════ */
+
+function selectChoice(scenarioIdx, eventIdx, choiceIdx, el) {
+  // Clear all selections
+  var container = document.getElementById('iv-choices-' + scenarioIdx + '-' + eventIdx);
+  if (container) {
+    container.querySelectorAll('.iv-choice-opt').forEach(function(opt) { opt.classList.remove('sel'); });
+  }
+  el.classList.add('sel');
+  // Store in data attribute
+  el.setAttribute('data-selected', 'true');
+}
+
+function respondIntervention(scenarioIdx, eventIdx, value) {
+  var s = scenarios[scenarioIdx];
+  var ev = s.events[eventIdx];
+  var data = ev.interventionData;
+  var respKey = 's' + scenarioIdx + '_e' + eventIdx;
+
+  // Determine response value
+  var responseText = '';
+  if (data.type === 'approval') {
+    responseText = value || 'denied';
+  } else if (data.type === 'choice') {
+    var sel = document.querySelector('#iv-choices-' + scenarioIdx + '-' + eventIdx + ' .iv-choice-opt.sel');
+    if (!sel) {
+      showToast('Please select an option before submitting.', 'error');
+      return;
+    }
+    var optIdx = parseInt(sel.getAttribute('data-idx'));
+    responseText = 'Selected: "' + (data.options[optIdx] || 'Unknown') + '"';
+  } else if (data.type === 'text') {
+    var ta = document.getElementById('iv-text-' + scenarioIdx + '-' + eventIdx);
+    if (!ta || !ta.value.trim()) {
+      showToast('Please enter a response before submitting.', 'error');
+      return;
+    }
+    responseText = ta.value.trim();
+  }
+
+  // Mark as responded
+  interventionResponded[respKey] = responseText;
+
+  // Hide banner if no more pending interventions for this scenario
+  checkPendingBanner();
+
+  // Add response log event after the intervention
+  var now = new Date();
+  var timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0');
+  var responseEvent = {
+    type: 'response',
+    time: timeStr,
+    msg: 'Intervention response submitted by Alex Harper',
+    extra: 'decision: ' + responseText + ' · operator: alex.harper · session: sess_active'
+  };
+
+  // Insert response event, then add resumed and any remaining events
+  var insertIdx = eventIdx + 1;
+  s.events.splice(insertIdx, 0, responseEvent);
+
+  // Add resumed event
+  s.events.splice(insertIdx + 1, 0, {
+    type: 'resumed',
+    time: timeStr,
+    msg: 'Delegation resumed — ' + data.agent + ' continues with operator input',
+    extra: 'response applied · resuming sub-agent execution',
+    card: {name: data.agent, state: 'done'}
+  });
+
+  // Add completion events
+  s.events.push({type:'tool',  time:timeStr, msg:'Tool call: filesystem____write_file — Generate final compliance report', extra:'size: 14.2 KB · duration: 0.4s'});
+  s.events.push({type:'system', time:timeStr, msg:'Agent session completed successfully', extra:'total_duration: 46s · exit_code: completed'});
+
+  // Update status
+  s.status = 'completed';
+  s.intervention.pending = false;
+
+  // Re-render
+  setScenario(scenarioIdx);
+  showToast('Intervention response submitted — session resuming', 'success');
+}
+
+function dismissIntervention(scenarioIdx, eventIdx) {
+  var respKey = 's' + scenarioIdx + '_e' + eventIdx;
+  interventionResponded[respKey + '_dismissed'] = true;
+  // Just mark for visual feedback — banner stays
+  showToast('Intervention dismissed. The pending banner remains visible.', 'info');
+  // Re-hide the inline intervention
+  document.getElementById('iv-inline-' + scenarioIdx + '-' + eventIdx).style.display = 'none';
+}
+
+function scrollToIntervention() {
+  var s = scenarios[currentScenario];
+  for (var i = 0; i < s.events.length; i++) {
+    if (s.events[i].intervention) {
+      var el = document.getElementById('iv-inline-' + currentScenario + '-' + i);
+      if (el) {
+        el.scrollIntoView({behavior:'smooth',block:'center'});
+        // flash
+        el.style.boxShadow = '0 0 0 4px rgba(255,152,0,0.3)';
+        setTimeout(function(){ el.style.boxShadow = ''; }, 1500);
+      }
+      return;
+    }
+  }
+}
+
+function checkPendingBanner() {
+  var s = scenarios[currentScenario];
+  var stillPending = false;
+  s.events.forEach(function(ev, i) {
+    if (ev.intervention && !interventionResponded['s' + currentScenario + '_e' + i]) {
+      stillPending = true;
+    }
+  });
+  if (!stillPending) {
+    document.getElementById('ivPendingBanner').classList.remove('visible');
+  }
+}
+
+/* ═══════════════════════════════ TERMINATE ═══════════════════════════════ */
+
+function terminateRun() {
+  if (confirm('Terminate this agent session? All active delegated sub-agents will also be terminated.')) {
+    var s = scenarios[currentScenario];
+    var now = new Date();
+    var timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0');
+
+    s.events.push({type:'system', time:timeStr, msg:'Session terminated by operator Alex Harper', extra:'terminated_delegations: any active sub-agents stopped · operator: alex.harper'});
+    s.status = 'completed';
+    if (s.intervention) s.intervention.pending = false;
+    setScenario(currentScenario);
+    showToast('Session terminated — all active sub-agents stopped', 'error');
+  }
+}
+
+/* ═══════════════════════════════ ELAPSED TIMER ═══════════════════════════════ */
+
+function updateElapsed() {
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  var startTime = Date.now();
+  elapsedInterval = setInterval(function() {
+    var diff = Math.floor((Date.now() - startTime) / 1000);
+    var m = Math.floor(diff / 60);
+    var s = diff % 60;
+    document.getElementById('elapsedTime').textContent = m + ':' + s.toString().padStart(2, '0');
+  }, 1000);
+}
+
+/* ═══════════════════════════════ TOAST ═══════════════════════════════ */
+
+function showToast(message, type) {
+  var container = document.getElementById('toastContainer');
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + (type || 'info');
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() { toast.remove(); }, 3000);
+}
+
+/* ═══════════════════════════════ INIT ═══════════════════════════════ */
+
+setScenario(0);
+</script>
+</body>
+</html>

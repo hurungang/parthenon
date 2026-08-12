@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
   Button,
@@ -16,76 +17,247 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { useAgentTypes, useAgentInstances, useTerminateInstance } from '../../hooks/useAgentTypes'
+import EditIcon from '@mui/icons-material/Edit'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import { useAgentTypes, useDeleteAgentType } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import apiClient from '../../api/apiClient'
-import { useQueryClient } from '@tanstack/react-query'
-import type { AgentType } from '../../types'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  AgentTypeForm,
+  defaultAgentTypeFormValues,
+  type AgentTypeFormValues,
+} from './AgentTypeForm'
+import { AgentJobLaunchDialog } from './AgentJobLaunchDialog'
+import { AgentTypeDetailsDialog } from '../../components/agents/AgentTypeDetailsDialog'
+import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
+import { ConversationDialog } from '../../components/agents/ConversationDialog'
+import type { AgentIdentity, AgentRole, AgentType } from '../../types'
+import { usePagination } from '../../hooks/usePagination'
+
+const SLUG_PATTERN = /^[a-z0-9-]+$/
+const TOKEN_BUDGET_UNIT = 1000
+
+function rawTokenBudgetToK(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '1000'
+  }
+
+  return String(Math.max(1, Math.round(value / TOKEN_BUDGET_UNIT)))
+}
+
+function tokenBudgetKToRaw(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 1000 * TOKEN_BUDGET_UNIT
+  }
+
+  return Math.round(parsed * TOKEN_BUDGET_UNIT)
+}
 
 /**
- * Agent management page — agent type list, creation, and active instance table.
+ * Agent management page — agent type list, creation/editing, active instance table,
+ * and session launch.
  */
 export function AgentManagementPage() {
   const { t } = useTranslation()
-  const { data: agentTypes, isLoading, error } = useAgentTypes()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const pag = usePagination()
+  const { data: agentTypes, isLoading, error } = useAgentTypes(pag.limit, pag.offset)
   const queryClient = useQueryClient()
-  const terminateInstance = useTerminateInstance()
-  const [selectedType, setSelectedType] = useState<AgentType | null>(null)
+
+  // Role and identity name resolution for table columns
+  const { data: allRoles } = useQuery<AgentRole[]>({
+    queryKey: ['agents', 'roles'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentRole[]>('/agents/roles')
+      return data
+    },
+  })
+  const { data: allIdentities } = useQuery<AgentIdentity[]>({
+    queryKey: ['agents', 'identities'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<AgentIdentity[]>('/agents/identities')
+      return data
+    },
+  })
+  const roleMap = new Map((allRoles ?? []).map((r) => [r.id, r.name]))
+  const identityMap = new Map((allIdentities ?? []).map((i) => [i.id, i.name]))
+  const [detailsDialogTypeId, setDetailsDialogTypeId] = useState<string | null>(null)
+  const [detailsDialogInitialTab, setDetailsDialogInitialTab] = useState(0)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogError, setDialogError] = useState<unknown>(null)
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    mode: 'skillful-agent' as 'sop-agent' | 'skillful-agent',
-    llm_provider: 'openai',
-    llm_model: 'gpt-4o',
-    llm_api_key: '',
-    max_instances: 5,
-    system_prompt: '',
-  })
+  const [editType, setEditType] = useState<AgentType | null>(null)
+  const [form, setForm] = useState<AgentTypeFormValues>(defaultAgentTypeFormValues)
+  const [launchType, setLaunchType] = useState<AgentType | null>(null)
+  const [launchOpen, setLaunchOpen] = useState(false)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [executionDetailsDialogOpen, setExecutionDetailsDialogOpen] = useState(false)
+  const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
+  const [conversationAgentType, setConversationAgentType] = useState<AgentType | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  const { data: instances } = useAgentInstances(selectedType?.id ?? '')
+  // Delete confirmation state
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<AgentType | null>(null)
+  const deleteMutation = useDeleteAgentType()
+  const invalidAgentName = !!form.name && !SLUG_PATTERN.test(form.name)
+
+  // Auto-open dialog if navigated from chat page with openDialogFor state
+  useEffect(() => {
+    const state = location.state as { openDialogFor?: string; editAgentType?: AgentType } | null
+    if (state?.openDialogFor) {
+      setDetailsDialogTypeId(state.openDialogFor)
+      // Clear the state so it doesn't reopen on next navigation
+      navigate(location.pathname, { replace: true, state: {} })
+    } else if (state?.editAgentType) {
+      // Open edit dialog for the agent type passed via state
+      handleOpenEdit(state.editAgentType)
+      // Clear the state so it doesn't reopen on next navigation
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location, navigate])
+
+  const handleOpenCreate = () => {
+    setEditType(null)
+    setForm(defaultAgentTypeFormValues)
+    setDialogError(null)
+    setDialogOpen(true)
+  }
+
+  const handleOpenEdit = (at: AgentType) => {
+    setEditType(at)
+    setForm({
+      name: at.name,
+      description: at.description ?? '',
+      identity_id: at.identity_id ?? '',
+      role_id: at.role_id ?? '',
+      model_id: at.model_id ?? '',
+      system_instruction: at.system_instruction ?? '',
+      input_type: at.input_type,
+      input_schema: at.input_schema ? JSON.stringify(at.input_schema, null, 2) : '',
+      output_type: at.output_type,
+      output_schema: at.output_schema ? JSON.stringify(at.output_schema, null, 2) : '',
+      output_data_type_id: at.output_data_type_id ?? '',
+      sop_bindings: (at.sop_bindings ?? []).map((b) => ({ sop_id: b.sop_id, order: b.order })),
+      skill_bindings: (at.skill_bindings ?? []).map((b) => ({ skill_id: b.skill_id, order: b.order })),
+      guardrail_max_iterations: at.guardrail_max_iterations ?? 10,
+      guardrail_max_delegation_depth: at.guardrail_max_delegation_depth ?? 3,
+      guardrail_max_delegated_steps: at.guardrail_max_delegated_steps ?? 20,
+      guardrail_execution_timeout_seconds: at.guardrail_execution_timeout_seconds ?? 300,
+      guardrail_token_budget: rawTokenBudgetToK(at.guardrail_token_budget),
+      guardrail_token_enforcement_mode: at.guardrail_token_enforcement_mode ?? 'observe',
+      guardrail_token_fallback_mode: at.guardrail_token_fallback_mode ?? 'observe_and_log',
+      guardrail_conversational_token_visibility_mode: at.guardrail_conversational_token_visibility_mode ?? 'enabled',
+      guardrail_conversational_continuation_policy: at.guardrail_conversational_continuation_policy ?? 'allow',
+    })
+    setDialogError(null)
+    setDialogOpen(true)
+  }
 
   const handleSave = async () => {
+    setSaving(true)
     try {
       setDialogError(null)
-      await apiClient.post('/agents/types', form)
+      if (!SLUG_PATTERN.test(form.name)) {
+        setDialogError(new Error(t('agents.types.slugNameValidationError')))
+        setSaving(false)
+        return
+      }
+      if (form.sop_bindings.length === 0 && form.skill_bindings.length === 0) {
+        setDialogError(new Error(t('agents.types.bindings.validationRequired')))
+        setSaving(false)
+        return
+      }
+      const body = {
+        name: form.name,
+        description: form.description || null,
+        identity_id: form.identity_id || null,
+        role_id: form.role_id || null,
+        model_id: form.model_id || null,
+        system_instruction: form.system_instruction || null,
+        input_type: form.input_type,
+        input_schema: form.input_schema ? JSON.parse(form.input_schema) : null,
+        output_type: form.output_type,
+        output_schema: form.output_schema ? JSON.parse(form.output_schema) : null,
+        output_data_type_id: form.output_data_type_id || null,
+        sop_bindings: form.sop_bindings,
+        skill_bindings: form.skill_bindings,
+        guardrail_max_iterations: form.guardrail_max_iterations,
+        guardrail_max_delegation_depth: form.guardrail_max_delegation_depth,
+        guardrail_max_delegated_steps: form.guardrail_max_delegated_steps,
+        guardrail_execution_timeout_seconds: form.guardrail_execution_timeout_seconds,
+        guardrail_token_budget: tokenBudgetKToRaw(form.guardrail_token_budget),
+        guardrail_token_enforcement_mode: form.guardrail_token_enforcement_mode,
+        guardrail_token_fallback_mode: form.guardrail_token_fallback_mode,
+        guardrail_conversational_token_visibility_mode: form.guardrail_conversational_token_visibility_mode,
+        guardrail_conversational_continuation_policy: form.guardrail_conversational_continuation_policy,
+      }
+      let savedAgentType: AgentType
+      if (editType) {
+        const res = await apiClient.put<AgentType>(`/agents/types/${editType.id}`, body)
+        savedAgentType = res.data
+      } else {
+        const res = await apiClient.post<AgentType>('/agents/types', body)
+        savedAgentType = res.data
+      }
       setDialogOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+      // Open agent details dialog on Agent Preview tab
+      setDetailsDialogInitialTab(1)
+      setDetailsDialogTypeId(savedAgentType.id)
     } catch (err) {
       setDialogError(err)
+    } finally {
+      setSaving(false)
     }
   }
 
-  const handleTerminate = async (instanceId: string) => {
-    if (confirm(t('agents.terminateConfirm'))) {
-      await terminateInstance.mutateAsync(instanceId)
+  const handleLaunch = (at: AgentType) => {
+    if (at.input_type === 'conversation') {
+      setConversationAgentType(at)
+      setConversationDialogOpen(true)
+    } else {
+      setLaunchType(at)
+      setLaunchOpen(true)
     }
   }
 
-  const statusColor = (status: string) => {
-    if (status === 'active') return 'success'
-    if (status === 'error') return 'error'
-    if (status === 'closed') return 'default'
-    return 'warning'
+  const handleDeleteClick = (at: AgentType) => {
+    setDeleteTarget(at)
+    setConfirmDeleteOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteMutation.mutateAsync(deleteTarget.id)
+      setConfirmDeleteOpen(false)
+      setDeleteTarget(null)
+      if (detailsDialogTypeId === deleteTarget.id) {
+        setDetailsDialogTypeId(null)
+        setDetailsDialogInitialTab(0)
+      }
+    } catch {
+      // error handled via PermissionDeniedAlert or deleteMutation.error
+    }
   }
 
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" fontWeight={700}>{t('agents.title')}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
           {t('agents.createType')}
         </Button>
       </Box>
@@ -99,30 +271,41 @@ export function AgentManagementPage() {
             <TableHead>
               <TableRow>
                 <TableCell>{t('app.name')}</TableCell>
-                <TableCell>{t('agents.mode')}</TableCell>
+                <TableCell>{t('agents.types.inputType')}</TableCell>
+                <TableCell>{t('agents.types.outputType')}</TableCell>
+                <TableCell>{t('agents.types.outputDataType')}</TableCell>
                 <TableCell>{t('agents.llmModel')}</TableCell>
-                <TableCell>{t('agents.maxInstances')}</TableCell>
                 <TableCell>{t('app.status')}</TableCell>
+                <TableCell>{t('agents.types.role')}</TableCell>
+                <TableCell>{t('agents.types.identity')}</TableCell>
+                <TableCell>{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {(agentTypes ?? []).map((at) => (
                 <TableRow
                   key={at.id}
-                  selected={selectedType?.id === at.id}
-                  onClick={() => setSelectedType(at)}
+                  selected={detailsDialogTypeId === at.id}
+                  onClick={() => setDetailsDialogTypeId(at.id)}
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell>{at.name}</TableCell>
                   <TableCell>
+                    <Chip label={at.input_type} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell>
                     <Chip
-                      label={at.mode === 'sop-agent' ? t('agents.sopAgent') : t('agents.skillfulAgent')}
+                      label={at.input_type === 'conversation' ? 'conversation' : at.output_type}
                       size="small"
-                      color={at.mode === 'sop-agent' ? 'primary' : 'secondary'}
+                      variant="outlined"
                     />
                   </TableCell>
-                  <TableCell>{at.llm_provider} / {at.llm_model}</TableCell>
-                  <TableCell>{at.max_instances}</TableCell>
+                  <TableCell>
+                    {at.output_data_type_name
+                      ? <Chip label={at.output_data_type_name} size="small" variant="outlined" color="info" />
+                      : '—'}
+                  </TableCell>
+                  <TableCell>{at.model_id ?? '—'}</TableCell>
                   <TableCell>
                     <Chip
                       label={at.is_active ? t('app.active') : t('app.inactive')}
@@ -130,11 +313,55 @@ export function AgentManagementPage() {
                       size="small"
                     />
                   </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {at.role_id ? (roleMap.get(at.role_id) ?? '—') : '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {at.identity_id ? (identityMap.get(at.identity_id) ?? '—') : '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Box display="flex" gap={0.5}>
+                      <Tooltip title={at.input_type === 'conversation' ? t('agents.types.startChat') : t('agents.types.runAgent')}>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          aria-label={at.input_type === 'conversation' ? t('agents.types.startChat') : t('agents.types.runAgent')}
+                          onClick={() => handleLaunch(at)}
+                        >
+                          <PlayArrowIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('app.view')}>
+                        <IconButton
+                          size="small"
+                          color="secondary"
+                          aria-label={t('app.view')}
+                          onClick={() => setDetailsDialogTypeId(at.id)}
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('app.edit')}>
+                        <IconButton size="small" aria-label={t('app.edit')} onClick={() => handleOpenEdit(at)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('app.delete')}>
+                        <IconButton size="small" aria-label={t('app.delete')} onClick={() => handleDeleteClick(at)}>
+                          <DeleteIcon fontSize="small" color="error" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
                 </TableRow>
               ))}
               {(agentTypes ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">{t('app.noData')}</TableCell>
+                  <TableCell colSpan={8} align="center">{t('app.noData')}</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -142,124 +369,132 @@ export function AgentManagementPage() {
         </TableContainer>
       )}
 
-      {/* Active instances for selected agent type */}
-      {selectedType && (
-        <Box>
-          <Typography variant="h6" mb={2}>
-            {t('agents.instances')} — {selectedType.name}
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Instance ID</TableCell>
-                  <TableCell>{t('app.status')}</TableCell>
-                  <TableCell>{t('app.createdAt')}</TableCell>
-                  <TableCell>{t('app.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(instances ?? []).map((inst) => (
-                  <TableRow key={inst.id}>
-                    <TableCell><code>{inst.id.substring(0, 8)}…</code></TableCell>
-                    <TableCell>
-                      <Chip
-                        label={inst.status}
-                        color={statusColor(inst.status) as 'success' | 'error' | 'default' | 'warning'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{new Date(inst.created_at).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Tooltip title={t('agents.terminate')}>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleTerminate(inst.id)}
-                          disabled={inst.status === 'closed'}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(instances ?? []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">{t('app.noData')}</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
+      <TablePagination
+        component="div"
+        count={-1}
+        page={pag.page}
+        onPageChange={pag.onPageChange}
+        rowsPerPage={pag.rowsPerPage}
+        onRowsPerPageChange={pag.onRowsPerPageChange}
+        rowsPerPageOptions={pag.rowsPerPageOptions}
+        labelRowsPerPage={t('app.rowsPerPage')}
+      />
+
+      {/* Agent Type Details Dialog */}
+      {detailsDialogTypeId !== null && (
+        <AgentTypeDetailsDialog
+          open={true}
+          agentTypeId={detailsDialogTypeId}
+          initialTab={detailsDialogInitialTab}
+          onClose={() => {
+            setDetailsDialogTypeId(null)
+            setDetailsDialogInitialTab(0)
+            void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+          }}
+        />
       )}
 
-      {/* Create Agent Type Dialog */}
-      <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogError(null) }} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('agents.createType')}</DialogTitle>
-        <DialogContent>
-          {dialogError ? <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} /> : null}
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            <TextField
-              label={t('app.name')}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel>{t('agents.mode')}</InputLabel>
-              <Select
-                value={form.mode}
-                label={t('agents.mode')}
-                onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value as typeof form.mode }))}
-              >
-                <MenuItem value="skillful-agent">{t('agents.skillfulAgent')}</MenuItem>
-                <MenuItem value="sop-agent">{t('agents.sopAgent')}</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label={t('agents.llmProvider')}
-              value={form.llm_provider}
-              onChange={(e) => setForm((f) => ({ ...f, llm_provider: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('agents.llmModel')}
-              value={form.llm_model}
-              onChange={(e) => setForm((f) => ({ ...f, llm_model: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('agents.apiKey')}
-              type="password"
-              value={form.llm_api_key}
-              onChange={(e) => setForm((f) => ({ ...f, llm_api_key: e.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label={t('agents.maxInstances')}
-              type="number"
-              value={form.max_instances}
-              onChange={(e) => setForm((f) => ({ ...f, max_instances: parseInt(e.target.value) || 5 }))}
-              fullWidth
-              inputProps={{ min: 1, max: 100 }}
-            />
-            <TextField
-              label={t('agents.systemPrompt')}
-              value={form.system_prompt}
-              onChange={(e) => setForm((f) => ({ ...f, system_prompt: e.target.value }))}
-              fullWidth
-              multiline
-              rows={3}
-            />
-          </Box>
+      {/* Create / Edit Agent Type Dialog */}
+      <Dialog
+        open={dialogOpen}
+        onClose={() => { setDialogOpen(false); setDialogError(null) }}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          {editType ? t('agents.editType') : t('agents.createType')}
+        </DialogTitle>
+        <DialogContent dividers>
+          {dialogError ? (
+            <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+          ) : null}
+          {saving ? (
+            <Box display="flex" flexDirection="column" alignItems="center" py={4}>
+              <CircularProgress />
+              <Typography mt={2}>{t('agents.generatingPlan', 'Generating implementation plan…')}</Typography>
+            </Box>
+          ) : (
+            <Box pt={1}>
+              <AgentTypeForm values={form} onChange={setForm} />
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('app.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave}>{t('app.save')}</Button>
+          <Button onClick={() => { setDialogOpen(false); setDialogError(null) }} disabled={saving}>
+            {t('app.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={!form.name.trim() || invalidAgentName || saving || (form.sop_bindings.length === 0 && form.skill_bindings.length === 0)}
+          >
+            {t('app.save')}
+          </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Session Launch Dialog */}
+      {launchType && launchOpen && (
+        <AgentJobLaunchDialog
+          open={true}
+          agentType={launchType}
+          onClose={() => { setLaunchOpen(false); setLaunchType(null) }}
+          onLaunched={(sessionId) => {
+            setLaunchOpen(false)
+            setLaunchType(null)
+            setSelectedSessionId(sessionId)
+            setExecutionDetailsDialogOpen(true)
+          }}
+          onRegeneratePlan={async () => {
+            await apiClient.post(`/agents/types/${launchType.id}/regenerate-plan`)
+            await queryClient.invalidateQueries({ queryKey: ['agents', 'types', launchType.id] })
+            await queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+            setLaunchOpen(false)
+            setLaunchType(null)
+            setDetailsDialogTypeId(launchType.id)
+            setDetailsDialogInitialTab(1)
+          }}
+        />
+      )}
+
+      {/* Execution Details Dialog for non-conversation launches */}
+      {executionDetailsDialogOpen && selectedSessionId && (
+        <AgentExecutionDetailsDialog
+          open={true}
+          sessionId={selectedSessionId}
+          onClose={() => {
+            setExecutionDetailsDialogOpen(false)
+            setSelectedSessionId(null)
+          }}
+        />
+      )}
+
+      {/* Conversation Dialog for conversation agents */}
+      {conversationAgentType && conversationDialogOpen && (
+        <ConversationDialog
+          open={true}
+          sessionId={null}
+          agentTypeId={conversationAgentType.id}
+          agentTypeName={conversationAgentType.name}
+          onClose={() => {
+            setConversationDialogOpen(false)
+            setConversationAgentType(null)
+            void queryClient.invalidateQueries({ queryKey: ['conversations', 'sessions'] })
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title={t('app.delete')}
+        message={t('agents.types.deleteConfirm', { name: deleteTarget?.name || '' })}
+        confirmText={t('app.delete')}
+        confirmColor="error"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => { setConfirmDeleteOpen(false); setDeleteTarget(null) }}
+      />
+
     </Box>
   )
 }

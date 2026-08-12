@@ -62,11 +62,32 @@ All backend configuration in the Parthenon platform flows through a single layer
 
 The YAML layer is inserted between env vars and defaults by overriding `settings_customise_sources()`. This gives operators the ability to manage config in version-controlled YAML files while still allowing environment variables to override any value at deploy time without changing files.
 
+### Per-Component Environment Variables
+
+Every infrastructure connection supports per-component environment variables for production deployments:
+
+| Variable Pattern | Purpose | Affected Services |
+|---|---|---|
+| `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Composed PostgreSQL connection parameters. When set, override the monolithic `DATABASE_URL`. | Control Center |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB` | Composed Redis connection parameters. When set, override the monolithic `REDIS_URL`. | Control Center, Communication Hub |
+| `OIDC_PROVIDER_URL`, `OIDC_REALM`, `OIDC_CLIENT_ID` | Per-component OIDC provider configuration. Override values from `config/identity.yaml`. | Control Center |
+| `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` | **Setup-only** — Keycloak master-realm admin credentials. Never available to the runtime Control Center. | Setup tool only |
+| `CONTROL_CENTER_URL` | Base URL of the Control Center. Used by Agent Runtime and Communication Hub for health checks and certificate bootstrap. | Agent Runtime, Communication Hub |
+| `AGENT_CERT_PATH`, `AGENT_KEY_PATH`, `AGENT_CA_CERT_PATH` | File system paths to agent instance certificate materials. | Agent Runtime |
+| `TELEMETRY_*` | Telemetry configuration (export targets, signal enable/disable, log levels). | All backend services |
+
+Computed properties (`computed_database_url`, `computed_redis_url`) assemble the composed variables into connection strings, falling back to the monolithic `DATABASE_URL` / `REDIS_URL` when per-component variables are not set.
+
+### Config Resolution Logging
+
+At startup, `Settings.log_config_sources` logs which source resolved each infrastructure connection (env var, YAML file, or default). This aids operators in diagnosing misconfigurations without inspecting container internals.
+
 ### Config Files
 
 | File | Domain | Purpose |
 |---|---|---|
 | `config/identity.yaml` | Identity / OIDC | Identity provider type, OIDC URL, realm, client ID, audience, setup-complete flag. Written by the Identity Bootstrap Service after first-run setup. |
+| `config/telemetry.yaml` | Telemetry | Telemetry export targets, signal enable/disable flags, and log levels. Overridable by `TELEMETRY_*` environment variables. |
 
 Additional `config/<domain>.yaml` files may be introduced by future modules following the same pattern — each domain owns its own YAML file and adds a corresponding `YamlSettingsSource` subclass to `config.py`.
 
@@ -99,15 +120,24 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `get_settings` | function | Returns application settings resolved through the layered config chain (env → YAML → defaults); cached with `@lru_cache`; call `get_settings.cache_clear()` to force a re-read after config changes | `backend/app/core/config.py` |
-| `Settings` | class | Pydantic `BaseSettings` subclass; declares all platform config fields; wires config sources via `settings_customise_sources()` | `backend/app/core/config.py` |
+| `Settings` | class | Pydantic `BaseSettings` subclass; declares all platform config fields including per-component env var fields for PostgreSQL, Redis, and OIDC connections; wires config sources via `settings_customise_sources()` | `backend/app/core/config.py` |
+| `Settings.computed_database_url` | property | Composed PostgreSQL connection URL from `POSTGRES_*` env vars; falls back to `DATABASE_URL` when per-component vars are not set | `backend/app/core/config.py` |
+| `Settings.computed_redis_url` | property | Composed Redis connection URL from `REDIS_*` env vars; falls back to `REDIS_URL` when per-component vars are not set | `backend/app/core/config.py` |
+| `Settings.log_config_sources` | method | Logs resolved configuration sources for every infrastructure connection at startup; aids operators in diagnosing misconfigurations | `backend/app/core/config.py` |
+| `Settings.keycloak_admin_user` | field | Keycloak master-realm admin username; setup tool only — never available to runtime Control Center | `backend/app/core/config.py` |
+| `Settings.keycloak_admin_password` | field | Keycloak master-realm admin password; setup tool only — never available to runtime Control Center | `backend/app/core/config.py` |
+| `TelemetrySettings` | class | Nested telemetry configuration model within Settings; controls export targets, signals, and log levels | `backend/app/core/config.py` |
+| `_SparseYamlSource` | class | Custom YAML source that drops null/empty placeholders, ensuring environment variables take priority over YAML | `backend/app/core/config.py` |
+| `settings_customise_sources` | method | Defines config source priority: init → env → dotenv → YAML → secrets | `backend/app/core/config.py` |
 | `YamlSettingsSource` | class | `PydanticBaseSettingsSource` subclass that reads a domain-specific `config/<domain>.yaml` file and feeds its values into `Settings` as the second-priority source after env vars | `backend/app/core/config.py` |
 | `get_db` | function | FastAPI dependency providing a scoped async SQLAlchemy session per request | `backend/app/db/session.py` |
 | `OIDCClient` | class | Fetches and caches JWKS; validates JWT signatures, expiry, and audience claims | `backend/app/core/oidc_client.py` |
-| `JWTAuthMiddleware` | class | Starlette middleware validating bearer tokens on all protected routes; attaches identity claims to request state | `backend/app/middleware/auth.py` |
+| `JWTAuthMiddleware` | class | Starlette middleware validating bearer tokens on all protected routes; attaches identity claims to `request.state`; also stores the raw bearer token string on `request.state.raw_token` immediately after extraction (used by passthrough session endpoints for JWT forwarding) | `backend/app/middleware/auth.py` |
 | `CredentialVault` | class | AES-256 encrypt/decrypt wrapper for stored credentials; decrypt at call time only | `backend/app/core/credential_vault.py` |
 | `setup_telemetry` | function | Configures TracerProvider, MeterProvider, and LoggerProvider with OTLP exporters; applies auto-instrumentation | `backend/app/core/telemetry.py` |
 | `_instrument_libraries` | function | Applies OTEL auto-instrumentation patches for FastAPI, SQLAlchemy, Redis, and httpx; isolated for fault tolerance | `backend/app/core/telemetry.py` |
 | `limiter` | object | Global slowapi.Limiter instance with remote-address key function; attached to app.state | `backend/app/main.py` |
+| `validation_exception_handler` | function | FastAPI exception handler for `RequestValidationError`; converts Pydantic v2 `model_validator` exception objects in `ctx` to strings before JSON serialisation; required for passthrough session credential validator responses | `backend/app/main.py` |
 | `initTelemetry` | function | Initialises browser WebTracerProvider with OTLP HTTP exporter and FetchInstrumentation; triggers Web Vitals recording | `frontend/src/telemetry.ts` |
 | `_recordWebVitals` | function | Lazily imports web-vitals and records LCP, FID, FCP, CLS as OTEL histograms | `frontend/src/telemetry.ts` |
 
@@ -119,10 +149,16 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | `get_current_claims` | function | FastAPI dependency that extracts the decoded JWT claims dict from `request.state.identity`; used by handlers that need raw claims without a full permission check | `backend/app/api/deps.py` |
 | `ResourceTypeManifest` | dict | Centralised registry mapping resource type strings to allowed action lists; authoritative source for `PermissionEngine` validation and the frontend `RESOURCE_TYPES` mirror | `backend/app/core/resource_types.py` |
 | `RT_AGENT` | constant | Resource type identifier: `"agent"` — agents module | `backend/app/core/resource_types.py` |
-| `RT_MCP_SERVER` | constant | Resource type identifier: `"mcp_server"` — MCP Hub module | `backend/app/core/resource_types.py` |
-| `RT_SKILL` | constant | Resource type identifier: `"skill"` — skills and SOPs module | `backend/app/core/resource_types.py` |
-| `RT_SCHEDULING` | constant | Resource type identifier: `"scheduling"` — scheduling module | `backend/app/core/resource_types.py` |
-| `RT_NOTIFICATION` | constant | Resource type identifier: `"notification"` — notifications module | `backend/app/core/resource_types.py` |
-| `RT_CONVERSATION` | constant | Resource type identifier: `"conversation"` — conversations module | `backend/app/core/resource_types.py` |
-| `RT_RESULT` | constant | Resource type identifier: `"result"` — results module; newly registered in implement-global-access-control | `backend/app/core/resource_types.py` |
-| `RT_ACCESS_REQUEST` | constant | Resource type identifier: `"access_request"` — user access requests module | `backend/app/core/resource_types.py` |
+| `RT_AGENT_ROLES` | constant | Resource type identifier: `"agent::roles"` — agent roles module | `backend/app/core/resource_types.py` |
+| `RT_AGENT_SKILLS` | constant | Resource type identifier: `"agent::skills"` — skills and SOPs module | `backend/app/core/resource_types.py` |
+| `RT_AGENT_SCHEDULES` | constant | Resource type identifier: `"agent::schedules"` — scheduling module | `backend/app/core/resource_types.py` |
+| `RT_INTEGRATION_MCP_HUB` | constant | Resource type identifier: `"integration::mcp_hub"` — MCP Hub module | `backend/app/core/resource_types.py` |
+| `RT_INTEGRATION_NOTIFICATIONS` | constant | Resource type identifier: `"integration::notifications"` — notifications module | `backend/app/core/resource_types.py` |
+| `RT_AGENT_TRAILS` | constant | Resource type identifier: `"agent::trails"` — conversations and results module | `backend/app/core/resource_types.py` |
+| `RT_AGENT_DATA_TYPES` | constant | Resource type identifier: `"agent::data_types"` — data types module | `backend/app/core/resource_types.py` |
+
+### Test Files
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `test_auth_middleware` | test module | Unit tests for `JWTAuthMiddleware`; 2 passthrough-related tests: `raw_token` stored on `request.state` after valid JWT extraction; `raw_token` absent on public paths that bypass auth | `backend/tests/unit/test_auth_middleware.py` |

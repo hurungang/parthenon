@@ -90,11 +90,16 @@ class SopOrchestrator:
         context: dict[str, Any],
         db: AsyncSession,
     ) -> dict[str, Any]:
-        """Execute a single SOP step."""
-        if step.step_type == SopStepType.skill:
+        """Execute a single SOP step.
+        
+        Handles:
+        - skill_invocation: Delegates to SkillExecutor.
+        - agent_delegation: Sends A2A request to Communication Hub.
+        """
+        if step.step_type == SopStepType.skill_invocation:
             if not step.skill_id:
                 raise SopOrchestratorError(
-                    f"Step {step.id} is type 'skill' but has no skill_id"
+                    f"Step {step.id} is type 'skill_invocation' but has no skill_id"
                 )
             logger.info(
                 "Executing skill step (order=%d, skill_id=%s)", step.order, step.skill_id
@@ -107,24 +112,70 @@ class SopOrchestrator:
             return {"type": "skill", "tool_results": tool_results}
 
         elif step.step_type == SopStepType.agent_delegation:
-            if not step.delegate_agent_type_id:
+            if not step.target_agent_type_id:
                 raise SopOrchestratorError(
-                    f"Step {step.id} is type 'agent_delegation' but has no delegate_agent_type_id"
+                    f"Step {step.id} is type 'agent_delegation' but has no target_agent_type_id"
                 )
-            # Import here to avoid circular dependency
-            from app.services.agents.instance_manager import AgentInstanceManager
-
+            
+            # Phase 1.2: Call Communication Hub A2A endpoint to handle delegation.
+            # Get the target agent type name (slug) from the database.
+            from sqlalchemy import select
+            from app.db.models.agents import AgentType
+            
+            result = await db.execute(
+                select(AgentType).where(AgentType.id == step.target_agent_type_id)
+            )
+            target_agent_type = result.scalar_one_or_none()
+            if not target_agent_type:
+                raise SopOrchestratorError(
+                    f"Step {step.id} target agent type {step.target_agent_type_id} not found"
+                )
+            
             logger.info(
-                "Delegating to agent type %s (step order=%d)",
-                step.delegate_agent_type_id,
+                "Delegating to agent type '%s' (step order=%d)",
+                target_agent_type.name,
                 step.order,
             )
-            # Return a delegation marker — the Agent Engine handles the actual invocation
-            return {
-                "type": "agent_delegation",
-                "delegate_agent_type_id": str(step.delegate_agent_type_id),
-                "context": context,
-            }
+            
+            # Call Communication Hub A2A endpoint (Phase 1.1)
+            import os
+            import httpx
+            from app.schemas.agents import A2ARequest, A2AResponse
+            
+            comm_hub_url = os.environ.get("COMM_HUB_URL", "http://localhost:8002")
+            a2a_url = f"{comm_hub_url}/internal/a2a/request"
+            
+            a2a_request = A2ARequest(
+                target_agent_type_slug=target_agent_type.name,
+                conversation_metadata=context,
+                request_payload=step.step_config or {},
+            )
+            
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        a2a_url,
+                        json=a2a_request.model_dump(),
+                        timeout=30.0,
+                    )
+                    response.raise_for_status()
+                    a2a_response_data = response.json()
+                    
+                    return {
+                        "type": "agent_delegation",
+                        "target_agent_type_id": str(step.target_agent_type_id),
+                        "target_agent_type_slug": target_agent_type.name,
+                        "receiver_instance_id": a2a_response_data.get("receiver_instance_id"),
+                        "session_link_id": a2a_response_data.get("session_link_id"),
+                        "status": a2a_response_data.get("status"),
+                    }
+            except httpx.HTTPError as exc:
+                logger.exception(
+                    "A2A delegation failed to %s: %s", target_agent_type.name, exc
+                )
+                raise SopOrchestratorError(
+                    f"A2A delegation to '{target_agent_type.name}' failed: {exc}"
+                ) from exc
 
         else:
             raise SopOrchestratorError(f"Unknown step type: {step.step_type}")

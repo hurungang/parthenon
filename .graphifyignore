@@ -1,0 +1,29 @@
+# Exclude frontend noise
+node_modules/
+dist/
+build/
+.pnpm-store/
+*.map
+*.min.js
+*.min.css
+
+# Exclude backend noise
+__pycache__/
+.venv/
+venv/
+*.pyc
+.pytest_cache/
+.poetry.lock
+poetry.lock
+pip-log.txt
+
+# Exclude logs, locks, and local tool outputs
+*.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+graphify-out/
+
+# Exclude archived docs
+
+docs/changes/archive/

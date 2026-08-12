@@ -14,6 +14,8 @@ from typing import Optional
 
 import httpx
 
+from app.core.ssl_context import get_ssl_context
+
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
@@ -109,7 +111,7 @@ class KeycloakAdminClient:
             :class:`KeycloakAdminError` on auth failure.
         """
         url = f"{self._base_url}/realms/master/protocol/openid-connect/token"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -138,7 +140,7 @@ class KeycloakAdminClient:
     async def realm_exists(self, token: AdminToken, realm_name: str) -> bool:
         """Return True if *realm_name* already exists in Keycloak."""
         url = f"{self._base_url}/admin/realms/{realm_name}"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "GET",
@@ -177,7 +179,7 @@ class KeycloakAdminClient:
             "displayName": display_name or realm_name,
             "enabled": True,
         }
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -199,7 +201,7 @@ class KeycloakAdminClient:
     ) -> bool:
         """Return True if a client with *client_id* already exists in *realm_name*."""
         url = f"{self._base_url}/admin/realms/{realm_name}/clients"
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "GET",
@@ -260,7 +262,7 @@ class KeycloakAdminClient:
         if not public_client:
             payload["serviceAccountsEnabled"] = True
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -286,7 +288,7 @@ class KeycloakAdminClient:
         if not keycloak_client_uuid:
             # Fall back: list clients and find by clientId
             list_url = f"{self._base_url}/admin/realms/{realm_name}/clients"
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
                 list_resp = await _request_with_retry(
                     client,
                     "GET",
@@ -302,7 +304,7 @@ class KeycloakAdminClient:
         secret_url = (
             f"{self._base_url}/admin/realms/{realm_name}/clients/{keycloak_client_uuid}/client-secret"
         )
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             secret_resp = await _request_with_retry(
                 client,
                 "GET",
@@ -316,6 +318,105 @@ class KeycloakAdminClient:
 
         secret_value: str = secret_resp.json().get("value", "")
         return ClientSecret(value=secret_value)
+
+    async def create_group_membership_mapper(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        client_id: str,
+    ) -> None:
+        """Add a Group Membership protocol mapper to an OIDC client.  Idempotent.
+
+        The mapper causes Keycloak to include a ``groups`` claim in JWT tokens,
+        which the ``GroupClaimMapper`` in the auth middleware consumes to
+        auto-assign users to Parthenon groups.
+
+        Args:
+            token: Valid admin token.
+            realm_name: Target realm.
+            client_id: Client identifier (e.g. ``parthenon-api-ui``).
+        """
+        mapper_name = "group_membership"
+
+        # Resolve the internal Keycloak client UUID
+        list_url = f"{self._base_url}/admin/realms/{realm_name}/clients"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            list_resp = await _request_with_retry(
+                client,
+                "GET",
+                list_url,
+                params={"clientId": client_id},
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if list_resp.status_code != 200:
+            raise KeycloakAdminError(
+                "client_lookup_failed",
+                f"Failed to list clients for realm {realm_name!r} "
+                f"(HTTP {list_resp.status_code}): {list_resp.text[:200]}",
+            )
+        clients = list_resp.json()
+        if not clients:
+            raise KeycloakAdminError(
+                "client_not_found",
+                f"Client {client_id!r} not found in realm {realm_name!r}",
+            )
+        keycloak_client_uuid = clients[0]["id"]
+
+        # Check if mapper already exists (idempotency)
+        mappers_url = (
+            f"{self._base_url}/admin/realms/{realm_name}"
+            f"/clients/{keycloak_client_uuid}/protocol-mappers/models"
+        )
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            mappers_resp = await _request_with_retry(
+                client,
+                "GET",
+                mappers_url,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if mappers_resp.status_code == 200:
+            existing_mappers = mappers_resp.json()
+            if any(m.get("name") == mapper_name for m in existing_mappers):
+                logger.info(
+                    "Group membership mapper already exists for client %r in realm %r — skipping",
+                    client_id,
+                    realm_name,
+                )
+                return
+
+        # Create the mapper
+        mapper_payload = {
+            "name": mapper_name,
+            "protocol": "openid-connect",
+            "protocolMapper": "oidc-group-membership-mapper",
+            "config": {
+                "full.path": "false",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true",
+                "claim.name": "groups",
+            },
+        }
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            create_resp = await _request_with_retry(
+                client,
+                "POST",
+                mappers_url,
+                json=mapper_payload,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if create_resp.status_code not in (200, 201):
+            raise KeycloakAdminError(
+                "mapper_creation_failed",
+                f"Failed to create group membership mapper for client {client_id!r} "
+                f"in realm {realm_name!r} (HTTP {create_resp.status_code}): "
+                f"{create_resp.text[:200]}",
+            )
+        logger.info(
+            "Group membership mapper created for client %r in realm %r",
+            client_id,
+            realm_name,
+        )
 
     async def create_user(
         self,
@@ -338,6 +439,10 @@ class KeycloakAdminClient:
         payload: dict[str, object] = {
             "username": username,
             "enabled": True,
+            "email": f"{username}@test.local",
+            "emailVerified": True,
+            "firstName": "Test",
+            "lastName": "User",
             "credentials": [
                 {
                     "type": "password",
@@ -346,7 +451,7 @@ class KeycloakAdminClient:
                 }
             ],
         }
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
             response = await _request_with_retry(
                 client,
                 "POST",
@@ -366,3 +471,139 @@ class KeycloakAdminClient:
                 f"(HTTP {response.status_code}): {response.text[:200]}",
             )
         logger.info("User %r created in realm %r", username, realm_name)
+
+        # Assign realm roles if requested
+        if roles:
+            await self._assign_realm_roles(token, realm_name, username, roles)
+
+    async def _assign_realm_roles(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        username: str,
+        roles: list[str],
+    ) -> None:
+        """Assign realm-level roles to a user."""
+        # Get user ID
+        user_id = await self.get_user_by_username(token, realm_name, username)
+        if not user_id:
+            logger.warning("Cannot assign roles: user %r not found in realm %r", username, realm_name)
+            return
+
+        # Get available realm roles
+        url = f"{self._base_url}/admin/realms/{realm_name}/roles"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            resp = await _request_with_retry(
+                client, "GET", url,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if resp.status_code != 200:
+            logger.warning("Failed to fetch realm roles: HTTP %s", resp.status_code)
+            return
+
+        all_roles = resp.json()
+        role_reprs = [r for r in all_roles if r.get("name") in roles]
+
+        if not role_reprs:
+            logger.warning("Requested roles %s not found in realm %r", roles, realm_name)
+            return
+
+        # Assign roles to user
+        assign_url = f"{self._base_url}/admin/realms/{realm_name}/users/{user_id}/role-mappings/realm"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            resp = await _request_with_retry(
+                client, "POST", assign_url,
+                json=role_reprs,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+        if resp.status_code == 204:
+            logger.info("Assigned roles %s to user %r in realm %r", roles, username, realm_name)
+        else:
+            logger.warning("Failed to assign roles: HTTP %s — %s", resp.status_code, resp.text[:200])
+
+    async def get_user_by_username(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        username: str,
+    ) -> str | None:
+        """Get user ID by username.
+
+        Args:
+            token: Valid admin token.
+            realm_name: Target realm.
+            username: Username to search for.
+
+        Returns:
+            User ID if found, None otherwise.
+        """
+        url = f"{self._base_url}/admin/realms/{realm_name}/users"
+        params = {"username": username, "exact": "true"}
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            response = await _request_with_retry(
+                client,
+                "GET",
+                url,
+                params=params,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+
+        if response.status_code != 200:
+            logger.warning(
+                "Failed to search for user %r in realm %r (HTTP %d)",
+                username,
+                realm_name,
+                response.status_code,
+            )
+            return None
+
+        users = response.json()
+        if not users:
+            return None
+
+        return str(users[0]["id"])
+
+    async def delete_user(
+        self,
+        token: AdminToken,
+        realm_name: str,
+        username: str,
+    ) -> bool:
+        """Delete a user from *realm_name*.
+
+        Args:
+            token: Valid admin token.
+            realm_name: Target realm.
+            username: Username to delete.
+
+        Returns:
+            True if user was deleted, False if user not found.
+        """
+        # First, get the user ID
+        user_id = await self.get_user_by_username(token, realm_name, username)
+        if not user_id:
+            logger.info("User %r not found in realm %r — nothing to delete", username, realm_name)
+            return False
+
+        url = f"{self._base_url}/admin/realms/{realm_name}/users/{user_id}"
+        async with httpx.AsyncClient(timeout=15.0, verify=get_ssl_context()) as client:
+            response = await _request_with_retry(
+                client,
+                "DELETE",
+                url,
+                headers={"Authorization": f"Bearer {token.access_token}"},
+            )
+
+        if response.status_code == 204:
+            logger.info("User %r deleted from realm %r", username, realm_name)
+            return True
+
+        if response.status_code == 404:
+            logger.info("User %r not found in realm %r", username, realm_name)
+            return False
+
+        raise KeycloakAdminError(
+            "user_deletion_failed",
+            f"Failed to delete user {username!r} from realm {realm_name!r} "
+            f"(HTTP {response.status_code}): {response.text[:200]}",
+        )

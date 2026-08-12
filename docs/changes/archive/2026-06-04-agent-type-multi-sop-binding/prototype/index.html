@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Agent Type Multi-SOP Binding Prototype</title>
+<style>
+/* ═══════════════════════════════ RESET & TOKENS ═══════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1976D2;--primary-dark:#115293;--primary-light:#E3F2FD;
+  --sidebar-bg:#FFFFFF;--sidebar-text:#424242;--sidebar-active-bg:#E3F2FD;
+  --sidebar-hover-bg:#F0F4F8;--sidebar-active-text:#1976D2;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --sidebar-w:256px;--topbar-h:64px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden;z-index:100;border-right:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo h1{font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
+.sidebar-logo small{font-size:11px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background var(--transition),color var(--transition);border-radius:0 24px 24px 0;margin-right:12px;color:var(--sidebar-text);font-size:13.5px;position:relative;user-select:none;white-space:nowrap}
+.nav-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+.nav-item .nav-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0;line-height:1}
+.nav-parent-group{margin-top:4px}
+.nav-parent-group-label{padding:14px 16px 6px;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:color var(--transition)}
+.nav-parent-group-label:hover{color:var(--sidebar-active-text)}
+.nav-parent-group-label .toggle-icon{transition:transform var(--transition);font-size:10px}
+.nav-parent-group.collapsed .nav-children{display:none}
+.nav-parent-group.collapsed .toggle-icon{transform:rotate(-90deg)}
+.nav-parent-group.active .nav-parent-group-label{color:var(--sidebar-active-text)}
+.nav-item.sub-item{padding-left:44px;font-size:13px;margin-right:12px}
+.nav-item.sub-item:hover{background:var(--sidebar-hover-bg)}
+.nav-item.sub-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active-text);font-weight:600}
+
+/* ── TOP BAR ── */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:600;flex:1;color:var(--text-primary)}
+.topbar-actions{display:flex;align-items:center;gap:12px}
+.btn-icon{background:none;border:none;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);transition:background var(--transition);position:relative}
+.btn-icon:hover{background:var(--bg)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── MAIN ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px}
+.main-content::-webkit-scrollbar{width:6px}.main-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── VIEWS ── */
+.view{display:none}.view.active{display:block}
+.view-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.view-header h2{font-size:22px;font-weight:600}
+.view-desc{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-icon-sm{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition)}.btn-icon-sm:hover{background:var(--bg);color:var(--text-primary)}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);transition:box-shadow var(--transition);margin-bottom:20px}
+.card:hover{box-shadow:var(--shadow-md)}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+
+/* ── TABLES ── */
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody td{padding:12px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-sop{background:#EDE9FE;color:#6D28D9}
+.chip-skill{background:#DBEAFE;color:#1D4ED8}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control::placeholder{color:#94A3B8}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px;cursor:pointer}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.form-error.visible{display:block}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 3px rgba(244,67,54,.15)}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:24px;gap:0}
+.tab{padding:10px 20px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);white-space:nowrap}
+.tab.active{border-bottom-color:var(--primary);color:var(--primary)}
+.tab:hover:not(.active){color:var(--text-primary)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* ── DRAWER ── */
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:900}
+.drawer-overlay.open{display:block}
+.drawer{position:fixed;top:0;right:-600px;bottom:0;width:600px;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:901;transition:right 0.3s ease;display:flex;flex-direction:column;overflow:hidden}
+.drawer.open{right:0}
+.drawer-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-header h3{font-size:16px;font-weight:600}
+.drawer-body{flex:1;overflow-y:auto;padding:24px}
+.drawer-body::-webkit-scrollbar{width:4px}.drawer-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.drawer-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+/* ── TOAST ── */
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:12px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .25s ease;display:flex;align-items:center;gap:8px}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--error)}
+.toast-warning{background:var(--warning);color:#fff}
+
+/* ── SECTION DIVIDER ── */
+.section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin-bottom:12px;margin-top:24px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title:first-child{margin-top:0}
+
+/* ═══════════════════════════════ BINDING-SPECIFIC STYLES ═══════════════════════════════ */
+
+/* Binding list container */
+.binding-list{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.binding-list-header{display:grid;grid-template-columns:40px 120px 1fr auto 40px;align-items:center;gap:8px;padding:10px 16px;background:#F8FAFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.binding-row{display:grid;grid-template-columns:40px 120px 1fr auto 40px;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);transition:background var(--transition);position:relative}
+.binding-row:last-child{border-bottom:none}
+.binding-row:hover{background:#F8FAFC}
+.binding-row.dragging{opacity:.5;background:var(--primary-light)}
+.binding-row.drag-over{border-top:2px solid var(--primary)}
+.binding-row.has-error{background:#FFF5F5}
+
+/* Order number */
+.binding-order{width:28px;height:28px;border-radius:50%;background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Drag handle */
+.drag-handle{cursor:grab;color:var(--text-secondary);font-size:16px;display:flex;align-items:center;justify-content:center;user-select:none;width:28px;height:28px}
+.drag-handle:active{cursor:grabbing}
+.drag-handle:hover{color:var(--text-primary)}
+
+/* Binding type selector */
+.binding-type-select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);font-size:13px;outline:none;cursor:pointer}
+
+/* Binding reference selector */
+.binding-ref-select{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);font-size:13px;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:28px}
+.binding-ref-select:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+
+/* Reorder buttons */
+.reorder-btns{display:flex;flex-direction:column;gap:2px}
+.reorder-btn{width:24px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text-secondary);cursor:pointer;font-size:10px;padding:0;line-height:1;transition:all var(--transition)}
+.reorder-btn:hover{background:var(--primary-light);color:var(--primary);border-color:var(--primary-light)}
+.reorder-btn:disabled{opacity:.3;cursor:not-allowed;background:var(--bg)}
+
+/* Remove button */
+.remove-btn{background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:4px;border-radius:var(--radius-sm);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.remove-btn:hover{color:var(--error);background:#FFF5F5}
+
+/* Binding error */
+.binding-error{grid-column:1/-1;padding:4px 0 4px 48px;font-size:11px;color:var(--error);display:none}
+.binding-error.visible{display:block}
+
+/* Add binding row */
+.add-binding-row{padding:12px 16px;background:#FAFBFC;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.add-binding-row .form-row-inline{display:flex;align-items:center;gap:8px;flex:1}
+.add-binding-row select{width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);font-size:13px;outline:none;cursor:pointer}
+.add-binding-row select:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+.add-binding-row select{padding-right:28px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748B' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+
+/* Empty state */
+.empty-binding-state{text-align:center;padding:32px 24px;color:var(--text-secondary)}
+.empty-binding-state .empty-icon{font-size:36px;margin-bottom:8px;opacity:.5}
+.empty-binding-state p{font-size:13px;margin-bottom:4px}
+.empty-binding-state .hint{font-size:11px;color:var(--text-secondary)}
+
+/* Validation alert */
+.validation-alert{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:12.5px}
+.validation-alert.error{background:#FFF5F5;border:1px solid #FECACA;color:#991B1B}
+.validation-alert.warning{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}
+.validation-alert.success{background:#F0FDF4;border:1px solid #BBF7D0;color:#166534}
+.validation-alert-icon{font-size:16px;flex-shrink:0}
+
+/* Plan Preview */
+.plan-list{list-style:none;padding:0;margin:0}
+.plan-item{display:flex;align-items:flex-start;padding:4px 0;margin-bottom:8px}
+.plan-item-num{min-width:22px;font-weight:700;color:var(--text-secondary);font-size:12px;margin-top:3px}
+.plan-item-content{flex:1;display:flex;flex-direction:column;gap:2px}
+.plan-item-header{display:flex;align-items:center;gap:8px}
+.plan-item-title{font-weight:500;font-size:14px;color:var(--text-primary)}
+.plan-item-desc{font-size:12px;color:var(--text-secondary);display:block}
+.h6{font-size:20px;font-weight:500;margin-bottom:12px;line-height:1.6;letter-spacing:.0075em}
+.topology-container{width:100%;min-height:280px;display:flex;align-items:center;justify-content:center;background:#FAFAFA;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+.chip-border{border:1px solid currentColor;background:transparent}
+
+/* Binding summary chip list */
+.binding-summary{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.binding-summary .chip-sop,.binding-summary .chip-skill{font-size:10.5px}
+
+/* Info banner */
+.info-banner{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius);margin-bottom:16px;font-size:12.5px;color:var(--text-secondary)}
+.info-banner strong{color:var(--primary-dark)}
+.info-banner .ib-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+
+/* Role info bar */
+.role-info-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#F0F4F8;border:1px solid #DDE4ED;border-radius:var(--radius-sm);margin-bottom:14px;font-size:12px;color:var(--text-secondary)}
+.role-info-bar strong{color:var(--text-primary)}
+.role-info-bar .ri-count{font-weight:600;color:var(--primary)}
+
+/* Responsive inline form row */
+.form-row-inline{display:flex;align-items:center;gap:8px}
+.form-col{flex:1;min-width:0}
+
+/* Helper text */
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.font-mono{font-family:'Courier New',monospace}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
+strong{font-weight:600}
+
+/* Broken reference */
+.broken-ref{text-decoration:line-through;color:var(--error);opacity:.7}
+
+/* Tooltip */
+.tooltip-trigger{position:relative;cursor:help;border-bottom:1px dotted var(--text-secondary)}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h1>&#9889; Parthenon</h1>
+    <small>Enterprise AI Harness</small>
+  </div>
+
+  <div class="nav-item" data-view="dashboard" onclick="navigate('dashboard')"><span class="nav-icon">&#127968;</span>Dashboard</div>
+
+  <div class="nav-parent-group" id="nav-agents" data-group="agents">
+    <div class="nav-parent-group-label" onclick="toggleNavGroup(this)" role="button" tabindex="0">
+      <span><span class="nav-icon" style="font-size:14px">&#129302;</span>&nbsp;&nbsp;Agents</span>
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="nav-children">
+      <div class="nav-item sub-item" data-view="agent-roles" onclick="navigate('agent-roles')">Agent Roles</div>
+      <div class="nav-item sub-item" data-view="agent-identities" onclick="navigate('agent-identities')">Agent Identities</div>
+      <div class="nav-item sub-item active" data-view="agents" onclick="navigate('agents')">Agent Types</div>
+      <div class="nav-item sub-item" data-view="skills" onclick="navigate('skills')">Skills</div>
+      <div class="nav-item sub-item" data-view="sops" onclick="navigate('sops')">SOPs</div>
+      <div class="nav-item sub-item" data-view="model-configs" onclick="navigate('model-configs')">Model Configs</div>
+    </div>
+  </div>
+
+  <div class="nav-item" data-view="mcp-hub" onclick="navigate('mcp-hub')"><span class="nav-icon">&#128268;</span>MCP Hub</div>
+  <div class="nav-item" data-view="observability" onclick="navigate('observability')"><span class="nav-icon">&#128202;</span>Observability</div>
+  <div class="nav-item" data-view="permissions" onclick="navigate('permissions')"><span class="nav-icon">&#128274;</span>Permissions</div>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN WRAPPER ═══════════════════════════════ -->
+<div class="main-wrapper">
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Agent Types</div>
+    <div class="topbar-actions">
+      <button class="btn-icon" title="Notifications">&#128276;</button>
+      <div class="avatar" title="Alex Harper — Admin">AH</div>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+<!-- ═══════════════════════════════ VIEW: AGENT TYPES LIST ═══════════════════════════════ -->
+<div id="view-agents" class="view active">
+  <div class="view-header">
+    <div>
+      <h2>Agent Types</h2>
+      <div class="view-desc">Configure agent types with curated SOP and skill bindings. Each agent type binds an ordered list of SOPs and skills drawn from its role.</div>
+    </div>
+    <button class="btn btn-primary" onclick="openEditor(null)">+ Create Agent Type</button>
+  </div>
+
+  <!-- Info banner explaining the new binding model -->
+  <div class="info-banner">
+    <span class="ib-icon" style="font-size:20px">&#128161;</span>
+    <div>
+      <strong>New: Multi-SOP Binding</strong><br>
+      Agent Types now support binding multiple SOPs and skills as an ordered list — instead of a single "Primary SOP." This mirrors how SOPs bind skills and gives you precise control over which capabilities each agent type receives as context.
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Identity</th>
+          <th>Model</th>
+          <th>Bindings</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>pr-reviewer</strong></td>
+          <td>Developer</td>
+          <td><span class="font-mono text-sm">gh-bot@parthenon</span></td>
+          <td><span class="chip chip-gray">gpt-4-turbo</span></td>
+          <td>
+            <div class="binding-summary">
+              <span class="chip chip-sop">1. github-pr-workflow</span>
+              <span class="chip chip-skill">2. read-analyze-file</span>
+              <span class="chip chip-skill">3. db-report</span>
+            </div>
+          </td>
+          <td><span class="chip chip-green">Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm" onclick="openEditor('pr-reviewer')" title="Edit">&#9998;&#65039;</button>
+            <button class="btn-icon-sm" title="Delete">&#128465;&#65039;</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>report-generator</strong></td>
+          <td>Operations</td>
+          <td><span class="font-mono text-sm">reporter@parthenon</span></td>
+          <td><span class="chip chip-gray">claude-3-5-sonnet</span></td>
+          <td>
+            <div class="binding-summary">
+              <span class="chip chip-sop">1. daily-report-gen</span>
+            </div>
+          </td>
+          <td><span class="chip chip-green">Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm" onclick="openEditor('report-generator')" title="Edit">&#9998;&#65039;</button>
+            <button class="btn-icon-sm" title="Delete">&#128465;&#65039;</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>incident-bot</strong></td>
+          <td>Operations</td>
+          <td><span class="font-mono text-sm">incident@parthenon</span></td>
+          <td><span class="chip chip-gray">gpt-4o</span></td>
+          <td>
+            <div class="binding-summary">
+              <span class="chip chip-sop">1. incident-response</span>
+              <span class="chip chip-sop">2. data-pipeline-audit</span>
+              <span class="chip chip-skill">3. file-organizer</span>
+            </div>
+          </td>
+          <td><span class="chip chip-yellow">Draft</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm" onclick="openEditor('incident-bot')" title="Edit">&#9998;&#65039;</button>
+            <button class="btn-icon-sm" title="Delete">&#128465;&#65039;</button>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>data-analyst</strong></td>
+          <td>Data Analyst</td>
+          <td><span class="font-mono text-sm">analyst@parthenon</span></td>
+          <td><span class="chip chip-gray">gpt-4o-mini</span></td>
+          <td>
+            <div class="binding-summary">
+              <span class="chip chip-skill">1. read-analyze-file</span>
+              <span class="chip chip-skill">2. db-report</span>
+            </div>
+          </td>
+          <td><span class="chip chip-green">Active</span></td>
+          <td class="actions-cell">
+            <button class="btn-icon-sm" onclick="openEditor('data-analyst')" title="Edit">&#9998;&#65039;</button>
+            <button class="btn-icon-sm" title="Delete">&#128465;&#65039;</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Feature demonstration card -->
+  <div class="card" style="margin-top:24px">
+    <div class="card-header">
+      <h3>What this prototype demonstrates</h3>
+      <span class="chip chip-blue" style="font-size:10px">agent-type-multi-sop-binding</span>
+    </div>
+    <div class="card-body" style="font-size:13px; color:var(--text-secondary); line-height:1.7">
+      <p><strong>Click "Edit" on any agent type</strong> to open the editor drawer and explore the new binding model:</p>
+      <ul style="margin:8px 0 0 20px; display:flex; flex-direction:column; gap:4px">
+        <li><strong>SOP/Skill Binding Section</strong> — Ordered list of bindings with type selector, dropdown picker, and remove button</li>
+        <li><strong>Drag-to-reorder</strong> — Use drag handles or up/down arrow buttons to reorder bindings</li>
+        <li><strong>Role-based filtering</strong> — Change the role and watch the available SOPs and skills update in dropdowns</li>
+        <li><strong>Validation feedback</strong> — Try adding a duplicate binding or switching to a role that doesn't have access to see inline errors</li>
+        <li><strong>Plan Preview tab</strong> — See how the curated binding list feeds into the AI-generated implementation plan</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PLACEHOLDER VIEWS ═══════════════════════════════ -->
+<div id="view-dashboard" class="view"><div class="view-header"><h2>Dashboard</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-agent-roles" class="view"><div class="view-header"><h2>Agent Roles</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-agent-identities" class="view"><div class="view-header"><h2>Agent Identities</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-skills" class="view"><div class="view-header"><h2>Skills</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-sops" class="view"><div class="view-header"><h2>SOPs</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-model-configs" class="view"><div class="view-header"><h2>Model Configs</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-mcp-hub" class="view"><div class="view-header"><h2>MCP Hub</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-observability" class="view"><div class="view-header"><h2>Observability</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+<div id="view-permissions" class="view"><div class="view-header"><h2>Permissions</h2></div><p class="text-secondary">This prototype focuses on Agent Types. Click "Agent Types" in the sidebar.</p></div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-wrapper -->
+</div><!-- /app-shell -->
+
+<!-- ═══════════════════════════════ AGENT TYPE EDITOR DRAWER ═══════════════════════════════ -->
+<div class="drawer-overlay" id="editor-overlay" onclick="closeEditor()"></div>
+<div class="drawer" id="editor-drawer">
+  <div class="drawer-header">
+    <h3 id="editor-title">Edit Agent Type</h3>
+    <button class="btn-icon-sm" onclick="closeEditor()" style="font-size:18px">&#10005;</button>
+  </div>
+
+  <!-- Editor Tabs -->
+  <div class="tabs" style="margin:0;padding:0 24px">
+    <div class="tab active" onclick="switchEditorTab(this,'editor-details-panel')">Details</div>
+    <div class="tab" onclick="switchEditorTab(this,'editor-bindings-panel')">SOP / Skill Bindings</div>
+    <div class="tab" onclick="switchEditorTab(this,'editor-plan-panel')">Plan Preview</div>
+  </div>
+
+  <div class="drawer-body">
+    <!-- ── DETAILS TAB ── -->
+    <div id="editor-details-panel" class="tab-panel active">
+      <div class="form-group">
+        <label>Name</label>
+        <input class="form-control" id="at-name" placeholder="e.g. my-reviewer" value="">
+        <div class="form-hint">Use lowercase letters, numbers, and hyphens only.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Identity</label>
+          <input class="form-control" id="at-identity" placeholder="agent-myname@parthenon" value="">
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <select class="form-control" id="at-model">
+            <option value="">Select a model...</option>
+            <option>gpt-4o</option><option>gpt-4o-mini</option>
+            <option>claude-3-5-sonnet</option><option>claude-3-haiku</option><option>gemini-1.5-pro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Role <span style="font-size:11px;color:var(--text-secondary)">(filters available SOPs/Skills)</span></label>
+          <select class="form-control" id="at-role" onchange="onRoleChange()">
+            <option value="">Select a role...</option>
+            <option value="developer">Developer</option>
+            <option value="data-analyst">Data Analyst</option>
+            <option value="operations">Operations</option>
+            <option value="security">Security</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Input Type</label>
+          <select class="form-control" id="at-input-type">
+            <option value="none">none</option>
+            <option value="typed">typed</option>
+            <option value="conversation">conversation</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>System Instruction (template)</label>
+        <textarea class="form-control" rows="3" placeholder="You are a helpful agent... Use {bound_sops} and {bound_skills} placeholders for auto-injection." id="at-instruction"></textarea>
+        <div class="form-hint">Use <code>{bound_sops}</code> and <code>{bound_skills}</code> to reference the curated binding list.</div>
+      </div>
+    </div>
+
+    <!-- ── SOP / SKILL BINDINGS TAB ── -->
+    <div id="editor-bindings-panel" class="tab-panel">
+      <!-- Role info bar -->
+      <div class="role-info-bar" id="binding-role-bar">
+        <span>&#128100;</span>
+        <span>Role: <strong id="binding-role-name">(no role selected)</strong></span>
+        <span style="margin-left:auto">Available: <span class="ri-count" id="binding-avail-count">0 SOPs, 0 Skills</span></span>
+      </div>
+
+      <!-- Validation summary -->
+      <div id="binding-validation-summary" style="display:none"></div>
+
+      <div class="section-title">Bound SOPs &amp; Skills</div>
+      <p class="text-sm text-secondary mb-3">Each entry references either an SOP or a Skill. The order drives context for AI-generated system instructions. All entries must be accessible through the selected role.</p>
+
+      <!-- Binding List -->
+      <div class="binding-list" id="binding-list-container">
+        <div class="binding-list-header">
+          <span style="text-align:center">#</span>
+          <span>Type</span>
+          <span>Reference</span>
+          <span>Reorder</span>
+          <span></span>
+        </div>
+        <div id="binding-rows">
+          <!-- Dynamically populated -->
+        </div>
+        <div class="add-binding-row">
+          <select id="new-binding-type" onchange="onNewBindingTypeChange()">
+            <option value="sop">SOP</option>
+            <option value="skill">Skill</option>
+          </select>
+          <select id="new-binding-ref" style="flex:1">
+            <option value="">Select an SOP or Skill...</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="addBinding()" id="add-binding-btn">+ Add Binding</button>
+        </div>
+      </div>
+
+      <!-- Empty state (shown when no bindings) -->
+      <div id="binding-empty-state" class="empty-binding-state" style="display:none">
+        <div class="empty-icon">&#128206;</div>
+        <p><strong>No bindings defined</strong></p>
+        <p class="hint">Click "+ Add Binding" to curate which SOPs and skills this agent type uses.</p>
+        <p class="hint">If no bindings are defined, all role-assigned SOPs and skills will be used (current behavior).</p>
+      </div>
+
+      <!-- Validation info -->
+      <div class="validation-alert success mt-3" id="binding-valid-msg" style="display:none">
+        <span class="validation-alert-icon">&#9989;</span>
+        <span>All bindings are valid and accessible through the role <strong id="binding-valid-role"></strong>.</span>
+      </div>
+    </div>
+
+    <!-- ── PLAN PREVIEW TAB ── -->
+    <div id="editor-plan-panel" class="tab-panel">
+      <div class="info-banner" style="margin-bottom:20px">
+        <span class="ib-icon">&#129504;</span>
+        <div>
+          <strong>Plan generated from curated bindings</strong><br>
+          The AI-generated implementation plan uses only the explicitly bound SOPs and skills — not all role-assigned ones. Bound entries are presented in their saved order.
+        </div>
+      </div>
+
+      <div class="h6" id="plan-title">Implementation Plan &mdash; pr-reviewer</div>
+
+      <div id="plan-content">
+        <!-- Dynamically populated from bindings -->
+      </div>
+
+      <div style="margin-top:20px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Topology Diagram</div>
+        <div class="topology-container" id="topology-container">
+          <svg id="topology-svg" viewBox="0 0 520 350" width="100%" height="350" aria-label="Agent topology showing binding relationships"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-footer">
+    <span id="editor-save-status" style="font-size:12px;color:var(--text-secondary);margin-right:auto;display:flex;align-items:center;gap:6px"></span>
+    <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveAgentType()">Save Agent Type</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ TOAST CONTAINER ═══════════════════════════════ -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ═══════════════════════════════ SCRIPTS ═══════════════════════════════ -->
+<script>
+// ═══════════════════════════════ DATA ═══════════════════════════════
+
+// Role → SOPs/Skills mapping
+var rolePermissions = {
+  'developer': {
+    sops: [
+      { id: 'github-pr-workflow', name: 'github-pr-workflow', desc: 'PR review and merge automation' },
+      { id: 'code-quality-check', name: 'code-quality-check', desc: 'Lint and static analysis workflow' }
+    ],
+    skills: [
+      { id: 'read-analyze-file', name: 'read-analyze-file', desc: 'Read and analyze file contents' },
+      { id: 'db-report', name: 'db-report', desc: 'Generate database reports' },
+      { id: 'git-operations', name: 'git-operations', desc: 'Perform Git operations' }
+    ]
+  },
+  'data-analyst': {
+    sops: [
+      { id: 'data-pipeline-audit', name: 'data-pipeline-audit', desc: 'Audit data pipeline health' },
+      { id: 'daily-report-gen', name: 'daily-report-gen', desc: 'Generate daily business reports' }
+    ],
+    skills: [
+      { id: 'read-analyze-file', name: 'read-analyze-file', desc: 'Read and analyze file contents' },
+      { id: 'db-report', name: 'db-report', desc: 'Generate database reports' },
+      { id: 'visualize-data', name: 'visualize-data', desc: 'Create data visualizations' },
+      { id: 'run-sql-query', name: 'run-sql-query', desc: 'Execute SQL queries' }
+    ]
+  },
+  'operations': {
+    sops: [
+      { id: 'incident-response', name: 'incident-response', desc: 'Automated incident triage and response' },
+      { id: 'daily-report-gen', name: 'daily-report-gen', desc: 'Generate daily business reports' },
+      { id: 'data-pipeline-audit', name: 'data-pipeline-audit', desc: 'Audit data pipeline health' }
+    ],
+    skills: [
+      { id: 'file-organizer', name: 'file-organizer', desc: 'Organize and manage files' },
+      { id: 'read-analyze-file', name: 'read-analyze-file', desc: 'Read and analyze file contents' },
+      { id: 'db-report', name: 'db-report', desc: 'Generate database reports' },
+      { id: 'send-notification', name: 'send-notification', desc: 'Send notifications via configured channels' }
+    ]
+  },
+  'security': {
+    sops: [
+      { id: 'security-audit', name: 'security-audit', desc: 'Run comprehensive security audit' },
+      { id: 'incident-response', name: 'incident-response', desc: 'Automated incident triage and response' }
+    ],
+    skills: [
+      { id: 'read-analyze-file', name: 'read-analyze-file', desc: 'Read and analyze file contents' },
+      { id: 'scan-vulnerabilities', name: 'scan-vulnerabilities', desc: 'Scan for known vulnerabilities' },
+      { id: 'audit-log-review', name: 'audit-log-review', desc: 'Review and analyze audit logs' }
+    ]
+  }
+};
+
+// Agent type data (mock)
+var agentTypes = {
+  'pr-reviewer': {
+    name: 'pr-reviewer',
+    identity: 'gh-bot@parthenon',
+    model: 'gpt-4-turbo',
+    role: 'developer',
+    inputType: 'typed',
+    instruction: 'Review pull requests following the bound SOP workflow. Use {bound_sops} for process steps and {bound_skills} for analysis tasks.',
+    bindings: [
+      { type: 'sop', refId: 'github-pr-workflow' },
+      { type: 'skill', refId: 'read-analyze-file' },
+      { type: 'skill', refId: 'db-report' }
+    ]
+  },
+  'report-generator': {
+    name: 'report-generator',
+    identity: 'reporter@parthenon',
+    model: 'claude-3-5-sonnet',
+    role: 'operations',
+    inputType: 'none',
+    instruction: 'Generate daily reports using the bound SOPs and skills.',
+    bindings: [
+      { type: 'sop', refId: 'daily-report-gen' }
+    ]
+  },
+  'incident-bot': {
+    name: 'incident-bot',
+    identity: 'incident@parthenon',
+    model: 'gpt-4o',
+    role: 'operations',
+    inputType: 'conversation',
+    instruction: 'Handle incidents automatically. Follow incident-response SOP first, then audit with data-pipeline-audit.',
+    bindings: [
+      { type: 'sop', refId: 'incident-response' },
+      { type: 'sop', refId: 'data-pipeline-audit' },
+      { type: 'skill', refId: 'file-organizer' }
+    ]
+  },
+  'data-analyst': {
+    name: 'data-analyst',
+    identity: 'analyst@parthenon',
+    model: 'gpt-4o-mini',
+    role: 'data-analyst',
+    inputType: 'typed',
+    instruction: 'Analyze data using bound skills.',
+    bindings: [
+      { type: 'skill', refId: 'read-analyze-file' },
+      { type: 'skill', refId: 'db-report' }
+    ]
+  }
+};
+
+// ═══════════════════════════════ STATE ═══════════════════════════════
+var currentEditingAgent = null;  // null = creating new
+var currentBindings = [];        // Array of {type, refId}
+var bindingErrors = [];          // Array of {index, message}
+var dragSourceIndex = null;
+
+// ═══════════════════════════════ NAVIGATION ═══════════════════════════════
+function navigate(viewId) {
+  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(i) { i.classList.remove('active'); });
+
+  var view = document.getElementById('view-' + viewId);
+  if (view) view.classList.add('active');
+
+  var navItem = document.querySelector('.nav-item[data-view="' + viewId + '"]');
+  if (navItem) {
+    navItem.classList.add('active');
+    var parentGroup = navItem.closest('.nav-parent-group');
+    document.querySelectorAll('.nav-parent-group').forEach(function(g) { g.classList.remove('active'); });
+    if (parentGroup) {
+      parentGroup.classList.remove('collapsed');
+      parentGroup.classList.add('active');
+    }
+  }
+
+  var titles = {
+    'dashboard':'Dashboard','agent-roles':'Agent Roles','agent-identities':'Agent Identities',
+    'agents':'Agent Types','skills':'Skills','sops':'SOPs','model-configs':'Model Configs',
+    'mcp-hub':'MCP Hub','observability':'Observability','permissions':'Permissions'
+  };
+  document.getElementById('topbar-title').textContent = titles[viewId] || viewId;
+}
+
+function toggleNavGroup(labelEl) {
+  var group = labelEl.parentElement;
+  group.classList.toggle('collapsed');
+}
+
+// ═══════════════════════════════ EDITOR OPEN/CLOSE ═══════════════════════════════
+function openEditor(agentKey) {
+  currentEditingAgent = agentKey;
+
+  var overlay = document.getElementById('editor-overlay');
+  var drawer = document.getElementById('editor-drawer');
+
+  if (agentKey) {
+    var agent = agentTypes[agentKey];
+    document.getElementById('editor-title').textContent = 'Edit Agent Type: ' + agent.name;
+    document.getElementById('at-name').value = agent.name;
+    document.getElementById('at-identity').value = agent.identity;
+    document.getElementById('at-model').value = agent.model;
+    document.getElementById('at-role').value = agent.role;
+    document.getElementById('at-input-type').value = agent.inputType;
+    document.getElementById('at-instruction').value = agent.instruction || '';
+    currentBindings = JSON.parse(JSON.stringify(agent.bindings));
+  } else {
+    document.getElementById('editor-title').textContent = 'Create Agent Type';
+    document.getElementById('at-name').value = '';
+    document.getElementById('at-identity').value = '';
+    document.getElementById('at-model').value = '';
+    document.getElementById('at-role').value = '';
+    document.getElementById('at-input-type').value = 'none';
+    document.getElementById('at-instruction').value = '';
+    currentBindings = [];
+  }
+
+  bindingErrors = [];
+  overlay.classList.add('open');
+  drawer.classList.add('open');
+
+  // Reset to first tab
+  switchEditorTab(document.querySelector('#editor-drawer .tab'), 'editor-details-panel');
+
+  renderBindings();
+  updateBindingRoleBar();
+  updatePlanPreview();
+}
+
+function closeEditor() {
+  document.getElementById('editor-overlay').classList.remove('open');
+  document.getElementById('editor-drawer').classList.remove('open');
+  currentEditingAgent = null;
+  currentBindings = [];
+  bindingErrors = [];
+  document.getElementById('editor-save-status').innerHTML = '';
+}
+
+// ═══════════════════════════════ TAB SWITCHING ═══════════════════════════════
+function switchEditorTab(tabEl, panelId) {
+  var drawer = document.getElementById('editor-drawer');
+  drawer.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  drawer.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+
+  tabEl.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+
+  // Refresh plan preview when switching to that tab
+  if (panelId === 'editor-plan-panel') {
+    updatePlanPreview();
+  }
+
+  // Refresh binding state when switching to bindings tab
+  if (panelId === 'editor-bindings-panel') {
+    renderBindings();
+    updateBindingRoleBar();
+  }
+}
+
+// ═══════════════════════════════ ROLE CHANGE ═══════════════════════════════
+function onRoleChange() {
+  validateAllBindings();
+  updateBindingRoleBar();
+  updateNewBindingDropdown();
+  renderBindings();
+}
+
+// ═══════════════════════════════ BINDING RENDERING ═══════════════════════════════
+function getRoleData() {
+  var role = document.getElementById('at-role').value;
+  return rolePermissions[role] || { sops: [], skills: [] };
+}
+
+function getRefName(type, refId) {
+  var roleData = getRoleData();
+  var list = type === 'sop' ? roleData.sops : roleData.skills;
+  var item = list.find(function(i) { return i.id === refId; });
+  if (item) return item.name;
+
+  // Check all roles in case binding is from a previously valid role
+  for (var r in rolePermissions) {
+    var rList = type === 'sop' ? rolePermissions[r].sops : rolePermissions[r].skills;
+    var rItem = rList.find(function(i) { return i.id === refId; });
+    if (rItem) return rItem.name + ' (&#9888; not in current role)';
+  }
+  return refId + ' (missing)';
+}
+
+function isRefAccessible(type, refId) {
+  var roleData = getRoleData();
+  var list = type === 'sop' ? roleData.sops : roleData.skills;
+  return list.some(function(i) { return i.id === refId; });
+}
+
+function validateAllBindings() {
+  bindingErrors = [];
+  var seen = {};
+
+  for (var i = 0; i < currentBindings.length; i++) {
+    var b = currentBindings[i];
+    var key = b.type + ':' + b.refId;
+
+    // Check duplicates
+    if (seen[key]) {
+      bindingErrors.push({ index: i, message: 'Duplicate: ' + (b.type === 'sop' ? 'SOP' : 'Skill') + ' "' + getRefName(b.type, b.refId) + '" is already bound.' });
+    }
+    seen[key] = true;
+
+    // Check role access
+    if (!isRefAccessible(b.type, b.refId)) {
+      bindingErrors.push({ index: i, message: 'Not accessible: ' + (b.type === 'sop' ? 'SOP' : 'Skill') + ' "' + getRefName(b.type, b.refId) + '" is not assigned to the role "' + (document.getElementById('at-role').value || 'none') + '".' });
+    }
+  }
+
+  // Update validation summary
+  updateValidationSummary();
+}
+
+function updateValidationSummary() {
+  var summary = document.getElementById('binding-validation-summary');
+  if (bindingErrors.length === 0 && currentBindings.length > 0) {
+    summary.style.display = 'block';
+    summary.innerHTML = '<div class="validation-alert success"><span class="validation-alert-icon">&#9989;</span><span>All ' + currentBindings.length + ' binding(s) are valid and accessible through the selected role.</span></div>';
+  } else if (bindingErrors.length > 0) {
+    summary.style.display = 'block';
+    var html = '<div class="validation-alert error"><span class="validation-alert-icon">&#9888;&#65039;</span><div><strong>' + bindingErrors.length + ' validation error(s) found:</strong><ul style="margin:4px 0 0 16px;font-size:11.5px">';
+    for (var i = 0; i < bindingErrors.length; i++) {
+      html += '<li>Binding #' + (bindingErrors[i].index + 1) + ' — ' + bindingErrors[i].message + '</li>';
+    }
+    html += '</ul></div></div>';
+    summary.innerHTML = html;
+  } else {
+    summary.style.display = 'none';
+  }
+}
+
+function renderBindings() {
+  var container = document.getElementById('binding-rows');
+  var emptyState = document.getElementById('binding-empty-state');
+  var validMsg = document.getElementById('binding-valid-msg');
+
+  validateAllBindings();
+
+  if (currentBindings.length === 0) {
+    container.innerHTML = '';
+    emptyState.style.display = 'block';
+    validMsg.style.display = 'none';
+    updateValidationSummary();
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  var role = document.getElementById('at-role').value;
+  document.getElementById('binding-valid-role').textContent = role || '(no role)';
+
+  if (bindingErrors.length === 0 && role) {
+    validMsg.style.display = 'flex';
+  } else {
+    validMsg.style.display = 'none';
+  }
+
+  var html = '';
+  for (var i = 0; i < currentBindings.length; i++) {
+    var b = currentBindings[i];
+    var hasError = bindingErrors.some(function(e) { return e.index === i; });
+    var errorMsg = '';
+    for (var j = 0; j < bindingErrors.length; j++) {
+      if (bindingErrors[j].index === i) {
+        errorMsg = bindingErrors[j].message;
+        break;
+      }
+    }
+
+    var typeLabel = b.type === 'sop' ? 'SOP' : 'Skill';
+    var typeChip = b.type === 'sop' ? 'chip-purple' : 'chip-blue';
+    var refName = getRefName(b.type, b.refId);
+    var isBroken = !isRefAccessible(b.type, b.refId);
+
+    html += '<div class="binding-row' + (hasError ? ' has-error' : '') + '" data-index="' + i + '" draggable="true" ondragstart="onDragStart(event,' + i + ')" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,' + i + ')">';
+    html += '<div class="drag-handle" title="Drag to reorder">&#9776;&#65038;</div>';
+    html += '<div><span class="chip ' + typeChip + '" style="font-size:11px">' + typeLabel + '</span></div>';
+    html += '<div style="min-width:0">';
+    html += '<span style="font-size:13px;font-weight:500;' + (isBroken ? 'text-decoration:line-through;color:var(--error);opacity:.7' : '') + '">' + escapeHtml(refName) + '</span>';
+    if (isBroken) {
+      html += ' <span class="chip chip-red" style="font-size:9px;padding:1px 5px">&#9888;</span>';
+    }
+    html += '</div>';
+    html += '<div class="reorder-btns">';
+    html += '<button class="reorder-btn" onclick="moveBinding(' + i + ',-1)" ' + (i === 0 ? 'disabled' : '') + ' title="Move up">&#9650;</button>';
+    html += '<button class="reorder-btn" onclick="moveBinding(' + i + ',1)" ' + (i === currentBindings.length - 1 ? 'disabled' : '') + ' title="Move down">&#9660;</button>';
+    html += '</div>';
+    html += '<button class="remove-btn" onclick="removeBinding(' + i + ')" title="Remove binding">&#10005;</button>';
+    if (errorMsg) {
+      html += '<div class="binding-error visible">' + escapeHtml(errorMsg) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ═══════════════════════════════ BINDING CRUD ═══════════════════════════════
+function addBinding() {
+  var typeSelect = document.getElementById('new-binding-type');
+  var refSelect = document.getElementById('new-binding-ref');
+  var type = typeSelect.value;
+  var refId = refSelect.value;
+
+  if (!refId) {
+    showToast('Please select an SOP or Skill to bind.', 'warning');
+    return;
+  }
+
+  var role = document.getElementById('at-role').value;
+  if (!role) {
+    showToast('Please select a role first. The role determines which SOPs and Skills are available.', 'warning');
+    return;
+  }
+
+  currentBindings.push({ type: type, refId: refId });
+  refSelect.value = '';
+  renderBindings();
+  updateBindingRoleBar();
+  updatePlanPreview();
+  updateNewBindingDropdown();
+  showToast('Binding added: ' + (type === 'sop' ? 'SOP' : 'Skill') + ' "' + getRefName(type, refId) + '"', 'success');
+}
+
+function removeBinding(index) {
+  var b = currentBindings[index];
+  currentBindings.splice(index, 1);
+  bindingErrors = [];
+  renderBindings();
+  updateBindingRoleBar();
+  updatePlanPreview();
+  showToast('Binding removed.', 'success');
+}
+
+function moveBinding(index, direction) {
+  var newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= currentBindings.length) return;
+  var temp = currentBindings[index];
+  currentBindings[index] = currentBindings[newIndex];
+  currentBindings[newIndex] = temp;
+  bindingErrors = [];
+  renderBindings();
+  updatePlanPreview();
+}
+
+// ═══════════════════════════════ DRAG AND DROP ═══════════════════════════════
+function onDragStart(e, index) {
+  dragSourceIndex = index;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', index);
+  var row = document.querySelector('.binding-row[data-index="' + index + '"]');
+  if (row) row.classList.add('dragging');
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function onDragLeave(e) {
+  var row = e.target.closest('.binding-row');
+  if (row) row.classList.remove('drag-over');
+}
+
+function onDrop(e, targetIndex) {
+  e.preventDefault();
+  var sourceIndex = dragSourceIndex;
+  dragSourceIndex = null;
+
+  // Remove drag styles
+  document.querySelectorAll('.binding-row').forEach(function(r) {
+    r.classList.remove('dragging', 'drag-over');
+  });
+
+  if (sourceIndex === null || sourceIndex === targetIndex) return;
+
+  // Reorder
+  var item = currentBindings.splice(sourceIndex, 1)[0];
+  currentBindings.splice(targetIndex, 0, item);
+  bindingErrors = [];
+  renderBindings();
+  updatePlanPreview();
+  showToast('Binding reordered.', 'success');
+}
+
+// ═══════════════════════════════ DROPDOWN UPDATES ═══════════════════════════════
+function updateNewBindingDropdown() {
+  var roleData = getRoleData();
+  var type = document.getElementById('new-binding-type').value;
+  var list = type === 'sop' ? roleData.sops : roleData.skills;
+  var select = document.getElementById('new-binding-ref');
+
+  select.innerHTML = '<option value="">Select a ' + (type === 'sop' ? 'SOP' : 'Skill') + '...</option>';
+  for (var i = 0; i < list.length; i++) {
+    var alreadyBound = currentBindings.some(function(b) { return b.type === type && b.refId === list[i].id; });
+    select.innerHTML += '<option value="' + list[i].id + '"' + (alreadyBound ? ' disabled' : '') + '>' + list[i].name + (alreadyBound ? ' (already bound)' : '') + (list[i].desc ? ' — ' + list[i].desc : '') + '</option>';
+  }
+}
+
+function onNewBindingTypeChange() {
+  updateNewBindingDropdown();
+}
+
+function updateBindingRoleBar() {
+  var role = document.getElementById('at-role').value;
+  var roleData = getRoleData();
+  document.getElementById('binding-role-name').textContent = role ? role.charAt(0).toUpperCase() + role.slice(1) : '(no role selected)';
+  document.getElementById('binding-avail-count').textContent = roleData.sops.length + ' SOPs, ' + roleData.skills.length + ' Skills';
+  updateNewBindingDropdown();
+}
+
+// ═══════════════════════════════ PLAN PREVIEW ═══════════════════════════════
+function updatePlanPreview() {
+  var panel = document.getElementById('plan-content');
+  var title = document.getElementById('plan-title');
+  var agentName = document.getElementById('at-name').value || '(new agent type)';
+  title.textContent = 'Implementation Plan — ' + agentName;
+
+  if (currentBindings.length === 0) {
+    panel.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-secondary)">' +
+      '<div style="font-size:36px;margin-bottom:8px;opacity:.5">&#128196;</div>' +
+      '<p><strong>No bindings defined</strong></p>' +
+      '<p style="font-size:12px">The plan will be generated from all role-assigned SOPs and skills (current fallback behavior).</p>' +
+      '<p style="font-size:12px;margin-top:4px">Add bindings in the "SOP / Skill Bindings" tab to curate the plan scope.</p>' +
+      '</div>';
+    updateTopology([]);
+    return;
+  }
+
+  var html = '<ul class="plan-list">';
+  for (var i = 0; i < currentBindings.length; i++) {
+    var b = currentBindings[i];
+    var num = i + 1;
+    var typeLabel = b.type === 'sop' ? 'SOP Binding' : 'Skill Binding';
+    var typeChipClass = b.type === 'sop' ? 'chip-purple' : 'chip-blue';
+    var refName = getRefName(b.type, b.refId);
+    var desc = b.type === 'sop' ? 'Load and execute SOP: ' + refName : 'Invoke skill: ' + refName;
+
+    html += '<li class="plan-item">';
+    html += '<div class="plan-item-num">' + num + '.</div>';
+    html += '<div class="plan-item-content">';
+    html += '<div class="plan-item-header">';
+    html += '<span class="chip ' + typeChipClass + ' chip-border">' + typeLabel + '</span>';
+    html += '<span class="plan-item-title">' + escapeHtml(refName) + '</span>';
+    html += '</div>';
+    html += '<span class="plan-item-desc">' + escapeHtml(desc) + '</span>';
+    html += '</div>';
+    html += '</li>';
+  }
+  html += '</ul>';
+
+  // Show generation summary
+  html += '<div class="validation-alert success mt-3"><span class="validation-alert-icon">&#9989;</span><span><strong>' + currentBindings.length + ' curated binding(s)</strong> will be used to generate the system instruction and implementation plan — not all role-assigned items.</span></div>';
+
+  panel.innerHTML = html;
+  updateTopology(currentBindings);
+}
+
+function updateTopology(bindings) {
+  var svg = document.getElementById('topology-svg');
+  if (!svg) return;
+
+  var agentName = document.getElementById('at-name').value || 'agent-type';
+  var role = document.getElementById('at-role').value || 'role';
+
+  if (bindings.length === 0) {
+    svg.innerHTML = '<rect x="160" y="130" width="200" height="50" rx="8" fill="#FCE4EC" stroke="#D32F2F" stroke-width="1.5"></rect>' +
+      '<text x="260" y="160" text-anchor="middle" font-size="13" font-weight="600" fill="#212121">' + escapeHtml(agentName) + '</text>' +
+      '<text x="260" y="210" text-anchor="middle" font-size="11" fill="#757575">No bindings defined</text>';
+    return;
+  }
+
+  var items = '';
+  var lines = '';
+  var rowHeight = 52;
+  var startY = 40;
+  var totalHeight = Math.max(260, startY + bindings.length * rowHeight + 40);
+
+  svg.setAttribute('viewBox', '0 0 520 ' + totalHeight);
+  svg.setAttribute('height', totalHeight);
+
+  // Agent type node
+  items += '<rect x="20" y="' + (startY + (bindings.length * rowHeight) / 2 - 25) + '" width="130" height="50" rx="8" fill="#FCE4EC" stroke="#D32F2F" stroke-width="1.5"></rect>';
+  items += '<text x="85" y="' + (startY + (bindings.length * rowHeight) / 2 + 5) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#212121">' + escapeHtml(agentName) + '</text>';
+
+  // Role node
+  items += '<rect x="195" y="' + (startY + (bindings.length * rowHeight) / 2 - 25) + '" width="120" height="50" rx="8" fill="#E8F5E9" stroke="#388E3C" stroke-width="1.5"></rect>';
+  items += '<text x="255" y="' + (startY + (bindings.length * rowHeight) / 2 + 5) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#212121">' + escapeHtml(role) + '</text>';
+
+  // Lines from agent to role
+  lines += '<line x1="150" y1="' + (startY + (bindings.length * rowHeight) / 2) + '" x2="195" y2="' + (startY + (bindings.length * rowHeight) / 2) + '" stroke="#64748B" stroke-width="2" marker-end="url(#arrowhead)"></line>';
+
+  for (var i = 0; i < bindings.length; i++) {
+    var b = bindings[i];
+    var y = startY + i * rowHeight;
+    var typeLabel = b.type === 'sop' ? 'SOP' : 'Skill';
+    var typeColor = b.type === 'sop' ? '#EDE9FE' : '#DBEAFE';
+    var strokeColor = b.type === 'sop' ? '#6D28D9' : '#1D4ED8';
+    var refName = getRefName(b.type, b.refId);
+
+    items += '<rect x="360" y="' + (y - 10) + '" width="130" height="36" rx="6" fill="' + typeColor + '" stroke="' + strokeColor + '" stroke-width="1.5"></rect>';
+    items += '<text x="425" y="' + (y + 12) + '" text-anchor="middle" font-size="11" font-weight="500" fill="#212121">' + escapeHtml(refName) + '</text>';
+    items += '<text x="425" y="' + (y + 24) + '" text-anchor="middle" font-size="9" fill="#757575">' + typeLabel + ' #' + (i + 1) + '</text>';
+
+    // Lines from role to each binding
+    lines += '<line x1="315" y1="' + (startY + (bindings.length * rowHeight) / 2) + '" x2="315" y2="' + y + '" stroke="#64748B" stroke-width="1.5"></line>';
+    lines += '<line x1="315" y1="' + y + '" x2="360" y2="' + (y + 8) + '" stroke="#64748B" stroke-width="1.5"></line>';
+  }
+
+  svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#64748B"/></marker></defs>' + items + lines;
+}
+
+// ═══════════════════════════════ SAVE ═══════════════════════════════
+function saveAgentType() {
+  var name = document.getElementById('at-name').value.trim();
+  if (!name) {
+    showToast('Please enter a name for the agent type.', 'warning');
+    return;
+  }
+
+  var role = document.getElementById('at-role').value;
+
+  // Validate bindings against role
+  validateAllBindings();
+  if (bindingErrors.length > 0) {
+    // Switch to bindings tab to show errors
+    var bindingsTab = document.querySelector('#editor-drawer .tab:nth-child(2)');
+    if (bindingsTab) switchEditorTab(bindingsTab, 'editor-bindings-panel');
+    renderBindings();
+    showToast('Cannot save: ' + bindingErrors.length + ' binding validation error(s). Please fix them first.', 'error');
+    return;
+  }
+
+  // Simulate save
+  var statusEl = document.getElementById('editor-save-status');
+  statusEl.innerHTML = '<span style="color:var(--primary)">Saving...</span>';
+
+  setTimeout(function() {
+    statusEl.innerHTML = '<span style="color:var(--success)">&#10003; Saved successfully</span>';
+    showToast('Agent type "' + name + '" saved with ' + currentBindings.length + ' binding(s).', 'success');
+
+    // Update agentTypes data
+    if (currentEditingAgent && agentTypes[currentEditingAgent]) {
+      agentTypes[currentEditingAgent].name = name;
+      agentTypes[currentEditingAgent].role = role;
+      agentTypes[currentEditingAgent].bindings = JSON.parse(JSON.stringify(currentBindings));
+    }
+
+    setTimeout(function() {
+      statusEl.innerHTML = '';
+      closeEditor();
+      // Simulates: page doesn't need reload — binding list reflects changes
+    }, 800);
+  }, 500);
+}
+
+// ═══════════════════════════════ TOAST ═══════════════════════════════
+function showToast(message, type) {
+  var container = document.getElementById('toast-container');
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + (type || 'success');
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(function() {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 300);
+  }, 2500);
+}
+
+// ═══════════════════════════════ INIT ═══════════════════════════════
+(function init() {
+  // Pre-expand the Agents group
+  var agentsGroup = document.getElementById('nav-agents');
+  if (agentsGroup) agentsGroup.classList.remove('collapsed');
+
+  // Set initial role dropdown state from binding role bar
+  updateBindingRoleBar();
+  updateNewBindingDropdown();
+})();
+</script>
+
+</body>
+</html>

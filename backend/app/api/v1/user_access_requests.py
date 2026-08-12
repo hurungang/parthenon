@@ -2,12 +2,12 @@
 import uuid
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_claims
-from app.core.resource_types import RT_PERMISSIONS
+from app.core.resource_types import RT_SYSTEM_PERMISSIONS
 from app.db.models.access_request import AccessRequest, AccessRequestStatus
 from app.db.models.access_request_batch import AccessRequestBatch
 from app.db.models.group import Group
@@ -102,6 +102,8 @@ async def submit_access_request(
 async def list_my_requests(
     request: Request,
     db: DbSession,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> List[AccessRequestBatchRead]:
     """List the current user's access request batches. Authenticated users."""
     platform_user_id = _get_platform_user_id(request)
@@ -112,6 +114,8 @@ async def list_my_requests(
         select(AccessRequestBatch)
         .where(AccessRequestBatch.user_id == platform_user_id)
         .order_by(AccessRequestBatch.submitted_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     batches = result.scalars().all()
     return [await _load_batch_with_requests(db, b) for b in batches]
@@ -121,6 +125,8 @@ async def list_my_requests(
 async def list_pending_requests(
     request: Request,
     db: DbSession,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ) -> List[AccessRequestRead]:
     """List pending access requests. Users with permission to manage permissions see all; group owners see their groups only."""
     platform_user_id = _get_platform_user_id(request)
@@ -128,13 +134,15 @@ async def list_pending_requests(
     # Check if user has permissions to manage permissions (admin-level access)
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_SYSTEM_PERMISSIONS, "manage")
 
     if has_manage_permission:
         result = await db.execute(
             select(AccessRequest)
             .where(AccessRequest.status == AccessRequestStatus.pending)
             .order_by(AccessRequest.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     elif platform_user_id is not None:
         owned_result = await db.execute(
@@ -150,6 +158,8 @@ async def list_pending_requests(
                 AccessRequest.status == AccessRequestStatus.pending,
             )
             .order_by(AccessRequest.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
     else:
         raise HTTPException(status_code=403, detail="Not authorized.")
@@ -187,7 +197,7 @@ async def approve_request(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_SYSTEM_PERMISSIONS, "manage")
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
@@ -214,7 +224,7 @@ async def reject_request(
     # Check if user has permissions to manage permissions
     has_manage_permission = False
     if platform_user_id:
-        has_manage_permission = await _has_permission(db, platform_user_id, RT_PERMISSIONS, "manage")
+        has_manage_permission = await _has_permission(db, platform_user_id, RT_SYSTEM_PERMISSIONS, "manage")
 
     req_obj = await db.get(AccessRequest, request_id)
     if not req_obj:
@@ -226,3 +236,4 @@ async def reject_request(
     svc = AccessRequestService()
     updated = await svc.reject_request(db, request_id, reviewer_id, body.rejection_reason)
     return await _enrich_request(db, updated)
+

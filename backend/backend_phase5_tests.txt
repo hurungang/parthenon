@@ -1,0 +1,66 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.3, pluggy-1.5.0 -- C:\Users\rhu\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend
+configfile: pyproject.toml
+plugins: anyio-4.9.0, devtools-0.12.2, Faker-40.15.0, langsmith-0.8.2, asyncio-1.3.0, cov-7.1.0, env-1.1.3, mock-3.14.0, respx-0.23.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 31 items
+
+tests/unit/test_permission_manager.py::test_calculate_allowed_tools_cache_miss_then_hit PASSED [  3%]
+tests/unit/test_permission_manager.py::test_calculate_allowed_tools_empty_when_no_skills PASSED [  6%]
+tests/unit/test_permission_manager.py::test_invalidate_removes_cache_entry PASSED [  9%]
+tests/unit/test_permission_manager.py::test_invalidate_noop_when_not_cached PASSED [ 12%]
+tests/unit/test_permission_manager.py::test_invalidate_stale_cache_forces_fresh_query PASSED [ 16%]
+tests/unit/test_permission_manager.py::test_check_tool_allowed_passes_when_in_set PASSED [ 19%]
+tests/unit/test_permission_manager.py::test_check_tool_allowed_raises_permission_denied PASSED [ 22%]
+tests/unit/test_permission_manager.py::test_tool_identifiers_use_canonical_separator PASSED [ 25%]
+tests/unit/test_permission_manager.py::test_check_tool_allowed_save_result_always_passes PASSED [ 29%]
+tests/unit/test_permission_manager.py::test_resolve_allowed_tools_with_direct_skill PASSED [ 32%]
+tests/unit/test_permission_manager.py::test_resolve_allowed_tools_empty_when_no_assignments PASSED [ 35%]
+tests/unit/test_permission_manager.py::test_resolve_allowed_tools_deduplicates PASSED [ 38%]
+tests/unit/test_permission_manager.py::test_resolve_no_infinite_recursion_without_circular_sop PASSED [ 41%]
+tests/unit/test_permission_manager.py::test_calculate_allowed_agent_types_from_sop_delegation_steps PASSED [ 45%]
+tests/unit/test_permission_manager.py::test_calculate_allowed_agent_types_uses_cache PASSED [ 48%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_empty_graph_returns_empty_nodes_and_edges PASSED [ 51%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_all_four_node_types_rendered PASSED [ 54%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_node_count_matches_graph_dimensions PASSED [ 58%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_role_to_sop_edges_present PASSED [ 61%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_sop_to_skill_edges_via_sop_ids PASSED [ 64%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_directly_assigned_skill_links_to_role PASSED [ 67%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_skill_to_tool_edges_present PASSED [ 70%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_node_ids_are_deterministic PASSED [ 74%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_duplicate_tool_produces_one_node_and_two_edges PASSED [ 77%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_node_labels_match_names PASSED [ 80%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_role_only_graph PASSED [ 83%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_extra_fields_on_nodes_do_not_cause_errors PASSED [ 87%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_edge_label_shows_session_name_when_session_configured PASSED [ 90%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_edge_label_shows_agent_identity_for_passthrough PASSED [ 93%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_edge_label_shows_calls_for_platform_tools PASSED [ 96%]
+tests/unit/services/test_topology_builder_service.py::TestTopologyBuilderService::test_multiple_tools_different_sessions PASSED [100%]
+
+============================== warnings summary ===============================
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\opentelemetry\sdk\_logs\_internal\__init__.py:547: DeprecationWarning: `LoggingHandler` in `opentelemetry-sdk` is deprecated. Use the handler from `opentelemetry-instrumentation-logging` instead.
+    warnings.warn(
+
+app\main.py:169
+  C:\Users\rhu\source\personal\coding-workspace\Parthenon\backend\app\main.py:169: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495
+  C:\Users\rhu\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastapi\applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 31 passed, 3 warnings in 0.60s ========================

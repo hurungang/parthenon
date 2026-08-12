@@ -23,9 +23,16 @@ wheels/
 venv/
 env/
 ENV/
+graphify-out/
 .env
 .env.*
 !.env.example
+
+# Corporate CA cert bundles (machine-local, not for version control)
+ca-bundle.crt
+cacert.pem
+*.local.pem
+*.local.crt
 
 # pytest
 .pytest_cache/
@@ -77,3 +84,4 @@ secrets/
 # Identity YAML config (may contain resolved OIDC settings — not a secret itself,
 # but generated at runtime and should not be committed)
 config/identity.yaml
+docs/demo.mp4

@@ -1,0 +1,758 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Divider,
+  Paper,
+  TextField,
+  Typography,
+} from '@mui/material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import SendIcon from '@mui/icons-material/Send'
+import apiClient from '../../api/apiClient'
+import { useChatSession } from '../../hooks/useChatSession'
+import { useExecutionLogs } from '../../hooks/useExecutionLogs'
+import { useSessionExecutionLogStream } from '../../hooks/useSessionExecutionLogStream'
+import { useTypedOutput } from '../../hooks/useTypedOutput'
+import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { ContentRenderer } from '../../components/ContentRenderer'
+import { MaximizableContent } from '../../components/MaximizableContent'
+import { LogViewer } from '../../components/executions/LogViewer'
+import { OutputTypeResultTab } from '../../components/executions/OutputTypeResultTab'
+import { AgentExecutionDetailsDialog } from '../../components/agents/AgentExecutionDetailsDialog'
+import { InterveneRequestList } from '../../components/agents/InterveneRequestList'
+import { InterveneResponseDialog } from '../../components/agents/InterveneResponseDialog'
+import * as interveneApi from '../../api/interveneApi'
+import type { AgentJob, AgentJobStatus, ExecutionLogEntry, InterveneRequest } from '../../types'
+
+
+const TERMINAL_STATUSES: AgentJobStatus[] = ['completed', 'failed']
+const POLL_INTERVAL_MS = 3_000
+
+function mergeLogEntries(
+  existing: ExecutionLogEntry[],
+  incoming: ExecutionLogEntry[],
+): ExecutionLogEntry[] {
+  if (incoming.length === 0) {
+    return existing
+  }
+
+  const map = new Map<string, ExecutionLogEntry>()
+  for (const entry of existing) {
+    map.set(entry.id, entry)
+  }
+  for (const entry of incoming) {
+    map.set(entry.id, entry)
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  )
+}
+
+function statusColor(status: AgentJobStatus): 'default' | 'warning' | 'info' | 'success' | 'error' {
+  if (status === 'queued') return 'default'
+  if (status === 'running') return 'info'
+  if (status === 'waiting_for_human') return 'warning'
+  if (status === 'completed') return 'success'
+  if (status === 'failed') return 'error'
+  if (status === 'terminated') return 'warning'
+  return 'default'
+}
+
+export interface AgentJobPageProps {
+  /** Optional session ID for embedded usage. If not provided, reads from URL params. */
+  sessionId?: string
+  /** Hide task result output when true (useful for dialog mode to focus on logs). */
+  hideResults?: boolean
+  /** Hide the LogViewer when true (useful when the parent already provides a log tab). */
+  hideLogs?: boolean
+}
+
+/**
+ * AgentJobPage — shows status and result for a single agent session.
+ *
+ * - Task agents: polls GET /agents/sessions/{id} every 3s until terminal status,
+ *   then renders the result (structured JSON or markdown).
+ * - Conversational agents: opens a WebSocket chat interface for interactive Q&A.
+ * - Can be used standalone (with URL params) or embedded in a dialog (with sessionId prop).
+ */
+export function AgentJobPage({ sessionId: sessionIdProp, hideResults = false, hideLogs = false }: AgentJobPageProps = {}) {
+  const { id: urlId } = useParams<{ id: string }>()
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+
+  // Use prop if provided, otherwise fall back to URL param
+  const id = sessionIdProp ?? urlId
+
+  const [session, setSession] = useState<AgentJob | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<unknown>(null)
+  const [chatInput, setChatInput] = useState('')
+  const [logEntries, setLogEntries] = useState<ExecutionLogEntry[]>([])
+  const [interveneRequests, setInterveneRequests] = useState<InterveneRequest[]>([])
+  const [pendingInterventionsByChildSession, setPendingInterventionsByChildSession] = useState<Record<string, InterveneRequest>>({})
+  const [subAgentDialogSessionId, setSubAgentDialogSessionId] = useState<string | null>(null)
+  const [interveneLoading, setInterveneLoading] = useState(false)
+  const [autoDialogOpen, setAutoDialogOpen] = useState(false)
+  const [autoDialogRequest, setAutoDialogRequest] = useState<InterveneRequest | null>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const logRefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasRefetchedLogsRef = useRef(false)
+  const autoDialogShownRef = useRef<string | null>(null)
+
+  // Typed output management
+  const { outputId, typedOutput, outputLoading, extractAndSetOutputId, fetchTypedOutput } = useTypedOutput(session)
+
+  // Execution logs (system instruction + user prompt) via dedicated hook
+  const { logs: execLogs, loading: execLogsLoading, refetch: refetchExecLogs } = useExecutionLogs(id ?? null)
+
+  // Determine if this is a conversational session based on status flow
+  // (we'll fetch the agent type info implicitly from output format)
+  const isConversational = session?.input_data != null &&
+    typeof session.input_data === 'object' &&
+    'message' in session.input_data
+
+  const shouldStreamLogs = Boolean(
+    id &&
+    session &&
+    !isConversational &&
+    !TERMINAL_STATUSES.includes(session.status),
+  )
+
+  const {
+    entries: streamedLogEntries,
+    connectionState: logStreamState,
+    isFallback: isLogStreamFallback,
+    humanInterveneEvent,
+    clearHumanInterveneEvent,
+  } = useSessionExecutionLogStream({
+    sessionId: id ?? null,
+    enabled: shouldStreamLogs,
+    onComplete: () => {
+      void fetchSession()
+      // Re-fetch intervention requests so stale "pending" state from responded
+      // interventions is cleared once the parent execution completes.
+      void fetchInterveneRequests()
+    },
+  })
+
+  // WebSocket chat — only active for conversational agents
+  const { messages, sendMessage, connected } = useChatSession(
+    isConversational && id ? id : null,
+  )
+
+  const fetchSession = useCallback(async () => {
+    if (!id) return
+    try {
+      const { data } = await apiClient.get<AgentJob>(`/agents/sessions/${id}`)
+      setSession(data)
+      setFetchError(null)
+      if (TERMINAL_STATUSES.includes(data.status)) {
+        if (pollingRef.current) clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    } catch (err) {
+      setFetchError(err)
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  const fetchLogEntries = useCallback(async () => {
+    if (!id) return
+    try {
+      const { data } = await apiClient.get<ExecutionLogEntry[]>(`/agents/sessions/${id}/logs`)
+      setLogEntries(data)
+    } catch {
+      // Log entries are best-effort; do not surface errors in main page error state
+    }
+  }, [id])
+
+  const fetchInterveneRequests = useCallback(async () => {
+    if (!id) return
+    try {
+      setInterveneLoading(true)
+      const [ownRequests, allPending] = await Promise.all([
+        interveneApi.getInterveneRequests({ agent_session_id: id }),
+        interveneApi.getInterveneRequests({ status: 'pending' }),
+      ])
+      setInterveneRequests(ownRequests)
+      // Build a map of child_session_id → pending intervention for inline
+      // rendering in delegation cards.  Uses all pending requests (not just
+      // own) because delegated sub-agents create their own InterveneRequest
+      // records with a different agent_session_id.
+      const pendingMap: Record<string, InterveneRequest> = {}
+      for (const req of allPending) {
+        if (req.agent_session_id) {
+          pendingMap[req.agent_session_id] = req
+        }
+      }
+      setPendingInterventionsByChildSession(pendingMap)
+    } catch {
+      // Intervene requests are best-effort
+      setPendingInterventionsByChildSession({})
+    } finally {
+      setInterveneLoading(false)
+    }
+  }, [id])
+
+  const handleSubmitResponse = useCallback(
+    async (requestId: string, value: {
+      approval_value?: boolean
+      selected_choice?: string
+      text_value?: string
+    }) => {
+      await interveneApi.submitInterveneResponse(requestId, {
+        request_id: requestId,
+        ...value,
+      })
+      await fetchInterveneRequests()
+    },
+    [fetchInterveneRequests],
+  )
+
+  const handleCancelRequest = useCallback(
+    async (requestId: string) => {
+      await interveneApi.cancelInterveneRequest(requestId)
+      await fetchInterveneRequests()
+    },
+    [fetchInterveneRequests],
+  )
+
+  useEffect(() => {
+    // Reset refetch flag when session ID changes
+    hasRefetchedLogsRef.current = false
+    
+    void fetchSession()
+    void fetchLogEntries()
+    void fetchInterveneRequests()
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+      if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
+    }
+  }, [fetchSession, fetchLogEntries, fetchInterveneRequests])
+
+  useEffect(() => {
+    if (!streamedLogEntries.length) {
+      return
+    }
+    setLogEntries((prev) => mergeLogEntries(prev, streamedLogEntries))
+  }, [streamedLogEntries])
+
+  // Start polling when session is in a non-terminal status
+  useEffect(() => {
+    if (!session) return
+    if (TERMINAL_STATUSES.includes(session.status)) return
+    if (isConversational) return // Conversational uses WebSocket
+
+    if (!pollingRef.current) {
+      pollingRef.current = setInterval(() => void fetchSession(), POLL_INTERVAL_MS)
+    }
+  }, [session, isConversational, fetchSession])
+
+  // Refetch logs when session completes (with delay to allow backend to persist)
+  useEffect(() => {
+    if (!session || !TERMINAL_STATUSES.includes(session.status)) return
+    if (hasRefetchedLogsRef.current) return // Already refetched
+    
+    hasRefetchedLogsRef.current = true
+    
+    // Wait 1 second after completion, then refetch both execution logs and log entries
+    logRefetchTimeoutRef.current = setTimeout(() => {
+      refetchExecLogs()
+      void fetchLogEntries()
+    }, 1000)
+    
+    return () => {
+      if (logRefetchTimeoutRef.current) clearTimeout(logRefetchTimeoutRef.current)
+    }
+  }, [session, refetchExecLogs, fetchLogEntries])
+
+  // Extract output_id from session when it changes
+  useEffect(() => {
+    extractAndSetOutputId(session)
+  }, [session, extractAndSetOutputId])
+
+  // Fetch typed output whenever output_id becomes available
+  useEffect(() => {
+    if (outputId) {
+      void fetchTypedOutput(outputId)
+    }
+  }, [outputId, fetchTypedOutput])
+
+  // Auto-popup intervene dialog when stream emits a human_intervene event
+  useEffect(() => {
+    if (!humanInterveneEvent) return
+
+    const event = humanInterveneEvent
+    // Fetch full request details and show dialog
+    const showDialog = async () => {
+      try {
+        const request = await interveneApi.getInterveneRequest(event.request_id)
+        if (request && request.status === 'pending') {
+          autoDialogShownRef.current = request.id
+          setAutoDialogRequest(request)
+          setAutoDialogOpen(true)
+        }
+      } catch {
+        // Best-effort
+      } finally {
+        clearHumanInterveneEvent()
+      }
+    }
+    void showDialog()
+  }, [humanInterveneEvent, clearHumanInterveneEvent])
+
+  // Polling fallback: when session status becomes waiting_for_human, auto-fetch
+  // and show dialog if not already shown via stream event.
+  useEffect(() => {
+    if (!session || session.status !== 'waiting_for_human') return
+
+    const fetchAndShow = async () => {
+      try {
+        const requests = await interveneApi.getInterveneRequests({
+          agent_session_id: id,
+          status: 'pending',
+        })
+        if (requests.length > 0) {
+          const req = requests[0]
+          if (autoDialogShownRef.current !== req.id) {
+            autoDialogShownRef.current = req.id
+            setAutoDialogRequest(req)
+            setAutoDialogOpen(true)
+          }
+        }
+      } catch {
+        // Best-effort
+      }
+    }
+    void fetchAndShow()
+  }, [session?.status, id])
+
+  // Auto-close the dialog after successful submission
+  const handleAutoDialogClose = useCallback(() => {
+    setAutoDialogOpen(false)
+    setAutoDialogRequest(null)
+  }, [])
+
+  const handleViewSubAgentExecution = useCallback((sid: string) => {
+    setSubAgentDialogSessionId(sid)
+  }, [])
+
+  const handleAutoDialogSubmit = useCallback(
+    async (requestId: string, value: {
+      approval_value?: boolean
+      selected_choice?: string
+      text_value?: string
+    }) => {
+      await handleSubmitResponse(requestId, value)
+      handleAutoDialogClose()
+    },
+    [handleSubmitResponse, handleAutoDialogClose],
+  )
+
+  const handleTerminateSession = useCallback(
+    async (sessionId: string, _requestId: string) => {
+      await interveneApi.terminateSession(sessionId, 'Operator terminated from intervention dialog')
+      handleAutoDialogClose()
+      void fetchSession()
+    },
+    [handleAutoDialogClose, fetchSession],
+  )
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSendMessage = () => {
+    const msg = chatInput.trim()
+    if (!msg) return
+    sendMessage(msg)
+    setChatInput('')
+  }
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" pt={8}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <Box>
+        {!sessionIdProp && (
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/agents')} sx={{ mb: 2 }}>
+            {t('app.back')}
+          </Button>
+        )}
+        <PermissionDeniedAlert error={fetchError} fallbackMessage={t('app.error')} />
+      </Box>
+    )
+  }
+
+  if (!session) return null
+
+  const isTerminal = TERMINAL_STATUSES.includes(session.status)
+
+  return (
+    <Box>
+      {!sessionIdProp && (
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/agents')} sx={{ mb: 2 }}>
+          {t('app.back')}
+        </Button>
+      )}
+
+      {/* Session Metadata */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+          <Box>
+            <Typography variant="h5" fontWeight={700} mb={0.5}>
+              {t('agents.sessions.sessionTitle')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" fontFamily="monospace">
+              {session.id}
+            </Typography>
+          </Box>
+          <Box display="flex" alignItems="center" gap={1}>
+            {!isTerminal && !isConversational && (
+              <CircularProgress size={16} sx={{ mr: 1 }} />
+            )}
+            <Chip
+              label={t(`agents.sessions.status${session.status.replace(/^./, (c: string) => c.toUpperCase())}`)}
+              color={statusColor(session.status)}
+              size="small"
+            />
+          </Box>
+        </Box>
+
+        <Divider sx={{ mb: 2 }} />
+
+        <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(200px, 1fr))" gap={2}>
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {t('agents.agentType')}
+            </Typography>
+            <Typography variant="body2">
+              {session.agent_type_name ?? session.agent_type_id.slice(0, 8) + '…'}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {t('agents.sessions.triggeredBy')}
+            </Typography>
+            <Typography variant="body2">
+              {session.triggered_by_user_name ?? '—'}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {t('agents.sessions.createdAt')}
+            </Typography>
+            <Typography variant="body2">
+              {new Date(session.created_at).toLocaleString()}
+            </Typography>
+          </Box>
+          {session.started_at && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {t('agents.sessions.startedAt')}
+              </Typography>
+              <Typography variant="body2">
+                {new Date(session.started_at).toLocaleString()}
+              </Typography>
+            </Box>
+          )}
+          {session.completed_at && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {t('agents.sessions.completedAt')}
+              </Typography>
+              <Typography variant="body2">
+                {new Date(session.completed_at).toLocaleString()}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </Paper>
+
+      {/* Error display */}
+      {session.status === 'failed' && session.error_message && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" mb={0.5}>{t('agents.sessions.errorTitle')}</Typography>
+          <Typography variant="body2" fontFamily="monospace">
+            {session.error_message}
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Conversational Chat Interface */}
+      {isConversational && (
+        <Paper sx={{ p: 0, overflow: 'hidden' }}>
+          <Box
+            sx={{
+              p: 1.5,
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Typography variant="subtitle2">{t('agents.sessions.chat')}</Typography>
+            <Chip
+              label={connected ? t('agents.sessions.connected') : t('agents.sessions.disconnected')}
+              size="small"
+              color={connected ? 'success' : 'default'}
+              sx={{ color: 'white', bgcolor: connected ? 'success.dark' : 'grey.600' }}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              height: 400,
+              overflowY: 'auto',
+              p: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+            }}
+          >
+            {messages.length === 0 && (
+              <Typography color="text.secondary" textAlign="center" mt={4}>
+                {t('agents.sessions.chatEmpty')}
+              </Typography>
+            )}
+            {messages.map((msg) => (
+              <Box
+                key={msg.id}
+                alignSelf={msg.role === 'user' ? 'flex-end' : 'flex-start'}
+                sx={{ maxWidth: '75%' }}
+              >
+                <Paper
+                  sx={{
+                    p: 1.5,
+                    bgcolor: msg.role === 'user' ? 'primary.main' : 'grey.100',
+                    color: msg.role === 'user' ? 'primary.contrastText' : 'text.primary',
+                  }}
+                >
+                  {msg.role !== 'user' ? (
+                    <MaximizableContent title="Agent Response">
+                      <ContentRenderer mode="chat" content={msg.content} />
+                    </MaximizableContent>
+                  ) : (
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                      {msg.content}
+                    </Typography>
+                  )}
+                </Paper>
+                <Typography variant="caption" color="text.secondary" display="block" mt={0.25}
+                  textAlign={msg.role === 'user' ? 'right' : 'left'}>
+                  {new Date(msg.timestamp).toLocaleTimeString()}
+                </Typography>
+              </Box>
+            ))}
+            <div ref={messagesEndRef} />
+          </Box>
+
+          <Divider />
+          <Box display="flex" gap={1} p={1.5}>
+            <TextField
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSendMessage()
+                }
+              }}
+              placeholder={t('agents.sessions.chatPlaceholder')}
+              fullWidth
+              size="small"
+              multiline
+              maxRows={4}
+              disabled={!connected}
+            />
+            <Button
+              variant="contained"
+              onClick={handleSendMessage}
+              disabled={!chatInput.trim() || !connected}
+              endIcon={<SendIcon />}
+            >
+              {t('agents.sessions.send')}
+            </Button>
+          </Box>
+        </Paper>
+      )}
+
+      {/* Task Agent Result */}
+      {!hideResults && !isConversational && session.status === 'completed' && session.output_data && (
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" mb={2}>{t('agents.sessions.result')}</Typography>
+          {/* Display typed output if available, otherwise fall back to raw output_data */}
+          {outputLoading ? (
+            <CircularProgress size={24} />
+          ) : typedOutput ? (
+            <OutputTypeResultTab
+              outputType="typed"
+              outputData={typedOutput.field_values}
+              dataTypeId={typedOutput.data_type_id}
+              validationStatus={typedOutput.validation_status}
+              rawOutput={typedOutput.raw_output}
+              dataTypeName={typedOutput.data_type_name}
+            />
+          ) : typeof session.output_data === 'object' &&
+          'markdown' in session.output_data &&
+          typeof session.output_data.markdown === 'string' ? (
+            <Box
+              sx={{
+                '& p': { mb: 1 },
+                '& code': { fontFamily: 'monospace', bgcolor: 'grey.100', px: 0.5, borderRadius: 0.5 },
+                '& pre': { bgcolor: 'grey.100', p: 2, borderRadius: 1, overflow: 'auto' },
+              }}
+              dangerouslySetInnerHTML={{ __html: session.output_data.markdown }}
+            />
+          ) : (
+            <Box
+              component="pre"
+              sx={{
+                bgcolor: 'grey.50',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 2,
+                overflow: 'auto',
+                fontSize: 13,
+                fontFamily: 'monospace',
+              }}
+            >
+              {JSON.stringify(session.output_data, null, 2)}
+            </Box>
+          )}
+        </Paper>
+      )}
+
+      {/* Intervention Requests */}
+      {interveneRequests.length > 0 && !isConversational && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6" mb={2}>
+            {t('intervene.title', 'Intervention Requests')}
+          </Typography>
+          <InterveneRequestList
+            requests={interveneRequests}
+            isLoading={interveneLoading}
+            onSubmitResponse={handleSubmitResponse}
+            onCancelRequest={handleCancelRequest}
+          />
+        </Paper>
+      )}
+
+      {/* Auto-popup intervention dialog (triggered by stream event or session status) */}
+      <InterveneResponseDialog
+        open={autoDialogOpen}
+        request={autoDialogRequest}
+        onClose={handleAutoDialogClose}
+        onSubmit={handleAutoDialogSubmit}
+        onTerminate={handleTerminateSession}
+      />
+
+      {/* Conversation History (read-only, for completed conversational sessions) */}
+      {session.conversation_history && session.conversation_history.length > 0 && isTerminal && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6" mb={2}>{t('agents.sessions.conversationHistory')}</Typography>
+          <Box display="flex" flexDirection="column" gap={1.5}>
+            {session.conversation_history.map((msg, idx) => (
+              <Box
+                key={idx}
+                alignSelf={msg.role === 'user' ? 'flex-end' : 'flex-start'}
+                sx={{ maxWidth: '80%' }}
+              >
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.25}
+                  textAlign={msg.role === 'user' ? 'right' : 'left'}>
+                  {msg.role}
+                </Typography>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    px: 1.5,
+                    py: 1,
+                    bgcolor: msg.role === 'user' ? 'primary.50' : msg.role === 'tool' ? 'grey.100' : 'background.paper',
+                    borderRadius: 2,
+                  }}
+                >
+                  {msg.role !== 'user' ? (
+                    <MaximizableContent title="Agent Response">
+                      <ContentRenderer mode="chat" content={msg.content} />
+                    </MaximizableContent>
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      sx={{ whiteSpace: 'pre-wrap' }}
+                    >
+                      {msg.content}
+                    </Typography>
+                  )}
+                </Paper>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Queued / Running state for task agents */}
+      {!isConversational && !isTerminal && (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography color="text.secondary">
+            {session.status === 'queued'
+              ? t('agents.sessions.statusQueued')
+              : t('agents.sessions.statusRunning')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {isLogStreamFallback
+              ? t('agents.sessions.pollingHint')
+              : t('agents.sessions.statusRunning')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+            {isLogStreamFallback
+              ? t('agents.sessions.pollingHint')
+              : t('agents.sessions.logViewer.streamConnected', { defaultValue: `Live stream: ${logStreamState}` })}
+          </Typography>
+        </Paper>
+      )}
+
+      {/* Log Viewer — shows whenever any log data exists (with or without prompt log) */}
+      {!hideLogs && !execLogsLoading && (logEntries.length > 0 || execLogs.length > 0) && session && (
+        <LogViewer
+          executionLog={execLogs[0] ?? null}
+          entries={logEntries}
+          sessionStatus={session.status}
+          pendingInterventionsByChildSession={pendingInterventionsByChildSession}
+          onViewSubAgentExecution={handleViewSubAgentExecution}
+          onOpenIntervention={(req) => {
+            setAutoDialogRequest(req)
+            setAutoDialogOpen(true)
+          }}
+        />
+      )}
+
+      {/* Sub-agent execution details dialog (opened via delegation block "View Execution Logs" button) */}
+      {subAgentDialogSessionId && (
+        <AgentExecutionDetailsDialog
+          open
+          onClose={() => setSubAgentDialogSessionId(null)}
+          sessionId={subAgentDialogSessionId}
+        />
+      )}
+    </Box>
+  )
+}

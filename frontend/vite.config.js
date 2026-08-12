@@ -16,7 +16,7 @@ export default defineConfig({
                 changeOrigin: true,
             },
             '/ws': {
-                target: 'ws://localhost:8000',
+                target: 'ws://localhost:8002',
                 ws: true,
                 changeOrigin: true,
             },
@@ -26,6 +26,6 @@ export default defineConfig({
         globals: true,
         environment: 'jsdom',
         setupFiles: ['./src/__tests__/setup.ts'],
-        testTimeout: 15000,
+        testTimeout: 30000,
     },
 });

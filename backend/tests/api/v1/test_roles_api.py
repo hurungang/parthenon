@@ -24,6 +24,7 @@ def _bypass_auth(admin: bool = True):
 
     async def patched_dispatch(self, request, call_next):
         request.state.identity = {"sub": "user-sub", "roles": ["admin"] if admin else []}
+        request.state.platform_user_id = uuid.uuid4()
         return await call_next(request)
 
     return patch.object(JWTAuthMiddleware, "dispatch", patched_dispatch)
@@ -62,7 +63,8 @@ async def test_list_roles_as_admin_returns_200():
     app = create_app()
     _, db_dep = _db_override()
     app.dependency_overrides[get_db] = db_dep
-    app.dependency_overrides[require_permission("permissions", "read")] = _admin_override()
+    from app.core.resource_types import RT_SYSTEM_PERMISSIONS
+    app.dependency_overrides[require_permission(RT_SYSTEM_PERMISSIONS, "read")] = _admin_override()
 
     with _bypass_auth():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -97,7 +99,8 @@ async def test_create_role_as_admin_returns_201():
     app = create_app()
     mock_session, db_dep = _db_override()
     app.dependency_overrides[get_db] = db_dep
-    app.dependency_overrides[require_permission("permissions", "manage")] = _admin_override()
+    from app.core.resource_types import RT_SYSTEM_PERMISSIONS
+    app.dependency_overrides[require_permission(RT_SYSTEM_PERMISSIONS, "manage")] = _admin_override()
 
     # Mock scalar_one_or_none to return None (role doesn't exist yet)
     mock_session.execute = AsyncMock(return_value=MagicMock(

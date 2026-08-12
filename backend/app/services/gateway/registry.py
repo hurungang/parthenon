@@ -1,70 +1,53 @@
-"""Gateway Endpoint Registry — persists and resolves gateway routes per agent type."""
+"""Gateway Endpoint Registry — in-memory route registry for agent type gateways.
+
+Routes are deterministic: ``/gateway/{agent_type_id}``.  No database persistence
+is needed — routes are re-registered from the agent catalogue on startup.
+"""
+from __future__ import annotations
+
 import uuid
-from datetime import datetime
-from typing import Any
+import logging
 
-from sqlalchemy import Column, DateTime, String, func
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
-
-from app.db.session import Base
-
-
-class GatewayRoute(Base):
-    """Persisted route mapping for an agent type's gateway endpoint."""
-
-    __tablename__ = "gateway_routes"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    agent_type_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), unique=True, nullable=False
-    )
-    http_base_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    def __repr__(self) -> str:
-        return f"<GatewayRoute agent_type_id={self.agent_type_id} path={self.http_base_path}>"
+logger = logging.getLogger(__name__)
 
 
 class GatewayEndpointRegistry:
-    """Persists and resolves gateway route mappings per agent type."""
+    """In-memory registry mapping agent_type_id → http_base_path.
 
-    async def register(
-        self, agent_type_id: Any, db: AsyncSession
-    ) -> GatewayRoute:
-        """Create or return the gateway route for an agent type."""
-        existing = await self.resolve(agent_type_id, db)
-        if existing:
-            return existing
+    Routes are deterministic and can be rebuilt from the agent catalogue without
+    persistent storage.  Thread-safe for asyncio single-threaded environments.
 
-        http_base_path = f"/gateway/{agent_type_id}"
-        route = GatewayRoute(
-            agent_type_id=agent_type_id,
-            http_base_path=http_base_path,
-        )
-        db.add(route)
-        await db.flush()
-        await db.refresh(route)
-        return route
+    Usage::
 
-    async def resolve(
-        self, agent_type_id: Any, db: AsyncSession
-    ) -> GatewayRoute | None:
-        """Resolve a gateway route by agent type ID."""
-        result = await db.execute(
-            select(GatewayRoute).where(GatewayRoute.agent_type_id == agent_type_id)
-        )
-        return result.scalar_one_or_none()
+        registry = GatewayEndpointRegistry()
+        route = registry.register(agent_type_id)
+        path = registry.resolve(agent_type_id)   # returns "/gateway/{agent_type_id}"
+        all_routes = registry.list_all()
+    """
 
-    async def list_all(self, db: AsyncSession) -> list[GatewayRoute]:
-        """List all registered gateway routes."""
-        result = await db.execute(
-            select(GatewayRoute).order_by(GatewayRoute.created_at.desc())
-        )
-        return list(result.scalars().all())
+    def __init__(self) -> None:
+        self._routes: dict[str, str] = {}  # agent_type_id (str) → http_base_path
+
+    def register(self, agent_type_id: uuid.UUID | str) -> str:
+        """Register a gateway route and return its http_base_path."""
+        key = str(agent_type_id)
+        path = f"/gateway/{key}"
+        if key not in self._routes:
+            self._routes[key] = path
+            logger.debug("Registered gateway route: %s → %s", key, path)
+        return path
+
+    def resolve(self, agent_type_id: uuid.UUID | str) -> str | None:
+        """Return the http_base_path for an agent type, or None if not registered."""
+        return self._routes.get(str(agent_type_id))
+
+    def list_all(self) -> list[dict[str, str]]:
+        """Return all registered routes as a list of dicts."""
+        return [
+            {"agent_type_id": k, "http_base_path": v}
+            for k, v in sorted(self._routes.items())
+        ]
+
+    def clear(self) -> None:
+        """Remove all registered routes (used in tests)."""
+        self._routes.clear()

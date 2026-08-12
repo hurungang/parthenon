@@ -31,7 +31,7 @@ Parthenon now offers a bundled Keycloak identity provider with a guided setup wi
 - Start/stop scripts manage the lifecycle of the Keycloak container when it is in use
 
 ## Out of Scope
-- Supporting identity providers other than Keycloak and Azure EntraID
+- One-click single-provider setup for non-Keycloak/non-Azure providers (external OIDC providers are configured via System Config UI)
 - Advanced Keycloak customization beyond automated Parthenon realm and client setup
 - Migration of existing user data between identity providers
 - In-depth Keycloak management UI within Parthenon
