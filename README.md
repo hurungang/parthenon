@@ -20,9 +20,7 @@
 
 ![Parthenon Feature Demo Teaser](docs/demo-teaser.gif)
 
-[![Parthenon Full Feature Demo](https://img.youtube.com/vi/uW4r8Ygj15Y/maxresdefault.jpg)](https://youtu.be/uW4r8Ygj15Y)
-
-> ▶️ **[Watch the Full 59-Minute Feature Walkthrough on YouTube](https://youtu.be/uW4r8Ygj15Y)** — covers architecture, IAM, MCP Hub, agents, HITL, delegation, notifications, and observability.
+▶️ **[Watch the Full 59-Minute Feature Walkthrough on YouTube](https://youtu.be/uW4r8Ygj15Y)** — covers architecture, IAM, MCP Hub, agents, HITL, delegation, notifications, and observability.
 
 ## Tech Stack
 
