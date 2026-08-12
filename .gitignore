@@ -84,3 +84,4 @@ secrets/
 # Identity YAML config (may contain resolved OIDC settings — not a secret itself,
 # but generated at runtime and should not be committed)
 config/identity.yaml
+docs/demo.mp4
