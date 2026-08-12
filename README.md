@@ -16,9 +16,11 @@
 - **Three isolated backend services.** Agent Runtime, Control Center, and Communication Hub run independently. Compromise the runtime, and your database stays safe.
 - **Bring your own LLM.** Parthenon connects to any OpenAI-compatible API — use GPT-4, Claude, open-source models, whatever you want. No vendor lock-in.
 
-## Screenshots
+## Demo
 
-![Parthenon Dashboard](docs/screenshot.png)
+![Parthenon Feature Demo Teaser](docs/demo-teaser.gif)
+
+**Full Feature Walkthrough on YouTube** — 59 minutes covering every major feature: architecture, IAM, MCP Hub, agents, HITL, notifications, and observability.
 
 ## Tech Stack
 
