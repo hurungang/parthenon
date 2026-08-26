@@ -48,7 +48,7 @@ from app.db.models.agents import (
 from app.db.session import Base, get_db
 from app.main import create_app
 from app.services.agents.plan_generation_service import PlanGenerationService
-from app.core.resource_types import RT_AGENT_MANAGEMENT
+from app.core.resource_types import RT_AGENT, RT_AGENT_MANAGEMENT
 
 
 # ── Fixture: shared SQLite engine (reuses integration conftest's engine) ───────
@@ -356,10 +356,6 @@ async def authed_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     async def no_op_permission() -> dict:
         return {"sub": "test-user", "roles": ["admin"]}
 
-    # Mock OIDC client to bypass JWT auth middleware (middleware runs before dep overrides)
-    mock_oidc = AsyncMock()
-    mock_oidc.validate_token.return_value = {"sub": "test-user", "roles": ["admin"]}
-
     app = create_app()
     app.dependency_overrides[get_db] = override_get_db
 
@@ -367,8 +363,17 @@ async def authed_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     for action in ("read", "create", "update", "delete", "execute"):
         dep = require_permission(RT_AGENT_MANAGEMENT, action)
         app.dependency_overrides[dep] = no_op_permission
+        dep = require_permission(RT_AGENT, action)
+        app.dependency_overrides[dep] = no_op_permission
 
-    with patch("app.middleware.auth.get_oidc_client", return_value=mock_oidc):
+    # Mock OIDC auth middleware to bypass JWT validation (middleware runs before dep overrides)
+    from app.middleware.auth import JWTAuthMiddleware
+
+    with patch.object(
+        JWTAuthMiddleware,
+        "_try_oidc_auth",
+        new=AsyncMock(return_value={"sub": "test-user", "roles": ["admin"]}),
+    ):
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",

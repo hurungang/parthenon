@@ -93,10 +93,10 @@ async def test_internal_system_tools_rejects_missing_service_certificate(
 ):
     """System-tools internal API requires service certificate even on internal path."""
     response = await async_client.post(
-        "/api/v1/internal/system-tools/save-result",
+        "/api/v1/internal/system-tools/save-data",
         json={
             "session_id": str(uuid.uuid4()),
-            "tool_args": {"content": "probe"},
+            "tool_args": {"data_name": "probe", "data_value": {"x": 1}},
         },
     )
 

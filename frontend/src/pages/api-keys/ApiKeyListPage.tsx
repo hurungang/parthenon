@@ -24,10 +24,13 @@ import {
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import BlockIcon from '@mui/icons-material/Block'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import { useApiKeys } from '../../hooks/useApiKeys'
 import { ApiKeyStatus, type ApiKey } from '../../types/apiKeys'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
 import { RevokeApiKeyDialog } from './RevokeApiKeyDialog'
+import { DeleteApiKeyDialog } from './DeleteApiKeyDialog'
+import { McpConnectionGuide } from './McpConnectionGuide'
 
 export function ApiKeyListPage() {
   const { t } = useTranslation()
@@ -35,6 +38,8 @@ export function ApiKeyListPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ApiKey | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
 
   const { data: keys, isLoading, isError, error, refetch } = useApiKeys(
     statusFilter !== 'all' ? statusFilter : undefined,
@@ -59,6 +64,11 @@ export function ApiKeyListPage() {
 
   const handleRevoked = () => {
     setRevokeTarget(null)
+    refetch()
+  }
+
+  const handleDeleted = () => {
+    setDeleteTarget(null)
     refetch()
   }
 
@@ -99,6 +109,22 @@ export function ApiKeyListPage() {
       <Alert severity="info" sx={{ mb: 2 }}>
         {t('apiKeys.infoBanner')}
       </Alert>
+
+      {/* Connection help (hidden behind a help button) */}
+      <Box mb={3}>
+        <Button
+          variant="outlined"
+          startIcon={<HelpOutlineIcon />}
+          onClick={() => setShowHelp((v) => !v)}
+        >
+          {showHelp ? t('apiKeys.hideConnectionHelp') : t('apiKeys.connectionHelp')}
+        </Button>
+        {showHelp && (
+          <Box mt={2}>
+            <McpConnectionGuide defaultExpanded />
+          </Box>
+        )}
+      </Box>
 
       {/* Filter bar */}
       <Box display="flex" gap={2} mb={3} flexWrap="wrap">
@@ -165,6 +191,7 @@ export function ApiKeyListPage() {
                 <TableCell>{t('apiKeys.keyHint')}</TableCell>
                 <TableCell>{t('app.createdAt')}</TableCell>
                 <TableCell>{t('apiKeys.lastUsed')}</TableCell>
+                <TableCell>{t('apiKeys.expires')}</TableCell>
                 <TableCell align="right">{t('app.actions')}</TableCell>
               </TableRow>
             </TableHead>
@@ -192,6 +219,11 @@ export function ApiKeyListPage() {
                   </TableCell>
                   <TableCell>{formatRelativeTime(key.created_at)}</TableCell>
                   <TableCell>{formatRelativeTime(key.last_used_at)}</TableCell>
+                  <TableCell>
+                    {key.expires_at
+                      ? new Date(key.expires_at).toLocaleDateString()
+                      : t('apiKeys.noExpiration')}
+                  </TableCell>
                   <TableCell align="right">
                     {key.status === ApiKeyStatus.Active && (
                       <IconButton
@@ -207,6 +239,7 @@ export function ApiKeyListPage() {
                       color="default"
                       size="small"
                       title={t('app.delete')}
+                      onClick={() => setDeleteTarget(key)}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -230,6 +263,13 @@ export function ApiKeyListPage() {
         open={!!revokeTarget}
         onClose={() => setRevokeTarget(null)}
         onRevoked={handleRevoked}
+      />
+
+      <DeleteApiKeyDialog
+        keyData={deleteTarget}
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={handleDeleted}
       />
     </Box>
   )

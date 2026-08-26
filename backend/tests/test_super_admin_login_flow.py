@@ -70,17 +70,6 @@ def _mock_provider_config(**overrides):
     return IdentityProviderConfig(**defaults)
 
 
-def _mock_creds(is_enabled=True):
-    """Create a mock SuperAdminCredentials."""
-    from app.db.models.super_admin_credentials import SuperAdminCredentials
-    return SuperAdminCredentials(
-        id=uuid.uuid4(),
-        username="testadmin",
-        hashed_password="hashed-pass",
-        is_enabled=is_enabled,
-    )
-
-
 # ── Tests: Login ──────────────────────────────────────────────────────────
 
 class TestSuperAdminLogin:
@@ -88,11 +77,9 @@ class TestSuperAdminLogin:
 
     def test_login_returns_token(self, client):
         """Login with valid credentials returns access token."""
-        from app.services.super_admin_auth_service import SuperAdminAuthError
-
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(return_value="test-jwt-token-string"),
+            "app.services.super_admin_auth_service.super_admin_login",
+            return_value="test-jwt-token-string",
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -108,8 +95,8 @@ class TestSuperAdminLogin:
         from app.services.super_admin_auth_service import SuperAdminAuthError
 
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(side_effect=SuperAdminAuthError("Invalid username or password")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            side_effect=SuperAdminAuthError("Invalid username or password"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -122,8 +109,8 @@ class TestSuperAdminLogin:
         from app.services.super_admin_auth_service import SuperAdminAuthError
 
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(side_effect=SuperAdminAuthError("Super admin login is disabled")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            side_effect=SuperAdminAuthError("Super admin login is disabled"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -132,12 +119,12 @@ class TestSuperAdminLogin:
             assert response.status_code == 401
 
     def test_login_not_configured(self, client):
-        """Login when super admin not seeded returns 401."""
+        """Login when super admin not configured returns 401."""
         from app.services.super_admin_auth_service import SuperAdminAuthError
 
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(side_effect=SuperAdminAuthError("Super admin not configured")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            side_effect=SuperAdminAuthError("Super admin not configured"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -333,247 +320,89 @@ class TestIdentityProviderLifecycle:
                 assert response.status_code == 400
 
 
-# ── Tests: Super Admin Toggle ─────────────────────────────────────────────
-
-class TestSuperAdminToggle:
-    """Test the super admin toggle with guard rail."""
-
-    def test_disable_without_oidc_guard_rail(self, client):
-        """Disabling without OIDC provider returns 400 (guard rail)."""
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.OIDCConfigService.list_providers",
-                AsyncMock(return_value=[]),
-            ):
-                response = client.patch(
-                    "/api/v1/system/super-admin/toggle",
-                    json={"is_enabled": False},
-                )
-                assert response.status_code == 400
-                assert "no active oidc provider" in response.json()["detail"].lower()
-
-    def test_disable_with_active_oidc_succeeds(self, client):
-        """Disabling with active OIDC provider succeeds."""
-        mock_provider = _mock_provider_config(is_enabled=True)
-
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.OIDCConfigService.list_providers",
-                AsyncMock(return_value=[mock_provider]),
-            ):
-                with patch(
-                    "app.api.v1.system_config.SuperAdminAuthService.toggle",
-                    AsyncMock(return_value=_mock_creds(is_enabled=False)),
-                ):
-                    with patch(
-                        "app.api.v1.system_config.SuperAdminAuthService.get_status",
-                        AsyncMock(return_value={
-                            "is_enabled": False,
-                            "username": "testadmin",
-                            "last_login_at": None,
-                        }),
-                    ):
-                        response = client.patch(
-                            "/api/v1/system/super-admin/toggle",
-                            json={"is_enabled": False},
-                        )
-                        assert response.status_code == 200
-                        assert response.json()["is_enabled"] is False
-
-    def test_disable_with_disabled_oidc_fails(self, client):
-        """Disabling when OIDC exists but is disabled still has guard rail."""
-        mock_provider = _mock_provider_config(is_enabled=False)
-
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.OIDCConfigService.list_providers",
-                AsyncMock(return_value=[mock_provider]),
-            ):
-                response = client.patch(
-                    "/api/v1/system/super-admin/toggle",
-                    json={"is_enabled": False},
-                )
-                assert response.status_code == 400
-
-    def test_enable_succeeds(self, client):
-        """Enabling super admin succeeds directly."""
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.toggle",
-                AsyncMock(return_value=_mock_creds(is_enabled=True)),
-            ):
-                with patch(
-                    "app.api.v1.system_config.SuperAdminAuthService.get_status",
-                    AsyncMock(return_value={
-                        "is_enabled": True,
-                        "username": "testadmin",
-                        "last_login_at": None,
-                    }),
-                ):
-                    response = client.patch(
-                        "/api/v1/system/super-admin/toggle",
-                        json={"is_enabled": True},
-                    )
-                    assert response.status_code == 200
-                    assert response.json()["is_enabled"] is True
-
-    def test_toggle_requires_super_admin(self, client):
-        """Toggle requires super_admin, not just regular auth."""
-        # Without _require_super_admin mock, the endpoint gets no identity
-        response = client.patch(
-            "/api/v1/system/super-admin/toggle",
-            json={"is_enabled": False},
-        )
-        assert response.status_code in (401, 403)
-
-
 # ── Tests: Super Admin Status ─────────────────────────────────────────────
 
 class TestSuperAdminStatus:
-    """Test the super admin status endpoint."""
+    """Test the super admin status endpoint (env-var based)."""
 
     def test_status_returns_enabled(self, client):
         """Status returns is_enabled=True when enabled."""
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.get_status",
-            AsyncMock(return_value={
-                "is_enabled": True,
-                "username": "testadmin",
-                "last_login_at": "2025-01-15T10:00:00Z",
-            }),
+            "app.services.super_admin_auth_service.super_admin_enabled",
+            return_value=True,
         ):
             with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.is_enabled",
-                MagicMock(return_value=True),
+                "app.services.super_admin_auth_service.super_admin_username",
+                return_value="testadmin",
             ):
-                response = client.get("/api/v1/system/super-admin/status")
-                assert response.status_code == 200
-                data = response.json()
-                assert data["is_enabled"] is True
-                assert data["username"] == "testadmin"
+                with patch(
+                    "app.services.super_admin_auth_service.is_env_controlled",
+                    return_value=True,
+                ):
+                    response = client.get("/api/v1/system/super-admin/status")
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert data["is_enabled"] is True
+                    assert data["username"] == "testadmin"
 
     def test_status_returns_disabled(self, client):
         """Status returns is_enabled=False when disabled."""
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.get_status",
-            AsyncMock(return_value={
-                "is_enabled": False,
-                "username": "testadmin",
-                "last_login_at": None,
-            }),
-        ):
-            response = client.get("/api/v1/system/super-admin/status")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["is_enabled"] is False
-
-    def test_status_not_seeded(self, client):
-        """Status when no credentials exist returns null username."""
-        with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.get_status",
-            AsyncMock(return_value=None),
+            "app.services.super_admin_auth_service.super_admin_enabled",
+            return_value=False,
         ):
             with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.is_enabled",
-                MagicMock(return_value=False),
-            ):
-                response = client.get("/api/v1/system/super-admin/status")
-                assert response.status_code == 200
-                data = response.json()
-                assert data["is_enabled"] is False
-                assert data["username"] is None
-
-    def test_status_env_disable_overrides_db(self, client):
-        """Env-level disable should override DB value."""
-        with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.get_status",
-            AsyncMock(return_value={
-                "is_enabled": True,
-                "username": "testadmin",
-                "last_login_at": None,
-            }),
-        ):
-            with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.is_enabled",
-                MagicMock(return_value=False),
-            ):
-                response = client.get("/api/v1/system/super-admin/status")
-                assert response.status_code == 200
-                data = response.json()
-                assert data["is_enabled"] is False  # DB true, but env disabled
-
-
-# ── Tests: Password Update ────────────────────────────────────────────────
-
-class TestSuperAdminPasswordUpdate:
-    """Test the password update flow."""
-
-    def test_update_success(self, client):
-        """Password update succeeds with valid credentials."""
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.update_password",
-                AsyncMock(),
+                "app.services.super_admin_auth_service.super_admin_username",
+                return_value="testadmin",
             ):
                 with patch(
-                    "app.api.v1.system_config.SuperAdminAuthService.get_status",
-                    AsyncMock(return_value={
-                        "is_enabled": True,
-                        "username": "testadmin",
-                        "last_login_at": None,
-                    }),
+                    "app.services.super_admin_auth_service.is_env_controlled",
+                    return_value=True,
                 ):
-                    response = client.put(
-                        "/api/v1/system/super-admin/password",
-                        json={
-                            "current_password": "oldpass",
-                            "new_password": "newpass123",
-                        },
-                    )
+                    response = client.get("/api/v1/system/super-admin/status")
                     assert response.status_code == 200
+                    data = response.json()
+                    assert data["is_enabled"] is False
 
-    def test_update_wrong_current(self, client):
-        """Password update fails with wrong current password."""
-        from app.services.super_admin_auth_service import SuperAdminAuthError
-
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
+    def test_status_not_configured(self, client):
+        """Status when no credentials exist returns null username."""
+        with patch(
+            "app.services.super_admin_auth_service.super_admin_enabled",
+            return_value=False,
+        ):
             with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.update_password",
-                AsyncMock(side_effect=SuperAdminAuthError("Current password is incorrect")),
+                "app.services.super_admin_auth_service.super_admin_username",
+                return_value=None,
             ):
-                response = client.put(
-                    "/api/v1/system/super-admin/password",
-                    json={
-                        "current_password": "wrong",
-                        "new_password": "newpass123",
-                    },
-                )
-                assert response.status_code == 400
+                with patch(
+                    "app.services.super_admin_auth_service.is_env_controlled",
+                    return_value=False,
+                ):
+                    response = client.get("/api/v1/system/super-admin/status")
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert data["is_enabled"] is False
+                    assert data["username"] is None
 
-    def test_update_short_password(self, client):
-        """Password shorter than 8 chars fails Pydantic validation."""
-        response = client.put(
-            "/api/v1/system/super-admin/password",
-            json={"current_password": "oldpass", "new_password": "short"},
-        )
-        # 422 from Pydantic min_length=8, or 401 if auth is checked first
-        assert response.status_code in (401, 403, 422)
-
-    def test_update_without_auth(self, client):
-        """Password update without auth returns 401/403."""
-        response = client.put(
-            "/api/v1/system/super-admin/password",
-            json={"current_password": "old", "new_password": "newpass123"},
-        )
-        assert response.status_code in (401, 403)
-
-    def test_update_empty_current(self, client):
-        """Empty current password should fail validation."""
-        response = client.put(
-            "/api/v1/system/super-admin/password",
-            json={"current_password": "", "new_password": "newpass123"},
-        )
-        assert response.status_code in (401, 403, 422)
+    def test_status_env_disable(self, client):
+        """Env-controlled flag is reflected in the status response."""
+        with patch(
+            "app.services.super_admin_auth_service.super_admin_enabled",
+            return_value=False,
+        ):
+            with patch(
+                "app.services.super_admin_auth_service.super_admin_username",
+                return_value="testadmin",
+            ):
+                with patch(
+                    "app.services.super_admin_auth_service.is_env_controlled",
+                    return_value=True,
+                ):
+                    response = client.get("/api/v1/system/super-admin/status")
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert data["is_enabled"] is False
+                    assert data["env_controlled"] is True
 
 
 # ── Tests: Token Refresh ─────────────────────────────────────────────────

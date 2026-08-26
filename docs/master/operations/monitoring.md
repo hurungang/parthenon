@@ -120,6 +120,10 @@ Update this table whenever new components are added or new metrics are instrumen
 | **API Key Access** | `api_key.load_skills_skill_count` histogram | Number of skills returned per `load_skills` response; tracks payload size growth |
 | **API Key Access** | `api_key.tool_call_total` by `outcome`, `tool_name` | Tool call volume via API key auth; tracks success, permission_denied, and error outcomes |
 | **API Key Access** | `api_key.tool_call_auth_method` by `method` | Ratio of tool calls by auth method (api_key vs certificate); used for volume comparison |
+| **MCP Protocol Server** | `mcp.connections_total` / active connections | External MCP client connections (SSE + Streamable HTTP) to the Communication Hub; tracks external agent adoption |
+| **MCP Protocol Server** | `mcp.initialize_total` | MCP `initialize` handshake volume; a drop to zero with active clients signals a transport regression |
+| **MCP Protocol Server** | `mcp.tools_list_total` | `tools/list` call volume; spikes indicate client re-discovery storms |
+| **MCP Protocol Server** | `mcp.tools_call_total` by `outcome`, `tool_name` | `tools/call` volume by outcome (success, permission_denied, error) |
 | **Startup Validation — Control Center** | `startup.validation.database_ok` / `startup.validation.database_failed` | PostgreSQL reachability at startup; failure prevents CC from starting |
 | **Startup Validation — Control Center** | `startup.validation.keycloak_ok` / `startup.validation.keycloak_not_found` | Keycloak realm existence at startup; failure means operator must run `setup identity` or fix OIDC config |
 | **Startup Validation — Control Center** | `startup.validation.redis_ok` / `startup.validation.redis_failed` | Redis reachability at startup; failure prevents CC from starting |

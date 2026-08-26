@@ -27,6 +27,7 @@ from app.schemas.api_key import (
 )
 from app.services.api_key_service import (
     create_api_key_usage_log,
+    is_key_expired,
     resolve_allowed_tools,
     resolve_identity_token,
     update_last_used_at,
@@ -155,6 +156,18 @@ async def validate_api_key_internal(
 
         logger.warning("API key validation failed: hash not found")
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # 1b. Reject expired keys (expires_at in the past)
+    if is_key_expired(api_key):
+        await create_api_key_usage_log(
+            api_key_id=api_key.id,
+            action=ApiKeyUsageAction.validate,
+            db=db,
+            success=False,
+        )
+        await db.commit()
+        logger.warning("API key validation failed: key %s has expired", api_key.id)
+        raise HTTPException(status_code=401, detail="API key has expired")
 
     # 2. Resolve identity token
     try:

@@ -116,6 +116,7 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
 
     from app.api.deps import require_permission
+    from app.core.resource_types import RT_AGENT_HUMAN_INTERVENTION, RT_AGENT_TRAILS
     from app.middleware.auth import JWTAuthMiddleware
     from unittest.mock import patch
 
@@ -129,8 +130,9 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
     def _allow_all():
         return {"sub": "test-user-sub"}
 
-    app.dependency_overrides[require_permission("intervene", "view")] = _allow_all
-    app.dependency_overrides[require_permission("intervene", "respond")] = _allow_all
+    app.dependency_overrides[require_permission(RT_AGENT_HUMAN_INTERVENTION, "view")] = _allow_all
+    app.dependency_overrides[require_permission(RT_AGENT_HUMAN_INTERVENTION, "respond")] = _allow_all
+    app.dependency_overrides[require_permission(RT_AGENT_TRAILS, "read")] = _allow_all
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client

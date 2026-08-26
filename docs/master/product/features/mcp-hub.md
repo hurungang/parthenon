@@ -1,7 +1,7 @@
 # MCP Hub
 
 ## Overview
-The MCP Hub enables Parthenon to connect with external tool servers, synchronize available tools, and manage secure, identity-bound sessions for tool execution. It centralizes tool integration and session management, ensuring that all tool usage is governed and auditable. The MCP Hub also accepts connections from third-party AI agents (such as Claude Code or Cursor) via API key authentication, granting external agents access to the same skills, SOPs, and tools under the same role-based permission model used for internal agents.
+The MCP Hub enables Parthenon to connect with external tool servers, synchronize available tools, and manage secure, identity-bound sessions for tool execution. It centralizes tool integration and session management, ensuring that all tool usage is governed and auditable. The MCP Hub also accepts connections from third-party AI agents (such as Claude Code or Cursor) via API key authentication, granting external agents access to the same skills, SOPs, and tools under the same role-based permission model used for internal agents. Tools proxied from registered MCP servers are now reachable by external MCP clients over the standard MCP protocol (initialize / tools/list / tools/call), in addition to internal Agent Runtime tool calls.
 
 ## Who Uses It
 - Enterprise Admins: Register and configure MCP servers, manage sessions and credentials
@@ -17,6 +17,7 @@ The MCP Hub enables Parthenon to connect with external tool servers, synchronize
 - Supports designating a default session per server for predictable tool routing
 - Automatically treats a server's sole session as the default, requiring no manual action
 - Maps sessions or passthrough configuration to agent identities or roles for secure tool access
+- Exposes proxied MCP server tools to external MCP clients over the standard MCP protocol (initialize / tools/list / tools/call), in addition to internal Agent Runtime tool calls — both governed by the same role-based permission resolution
 
 
 

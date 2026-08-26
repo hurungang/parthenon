@@ -42,33 +42,22 @@ No new API endpoints. No database changes.
 
 ## End-to-End Flow
 
-```
-Keycloak Bootstrap (first-run setup)
-  │
-  ├─ IdentityBootstrapService.provision_bundled_keycloak()
-  │    └─ KeycloakAdminClient.create_group_membership_mapper(token, realm, "myapp-ui")
-  │         ├─ _get_client_uuid() — resolve internal Keycloak client ID
-  │         ├─ GET existing protocol mappers (idempotency check)
-  │         └─ POST oidc-group-membership-mapper with groups claim config
-  │
-  ▼
-Keycloak emits `groups` claim in JWT tokens
-
-  │
-  ▼
-Inbound request with JWT bearer token
-  │
-  ├─ JWTAuthMiddleware.dispatch()
-  │    ├─ Extract & validate token via OIDCClient
-  │    └─ _sync_user_and_groups(request, claims)
-  │         ├─ UserCacheService.upsert_user(sub, email, display_name)
-  │         └─ GroupClaimMapper.map_claims(db, user_id, claims["groups"])
-  │              ├─ SELECT Group WHERE idp_claim_value IN (…)
-  │              ├─ SELECT UserGroup WHERE user_id = …
-  │              └─ INSERT UserGroup for new memberships
-  │
-  ▼
-PlatformUser now has group memberships → roles resolve via group → permissions granted
+```mermaid
+flowchart TD
+    A[Keycloak Bootstrap — first-run setup] --> B[provision_bundled_keycloak]
+    B --> C[create_group_membership_mapper]
+    C --> D[_get_client_uuid]
+    C --> E[GET existing protocol mappers — idempotency]
+    C --> F[POST oidc-group-membership-mapper with groups claim]
+    F --> G[Keycloak emits groups claim in JWT]
+    G --> H[JWTAuthMiddleware.dispatch]
+    H --> I[_sync_user_and_groups]
+    I --> J[UserCacheService.upsert_user]
+    I --> K[GroupClaimMapper.map_claims]
+    K --> L[SELECT Group WHERE idp_claim_value IN …]
+    K --> M[INSERT UserGroup for new memberships]
+    L --> N[roles resolve via group → permissions granted]
+    M --> N
 ```
 
 ---

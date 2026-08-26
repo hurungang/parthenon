@@ -70,15 +70,7 @@ The Sessions tab is visible **only** for agent types with `input_type = 'convers
 
 ### Runtime Control Dashboard
 
-The dashboard hosts the [Runtime Control Dashboard](runtime-control-dashboard.md), which provides a read-only operator view of currently running agents, their delegation topology, configured model-usage guardrails, and current usage posture. It supports operator-controlled termination actions for authorized users, with cascade termination of delegated children.
-
-Key behaviors:
-
-- **Topology view** shows active agents, their delegated children, conversation sessions, and agent instances
-- **Filter legend** lets operators toggle visibility of any combination of status + node kind
-- **Cascade termination** — terminating a parent execution stops all active delegated child executions
-
-For full architecture details, see the [Runtime Control Dashboard](runtime-control-dashboard.md) document.
+The dashboard hosts the [Runtime Control Dashboard](runtime-control-dashboard.md) — a read-only operator view of currently running agents, delegation topology, model-usage guardrails, usage posture, and cascade termination. See that document for the full architecture, topology view, and node actions.
 
 ### Instance Detail View
 

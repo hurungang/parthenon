@@ -46,9 +46,9 @@ def test_manifest_structure():
             assert len(action) > 0
 
 
-def test_manifest_has_17_entries():
-    """Manifest should contain exactly 17 namespaced resource types."""
-    assert len(ResourceTypeManifest) == 17
+def test_manifest_has_20_entries():
+    """Manifest should contain exactly 20 resource types (19 namespaced + bare 'agent')."""
+    assert len(ResourceTypeManifest) == 20
 
 
 def test_all_resource_type_constants_exist():
@@ -99,7 +99,6 @@ def test_agent_management_resource_type_has_expected_actions():
 
 def test_invalid_resource_type_not_in_manifest():
     """Invalid resource types should not be in manifest."""
-    assert "agent" not in ResourceTypeManifest
     assert "role" not in ResourceTypeManifest
     assert "invalid_resource_type" not in ResourceTypeManifest
     assert "fake_module" not in ResourceTypeManifest
@@ -111,9 +110,9 @@ def test_module_groups_have_three_modules():
     assert set(MODULE_GROUPS.keys()) == {"agent", "integration", "system"}
 
 
-def test_agent_module_has_12_submodules():
-    """Agent module should have 12 submodules."""
-    assert len(MODULE_GROUPS["agent"]) == 12
+def test_agent_module_has_14_submodules():
+    """Agent module should have 14 submodules."""
+    assert len(MODULE_GROUPS["agent"]) == 14
 
 
 def test_integration_module_has_2_submodules():

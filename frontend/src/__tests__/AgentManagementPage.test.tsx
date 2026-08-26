@@ -111,6 +111,7 @@ vi.mock('../hooks/useAgentTypes', () => ({
   useAgentType: () => ({ data: undefined, isLoading: true, error: null }),
   useAgentInstances: () => ({ data: [], isLoading: false }),
   useTerminateInstance: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteAgentType: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 vi.mock('../api/apiClient', () => ({

@@ -69,3 +69,8 @@ Conversation Management ensures that all interactions—across users, agents, an
 - The user's intervention response is recorded as a conversation turn visible in history and replay
 - If a user disconnects while an intervention dialog is open, the pending intervention request is re-surfaced automatically when the user reconnects
 - The parent conversational session shows a `waiting_for_human` state in the session list and dashboard while a sub-agent intervention is outstanding
+
+## Out of Scope
+- Agent execution engine internals and model reasoning
+- Content generation quality and model selection
+- Storage schema and database implementation details

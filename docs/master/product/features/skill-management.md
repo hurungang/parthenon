@@ -41,3 +41,8 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Only authorized entities can execute each Skill
 - All Skill usage is logged and auditable
 - Skills are discoverable and manageable from the UI
+
+## Out of Scope
+- SOP composition and sequencing (covered by SOP Management)
+- MCP server registration and tool sync (covered by MCP Hub)
+- Low-level execution runtime implementation details

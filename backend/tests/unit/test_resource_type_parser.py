@@ -145,9 +145,9 @@ def test_valid_namespaced_types_in_manifest():
 
 
 def test_flat_legacy_values_not_in_manifest():
-    """Legacy flat values should NOT be in the manifest."""
+    """Legacy flat values should NOT be in the manifest (bare 'agent' is a permitted exception)."""
     legacy = [
-        "agent", "role", "skill", "sop", "mcp_server", "notification",
+        "role", "skill", "sop", "mcp_server", "notification",
         "permissions", "group", "user", "tag", "access_request",
         "conversation", "result", "schedule", "model_config",
     ]
@@ -164,6 +164,8 @@ def test_nonexistent_namespaced_types_not_in_manifest():
 
 
 def test_two_layer_only():
-    """All manifest entries have exactly two layers (module::submodule)."""
+    """All namespaced manifest entries have exactly two layers; bare 'agent' is the only exception."""
     for rt in ResourceTypeManifest:
+        if rt == "agent":
+            continue
         assert rt.count("::") == 1, f"'{rt}' should have exactly one '::' delimiter"

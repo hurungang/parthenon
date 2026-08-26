@@ -4,6 +4,8 @@
 
 When an LLM response includes a tool-call request, the Agent Engine delegates execution through a three-layer chain: **Skill Engine → MCP Hub → External MCP Server**. This separation keeps agent logic decoupled from tool implementation and allows tools to be registered, versioned, and secured independently.
 
+For external MCP clients (Copilot, Claude, Cursor, custom agents), the standard `tools/list` and `tools/call` methods reuse this same **Skill Engine → MCP Hub → External MCP Server** chain via the Communication Hub's Tool Registry Bridge — no separate execution path is introduced.
+
 ## Single-Tool Execution
 
 ```mermaid

@@ -150,7 +150,7 @@ async def test_create_api_key_success():
     mock_role_check.scalar_one_or_none.return_value = MagicMock()
     call_responses.append(mock_role_check)
 
-    # Call: check duplicate active key
+    # Call: check duplicate name
     mock_dup = MagicMock()
     mock_dup.scalar_one_or_none.return_value = None
     call_responses.append(mock_dup)
@@ -182,8 +182,8 @@ async def test_create_api_key_success():
 
 
 @pytest.mark.asyncio
-async def test_create_api_key_duplicate_identity_role():
-    """POST /api-keys returns 409 when active key already exists for same identity-role pair."""
+async def test_create_api_key_duplicate_name():
+    """POST /api-keys returns 409 when a key with the same name already exists."""
     app = create_app()
     identity_id = uuid.uuid4()
     role_id = uuid.uuid4()

@@ -121,7 +121,7 @@ flowchart LR
 
 ## Authentication Paths
 
-The Communication Hub serves as an MCP endpoint for both internal and external agents. Internal Agent Runtime instances authenticate via mTLS certificates; external third-party AI agents use API keys. In both cases, identity tokens are held exclusively by the Communication Hub — agents never receive them directly. For full dual-auth architecture, see [Communication Hub Architecture](modules/communication-hub/architecture.md).
+The Communication Hub serves as an MCP endpoint for both internal and external agents. Internal Agent Runtime instances authenticate via mTLS certificates; external third-party AI agents use API keys. For external clients, CH exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the existing REST skills-loading endpoint — both fronted by the same API-key authentication. In both cases, identity tokens are held exclusively by the Communication Hub — agents never receive them directly. For full dual-auth architecture, see [Communication Hub Architecture](modules/communication-hub/architecture.md).
 
 ## Permission Authorization
 
@@ -135,5 +135,5 @@ The Control Center uses a three-tier authentication pipeline — super admin loc
 
 - **Control Center** — Central authority for configuration, authentication, OIDC provider registry, permission resolution, certificate authority, API key management, agent data type registry, agent outputs, and scheduling. Validates infrastructure dependencies at startup and fails fast.
 - **Agent Runtime** — Deep agent execution via LangChain with tool call orchestration through Communication Hub. Enforces delegation depth limits, performs typed output validation, and emits delegation status events. Agents never hold identity tokens.
-- **Communication Hub** — Message broker and agent gateway supporting dual authentication (mTLS cert + API key). Routes tool calls to Control Center, handles conversation intervention routing, A2A messaging, and WebSocket connections for real-time chat.
+- **Communication Hub** — Message broker and agent gateway supporting dual authentication (mTLS cert + API key). Exposes a standard MCP protocol endpoint (SSE + Streamable HTTP) in addition to the REST skills-loading endpoint. Routes tool calls to Control Center, handles conversation intervention routing, A2A messaging, and WebSocket connections for real-time chat.
 - **Setup Tool** — Operator-invoked CLI (outside running system) for Keycloak provisioning, certificate authority bootstrap, and database seeding. All operations are idempotent.

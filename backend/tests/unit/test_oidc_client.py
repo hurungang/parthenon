@@ -17,7 +17,7 @@ class TestOIDCClient:
     """Tests for OIDCClient JWT validation."""
 
     def _make_client(self) -> OIDCClient:
-        client = OIDCClient()
+        client = OIDCClient(issuer_url="http://localhost:8080/realms/parthenon")
         client.clear_cache()
         return client
 
@@ -92,13 +92,11 @@ class TestOIDCClient:
 
     def test_clear_cache_resets_jwks(self) -> None:
         """Test that clear_cache empties the JWKS cache."""
-        from app.core import oidc_client as oc
-
-        oc._jwks_cache = {"some-kid": {"kty": "RSA"}}
-        oc._jwks_cache_expiry = time.monotonic() + 300
-
         client = self._make_client()
+        client._jwks_keys = {"some-kid": {"kty": "RSA"}}
+        client._jwks_expiry = time.monotonic() + 300
+
         client.clear_cache()
 
-        assert oc._jwks_cache == {}
-        assert oc._jwks_cache_expiry == 0.0
+        assert client._jwks_keys == {}
+        assert client._jwks_expiry == 0.0

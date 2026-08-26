@@ -1,7 +1,7 @@
 # API Key Management
 
 ## Overview
-API Key Management enables Platform Administrators to create, view, and revoke API keys that allow third-party AI agents — such as Claude Code, Cursor, or custom-built agents — to securely connect to Parthenon's MCP Hub. Each API key is bound to an existing agent identity and agent role, inheriting the role's full permission set for skill and tool access. Keys are hashed at rest in Control Center's database and never retrievable after creation, ensuring that clear-text credentials cannot be leaked through the platform.
+API Key Management enables Platform Administrators to create, view, and revoke API keys that allow third-party AI agents — such as Claude Code, Cursor, or custom-built agents — to securely connect to Parthenon as an MCP client. An API key authenticates a full MCP protocol session (initialize, list tools, and invoke tools) — not just skill discovery — so external agents gain governed access to the platform's skills, SOPs, and proxied MCP tools. Each API key is bound to an existing agent identity and agent role, inheriting the role's full permission set for skill and tool access. A key may optionally carry an expiration timestamp (or none, for a non-expiring key); an expired key is rejected at authentication. Keys are hashed at rest in Control Center's database and never retrievable after creation, ensuring that clear-text credentials cannot be leaked through the platform.
 
 ## Who Uses It
 - Platform Administrators: Create and manage API keys for third-party integrations, bind keys to agent identities and roles, view and revoke keys as needed
@@ -10,10 +10,11 @@ API Key Management enables Platform Administrators to create, view, and revoke A
 
 ## What It Does
 - Provides a dedicated API Keys management page in the Web UI, accessible under the Agents or Integrations section
-- Allows Platform Administrators to create a new API key by selecting an existing agent identity and agent role from dropdowns
+- Authenticates full MCP protocol sessions (initialize / tools/list / tools/call) for external MCP clients, resolving the bound agent identity, role, and permitted tools
+- Allows Platform Administrators to create a new API key by selecting an existing agent identity and agent role from dropdowns, and optionally setting an expiration timestamp (or leaving it unset for a non-expiring key)
 - Displays the clear-text key once at creation time for the administrator to copy; the key value is never shown again
 - Stores API keys in hashed form, making the clear-text key unrecoverable after the initial display
-- Lists all API keys with columns for name or label, bound agent identity, bound agent role, creation date, last used date, and status (active or revoked)
+- Lists all API keys with columns for name or label, bound agent identity, bound agent role, creation date, last used date, expiration (or "No expiration"), and status (active or revoked)
 - Supports filtering the API key list by status to quickly find active or revoked keys
 - Allows Platform Administrators to revoke an API key with a confirmation dialog; revoked keys immediately become unusable
 - Retains revoked keys in the list with a "revoked" status indicator for audit trail purposes
@@ -26,6 +27,7 @@ API Key Management enables Platform Administrators to create, view, and revoke A
 - **Key Binding**: Each API key is bound to a specific agent identity and agent role at creation time. The key inherits the complete permission set of the bound role.
 - **Hashed Storage**: API keys are stored as cryptographic hashes in Control Center's database. Authentication involves hashing the presented key and comparing against the stored hash.
 - **Revocation**: The permanent deactivation of an API key. Once revoked, the key cannot be re-activated and immediately fails all authentication attempts. Revoked keys remain visible in the UI for audit purposes.
+- **Expiration**: Each API key may optionally carry an expiration timestamp. A key with no timestamp never expires; a key whose timestamp has passed is rejected at authentication with a clear error, exactly like a revoked key. Expired keys remain listed as "active" — they are rejected at authentication time rather than automatically flipped to a distinct status.
 - **One Key Per Identity-Role Pair**: Only one active API key is permitted per combination of agent identity and agent role.
 
 ## Acceptance Criteria
@@ -46,6 +48,12 @@ API Key Management enables Platform Administrators to create, view, and revoke A
 - After revocation, the key remains in the list with status "revoked" and cannot be re-activated
 - The API key list automatically refreshes after revocation — no manual page reload required
 
+### Key Expiration
+- Platform Administrator can optionally set an expiration timestamp when creating a key, or omit it to create a non-expiring key
+- The API key list shows each key's expiration date (or "No expiration")
+- A key whose expiration timestamp has passed is rejected at authentication with a clear error, like a revoked key
+- Omitting the expiration timestamp means the key never expires
+
 ### Audit and Logging
 - API key creation and revocation events are recorded in the audit log
 - API key usage (authentication events) is logged with the key identifier and bound identity, not the key value
@@ -53,7 +61,8 @@ API Key Management enables Platform Administrators to create, view, and revoke A
 
 ## Out of Scope
 - API key scoping beyond role-based permissions — keys inherit the full permission set of the bound role
-- API key expiration dates or automatic rotation — keys are valid until manually revoked
+- Automatic API key rotation — keys are not automatically rotated; administrators rotate them manually
+- Automatic status changes for expired keys — an expired key remains listed as "active" and is rejected at authentication time rather than flipped to a distinct status
 - Multiple active API keys per agent identity-role pair — only one active key per combination
 - Self-service API key generation by external developers — keys can only be created by Platform Administrators
 - Client SDKs or libraries for third-party agent developers — they interact via standard MCP protocol
