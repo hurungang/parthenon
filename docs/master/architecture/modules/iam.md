@@ -39,6 +39,33 @@ At authorization check time, the Permission Engine resolves effective permission
 
 Wildcards are additive — a role holding both `agent::*` and `system::audit` can access all agent submodules plus system audit.
 
+## Component Responsibilities
+
+| Component | Responsibility |
+|---|---|
+| **Permission Management UI** | Provides administrators with interfaces to manage user roles, policies, and resource permissions |
+| **require_permission** | FastAPI dependency factory that resolves the authenticated user and calls `PermissionEngine.authorize()` with a `(resource_type, action)` tuple; raises `HTTPException(403)` on denial |
+| **Permission Engine** | Central `authorize()` method that evaluates policy statements against the requested resource type and action; evaluates wildcard policies at three levels of specificity (exact match → module-level `agent::*` → global `*::*`) |
+| **ResourceTypeManifest** | Central registry in `backend/app/core/resource_types.py` mapping all `module::submodule` resource types to their allowed actions; validated at startup; mirrored in the frontend as `RESOURCE_TYPE_MANIFEST` |
+| **Policy Statements** | Database-backed policy rules linking user roles to allowed resources, actions, and optional tag conditions |
+
+## Resource Type Naming Convention
+
+All resource types follow the two-level namespaced format `module::submodule`:
+
+| Module | Example Resource Types |
+|---|---|
+| `agent` | `agent::management`, `agent::roles`, `agent::identities`, `agent::trails`, `agent::data`, `agent::outputs`, `agent::skills`, `agent::sops`, `agent::model_configs`, `agent::schedules`, `agent::data_types`, `agent::api_keys`, `agent::human_intervention`, `agent::runtime_control` |
+| `integration` | `integration::mcp_hub`, `integration::notifications` |
+| `system` | `system::observability`, `system::permissions`, `system::system_config` |
+
+## Key Flows
+
+| Flow | Path |
+|---|---|
+| **API authorization** | Endpoint → `require_permission(resource_type, action)` → `PermissionEngine.authorize()` → ResourceTypeManifest validation → Policy Statement evaluation → Allow/Deny |
+| **System startup** | `PermissionEngine` validates `ResourceTypeManifest` entries at init; unknown resource types are rejected before any wildcard evaluation |
+
 ## RolePolicyDialog: Batch Save Flow
 
 Administrators manage role policies through the **RolePolicyDialog**, which replaces the legacy inline-table expansion pattern. The dialog supports two editing modes and commits all policies in a single atomic batch operation.

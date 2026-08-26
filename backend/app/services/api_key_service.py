@@ -82,6 +82,20 @@ async def validate_api_key_from_hash(
     return result.scalar_one_or_none()
 
 
+def is_key_expired(api_key: AgentApiKey, now: datetime | None = None) -> bool:
+    """Return ``True`` if the key carries an ``expires_at`` in the past.
+
+    A ``None`` ``expires_at`` means the key never expires.
+    """
+    if api_key.expires_at is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    expires = api_key.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    return expires < current
+
+
 async def create_api_key_usage_log(
     api_key_id: uuid.UUID,
     action: ApiKeyUsageAction,
@@ -180,17 +194,16 @@ async def get_identity_name(identity_id: uuid.UUID, db: AsyncSession) -> str | N
     return result.scalar_one_or_none()
 
 
-async def check_duplicate_active_key(
-    agent_identity_id: uuid.UUID,
-    agent_role_id: uuid.UUID,
+async def check_duplicate_name(
+    name: str,
     db: AsyncSession,
 ) -> bool:
-    """Check if an active key already exists for this identity-role pair."""
+    """Check if an API key with the given name already exists.
+
+    Key names are unique platform-wide; the identity-role pair may have any
+    number of keys with distinct names.
+    """
     result = await db.execute(
-        select(AgentApiKey.id).where(
-            AgentApiKey.agent_identity_id == agent_identity_id,
-            AgentApiKey.agent_role_id == agent_role_id,
-            AgentApiKey.status == ApiKeyStatus.active,
-        )
+        select(AgentApiKey.id).where(AgentApiKey.name == name)
     )
     return result.scalar_one_or_none() is not None

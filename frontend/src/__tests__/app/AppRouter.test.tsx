@@ -1,17 +1,13 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import { SetupState } from '../../types/setup'
+import { Outlet } from 'react-router-dom'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
-
-vi.mock('../../api/setupApi', () => ({
-  getIdentityStatus: vi.fn(),
-}))
 
 // Stub all page components to simple divs to avoid deep render trees
 vi.mock('../../pages/auth/LoginPage', () => ({ LoginPage: () => <div>LoginPage</div> }))
 vi.mock('../../pages/auth/OidcCallback', () => ({ OidcCallback: () => <div>OidcCallback</div> }))
-vi.mock('../../pages/setup/SetupWizard', () => ({ SetupWizard: () => <div>setup.title</div> }))
+vi.mock('../../pages/setup/SetupWizard', () => ({ SetupWizard: () => <div>SetupWizard</div> }))
 vi.mock('../../pages/DashboardPage', () => ({ DashboardPage: () => <div>Dashboard</div> }))
 vi.mock('../../pages/NotFoundPage', () => ({ NotFoundPage: () => <div>NotFound</div> }))
 vi.mock('../../pages/mcp/McpHubPage', () => ({ McpHubPage: () => <div>Mcp</div> }))
@@ -29,8 +25,20 @@ vi.mock('../../pages/scheduling/ScheduleManagerPage', () => ({
 vi.mock('../../pages/conversations/ConversationHistoryPage', () => ({
   ConversationHistoryPage: () => <div>Conversations</div>,
 }))
-vi.mock('../../pages/results/ResultRepositoryPage', () => ({
-  ResultRepositoryPage: () => <div>Results</div>,
+vi.mock('../../pages/trails/AgentTrailsPage', () => ({
+  AgentTrailsPage: () => <div>Trails</div>,
+}))
+vi.mock('../../pages/agent-data/AgentDataPage', () => ({
+  AgentDataPage: () => <div>AgentData</div>,
+}))
+vi.mock('../../pages/agent-outputs/AgentOutputsPage', () => ({
+  AgentOutputsPage: () => <div>AgentOutputs</div>,
+}))
+vi.mock('../../pages/data-types/DataTypesPage', () => ({
+  DataTypesPage: () => <div>DataTypes</div>,
+}))
+vi.mock('../../pages/api-keys/ApiKeyListPage', () => ({
+  ApiKeyListPage: () => <div>ApiKeys</div>,
 }))
 vi.mock('../../pages/notifications/NotificationConfigPage', () => ({
   NotificationConfigPage: () => <div>Notifications</div>,
@@ -43,45 +51,21 @@ vi.mock('../../app/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 vi.mock('../../app/AppShell', () => ({
-  AppShell: () => <div>AppShell</div>,
+  AppShell: () => (
+    <div>
+      <div>AppShell</div>
+      <Outlet />
+    </div>
+  ),
 }))
 
 import { AppRouter } from '../../app/AppRouter'
-import { getIdentityStatus } from '../../api/setupApi'
-const mockedGetIdentityStatus = vi.mocked(getIdentityStatus)
 
-describe('AppRouter first-run redirect', () => {
-  afterEach(() => vi.clearAllMocks())
-
-  it('redirects to /setup when NOT_CONFIGURED', async () => {
-    mockedGetIdentityStatus.mockResolvedValueOnce({
-      setup_state: SetupState.NOT_CONFIGURED,
-      provider_type: null,
-      oidc_provider_url: null,
-    })
+describe('AppRouter', () => {
+  it('redirects root to dashboard', async () => {
     render(<AppRouter />)
     await waitFor(() => {
-      expect(screen.getByText('setup.title')).toBeDefined()
-    })
-  })
-
-  it('renders normal routes when CONFIGURED', async () => {
-    mockedGetIdentityStatus.mockResolvedValueOnce({
-      setup_state: SetupState.CONFIGURED,
-      provider_type: 'keycloak_bundled',
-      oidc_provider_url: 'http://localhost:8080',
-    })
-    render(<AppRouter />)
-    await waitFor(() => {
-      expect(screen.queryByText('setup.title')).toBeNull()
-    })
-  })
-
-  it('does NOT redirect when identity check throws', async () => {
-    mockedGetIdentityStatus.mockRejectedValueOnce(new Error('network fail'))
-    render(<AppRouter />)
-    await waitFor(() => {
-      expect(screen.queryByText('setup.title')).toBeNull()
+      expect(screen.getByText('Dashboard')).toBeDefined()
     })
   })
 })

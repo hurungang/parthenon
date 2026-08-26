@@ -4,12 +4,12 @@ Phase 10 (tool naming refactor) fixed the bug: system tool schemas ARE now inclu
 in tool_definitions when the tools are explicitly assigned via a skill bound to the role.
 
 Key changes in Phase 10:
-- System tool canonical names changed from ``save_result`` / ``system/save_result``
-  to ``system____save_result`` (4-underscore separator).
+- System tool canonical names changed from ``save_data`` / ``system/save_data``
+  to ``system____save_data`` (4-underscore separator).
 - System tools are NO LONGER auto-injected into allowed_tools. They must be explicitly
   assigned via a Skill → SkillToolBinding → AgentRoleSkill chain.
-- The agent context endpoint returns ``system____save_result`` in allowed_tools and
-  ``system__save_result`` (2-underscore, OpenAI-compatible) in tool_definitions.
+- The agent context endpoint returns ``system____save_data`` in allowed_tools and
+  ``system__save_data`` (2-underscore, OpenAI-compatible) in tool_definitions.
 
 These tests verify the FIXED behaviour: context endpoint includes system tool schemas.
 """
@@ -29,11 +29,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import require_service_certificate
 from app.api.v1.mcp_hub import (
-    SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
-    SYSTEM_TOOL_SAVE_RESULT_ID,
-    SYSTEM_TOOL_SEND_NOTIFICATION_ID,
     seed_system_tools,
 )
+from app.services.agents.system_tool_registry import SystemToolRegistry
+
+SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID = SystemToolRegistry.get("get_recipient_group").mcp_hub_id
+SYSTEM_TOOL_SAVE_DATA_ID = SystemToolRegistry.get("save_data").mcp_hub_id
+SYSTEM_TOOL_SEND_NOTIFICATION_ID = SystemToolRegistry.get("send_notification").mcp_hub_id
 from app.db.models.agents import (
     AgentInputType,
     AgentOutputType,
@@ -50,9 +52,9 @@ from app.middleware.auth import JWTAuthMiddleware
 # ── Shared constants ──────────────────────────────────────────────────────────
 
 # Canonical Phase 10 system tool names (4-underscore separator).
-# OpenAI tool_definitions use 2-underscore form: system__save_result, etc.
+# OpenAI tool_definitions use 2-underscore form: system__save_data, etc.
 _SYSTEM_TOOL_NAMES = {
-    "system____save_result",
+    "system____save_data",
     "system____send_notification",
     "system____get_recipient_group",
 }
@@ -204,26 +206,26 @@ def _find_tool_def(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Test 1: save_result schema missing from tool_definitions
+# Test 1: save_data schema missing from tool_definitions
 #
 # Expected result: FAIL
-# Failure message: "BUG ... save_result not found in tool_definitions ..."
+# Failure message: "BUG ... save_data not found in tool_definitions ..."
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 @pytest.mark.asyncio
-async def test_context_endpoint_includes_save_result_schema(
+async def test_context_endpoint_includes_save_data_schema(
     internal_client: AsyncClient,
     db_session: AsyncSession,
 ):
-    """GET /internal/data/agent-types/{id}/context includes system__save_result schema.
+    """GET /internal/data/agent-types/{id}/context includes system__save_data schema.
 
-    Phase 10 fix: when save_result is explicitly assigned to the role via a Skill,
-    the context endpoint returns ``system____save_result`` in allowed_tools and
-    a schema with function.name ``system__save_result`` in tool_definitions.
+    Phase 10 fix: when save_data is explicitly assigned to the role via a Skill,
+    the context endpoint returns ``system____save_data`` in allowed_tools and
+    a schema with function.name ``system__save_data`` in tool_definitions.
     """
     agent_type = await _create_agent_type_with_system_skill(
-        db_session, [SYSTEM_TOOL_SAVE_RESULT_ID]
+        db_session, [SYSTEM_TOOL_SAVE_DATA_ID]
     )
 
     response = await internal_client.get(
@@ -238,15 +240,15 @@ async def test_context_endpoint_includes_save_result_schema(
     allowed_tools: list[str] = data.get("allowed_tools", [])
 
     # Phase 10: canonical name uses 4-underscore separator.
-    assert "system____save_result" in allowed_tools, (
-        f"system____save_result not in allowed_tools={allowed_tools}. "
-        f"Ensure the skill with SYSTEM_TOOL_SAVE_RESULT_ID is assigned to the role."
+    assert "system____save_data" in allowed_tools, (
+        f"system____save_data not in allowed_tools={allowed_tools}. "
+        f"Ensure the skill with SYSTEM_TOOL_SAVE_DATA_ID is assigned to the role."
     )
 
     # OpenAI tool_definitions use 2-underscore sanitized name.
-    tool_def = _find_tool_def(tool_definitions, "system__save_result")
+    tool_def = _find_tool_def(tool_definitions, "system__save_data")
     assert tool_def is not None, (
-        f"'system__save_result' schema is missing from tool_definitions "
+        f"'system__save_data' schema is missing from tool_definitions "
         f"(count={len(tool_definitions)}, names="
         f"{[_extract_tool_name(t) for t in tool_definitions]!r}). "
         f"FIX-20260518-012042 Issue 2 regression check failed."
@@ -376,14 +378,14 @@ async def test_all_system_tool_schemas_present_with_openai_format(
         }
     """
     from app.api.v1.mcp_hub import (
-        SYSTEM_TOOL_SAVE_RESULT_ID,
+        SYSTEM_TOOL_SAVE_DATA_ID,
         SYSTEM_TOOL_SEND_NOTIFICATION_ID,
         SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
     )
     agent_type = await _create_agent_type_with_system_skill(
         db_session,
         [
-            SYSTEM_TOOL_SAVE_RESULT_ID,
+            SYSTEM_TOOL_SAVE_DATA_ID,
             SYSTEM_TOOL_SEND_NOTIFICATION_ID,
             SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
         ],
@@ -401,7 +403,7 @@ async def test_all_system_tool_schemas_present_with_openai_format(
     allowed_tools: set[str] = set(data.get("allowed_tools", []))
 
     # Determine which system tools are allowed (should be all three).
-    # allowed_tools uses the canonical 4-underscore form (system____save_result).
+    # allowed_tools uses the canonical 4-underscore form (system____save_data).
     system_canonical_in_allowed = _SYSTEM_TOOL_NAMES & allowed_tools
     assert system_canonical_in_allowed, (
         f"Pre-condition failed: none of {_SYSTEM_TOOL_NAMES} are in "
@@ -409,7 +411,7 @@ async def test_all_system_tool_schemas_present_with_openai_format(
     )
 
     # The context endpoint puts the OpenAI-compatible 2-underscore form in
-    # tool_definitions (system__save_result), so convert before comparing.
+    # tool_definitions (system__save_data), so convert before comparing.
     expected_openai_names = {
         canonical.replace("____", "__") for canonical in system_canonical_in_allowed
     }

@@ -275,10 +275,8 @@ Reprovision the identity provider with the `force_reconfigure` flag set to `true
 
 **Via the CLI (headless):**
 
-Run inside the `control-center` container:
-```bash
-python -m app.cli provision-identity --force-reconfigure
-```
+Run inside the `control-center` container: `python -m app.cli provision-identity --force-reconfigure`
+
 The CLI uses the existing identity provider configuration stored in the database and re-provisions without prompting for credentials.
 
 **Via the API directly:**

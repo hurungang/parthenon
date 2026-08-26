@@ -28,7 +28,9 @@ from httpx import ASGITransport, AsyncClient
 from app.main import create_app
 from app.db.session import get_db
 from app.middleware.auth import JWTAuthMiddleware
-from app.api.v1.mcp_hub import SYSTEM_TOOL_SEND_NOTIFICATION_ID
+from app.services.agents.system_tool_registry import SystemToolRegistry
+
+SYSTEM_TOOL_SEND_NOTIFICATION_ID = SystemToolRegistry.get("send_notification").mcp_hub_id
 
 
 def _bypass_auth():
@@ -566,150 +568,65 @@ async def test_list_skills_instructions_with_tools_present_for_each_skill():
 
 
 @pytest.mark.asyncio
-async def test_skill_seeder_creates_save_result_skill():
-    """SkillSeeder.run() creates save-result skill on a clean database."""
+async def test_skill_seeder_creates_save_data_skill(db_session):
+    """SkillSeeder.run() creates the save-data skill on a clean database."""
+    from sqlalchemy import select
     from app.services.skill_seeder import SkillSeeder
     from app.db.models.skills import Skill
+    from app.api.v1.mcp_hub import seed_system_tools
 
-    no_skill_result = MagicMock()
-    no_skill_result.scalar_one_or_none = MagicMock(return_value=None)
-    no_tool_result = MagicMock()
-    no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+    await seed_system_tools(db_session)
 
-    mock_session = AsyncMock()
-    # 4 skills x (1 existence check + 1 tool lookup) = 8 entries
-    mock_session.execute = AsyncMock(
-        side_effect=[
-            no_skill_result, no_tool_result,  # save-result
-            no_skill_result, no_tool_result,  # send-notification
-            no_skill_result, no_tool_result,  # get-recipient-group
-            no_skill_result, no_tool_result,  # human-intervene
-        ]
-    )
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-    mock_session.rollback = AsyncMock()
+    summary = await SkillSeeder().run(db_session)
 
-    seeder = SkillSeeder()
-    summary = await seeder.run(mock_session)
-
-    assert summary["save-result"] == "created"
-    added_skills = [
-        call.args[0]
-        for call in mock_session.add.call_args_list
-        if isinstance(call.args[0], Skill)
-    ]
-    assert any(s.name == "save-result" for s in added_skills)
+    assert summary["save-data"] == "created"
+    result = await db_session.execute(select(Skill).where(Skill.name == "save-data"))
+    assert result.scalar_one_or_none() is not None
 
 
 @pytest.mark.asyncio
-async def test_skill_seeder_creates_send_notification_skill():
-    """SkillSeeder.run() creates send-notification skill on a clean database."""
+async def test_skill_seeder_creates_send_notification_skill(db_session):
+    """SkillSeeder.run() creates the send-notification skill on a clean database."""
+    from sqlalchemy import select
     from app.services.skill_seeder import SkillSeeder
     from app.db.models.skills import Skill
+    from app.api.v1.mcp_hub import seed_system_tools
 
-    no_skill_result = MagicMock()
-    no_skill_result.scalar_one_or_none = MagicMock(return_value=None)
-    no_tool_result = MagicMock()
-    no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+    await seed_system_tools(db_session)
 
-    mock_session = AsyncMock()
-    # 4 skills x (1 existence check + 1 tool lookup) = 8 entries
-    mock_session.execute = AsyncMock(
-        side_effect=[
-            no_skill_result, no_tool_result,  # save-result
-            no_skill_result, no_tool_result,  # send-notification
-            no_skill_result, no_tool_result,  # get-recipient-group
-            no_skill_result, no_tool_result,  # human-intervene
-        ]
-    )
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-    mock_session.rollback = AsyncMock()
-
-    seeder = SkillSeeder()
-    summary = await seeder.run(mock_session)
+    summary = await SkillSeeder().run(db_session)
 
     assert summary["send-notification"] == "created"
-    added_skills = [
-        call.args[0]
-        for call in mock_session.add.call_args_list
-        if isinstance(call.args[0], Skill)
-    ]
-    assert any(s.name == "send-notification" for s in added_skills)
+    result = await db_session.execute(select(Skill).where(Skill.name == "send-notification"))
+    assert result.scalar_one_or_none() is not None
 
 
 @pytest.mark.asyncio
-async def test_skill_seeder_is_idempotent_when_skills_already_exist():
+async def test_skill_seeder_is_idempotent_when_skills_already_exist(db_session):
     """SkillSeeder.run() returns 'exists' for skills already in the database (no duplicates)."""
     from app.services.skill_seeder import SkillSeeder
+    from app.api.v1.mcp_hub import seed_system_tools
 
-    existing_save = MagicMock()
-    existing_save.name = "save-result"
-    existing_notif = MagicMock()
-    existing_notif.name = "send-notification"
-    existing_group = MagicMock()
-    existing_group.name = "get-recipient-group"
-    existing_intervene = MagicMock()
-    existing_intervene.name = "human-intervene"
+    await seed_system_tools(db_session)
 
-    def _exists_skill(name):
-        r = MagicMock()
-        mapping = {"save-result": existing_save, "send-notification": existing_notif,
-                   "get-recipient-group": existing_group, "human-intervene": existing_intervene}
-        r.scalar_one_or_none = MagicMock(return_value=mapping.get(name))
-        return r
+    first = await SkillSeeder().run(db_session)
+    second = await SkillSeeder().run(db_session)
 
-    mock_session = AsyncMock()
-    # Each _seed_one calls execute once (existence check) for each of 4 skills
-    mock_session.execute = AsyncMock(side_effect=[
-        _exists_skill("save-result"),
-        _exists_skill("send-notification"),
-        _exists_skill("get-recipient-group"),
-        _exists_skill("human-intervene"),
-    ])
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-    mock_session.rollback = AsyncMock()
-
-    seeder = SkillSeeder()
-    summary = await seeder.run(mock_session)
-
-    assert summary["save-result"] == "exists"
-    assert summary["send-notification"] == "exists"
-    assert summary["get-recipient-group"] == "exists"
-    assert summary["human-intervene"] == "exists"
-    mock_session.add.assert_not_called()
+    assert first["save-data"] == "created"
+    assert second["save-data"] == "exists"
+    assert second["send-notification"] == "exists"
 
 
 @pytest.mark.asyncio
-async def test_skill_seeder_returns_both_default_skill_names():
-    """SkillSeeder.run() summary contains entries for all 4 default skills."""
+async def test_skill_seeder_returns_all_default_skill_names(db_session):
+    """SkillSeeder.run() summary contains entries for all default skills."""
     from app.services.skill_seeder import SkillSeeder
+    from app.services.agents.system_tool_registry import SystemToolRegistry
+    from app.api.v1.mcp_hub import seed_system_tools
 
-    no_skill_result = MagicMock()
-    no_skill_result.scalar_one_or_none = MagicMock(return_value=None)
-    no_tool_result = MagicMock()
-    no_tool_result.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None)))
+    await seed_system_tools(db_session)
 
-    mock_session = AsyncMock()
-    # 4 skills x (1 existence check + 1 tool lookup) = 8 entries
-    mock_session.execute = AsyncMock(
-        side_effect=[
-            no_skill_result, no_tool_result,  # save-result
-            no_skill_result, no_tool_result,  # send-notification
-            no_skill_result, no_tool_result,  # get-recipient-group
-            no_skill_result, no_tool_result,  # human-intervene
-        ]
-    )
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-    mock_session.rollback = AsyncMock()
+    summary = await SkillSeeder().run(db_session)
 
-    seeder = SkillSeeder()
-    summary = await seeder.run(mock_session)
-
-    assert "save-result" in summary
-    assert "send-notification" in summary
-    assert "get-recipient-group" in summary
-    assert "human-intervene" in summary
+    expected = {sd["name"] for sd in SystemToolRegistry.get_skill_definitions()}
+    assert set(summary.keys()) == expected

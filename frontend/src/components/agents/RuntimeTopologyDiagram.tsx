@@ -224,16 +224,12 @@ export function RuntimeTopologyDiagram({
     )
   }
 
-  // Dynamic SVG size: width is at least ~3 visible nodes wide so
-  // the diagram is not awkwardly narrow when there are only a
-  // few nodes, otherwise it expands to fit the widest row
-  // horizontally.  Height is one row per depth level.  When
-  // there are many nodes at the same depth, the wrapping Box
-  // provides a horizontal scrollbar (overflowX: 'auto').
-  const svgWidth = Math.max(
-    3 * NODE_X_STEP + NODE_WIDTH + SVG_PADDING_X,
-    COL_X_BASE + widthInColumns * NODE_X_STEP + SVG_PADDING_X,
-  )
+  // Dynamic SVG size: width fits the widest row horizontally so a
+  // single node produces a compact diagram (no phantom scroll
+  // space), while many nodes at one depth still expand and the
+  // wrapping Box provides a horizontal scrollbar (overflowX:
+  // 'auto').  Height is one row per depth level.
+  const svgWidth = COL_X_BASE + widthInColumns * NODE_X_STEP + SVG_PADDING_X
   const svgHeight = Math.max(
     2 * ROW_GAP + ROOT_Y,
     ROOT_Y + heightInRows * ROW_GAP + SVG_PADDING_Y,
@@ -259,7 +255,7 @@ export function RuntimeTopologyDiagram({
           width={svgWidth}
           height={svgHeight}
           aria-label={t('agents.sessions.runtimeTopologyTitle')}
-          style={{ display: 'block', minWidth: 600 }}
+          style={{ display: 'block' }}
         >
           <defs>
             <marker

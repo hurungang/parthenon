@@ -1,4 +1,5 @@
-"""Result Store — persists structured agent/SOP outputs; registers save_result MCP tool."""
+"""Result Store — persists structured agent/SOP outputs."""
+
 import logging
 from typing import Any
 
@@ -9,36 +10,9 @@ from app.db.models.results import ResultRecord
 
 logger = logging.getLogger(__name__)
 
-# MCP tool definition for save_result
-SAVE_RESULT_TOOL_DEFINITION = {
-    "name": "save_result",
-    "description": "Save a structured result from the current agent or SOP execution.",
-    "inputSchema": {
-        "type": "object",
-        "properties": {
-            "title": {
-                "type": "string",
-                "description": "Optional title for the result",
-            },
-            "payload": {
-                "type": "object",
-                "description": "Structured result data to persist",
-            },
-            "tags": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Optional tags for filtering",
-            },
-        },
-        "required": ["payload"],
-    },
-}
-
 
 class ResultStore:
-    """
-    Persists structured result records and exposes the save_result MCP tool.
-    """
+    """Persists structured result records for the Result Repository."""
 
     async def save(
         self,
@@ -85,22 +59,3 @@ class ResultStore:
         query = query.limit(limit).offset(offset)
         result = await db.execute(query)
         return list(result.scalars().all())
-
-    def get_mcp_tool_definition(self) -> dict[str, Any]:
-        """Return the MCP tool definition for save_result."""
-        return SAVE_RESULT_TOOL_DEFINITION
-
-    async def handle_mcp_call(
-        self, arguments: dict[str, Any], db: AsyncSession, **context: Any
-    ) -> dict[str, Any]:
-        """Handle a save_result MCP tool call."""
-        record = await self.save(
-            payload=arguments["payload"],
-            db=db,
-            title=arguments.get("title"),
-            tags=arguments.get("tags"),
-            agent_type_id=context.get("agent_type_id"),
-            agent_instance_id=context.get("agent_instance_id"),
-            conversation_session_id=context.get("conversation_session_id"),
-        )
-        return {"result_id": str(record.id), "saved": True}

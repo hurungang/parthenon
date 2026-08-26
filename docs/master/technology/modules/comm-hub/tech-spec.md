@@ -19,7 +19,11 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `AgentRouter` | Service class that routes inter-agent messages from a source agent instance to a target instance's pub/sub channel via `MessageBroker`; enables agent-to-agent communication |
 | `SessionContextManager` | Service class that stores and retrieves active session state — including participants, turn count, and current status — in Redis with a configurable TTL; context is flushed to PostgreSQL when the session closes |
 | `CertificateAuthorizationMiddleware` | Starlette middleware intercepting all agent tool call requests; extracts the client certificate from the TLS handshake, validates it with the Control Center, and fetches the authorised identity token; tool execution proceeds with the Control Center-provided token; returns `403 Forbidden` with reason on any validation or authorisation failure; all decisions written to `certificate_validation_log` |
-| `ApiKeyAuthMiddleware` | Middleware on the Communication Hub that detects API key authentication on incoming MCP requests. Checks `Authorization: Bearer` header first, then `?apiKey=` query parameter. Hashes the extracted key, calls Control Center's internal validation endpoint, stores the returned identity token and permission set on the request context, and rejects invalid/revoked keys with 401. Coexists with existing mTLS certificate auth — detects which method is in use and routes accordingly. |
+| `ApiKeyAuthMiddleware` | Middleware on the Communication Hub that detects API key authentication on incoming MCP requests. Checks `Authorization: Bearer` header first, then `?apiKey=` query parameter. Hashes the extracted key, calls Control Center's internal validation endpoint, stores the returned identity token and permission set on the request context, and rejects invalid/revoked/expired keys with 401. Coexists with existing mTLS certificate auth — detects which method is in use and routes accordingly. |
+| `McpProtocolServer` | MCP protocol server that bridges JSON-RPC `initialize`, `tools/list`, and `tools/call` to the tool registry bridge. `initialize` performs capability negotiation; the other two require an authenticated API-key session. |
+| `McpSessionManager` | In-memory per-connection MCP session registry that tracks protocol state (initialized flag, capability negotiation) and the authenticated identity/role/permissions context, with TTL/idle cleanup. Holds the identity token server-side only. |
+| `ToolRegistryBridge` | Builds the permission-filtered tool catalog for `tools/list` and authorizes + dispatches `tools/call`, routing system tools to CC system-tool endpoints and proxied MCP tools to the CC MCP proxy. |
+| MCP transports | Streamable HTTP (`POST /mcp`) and SSE (`GET /mcp/sse`, `POST /mcp/sse/messages`) handlers that share the same protocol server and session manager; gated by `CH_MCP_PROTOCOL_SERVER_ENABLED`. |
 | Tool naming & routing | Utilities in `tool_naming.py` (`is_system_tool`, `get_bare_tool_name`) and `tool_routing.py` (`_route_to_system_tool`, `_route_to_mcp_tool`) that route all tool calls from Agent Runtime using the unified `server____tool` naming convention. `system____*` calls are dispatched to internal system tool handlers (e.g., Notification Service, Human Intervene persistence); `<server>____*` calls are forwarded to the MCP Hub for external server proxying. |
 | `InterventionRouter` | New router that inspects suspend signals from Agent Runtime for `human_intervene` invocations containing a `conversation_session_id`. When detected, routes the intervention request to the connected WebSocket client of the parent conversation. Falls through to existing dashboard-based flow when `conversation_session_id` is absent. |
 | `InterventionQueue` | Per-conversation-session FIFO queue for pending intervention requests. Backed by database state for resilience across disconnects and service restarts. Delivers queued requests to UI in order as prior interventions are resolved or cancelled. |
@@ -39,6 +43,8 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 |----------|------|---------|
 | `WebSocket` | `/ws/sessions/{session_id}` | Bidirectional real-time messaging for user ↔ agent chat |
 | `POST` | `/internal/agent/resume/{session_id}` | Resume a suspended agent session after an intervene response; forwards resume signal from Control Center to Agent Runtime |
+| `MCP` | `/mcp` (Streamable HTTP) | MCP JSON-RPC endpoint (`initialize` / `tools/list` / `tools/call`) for external MCP clients, authenticated by API key |
+| `MCP` | `/mcp/sse`, `/mcp/sse/messages` | MCP Server-Sent Events transport (stream + message posting) |
 | `MCP Tool` | `load_skills` | MCP system tool: discover all skills (including SOPs) accessible to the authenticated agent. Accepts optional `since` parameter (ISO 8601 timestamp) for incremental sync — only skills updated after the given timestamp are returned. |
 
 ---
@@ -78,7 +84,7 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `_route_to_mcp_tool` | function | Forwards `<server>____*` calls to Control Center MCP proxy internal endpoint | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `_build_control_center_auth` | function | Builds authenticated CH->CC internal call transport for tool routing and policy checks | `backend/app/communication_hub/api/internal/tool_routing.py` |
 | `trigger_agent_execution` | endpoint | Triggers Agent Runtime execution for queued or conversation work units and preserves guardrail stop metadata in forwarded payloads | `backend/app/communication_hub/api/internal/agent_execute.py` |
-| `resume_agent_session` | endpoint | `POST /internal/agent/resume/{session_id}` — Forwards resume signal from Control Center to Agent Runtime with the operator's response value; restores suspended session | `backend/app/communication_hub/api/internal/resume.py` |
+| `forward_resume_session` | endpoint | `POST /internal/agent/resume/{session_id}` — Forwards resume signal from Control Center to Agent Runtime with the operator's response value; restores suspended session | `backend/app/communication_hub/api/internal/agent_resume.py` |
 | `request_a2a` | endpoint | Creates agent-to-agent delegation requests through Control Center orchestration APIs while preserving delegated guardrail outcome metadata | `backend/app/communication_hub/api/a2a.py` |
 | `disconnect_a2a` | endpoint | Closes linked A2A sessions and updates orchestration state via Control Center | `backend/app/communication_hub/api/a2a.py` |
 | `ApiKeyAuthMiddleware` | middleware | CH middleware detecting API keys (Bearer/query param), validating via CC, enriching request context | `backend/app/communication_hub/middleware/api_key_auth.py` |
@@ -86,6 +92,16 @@ The hub also serves as the **mTLS gateway** for agent-to-tool calls. Every inbou
 | `_validate_api_key_with_cc` | function (async) | Calls CC internal validation endpoint over mTLS, returns enriched response | `backend/app/communication_hub/middleware/api_key_auth.py` |
 | `load_skills` | function (system tool) | MCP system tool: returns accessible skills with schemas, supports `since` for incremental sync | `backend/app/communication_hub/api/mcp_tools.py` |
 | `mcp_router` | router | FastAPI APIRouter for MCP-facing tool endpoints on Communication Hub | `backend/app/communication_hub/api/mcp_tools.py` |
+| `McpProtocolServer` | class | MCP protocol server bridging JSON-RPC `initialize`/`tools/list`/`tools/call` | `backend/app/communication_hub/mcp/protocol_server.py` |
+| `McpSession` | class | Per-connection MCP protocol state + server-side auth context | `backend/app/communication_hub/mcp/session_manager.py` |
+| `McpSessionManager` | class | In-memory MCP session registry with TTL/idle cleanup | `backend/app/communication_hub/mcp/session_manager.py` |
+| `ToolRegistryBridge` | class | Builds permission-filtered tool catalog + authorizes/dispatches `tools/call` | `backend/app/communication_hub/mcp/tool_registry_bridge.py` |
+| `build_cc_client` | function | Builds mTLS-authenticated httpx client kwargs for CH → CC | `backend/app/communication_hub/mcp/cc_client.py` |
+| `handle_streamable_http` | function | Streamable HTTP `POST /mcp` handler | `backend/app/communication_hub/mcp/streamable_http.py` |
+| `handle_sse_open` | function | SSE `GET /mcp/sse` stream handler | `backend/app/communication_hub/mcp/sse_transport.py` |
+| `handle_sse_message` | function | SSE `POST /mcp/sse/messages` handler | `backend/app/communication_hub/mcp/sse_transport.py` |
+| `mcp_protocol_router` | router | FastAPI router mounting the MCP protocol endpoints | `backend/app/communication_hub/mcp/router.py` |
+| `register_mcp_protocol_server` | function | Registers the MCP router when `CH_MCP_PROTOCOL_SERVER_ENABLED` | `backend/app/communication_hub/mcp/router.py` |
 | `ChatPage` | component | Real-time user-to-agent chat interface backed by WebSocket connection | `frontend/src/pages/chat/ChatPage.tsx` |
 | `useChatSession` | hook | Manages WebSocket connection lifecycle, inbound message queue, pending question state, and reconnection | `frontend/src/hooks/useChatSession.ts` |
 

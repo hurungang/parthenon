@@ -1,14 +1,17 @@
 """Unit tests for ApiKeyService — key generation, hashing, and validation."""
 import hashlib
 import uuid
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
 from app.services.api_key_service import (
     _hash_key,
-    check_duplicate_active_key,
+    check_duplicate_name,
     generate_api_key,
     hash_api_key,
+    is_key_expired,
 )
 
 
@@ -66,3 +69,24 @@ class TestKeyGeneration:
         h1 = _hash_key(test_key)
         h2 = _hash_key(test_key)
         assert h1 == h2
+
+
+class TestKeyExpiration:
+    """Test optional API key expiration."""
+
+    def test_no_expiration_never_expires(self):
+        key = SimpleNamespace(expires_at=None)
+        assert not is_key_expired(key)
+
+    def test_future_expiration_not_expired(self):
+        key = SimpleNamespace(expires_at=datetime.now(timezone.utc) + timedelta(days=1))
+        assert not is_key_expired(key)
+
+    def test_past_expiration_is_expired(self):
+        key = SimpleNamespace(expires_at=datetime.now(timezone.utc) - timedelta(days=1))
+        assert is_key_expired(key)
+
+    def test_naive_expiration_treated_as_utc(self):
+        past_naive = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+        key = SimpleNamespace(expires_at=past_naive)
+        assert is_key_expired(key)

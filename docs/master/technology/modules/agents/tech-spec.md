@@ -67,7 +67,6 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentRoleListPage` | Table view of all agent roles; Name, SOP count chip, Skill count chip, Edit/Delete actions; launches `AgentRoleDialog` |
 | `AgentRoleDialog` | **MODIFIED**: Create/edit form with SOP multi-select, Skill multi-select, real-time MCP tool preview panel (debounced 300 ms, edit mode only); assigned identities data table with Assign/Remove actions; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; each dropdown has a Refresh button; passthrough badge on server labels; uses `useQueries` batch for per-server session fetch; `maxWidth="lg"` |
 | `AssignIdentitiesToRoleDialog` | Multi-select dialog to bulk-assign identities to a role |
-| `AssignMcpSessionsToRoleDialog` | **REMOVED** — replaced by inline dropdowns in `AgentRoleDialog`; component file deleted |
 | `AgentIdentityListPage` | Table view of all agent identities; realm_name, realm_username, token status chip (Active/Expired), identity status chip; Refresh Token and Re-Authenticate actions per row |
 | `AgentIdentityDialog` | Create/edit form for `AgentIdentity`; realm_name and realm_username text fields; **"Sign In as Agent"** OAuth button that fetches the authorization URL and opens the agent realm sign-in in a popup; reflects updated token status after OAuth callback |
 | `AssignRolesToIdentityDialog` | Multi-select dialog to bulk-assign roles to an identity |
@@ -368,7 +367,6 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentRoleListPage` | component | Table view; Name, SOP count chip, Skill count chip, Edit/Delete actions | `frontend/src/pages/agents/AgentRoleListPage.tsx` |
 | `AgentRoleDialog` | component | **MODIFIED**: Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); includes allowed target agent type slug preview derived from SOP `agent_delegation` policy mappings; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills, excluding system tools), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; uses `useQueries` batch for per-server session fetch; each dropdown has a Refresh button that preserves valid selections; passthrough badge on server labels; assigned identities with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
 | `AssignIdentitiesToRoleDialog` | component | Multi-select dialog to bulk-assign identities to a role | `frontend/src/pages/agents/AssignIdentitiesToRoleDialog.tsx` |
-| `AssignMcpSessionsToRoleDialog` | component | **REMOVED** — replaced by inline dropdowns in AgentRoleDialog | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` (deleted) |
 | `AgentIdentityListPage` | component | Table view; realm_name, realm_username, token status chip, identity status chip; Refresh Token and Re-Authenticate per row | `frontend/src/pages/agents/AgentIdentityListPage.tsx` |
 | `AgentIdentityDialog` | component | Create/edit; realm_name, realm_username; "Sign In as Agent" OAuth button opens agent realm popup; reflects token status after callback | `frontend/src/pages/agents/AgentIdentityDialog.tsx` |
 | `AssignRolesToIdentityDialog` | component | Multi-select dialog to bulk-assign roles to an identity | `frontend/src/pages/agents/AssignRolesToIdentityDialog.tsx` |
@@ -433,7 +431,6 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `test_agent_runtime_executor` | test module | Unit tests for `AgentRuntimeExecutor`; 2 passthrough tests: proxy called with `agent_jwt`, error returned when no JWT available | `backend/tests/unit/test_agent_runtime_executor.py` |
 | `test_permission_manager` | test module | Unit tests for permission resolution and allow/deny behavior, including A2A delegation permission checks | `backend/tests/unit/test_permission_manager.py` |
-| `AssignMcpSessionsToRoleDialog.test` | test module | **REMOVED** — component deleted, tests migrated to `AgentRoleDialog.test` | `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` (deleted) |
 | `AgentRoleDialog.test` | test module | **UPDATED**: Inline dropdown rendering, server computation, pre-save validation, refresh, save integration, passthrough badge, error states, removal of old popup elements | `frontend/src/__tests__/AgentRoleDialog.test.tsx` |
 
 ### Frontend Components (`frontend/src/components/agents/`)
@@ -654,8 +651,8 @@ The following components and services support the **vendor → model → guardra
 | `useUpdateModelUsageLimit` | hook | Mutation hook to update a per-period guardrail row using the per-guardrail shape | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
 | `useDeleteModelUsageLimit` | hook | Mutation hook to delete a per-period guardrail row | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
 | `useModelAvailability` | hook | Server-state hook for the full vendor → model → enabled state and refresh | `frontend/src/hooks/useModelAvailability.ts` |
-| `useToggleVendorDisabled` | hook | Mutation hook for the vendor-level `is_disabled` toggle | `frontend/src/hooks/useModelAvailabilityMutations.ts` |
-| `useToggleModelDisabled` | hook | Mutation hook for the per-model availability toggle | `frontend/src/hooks/useModelAvailabilityMutations.ts` |
+| `useSetVendorDisabled` | hook | Mutation hook for the vendor-level `is_disabled` toggle | `frontend/src/hooks/useModelAvailability.ts` |
+| `useSetModelDisabled` | hook | Mutation hook for the per-model availability toggle | `frontend/src/hooks/useModelAvailability.ts` |
 | `usePreflightAvailability` | hook | Mutation hook Agent Runtime (or server-to-server test harness) uses for the pre-execution availability check | `frontend/src/hooks/usePreflightAvailability.ts` |
 | `useEndConversationSession` | hook | Mutation hook to end a sleep conversation session | `frontend/src/hooks/useConversationSessions.ts` |
 
@@ -714,7 +711,7 @@ The following components and services support the **vendor → model → guardra
 | `terminate_agent_session` | endpoint | AR-internal terminate endpoint; cancels in-flight task via task registry; walks delegation graph to cascade children; updates `AgentJob.status` to `terminated` | `backend/app/agent_runtime/api/terminate.py` |
 | `ControlCenterCertificateMiddleware` | middleware | Accepts only `service:communication-hub` service certificates on `/internal/agent/*` paths (including terminate); `_EXPECTED_SERVICE_NAME = "communication-hub"` | `backend/app/agent_runtime/middleware.py` |
 | `AgentRuntimeExecutor._preflight_availability` | method | Pre-execution availability check; calls Control Center preflight endpoint for the resolved model; on deny, produces a policy-block outcome with `termination_category` of `model_disabled` or `vendor_disabled` | `backend/app/services/agents/runtime_executor.py` |
-| `add_done_callback` (session task registry) | mechanism | Cleans up session entries in the in-flight task registry on completion | `backend/app/agent_runtime/session_task_registry.py` |
+| `session_tasks` (in-flight registry) | mechanism | `app.state.session_tasks` dict keyed by `session_id`; `Task.add_done_callback` pops the entry on completion to keep the registry clean | `backend/app/agent_runtime/api/execute.py` |
 
 ### Backend Database Models (`backend/app/db/models/`)
 
@@ -730,12 +727,12 @@ The following components and services support the **vendor → model → guardra
 | `TerminationCascadeOutcome` | model | Per-node cascade result for terminate orchestration | `backend/app/db/models/termination_cascade_outcome.py` |
 | `SopRecursionValidationCheck` | model | Validation-check audit model for create/update/run contexts | `backend/app/db/models/sop_recursion_validation_check.py` |
 | `SopRecursionValidationFinding` | model | Detailed recursion-risk finding model linked to validation checks | `backend/app/db/models/sop_recursion_validation_finding.py` |
-| `AgentInstance` | model | Agent instance dashboard record; `instance_id`, `status: created \| active \| closed \| error` | `backend/app/db/models/agent_instance.py` |
+| `AgentInstance` | model | Agent instance dashboard record; `instance_id`, `status: created \| active \| closed \| error` | `backend/app/db/models/agents.py` |
 | `AgentJobStatus.terminated` | enum value | New `terminated` value added to `agent_job_status_enum`; distinct from `failed` | `backend/app/db/models/agents.py` |
 | `ExecutionEventCategory.guardrail_breached` | enum value | New `guardrail_breached` event category | `backend/app/db/models/session_logs.py` |
 | `ExecutionEventCategory.model_disabled` | enum value | New `model_disabled` event category for vendor-cascaded or manual model blocks | `backend/app/db/models/session_logs.py` |
 | `ExecutionEventCategory.vendor_disabled` | enum value | New `vendor_disabled` event category for vendor-level blocks | `backend/app/db/models/session_logs.py` |
-| `AgentInstanceStatus` | enum | `created` / `active` / `closed` / `error` for the agent instance dashboard | `backend/app/db/models/agent_instance.py` |
+| `AgentInstanceStatus` | enum | `created` / `active` / `closed` / `error` for the agent instance dashboard | `backend/app/db/models/agents.py` |
 | `ModelGuardrailPeriod` | enum | `hour` / `day` / `week` / `month` for per-period guardrail rows | `backend/app/db/models/model_guardrail_configuration.py` |
 | `ModelGuardrailEnforcementPosture` | enum | `terminate` (default) / `observe_only` for per-guardrail posture | `backend/app/db/models/model_guardrail_configuration.py` |
 | `ModelUsageUnit` | enum | `k` (thousand tokens, default) / `tokens` (raw tokens) for per-period limit value | `backend/app/db/models/model_guardrail_configuration.py` |

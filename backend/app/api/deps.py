@@ -59,7 +59,7 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/mcp/proxy-tool"),
     ("POST", "/api/v1/internal/data/intervene/respond"),
     ("POST", "/api/v1/internal/auth/validate-api-key"),
-    ("POST", "/api/v1/internal/skills/resolve"),
+    ("POST", "/api/v1/internal/system-tools/skills/resolve"),
 }
 
 _INTERNAL_ALLOWLISTS: dict[str, set[tuple[str, str]]] = {

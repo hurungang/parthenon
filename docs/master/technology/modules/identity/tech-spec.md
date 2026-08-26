@@ -277,7 +277,7 @@ Public endpoints for super admin credential-based access:
 
 ## Config: `config/identity.yaml`
 
-Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisioning. Read at startup by `YamlSettingsSource` (see [foundation tech-spec — Configuration System](../foundation/tech-spec.md#configuration-system)). Environment variables always override YAML values.
+Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisioning. Read at startup by `_SparseYamlSource` (see [foundation tech-spec — Configuration System](../foundation/tech-spec.md#configuration-system)). Environment variables always override YAML values.
 
 | Field | Type | Purpose |
 |-------|------|---------|
@@ -366,7 +366,6 @@ Non-sensitive OIDC settings written by `IdentityBootstrapService` after provisio
 | `test_bootstrap_service` | unit test | `IdentityBootstrapService` provisioning paths and idempotency | `backend/tests/services/identity/test_bootstrap_service.py` |
 | `test_keycloak_admin_client` | unit test | `KeycloakAdminClient` auth, retry, and error-mapping behaviour | `backend/tests/services/identity/test_keycloak_admin_client.py` |
 | `test_setup_identity` | unit test | Setup API endpoint success, 409, 502, and 422 response paths | `backend/tests/api/v1/test_setup_identity.py` |
-| `test_identity_setup_flow` | integration test | End-to-end API-layer setup flow through real DB | `backend/tests/integration/test_identity_setup_flow.py` |
 | `setupApi.test` | unit test | `getIdentityStatus` and `provisionIdentity` function tests | `frontend/src/__tests__/api/setupApi.test.ts` |
 | `ProviderSelectionStep.test` | unit test | Provider selection step component | `frontend/src/__tests__/features/setup/ProviderSelectionStep.test.tsx` |
 | `KeycloakConfigStep.test` | unit test | Keycloak config step component | `frontend/src/__tests__/features/setup/KeycloakConfigStep.test.tsx` |

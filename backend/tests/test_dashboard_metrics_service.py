@@ -47,12 +47,33 @@ TWO_DAYS_AGO = NOW - timedelta(days=2)
 PERMISSION_ENGINE_PATH = "app.services.dashboard_metrics_service.PermissionEngine"
 
 
-async def _seed_platform_user(db_session, *, sub="test-user", id_=None):
+@pytest.fixture
+async def db_session():
+    """Isolated in-memory DB per test (avoids cross-file contamination of counts)."""
+    from sqlalchemy.pool import StaticPool
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from app.db.session import Base
+
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    async with SessionLocal() as session:
+        yield session
+    await engine.dispose()
+
+
+async def _seed_platform_user(db_session, *, sub=None, id_=None):
     """Seed a PlatformUser so the service can resolve user_id from claims."""
+    sub = sub or f"test-user-{uuid.uuid4().hex}"
     user = PlatformUser(
         id=id_ or uuid.uuid4(),
         sub=sub,
-        email="test@example.com",
+        email=f"{sub}@example.com",
         display_name="Test User",
     )
     db_session.add(user)

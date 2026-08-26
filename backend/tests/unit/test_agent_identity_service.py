@@ -13,6 +13,7 @@ from app.services.agents.identity_service import (
     AgentIdentityNotFoundError,
     AgentIdentityConflictError,
     AgentOAuthError,
+    AgentOAuthConfig,
 )
 from app.db.models.agents import AgentIdentity, AgentIdentityType, AgentIdentityStatus
 
@@ -48,6 +49,15 @@ def _mock_db() -> AsyncMock:
     db.add = MagicMock()
     db.delete = AsyncMock()
     return db
+
+
+def _mock_oauth_config() -> AgentOAuthConfig:
+    return AgentOAuthConfig(
+        issuer_url="http://localhost:8082/realms/ai_agents",
+        client_id="parthenon-api",
+        auth_endpoint="http://localhost:8082/realms/ai_agents/protocol/openid-connect/auth",
+        token_endpoint="http://localhost:8082/realms/ai_agents/protocol/openid-connect/token",
+    )
 
 
 # ── Create ─────────────────────────────────────────────────────────────────────
@@ -280,19 +290,14 @@ async def test_get_oauth_authorize_url_targets_agent_realm():
 
     with (
         patch(
-            "app.services.agents.identity_service._keycloak_base_url",
-            return_value="http://localhost:8082",
+            "app.services.agents.identity_service._resolve_agent_oauth_config",
+            new=AsyncMock(return_value=_mock_oauth_config()),
         ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_name",
-            return_value="ai_agents",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_client_id",
-            return_value="parthenon-api",
-        ),
+        patch("app.db.session.AsyncSessionLocal") as mock_session_cls,
     ):
-        url = service.get_oauth_authorize_url(
+        mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=AsyncMock())
+        mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+        url = await service.get_oauth_authorize_url(
             state=state,
             redirect_uri="http://localhost:5173/agents/identities/oauth/callback",
         )
@@ -311,19 +316,14 @@ async def test_get_oauth_authorize_url_encodes_state_parameter():
 
     with (
         patch(
-            "app.services.agents.identity_service._keycloak_base_url",
-            return_value="http://localhost:8082",
+            "app.services.agents.identity_service._resolve_agent_oauth_config",
+            new=AsyncMock(return_value=_mock_oauth_config()),
         ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_name",
-            return_value="ai_agents",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_client_id",
-            return_value="parthenon-api",
-        ),
+        patch("app.db.session.AsyncSessionLocal") as mock_session_cls,
     ):
-        url = service.get_oauth_authorize_url(
+        mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=AsyncMock())
+        mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+        url = await service.get_oauth_authorize_url(
             state=state,
             redirect_uri="http://localhost:5173/agents/identities/oauth/callback",
         )
@@ -339,19 +339,14 @@ async def test_get_oauth_authorize_url_requests_offline_access():
 
     with (
         patch(
-            "app.services.agents.identity_service._keycloak_base_url",
-            return_value="http://localhost:8082",
+            "app.services.agents.identity_service._resolve_agent_oauth_config",
+            new=AsyncMock(return_value=_mock_oauth_config()),
         ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_name",
-            return_value="ai_agents",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_client_id",
-            return_value="parthenon-api",
-        ),
+        patch("app.db.session.AsyncSessionLocal") as mock_session_cls,
     ):
-        url = service.get_oauth_authorize_url(
+        mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=AsyncMock())
+        mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+        url = await service.get_oauth_authorize_url(
             state=state,
             redirect_uri="http://localhost:5173/callback",
         )
@@ -390,16 +385,8 @@ async def test_complete_oauth_flow_stores_encrypted_tokens():
 
     with (
         patch(
-            "app.services.agents.identity_service._keycloak_base_url",
-            return_value="http://localhost:8082",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_name",
-            return_value="ai_agents",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_client_id",
-            return_value="parthenon-api",
+            "app.services.agents.identity_service._resolve_agent_oauth_config",
+            new=AsyncMock(return_value=_mock_oauth_config()),
         ),
         patch(
             "app.services.agents.identity_service.get_vault",
@@ -441,16 +428,8 @@ async def test_complete_oauth_flow_raises_on_token_exchange_failure():
 
     with (
         patch(
-            "app.services.agents.identity_service._keycloak_base_url",
-            return_value="http://localhost:8082",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_name",
-            return_value="ai_agents",
-        ),
-        patch(
-            "app.services.agents.identity_service._agent_realm_client_id",
-            return_value="parthenon-api",
+            "app.services.agents.identity_service._resolve_agent_oauth_config",
+            new=AsyncMock(return_value=_mock_oauth_config()),
         ),
         patch(
             "app.services.agents.identity_service.get_vault",

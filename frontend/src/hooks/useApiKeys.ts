@@ -39,6 +39,16 @@ export function useRevokeApiKey() {
   })
 }
 
+export function useDeleteApiKey() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (keyId: string) => api.deleteApiKey(keyId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: apiKeyQueryKeys.all })
+    },
+  })
+}
+
 export function useIdentitiesWithRoles() {
   return useQuery({
     queryKey: apiKeyQueryKeys.identitiesWithRoles,

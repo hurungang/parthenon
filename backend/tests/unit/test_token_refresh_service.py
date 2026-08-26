@@ -77,16 +77,8 @@ async def test_refresh_token_updates_encrypted_tokens():
 
     with (
         patch(
-            "app.services.agents.token_refresh_service._keycloak_base_url",
-            return_value="http://localhost:8082",
-        ),
-        patch(
-            "app.services.agents.token_refresh_service._agent_realm_name",
-            return_value="ai_agents",
-        ),
-        patch(
-            "app.services.agents.token_refresh_service._agent_realm_client_id",
-            return_value="parthenon-api",
+            "app.services.agents.token_refresh_service._resolve_agent_refresh_config",
+            return_value=("http://localhost:8082/realms/ai_agents/protocol/openid-connect/token", "parthenon-api", None),
         ),
         patch(
             "app.services.agents.token_refresh_service.get_vault",
@@ -130,9 +122,7 @@ async def test_refresh_token_rotates_refresh_token():
     mock_vault.encrypt.side_effect = lambda s: f"enc:{s}"
 
     with (
-        patch("app.services.agents.token_refresh_service._keycloak_base_url", return_value="http://localhost:8082"),
-        patch("app.services.agents.token_refresh_service._agent_realm_name", return_value="ai_agents"),
-        patch("app.services.agents.token_refresh_service._agent_realm_client_id", return_value="parthenon-api"),
+        patch("app.services.agents.token_refresh_service._resolve_agent_refresh_config", return_value=("http://localhost:8082/realms/ai_agents/protocol/openid-connect/token", "parthenon-api", None)),
         patch("app.services.agents.token_refresh_service.get_vault", return_value=mock_vault),
         patch("httpx.AsyncClient") as mock_http_client_cls,
     ):
@@ -167,9 +157,7 @@ async def test_refresh_token_marks_identity_suspended_when_refresh_token_expired
     mock_vault.decrypt.return_value = "plain-expired-refresh"
 
     with (
-        patch("app.services.agents.token_refresh_service._keycloak_base_url", return_value="http://localhost:8082"),
-        patch("app.services.agents.token_refresh_service._agent_realm_name", return_value="ai_agents"),
-        patch("app.services.agents.token_refresh_service._agent_realm_client_id", return_value="parthenon-api"),
+        patch("app.services.agents.token_refresh_service._resolve_agent_refresh_config", return_value=("http://localhost:8082/realms/ai_agents/protocol/openid-connect/token", "parthenon-api", None)),
         patch("app.services.agents.token_refresh_service.get_vault", return_value=mock_vault),
         patch("httpx.AsyncClient") as mock_http_client_cls,
     ):
@@ -313,9 +301,7 @@ async def test_refresh_token_commits_changes_to_database():
     mock_vault.encrypt.side_effect = lambda s: f"enc:{s}"
 
     with (
-        patch("app.services.agents.token_refresh_service._keycloak_base_url", return_value="http://localhost:8082"),
-        patch("app.services.agents.token_refresh_service._agent_realm_name", return_value="ai_agents"),
-        patch("app.services.agents.token_refresh_service._agent_realm_client_id", return_value="parthenon-api"),
+        patch("app.services.agents.token_refresh_service._resolve_agent_refresh_config", return_value=("http://localhost:8082/realms/ai_agents/protocol/openid-connect/token", "parthenon-api", None)),
         patch("app.services.agents.token_refresh_service.get_vault", return_value=mock_vault),
         patch("httpx.AsyncClient") as mock_http_client_cls,
     ):
@@ -371,9 +357,7 @@ async def test_refresh_expiring_soon_commits_all_refreshes():
     mock_vault.encrypt.side_effect = lambda s: f"enc:{s}"
 
     with (
-        patch("app.services.agents.token_refresh_service._keycloak_base_url", return_value="http://localhost:8082"),
-        patch("app.services.agents.token_refresh_service._agent_realm_name", return_value="ai_agents"),
-        patch("app.services.agents.token_refresh_service._agent_realm_client_id", return_value="parthenon-api"),
+        patch("app.services.agents.token_refresh_service._resolve_agent_refresh_config", return_value=("http://localhost:8082/realms/ai_agents/protocol/openid-connect/token", "parthenon-api", None)),
         patch("app.services.agents.token_refresh_service.get_vault", return_value=mock_vault),
         patch("httpx.AsyncClient") as mock_http_client_cls,
     ):

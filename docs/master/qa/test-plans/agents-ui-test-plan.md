@@ -6,6 +6,16 @@ Covers frontend UI tests for agent navigation structure, `AgentTypeDetailsDialog
 
 ---
 
+## Critical Scenarios
+
+- **WHEN** the "AI Agent" sidebar group renders, **THEN** all five child links appear in order and the group defaults to expanded.
+- **WHEN** a user navigates to `/agents/instances`, **THEN** the legacy URL redirects to `/agents/executions`.
+- **WHEN** a user clicks an agent type row, **THEN** the details dialog opens with the Details tab (index 0) reset; **WHEN** a row action button is clicked, **THEN** the dialog does not open.
+- **WHEN** an agent type has a null `role_id` or `identity_id`, **THEN** the Role/Identity columns render a placeholder and the name links are non-clickable.
+- **WHEN** a binding is orphaned by a role switch, **THEN** a warning banner lists the orphaned items and "Remove All" clears them.
+
+---
+
 ## Coverage Areas
 
 ### 1. Navigation Menu Structure

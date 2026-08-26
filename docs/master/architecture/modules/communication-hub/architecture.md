@@ -98,13 +98,15 @@ Communication Hub accepts agents through two parallel authentication paths, conv
 ```mermaid
 flowchart LR
     EA[External Agent]
+    MCPEP[MCP Protocol Endpoint<br/>SSE + Streamable HTTP]
     AKV[API Key Validator]
     CC_VAL[CC Key Validation API]
     CC_DB[(CC Database)]
     CH_PROXY[MCP Proxy Layer]
     MCP[MCP Servers]
 
-    EA -->|API Key| AKV
+    EA -->|MCP handshake| MCPEP
+    MCPEP -->|API Key| AKV
     AKV -->|mTLS: validate key| CC_VAL
     CC_VAL -->|lookup hash| CC_DB
     CC_VAL -->|identity token + permissions| AKV
@@ -112,7 +114,7 @@ flowchart LR
     CH_PROXY -->|proxy with token| MCP
 ```
 
-External agents do not receive identity tokens. The API Key Validator calls Control Center's internal validation endpoint over mTLS, receives a resolved identity token, and holds it internally. CH injects the token only when proxying MCP tool requests to downstream servers.
+External agents do not receive identity tokens. The MCP Protocol Endpoint accepts the standard MCP handshake (SSE + Streamable HTTP) and fronts the API Key Validator, which calls Control Center's internal validation endpoint over mTLS, receives a resolved identity token, and holds it internally. CH injects the token only when proxying MCP tool requests to downstream servers.
 
 ## Responsibilities
 
@@ -123,6 +125,9 @@ External agents do not receive identity tokens. The API Key Validator calls Cont
 - **Intervention Queue**: Per-conversation-session FIFO queue for intervention requests. When multiple delegated sub-agents request intervention concurrently, requests are delivered sequentially.
 - **Task Delegation Event Router**: In-memory router that manages delivery of non-conversational delegation status events and intervention requests to execution log viewer clients. Maintains a mapping of active log viewer connections to parent task agent sessions. Pushes delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) and intervention requests to the correct log viewer. Falls back to poll-based delivery when no live viewer is connected.
 - **System Tool Router**: Maps bare tool names (`save_data`, `get_data`, `get_output`, `query_result`, `load_skills`) to Control Center internal system-tool endpoints. No new structural components are needed; existing permission-check and certificate-forwarding infrastructure handles these tool calls automatically.
+- **MCP Protocol Server**: Bridges standard MCP JSON-RPC methods (`initialize`, `tools/list`, `tools/call`) over SSE and Streamable HTTP transports to the existing tool registry and proxy path.
+- **MCP Session Manager**: Tracks per-connection protocol state — capability negotiation from `initialize`, per-session identity context — across the SSE and Streamable HTTP transports.
+- **Tool Registry Bridge**: Resolves canonical tool names, enforces the permission set carried on the authenticated session, and dispatches system tools to Control Center's system-tool endpoint and proxied MCP tools to the MCP proxy engine.
 
 ## WebSocket Messages
 

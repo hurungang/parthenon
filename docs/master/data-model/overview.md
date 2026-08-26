@@ -670,6 +670,7 @@ erDiagram
         enum status "active | revoked"
         datetime created_at
         datetime last_used_at
+        datetime expires_at "NULL = never expires"
         uuid created_by
     }
     ApiKeyUsageLog {
@@ -721,6 +722,7 @@ erDiagram
 - `key_hash` uses SHA-256; the raw key is never stored after creation.
 - `key_prefix` identifies the key type visually (e.g. `phn_sk_`) without exposing the secret.
 - `last_used_at` is updated on each successful authentication.
+- `expires_at` optionally sets a key expiry; `NULL` means the key never expires, and a past value causes the key to be rejected at authentication.
 - `ApiKeyUsageLog` entries are append-only and capture the action type, tool name (when applicable), client IP, and success/failure for every API key operation.
 
 ---

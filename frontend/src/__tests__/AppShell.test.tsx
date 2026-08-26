@@ -101,6 +101,7 @@ describe('AppShell — sidebar structure', () => {
   })
 
   it.each(AGENTS_CHILDREN)('renders Agents child label "%s" under the Agents group', async (label) => {
+    mockPathname = '/agents/roles'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     // Each label appears in both permanent and temporary drawers → at least 1.
@@ -108,18 +109,21 @@ describe('AppShell — sidebar structure', () => {
   })
 
   it.each(INTEGRATIONS_CHILDREN)('renders Integrations child label "%s" under the Integrations group', async (label) => {
+    mockPathname = '/mcp'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1)
   })
 
   it.each(SYSTEM_CHILDREN)('renders System child label "%s" under the System group', async (label) => {
+    mockPathname = '/observability'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders the Agents group with exactly 9 children (in declaration order)', async () => {
+    mockPathname = '/agents/roles'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     for (const label of AGENTS_CHILDREN) {
@@ -129,6 +133,7 @@ describe('AppShell — sidebar structure', () => {
   })
 
   it('renders the Integrations group with exactly 2 children (in declaration order)', async () => {
+    mockPathname = '/mcp'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     for (const label of INTEGRATIONS_CHILDREN) {
@@ -138,6 +143,7 @@ describe('AppShell — sidebar structure', () => {
   })
 
   it('renders the System group with exactly 3 children (in declaration order)', async () => {
+    mockPathname = '/observability'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     for (const label of SYSTEM_CHILDREN) {
@@ -203,46 +209,59 @@ describe('AppShell — sidebar interactions', () => {
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
 
-    // Click an Integrations child
-    const mcpHub = screen.getAllByText('nav.mcpHub')[0]
-    fireEvent.click(mcpHub)
+    const roles = screen.getAllByText('nav.agentRoles')[0]
+    fireEvent.click(roles)
 
-    expect(mockNavigate).toHaveBeenCalledWith('/mcp')
+    expect(mockNavigate).toHaveBeenCalledWith('/agents/roles')
   })
 
-  it('the Integrations group is locked open — clicking the header has no effect', async () => {
+  it('clicking a collapsed group header expands it, clicking again collapses it', async () => {
+    mockPathname = '/dashboard'
     const user = userEvent.setup()
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
 
-    // Integrations children start visible
-    expect(screen.getAllByText('nav.mcpHub').length).toBeGreaterThanOrEqual(1)
+    // Integrations starts collapsed (not the active route)
+    expect(screen.queryAllByText('nav.mcpHub')).toHaveLength(0)
 
-    // Click the Integrations group header
+    // Click the Integrations group header to expand
     const groupHeaderText = screen.getAllByText('nav.groupIntegrations')[0]
     const groupHeaderButton = groupHeaderText.closest('.MuiListItemButton-root') as HTMLElement
     await user.click(groupHeaderButton)
 
-    // Children remain visible (group is locked open)
+    // Children now visible
     expect(screen.getAllByText('nav.mcpHub').length).toBeGreaterThanOrEqual(1)
+
+    // Click again to collapse
+    await user.click(groupHeaderButton)
+    expect(screen.queryAllByText('nav.mcpHub')).toHaveLength(0)
   })
 
-  it('clicking one group header does not collapse other groups (Integrations is locked open)', async () => {
+  it('clicking one group header does not collapse other groups', async () => {
+    mockPathname = '/agents/roles'
     const user = userEvent.setup()
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
 
-    // Collapse the System group
+    // Agents starts expanded (active route), System starts collapsed
+    expect(screen.getAllByText('nav.agentTypes').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryAllByText('nav.observability')).toHaveLength(0)
+
+    // Expand System manually
     const systemHeaderText = screen.getAllByText('nav.groupSystem')[0]
     const systemHeaderButton = systemHeaderText.closest('.MuiListItemButton-root') as HTMLElement
     await user.click(systemHeaderButton)
+    expect(screen.getAllByText('nav.observability').length).toBeGreaterThanOrEqual(1)
 
-    // System children hidden
+    // Collapse System again
+    await user.click(systemHeaderButton)
+
+    // System children hidden again
     expect(screen.queryAllByText('nav.observability')).toHaveLength(0)
-    // Integrations still visible (locked open)
-    expect(screen.getAllByText('nav.mcpHub').length).toBeGreaterThanOrEqual(1)
-    // Agents still expanded
+    // Agents still expanded (active route)
     expect(screen.getAllByText('nav.agentTypes').length).toBeGreaterThanOrEqual(1)
+    // Integrations remains collapsed (not affected by System toggle)
+    expect(screen.queryAllByText('nav.mcpHub')).toHaveLength(0)
   })
 
   it('marks the active child item with the MUI selected class', async () => {

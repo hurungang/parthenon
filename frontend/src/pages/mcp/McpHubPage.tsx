@@ -29,7 +29,6 @@ import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import StorageIcon from '@mui/icons-material/Storage'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { usePagination } from '../../hooks/usePagination'
 import { useMcpServers, useSyncServer } from '../../hooks/useMcpServers'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
@@ -131,20 +130,7 @@ export function McpHubPage() {
           {error && <PermissionDeniedAlert error={error} fallbackMessage={t('app.error')} />}
 
           {/* System entry contextual info banner */}
-          <Box sx={{
-            display: 'flex', alignItems: 'flex-start', gap: 1.5,
-            p: 1.5, borderRadius: 2, mb: 2.5,
-            bgcolor: 'rgba(255,123,114,0.06)',
-            border: '1px solid rgba(255,123,114,0.15)',
-          }}>
-            <InfoOutlinedIcon fontSize="small" sx={{ color: 'text.secondary', mt: 0.2 }} />
-            <Box>
-              <Typography variant="subtitle2" fontWeight={600}>{t('mcp.system.aboutTitle')}</Typography>
-              <Typography variant="body2" color="text.secondary">{t('mcp.system.aboutBody')}</Typography>
-            </Box>
-          </Box>
-
-          {!isLoading && !error && (
+          {!error && (
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -166,11 +152,29 @@ export function McpHubPage() {
                         <Box display="flex" alignItems="center" gap={1}>
                           <code>{server.slug}</code>
                           {isSystem && (
-                            <Chip label={t('mcp.system.builtIn')} color="error" size="small" variant="outlined" />
+                            <Tooltip title={
+                              <Box>
+                                <Typography variant="subtitle2">{t('mcp.system.aboutTitle')}</Typography>
+                                <Typography variant="body2">{t('mcp.system.aboutBody')}</Typography>
+                              </Box>
+                            } arrow placement="top">
+                              <Chip label={t('mcp.system.builtIn')} color="error" size="small" variant="outlined" />
+                            </Tooltip>
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>{isSystem ? '' : server.base_url}</TableCell>
+                      <TableCell sx={{ maxWidth: 240 }}>
+                        <Tooltip title={server.base_url || ''} arrow placement="top">
+                          <Typography
+                            noWrap
+                            component="span"
+                            variant="body2"
+                            sx={{ display: 'block', maxWidth: 240 }}
+                          >
+                            {isSystem ? '—' : server.base_url}
+                          </Typography>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell>
                         <Chip
                           label={server.status}

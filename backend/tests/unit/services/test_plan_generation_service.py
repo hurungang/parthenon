@@ -32,7 +32,7 @@ def _make_agent_type(
     primary_sop_id: uuid.UUID | None = None,
     system_instruction: str | None = None,
     model_id: str | None = None,
-) -> AgentType:
+) -> MagicMock:
     at = MagicMock(spec=AgentType)
     at.id = type_id or uuid.uuid4()
     at.name = "Test Agent"
@@ -41,6 +41,12 @@ def _make_agent_type(
     at.primary_sop_id = primary_sop_id
     at.system_instruction = system_instruction
     at.model_id = model_id
+    at.sop_bindings = []
+    at.skill_bindings = []
+    # Mock SQLAlchemy instance state (used by _compute_config_hash to detect unloaded relations)
+    instance_state = MagicMock()
+    instance_state.unloaded = set()
+    at._sa_instance_state = instance_state
     return at
 
 

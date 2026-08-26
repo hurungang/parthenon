@@ -43,15 +43,16 @@ class AgentApiKey(Base):
     clear-text key is displayed once at creation and never retrievable afterward.
 
     Business rules:
-    - One key per identity-role pair (enforced by unique constraint).
+    - Key names are unique; multiple keys may exist per identity-role pair.
     - Keys inherit the full permission set of the bound role.
     - Revocation is immediate — the key becomes unusable on next authentication.
-    - Keys are valid until manually revoked; no automatic expiration.
+    - Keys may optionally carry an ``expires_at`` timestamp; a ``NULL`` value
+      means the key never expires. Expired keys are rejected at authentication.
     """
 
     __tablename__ = "agent_api_keys"
     __table_args__ = (
-        UniqueConstraint("agent_identity_id", "agent_role_id", name="uq_agent_api_keys_identity_role"),
+        UniqueConstraint("name", name="uq_agent_api_keys_name"),
         Index("ix_agent_api_keys_key_hash", "key_hash"),
         Index("ix_agent_api_keys_status", "status"),
     )
@@ -75,6 +76,9 @@ class AgentApiKey(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(

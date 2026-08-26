@@ -15,6 +15,7 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -120,29 +121,31 @@ export function SopListPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>{t('app.name')}</TableCell>
-                  <TableCell>{t('sops.stepCount')}</TableCell>
-                  <TableCell>{t('app.status')}</TableCell>
-                  <TableCell>{t('app.actions')}</TableCell>
+                  <TableCell>{t('app.description')}</TableCell>
+                  <TableCell sx={{ width: 100 }}>{t('app.status')}</TableCell>
+                  <TableCell sx={{ width: 130, whiteSpace: 'nowrap' }}>{t('app.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredSops.map((sop) => (
-                  <TableRow
-                    key={sop.id}
-                  >
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {sop.name}
-                      </Typography>
-                      {sop.description && (
-                        <Typography variant="caption" color="text.secondary">
-                          {sop.description}
+                  <TableRow key={sop.id}>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Tooltip title={sop.name} arrow placement="top">
+                        <Typography noWrap variant="body2" fontWeight={500}>
+                          {sop.name}
                         </Typography>
-                      )}
+                      </Tooltip>
                     </TableCell>
-                    <TableCell>
-                      {/* Step count requires detail fetch — shown in editor */}
-                      <Chip label="—" size="small" variant="outlined" />
+                    <TableCell sx={{ maxWidth: 300 }}>
+                      {sop.description ? (
+                        <Tooltip title={sop.description} arrow placement="top">
+                          <Typography noWrap variant="body2" color="text.secondary">
+                            {sop.description}
+                          </Typography>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -151,7 +154,7 @@ export function SopListPage() {
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <IconButton
                         size="small"
                         onClick={() => void handleOpen(sop, 'edit')}

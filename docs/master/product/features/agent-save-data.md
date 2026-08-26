@@ -50,6 +50,10 @@ Parthenon provides agents with two distinct persistence paths: **save_data** for
   - **date_range**: A time window to scope the query.
 - This tool is available to all agents by default and enables trend analysis, reporting, and comparison across sessions.
 
+### Result Repository (UI)
+
+The **Result Repository** provides a centralized, read-only view of all persisted artifacts — final outputs and intermediate saved data — in the Web UI, supporting compliance review, operational triage, and cross-session analysis. It is browse-only: operators can inspect and search records but cannot edit or delete them from the UI.
+
 ## User Stories
 
 - As an **agent designer**, I want to save named data at any point in a session using `save_data`, so that I can preserve important intermediate findings for later reuse.
@@ -70,10 +74,13 @@ Parthenon provides agents with two distinct persistence paths: **save_data** for
 
 ## Out of Scope
 
-- Changes to how final output quality is generated, evaluated, or formatted.
-- New visualisation dashboards or advanced analytics interfaces beyond the retrieval capability itself.
-- Redesign of broader agent lifecycle orchestration, scheduling, or delegation behaviour.
-- Historical data cleanup policy redesign, archival strategy changes, or retention governance expansion.
+- Editing or deleting saved data records from the UI (read-only repository)
+- Data retention policies, automatic archival of old results, or retention governance expansion
+- Export integrations to external data warehouse or cloud storage
+- Migration of legacy `save_result` records to the `save_data` model
+- Changes to how final output quality is generated, evaluated, or formatted
+- New visualisation dashboards or advanced analytics interfaces beyond the retrieval capability itself
+- Redesign of broader agent lifecycle orchestration, scheduling, or delegation behaviour
 
 ## Dependencies & Constraints
 

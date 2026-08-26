@@ -190,7 +190,10 @@ export function RuntimeControlDashboardPage() {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '1.4fr 1fr' },
+              gridTemplateColumns: {
+                xs: 'minmax(0, 1fr)',
+                md: 'minmax(0, 1.4fr) minmax(0, 1fr)',
+              },
               gap: 2,
               alignItems: 'start',
             }}
@@ -306,10 +309,12 @@ export function RuntimeControlDashboardPage() {
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (
     <Box display="flex" gap={1} alignItems="center">
-      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 90 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 90, flexShrink: 0 }}>
         {k}
       </Typography>
-      <Typography variant="body2">{children}</Typography>
+      <Typography variant="body2" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+        {children}
+      </Typography>
     </Box>
   )
 }

@@ -118,6 +118,17 @@ API Key authentication opens the platform to external agents by providing an alt
 - No changes to identity token resolution or proxying for internal agents
 - Web UI agent/role/MCP pages unaffected
 
+### 9. API Key Expiration
+**Why critical**: Expiration is time-based access control; a missed check leaves external access open past the intended window.
+
+**Covered**:
+- Key creation with optional `expires_at`; omitting it yields a non-expiring key (`NULL`)
+- `is_key_expired` logic for none / future / past / timezone-naive datetime cases
+- Expired key rejected at authentication with a clear error (not a 500), exactly like a revoked key
+- Key with future `expires_at` or no `expires_at` authenticates normally
+- `expires_at` column presence and nullability verified at the schema level
+- Key list surfaces expiration date (or "No expiration" when unset)
+
 ---
 
 ## Critical Scenarios
@@ -194,6 +205,23 @@ API Key authentication opens the platform to external agents by providing an alt
 
 **WHEN** authentication attempts exceed the rate limit threshold
 **THEN** subsequent attempts are throttled to prevent brute-force attacks
+
+### API Key Expiration
+
+**WHEN** a Platform Administrator creates an API key with an optional `expires_at` timestamp
+**THEN** the key is stored with that timestamp and rejected at authentication once the timestamp passes
+
+**WHEN** a Platform Administrator creates an API key without an `expires_at`
+**THEN** the key is stored with `NULL` and authenticates indefinitely
+
+**WHEN** an external agent authenticates with a key whose `expires_at` has passed
+**THEN** the CH returns a clear authentication error (not a 500), exactly like a revoked key
+
+**WHEN** an external agent authenticates with a key whose `expires_at` is in the future
+**THEN** authentication succeeds normally
+
+**WHEN** the API key list is displayed
+**THEN** each key shows its expiration date, or "No expiration" when unset
 
 ---
 
@@ -276,6 +304,12 @@ API Key authentication opens the platform to external agents by providing an alt
 - [ ] **AC-REGRESS-02**: Internal Agent Runtime agents can connect, discover skills, and invoke tools as before
 - [ ] **AC-REGRESS-03**: Web UI agent management, role management, MCP pages unaffected
 
+### API Key Expiration
+- [ ] **AC-EXP-01**: Administrator can create a key with an optional `expires_at`; omitting it yields a non-expiring key
+- [ ] **AC-EXP-02**: A key with a past `expires_at` is rejected at authentication with a clear error
+- [ ] **AC-EXP-03**: A key with a future `expires_at` or no `expires_at` authenticates normally
+- [ ] **AC-EXP-04**: The key list shows each key's expiration date (or "No expiration")
+
 ---
 
 ## Pre-Test Checklist (Database Changes)
@@ -308,7 +342,7 @@ API Key authentication opens the platform to external agents by providing an alt
 ### Backend Unit Tests
 | Test File | Coverage |
 |-----------|----------|
-| `backend/tests/test_api_key_service.py` | Key generation (randomness, length), SHA-256 hashing, hash comparison, key prefix generation — 8 tests |
+| `backend/tests/test_api_key_service.py` | Key generation (randomness, length), SHA-256 hashing, hash comparison, key prefix generation, `is_key_expired` (none/future/past/naive-datetime cases) — 8 tests |
 | `backend/tests/test_api_key_admin_api.py` | Pydantic schema validation for all API key schemas — 13 tests |
 
 ### Backend Integration Tests
@@ -316,7 +350,7 @@ API Key authentication opens the platform to external agents by providing an alt
 |-----------|----------|
 | `backend/tests/api/v1/test_api_keys_api.py` | Full CRUD: create (POST, one-time clear-text return), list (GET with status filter), revoke (POST), duplicate prevention (409), 404 for non-existent, auth required (401), validation errors (422), idempotent revoke — 12 tests |
 | `backend/tests/communication_hub/api/internal/test_validate_api_key.py` | Internal validation: valid active key returns identity token + permissions, revoked key returns 401, invalid/unknown returns 401, empty key_hash returns 422, since parameter flow, service cert requirement — 6 tests |
-| `backend/tests/integration/test_api_key_schema.py` | Schema verification: model columns, column lengths, enum values, FK constraints (CASCADE), unique constraint, indexes, no-plaintext-storage negative test — 17 tests |
+| `backend/tests/integration/test_api_key_schema.py` | Schema verification: model columns, column lengths, enum values, FK constraints (CASCADE), unique constraint, indexes, no-plaintext-storage negative test, `expires_at` column presence + nullability — 17 tests |
 
 ### Frontend Component Tests
 | Test File | Coverage |

@@ -67,30 +67,44 @@
 - A2A forwarding paths preserve downstream guardrail terminal outcomes for parent-session triage
 - Hub remains transport-only: no guardrail policy ownership and no guardrail persistence side effects
 
+### MCP Protocol Server (add-mcp-protocol-server)
+- Protocol handshake: external MCP client completes `initialize` over the CH MCP endpoint and receives negotiated server capabilities and version
+- Protocol ordering: methods other than `initialize` are rejected until a session is initialized
+- `tools/list` permission filtering: catalog filtered to exactly the tools permitted by the API key's bound role (system tools + proxied MCP tools), no more, no less
+- `tools/call` routing & authorization: permitted system tools route to the CC system-tool endpoint; permitted proxied MCP tools route to the CC MCP proxy; unauthorized calls rejected before routing
+- Canonical tool-name mapping: bare system-tool names vs. `slug____tool` namespaced proxied names resolved in both directions
+- Dual-transport consistency: `initialize`/`tools/list`/`tools/call` behave identically over Streamable HTTP (POST JSON-RPC, session-header resolution, newline-delimited responses) and SSE (event-stream `endpoint` announcement + message-posting)
+- Session lifecycle: state transitions, TTL/idle cleanup, identity-context isolation, cross-transport session reuse
+- Identity-token & secret non-exposure: resolved identity token and credentials held server-side only; never serialized into any client-visible response
+- `load_skills` over the protocol: available as a system tool, returns full definitions/schemas/`updated_at`; `since` incremental sync matches REST behavior
+- No regression: existing internal mTLS cert path and REST `/mcp/tools/load_skills` unchanged
+
 ## Critical Scenarios
 
 ### Scenario: Authorized Tool Execution
-- Agent Runtime sends tool call with valid client certificate
-- Communication Hub forwards to Control Center for authorization
-- Control Center validates cert, resolves permissions, refreshes token if needed, returns authorized=true with token
-- Hub executes tool with Control Center-provided token
-- Result returned to Agent Runtime
+- **WHEN** Agent Runtime sends a tool call with a valid client certificate, **THEN** the Hub forwards it to Control Center for authorization.
+- **WHEN** Control Center validates the cert, resolves permissions, and returns `authorized=true` with a token, **THEN** the Hub executes the tool with that token and returns the result to Agent Runtime.
 
 ### Scenario: Unauthorized Tool Call Blocked
-- Agent Runtime requests tool not in its permission set
-- Communication Hub requests authorization; Control Center returns 403
-- Hub returns 403 to Agent Runtime; tool NOT executed; outcome logged
+- **WHEN** Agent Runtime requests a tool not in its permission set, **THEN** Control Center returns 403.
+- **WHEN** Control Center denies authorization, **THEN** the Hub returns 403 to Agent Runtime, does not execute the tool, and logs the outcome.
 
 ### Scenario: Certificate Revocation in Flight
-- Agent Runtime calls tool with valid cert
-- Admin revokes cert while call is in-flight (before Communication Hub validates)
-- Communication Hub validates cert, detects revocation, returns 403
-- Tool NOT executed
+- **WHEN** a tool call is in-flight and an admin revokes the agent certificate before the Hub validates it, **THEN** the Hub detects the revocation and returns 403.
+- **WHEN** a revoked certificate is detected, **THEN** the tool is not executed.
 
 ### Scenario: Guardrail Stop Propagation
-- Downstream runtime ends execution with a guardrail stop reason
-- Communication Hub forwards response without changing stop reason/category fields
-- Parent-facing session views receive the same terminal guardrail semantics
+- **WHEN** a downstream runtime ends execution with a guardrail stop reason, **THEN** the Hub forwards the response without changing the stop reason or category fields.
+- **WHEN** guardrail terminal outcomes are forwarded, **THEN** parent-facing session views receive the same terminal guardrail semantics.
+
+### Scenario: MCP Protocol Handshake & Tool Invocation
+- **WHEN** a client sends `initialize` with a supported protocol version, **THEN** the server returns a successful result with negotiated capabilities and version.
+- **WHEN** a client sends `tools/list` before `initialize`, **THEN** the server rejects the request (protocol ordering error).
+- **WHEN** an authenticated client invokes a permitted tool via `tools/call`, **THEN** the call routes to CC (system-tool endpoint or MCP proxy) and returns the result.
+- **WHEN** a client invokes a tool outside its permitted set, **THEN** the server returns an authorization error and the tool is not executed.
+
+### Scenario: Identity-token Non-exposure
+- **WHEN** a client authenticates with a valid API key, **THEN** the resolved identity token and credentials remain server-side and appear nowhere in any response.
 
 ## Edge Cases
 - Hub restart during active tool call: in-flight tool call fails with clear error; agent session transitions to failed
@@ -104,6 +118,11 @@
 - `backend/tests/unit/test_a2a_communication.py` — A2A message relay and slug-target request path coverage
 - `backend/tests/unit/test_a2a_core_flow.py` — A2A requester/receiver lifecycle baseline behaviors
 - `backend/tests/unit/test_control_center_comm_hub_client.py` — revocation contract path and internal client wiring between Communication Hub and Control Center
+- `backend/tests/unit/test_mcp_protocol_server.py` — `initialize`/`tools/list`/`tools/call` JSON-RPC dispatch, capability negotiation, protocol ordering
+- `backend/tests/unit/test_mcp_session_manager.py` — session state transitions, TTL/idle cleanup, identity-context isolation
+- `backend/tests/unit/test_tool_registry_bridge.py` — permission-filtered catalog build, canonical tool-name mapping, system vs. proxy dispatch authorization
+- `backend/tests/unit/test_mcp_streamable_http.py` — Streamable HTTP `POST` JSON-RPC handling, session-header resolution, newline-delimited responses
+- `backend/tests/unit/test_mcp_sse_transport.py` — SSE event-stream `endpoint` announcement and message-posting path
 
 ### Backend — Integration Tests
 - `backend/tests/integration/test_communication_hub.py` — integration-level routing, session context consistency, concurrent session isolation
@@ -111,6 +130,7 @@
 - `backend/tests/integration/test_internal_allowlist_partitioning.py` — caller-scoped allowlist enforcement for Communication Hub and deny on Agent Runtime-only endpoints
 - `backend/tests/integration/test_internal_deny_audit_events.py` — deny-by-default evidence with structured deny event fields
 - `backend/tests/integration/test_websocket_communication_hub.py` — websocket delivery integration path
+- `backend/tests/integration/test_mcp_protocol_server.py` — full MCP handshake → list → call through the CH app with a mocked CC proxy (system + proxied tools)
 
 ### E2E Tests
 - `e2e/tests/agent-security-segregation.spec.ts` — **Real Backend Integration**: tool call authorization with certificate, permission denial (403), revocation enforcement; verifies hub correctly routes authorization decisions

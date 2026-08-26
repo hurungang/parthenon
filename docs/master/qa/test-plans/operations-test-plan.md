@@ -8,20 +8,17 @@
 - **Observability**: OTEL trace emission, span correlation, metric export, log correlation fields
 
 ## Critical Scenarios
-- Scheduled SOP executes at cron time
-- Agent saves result via `system____save_result` tool (explicit call only)
-- Agent completes without calling `save_result` → no result record created
-- Agent triggers notification via `system____send_notification` with group slug → `NotificationLog` entry created per channel; delivery status reflects per-channel outcome
-- Delivery continues to remaining channels when one channel fails
-- Notification source_type recorded as `AGENT` for tool-triggered sends; `MANUAL` for UI-triggered sends
-- Channel credential encrypted at write; secret properties omitted from read response
-- Channel assigned to group; group deleted-while-assigned returns 409 (if applicable per schema)
-- Conversation history persisted with tool calls
-- OTEL traces emitted for complete chain
-- User without `RT_NOTIFICATION` receives 403 on notification channel/group/log endpoints; UI shows permission-denied snackbar
-- User without `scheduling:read` receives 403 on `GET /api/v1/schedules`
-- User without `conversation:read` receives 403 on `GET /api/v1/conversations`
-- User without `result:read` receives 403 on `GET /api/v1/results`
+
+- **WHEN** a schedule's cron time arrives, **THEN** the scheduled SOP executes and a job record is created.
+- **WHEN** an agent explicitly calls `system____save_result`, **THEN** a result record is persisted; **WHEN** the agent completes without calling it, **THEN** no result record is created.
+- **WHEN** an agent triggers `system____send_notification` with a group slug, **THEN** a `NotificationLog` entry is created per assigned channel with per-channel delivery status.
+- **WHEN** one notification channel fails, **THEN** delivery continues to the remaining channels.
+- **WHEN** notification `source_type` is tool-triggered, **THEN** it is recorded as `AGENT`; **WHEN** UI-triggered, **THEN** `MANUAL`.
+- **WHEN** a channel credential is written, **THEN** it is encrypted at rest and secret properties are omitted from read responses.
+- **WHEN** a user without `scheduling:read` requests `GET /api/v1/schedules`, **THEN** 403 is returned.
+- **WHEN** a user without `conversation:read` requests `GET /api/v1/conversations`, **THEN** 403 is returned.
+- **WHEN** a user without `result:read` requests `GET /api/v1/results`, **THEN** 403 is returned.
+- **WHEN** OTEL instrumentation is active, **THEN** traces are emitted for the complete execution chain.
 
 ## Edge Cases
 - Missed cron fire

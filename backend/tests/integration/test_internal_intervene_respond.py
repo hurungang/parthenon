@@ -166,7 +166,7 @@ async def _create_test_data(
     platform_user = PlatformUser(
         id=uuid.uuid4(),
         sub=f"test-internal-user-{uuid.uuid4().hex}",
-        email="test-internal@example.com",
+        email=f"test-internal-{uuid.uuid4().hex}@example.com",
         display_name="Test Internal User",
     )
     db.add(platform_user)

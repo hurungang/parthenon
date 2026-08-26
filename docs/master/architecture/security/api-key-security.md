@@ -2,7 +2,7 @@
 
 ## Overview
 
-API keys provide an alternative authentication credential for external third-party AI agents (Claude Code, Cursor, custom agents) connecting to the Communication Hub's MCP endpoint. Keys are provisioned by platform administrators in Control Center and validated over existing mTLS service certificates — no new trust model is introduced.
+API keys provide an alternative authentication credential for external third-party AI agents (Claude Code, Cursor, custom agents) connecting to the Communication Hub. Keys now authenticate the standard MCP protocol handshake (SSE + Streamable HTTP) in addition to the existing REST skills-loading endpoint. Keys are provisioned by platform administrators in Control Center and validated over existing mTLS service certificates — no new trust model is introduced. The permission model and identity-token isolation are unchanged.
 
 ## Key Lifecycle
 
