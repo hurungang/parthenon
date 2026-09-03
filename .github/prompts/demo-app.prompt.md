@@ -75,6 +75,19 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Revoke API Key | `API Key Management - Revoke Key Flow > revoke dialog shows key name and warning` | Confirmation dialog with irreversible warning |
 | Filter API Keys | `API Key Management - Filtering > status filter has all/active/revoked options` | Dropdown filter toggling between key states |
 | Real Backend Auth | `Real Backend Integration - API Key Endpoints > GET /api/v1/api-keys returns 200 with valid admin token` | Backend integration verification |
+| **Agent Runtime Monitor** (agent-runtime-monitor) | | |
+| Page rename & map | `Agent Runtime Monitor > presents the view as "Agent Runtime Monitor" and renders the map canvas` | Page rebranded; interactive map canvas is the primary view (no guardrail panel) |
+| Auto-fit & grouping | `Agent Runtime Monitor > auto-fits the map and groups same-type agents into containers` | All agents on screen; same-type agents grouped in labelled containers |
+| Delegation connector | `Agent Runtime Monitor > renders a delegation connector between parent and child` | Parent → child delegation shown as a connecting line |
+| Human-intervention alert | `Agent Runtime Monitor > surfaces a sleeping agent awaiting intervention and opens the intervention dialog` | Sleeping agent shows alert icon; click opens the intervention dialog |
+| Selection & terminate | `Agent Runtime Monitor > selects a node and opens the termination dialog from the detail bubble` | Select agent → detail bubble → terminate |
+| Zoom | `Agent Runtime Monitor > zooms in and out via the toolbar` | Map zoom in/out via toolbar controls |
+| Drag-to-pan | `Agent Runtime Monitor > pans the canvas via drag` | Drag empty canvas to pan the map |
+| Fullscreen | `Agent Runtime Monitor > toggles fullscreen and restores` | Maximize the map to fullscreen and back |
+| Cross-type delegation | `Agent Runtime Monitor > shows a cross-type parent/child delegation connector` | Parent and delegated child laid out adjacent across agent types with a connector |
+| Filter empty-state recovery | `Agent Runtime Monitor > recovers from the filtered-empty state via "Reset filters"` | Legend/toolbar stay usable when a filter hides all agents; "Reset filters" restores them |
+| Trigger provenance | `Agent Runtime Monitor > shows trigger provenance on the tile and detail bubble` | Who triggered each agent (user / inherited / schedule) on the tile and bubble |
+| Tool-call routes (CH + MCP) | `Agent Runtime Monitor > renders the Communication Hub and tool-call routes to MCP servers` | Communication Hub node + agent→Hub→MCP tool-call routes, latest highlighted |
 
 ## Prerequisites
 

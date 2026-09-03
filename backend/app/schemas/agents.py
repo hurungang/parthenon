@@ -693,6 +693,18 @@ class ModelUsagePostureRead(BaseModel):
 # ── Runtime Control Schemas ────────────────────────────────────────────────
 
 
+class ToolCallRouteRead(BaseModel):
+    """A single tool call resolved to an MCP server slug for route drawing."""
+
+    tool_name: str
+    mcp_slug: str
+    called_at: datetime | None = None
+    # Routing path the call took (``RuntimeToolCall.route_type`` value:
+    # system/mcp/a2a).  ``None`` for legacy chat-sourced tool-call rows
+    # that predate the runtime tool-call store.
+    route_type: str | None = None
+
+
 class RuntimeTopologyNodeRead(BaseModel):
     session_id: uuid.UUID
     agent_type_id: uuid.UUID
@@ -725,6 +737,14 @@ class RuntimeTopologyNodeRead(BaseModel):
     # compatibility.
     kind: str = "agent"
     title: str | None = None
+    # Whether this node has a pending human-intervention request.
+    needs_intervention: bool = False
+    # Trigger provenance: who/what triggered this node.
+    trigger_source: str = "unknown"
+    # Human-readable trigger source label (user display name or schedule name).
+    trigger_source_label: str | None = None
+    # Tool-call history (latest first), each resolved to an MCP server slug.
+    tool_calls: list[ToolCallRouteRead] = []
 
 
 class RuntimeTopologyEdgeRead(BaseModel):

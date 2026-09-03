@@ -1,0 +1,125 @@
+# Technical Specification — Agent Runtime Monitor
+
+## 1. Technical Overview
+
+The runtime-control view becomes a full-page, interactive **Agent Runtime Monitor** (frontend). The backend topology endpoint is enhanced (single-service, Control Center only) so each node carries:
+
+- `needs_intervention` — boolean computed from pending `InterveneRequest` rows (existing; no schema change).
+- **Trigger provenance** — `trigger_source` (`user` | `schedule` | `delegated` | `unknown`) plus a human-readable `trigger_source_label` (user display name or schedule name). This is underpinned by one new nullable field on `ScheduledJob` (`scheduled_by_user_id`), a scheduler pass-through into `launch`, and delegation inheritance so child `AgentJob`s carry their parent's `triggered_by_user_id`.
+- **Tool-call history** — an ordered per-node route list (`tool_name` → `McpServer`) read from `ToolCallRecord` (via `ConversationTurn` → `ConversationSession`) and/or `AgentJob.conversation_history`, resolved to MCP servers via `parse_tool_name` on the `server____tool` naming scheme.
+
+Slug resolution hardening (Phase 12): tool-call rows recorded by Agent Runtime historically stored the **OpenAI-sanitised** name (`server__tool`, double underscore — the sanitiser converts the canonical `____` before sending to OpenAI), which `parse_tool_name` rejects. `_resolve_mcp_slug` therefore falls back to splitting the sanitised form on the FIRST `__` (empty parts → `unknown`; bare legacy system names keep the reserved `system` slug via `parse_tool_name`), repairing existing rows at read time, while the recorder (`build_langchain_tools_for_ar_path`) now restores the CANONICAL name via `tool_name_map` before writing, so new rows carry canonical names. A2A delegation rows (`route_type='a2a'`) are excluded from the per-node tool-call history — delegations render as delegation edges, not tool routes — and each route exposes its `route_type` (system/mcp/a2a; `null` for legacy chat rows).
+
+Live-data correction: the projection also includes **terminal direct children** of included jobs (budget-capped by `max_nodes`) so delegation edges to already-finished delegated attempts still render, and **`waiting_for_human` counts as a live status** — it is part of the endpoint's default (non-terminal) status list, and a conversation whose backing job or chat-spawned linked job (`input_data.__conv_session_id`) is paused for HITL computes runtime status `active` instead of `sleep`.
+
+The frontend consumes these signals to drive a map-style canvas (zoom/pan/auto-fit, grid + **delegation-tree team containers** — one tree per container row with **columns = delegation depth**, delegation connectors that survive filtering, a visible **Communication Hub** firewall bar with per-agent tool-call routes routed orthogonally through column gutters and per-container bottom channels to **evenly distributed MCP nodes and their tool chips**, inline detail bubble with trigger provenance, fullscreen) and keeps the filter/legend toolbar usable even when a filter hides every agent. The model guardrail panel is removed from this page; terminate and human-intervention flows are reused unchanged.
+
+No new database entities are introduced beyond `RuntimeToolCall` (table `runtime_tool_calls`, the Agent Runtime tool-call history store; `scheduled_by_user_id` is an added field); Alembic migrations are required for both.
+
+## 2. Component Breakdown
+
+### Backend (Control Center — single-service, DB access here only)
+
+- **`ScheduledJob`** — gains `scheduled_by_user_id` (nullable FK → `identities.id`), the provenance anchor for schedule-triggered agents.
+- **`SchedulingEngine._dispatch`** — passes `job.scheduled_by_user_id` through to `GatewayLifecycleHandler.launch(...)` (currently `user_id=None`).
+- **`GatewayLifecycleHandler.launch`** — accepts the scheduled-by `user_id` and stamps it onto the created `AgentJob.triggered_by_user_id`.
+- **`AgentSessionService.enqueue` + delegation path** — when a delegated child is created with `parent_job_id` set (via the A2A data handler `backend/app/api/v1/internal/session_data.py`, currently `user_id=None`), the child inherits the parent's `triggered_by_user_id`.
+- **`RuntimeTopologyController`** — builds the active topology projection; enhanced to resolve per-node trigger provenance, read tool-call history and derive per-node MCP-server routes, and attach `needs_intervention`.
+- **Projection dataclasses** (`TopologyNode`, `TopologyEdge`, `RuntimeTopologyProjection`) — carry node/edge/root data plus `needs_intervention`, trigger-provenance fields, and the tool-call route list.
+- **Response schemas** (`RuntimeTopologyNodeRead`, `RuntimeTopologyEdgeRead`, `RuntimeTopologyRead`, new `ToolCallRouteRead`) — serialize the projection; the node schema gains provenance fields and a tool-call route list.
+- **Endpoint handler `get_runtime_topology`** — `GET /agents/runtime/topology`, maps the projection into the response schema.
+- **Read-only sources** — `InterveneRequestStore`/`InterveneRequest` (pending intervention), `ToolCallRecord`/`ConversationTurn`/`ConversationSession` (tool-call history), `McpServer` (server node resolution), `Identity` (display names), `parse_tool_name` (tool-name splitting).
+
+### Frontend (React 19 + TypeScript + MUI)
+
+- **`RuntimeControlDashboardPage`** — page rebranded to "Agent Runtime Monitor"; hosts the map as the primary canvas and drops the guardrail panel.
+- **`AgentRuntimeMapCanvas`** (new) — map-style canvas: viewport state (zoom/pan), auto-fit, delegation-tree team containers (one tree per container row; column X = BFS depth from the root so the main agent is column 0, 1st-level delegation column 1, …), gutter-elbow delegation connectors, a Communication Hub **firewall bar** spanning the container stack with tool-call routes routed orthogonally (agent → column gutter → container bottom channel → hub → evenly distributed MCP node → tool chip; latest call per-agent colour, older calls grey, brightened with non-color cues on selection and involved MCP/tool nodes outlined — Phase 12 precision: only the `(mcp_slug, bare_tool)` pairs the selected agent actually called are highlighted; uninvolved chips stay dimmed), fullscreen toggle, and a **filter popover** — collapsed by default as a floating circular button at the right-bottom corner (badge = count of active restrictions) that expands on hover/click into a compact panel with the status chips, kind chips, and the recently-completed controls ("Recently completed agents" toggle + numeric window with minutes/hours unit, clamped ≥ 1); the panel auto-folds 1.2s after pointer-leave, on click-outside, and on Escape, and stays usable on an empty (fully-filtered) map.
+- **`AgentDetailBubble`** (new) — inline detail bubble beside the selected node, embedding detail, terminate (via `NodeTerminationDialog`), guardrail summary, and **trigger provenance**.
+- **`runtimeNodeMeta`** (new) — shared presentation helpers (`nodeKind`, `kindLabelKey`, `statusLabelKey`, `statusChipColor`, `statusDotColor`) used by both the map canvas and the detail bubble.
+- **`useRuntimeTopology`** — fetches topology data (`useRuntimeTopology(includeTerminal, recentMinutes)` — `recent_minutes` is part of the React Query key and the request URL, default 30, `0` disables the recent-terminal window; changing the value refetches, with the page debouncing window edits ~500ms); exports `isNodeVisibleByDefault` (active + sleep-awaiting-intervention) and consumes trigger-provenance + tool-call-route fields; drives filter/legend state that persists on an empty map.
+- **Reused** — `InterveneResponseDialog` (intervention response) and `NodeTerminationDialog` (terminate).
+- **Retired** — `RuntimeTopologyDiagram` (deleted; replaced by the map canvas).
+- **Removed from page** — `VendorModelGuardrailPanel` (still used by `ModelConfigListPage`).
+
+## 3. API Changes
+
+- **`GET /agents/runtime/topology`** — existing endpoint (`backend/app/api/v1/agents.py`), response model `RuntimeTopologyRead`. Each node in `nodes` gains:
+  - `needs_intervention: bool` — pending human-intervention request exists (existing).
+  - `trigger_source: str` — `user` | `schedule` | `delegated` | `unknown`.
+  - `trigger_source_label: str | None` — human-readable source (user display name, or schedule name for schedule-triggered nodes).
+  - `tool_calls: list[ToolCallRouteRead]` — ordered (latest first) per-node tool calls, each with `tool_name`, `mcp_slug`, `called_at`, and `route_type` (Phase 12, additive: `system` | `mcp` | `a2a` | `null` for legacy chat rows; `a2a` delegation rows are excluded from the list entirely).
+  - Query parameters: `include_terminal` (existing, "all terminal, no window"), `max_nodes` (existing), and `recent_minutes: int = Query(30, ge=0, le=10080)` — width of the recent-terminal visibility window; `0` disables it; `include_terminal=true` supersedes it. The frontend `useRuntimeTopology(includeTerminal, recentMinutes)` sends it on every request.
+
+## 4. State Management
+
+- **Viewport state (zoom level, pan offset)** — component-local state inside `AgentRuntimeMapCanvas`, updated by wheel/pointer gestures and the toolbar controls; auto-fit recomputes it on mount, resize, and fullscreen toggle.
+- **Fullscreen state** — page-level state in `RuntimeControlDashboardPage`, toggled by the maximize control and driving CSS/portal expansion of the map stage.
+- **Selection state** — selected node id lives in the page (or canvas) and drives `AgentDetailBubble` visibility/position; dismissal clears it; selection also brightens that node's historical tool-call routes.
+- **Filter/legend state (status + kind filters, legend collapsed)** — toolbar-local state inside `AgentRuntimeMapCanvas`; deliberately **not** cleared when a filter hides every agent, so the operator can always restore visibility from an empty map.
+- **Server data** — `useRuntimeTopology` (React Query) holds the topology projection; node visibility is a derived predicate (active OR `needs_intervention` on a sleep node) rather than separately stored state; trigger-provenance and tool-call-route fields come directly from the projection.
+
+## 5. Data Access Patterns
+
+- **Server-side / API** — topology data is fetched from `GET /agents/runtime/topology` via `useRuntimeTopology` (React Query), consistent with the existing "frontend calls backend REST APIs" convention. Trigger-provenance resolution, tool-call-history reads, and MCP-server resolution all happen in `RuntimeTopologyController` (Control Center), which queries `AgentJob`/`Identity`/`ScheduledJob`, `ToolCallRecord` via `ConversationTurn` → `ConversationSession` (and/or `AgentJob.conversation_history`), and `McpServer`; the frontend never touches the database directly.
+- **Write path (provenance)** — the scheduler (`_dispatch`) → `GatewayLifecycleHandler.launch` → `AgentSessionService.enqueue` chain stamps `triggered_by_user_id` at job creation; delegated children inherit it from their parent.
+- **Client-side layout** — delegation-tree containers (one tree per row, columns = delegation depth), the Communication Hub firewall position, the evenly distributed MCP column, tool-chip columns, connector/route geometry (orthogonal multi-segment tool routes through tile-free column gutters and per-container bottom channels), and the System Tools node synthesis are all computed client-side in the canvas layout engine from the fetched projection.
+- **Read-only monitor** — the only write paths are the existing terminate mutation (`useNodeTermination`) and the existing intervention response flow (`InterveneResponseDialog`); no new persistence access patterns are introduced.
+
+## 6. Code Reference Map
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ScheduledJob` | model | Schedule entity; gains `scheduled_by_user_id` (nullable FK → `identities.id`) | `backend/app/db/models/scheduling.py` |
+| `create_schedule` / `update_schedule` | functions | Stamp `scheduled_by_user_id` from the requesting user's identity on create/update (trigger provenance anchor for schedule-triggered runs) | `backend/app/api/v1/scheduling.py` |
+| `prepare_a2a_request` | function | A2A delegation enqueue; resolves the chat user from the source `ConversationSession` and passes it as `user_id` so chat-originated delegations carry the human trigger | `backend/app/api/v1/internal/session_data.py` |
+| `record_tool_calls` | function | CC internal endpoint `POST /internal/data/tool-calls` (service-cert auth); persists one or a batch of `RuntimeToolCall` rows reported by Agent Runtime | `backend/app/api/v1/internal/session_data.py` |
+| `RuntimeToolCall` | model | Recorded tool execution (MCP/system/A2A); polymorphic `session_id` (agent job OR conversation id, no FK, indexed) with `session_kind`, `tool_name`, `route_type`, `mcp_slug`, `status`, `duration_ms`, `error` | `backend/app/db/models/tool_calls.py` |
+| `record_tool_call` | method | Fire-and-forget AR write of one tool execution to `POST /internal/data/tool-calls` — failures are logged and swallowed, never breaking tool execution | `backend/app/agent_runtime/data_client.py` |
+| `_record_tool_call_safely` / `_build_tool_call_recorder` | methods | Executor-side best-effort recording hooks; resolve a working data client (executor client or app-level fallback) so conversation turns — whose call sites pass `data_client=None` — are recorded too | `backend/app/services/agents/runtime_executor.py` |
+| `SchedulingEngine._dispatch` | method | Dispatches a `ScheduledJob`; passes `job.scheduled_by_user_id` into `launch(...)` | `backend/app/services/scheduling/scheduler.py` |
+| `GatewayLifecycleHandler.launch` | method | Enqueues an `AgentJob`; forwards `user_id` → `AgentJob.triggered_by_user_id` | `backend/app/services/gateway/lifecycle_handler.py` |
+| `AgentSessionService.enqueue` | method | Creates an `AgentJob`; gains delegation inheritance (copy parent `triggered_by_user_id` when `parent_job_id` set) | `backend/app/services/agents/session_service.py` |
+| `AgentJob` | model | Job entity; `triggered_by_user_id` (provenance anchor), `parent_job_id` (delegation), `conversation_history` (tool-call source) | `backend/app/db/models/agents.py` |
+| `RuntimeTopologyController` | class | Builds active runtime topology projection; enhanced to resolve provenance, tool-call history (union of `RuntimeToolCall` + `ToolCallRecord`, `chat_status` dropped, latest-first, cap 20), and `needs_intervention`; delegation edges derived from `AgentJob.parent_job_id` (unioned with `AgentRunRelationship`, deduped) with `depth_from_root` computed by walking parent chains; conversation nodes linked to jobs via `input_data.__conv_session_id` | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `get_active_topology` | method | Returns `RuntimeTopologyProjection` with nodes/edges/roots plus provenance, tool-call routes, and `needs_intervention`; Phase 11 adds the `recent_minutes` window (default 30) — terminal jobs (completed/failed/terminated) whose `completed_at` (fallback `created_at`; `AgentJob` has no `updated_at`) falls inside the window join the live set, `created_at desc`, live statuses first, `max_nodes`-budgeted; skipped when `include_statuses` already contains terminal statuses (`include_terminal` = all terminal, no window) | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `TopologyNode` | dataclass | Single run node in the projection; gains `needs_intervention`, trigger-provenance fields, and tool-call route list | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `TopologyEdge` | dataclass | Delegation edge between two run nodes | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `RuntimeTopologyProjection` | dataclass | Projection payload (nodes, edges, root session ids) | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `get_runtime_topology` | function | Handler for `GET /agents/runtime/topology`; maps projection to response schema; includes `waiting_for_human` in the default and non-terminal status lists; Phase 11 adds `recent_minutes: int = Query(30, ge=0, le=10080)` (0 disables the recent-terminal window; `include_terminal` unchanged) passed through to the controller | `backend/app/api/v1/agents.py` |
+| `RuntimeTopologyNodeRead` | schema | Node response schema; gains `needs_intervention`, `trigger_source`, `trigger_source_label`, `tool_calls` | `backend/app/schemas/agents.py` |
+| `ToolCallRouteRead` | schema | New sub-schema: `tool_name`, `mcp_slug`, `called_at`; Phase 12 adds `route_type` (`system`/`mcp`/`a2a`, nullable) | `backend/app/schemas/agents.py` |
+| `RuntimeTopologyEdgeRead` | schema | Edge response schema | `backend/app/schemas/agents.py` |
+| `RuntimeTopologyRead` | schema | Projection response schema | `backend/app/schemas/agents.py` |
+| `InterveneRequestStore` | class | Manages human-intervention request lifecycle; source of pending state read by the controller | `backend/app/services/agents/intervene_service.py` |
+| `InterveneRequest` | model | Intervention request entity with `pending` lifecycle status | `backend/app/db/models/intervene.py` |
+| `InterveneRequestStatus` | enum | Intervention request status values (pending/responded/cancelled/expired) | `backend/app/db/models/intervene.py` |
+| `AgentJobStatus` | enum | Agent job status enum; includes `waiting_for_human` | `backend/app/db/models/agents.py` |
+| `ToolCallRecord` | model | Per-turn tool call record (tool name, input/output, error, duration, timestamp) — read-only tool-call-history source | `backend/app/db/models/conversations.py` |
+| `ConversationTurn` | model | Conversation turn; links a `ToolCallRecord` to a session | `backend/app/db/models/conversations.py` |
+| `ConversationSession` | model | Conversation session; parent of turns, keyed to `agent_job_id` | `backend/app/db/models/conversations.py` |
+| `McpServer` | model | MCP server node with unique `slug` and `name`; read to resolve tool-call routes | `backend/app/db/models/mcp_hub.py` |
+| `Identity` | model | Identity entity (`display_name`); read for trigger-provenance user names | `backend/app/db/models/identity.py` |
+| `parse_tool_name` | function | Splits canonical `server____tool` names into (server slug, tool name) for MCP-server routing | `backend/app/services/agents/tool_naming.py` |
+| `_resolve_mcp_slug` | function | Controller-side slug resolution: canonical `parse_tool_name` first, then a sanitised-name fallback splitting on the FIRST `__` (empty parts → `unknown`; bare legacy system names keep the `system` slug; legacy `server/tool` → server part) so rows recorded with OpenAI-sanitised names still resolve | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `build_langchain_tools_for_ar_path` | function | Builds LangChain tools for the AR loop; Phase 12 records tool calls under the CANONICAL name (restored via `tool_name_map`, the same mapping used for CommHub dispatch) instead of the sanitised definition name; delegation tools record `agent____<slug>` | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `build_tool_name` | function | Builds canonical `server____tool` names (context for the `parse_tool_name` inverse) | `backend/app/services/agents/tool_naming.py` |
+| `RuntimeControlDashboardPage` | component | Page rebranded to "Agent Runtime Monitor"; hosts the map canvas, drops the guardrail panel | `frontend/src/pages/agents/RuntimeControlDashboardPage.tsx` |
+| `AgentRuntimeMapCanvas` | component | New map canvas: zoom/pan/auto-fit, delegation-tree team containers (one tree per row, columns = delegation depth), Communication Hub firewall bar + orthogonal tool-call routes through evenly distributed MCP nodes and tool chips (System Tools node, per-agent colour / grey history / selection highlight), filter/legend recovery, fullscreen | `frontend/src/components/agents/AgentRuntimeMapCanvas.tsx` |
+| `AgentDetailBubble` | component | New inline detail bubble (detail + terminate + trigger provenance); Phase 11 adds the "Execution log" link (agent-kind only; opens `AgentExecutionDetailsDialog`) and the guardrail USAGE-vs-limits box (4 metrics, `current / limit` rows, near ≥80% / over colour semantics + `data-state` cue) | `frontend/src/components/agents/AgentDetailBubble.tsx` |
+| `AgentExecutionDetailsDialog` | component | Reused execution-log dialog; opened from the detail bubble for agent-kind nodes (`sessionId = node.session_id`) | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
+| guardrail usage — agent-kind | data source | `GET /agents/sessions/{id}` → `AgentJobStatusRead.output_data.guardrail_usage`; snake_case keys built by `runtime_executor.py` (`output_data.setdefault("guardrail_usage", …)`): `policy_snapshot_id`, `cumulative_iterations`, `delegated_steps`, `delegation_depth`, `elapsed_seconds`, `token_usage_current_session` (limits `max_iterations` / `max_delegated_steps` / `max_delegation_depth` / `token_budget` come from the agent type or the conversation builder — the agent-job builder emits currents only). Fetched lazily via react-query in `AgentDetailBubble`, staleTime 30s | `backend/app/services/agents/runtime_executor.py`, `frontend/src/components/agents/AgentDetailBubble.tsx` |
+| guardrail usage — conversation-kind | data source | `ConversationSessionRead.guardrail_usage` (conversation list/detail endpoints); snake_case keys from `build_conversation_guardrail_usage`: `token_usage_current_session`, `token_budget`, `cumulative_iterations`, `max_iterations`, `delegated_steps`, `max_delegated_steps`, `delegation_depth`, `max_delegation_depth`, `policy_snapshot_id`. Read via `useConversationSessions` in `AgentDetailBubble` | `backend/app/schemas/conversations.py`, `frontend/src/hooks/useConversationSessions.ts` |
+| `RuntimeTopologyDiagram` | component | **Retired** — deleted static single-row diagram, replaced by the map canvas | `frontend/src/components/agents/RuntimeTopologyDiagram.tsx` |
+| `VendorModelGuardrailPanel` | component | **Removed from this page** (still used by `ModelConfigListPage`) | `frontend/src/components/agents/VendorModelGuardrailPanel.tsx` |
+| `InterveneResponseDialog` | component | Reused human-intervention response dialog | `frontend/src/components/agents/InterveneResponseDialog.tsx` |
+| `NodeTerminationDialog` | component | Reused node termination dialog | `frontend/src/components/agents/NodeTerminationDialog.tsx` |
+| `useRuntimeTopology` | hook | Fetches topology projection; exposes `isNodeVisibleByDefault`; consumes provenance + tool-call routes; keeps filter/legend usable on empty map | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `isNodeVisibleByDefault` | function | Default-visibility predicate: active nodes visible; sleep nodes visible only when `needs_intervention === true` | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `getPendingInterventionForNode` | function | Resolves the pending `InterveneRequest` for a node (conversation-scoped vs agent-scoped endpoint) | `frontend/src/api/interveneApi.ts` |
+| `runtimeNodeMeta` | module | Shared presentation helpers (`nodeKind`, `kindLabelKey`, `statusLabelKey`, `statusChipColor`, `statusDotColor`) | `frontend/src/components/agents/runtimeNodeMeta.ts` |
+| `useNodeTermination` | hook | Termination mutation for terminating a node/session | `frontend/src/hooks/useNodeTermination.ts` |
+| `RuntimeTopologyNode` | type | Frontend node type; gains `needs_intervention`, `trigger_source`, `trigger_source_label`, `tool_calls` | `frontend/src/types/index.ts` |
+| `ToolCallRoute` | type | Frontend tool-call route type (`tool_name`, `mcp_slug`, `called_at`, optional `route_type`: `system`/`mcp`/`a2a`/null) | `frontend/src/types/index.ts` |
+| `RuntimeTopologyEdge` | type | Frontend edge type | `frontend/src/types/index.ts` |
+| `RuntimeTopologyProjection` | type | Frontend projection type | `frontend/src/types/index.ts` |
+| `AgentJobStatus` | type | Frontend job status union; includes `waiting_for_human` | `frontend/src/types/index.ts` |

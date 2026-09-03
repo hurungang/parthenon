@@ -209,6 +209,7 @@ def build_langchain_tools_for_ar_path(
     role_id: str | None = None,
     guardrail_state: Any | None = None,
     status_event_callback: Callable[..., Awaitable[None]] | None = None,
+    tool_call_recorder: Callable[..., Awaitable[None]] | None = None,
 ) -> list[Any]:
     """Build LangChain tools for the Agent Runtime path.
 
@@ -232,10 +233,47 @@ def build_langchain_tools_for_ar_path(
         conv_session_id: Parent conversation session ID (for HITL context).
         tool_name_map: Optional mapping of OpenAI-sanitised (2-underscore) tool
             names to their canonical (4-underscore) equivalents.
+        tool_call_recorder: Optional async callback invoked after every tool
+            execution with keyword args ``tool_name``, ``route_type``,
+            ``status``, ``duration_ms``, ``mcp_slug``, ``error`` — used to
+            persist tool-call history for the runtime monitor.  The callback
+            is best-effort and must never raise into the tool path.
 
     Returns:
         List of LangChain StructuredTool / BaseTool instances.
     """
+
+    async def _record(
+        *,
+        tool_name: str,
+        route_type: str,
+        status: str,
+        duration_ms: int | None = None,
+        mcp_slug: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if tool_call_recorder is None:
+            return
+        try:
+            await tool_call_recorder(
+                tool_name=tool_name,
+                route_type=route_type,
+                status=status,
+                duration_ms=duration_ms,
+                mcp_slug=mcp_slug,
+                error=error,
+            )
+        except Exception as exc:  # recording must never break execution
+            logger.warning("Tool-call recording failed for %s: %s", tool_name, exc)
+
+    def _mcp_slug_of(name: str) -> str | None:
+        try:
+            from app.services.agents.tool_naming import parse_tool_name
+
+            return parse_tool_name(name)[0]
+        except Exception:
+            return None
+
     from app.services.agents.langchain_system_tools import LangChainHumanInterveneTool
 
     tools: list[Any] = []
@@ -260,6 +298,9 @@ def build_langchain_tools_for_ar_path(
                 session_id=session_id,
                 agent_type_id=agent_type_id,
                 conv_session_id=conv_session_id,
+                tool_call_recorder=(
+                    (lambda **kw: _record(**kw)) if tool_call_recorder is not None else None
+                ),
             )
             tools.append(tool)
             continue
@@ -273,6 +314,9 @@ def build_langchain_tools_for_ar_path(
                 async def _arun(**kwargs: Any) -> str:
                     import uuid as _uuid
                     import time as _time
+                    _started = _time.monotonic()
+                    _call_status = "success"
+                    _call_error: str | None = None
                     try:
                         request_payload: dict[str, Any] = {}
                         rp = kwargs.get("request_payload")
@@ -449,6 +493,8 @@ def build_langchain_tools_for_ar_path(
 
                     except Exception as exc:
                         import uuid as _uuid2
+                        _call_status = "error"
+                        _call_error = str(exc)
                         try:
                             await data_client.log_execution_event(
                                 session_id=_uuid2.UUID(session_id),
@@ -460,6 +506,17 @@ def build_langchain_tools_for_ar_path(
                             pass
                         logger.error("Delegation to '%s' failed: %s", slug, exc)
                         return json.dumps({"error": str(exc), "tool": orig_name})
+                    finally:
+                        # Record the canonical delegation tool name (the def
+                        # name may be the sanitised ``agent__<slug>`` form).
+                        await _record(
+                            tool_name=f"agent____{slug}",
+                            route_type="a2a",
+                            status=_call_status,
+                            duration_ms=int((_time.monotonic() - _started) * 1000),
+                            mcp_slug=None,
+                            error=_call_error,
+                        )
 
                 def _run(**kwargs: Any) -> str:
                     import asyncio
@@ -496,6 +553,10 @@ def build_langchain_tools_for_ar_path(
 
         def _make_commhub_tool(orig_name: str, comm_name: str) -> tuple:
             async def _arun(**kwargs: Any) -> str:
+                import time as _time
+                _started = _time.monotonic()
+                _call_status = "success"
+                _call_error: str | None = None
                 try:
                     # Emit using_tool status event for WebSocket consumers
                     try:
@@ -511,12 +572,36 @@ def build_langchain_tools_for_ar_path(
                         agent_type_id=agent_type_id,
                         conv_session_id=conv_session_id,
                     )
+                    if isinstance(result, dict) and result.get("error"):
+                        _call_status = "error"
+                        _call_error = str(result.get("error"))
                     if isinstance(result, (dict, list)):
                         return json.dumps(result)
                     return str(result)
                 except Exception as exc:
+                    _call_status = "error"
+                    _call_error = str(exc)
                     logger.error("Tool '%s' failed via CommHub: %s", orig_name, exc)
                     return json.dumps({"error": str(exc), "tool": orig_name})
+                finally:
+                    try:
+                        from app.services.agents.tool_naming import is_system_tool
+
+                        _route = "system" if is_system_tool(comm_name) else "mcp"
+                    except Exception:
+                        _route = "mcp"
+                    # Record the CANONICAL (4-underscore) name, restored via
+                    # tool_name_map — the tool definitions carry OpenAI-
+                    # sanitised (2-underscore) names, and the runtime monitor
+                    # resolves MCP slugs from the canonical form.
+                    await _record(
+                        tool_name=comm_name,
+                        route_type=_route,
+                        status=_call_status,
+                        duration_ms=int((_time.monotonic() - _started) * 1000),
+                        mcp_slug=_mcp_slug_of(comm_name),
+                        error=_call_error,
+                    )
 
             def _run(**kwargs: Any) -> str:
                 import asyncio
