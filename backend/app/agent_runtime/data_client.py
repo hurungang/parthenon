@@ -475,3 +475,50 @@ class ControlCenterDataClient:
                 "user_prompt_length": len(user_prompt or ""),
             },
         )
+
+    # ── Tool-call recording ──────────────────────────────────────────────────
+
+    async def record_tool_call(
+        self,
+        *,
+        session_id: uuid.UUID,
+        session_kind: str,
+        tool_name: str,
+        route_type: str,
+        status: str,
+        duration_ms: int | None = None,
+        mcp_slug: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Record a single tool execution to Control Center (fire-and-forget).
+
+        Writes to ``POST /internal/data/tool-calls`` so the Agent Runtime
+        Monitor can render per-node tool-call history for agent jobs AND
+        conversation turns (``session_kind`` distinguishes the two).
+
+        Best-effort by design: recording failures are logged and swallowed —
+        they must never break the tool execution they describe.
+        """
+        body: dict[str, Any] = {
+            "records": [
+                {
+                    "session_id": str(session_id),
+                    "session_kind": session_kind,
+                    "tool_name": tool_name,
+                    "route_type": route_type,
+                    "mcp_slug": mcp_slug,
+                    "status": status,
+                    "duration_ms": duration_ms,
+                    "error": error,
+                }
+            ]
+        }
+        try:
+            await self._post("/tool-calls", body)
+        except Exception as exc:
+            logger.warning(
+                "Failed to record tool call %s for session %s: %s",
+                tool_name,
+                session_id,
+                exc,
+            )

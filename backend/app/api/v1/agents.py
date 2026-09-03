@@ -72,6 +72,7 @@ from app.schemas.agents import (
     RuntimeTopologyRead,
     TerminationCascadeOutcomeRead,
     TerminationRequestRead,
+    ToolCallRouteRead,
     VendorDisabledUpdate,
     WorkflowGenerationModelConfigRead,
     WorkflowGenerationModelConfigUpdate,
@@ -2111,26 +2112,59 @@ async def get_runtime_topology(
     db: DbSession,
     include_terminal: bool = Query(False),
     max_nodes: int = Query(200, ge=1, le=1000),
+    recent_minutes: int = Query(
+        30,
+        ge=0,
+        le=10080,
+        description=(
+            "Include terminal jobs (completed/failed/terminated) whose "
+            "completion time (completed_at, falling back to created_at) is "
+            "within this many minutes, so just-finished runs stay visible "
+            "on the live map. 0 disables the window; include_terminal=true "
+            "supersedes it (all terminal jobs, no window)."
+        ),
+    ),
     _: dict = Depends(require_permission(RT_AGENT, "read")),
 ) -> RuntimeTopologyRead:
+    """Return the live runtime topology projection for the Agent Runtime Monitor.
+
+    Includes jobs in live states (queued / running / waiting_for_human)
+    plus — within the ``recent_minutes`` window — recently terminal jobs
+    (completed_at, falling back to created_at, inside the window), so a
+    just-finished run and its recorded tool routes remain visible. The
+    existing "terminal direct children of included jobs" logic then pulls
+    in their children. Everything respects the ``max_nodes`` budget
+    (ordered by created_at desc, live statuses first).
+
+    ``include_terminal=true`` keeps its existing meaning — ALL terminal
+    jobs are returned regardless of age (no window). ``recent_minutes=0``
+    disables the recent-terminal window entirely.
+    """
     from app.db.models.agents import AgentJobStatus
 
-    statuses = (
-        [AgentJobStatus.queued, AgentJobStatus.running]
-        if not include_terminal
-        else [
+    # waiting_for_human is a non-terminal live state — jobs paused for a
+    # human intervention must stay visible on the runtime monitor.
+    if not include_terminal:
+        statuses = [
             AgentJobStatus.queued,
             AgentJobStatus.running,
+            AgentJobStatus.waiting_for_human,
+        ]
+    else:
+        statuses = [
+            AgentJobStatus.queued,
+            AgentJobStatus.running,
+            AgentJobStatus.waiting_for_human,
             AgentJobStatus.completed,
             AgentJobStatus.failed,
             AgentJobStatus.terminated,
         ]
-    )
 
     projection = await _runtime_topology_controller.get_active_topology(
         db,
         include_statuses=statuses,
         max_nodes=max_nodes,
+        recent_minutes=recent_minutes,
     )  # include_conversations and include_instances default to True
 
     return RuntimeTopologyRead(
@@ -2147,6 +2181,18 @@ async def get_runtime_topology(
                 termination_category=node.termination_category,
                 kind=node.kind,
                 title=node.title,
+                needs_intervention=node.needs_intervention,
+                trigger_source=node.trigger_source,
+                trigger_source_label=node.trigger_source_label,
+                tool_calls=[
+                    ToolCallRouteRead(
+                        tool_name=call.tool_name,
+                        mcp_slug=call.mcp_slug,
+                        called_at=call.called_at,
+                        route_type=call.route_type,
+                    )
+                    for call in node.tool_calls
+                ],
             )
             for node in projection.nodes
         ],

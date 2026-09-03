@@ -90,6 +90,12 @@ from app.db.models.model_guardrail_evaluation import ModelGuardrailEvaluation  #
 from app.db.models.model_usage_posture import ModelUsagePosture  # noqa: F401
 from app.db.models.guardrail_threshold_event import GuardrailThresholdEvent  # noqa: F401
 from app.db.models.agent_run_relationship import AgentRunRelationship  # noqa: F401
+from app.db.models.tool_calls import (  # noqa: F401
+    RuntimeToolCall,
+    RuntimeToolCallRouteType,
+    RuntimeToolCallSessionKind,
+    RuntimeToolCallStatus,
+)
 from app.db.models.termination_request import TerminationRequest  # noqa: F401
 from app.db.models.termination_cascade_outcome import TerminationCascadeOutcome  # noqa: F401
 from app.db.models.sop_recursion_validation_check import SopRecursionValidationCheck  # noqa: F401

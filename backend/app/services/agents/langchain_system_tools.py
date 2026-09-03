@@ -155,6 +155,8 @@ class LangChainHumanInterveneTool(BaseTool):
     session_id: str = Field(exclude=True)
     agent_type_id: str = Field(exclude=True, default="")
     conv_session_id: Optional[str] = Field(default=None, exclude=True)
+    # Optional async callback for tool-call recording (runtime monitor).
+    tool_call_recorder: Optional[Any] = Field(default=None, exclude=True)
 
     class Config:
         arbitrary_types_allowed = True
@@ -190,7 +192,11 @@ class LangChainHumanInterveneTool(BaseTool):
         """Register intervention with CommHub then interrupt agent via LangGraph."""
         from langgraph.types import interrupt
 
-        request_id = ""
+        import time
+
+        _started = time.monotonic()
+        _call_status = "success"
+        _call_error: Optional[str] = None
         try:
             result = await self.comm_hub_client.call_human_intervene(
                 session_id=self.session_id,
@@ -210,9 +216,27 @@ class LangChainHumanInterveneTool(BaseTool):
             )
         except Exception as exc:
             logger.error("LangChainHumanInterveneTool: CommHub call failed: %s", exc)
+            _call_status = "error"
+            _call_error = str(exc)
             # Registration failed — do NOT interrupt; return error so the model
             # can decide how to proceed (retry, skip, or complete without HITL).
             return json.dumps({"error": str(exc)})
+        finally:
+            recorder = self.tool_call_recorder
+            if recorder is not None:
+                try:
+                    await recorder(
+                        tool_name="human_intervene",
+                        route_type="system",
+                        status=_call_status,
+                        duration_ms=int((time.monotonic() - _started) * 1000),
+                        mcp_slug="system",
+                        error=_call_error,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Tool-call recording failed for human_intervene: %s", exc
+                    )
 
         # CommHub registration succeeded — pause the agent.
         # GraphInterrupt is caught by _run_task_loop_ar, which extracts

@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Runtime Monitor — Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+
+/* ── App shell ── */
+.monitor{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#2563EB,#60A5FA);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+.brand .crumb{color:var(--text-secondary);font-weight:400;font-size:14px}
+.topbar-title{font-weight:600;font-size:16px}
+.topbar-spacer{flex:1}
+.live-badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--info)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:livepulse 1.6s infinite}
+.topbar-stat{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px;font-weight:600}
+.topbar-stat .n{font-size:14px}
+.topbar-stat.amber{border-color:#FDE68A;background:#FFFBEB;color:#92400E}
+
+/* ── Map stage ── */
+.map-stage{position:relative;flex:1;overflow:hidden;min-height:0;background:#EFF3F7;cursor:grab}
+.map-stage.panning{cursor:grabbing}
+.world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;user-select:none;
+  background-color:#F4F7FA;
+  background-image:radial-gradient(#D7E0EA 1px,transparent 1px);
+  background-size:22px 22px;
+}
+
+/* group virtual containers */
+.groups-layer{position:absolute;left:0;top:0;z-index:1}
+.group{position:absolute;border:1px dashed #B0BEC5;border-radius:12px;background:rgba(255,255,255,.55);z-index:1}
+.group-label{position:absolute;top:7px;left:12px;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:#455A64;letter-spacing:.2px}
+.group-count{background:#ECEFF3;color:#607D8B;border-radius:999px;padding:0 7px;font-size:10.5px;font-weight:700}
+
+/* delegation connectors */
+#connectors{position:absolute;left:0;top:0;z-index:2;pointer-events:none;overflow:visible}
+.connector{stroke:#64748B;stroke-width:2;fill:none}
+
+/* tool-call routes */
+#toolSvg{position:absolute;left:0;top:0;z-index:1;pointer-events:none;overflow:visible}
+.route{fill:none;stroke-linecap:round}
+
+/* Communication Hub + MCP server nodes */
+.nodes-layer{position:absolute;left:0;top:0;z-index:2;pointer-events:none}
+.hub-node{position:absolute;background:linear-gradient(135deg,#0F172A,#1E293B);border-radius:14px;box-shadow:var(--shadow-md);display:flex;align-items:center;gap:12px;padding:12px 16px}
+.hub-icon{width:40px;height:40px;border-radius:10px;background:rgba(96,165,250,.18);color:#93C5FD;font-size:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hub-title{font-size:13.5px;font-weight:700;color:#fff;white-space:nowrap}
+.hub-sub{font-size:11px;color:#94A3B8;white-space:nowrap}
+.server-node{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;padding:0 12px}
+.server-icon{font-size:13px;color:var(--text-secondary);flex-shrink:0}
+.server-label{font-size:12px;font-weight:600;font-family:'Courier New',monospace;white-space:nowrap}
+
+/* tiles */
+.tiles-layer{position:absolute;left:0;top:0;z-index:3}
+.tile{position:absolute;background:var(--surface);border:1px solid #CFD8DC;border-radius:10px;box-shadow:var(--shadow);padding:9px 11px;cursor:pointer;transition:border-color var(--transition),box-shadow var(--transition);display:flex;flex-direction:column;gap:4px}
+.tile:hover{border-color:#90CAF9;box-shadow:var(--shadow-md)}
+.tile.selected{border-color:var(--primary);border-width:2px;background:var(--primary-light);box-shadow:var(--shadow-md)}
+.tile-row{display:flex;align-items:center;gap:7px;min-width:0}
+.kind-badge{width:18px;height:18px;border-radius:5px;background:#F1F5F9;color:#607D8B;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.tile-name{font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}
+.dot-blue{background:var(--info)}
+.dot-yellow{background:var(--warning)}
+.dot-red{background:var(--error)}
+.dot-gray{background:#94A3B8}
+.tile-session{font-size:11px;color:var(--text-secondary);font-family:'Courier New',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile-meta{font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:6px}
+.tile-meta b{color:var(--text-primary);font-weight:600}
+.tile-trigger{font-size:10.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile-trigger .tt-label{text-transform:uppercase;letter-spacing:.3px;font-size:9px;font-weight:700;color:#94A3B8}
+.alert-btn{position:absolute;top:-9px;right:-9px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:var(--warning);color:#fff;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);animation:alertpulse 1.4s infinite;z-index:4}
+.tile.sleeping{border-color:var(--warning);background:#FFFBEB}
+.tile.sleeping .status-dot{box-shadow:0 0 0 3px rgba(255,152,0,.22)}
+
+/* toolbar */
+.toolbar{position:absolute;right:16px;top:16px;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;overflow:hidden}
+.tool-btn{width:42px;height:40px;border:none;background:var(--surface);color:var(--text-primary);font-size:17px;display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.tool-btn:hover{background:var(--primary-light);color:var(--primary)}
+.tool-btn + .tool-btn{border-top:1px solid var(--border)}
+.tool-zoom{font-size:12px;color:var(--text-secondary);text-align:center;padding:6px 0;border-top:1px solid var(--border);font-weight:600}
+
+/* legend — horizontal bottom bar, collapsible, click-to-filter */
+.legend-bar{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;box-shadow:var(--shadow-md);padding:6px 8px;max-width:calc(100% - 24px);transition:all var(--transition)}
+.legend-bar.collapsed{padding:4px}
+.legend-collapse{border:none;background:none;color:var(--text-secondary);font-size:15px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background var(--transition);flex-shrink:0}
+.legend-collapse:hover{background:var(--bg);color:var(--primary)}
+.legend-items{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.legend-bar.collapsed .legend-items{display:none}
+.legend-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);white-space:nowrap}
+.legend-sep{width:1px;height:18px;background:var(--border)}
+.legend-group-inline{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.legend-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:12px;font-weight:500;color:var(--text-primary);transition:all var(--transition);white-space:nowrap}
+.legend-chip:hover{border-color:var(--primary);color:var(--primary)}
+.legend-chip.off{opacity:.42;color:var(--text-secondary)}
+.legend-chip .status-dot{width:8px;height:8px}
+.legend-chip .kicon{font-size:11px;color:var(--text-secondary)}
+
+/* empty-state overlay (canvas only — legend & toolbar stay interactive above it) */
+.empty-state{position:absolute;inset:0;z-index:10;display:none;align-items:center;justify-content:center;pointer-events:none}
+.empty-state.show{display:flex}
+.empty-card{pointer-events:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-md);padding:26px 30px;text-align:center;max-width:360px}
+.empty-icon{font-size:34px;margin-bottom:10px;color:var(--text-secondary)}
+.empty-title{font-weight:700;font-size:15px;margin-bottom:6px}
+.empty-desc{font-size:12.5px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5}
+
+/* detail bubble */
+.bubble{position:absolute;z-index:30;width:288px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-md);padding:14px;display:none}
+.bubble.show{display:block}
+.bubble-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.bubble-title{font-weight:700;font-size:14px;word-break:break-word}
+.bubble-close{border:none;background:none;color:var(--text-secondary);font-size:14px;padding:2px 4px;border-radius:4px}
+.bubble-close:hover{background:#F1F5F9;color:var(--text-primary)}
+.bubble .chip{margin-bottom:8px}
+.bubble .kv{display:grid;grid-template-columns:74px 1fr;gap:8px;font-size:12.5px;margin-bottom:8px}
+.bubble .kv .k{color:var(--text-secondary)}
+.bubble .kv .v{font-family:'Courier New',monospace;word-break:break-all}
+.bubble-guardrails{border:1px solid var(--border);border-radius:8px;background:#F8FAFC;padding:9px 11px;margin-bottom:12px}
+.bubble-guardrails .g-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-bottom:6px}
+.g-row{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:2px 0}
+.g-row span{color:var(--text-secondary)}
+.g-row b{font-weight:600}
+.bubble-actions{display:flex;gap:8px}
+
+/* buttons & chips */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;letter-spacing:.25px;transition:all var(--transition);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}
+.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}
+.btn-danger:hover{opacity:.9}
+.btn-block{width:100%}
+.chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-gray{background:#F1F5F9;color:#475569}
+
+/* modals */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.modal-header h3{font-size:17px;font-weight:600}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+.modal-close{background:none;border:none;color:var(--text-secondary);font-size:18px;padding:2px 6px;border-radius:var(--radius-sm);line-height:1}
+.modal-close:hover{background:var(--bg);color:var(--text-primary)}
+
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+textarea.form-control{resize:vertical;min-height:80px}
+.choice-list{display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+.choice{border:1px solid var(--border);border-radius:var(--radius);padding:9px 11px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:all var(--transition)}
+.choice:hover{border-color:#90CAF9;background:#F8FAFF}
+.choice input{margin:0;accent-color:var(--primary)}
+.choice .choice-label{font-size:13px;font-weight:500}
+.choice .choice-hint{font-size:11.5px;color:var(--text-secondary)}
+.alert{border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+.alert-error{background:#FFF5F5;color:#991B1B;border-left:4px solid var(--error)}
+.hidden{display:none!important}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#263238;color:#fff;padding:11px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:all .25s ease;z-index:2000;max-width:80vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* fullscreen */
+.monitor.fs .topbar{display:none}
+.monitor.fs .map-stage{position:fixed;inset:0;z-index:150}
+
+@keyframes livepulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+@keyframes alertpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,152,0,.55)}50%{box-shadow:0 0 0 7px rgba(255,152,0,0)}}
+</style>
+</head>
+<body>
+<div class="monitor" id="monitor">
+  <header class="topbar">
+    <div class="brand"><span class="logo">P</span>Parthenon <span class="crumb">/ Runtime Control</span></div>
+    <span class="topbar-title">Agent Runtime Monitor</span>
+    <div class="topbar-spacer"></div>
+    <span class="live-badge"><span class="live-dot"></span>LIVE · refresh 5s</span>
+    <span class="topbar-stat"><span class="n" id="statTotal">0</span> agents</span>
+    <span class="topbar-stat"><span class="n" id="statRunning" style="color:var(--success)">0</span> running</span>
+    <span class="topbar-stat amber"><span class="n" id="statAlert">0</span> awaiting intervention</span>
+  </header>
+
+  <div class="map-stage" id="viewport">
+    <div class="world" id="world">
+      <div class="groups-layer" id="groupsLayer"></div>
+      <svg id="toolSvg"></svg>
+      <svg id="connectors"></svg>
+      <div class="nodes-layer" id="nodesLayer"></div>
+      <div class="tiles-layer" id="tilesLayer"></div>
+    </div>
+
+    <div class="toolbar" title="Map controls">
+      <button class="tool-btn" id="btnZoomIn" title="Zoom in">+</button>
+      <button class="tool-btn" id="btnZoomOut" title="Zoom out">−</button>
+      <div class="tool-zoom" id="zoomPct">100%</div>
+      <button class="tool-btn" id="btnFit" title="Fit to screen">⤢</button>
+      <button class="tool-btn" id="btnFullscreen" title="Maximise">⛶</button>
+    </div>
+
+    <div class="legend-bar" id="legendBar">
+      <button class="legend-collapse" id="legendCollapse" title="Collapse legend" aria-expanded="true">▾</button>
+      <div class="legend-items">
+        <span class="legend-label">Status</span>
+        <div class="legend-group-inline" id="legendStatus"></div>
+        <span class="legend-sep"></span>
+        <span class="legend-label">Kind</span>
+        <div class="legend-group-inline" id="legendKind"></div>
+      </div>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="empty-card">
+        <div class="empty-icon">⊘</div>
+        <div class="empty-title">No agents match the current filters</div>
+        <div class="empty-desc">Adjust the status or kind chips below to restore visibility. The map controls stay available, so you are never stranded.</div>
+        <button class="btn btn-secondary" id="resetFiltersBtn">Reset filters</button>
+      </div>
+    </div>
+
+    <div class="bubble" id="bubble">
+      <div class="bubble-head">
+        <div class="bubble-title" id="bubbleTitle">—</div>
+        <button class="bubble-close" id="bubbleClose" title="Dismiss">✕</button>
+      </div>
+      <span class="chip" id="bubbleStatus">—</span>
+      <div class="kv"><span class="k">Session</span><span class="v" id="bubbleSession">—</span></div>
+      <div class="kv"><span class="k">Triggered</span><span class="v" id="bubbleTrigger">—</span></div>
+      <div class="kv"><span class="k">Latest call</span><span class="v" id="bubbleTool">—</span></div>
+      <div class="bubble-guardrails">
+        <div class="g-title">Guardrail summary</div>
+        <div class="g-row"><span>Max iterations</span><b id="gIter">—</b></div>
+        <div class="g-row"><span>Delegation depth</span><b id="gDepth">—</b></div>
+        <div class="g-row"><span>Token budget</span><b id="gTokens">—</b></div>
+      </div>
+      <button class="btn btn-danger btn-block" id="bubbleTerminate">Terminate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Terminate modal -->
+<div class="modal-overlay" id="terminateModal" onclick="if(event.target===this)closeModal('terminateModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Confirm Termination</h3>
+      <button class="modal-close" onclick="closeModal('terminateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info" id="terminateSummary">—</div>
+      <div class="form-group">
+        <label for="terminationReason">Operator reason (required for audit)</label>
+        <textarea id="terminationReason" class="form-control" rows="3" placeholder="e.g. model usage breach escalated; stopping this session"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="choice" style="cursor:default">
+          <input type="checkbox" id="cascadeConfirm" checked>
+          <span class="choice-label">Cascade termination to delegated child sessions</span>
+        </label>
+      </div>
+      <div class="alert alert-error hidden" id="terminateError">Operator reason is required before confirming.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('terminateModal')">Cancel</button>
+      <button class="btn btn-danger" id="confirmTerminateBtn" onclick="confirmTerminate()">Confirm Termination</button>
+    </div>
+  </div>
+</div>
+
+<!-- Human intervention modal -->
+<div class="modal-overlay" id="interventionModal" onclick="if(event.target===this)closeModal('interventionModal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Human Intervention Required</h3>
+      <button class="modal-close" onclick="closeModal('interventionModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-warning" id="interventionSummary">—</div>
+      <div class="form-group">
+        <label>Decision</label>
+        <div class="choice-list" id="interventionChoices">
+          <label class="choice"><input type="radio" name="decision" value="approve" checked><span><span class="choice-label">Approve &amp; continue</span><div class="choice-hint">Resume the agent with its current plan</div></span></label>
+          <label class="choice"><input type="radio" name="decision" value="changes"><span><span class="choice-label">Request changes</span><div class="choice-hint">Send guidance back to the agent to revise</div></span></label>
+          <label class="choice"><input type="radio" name="decision" value="escalate"><span><span class="choice-label">Escalate to supervisor</span><div class="choice-hint">Route this decision to an AI Operations Lead</div></span></label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="interventionText">Guidance / note</label>
+        <textarea id="interventionText" class="form-control" rows="3" placeholder="Provide guidance or an approval note for the agent…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('interventionModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitIntervention()">Submit Response</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── Sample runtime data (placeholder) ── */
+const KIND_META = {
+  agent:        { label:'Agent',        icon:'◆' },
+  conversation: { label:'Conversation', icon:'💬' },
+  instance:     { label:'Instance',     icon:'▣' }
+};
+const STATUS_META = {
+  running:    { label:'Running',                        dot:'dot-blue',   chip:'chip-blue'   },
+  completed:  { label:'Completed',                      dot:'dot-green',  chip:'chip-green'  },
+  sleeping:   { label:'Sleeping · awaiting intervention', dot:'dot-yellow', chip:'chip-yellow' },
+  terminated: { label:'Terminated',                     dot:'dot-red',    chip:'chip-red'    },
+  failed:     { label:'Failed',                         dot:'dot-red',    chip:'chip-red'    }
+};
+
+/* trigger.source: 'user' | 'delegated' (inherited from parent) | 'schedule' */
+const agents = [
+  { id:'P1', type:'procurement-orchestrator', kind:'agent',        status:'running',    session:'sess-7412',   parent:null, guardrails:{iterations:12, depth:3, tokens:'120k'}, trigger:{source:'user',     user:'Alice'} },
+  { id:'C1', type:'vendor-policy-checker',    kind:'instance',     status:'running',    session:'sess-7412-a', parent:'P1',  guardrails:{iterations:10, depth:3, tokens:'80k'},  trigger:{source:'delegated', user:'Alice'} },
+  { id:'C2', type:'invoice-reconciler',       kind:'instance',     status:'running',    session:'sess-7412-b', parent:'P1',  guardrails:{iterations:10, depth:3, tokens:'80k'},  trigger:{source:'delegated', user:'Alice'} },
+  { id:'C3', type:'risk-auditor',             kind:'instance',     status:'completed',  session:'sess-7412-c', parent:'P1',  guardrails:{iterations:8,  depth:3, tokens:'60k'},  trigger:{source:'delegated', user:'Alice'} },
+  { id:'C5', type:'invoice-reconciler',       kind:'instance',     status:'completed',  session:'sess-7480-a', parent:null, guardrails:{iterations:10, depth:2, tokens:'80k'},  trigger:{source:'user',     user:'Bob'}   },
+  { id:'P2', type:'compliance-reviewer',      kind:'conversation', status:'running',    session:'sess-7450',   parent:null, guardrails:{iterations:8,  depth:2, tokens:'90k'},  trigger:{source:'schedule', schedule:'nightly-report', user:'Carol'} },
+  { id:'L1', type:'legal-summarizer',         kind:'instance',     status:'sleeping',   session:'sess-7450-a', parent:'P2',  guardrails:{iterations:6,  depth:2, tokens:'50k'},  trigger:{source:'delegated', user:'Carol'} },
+  { id:'M1', type:'market-intel',             kind:'agent',        status:'running',    session:'sess-7460',   parent:null, guardrails:{iterations:10, depth:1, tokens:'70k'},  trigger:{source:'schedule', schedule:'nightly-report', user:'Carol'} },
+  { id:'M2', type:'market-intel',             kind:'agent',        status:'terminated', session:'sess-7461',   parent:null, guardrails:{iterations:10, depth:1, tokens:'70k'},  trigger:{source:'user',     user:'Dave'}  },
+  { id:'R1', type:'report-compiler',          kind:'instance',     status:'completed',  session:'sess-7470',   parent:null, guardrails:{iterations:5,  depth:1, tokens:'40k'},  trigger:{source:'schedule', schedule:'weekly-audit', user:'Erin'} }
+];
+
+/* MCP servers (labelled by slug) and tool-call history via the Communication Hub */
+const MCP_SERVERS = [
+  { slug:'github',     label:'github' },
+  { slug:'slack',      label:'slack' },
+  { slug:'postgres',   label:'postgres' },
+  { slug:'web-search', label:'web-search' }
+];
+const SERVER_ICONS = { 'github':'⬡', 'slack':'✳', 'postgres':'▦', 'web-search':'⌕' };
+/* ordered arrays: earlier entries = older calls, last entry = most recent call */
+const TOOL_CALLS = {
+  P1: [ {server:'github', tool:'list_org_repos'}, {server:'github', tool:'get_issue'}, {server:'slack', tool:'post_message'} ],
+  C1: [ {server:'web-search', tool:'search'}, {server:'github', tool:'read_code'} ],
+  C2: [ {server:'postgres', tool:'query_invoices'} ],
+  C3: [ {server:'postgres', tool:'run_risk_checks'} ],
+  C5: [ {server:'postgres', tool:'reconcile_batch'} ],
+  P2: [ {server:'web-search', tool:'search'} ],
+  L1: [ {server:'postgres', tool:'fetch_contracts'} ],
+  M1: [ {server:'web-search', tool:'search'}, {server:'slack', tool:'post_message'} ],
+  R1: [ {server:'slack', tool:'upload_report'}, {server:'postgres', tool:'save_report'} ]
+};
+
+/* per-agent colour palette for latest/highlighted tool-call routes */
+const AGENT_COLORS = ['#2563EB','#F59E0B','#10B981','#8B5CF6','#EC4899','#06B6D4','#EF4444','#84CC16','#F97316','#14B8A6'];
+const agentColor = a => AGENT_COLORS[agents.indexOf(a) % AGENT_COLORS.length];
+
+/* ── Layout constants ── */
+const TILE_W = 158, TILE_H = 108, TILE_GAP = 16;
+const GROUP_PAD_TOP = 32, GROUP_PAD_SIDE = 16, GROUP_PAD_BOTTOM = 16;
+const GROUP_GAP = 36, WORLD_PAD = 26, MAX_ROW_W = 1120;
+const CLUSTER_GAP = 22;
+const HUB_W = 190, HUB_H = 84, HUB_GAP = 48;
+const SERVER_W = 136, SERVER_H = 46, SERVER_GAP = 28, SERVER_VGAP = 12;
+const MIN_ZOOM = 0.25, MAX_ZOOM = 2.5;
+
+let groups = [], connectors = [], worldW = 0, worldH = 0;
+let hub = { x:0, y:0, w:HUB_W, h:HUB_H };
+let servers = [];
+let zoom = 1, panX = 0, panY = 0;
+let selected = null;
+let interventionTarget = null;
+
+/* filter-by-legend state: everything visible by default */
+const filterStatus = new Set(Object.keys(STATUS_META));
+const filterKind = new Set(Object.keys(KIND_META));
+
+const viewport = document.getElementById('viewport');
+const world = document.getElementById('world');
+const groupsLayer = document.getElementById('groupsLayer');
+const tilesLayer = document.getElementById('tilesLayer');
+const connectorsSvg = document.getElementById('connectors');
+const toolSvg = document.getElementById('toolSvg');
+const nodesLayer = document.getElementById('nodesLayer');
+const bubble = document.getElementById('bubble');
+const legendBar = document.getElementById('legendBar');
+
+const $ = id => document.getElementById(id);
+const clamp = (v,min,max) => Math.min(max, Math.max(min, v));
+const agentById = id => agents.find(a => a.id === id);
+const visibleAgents = () => agents.filter(a => filterStatus.has(a.status) && filterKind.has(a.kind));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ── Trigger provenance helpers ── */
+function triggerValue(a) {
+  const t = a.trigger || { source:'user', user:'—' };
+  if (t.source === 'schedule') return 'schedule "' + t.schedule + '"';
+  return t.user;
+}
+function triggerFull(a) {
+  const t = a.trigger || { source:'user', user:'—' };
+  if (t.source === 'schedule') return 'schedule "' + t.schedule + '" · scheduled by ' + t.user;
+  if (t.source === 'delegated') return t.user + ' · inherited from parent';
+  return t.user;
+}
+
+/* ── Auto-layout: delegation adjacency takes precedence over type grouping ──
+   Roots are grouped by type into virtual containers; each root and its delegated
+   children form a cluster laid out side-by-side (children beside the parent). */
+function layout(list) {
+  if (list.length === 0) {
+    groups = [];
+    worldW = 420; worldH = 260;
+    hub = { x:0, y:0, w:HUB_W, h:HUB_H };
+    servers = [];
+    return;
+  }
+
+  /* build delegation clusters: root + its delegated children.
+     A delegated child whose parent is not currently visible (e.g. filtered out
+     by status/kind) is promoted to its own root so it is never silently dropped
+     from the map while the operator narrows the view. */
+  const visibleIds = new Set(list.map(a => a.id));
+  const clusters = [];
+  list.forEach(a => {
+    if (!a.parent || !visibleIds.has(a.parent)) {
+      clusters.push({ root:a, children: list.filter(c => c.parent === a.id) });
+    }
+  });
+
+  /* group clusters by root type (delegation adjacency keeps cross-type children with their parent) */
+  const typeMap = new Map();
+  clusters.forEach(cl => {
+    if (!typeMap.has(cl.root.type)) typeMap.set(cl.root.type, []);
+    typeMap.get(cl.root.type).push(cl);
+  });
+  groups = Array.from(typeMap.entries()).map(([type, cls]) => ({ type, clusters: cls }));
+
+  let x = WORLD_PAD, y = WORLD_PAD, rowH = 0, maxX = 0;
+  const innerMax = MAX_ROW_W - GROUP_PAD_SIDE*2;
+
+  groups.forEach(g => {
+    let cx = 0, cy = 0, gw = 0, gh = 0;
+    g.clusters.forEach(cl => {
+      const n = 1 + cl.children.length;
+      const clw = n*TILE_W + (n-1)*TILE_GAP;
+      if (cx > 0 && cx + clw > innerMax) { cx = 0; cy += TILE_H + TILE_GAP; }
+      cl.root.w = TILE_W; cl.root.h = TILE_H;
+      cl.root.x = cx; cl.root.y = cy;
+      cl.children.forEach((ch, i) => {
+        ch.w = TILE_W; ch.h = TILE_H;
+        ch.x = cx + (i+1)*(TILE_W + TILE_GAP);
+        ch.y = cy;
+      });
+      cx += clw + CLUSTER_GAP;
+      gw = Math.max(gw, cx - CLUSTER_GAP);
+      gh = Math.max(gh, cy + TILE_H);
+    });
+    g.bw = gw + GROUP_PAD_SIDE*2;
+    g.bh = gh + GROUP_PAD_TOP + GROUP_PAD_BOTTOM;
+
+    if (x + g.bw > MAX_ROW_W) { x = WORLD_PAD; y += rowH + GROUP_GAP; rowH = 0; }
+    g.x = x; g.y = y;
+    g.clusters.forEach(cl => {
+      cl.root.x += g.x + GROUP_PAD_SIDE;
+      cl.root.y += g.y + GROUP_PAD_TOP;
+      cl.children.forEach(ch => {
+        ch.x += g.x + GROUP_PAD_SIDE;
+        ch.y += g.y + GROUP_PAD_TOP;
+      });
+    });
+    x += g.bw + GROUP_GAP;
+    rowH = Math.max(rowH, g.bh);
+    maxX = Math.max(maxX, x);
+  });
+
+  const groupRight = maxX - GROUP_GAP;
+  const groupBottom = y + rowH;
+
+  /* Communication Hub node */
+  hub.x = groupRight + HUB_GAP;
+  hub.w = HUB_W; hub.h = HUB_H;
+  hub.y = WORLD_PAD + Math.max(0, (groupBottom - WORLD_PAD - HUB_H) / 2);
+
+  /* only MCP servers referenced by a visible agent's tool calls */
+  const used = new Set();
+  list.forEach(a => (TOOL_CALLS[a.id] || []).forEach(c => used.add(c.server)));
+  const activeServers = MCP_SERVERS.filter(s => used.has(s.slug));
+
+  const sTotalH = activeServers.length*SERVER_H + Math.max(0, activeServers.length-1)*SERVER_VGAP;
+  const sx = hub.x + HUB_W + SERVER_GAP;
+  const sy0 = WORLD_PAD + Math.max(0, (groupBottom - WORLD_PAD - sTotalH) / 2);
+  servers = activeServers.map((s, i) => ({
+    slug:s.slug, label:s.label, x:sx, y:sy0 + i*(SERVER_H + SERVER_VGAP), w:SERVER_W, h:SERVER_H
+  }));
+
+  worldW = sx + SERVER_W + WORLD_PAD;
+  worldH = Math.max(groupBottom, WORLD_PAD + sTotalH) + WORLD_PAD;
+}
+
+/* ── Render ── */
+function renderGroups() {
+  groupsLayer.innerHTML = '';
+  groups.forEach(g => {
+    const count = g.clusters.reduce((n, cl) => n + 1 + cl.children.length, 0);
+    const el = document.createElement('div');
+    el.className = 'group';
+    el.style.left = g.x + 'px';
+    el.style.top = g.y + 'px';
+    el.style.width = g.bw + 'px';
+    el.style.height = g.bh + 'px';
+    el.innerHTML =
+      '<span class="group-label">' + esc(g.type) +
+        (count > 1 ? ' <span class="group-count">'+count+'</span>' : '') +
+      '</span>';
+    groupsLayer.appendChild(el);
+  });
+}
+
+function renderConnectors(list) {
+  const visIds = new Set(list.map(a => a.id));
+  connectors = agents.filter(a => a.parent && visIds.has(a.parent) && visIds.has(a.id))
+    .map(a => ({ from: agentById(a.parent), to: a }));
+  let svg = '<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,4.5 L0,9 z" fill="#64748B"></path></marker></defs>';
+  connectors.forEach(c => {
+    if (!c.from || !c.to) return;
+    const x1 = c.from.x + c.from.w;
+    const y1 = c.from.y + c.from.h / 2;
+    const x2 = c.to.x;
+    const y2 = c.to.y + c.to.h / 2;
+    const dx = (x2 - x1) * 0.55;
+    const d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1+dx) + ' ' + y1 + ', ' + (x2-dx) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+    svg += '<path class="connector" d="' + d + '" marker-end="url(#arrow)"></path>';
+  });
+  connectorsSvg.setAttribute('width', worldW);
+  connectorsSvg.setAttribute('height', worldH);
+  connectorsSvg.innerHTML = svg;
+}
+
+function renderNodes() {
+  nodesLayer.innerHTML = '';
+  const vis = visibleAgents();
+  if (!vis.length) return;
+  const totalCalls = vis.reduce((n, a) => n + (TOOL_CALLS[a.id] || []).length, 0);
+  const hubEl = document.createElement('div');
+  hubEl.className = 'hub-node';
+  hubEl.style.left = hub.x + 'px';
+  hubEl.style.top = hub.y + 'px';
+  hubEl.style.width = hub.w + 'px';
+  hubEl.style.height = hub.h + 'px';
+  hubEl.innerHTML =
+    '<div class="hub-icon">⇄</div>' +
+    '<div><div class="hub-title">Communication Hub</div>' +
+    '<div class="hub-sub">' + totalCalls + ' tool call' + (totalCalls === 1 ? '' : 's') + ' routed</div></div>';
+  nodesLayer.appendChild(hubEl);
+
+  servers.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'server-node';
+    el.style.left = s.x + 'px';
+    el.style.top = s.y + 'px';
+    el.style.width = s.w + 'px';
+    el.style.height = s.h + 'px';
+    el.innerHTML = '<span class="server-icon">' + (SERVER_ICONS[s.slug] || '▣') + '</span><span class="server-label">' + esc(s.label) + '</span>';
+    nodesLayer.appendChild(el);
+  });
+}
+
+function bezier(x1,y1,x2,y2) {
+  const mx = (x1 + x2) / 2;
+  return 'M ' + x1 + ' ' + y1 + ' C ' + mx + ' ' + y1 + ', ' + mx + ' ' + y2 + ', ' + x2 + ' ' + y2;
+}
+
+function renderToolRoutes() {
+  toolSvg.innerHTML = '';
+  const vis = visibleAgents();
+  if (!vis.length || !servers.length) {
+    toolSvg.setAttribute('width', worldW);
+    toolSvg.setAttribute('height', worldH);
+    return;
+  }
+  const selectedId = selected ? selected.id : null;
+  const serverBySlug = {};
+  servers.forEach(s => serverBySlug[s.slug] = s);
+
+  const hInX = hub.x, hInY = hub.y + hub.h/2;
+  const hOutX = hub.x + hub.w, hOutY = hub.y + hub.h/2;
+
+  let svg = '';
+  vis.forEach(a => {
+    const calls = TOOL_CALLS[a.id] || [];
+    if (!calls.length) return;
+    const isSelected = a.id === selectedId;
+    const color = agentColor(a);
+    const ax = a.x + a.w/2, ay = a.y + a.h; /* agent bottom-centre anchor */
+    calls.forEach((c, i) => {
+      const s = serverBySlug[c.server];
+      if (!s) return;
+      const isLatest = i === calls.length - 1;
+      let stroke, width, opacity;
+      if (isLatest)      { stroke = color;      width = 2.2; opacity = 1;   }
+      else if (isSelected){ stroke = color;      width = 1.7; opacity = 0.72; }
+      else               { stroke = '#E2E8F0';  width = 1.1; opacity = 0.9;  }
+      const d1 = bezier(ax, ay, hInX, hInY);       /* agent → Hub */
+      const d2 = bezier(hOutX, hOutY, s.x, s.y + s.h/2); /* Hub → MCP server */
+      svg += '<path class="route" d="' + d1 + '" stroke="' + stroke + '" stroke-width="' + width + '" opacity="' + opacity + '"></path>';
+      svg += '<path class="route" d="' + d2 + '" stroke="' + stroke + '" stroke-width="' + width + '" opacity="' + opacity + '"></path>';
+    });
+  });
+  toolSvg.innerHTML = svg;
+  toolSvg.setAttribute('width', worldW);
+  toolSvg.setAttribute('height', worldH);
+}
+
+function createTile(a) {
+  const meta = STATUS_META[a.status];
+  const kind = KIND_META[a.kind];
+  const el = document.createElement('div');
+  el.className = 'tile' + (a.status === 'sleeping' ? ' sleeping' : '') + (selected && selected.id === a.id ? ' selected' : '');
+  el.dataset.id = a.id;
+  el.style.left = a.x + 'px';
+  el.style.top = a.y + 'px';
+  el.style.width = a.w + 'px';
+  el.style.height = a.h + 'px';
+  el.innerHTML =
+    '<div class="tile-row">' +
+      '<span class="kind-badge" title="'+kind.label+'">'+kind.icon+'</span>' +
+      '<span class="tile-name">'+esc(a.type)+'</span>' +
+      '<span class="status-dot '+meta.dot+'" title="'+meta.label+'"></span>' +
+    '</div>' +
+    '<div class="tile-session">'+a.session+'</div>' +
+    '<div class="tile-meta"><b>'+meta.label+'</b> · depth '+a.guardrails.depth+'</div>' +
+    '<div class="tile-trigger"><span class="tt-label">Triggered by</span> '+esc(triggerValue(a))+'</div>' +
+    (a.status === 'sleeping' ? '<button class="alert-btn" data-id="'+a.id+'" title="Requires human intervention">!</button>' : '');
+  return el;
+}
+
+function renderTiles(list) {
+  tilesLayer.innerHTML = '';
+  list.forEach(a => tilesLayer.appendChild(createTile(a)));
+}
+
+function renderEmptyState(vis) {
+  $('emptyState').classList.toggle('show', vis.length === 0);
+}
+
+function renderAll() {
+  const vis = visibleAgents();
+  if (selected && !vis.some(a => a.id === selected.id)) {
+    selected = null;
+    bubble.classList.remove('show');
+  }
+  layout(vis);
+  world.style.width = worldW + 'px';
+  world.style.height = worldH + 'px';
+  renderGroups();
+  renderConnectors(vis);
+  renderNodes();
+  renderToolRoutes();
+  renderTiles(vis);
+  renderLegend();
+  updateStats(vis);
+  renderEmptyState(vis);
+  positionBubble();
+}
+
+/* ── Stats ── */
+function updateStats(vis) {
+  $('statTotal').textContent = vis.length;
+  $('statRunning').textContent = vis.filter(a => a.status === 'running').length;
+  $('statAlert').textContent = vis.filter(a => a.status === 'sleeping').length;
+}
+
+/* ── Legend (horizontal bottom bar, click-to-filter, collapsible) ── */
+function renderLegend() {
+  const s = $('legendStatus'); s.innerHTML = '';
+  Object.keys(STATUS_META).forEach(k => {
+    const m = STATUS_META[k];
+    const on = filterStatus.has(k);
+    const b = document.createElement('button');
+    b.className = 'legend-chip' + (on ? '' : ' off');
+    b.innerHTML = '<span class="status-dot '+m.dot+'"></span>'+m.label;
+    b.addEventListener('click', () => toggleStatus(k));
+    s.appendChild(b);
+  });
+  const kd = $('legendKind'); kd.innerHTML = '';
+  Object.keys(KIND_META).forEach(k => {
+    const m = KIND_META[k];
+    const on = filterKind.has(k);
+    const b = document.createElement('button');
+    b.className = 'legend-chip' + (on ? '' : ' off');
+    b.innerHTML = '<span class="kicon">'+m.icon+'</span>'+m.label;
+    b.addEventListener('click', () => toggleKind(k));
+    kd.appendChild(b);
+  });
+}
+
+function toggleStatus(k) {
+  if (filterStatus.has(k)) filterStatus.delete(k); else filterStatus.add(k);
+  renderAll();
+}
+function toggleKind(k) {
+  if (filterKind.has(k)) filterKind.delete(k); else filterKind.add(k);
+  renderAll();
+}
+function resetFilters() {
+  filterStatus.clear(); Object.keys(STATUS_META).forEach(k => filterStatus.add(k));
+  filterKind.clear(); Object.keys(KIND_META).forEach(k => filterKind.add(k));
+  renderAll();
+}
+
+$('legendCollapse').addEventListener('click', () => {
+  const collapsed = legendBar.classList.toggle('collapsed');
+  $('legendCollapse').textContent = collapsed ? '☰' : '▾';
+  $('legendCollapse').title = collapsed ? 'Expand legend' : 'Collapse legend';
+  $('legendCollapse').setAttribute('aria-expanded', String(!collapsed));
+});
+$('resetFiltersBtn').addEventListener('click', resetFilters);
+
+/* ── Transform / zoom / pan ── */
+function applyTransform() {
+  world.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+  $('zoomPct').textContent = Math.round(zoom * 100) + '%';
+  positionBubble();
+}
+
+function fitToScreen() {
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const m = 56;
+  const s = Math.min((vw - m*2) / worldW, (vh - m*2) / worldH);
+  zoom = clamp(s, MIN_ZOOM, MAX_ZOOM);
+  panX = (vw - worldW * zoom) / 2;
+  panY = (vh - worldH * zoom) / 2;
+  applyTransform();
+}
+
+function zoomAt(cx, cy, factor) {
+  const rect = viewport.getBoundingClientRect();
+  const mx = cx - rect.left, my = cy - rect.top;
+  const before = zoom;
+  zoom = clamp(zoom * factor, MIN_ZOOM, MAX_ZOOM);
+  const k = zoom / before;
+  panX = mx - (mx - panX) * k;
+  panY = my - (my - panY) * k;
+  applyTransform();
+}
+
+viewport.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1/1.12);
+}, { passive:false });
+
+/* drag-to-pan (background only) */
+let panning = false, lastX = 0, lastY = 0;
+viewport.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const interactive = e.target.closest('.tile, .alert-btn, .bubble, .toolbar, .legend-bar, button');
+  if (interactive) return;
+  panning = true;
+  lastX = e.clientX; lastY = e.clientY;
+  viewport.classList.add('panning');
+  e.preventDefault();
+});
+window.addEventListener('mousemove', e => {
+  if (!panning) return;
+  panX += e.clientX - lastX;
+  panY += e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  applyTransform();
+});
+window.addEventListener('mouseup', () => {
+  if (panning) { panning = false; viewport.classList.remove('panning'); }
+});
+
+/* ── Toolbar ── */
+$('btnZoomIn').addEventListener('click', () => {
+  const r = viewport.getBoundingClientRect();
+  zoomAt(r.left + r.width/2, r.top + r.height/2, 1.25);
+});
+$('btnZoomOut').addEventListener('click', () => {
+  const r = viewport.getBoundingClientRect();
+  zoomAt(r.left + r.width/2, r.top + r.height/2, 0.8);
+});
+$('btnFit').addEventListener('click', fitToScreen);
+$('btnFullscreen').addEventListener('click', () => {
+  const fs = document.getElementById('monitor').classList.toggle('fs');
+  $('btnFullscreen').textContent = fs ? '✕' : '⛶';
+  $('btnFullscreen').title = fs ? 'Exit fullscreen' : 'Maximise';
+  setTimeout(fitToScreen, 60);
+});
+
+/* ── Selection + detail bubble ── */
+tilesLayer.addEventListener('click', e => {
+  const alertBtn = e.target.closest('.alert-btn');
+  if (alertBtn) { openIntervention(agentById(alertBtn.dataset.id)); return; }
+  const tile = e.target.closest('.tile');
+  if (tile) selectAgent(agentById(tile.dataset.id));
+});
+
+function selectAgent(a) {
+  selected = a;
+  renderTiles(visibleAgents());
+  renderToolRoutes(); /* brighten this agent's historical routes */
+  const meta = STATUS_META[a.status];
+  $('bubbleTitle').textContent = a.type;
+  $('bubbleStatus').textContent = meta.label;
+  $('bubbleStatus').className = 'chip ' + meta.chip;
+  $('bubbleSession').textContent = a.session;
+  $('bubbleTrigger').textContent = triggerFull(a);
+  const calls = TOOL_CALLS[a.id] || [];
+  $('bubbleTool').textContent = calls.length ? calls[calls.length-1].server + ' · ' + calls[calls.length-1].tool : 'none';
+  $('gIter').textContent = a.guardrails.iterations;
+  $('gDepth').textContent = a.guardrails.depth;
+  $('gTokens').textContent = a.guardrails.tokens;
+  bubble.classList.add('show');
+  positionBubble();
+}
+
+function positionBubble() {
+  if (!selected || !bubble.classList.contains('show')) return;
+  const a = selected;
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const bw = bubble.offsetWidth || 288, bh = bubble.offsetHeight || 300;
+  const tx = a.x * zoom + panX, ty = a.y * zoom + panY;
+  let bx = tx + a.w * zoom + 12;
+  let by = ty - 6;
+  if (bx + bw > vw - 8) bx = tx - bw - 12;
+  if (bx < 8) bx = 8;
+  if (by + bh > vh - 8) by = vh - bh - 8;
+  if (by < 8) by = 8;
+  bubble.style.left = bx + 'px';
+  bubble.style.top = by + 'px';
+}
+
+$('bubbleClose').addEventListener('click', () => {
+  selected = null;
+  bubble.classList.remove('show');
+  renderTiles(visibleAgents());
+  renderToolRoutes();
+});
+$('bubbleTerminate').addEventListener('click', () => {
+  if (!selected) return;
+  openTerminate(selected);
+});
+
+/* ── Modals ── */
+function openModal(id) { $(id).classList.add('open'); }
+function closeModal(id) { $(id).classList.remove('open'); }
+
+function openTerminate(a) {
+  $('terminateSummary').textContent = 'You are terminating session ' + a.session + ' (' + a.type + ').' +
+    (connectors.some(c => c.from && c.from.id === a.id) ? ' This will cascade to all delegated child sessions.' : '');
+  $('terminationReason').value = '';
+  $('terminateError').classList.add('hidden');
+  openModal('terminateModal');
+}
+
+function confirmTerminate() {
+  const reason = $('terminationReason').value.trim();
+  if (!reason) { $('terminateError').classList.remove('hidden'); return; }
+  const a = selected;
+  a.status = 'terminated';
+  closeModal('terminateModal');
+  selected = null;
+  bubble.classList.remove('show');
+  renderAll();
+  showToast('Termination requested for ' + a.session + ' · ' + a.type);
+}
+
+function openIntervention(a) {
+  interventionTarget = a;
+  $('interventionSummary').textContent = 'Agent ' + a.type + ' (session ' + a.session + ') is sleeping and requires a human decision before it can continue.';
+  $('interventionText').value = '';
+  document.querySelector('input[name="decision"][value="approve"]').checked = true;
+  openModal('interventionModal');
+}
+
+function submitIntervention() {
+  const a = interventionTarget;
+  const decision = document.querySelector('input[name="decision"]:checked');
+  const label = decision ? decision.parentElement.querySelector('.choice-label').textContent : 'Responded';
+  if (a) { a.status = 'running'; }
+  closeModal('interventionModal');
+  interventionTarget = null;
+  selected = null;
+  bubble.classList.remove('show');
+  renderAll();
+  showToast(label + ' · response sent to ' + (a ? a.type : 'agent'));
+}
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal('terminateModal');
+    closeModal('interventionModal');
+    selected = null;
+    bubble.classList.remove('show');
+    renderAll();
+  }
+});
+
+/* ── Toast ── */
+let toastTimer = null;
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ── Init ── */
+renderAll();
+fitToScreen();
+window.addEventListener('resize', fitToScreen);
+</script>
+</body>
+</html>
