@@ -136,7 +136,7 @@ async def load_skills(
 
         async with httpx.AsyncClient(**cc_client_kwargs) as client:
             response = await client.post(
-                f"{cc_base}/api/v1/internal/skills/resolve",
+                f"{cc_base}/api/v1/internal/system-tools/skills/resolve",
                 json=payload,
                 headers=headers,
             )

@@ -38,7 +38,9 @@ class McpProxyRequest(BaseModel):
 
     tool_name: str  # Canonical "server____tool" (legacy "server/tool" also accepted)
     tool_args: dict[str, Any]
-    agent_type_id: str  # Agent type ID to resolve role and MCP session
+    agent_type_id: str | None = None  # Agent type ID (internal Agent Runtime path)
+    agent_role_id: str | None = None  # Agent role ID (external API-key MCP path)
+    agent_identity_id: str | None = None  # Agent identity ID (external API-key MCP path)
     agent_session_id: str | None = None  # Agent session ID (for logging only)
     agent_jwt: str | None = None  # Optional JWT for passthrough sessions
     user_jwt: str | None = None  # Optional user identity JWT for dual-identity passthrough
@@ -104,22 +106,41 @@ async def proxy_mcp_tool(
         logger.error("MCP tool not found: %s", body.tool_name)
         raise HTTPException(status_code=404, detail=f"MCP tool not found: {body.tool_name}")
 
-    # Get agent type and role to resolve MCP session
-    agent_type_uuid = uuid.UUID(body.agent_type_id)
-    agent_type = await db.get(AgentType, agent_type_uuid)
-    if not agent_type or not agent_type.role_id:
-        logger.error("Agent type %s not found or has no role", body.agent_type_id)
+    # Resolve the agent role (and optional identity) used to select the MCP session.
+    # Internal Agent Runtime supplies an agent type; external MCP clients supply a
+    # role + identity resolved from their API key. Both converge on the same
+    # role-based session lookup below.
+    agent_type = None
+    role_id: uuid.UUID | None = None
+    identity_id: uuid.UUID | None = None
+    if body.agent_role_id:
+        role_id = uuid.UUID(body.agent_role_id)
+    elif body.agent_type_id:
+        agent_type_uuid = uuid.UUID(body.agent_type_id)
+        agent_type = await db.get(AgentType, agent_type_uuid)
+        if not agent_type or not agent_type.role_id:
+            logger.error("Agent type %s not found or has no role", body.agent_type_id)
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent type {body.agent_type_id} not found or has no role",
+            )
+        role_id = agent_type.role_id
+        identity_id = agent_type.identity_id
+    else:
         raise HTTPException(
-            status_code=404,
-            detail=f"Agent type {body.agent_type_id} not found or has no role",
+            status_code=400,
+            detail="agent_role_id or agent_type_id is required",
         )
+
+    if body.agent_identity_id:
+        identity_id = uuid.UUID(body.agent_identity_id)
 
     # Resolve MCP session for this tool's server from role assignments
     mcp_session_result = await db.execute(
         select(McpSession)
         .join(AgentRoleMcpSession, AgentRoleMcpSession.mcp_session_id == McpSession.id)
         .where(
-            AgentRoleMcpSession.role_id == agent_type.role_id,
+            AgentRoleMcpSession.role_id == role_id,
             McpSession.server_id == tool.server_id,
             McpSession.is_active.is_(True),
         )
@@ -128,7 +149,7 @@ async def proxy_mcp_tool(
     if not mcp_session:
         logger.error(
             "No MCP session found for role %s and server %s (tool: %s)",
-            agent_type.role_id,
+            role_id,
             tool.server_id,
             body.tool_name,
         )
@@ -147,12 +168,12 @@ async def proxy_mcp_tool(
     if mcp_session.auth_type.value == "passthrough" and not agent_jwt:
         logger.info("Passthrough session detected, resolving agent JWT...")
         # Get agent identity JWT (same logic as runtime_executor)
-        
-        if agent_type.identity_id:
-            logger.info("Agent type has identity_id=%s, fetching identity...", agent_type.identity_id)
+
+        if identity_id:
+            logger.info("Resolving identity JWT for identity_id=%s...", identity_id)
             # Use explicit query to avoid lazy loading issues with encrypted columns
             identity_result = await db.execute(
-                select(AgentIdentity).where(AgentIdentity.id == agent_type.identity_id)
+                select(AgentIdentity).where(AgentIdentity.id == identity_id)
             )
             identity = identity_result.scalar_one_or_none()
             logger.info("Identity fetched: %s", identity is not None)

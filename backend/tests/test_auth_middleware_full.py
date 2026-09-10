@@ -111,17 +111,21 @@ class TestPublicPaths:
     def test_super_admin_status_is_public(self, client):
         """GET /api/v1/system/super-admin/status is public."""
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.get_status",
-            AsyncMock(return_value=None),
+            "app.services.super_admin_auth_service.super_admin_enabled",
+            return_value=True,
         ):
             with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.is_enabled",
-                MagicMock(return_value=True),
+                "app.services.super_admin_auth_service.super_admin_username",
+                return_value="testadmin",
             ):
-                response = client.get("/api/v1/system/super-admin/status")
-                assert response.status_code == 200
-                data = response.json()
-                assert "is_enabled" in data
+                with patch(
+                    "app.services.super_admin_auth_service.is_env_controlled",
+                    return_value=True,
+                ):
+                    response = client.get("/api/v1/system/super-admin/status")
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert "is_enabled" in data
 
     def test_swagger_docs_public(self, client):
         """/docs should be accessible."""
@@ -153,15 +157,6 @@ class TestAuthEnforcement:
         )
         assert response.status_code == 401
         assert "Authentication required" in response.json()["detail"]
-
-    def test_toggle_without_auth_returns_401(self, client):
-        """PATCH /api/v1/system/super-admin/toggle requires auth."""
-        response = client.patch(
-            "/api/v1/system/super-admin/toggle",
-            json={"is_enabled": False},
-        )
-        assert response.status_code in (401, 403)
-
 
 # ── Tests: identity provider CRUD (with auth mocking) ─────────────────────
 
@@ -262,68 +257,15 @@ class TestIdentityProviderCRUD:
 
 # ── Tests: Super admin management (with auth mocking) ─────────────────────
 
-class TestSuperAdminManagement:
-
-    def test_toggle_guard_rail_no_oidc_provider(self, client):
-        """Disabling super admin without OIDC provider should fail."""
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.OIDCConfigService.list_providers",
-                AsyncMock(return_value=[]),
-            ):
-                response = client.patch(
-                    "/api/v1/system/super-admin/toggle",
-                    json={"is_enabled": False},
-                )
-                assert response.status_code == 400
-
-    def test_toggle_enable(self, client):
-        """Enabling super admin should succeed."""
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.toggle",
-                AsyncMock(),
-            ):
-                with patch(
-                    "app.api.v1.system_config.SuperAdminAuthService.get_status",
-                    AsyncMock(return_value={
-                        "is_enabled": True,
-                        "username": "testadmin",
-                        "last_login_at": None,
-                    }),
-                ):
-                    response = client.patch(
-                        "/api/v1/system/super-admin/toggle",
-                        json={"is_enabled": True},
-                    )
-                    assert response.status_code == 200
-                    data = response.json()
-                    assert data["is_enabled"] is True
-
-    def test_toggle_requires_super_admin(self, client):
-        """Toggle must require super_admin (not just regular auth)."""
-        with patch("app.api.v1.system_config._require_super_admin",
-                   side_effect=lambda req: (_ for _ in ()).throw(
-                       __import__("fastapi").HTTPException(status_code=403, detail="Super admin access required"))):
-            response = client.patch(
-                "/api/v1/system/super-admin/toggle",
-                json={"is_enabled": False},
-            )
-            # Without proper mocking, the endpoint just returns 401 (no identity)
-            assert response.status_code in (401, 403)
-
-
 # ── Tests: Super admin login ──────────────────────────────────────────────
 
 class TestSuperAdminLogin:
 
     def test_login_with_valid_credentials(self, client):
         """Login should return an access token."""
-        from app.services.super_admin_auth_service import SuperAdminAuthError
-
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(return_value=make_super_admin_token("testadmin")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            return_value=make_super_admin_token("testadmin"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -339,8 +281,8 @@ class TestSuperAdminLogin:
         from app.services.super_admin_auth_service import SuperAdminAuthError
 
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(side_effect=SuperAdminAuthError("Invalid username or password")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            side_effect=SuperAdminAuthError("Invalid username or password"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -353,8 +295,8 @@ class TestSuperAdminLogin:
         from app.services.super_admin_auth_service import SuperAdminAuthError
 
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(side_effect=SuperAdminAuthError("Super admin login is disabled")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            side_effect=SuperAdminAuthError("Super admin login is disabled"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",
@@ -366,62 +308,6 @@ class TestSuperAdminLogin:
         """Login without credentials returns 422."""
         response = client.post("/api/v1/auth/super-admin/login")
         assert response.status_code == 422
-
-
-# ── Tests: Password update ────────────────────────────────────────────────
-
-class TestPasswordUpdate:
-
-    def test_update_password_success(self, client):
-        """Update with valid credentials should succeed."""
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.update_password",
-                AsyncMock(),
-            ):
-                with patch(
-                    "app.api.v1.system_config.SuperAdminAuthService.get_status",
-                    AsyncMock(return_value={
-                        "is_enabled": True,
-                        "username": "testadmin",
-                        "last_login_at": None,
-                    }),
-                ):
-                    response = client.put(
-                        "/api/v1/system/super-admin/password",
-                        json={
-                            "current_password": "oldpass",
-                            "new_password": "newpass123",
-                        },
-                    )
-                    assert response.status_code == 200
-
-    def test_update_password_wrong_current(self, client):
-        """Update with wrong current password should fail."""
-        from app.services.super_admin_auth_service import SuperAdminAuthError
-
-        with patch("app.api.v1.system_config._require_super_admin", MagicMock()):
-            with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.update_password",
-                AsyncMock(side_effect=SuperAdminAuthError("Current password is incorrect")),
-            ):
-                response = client.put(
-                    "/api/v1/system/super-admin/password",
-                    json={
-                        "current_password": "wrong",
-                        "new_password": "newpass123",
-                    },
-                )
-                assert response.status_code == 400
-
-    def test_update_password_short(self, client):
-        """Password shorter than 8 chars should fail validation."""
-        response = client.put(
-            "/api/v1/system/super-admin/password",
-            json={"current_password": "oldpass", "new_password": "short"},
-        )
-        # 422 from Pydantic min_length=8 validation, or 401 if auth enforced
-        assert response.status_code in (401, 403, 422)
 
 
 # ── Tests: Token refresh ─────────────────────────────────────────────────

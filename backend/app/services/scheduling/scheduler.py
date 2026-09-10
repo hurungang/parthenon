@@ -133,7 +133,7 @@ class SchedulingEngine:
             result = await handler.launch(
                 agent_type_id=job.target_id,
                 input_data=job.payload,
-                user_id=None,
+                user_id=job.scheduled_by_user_id,
                 db=db,
             )
             return result

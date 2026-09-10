@@ -26,11 +26,9 @@ async def test_raw_token_stored_on_request_state():
 
     valid_claims = {"sub": "user-123", "email": "user@example.com"}
 
-    with patch("app.middleware.auth.get_oidc_client") as mock_get_client:
-        mock_client = AsyncMock()
-        mock_client.validate_token = AsyncMock(return_value=valid_claims)
-        mock_get_client.return_value = mock_client
-
+    with patch.object(
+        middleware, "_try_oidc_auth", new=AsyncMock(return_value=valid_claims)
+    ):
         with patch.object(middleware, "_sync_user_and_groups", new=AsyncMock()):
             await middleware.dispatch(mock_request, fake_call_next)
 

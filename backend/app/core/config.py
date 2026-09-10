@@ -294,6 +294,11 @@ class Settings(BaseSettings):
     control_center_url: str = Field(default="http://localhost:8000")
     agent_runtime_url: str = Field(default="http://localhost:8001")
 
+    # Communication Hub — MCP protocol server feature flag (opt-in)
+    # When enabled, the CH exposes a standard MCP protocol endpoint (initialize /
+    # tools/list / tools/call over Streamable HTTP and SSE) authenticated by API keys.
+    ch_mcp_protocol_server_enabled: bool = Field(default=False)
+
     # OTEL — replaced by nested TelemetrySettings
     telemetry: TelemetrySettings = Field(default_factory=TelemetrySettings)
 

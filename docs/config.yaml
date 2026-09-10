@@ -63,7 +63,7 @@ logs:
 # Technology stack — context for agents, not prescriptive
 tech_stack:
   frontend: React 19 + TypeScript + Material-UI (MUI 7) + React Router 7 + Vite + i18next + antd + react-js-cron + cronstrue + OpenTelemetry
-  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry + LangChain (deep agent framework) + cryptography (X.509 certificate management)
+  backend: Python 3.11+ FastAPI + SQLAlchemy 2 (async) + Pydantic v2 + Alembic + Redis + OpenTelemetry + LangChain (deep agent framework) + cryptography (X.509 certificate management) + mcp (official MCP Python SDK — powers the Communication Hub MCP protocol server)
   database: PostgreSQL 16 — SQLAlchemy declarative models in backend/app/db/models/, Alembic migrations in backend/alembic/
   auth: OIDC/OAuth2 — supports Keycloak and Azure EntraID; JWT validation via python-jose; internal RBAC roles (user, agent, both); dual-realm topology (user realm + agent realm); certificate-based authentication for agent runtime (mTLS)
   infra: Docker Compose (dev/self-hosted) + Kubernetes/Helm (production) + nginx reverse proxy + OTEL Collector
@@ -93,7 +93,7 @@ conventions:
 domain:
   - "Identity provider modes: 'bundled' (Keycloak running in Docker Compose, auto-configured via setup tool or setup wizard) or 'external' (any OIDC-compliant provider like Azure EntraID, configured via System Config UI). External providers require no YAML file editing — all configuration is database-backed."
   - "Setup tool: a consolidated CLI (`setup/` directory) that replaces ad-hoc scripts for environment bootstrapping. Sub-commands: `identity` (provision Keycloak realm/clients/admin user), `database` (verify PostgreSQL readiness), `certificates` (bootstrap CA), `dev` (full dev environment bootstrap), `verify` (check existing configuration). All operations are idempotent. Separated from runtime containers — CC never holds Keycloak admin credentials."
-  - "Super Admin: built-in bootstrap administrator with OIDC-independent authentication (username + bcrypt-hashed password, stored in `super_admin_credentials` table). Used for first-run system config and disaster recovery. Can be enabled/disabled via System Config UI or SUPER_ADMIN_ENABLED env var. Credentials are configurable via SUPER_ADMIN_USERNAME and SUPER_ADMIN_PASSWORD_HASH env vars. Enable/disable has guard rails (prevents disabling the last active super admin, no disabling if no OIDC providers configured)."
+   - "Super Admin: built-in bootstrap administrator with OIDC-independent authentication. Credentials are environment-variable based (no database storage) — `SUPER_ADMIN_USERNAME` + `SUPER_ADMIN_PASSWORD_HASH` (or plaintext `SUPER_ADMIN_PASSWORD`). Enabled via `PARTHENON_SUPER_ADMIN_ENABLED` env var; status is read-only in the System Config UI (no runtime toggle or password change). Used for first-run system config and disaster recovery."
   - "OIDC Provider Registry: singleton service (`OIDCProviderRegistry`) that loads all enabled identity provider configs from the database on startup and exposes discovery document and JWKS keys per provider. Supports independent user and agent identity providers. Reloadable at runtime via System Config UI."
   - "Role types: 'user' (human), 'agent' (AI agent), 'both' (service account usable by either). Roles carry permission sets."
   - "MCP Hub: each registered MCP server has a unique slug; all tools from that server are synced under the slug namespace; permissions are granted at tool level"
@@ -109,9 +109,9 @@ domain:
   - "Control Center: manages Certificate Authority (CA), issues agent-instance and service certificates (24-hour and 30-day validity respectively), refreshes agent identity OAuth tokens automatically, resolves permissions for tool calls, enforces access control (blocks agent-instance certs from /internal/* endpoints), and maintains audit logs (certificate validation, token refresh). At startup, validates external dependency reachability (PostgreSQL, OIDC provider, Redis) and fails fast instead of auto-provisioning. Hosts the OIDC Provider Registry for multi-provider identity support."
 
   - "Certificate Types: agent-instance certificates identify agent runtime instances (CN=agent-type:instance-id), service certificates identify internal services like Communication Hub (CN=service:name); agent-instance certs have limited access (metadata and tool calls only), service certs have full Control Center accessthentication and role-based tool filtering"
-  - "Communication Hub: central broker for Web UI ↔ agent and agent ↔ agent messaging; also serves as Agent Gateway for session management"
+  - "Communication Hub: central broker for Web UI ↔ agent and agent ↔ agent messaging; also serves as Agent Gateway for session management and hosts the MCP protocol server (initialize / tools/list / tools/call over Streamable HTTP and SSE) that exposes permitted tools to external MCP clients authenticated by API keys"
   - "Execution Logs: full system instruction and user prompt captured for every agent run before first LLM call; visible in UI for audit and traceability"
-  - "Result Repository: a default MCP tool ('save_result') available to all SOPs/agents to persist structured outputs"
+   - "Result Repository: read-only repository of persisted structured outputs, browsable in the UI. Agents no longer use a dedicated `save_result` MCP tool — intermediate saves go through the `save_data` system tool and final results through typed `AgentOutput` records."
   - "Notification integrations: pluggable channels (email, Slack, Teams, webhook) exposed as MCP tools"
   - "Observability: OTEL traces, metrics, and structured logs emitted by all components; collected via OTEL Collector; shipped to configurable backends (Prometheus, Jaeger, Loki, etc.)"
   - "Schedule management: cron-based scheduling for prompts and SOPs; managed via the admin UI; backed by a persistent job store"

@@ -16,6 +16,8 @@ import {
   Select,
   IconButton,
   Tooltip,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import VisibilityIcon from '@mui/icons-material/Visibility'
@@ -24,6 +26,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { useCreateApiKey, useIdentitiesWithRoles } from '../../hooks/useApiKeys'
 import type { ApiKeyCreateResponse } from '../../types/apiKeys'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import { McpConnectionGuide } from './McpConnectionGuide'
 
 interface CreateApiKeyDialogProps {
   open: boolean
@@ -41,6 +44,8 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
   const [createdKey, setCreatedKey] = useState<ApiKeyCreateResponse | null>(null)
   const [keyRevealed, setKeyRevealed] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [useExpiration, setUseExpiration] = useState(false)
+  const [expiresAtLocal, setExpiresAtLocal] = useState('')
 
   const { data: identitiesWithRoles } = useIdentitiesWithRoles()
   const createMutation = useCreateApiKey()
@@ -59,6 +64,8 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
     setCreatedKey(null)
     setKeyRevealed(false)
     setCopied(false)
+    setUseExpiration(false)
+    setExpiresAtLocal('')
   }
 
   useEffect(() => {
@@ -78,10 +85,14 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
     if (!formValid) return
     setDialogError(null)
     try {
+      const expires_at = useExpiration && expiresAtLocal
+        ? new Date(expiresAtLocal).toISOString()
+        : null
       const result = await createMutation.mutateAsync({
         name: name.trim(),
         agent_identity_id: identityId,
         agent_role_id: roleId,
+        expires_at,
       })
       setCreatedKey(result)
       setStep(2)
@@ -117,7 +128,7 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
     <Dialog
       open={open}
       onClose={() => { onClose(); setDialogError(null) }}
-      maxWidth="sm"
+      maxWidth={step === 2 ? 'md' : 'sm'}
       fullWidth
     >
       {step === 1 && (
@@ -169,6 +180,28 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
                   ))}
                 </Select>
               </FormControl>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={useExpiration}
+                    onChange={(e) => setUseExpiration(e.target.checked)}
+                  />
+                }
+                label={t('apiKeys.expireKey')}
+              />
+
+              {useExpiration && (
+                <TextField
+                  type="datetime-local"
+                  label={t('apiKeys.expiresAt')}
+                  value={expiresAtLocal}
+                  onChange={(e) => setExpiresAtLocal(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                  helperText={t('apiKeys.expiresAtHint')}
+                />
+              )}
 
               <Alert severity="info" variant="outlined">
                 {t('apiKeys.scopingInfo')}
@@ -256,6 +289,10 @@ export function CreateApiKeyDialog({ open, onClose, onCreated }: CreateApiKeyDia
                   {createdKey.key_prefix}...
                 </Typography>
               </Typography>
+            </Box>
+
+            <Box mt={2}>
+              <McpConnectionGuide apiKey={createdKey.api_key} />
             </Box>
           </DialogContent>
           <DialogActions>

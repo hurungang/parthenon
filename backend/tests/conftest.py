@@ -41,6 +41,20 @@ _SERVICE_DEPENDENT_FILES = {
     "tests/api/v1/test_model_usage_guardrails_api.py",
     "tests/api/v1/test_agent_runtime_controls_api.py",
     "tests/api/v1/test_intervene.py",
+    "tests/integration/test_websocket_communication_hub.py",
+}
+
+# Files whose tests require a live PostgreSQL database (localhost:5432)
+_DB_DEPENDENT_FILES = {
+    "tests/db/test_namespace_migration.py",
+}
+
+# Individual tests (within otherwise-runnable files) that require PostgreSQL
+_DB_DEPENDENT_TESTS = {
+    "tests/integration/test_namespace_permission_evaluation.py": {
+        "test_db_can_connect_and_query_schema",
+        "test_policy_statements_module_is_varchar_100_not_null",
+    },
 }
 
 
@@ -56,14 +70,20 @@ def _is_service_available(port: int) -> bool:
 
 def pytest_collection_modifyitems(config, items):
     skip_services = pytest.mark.skip(reason="Requires running services (CC, AR, or CH)")
+    skip_db = pytest.mark.skip(reason="Requires a running PostgreSQL database (localhost:5432)")
     services_running = all(
         _is_service_available(p) for p in (8000, 8001, 8002)
     )
+    postgres_running = _is_service_available(5432)
     for item in items:
         rel_path = item.nodeid.split("::")[0]
         norm = os.path.normpath(rel_path).replace(os.sep, "/")
         if norm in _SERVICE_DEPENDENT_FILES and not services_running:
             item.add_marker(skip_services)
+        if norm in _DB_DEPENDENT_FILES and not postgres_running:
+            item.add_marker(skip_db)
+        elif item.name in _DB_DEPENDENT_TESTS.get(norm, set()) and not postgres_running:
+            item.add_marker(skip_db)
 
 
 @pytest.fixture(scope="session")

@@ -42,12 +42,27 @@ class AgentSessionService:
                 "user_id": str(user_id) if user_id else "anonymous",
             },
         ):
+            # Delegation inheritance: a delegated child job (parent_job_id set)
+            # with no explicit user inherits its parent's triggered_by_user_id,
+            # so the runtime monitor shows the original triggering user for the
+            # whole delegation chain.  The child's delegation_depth is the
+            # parent's depth + 1 so the topology tree reflects real nesting.
+            effective_user_id = user_id
+            delegation_depth = 0
+            if parent_job_id is not None:
+                parent_job = await db.get(AgentJob, parent_job_id)
+                if parent_job is not None:
+                    if effective_user_id is None:
+                        effective_user_id = parent_job.triggered_by_user_id
+                    delegation_depth = (parent_job.delegation_depth or 0) + 1
+
             job = AgentJob(
                 agent_type_id=agent_type_id,
-                triggered_by_user_id=user_id,
+                triggered_by_user_id=effective_user_id,
                 input_data=input_data,
                 status=AgentJobStatus.queued,
                 parent_job_id=parent_job_id,
+                delegation_depth=delegation_depth,
             )
             db.add(job)
             await db.flush()
@@ -56,7 +71,7 @@ class AgentSessionService:
                 "Enqueued AgentJob %s for type %s (user=%s)",
                 job.id,
                 agent_type_id,
-                user_id,
+                effective_user_id,
             )
             return job
 

@@ -98,7 +98,7 @@ describe('LoginPage - state rendering', () => {
     it('does not show OIDC login button', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.queryByText('auth.loginWithOidc')).toBeNull()
+        expect(screen.queryByText('auth.loginWithProvider')).toBeNull()
       })
     })
   })
@@ -116,7 +116,7 @@ describe('LoginPage - state rendering', () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
         expect(screen.getByText('auth.loginWith')).toBeDefined()
-        expect(screen.getByText('auth.loginWithOidc')).toBeDefined()
+        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
       })
     })
 
@@ -130,9 +130,9 @@ describe('LoginPage - state rendering', () => {
     it('calls login when OIDC button clicked', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.loginWithOidc')).toBeDefined()
+        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
       })
-      fireEvent.click(screen.getByText('auth.loginWithOidc'))
+      fireEvent.click(screen.getByText('auth.loginWithProvider'))
       expect(mockLogin).toHaveBeenCalledTimes(1)
     })
   })
@@ -149,7 +149,7 @@ describe('LoginPage - state rendering', () => {
     it('shows OIDC login button first', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.loginWithOidc')).toBeDefined()
+        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
       })
     })
 

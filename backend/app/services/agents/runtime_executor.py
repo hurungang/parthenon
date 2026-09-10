@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import uuid
 from copy import deepcopy
 from typing import Any, Awaitable, Callable, TYPE_CHECKING
@@ -1986,6 +1987,7 @@ class AgentRuntimeExecutor:
             tool_name_map=tool_name_map,
             role_id=str(context.get("role_id") or ""),
             guardrail_state=guardrail_state,
+            tool_call_recorder=self._build_tool_call_recorder(str(session_id), "agent"),
         )
 
         # ── Create agent (task 9.6/9.7) ───────────────────────────────────────
@@ -2197,6 +2199,97 @@ class AgentRuntimeExecutor:
         return output_data
 
 
+    def _build_tool_call_recorder(
+        self,
+        session_id: str,
+        session_kind: str,
+    ) -> Callable[..., Any]:
+        """Return an async callback that persists tool executions for one session.
+
+        Used by the LangChain tool wrapper (task loop and conversation turns).
+        The callback resolves a working data client at call time — conversation
+        turns pass ``data_client=None`` into the wrapper, so the executor's
+        client (or the app-level client) is the reliable path.
+        """
+
+        async def _recorder(
+            *,
+            tool_name: str,
+            route_type: str,
+            status: str,
+            duration_ms: int | None = None,
+            mcp_slug: str | None = None,
+            error: str | None = None,
+        ) -> None:
+            await self._record_tool_call_safely(
+                session_id=session_id,
+                session_kind=session_kind,
+                tool_name=tool_name,
+                route_type=route_type,
+                status=status,
+                duration_ms=duration_ms,
+                mcp_slug=mcp_slug,
+                error=error,
+            )
+
+        return _recorder
+
+    async def _record_tool_call_safely(
+        self,
+        *,
+        session_id: str,
+        session_kind: str,
+        tool_name: str,
+        route_type: str,
+        status: str,
+        duration_ms: int | None = None,
+        mcp_slug: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Best-effort persistence of one tool execution (never raises).
+
+        Resolves a *working* data client: the executor's own client when
+        available, otherwise the app-level client.  Conversation turns pass
+        ``data_client=None`` into helper components, so the recorder must
+        fall back to ``app.state.data_client`` to still record their calls.
+        """
+        client = self._data_client
+        if client is None:
+            try:
+                from app.main import app  # noqa: PLC0415 — runtime-only fallback
+
+                client = getattr(app.state, "data_client", None)
+            except Exception:
+                client = None
+        if client is None:
+            logger.debug(
+                "Tool call %s not recorded: no data client available (session %s)",
+                tool_name,
+                session_id,
+            )
+            return
+        try:
+            record = getattr(client, "record_tool_call", None)
+            if record is None:
+                return
+            await record(
+                session_id=uuid.UUID(str(session_id)),
+                session_kind=session_kind,
+                tool_name=tool_name,
+                route_type=route_type,
+                status=status,
+                duration_ms=duration_ms,
+                mcp_slug=mcp_slug,
+                error=error,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to record tool call %s for session %s: %s",
+                tool_name,
+                session_id,
+                exc,
+            )
+
     async def _execute_mcp_tool_ar(
         self,
         tool_name: str,
@@ -2214,12 +2307,17 @@ class AgentRuntimeExecutor:
         - Credential retrieval (from Control Center)
         - Routing to MCP servers or system tool endpoints
 
+        Every executed call is recorded to ``runtime_tool_calls`` (via the
+        Control Center data API) so the Agent Runtime Monitor can render
+        tool-call history for agent jobs and conversation turns alike.
+
         Args:
             tool_name: Tool name (e.g., "hello-world/helloWorld", "save_data")
             tool_args: Tool arguments
             role_mcp_sessions: Session mapping (not used - for backward compatibility)
             agent_type_id: Agent type ID
-            session_id: Agent session ID
+            session_id: Agent session ID (job id for task agents, conversation
+                id for conversation turns)
             comm_hub_client: Communication Hub tool client
             conv_session_id: Parent conversation session ID (for conversation-context interventions)
 
@@ -2228,9 +2326,33 @@ class AgentRuntimeExecutor:
         """
         from app.agent_runtime.comm_hub_client import CommHubToolClientError
 
+        # Use conversation session ID from delegation context if available
+        effective_conv_session_id = conv_session_id or getattr(self, "_conv_session_id", None)
+
+        # session_kind: conversation turns execute with the conversation id as
+        # the executing session; task agents use the agent job id.
+        session_kind = (
+            "conversation"
+            if effective_conv_session_id and session_id == effective_conv_session_id
+            else "agent"
+        )
+
+        # Route classification (delegation tools → "a2a").
+        route_type = _tool_route_type(tool_name)
+        if route_type == "agent":
+            route_type = "a2a"
+
+        # MCP server slug from the canonical ``server____tool`` name.
+        mcp_slug: str | None = None
         try:
-            # Use conversation session ID from delegation context if available
-            effective_conv_session_id = conv_session_id or getattr(self, "_conv_session_id", None)
+            mcp_slug = parse_tool_name(tool_name)[0]
+        except ValueError:
+            mcp_slug = None
+
+        started = time.monotonic()
+        call_status = "success"
+        error_text: str | None = None
+        try:
             result = await comm_hub_client.call_tool(
                 tool_name=tool_name,
                 tool_args=tool_args,
@@ -2238,13 +2360,31 @@ class AgentRuntimeExecutor:
                 agent_type_id=agent_type_id or "",
                 conv_session_id=effective_conv_session_id,
             )
+            if isinstance(result, dict) and result.get("error"):
+                call_status = "error"
+                error_text = str(result.get("error"))
             return result
         except CommHubToolClientError as exc:
             logger.warning("Tool %s failed via Communication Hub: %s", tool_name, exc)
+            call_status = "error"
+            error_text = str(exc)
             return {"error": str(exc)}
         except Exception as exc:
             logger.exception("Unexpected error calling tool %s", tool_name)
+            call_status = "error"
+            error_text = str(exc)
             return {"error": str(exc)}
+        finally:
+            await self._record_tool_call_safely(
+                session_id=session_id,
+                session_kind=session_kind,
+                tool_name=tool_name,
+                route_type=route_type,
+                status=call_status,
+                duration_ms=int((time.monotonic() - started) * 1000),
+                mcp_slug=mcp_slug,
+                error=error_text,
+            )
 
     async def execute_conversation_turn(
         self,
@@ -2614,6 +2754,9 @@ class AgentRuntimeExecutor:
             role_id=str(role_id_raw) if role_id_raw else "",
             guardrail_state=guardrail_state,
             status_event_callback=emit_status_event,
+            tool_call_recorder=self._build_tool_call_recorder(
+                str(conv_session_id), "conversation"
+            ),
         )
 
         # 9. Disable parallel tool calls when delegation tools present (same as non-conv path)

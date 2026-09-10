@@ -16,12 +16,14 @@ export interface ApiKey {
   status: ApiKeyStatus
   created_at: string
   last_used_at: string | null
+  expires_at: string | null
 }
 
 export interface ApiKeyCreateRequest {
   name: string
   agent_identity_id: string
   agent_role_id: string
+  expires_at?: string | null
 }
 
 export interface ApiKeyCreateResponse {
@@ -33,12 +35,18 @@ export interface ApiKeyCreateResponse {
   agent_identity_name: string
   agent_role_id: string
   agent_role_name: string
+  expires_at: string | null
   created_at: string
 }
 
 export interface ApiKeyRevokeResponse {
   id: string
   status: string
+  message: string
+}
+
+export interface ApiKeyDeleteResponse {
+  id: string
   message: string
 }
 

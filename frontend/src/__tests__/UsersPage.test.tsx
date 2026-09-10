@@ -18,6 +18,7 @@ vi.mock('../hooks/usePermissions', () => ({
   useRemoveUserRole: () => ({ mutate: vi.fn(), isPending: false }),
   useAddUserToGroup: () => ({ mutate: vi.fn(), isPending: false }),
   useRemoveUserFromGroup: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeletePlatformUser: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 function wrapper({ children }: { children: React.ReactNode }) {

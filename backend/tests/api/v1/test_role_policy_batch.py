@@ -223,7 +223,7 @@ async def test_batch_save_invalid_module_flat_value_rejected():
     batch_payload = {
         "policies": [
             {
-                "module": "agent",  # flat value, not namespaced
+                "module": "role",  # flat value, not namespaced (and not the permitted bare 'agent')
                 "effect": "allow",
                 "actions": [{"action": "read"}],
                 "resources": [],

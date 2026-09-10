@@ -17,6 +17,7 @@ class ApiKeyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128, description="Human-readable key name/label")
     agent_identity_id: uuid.UUID = Field(..., description="UUID of the agent identity this key is bound to")
     agent_role_id: uuid.UUID = Field(..., description="UUID of the agent role this key is bound to")
+    expires_at: datetime | None = Field(None, description="Optional expiration timestamp; None means the key never expires")
 
 
 class ApiKeyCreateResponse(BaseModel):
@@ -30,6 +31,7 @@ class ApiKeyCreateResponse(BaseModel):
     agent_identity_name: str = Field(..., description="Name of the bound agent identity")
     agent_role_id: uuid.UUID
     agent_role_name: str = Field(..., description="Name of the bound agent role")
+    expires_at: datetime | None = None
     created_at: datetime
 
 
@@ -48,6 +50,7 @@ class ApiKeyRead(BaseModel):
     status: str
     created_at: datetime
     last_used_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class ApiKeyListItem(BaseModel):
@@ -63,6 +66,7 @@ class ApiKeyListItem(BaseModel):
     status: str
     created_at: datetime
     last_used_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class IdentityWithRoles(BaseModel):
@@ -86,6 +90,13 @@ class ApiKeyRevokeResponse(BaseModel):
     id: uuid.UUID
     status: str
     message: str = "API key revoked successfully"
+
+
+class ApiKeyDeleteResponse(BaseModel):
+    """Response for API key deletion."""
+
+    id: uuid.UUID
+    message: str = "API key deleted successfully"
 
 
 # ── Internal Validation Schemas (CH → CC) ────────────────────────────────────

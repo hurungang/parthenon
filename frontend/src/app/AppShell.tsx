@@ -97,8 +97,8 @@ const STANDALONE_ITEMS: NavItem[] = [
  * Declarative definition of the three sidebar groups. Conversation history, agent
  * executions, and results are consolidated under a single "Agent Trails" entry
  * (tabs inside the page). Notification sub-items (channels, groups, logs) are also
- * consolidated under a single "Notifications" entry. Gateway is hidden. The
- * Integrations group is locked open (cannot be collapsed).
+ * consolidated under a single "Notifications" entry. Gateway is hidden.
+ * All groups auto-collapse — only the group containing the active route stays expanded.
  */
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -125,7 +125,6 @@ const NAV_GROUPS: NavGroup[] = [
     groupKey: 'integrations',
     labelKey: 'nav.groupIntegrations',
     icon: <HubIcon />,
-    lockedOpen: true,
     children: [
       { labelKey: 'nav.mcpHub', path: '/mcp', icon: <HubIcon /> },
       { labelKey: 'nav.apiKeys', path: '/api-keys', icon: <SecurityIcon /> },
@@ -146,13 +145,14 @@ const NAV_GROUPS: NavGroup[] = [
 ]
 
 /**
- * Default expansion state for the three groups on initial render. All groups start
- * expanded so operators can see the relocated items immediately after first load.
+ * Default expansion state for the groups on initial render.
+ * All groups start collapsed to save space.
+ * Groups expand automatically when they contain the active route.
  */
 const DEFAULT_EXPANDED_GROUPS: Record<string, boolean> = {
-  agents: true,
-  integrations: true,
-  system: true,
+  agents: false,
+  integrations: false,
+  system: false,
 }
 
 // Shared sx for standalone and child items — subtle grey active state with 8px radius.
@@ -251,11 +251,22 @@ export function AppShell() {
     return () => { if (interval) clearInterval(interval) }
   }, [])
 
+  useEffect(() => {
+    const activeGroup = NAV_GROUPS.find((group) =>
+      group.children.some((child) => child.path === location.pathname),
+    )
+    setExpandedGroups(() => {
+      const next: Record<string, boolean> = {}
+      for (const group of NAV_GROUPS) {
+        next[group.groupKey] = group.groupKey === activeGroup?.groupKey
+      }
+      return next
+    })
+  }, [location.pathname])
+
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen)
 
   const toggleGroup = (groupKey: string) => {
-    const group = NAV_GROUPS.find((g) => g.groupKey === groupKey)
-    if (group?.lockedOpen) return
     setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))
   }
 
@@ -311,9 +322,7 @@ export function AppShell() {
                     primary={t(group.labelKey)}
                     primaryTypographyProps={groupLabelTypographyProps}
                   />
-                  {!group.lockedOpen && (
-                    isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />
-                  )}
+                  {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                 </ListItemButton>
               </ListItem>
               <Collapse in={showChildren} timeout="auto" unmountOnExit>

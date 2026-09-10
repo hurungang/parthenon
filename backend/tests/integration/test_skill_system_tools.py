@@ -29,12 +29,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.v1.mcp_hub import (
     SYSTEM_SERVER_ID,
-    SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID,
-    SYSTEM_TOOL_SAVE_RESULT_ID,
-    SYSTEM_TOOL_SEND_NOTIFICATION_ID,
     SYSTEM_TOOL_IDS,
     seed_system_tools,
 )
+from app.services.agents.system_tool_registry import SystemToolRegistry
+
+SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID = SystemToolRegistry.get("get_recipient_group").mcp_hub_id
+SYSTEM_TOOL_SAVE_DATA_ID = SystemToolRegistry.get("save_data").mcp_hub_id
+SYSTEM_TOOL_SEND_NOTIFICATION_ID = SystemToolRegistry.get("send_notification").mcp_hub_id
 from app.api.deps import require_permission
 from app.core.resource_types import RT_AGENT_SKILLS, RT_INTEGRATION_MCP_HUB
 from app.db.models.mcp_hub import McpServer, McpServerStatus, McpTool
@@ -127,14 +129,14 @@ async def test_seed_system_tools_creates_server(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_seed_system_tools_creates_save_result_tool(db_session: AsyncSession):
-    """seed_system_tools() inserts system/save_result into mcp_tools."""
+async def test_seed_system_tools_creates_save_data_tool(db_session: AsyncSession):
+    """seed_system_tools() inserts system/save_data into mcp_tools."""
     await seed_system_tools(db_session)
 
-    tool = await db_session.get(McpTool, SYSTEM_TOOL_SAVE_RESULT_ID)
+    tool = await db_session.get(McpTool, SYSTEM_TOOL_SAVE_DATA_ID)
     assert tool is not None
-    assert tool.name == "system____save_result"
-    assert tool.original_name == "save_result"
+    assert tool.name == "system____save_data"
+    assert tool.original_name == "save_data"
     assert tool.server_id == SYSTEM_SERVER_ID
     assert tool.is_active is True
 
@@ -180,7 +182,7 @@ async def test_seed_system_tools_is_idempotent(db_session: AsyncSession):
 
 def test_system_tool_ids_set_contains_all_three():
     """SYSTEM_TOOL_IDS must include all three known system tool UUIDs."""
-    assert SYSTEM_TOOL_SAVE_RESULT_ID in SYSTEM_TOOL_IDS
+    assert SYSTEM_TOOL_SAVE_DATA_ID in SYSTEM_TOOL_IDS
     assert SYSTEM_TOOL_SEND_NOTIFICATION_ID in SYSTEM_TOOL_IDS
     assert SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID in SYSTEM_TOOL_IDS
     assert len(SYSTEM_TOOL_IDS) == 3
@@ -190,25 +192,25 @@ def test_system_tool_ids_set_contains_all_three():
 
 
 @pytest.mark.asyncio
-async def test_create_skill_with_only_save_result_tool(authed_client: AsyncClient):
-    """POST /api/v1/skills with save_result system tool returns 201."""
+async def test_create_skill_with_only_save_data_tool(authed_client: AsyncClient):
+    """POST /api/v1/skills with save_data system tool returns 201."""
     resp = await authed_client.post(
         "/api/v1/skills",
         json={
             "name": f"system-only-skill-{uuid.uuid4().hex[:6]}",
-            "description": "Uses only save_result",
-            "tool_ids": [str(SYSTEM_TOOL_SAVE_RESULT_ID)],
+            "description": "Uses only save_data",
+            "tool_ids": [str(SYSTEM_TOOL_SAVE_DATA_ID)],
         },
     )
     assert resp.status_code == 201, resp.text
     data = resp.json()
-    assert str(SYSTEM_TOOL_SAVE_RESULT_ID) in data["tool_ids"]
+    assert str(SYSTEM_TOOL_SAVE_DATA_ID) in data["tool_ids"]
 
 
 @pytest.mark.asyncio
 async def test_create_skill_with_both_notification_tools(authed_client: AsyncClient):
     """POST /api/v1/skills with two system tools returns 201 and both tool_ids."""
-    tool_ids = [str(SYSTEM_TOOL_SAVE_RESULT_ID), str(SYSTEM_TOOL_SEND_NOTIFICATION_ID)]
+    tool_ids = [str(SYSTEM_TOOL_SAVE_DATA_ID), str(SYSTEM_TOOL_SEND_NOTIFICATION_ID)]
     resp = await authed_client.post(
         "/api/v1/skills",
         json={
@@ -219,7 +221,7 @@ async def test_create_skill_with_both_notification_tools(authed_client: AsyncCli
     assert resp.status_code == 201, resp.text
     data = resp.json()
     returned_ids = data["tool_ids"]
-    assert str(SYSTEM_TOOL_SAVE_RESULT_ID) in returned_ids
+    assert str(SYSTEM_TOOL_SAVE_DATA_ID) in returned_ids
     assert str(SYSTEM_TOOL_SEND_NOTIFICATION_ID) in returned_ids
     assert len(returned_ids) == 2
 
@@ -228,7 +230,7 @@ async def test_create_skill_with_both_notification_tools(authed_client: AsyncCli
 async def test_create_skill_with_all_system_tools(authed_client: AsyncClient):
     """POST /api/v1/skills with all three system tools returns 201."""
     tool_ids = [
-        str(SYSTEM_TOOL_SAVE_RESULT_ID),
+        str(SYSTEM_TOOL_SAVE_DATA_ID),
         str(SYSTEM_TOOL_SEND_NOTIFICATION_ID),
         str(SYSTEM_TOOL_GET_RECIPIENT_GROUP_ID),
     ]
@@ -276,14 +278,14 @@ async def test_update_skill_add_system_tool(authed_client: AsyncClient):
     # Update to add system tool
     update_resp = await authed_client.put(
         f"/api/v1/skills/{skill_id}",
-        json={"tool_ids": [str(SYSTEM_TOOL_SAVE_RESULT_ID)]},
+        json={"tool_ids": [str(SYSTEM_TOOL_SAVE_DATA_ID)]},
     )
     assert update_resp.status_code == 200, update_resp.text
     # Verify via GET: the PUT response may show stale session data; the GET uses a
     # fresh session that reflects the committed state correctly.
     get_resp = await authed_client.get(f"/api/v1/skills/{skill_id}")
     assert get_resp.status_code == 200, get_resp.text
-    assert str(SYSTEM_TOOL_SAVE_RESULT_ID) in get_resp.json()["tool_ids"]
+    assert str(SYSTEM_TOOL_SAVE_DATA_ID) in get_resp.json()["tool_ids"]
 
 
 @pytest.mark.asyncio
@@ -294,7 +296,7 @@ async def test_update_skill_remove_system_tool(authed_client: AsyncClient):
         "/api/v1/skills",
         json={
             "name": f"remove-sys-tool-{uuid.uuid4().hex[:6]}",
-            "tool_ids": [str(SYSTEM_TOOL_SAVE_RESULT_ID)],
+            "tool_ids": [str(SYSTEM_TOOL_SAVE_DATA_ID)],
         },
     )
     assert create_resp.status_code == 201
@@ -320,7 +322,7 @@ async def test_update_skill_swap_system_tools(authed_client: AsyncClient):
         "/api/v1/skills",
         json={
             "name": f"swap-sys-tool-{uuid.uuid4().hex[:6]}",
-            "tool_ids": [str(SYSTEM_TOOL_SAVE_RESULT_ID)],
+            "tool_ids": [str(SYSTEM_TOOL_SAVE_DATA_ID)],
         },
     )
     assert create_resp.status_code == 201
@@ -337,7 +339,7 @@ async def test_update_skill_swap_system_tools(authed_client: AsyncClient):
     assert get_resp.status_code == 200, get_resp.text
     data = get_resp.json()
     assert str(SYSTEM_TOOL_SEND_NOTIFICATION_ID) in data["tool_ids"]
-    assert str(SYSTEM_TOOL_SAVE_RESULT_ID) not in data["tool_ids"]
+    assert str(SYSTEM_TOOL_SAVE_DATA_ID) not in data["tool_ids"]
 
 
 # ── 4. Skill Retrieval with System Tools ─────────────────────────────────────
@@ -351,7 +353,7 @@ async def test_get_skill_detail_includes_system_tool_info(authed_client: AsyncCl
         json={
             "name": f"detail-sys-tool-{uuid.uuid4().hex[:6]}",
             "instructions": "Use the save result tool.",
-            "tool_ids": [str(SYSTEM_TOOL_SAVE_RESULT_ID)],
+            "tool_ids": [str(SYSTEM_TOOL_SAVE_DATA_ID)],
         },
     )
     assert create_resp.status_code == 201
@@ -361,7 +363,7 @@ async def test_get_skill_detail_includes_system_tool_info(authed_client: AsyncCl
     assert get_resp.status_code == 200, get_resp.text
     data = get_resp.json()
     assert data["instructions_with_tools"] is not None
-    assert "system____save_result" in data["instructions_with_tools"]
+    assert "system____save_data" in data["instructions_with_tools"]
     assert "Save the final result of agent execution" in data["instructions_with_tools"]
 
 
@@ -374,7 +376,7 @@ async def test_get_skill_detail_all_system_tools_in_instructions(authed_client: 
             "name": f"all-sys-detail-{uuid.uuid4().hex[:6]}",
             "instructions": "Base instructions.",
             "tool_ids": [
-                str(SYSTEM_TOOL_SAVE_RESULT_ID),
+                str(SYSTEM_TOOL_SAVE_DATA_ID),
                 str(SYSTEM_TOOL_SEND_NOTIFICATION_ID),
             ],
         },
@@ -385,7 +387,7 @@ async def test_get_skill_detail_all_system_tools_in_instructions(authed_client: 
     get_resp = await authed_client.get(f"/api/v1/skills/{skill_id}")
     assert get_resp.status_code == 200, get_resp.text
     instructions = get_resp.json()["instructions_with_tools"]
-    assert "system____save_result" in instructions
+    assert "system____save_data" in instructions
     assert "system____send_notification" in instructions
 
 
@@ -397,7 +399,7 @@ async def test_list_skills_includes_skill_with_system_tools(authed_client: Async
         "/api/v1/skills",
         json={
             "name": skill_name,
-            "tool_ids": [str(SYSTEM_TOOL_SAVE_RESULT_ID)],
+            "tool_ids": [str(SYSTEM_TOOL_SAVE_DATA_ID)],
         },
     )
     assert create_resp.status_code == 201
@@ -409,7 +411,7 @@ async def test_list_skills_includes_skill_with_system_tools(authed_client: Async
     assert skill_name in names
 
     created_skill = next(s for s in skills if s["name"] == skill_name)
-    assert str(SYSTEM_TOOL_SAVE_RESULT_ID) in created_skill["tool_ids"]
+    assert str(SYSTEM_TOOL_SAVE_DATA_ID) in created_skill["tool_ids"]
 
 
 # ── 5. Invalid Tool ID Validation ────────────────────────────────────────────
@@ -490,7 +492,7 @@ async def test_system_tools_appear_once_in_mcp_tools_endpoint(
     assert len(names) == len(set(names)), f"Duplicate system tools found: {names}"
 
     # Verify each expected system tool is present exactly once
-    expected_names = {"system____save_result", "system____send_notification", "system____get_recipient_group"}
+    expected_names = {"system____save_data", "system____send_notification", "system____get_recipient_group"}
     found_names = set(names)
     for expected in expected_names:
         assert expected in found_names, f"System tool '{expected}' not found in /mcp/tools response"
@@ -554,8 +556,8 @@ async def test_agent_permission_for_system_tools(db_session: AsyncSession):
     allowed = await pm.calculate_allowed_tools(role_id, db_mock)
 
     # System tools are NOT auto-injected under Phase 10 architecture
-    assert "save_result" not in allowed, (
-        "save_result must NOT be auto-injected; it requires explicit skill assignment"
+    assert "save_data" not in allowed, (
+        "save_data must NOT be auto-injected; it requires explicit skill assignment"
     )
     assert len(allowed) == 0, f"Expected empty allowed set for role with no skills, got: {allowed}"
 
@@ -564,7 +566,7 @@ async def test_agent_permission_for_system_tools(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_agent_permission_system_tool_prefixed_name(db_session: AsyncSession):
-    """Permission check passes for system/save_result (namespaced identifier)."""
+    """Permission check passes for system/save_data (namespaced identifier)."""
     from unittest.mock import AsyncMock, MagicMock
     from app.services.agents.permission_manager import AgentPermissionManager
 
@@ -573,11 +575,11 @@ async def test_agent_permission_system_tool_prefixed_name(db_session: AsyncSessi
     role_id = uuid.uuid4()
 
     # Manually set allowed set to include system tool in both formats
-    allowed = {"save_result", "system/save_result", "system/send_notification"}
+    allowed = {"save_data", "system/save_data", "system/send_notification"}
 
     # Both prefixed and unprefixed names should pass the check
-    pm.check_tool_allowed("save_result", allowed, role_id)
-    pm.check_tool_allowed("system/save_result", allowed, role_id)
+    pm.check_tool_allowed("save_data", allowed, role_id)
+    pm.check_tool_allowed("system/save_data", allowed, role_id)
     pm.check_tool_allowed("system/send_notification", allowed, role_id)
 
 
@@ -588,7 +590,7 @@ async def test_agent_permission_denies_unknown_tool():
 
     pm = AgentPermissionManager()
     role_id = uuid.uuid4()
-    allowed = {"save_result"}
+    allowed = {"save_data"}
 
     with pytest.raises(PermissionDeniedError):
         pm.check_tool_allowed("malicious/drop_table", allowed, role_id)

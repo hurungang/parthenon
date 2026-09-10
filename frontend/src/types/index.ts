@@ -266,6 +266,15 @@ export interface AgentJob {
   output_type?: AgentOutputType | null // Resolved from AgentType
 }
 
+export interface ToolCallRoute {
+  tool_name: string
+  mcp_slug: string
+  called_at: string | null
+  /** Routing path the call took (RuntimeToolCall.route_type: system/mcp/a2a).
+   *  Null for legacy chat-sourced rows that predate the runtime store. */
+  route_type?: 'system' | 'mcp' | 'a2a' | null
+}
+
 export interface RuntimeTopologyNode {
   session_id: string
   agent_type_id: string
@@ -290,6 +299,19 @@ export interface RuntimeTopologyNode {
   // Phase 3.13: optional human-friendly title for conversation
   // nodes (auto-generated conversation name).
   title?: string | null
+  // Whether this node has a pending human-intervention request.
+  needs_intervention?: boolean
+  // Trigger provenance: who/what triggered this node.
+  trigger_source?: 'user' | 'schedule' | 'delegated' | 'unknown'
+  // Human-readable trigger source label (user display name or schedule name).
+  trigger_source_label?: string | null
+  trigger_user_label?: string | null
+  trigger_user_id?: string | null
+  schedule_id?: string | null
+  schedule_cron?: string | null
+  schedule_description?: string | null
+  // Tool-call history (latest first), each resolved to an MCP server slug.
+  tool_calls?: ToolCallRoute[]
 }
 
 export interface RuntimeTopologyEdge {

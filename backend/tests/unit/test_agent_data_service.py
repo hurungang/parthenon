@@ -204,8 +204,8 @@ async def test_query_output_history_returns_filtered_records(db_session: AsyncSe
     data_type = await _create_data_type(db_session)
 
     now = datetime.now(UTC)
-    inside_window = now - timedelta(hours=1)
-    outside_window = now - timedelta(days=5)
+    inside_window = now - timedelta(days=30)
+    outside_window = now - timedelta(days=60)
 
     output_1 = AgentOutput(
         data_type_id=data_type.id,
@@ -231,8 +231,8 @@ async def test_query_output_history_returns_filtered_records(db_session: AsyncSe
 
     records = await output_service.query_output_history(
         db=db_session,
-        date_from=(now - timedelta(days=1)).isoformat(),
-        date_to=now.isoformat(),
+        date_from=(now - timedelta(days=40)).isoformat(),
+        date_to=(now - timedelta(days=20)).isoformat(),
     )
 
     assert len(records) == 1

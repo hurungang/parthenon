@@ -178,7 +178,7 @@ async def test_list_servers_offset_zero_returns_one_system_entry():
     body = resp.json()
     assert isinstance(body, list)
     assert len(body) == 1, f"Expected exactly 1 item (System entry), got {len(body)}"
-    assert body[0]["name"] == "System"
+    assert body[0]["name"] == "system"
     assert body[0]["slug"] == "system"
     assert body[0]["session_count"] == 0
 

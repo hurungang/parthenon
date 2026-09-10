@@ -256,7 +256,7 @@ class TestAgentRuntimeClientMissingCertHeader:
     """
 
     @pytest.mark.asyncio
-    async def test_agent_runtime_client_make_client_has_cert_header(self):
+    async def test_agent_runtime_client_make_client_has_cert_header(self, tmp_path):
         """AgentRuntimeClient._make_client() now includes the X-Client-Certificate header.
 
         Verifies that the fix added the control-center's PEM cert as the
@@ -265,7 +265,16 @@ class TestAgentRuntimeClientMissingCertHeader:
         """
         from app.services.control_center.agent_runtime_client import AgentRuntimeClient
 
-        client = AgentRuntimeClient(agent_runtime_url=_ar_url())
+        cert = tmp_path / "cert.pem"
+        cert.write_text("-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----\n")
+        key = tmp_path / "key.pem"
+        key.write_text("-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n")
+
+        client = AgentRuntimeClient(
+            agent_runtime_url=_ar_url(),
+            cert_path=str(cert),
+            key_path=str(key),
+        )
         http_client = client._make_client()
 
         try:

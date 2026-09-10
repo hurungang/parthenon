@@ -45,12 +45,8 @@ async def fk_test_engine():
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    try:
-        yield engine
-    finally:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-        await engine.dispose()
+    yield engine
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture

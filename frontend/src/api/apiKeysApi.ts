@@ -7,6 +7,7 @@ import type {
   ApiKey,
   ApiKeyCreateRequest,
   ApiKeyCreateResponse,
+  ApiKeyDeleteResponse,
   ApiKeyRevokeResponse,
   IdentityWithRoles,
 } from '../types/apiKeys'
@@ -27,6 +28,11 @@ export async function createApiKey(
 
 export async function revokeApiKey(keyId: string): Promise<ApiKeyRevokeResponse> {
   const response = await apiClient.post<ApiKeyRevokeResponse>(`/api-keys/${keyId}/revoke`)
+  return response.data
+}
+
+export async function deleteApiKey(keyId: string): Promise<ApiKeyDeleteResponse> {
+  const response = await apiClient.delete<ApiKeyDeleteResponse>(`/api-keys/${keyId}`)
   return response.data
 }
 

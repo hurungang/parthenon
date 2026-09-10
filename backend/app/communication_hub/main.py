@@ -124,6 +124,7 @@ def _register_routers(app: FastAPI) -> None:
     from app.communication_hub.api.internal.agent_resume import router as agent_resume_router
     from app.communication_hub.api.a2a import router as a2a_router  # Phase 1.1
     from app.communication_hub.api.mcp_tools import mcp_router  # API Key MCP Hub
+    from app.communication_hub.mcp.router import register_mcp_protocol_server  # MCP protocol server
 
     app.include_router(mcp_router)  # MCP tools for external agents
     app.include_router(GatewayRouter)
@@ -134,6 +135,9 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(agent_terminate_router)  # POST /internal/agent/terminate/{session_id}
     app.include_router(agent_resume_router)  # POST /internal/agent/resume/{session_id}
     app.include_router(a2a_router)  # POST /internal/a2a/request, /internal/a2a/disconnect/{session_link_id}
+
+    # MCP protocol server — opt-in via CH_MCP_PROTOCOL_SERVER_ENABLED
+    register_mcp_protocol_server(app, enabled=settings.ch_mcp_protocol_server_enabled)
 
 
 app = create_app()

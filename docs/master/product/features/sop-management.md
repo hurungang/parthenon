@@ -30,6 +30,20 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 - **Delegation Boundaries**: Governing maximum delegation depth and delegated-step counts for predictable execution
 - **SOP Auditability**: Tracking and reviewing SOP definitions and runs
 
+## Delegation Guardrails & Default SOP
+
+SOP execution is bounded by guardrail policies so delegation stays predictable and enterprise-safe:
+
+- Detects and blocks direct and indirect cyclic delegation chains, producing clear policy-stop outcomes (distinct from functional failures) for governance and incident triage
+- Enforces delegation depth and delegated-step boundaries as part of execution policy
+- Supports a **Default SOP fallback** for agents without an explicitly assigned SOP, applied consistently across all supported agent input types
+- When an agent instruction explicitly references one or more SOP names, only those named SOPs are used for planning and execution context; otherwise the Default SOP is applied as fallback
+- Agent types bind SOPs using an ordered-list pattern, letting agent designers curate the set of approved workflows per agent type
+
+## Out of Scope
+- Technical workflow engine design details
+- Low-level execution runtime implementation mechanics
+
 ## Acceptance Criteria
 - Admins can create, edit, and manage SOPs from the UI
 - SOP create and edit experiences use workflow terminology consistently
@@ -46,3 +60,6 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 - SOPs with delegated human intervention steps surface intervention requests in the parent conversation UI when executed conversationally
 - Delegation-based intervention gates work reliably at any delegation depth within conversational agent sessions
 - SOPs are discoverable and manageable from the UI
+- SOP delegation produces clear policy-stop outcomes for governance, distinguishing policy enforcement stops from functional failures
+- Direct and indirect cyclic delegation paths are blocked with clear user-visible outcomes
+- If an agent instruction references one or more SOP names, only those named SOPs are used; otherwise the Default SOP is applied as fallback, across all supported agent input types

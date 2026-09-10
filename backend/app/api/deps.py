@@ -30,6 +30,7 @@ _AR_ALLOWLIST: set[tuple[str, str]] = {
     ("PATCH", "/api/v1/internal/data/sessions/{session_id}/status"),
     ("POST", "/api/v1/internal/data/sessions/{session_id}/result"),
     ("POST", "/api/v1/internal/data/sessions/{session_id}/log"),
+    ("POST", "/api/v1/internal/data/tool-calls"),
     ("GET", "/api/v1/internal/data/mcp-sessions/{server_slug}"),
     ("POST", "/api/v1/internal/data/preflight/availability"),
     # Typed output endpoints
@@ -59,7 +60,7 @@ _CH_ALLOWLIST: set[tuple[str, str]] = {
     ("POST", "/api/v1/internal/mcp/proxy-tool"),
     ("POST", "/api/v1/internal/data/intervene/respond"),
     ("POST", "/api/v1/internal/auth/validate-api-key"),
-    ("POST", "/api/v1/internal/skills/resolve"),
+    ("POST", "/api/v1/internal/system-tools/skills/resolve"),
 }
 
 _INTERNAL_ALLOWLISTS: dict[str, set[tuple[str, str]]] = {
@@ -142,6 +143,107 @@ def require_admin(request: Request) -> dict[str, Any]:
     return claims
 
 
+async def authorize_identity(
+    db: AsyncSession,
+    claims: dict[str, Any],
+    module: str,
+    action: str,
+    *,
+    is_super_admin: bool = False,
+) -> dict[str, Any]:
+    """Enforce a permission-engine check for an already-validated identity.
+
+    Shared permission gate used by BOTH auth paths:
+
+    - ``require_permission()`` — requests authenticated by ``JWTAuthMiddleware``
+      (claims come from ``request.state.identity``); and
+    - self-authenticating endpoints that validate the JWT themselves — e.g. the
+      SSE topology stream (``GET /agents/runtime/topology/stream``), which
+      receives the token via the ``?token=`` query param because browser
+      ``EventSource`` cannot set Authorization headers.
+
+    Keeping one implementation guarantees the stream enforces EXACTLY the same
+    permission semantics as the REST endpoint (permission parity).
+
+    Raises:
+        HTTPException 403 — if the user has no matching allow policy.
+        HTTPException 403 — if the user has no PlatformUser record yet.
+    """
+    from sqlalchemy import select
+
+    from app.db.models.platform_user import PlatformUser
+    from app.services.permissions.permission_engine import PermissionEngine
+
+    # Super admin bypass — full access to all modules and actions
+    if is_super_admin:
+        return claims
+
+    sub: str | None = claims.get("sub")
+    realm_roles = claims.get("realm_access", {}).get("roles", [])
+    client_roles: list[str] = []
+    resource_access = claims.get("resource_access", {})
+    for client_id, access in (resource_access or {}).items():
+        if isinstance(access, dict):
+            client_roles.extend(access.get("roles", []))
+    logger.debug(
+        "authorize_identity check: module=%s action=%s sub=%s realm_roles=%s client_roles=%s",
+        module, action, sub, realm_roles, client_roles,
+    )
+    if not sub:
+        logger.warning("authorize_identity: No identity claims found")
+        raise HTTPException(status_code=403, detail="No identity claims found.")
+
+    result = await db.execute(
+        select(PlatformUser).where(PlatformUser.sub == sub)
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        logger.warning(
+            "authorize_identity: PlatformUser not found for sub=%s — user must re-authenticate",
+            sub,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="User not found in platform. Please re-authenticate.",
+        )
+
+    logger.debug(
+        "authorize_identity: PlatformUser found — id=%s sub=%s",
+        user.id, user.sub,
+    )
+
+    auth = await PermissionEngine().authorize(
+        db=db,
+        user_id=user.id,
+        module=module,
+        action=action,
+        resource_id="*",
+        resource_tags={},
+    )
+    if not auth.allowed:
+        logger.warning(
+            "authorize_identity DENIED: user_id=%s module=%s action=%s reason=%s",
+            user.id, module, action, auth.reason,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=PermissionDeniedDetail(
+                detail=auth.reason,
+                required_permission=RequiredPermission(
+                    resource_type=module,
+                    action=action,
+                    resource_id=None,
+                ),
+            ).model_dump(),
+        )
+    logger.debug(
+        "authorize_identity ALLOWED: user_id=%s module=%s action=%s",
+        user.id, module, action,
+    )
+
+    return claims
+
+
 def require_permission(module: str, action: str) -> Callable:
     """Dependency factory: returns a FastAPI dependency that enforces permission-engine access.
 
@@ -171,81 +273,14 @@ def require_permission(module: str, action: str) -> Callable:
         request: Request,
         db: AsyncSession = Depends(get_db),
     ) -> dict[str, Any]:
-        from sqlalchemy import select
-
-        from app.db.models.platform_user import PlatformUser
-        from app.services.permissions.permission_engine import PermissionEngine
-
         claims: dict[str, Any] = getattr(request.state, "identity", {})
-
-        # Super admin bypass — full access to all modules and actions
-        if getattr(request.state, "is_super_admin", False):
-            return claims
-
-        sub: str | None = claims.get("sub")
-        realm_roles = claims.get("realm_access", {}).get("roles", [])
-        client_roles: list[str] = []
-        resource_access = claims.get("resource_access", {})
-        for client_id, access in (resource_access or {}).items():
-            if isinstance(access, dict):
-                client_roles.extend(access.get("roles", []))
-        logger.debug(
-            "require_permission check: module=%s action=%s sub=%s realm_roles=%s client_roles=%s",
-            module, action, sub, realm_roles, client_roles,
+        return await authorize_identity(
+            db,
+            claims,
+            module,
+            action,
+            is_super_admin=bool(getattr(request.state, "is_super_admin", False)),
         )
-        if not sub:
-            logger.warning("require_permission: No identity claims found in request.state.identity")
-            raise HTTPException(status_code=403, detail="No identity claims found.")
-
-        result = await db.execute(
-            select(PlatformUser).where(PlatformUser.sub == sub)
-        )
-        user = result.scalar_one_or_none()
-        if user is None:
-            logger.warning(
-                "require_permission: PlatformUser not found for sub=%s — user must re-authenticate",
-                sub,
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="User not found in platform. Please re-authenticate.",
-            )
-
-        logger.debug(
-            "require_permission: PlatformUser found — id=%s sub=%s",
-            user.id, user.sub,
-        )
-
-        auth = await PermissionEngine().authorize(
-            db=db,
-            user_id=user.id,
-            module=module,
-            action=action,
-            resource_id="*",
-            resource_tags={},
-        )
-        if not auth.allowed:
-            logger.warning(
-                "require_permission DENIED: user_id=%s module=%s action=%s reason=%s",
-                user.id, module, action, auth.reason,
-            )
-            raise HTTPException(
-                status_code=403,
-                detail=PermissionDeniedDetail(
-                    detail=auth.reason,
-                    required_permission=RequiredPermission(
-                        resource_type=module,
-                        action=action,
-                        resource_id=None,
-                    ),
-                ).model_dump(),
-            )
-        logger.debug(
-            "require_permission ALLOWED: user_id=%s module=%s action=%s",
-            user.id, module, action,
-        )
-
-        return claims
 
     _permission_dep_cache[(module, action)] = _dep
     return _dep

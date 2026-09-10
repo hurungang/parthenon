@@ -85,7 +85,7 @@ const POSTURE = [
   },
 ] as const
 
-describe('ModelUsageGuardrailManagement - hierarchy view on dedicated dashboard', () => {
+describe('ModelUsageGuardrailManagement - readonly guardrail hierarchy view', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     shared.mockGet.mockImplementation((url: string) => {
@@ -118,10 +118,10 @@ describe('ModelUsageGuardrailManagement - hierarchy view on dedicated dashboard'
   })
 
   it('renders the read-only dashboard title on the dedicated dashboard', async () => {
-    const { RuntimeControlDashboardPage } = await import(
-      '../pages/agents/RuntimeControlDashboardPage'
+    const { VendorModelGuardrailPanel } = await import(
+      '../components/agents/VendorModelGuardrailPanel'
     )
-    renderPage(<RuntimeControlDashboardPage />)
+    renderPage(<VendorModelGuardrailPanel readonly />)
 
     await waitFor(() => {
       expect(screen.getByText('agents.sessions.modelUsageDashboardTitle')).toBeDefined()
@@ -129,10 +129,10 @@ describe('ModelUsageGuardrailManagement - hierarchy view on dedicated dashboard'
   })
 
   it('renders vendor, model, and guardrail rows already expanded (read-only mode auto-expands)', async () => {
-    const { RuntimeControlDashboardPage } = await import(
-      '../pages/agents/RuntimeControlDashboardPage'
+    const { VendorModelGuardrailPanel } = await import(
+      '../components/agents/VendorModelGuardrailPanel'
     )
-    renderPage(<RuntimeControlDashboardPage />)
+    renderPage(<VendorModelGuardrailPanel readonly />)
 
     // In readonly mode the panel auto-expands; no manual clicks needed.
     await waitFor(() => {
@@ -143,10 +143,10 @@ describe('ModelUsageGuardrailManagement - hierarchy view on dedicated dashboard'
   })
 
   it('renders the unit suffix in the guardrail row using the limit_value', async () => {
-    const { RuntimeControlDashboardPage } = await import(
-      '../pages/agents/RuntimeControlDashboardPage'
+    const { VendorModelGuardrailPanel } = await import(
+      '../components/agents/VendorModelGuardrailPanel'
     )
-    renderPage(<RuntimeControlDashboardPage />)
+    renderPage(<VendorModelGuardrailPanel readonly />)
 
     await waitFor(() => {
       expect(screen.getByTestId('guardrail-row-gr-1')).toBeDefined()
@@ -159,10 +159,10 @@ describe('ModelUsageGuardrailManagement - hierarchy view on dedicated dashboard'
   })
 
   it('renders posture state chip on the guardrail row', async () => {
-    const { RuntimeControlDashboardPage } = await import(
-      '../pages/agents/RuntimeControlDashboardPage'
+    const { VendorModelGuardrailPanel } = await import(
+      '../components/agents/VendorModelGuardrailPanel'
     )
-    renderPage(<RuntimeControlDashboardPage />)
+    renderPage(<VendorModelGuardrailPanel readonly />)
 
     await waitFor(() => {
       expect(screen.getByTestId('guardrail-row-gr-1')).toBeDefined()

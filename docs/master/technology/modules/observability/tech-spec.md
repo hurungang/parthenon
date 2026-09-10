@@ -144,13 +144,13 @@ No credentials or full configuration are returned.
 | `docker-compose.yml` | config | Adds otel-collector, jaeger, prometheus, and loki services; injects OTEL_EXPORTER_OTLP_ENDPOINT into api | `docker-compose.yml` |
 | `telemetry.yaml` | config | Sample annotated telemetry configuration for operators | `config/telemetry.yaml` |
 | `.env.example` | config | Documents all `TELEMETRY__*` env vars with types and defaults | `.env.example` |
-| `test_telemetry_settings_defaults` | function | Unit test: default `TelemetrySettings` field values | `backend/tests/core/test_telemetry_config.py` |
-| `test_telemetry_settings_env_override` | function | Unit test: env-var override of telemetry settings | `backend/tests/core/test_telemetry_config.py` |
-| `test_exporter_factory_console` | function | Unit test: console exporter produces correct processor type | `backend/tests/core/test_telemetry.py` |
-| `test_exporter_factory_otlp_grpc` | function | Unit test: OTLP gRPC exporter registered for grpc protocol | `backend/tests/core/test_telemetry.py` |
-| `test_exporter_factory_otlp_http` | function | Unit test: OTLP HTTP exporter registered for http protocol | `backend/tests/core/test_telemetry.py` |
-| `test_exporter_factory_disabled_traces` | function | Unit test: no-op tracer provider when traces_enabled=False | `backend/tests/core/test_telemetry.py` |
-| `test_exporter_factory_multi_target` | function | Unit test: multiple processors registered for multi-target config | `backend/tests/core/test_telemetry.py` |
+| `test_default_exporters` | function | Unit test: default `TelemetrySettings` exporter field values | `backend/tests/core/test_telemetry_config.py` |
+| `test_service_name_override` | function | Unit test: env-var override of telemetry settings | `backend/tests/core/test_telemetry_config.py` |
+| `test_console_span_exporter_type` | function | Unit test: console exporter produces correct span exporter type | `backend/tests/core/test_telemetry.py` |
+| `test_otlp_grpc_span_exporter` | function | Unit test: OTLP gRPC span exporter registered for grpc protocol | `backend/tests/core/test_telemetry.py` |
+| `test_otlp_http_span_exporter` | function | Unit test: OTLP HTTP span exporter registered for http protocol | `backend/tests/core/test_telemetry.py` |
+| `test_traces_disabled_produces_no_trace_processors` | function | Unit test: no trace processors built when traces_enabled=False | `backend/tests/core/test_telemetry.py` |
+| `test_multi_target_builds_multiple_processors` | function | Unit test: multiple span processors registered for multi-target config | `backend/tests/core/test_telemetry.py` |
 | `test_telemetry_config_endpoint_authenticated` | function | API test: authenticated GET returns 200 with correct schema | `backend/tests/api/v1/test_telemetry.py` |
 | `test_telemetry_config_endpoint_unauthenticated` | function | API test: unauthenticated GET returns 401 | `backend/tests/api/v1/test_telemetry.py` |
 | `test_telemetry_config_returns_service_name` | function | API test: service name env var override reflected in response | `backend/tests/api/v1/test_telemetry.py` |
