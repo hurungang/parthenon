@@ -1,9 +1,13 @@
 """Agent management API routers: AgentRole, AgentIdentity, AgentJob, AgentType, AgentInstance, ModelConfig."""
 import asyncio
+import hashlib
 import json
 import logging
+import time
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -22,8 +26,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_claims, require_permission
+from app.api.deps import authorize_identity, get_current_claims, require_permission
 from app.core.resource_types import RT_AGENT
+from app.middleware.auth import validate_raw_token
 from app.db.models.agents import (
     AgentIdentity,
     AgentInstance,
@@ -360,11 +365,11 @@ async def assign_mcp_session_to_role(
         session_id = uuid.UUID(body["mcp_session_id"])
         claims = get_current_claims(request)
         user_id_str: str | None = claims.get("platform_user_id")
-        user_id = uuid.UUID(user_id_str) if user_id_str else None
+        assigned_by = uuid.UUID(user_id_str) if user_id_str else None
         await _role_service.assign_mcp_session(
             role_id=role_id,
             mcp_session_id=session_id,
-            assigned_by=user_id,
+            assigned_by=assigned_by,
             db=db,
         )
     except AgentRoleNotFoundError as exc:
@@ -611,9 +616,15 @@ async def launch_agent_session(
     _: dict = Depends(require_permission(RT_AGENT, "execute")),
 ) -> AgentJob:
     """Validate agent identity OAuth token, enqueue a new agent session, and return 202 with session ID."""
-    claims = get_current_claims(request)
-    user_id_str: str | None = claims.get("platform_user_id")
-    user_id = uuid.UUID(user_id_str) if user_id_str else None
+    # Trigger provenance: the middleware resolves the authenticated human to
+    # their canonical Identity row (request.state.identity_id) — JWTs carry no
+    # platform user id, so the old claims lookup always yielded None and runs
+    # were never attributed to a user.
+    user_id: uuid.UUID | None = getattr(request.state, "identity_id", None)
+    if user_id is None:
+        claims = get_current_claims(request)
+        user_id_str: str | None = claims.get("platform_user_id")
+        user_id = uuid.UUID(user_id_str) if user_id_str else None
 
     # Recursion pre-flight validation before launching
     try:
@@ -2107,6 +2118,97 @@ async def preflight_availability(
 # ── Runtime Control Endpoints ───────────────────────────────────────────────
 
 
+def _topology_statuses(include_terminal: bool) -> list[AgentJobStatus]:
+    """Status list for the live topology projection.
+
+    ``waiting_for_human`` is a non-terminal live state — jobs paused for a
+    human intervention must stay visible on the runtime monitor.
+    ``include_terminal=true`` means ALL terminal jobs (no recency window);
+    otherwise recently-terminal jobs join the live set via the controller's
+    ``recent_minutes`` window.
+    """
+    statuses = [
+        AgentJobStatus.queued,
+        AgentJobStatus.running,
+        AgentJobStatus.waiting_for_human,
+    ]
+    if include_terminal:
+        statuses += [
+            AgentJobStatus.completed,
+            AgentJobStatus.failed,
+            AgentJobStatus.terminated,
+        ]
+    return statuses
+
+
+def _runtime_topology_read(projection: Any) -> RuntimeTopologyRead:
+    """Serialize a ``RuntimeTopologyProjection`` into the response schema.
+
+    Shared by the REST endpoint and the SSE stream so the pushed payload is
+    byte-for-byte the same shape as the polled one (no push/pull drift).
+    """
+    return RuntimeTopologyRead(
+        nodes=[
+            RuntimeTopologyNodeRead(
+                session_id=node.session_id,
+                agent_type_id=node.agent_type_id,
+                agent_type_name=node.agent_type_name,
+                status=node.status,
+                depth_from_root=node.depth_from_root,
+                parent_session_id=node.parent_session_id,
+                started_at=node.started_at,
+                created_at=node.created_at,
+                termination_category=node.termination_category,
+                kind=node.kind,
+                title=node.title,
+                needs_intervention=node.needs_intervention,
+                trigger_source=node.trigger_source,
+                trigger_source_label=node.trigger_source_label,
+                trigger_user_label=node.trigger_user_label,
+                trigger_user_id=node.trigger_user_id,
+                schedule_id=node.schedule_id,
+                schedule_cron=node.schedule_cron,
+                schedule_description=node.schedule_description,
+                tool_calls=[
+                    ToolCallRouteRead(
+                        tool_name=call.tool_name,
+                        mcp_slug=call.mcp_slug,
+                        called_at=call.called_at,
+                        route_type=call.route_type,
+                    )
+                    for call in node.tool_calls
+                ],
+            )
+            for node in projection.nodes
+        ],
+        edges=[
+            RuntimeTopologyEdgeRead(
+                parent_session_id=edge.parent_session_id,
+                child_session_id=edge.child_session_id,
+                depth_from_root=edge.depth_from_root,
+            )
+            for edge in projection.edges
+        ],
+        root_session_ids=projection.root_session_ids,
+    )
+
+
+async def _compute_runtime_topology(
+    db: DbSession,
+    include_terminal: bool,
+    max_nodes: int,
+    recent_minutes: int,
+) -> RuntimeTopologyRead:
+    """Compute the topology projection with the live/terminal status split."""
+    projection = await _runtime_topology_controller.get_active_topology(
+        db,
+        include_statuses=_topology_statuses(include_terminal),
+        max_nodes=max_nodes,
+        recent_minutes=recent_minutes,
+    )  # include_conversations and include_instances default to True
+    return _runtime_topology_read(projection)
+
+
 @RuntimeControlRouter.get("/topology", response_model=RuntimeTopologyRead)
 async def get_runtime_topology(
     db: DbSession,
@@ -2140,71 +2242,164 @@ async def get_runtime_topology(
     jobs are returned regardless of age (no window). ``recent_minutes=0``
     disables the recent-terminal window entirely.
     """
-    from app.db.models.agents import AgentJobStatus
+    return await _compute_runtime_topology(db, include_terminal, max_nodes, recent_minutes)
 
-    # waiting_for_human is a non-terminal live state — jobs paused for a
-    # human intervention must stay visible on the runtime monitor.
-    if not include_terminal:
-        statuses = [
-            AgentJobStatus.queued,
-            AgentJobStatus.running,
-            AgentJobStatus.waiting_for_human,
-        ]
-    else:
-        statuses = [
-            AgentJobStatus.queued,
-            AgentJobStatus.running,
-            AgentJobStatus.waiting_for_human,
-            AgentJobStatus.completed,
-            AgentJobStatus.failed,
-            AgentJobStatus.terminated,
-        ]
 
-    projection = await _runtime_topology_controller.get_active_topology(
-        db,
-        include_statuses=statuses,
-        max_nodes=max_nodes,
-        recent_minutes=recent_minutes,
-    )  # include_conversations and include_instances default to True
+# ── Runtime topology SSE stream ──────────────────────────────────────────────
 
-    return RuntimeTopologyRead(
-        nodes=[
-            RuntimeTopologyNodeRead(
-                session_id=node.session_id,
-                agent_type_id=node.agent_type_id,
-                agent_type_name=node.agent_type_name,
-                status=node.status,
-                depth_from_root=node.depth_from_root,
-                parent_session_id=node.parent_session_id,
-                started_at=node.started_at,
-                created_at=node.created_at,
-                termination_category=node.termination_category,
-                kind=node.kind,
-                title=node.title,
-                needs_intervention=node.needs_intervention,
-                trigger_source=node.trigger_source,
-                trigger_source_label=node.trigger_source_label,
-                tool_calls=[
-                    ToolCallRouteRead(
-                        tool_name=call.tool_name,
-                        mcp_slug=call.mcp_slug,
-                        called_at=call.called_at,
-                        route_type=call.route_type,
+# Cadence of the server-side projection recompute (~2s per the tech spec).
+TOPOLOGY_STREAM_POLL_SECONDS = 2.0
+# SSE comment keep-alive interval so proxies/load balancers do not close an
+# idle connection (~15s per the tech spec).
+TOPOLOGY_STREAM_HEARTBEAT_SECONDS = 15.0
+# Generous max lifetime — the stream closes and browser EventSource clients
+# reconnect naturally, keeping connections and server tasks bounded.
+TOPOLOGY_STREAM_MAX_LIFETIME_SECONDS = 600.0
+
+# The stream path is registered in JWTAuthMiddleware.PUBLIC_PATHS because it
+# authenticates ITSELF via the ``?token=`` query param (EventSource cannot set
+# Authorization headers) — same pattern as the Communication Hub chat
+# WebSocket (``WebSocketServer.authenticate`` in ``app/api/ws/chat.py``).
+
+
+async def _authenticate_stream_request(
+    request: Request, token: str | None
+) -> tuple[dict | None, bool]:
+    """Validate the SSE stream JWT and return ``(claims, is_super_admin)``.
+
+    Token source precedence:
+      1. ``?token=`` query param — the EventSource path (browser EventSource
+         cannot set request headers).
+      2. ``Authorization: Bearer`` header — for header-capable clients.
+
+    When the auth middleware already validated an Authorization header (its
+    identity is on ``request.state``), those claims are reused. Validation
+    goes through the same tier pipeline the middleware uses
+    (``validate_raw_token``: super admin → OIDC registry → legacy client),
+    mirroring the Communication Hub chat WebSocket authenticate pattern.
+    """
+    identity = getattr(request.state, "identity", None)
+    if identity:
+        return identity, bool(getattr(request.state, "is_super_admin", False))
+
+    if not token:
+        header = request.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            token = header[len("Bearer "):]
+    if not token:
+        return None, False
+
+    return await validate_raw_token(token)
+
+
+async def _topology_stream_events(
+    db: DbSession,
+    *,
+    include_terminal: bool,
+    max_nodes: int,
+    recent_minutes: int,
+) -> AsyncGenerator[str, None]:
+    """SSE event generator: hash-gated payload emission + heartbeat keep-alives.
+
+    - Recomputes the projection every ~2s with the SAME controller call and
+      query parameters as the REST endpoint.
+    - Emits the full ``RuntimeTopologyRead`` JSON as ``data:`` ONLY when its
+      SHA-256 hash differs from the last emission — unchanged state costs the
+      client nothing.
+    - Emits a ``: heartbeat`` comment when the connection would otherwise be
+      silent for ~15s.
+    - Stops cleanly after the max lifetime (clients reconnect naturally via
+      EventSource auto-reconnect). A client disconnect cancels the generator
+      (Starlette tears the stream down), which the ``finally`` below logs —
+      the same contract as the execution-log stream endpoint.
+    """
+    last_hash: str | None = None
+    last_write = time.monotonic()
+    deadline = time.monotonic() + TOPOLOGY_STREAM_MAX_LIFETIME_SECONDS
+    try:
+        while True:
+            if time.monotonic() >= deadline:
+                logger.info("Runtime topology stream closing: max lifetime reached")
+                return
+            try:
+                payload = (
+                    await _compute_runtime_topology(
+                        db, include_terminal, max_nodes, recent_minutes
                     )
-                    for call in node.tool_calls
-                ],
-            )
-            for node in projection.nodes
-        ],
-        edges=[
-            RuntimeTopologyEdgeRead(
-                parent_session_id=edge.parent_session_id,
-                child_session_id=edge.child_session_id,
-                depth_from_root=edge.depth_from_root,
-            )
-            for edge in projection.edges
-        ],
-        root_session_ids=projection.root_session_ids,
+                ).model_dump_json()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # A transient projection failure must not kill the connection —
+                # skip this tick; heartbeats keep the socket warm.
+                logger.exception("Runtime topology stream: projection computation failed")
+                payload = None
+
+            now = time.monotonic()
+            if payload is not None:
+                digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                if digest != last_hash:
+                    last_hash = digest
+                    last_write = now
+                    yield f"data: {payload}\n\n"
+            if now - last_write >= TOPOLOGY_STREAM_HEARTBEAT_SECONDS:
+                last_write = now
+                yield ": heartbeat\n\n"
+            await asyncio.sleep(TOPOLOGY_STREAM_POLL_SECONDS)
+    except (asyncio.CancelledError, GeneratorExit):
+        logger.info("Runtime topology stream cancelled: client disconnected")
+        raise
+
+
+@RuntimeControlRouter.get("/topology/stream")
+async def stream_runtime_topology(
+    request: Request,
+    db: DbSession,
+    token: str | None = Query(
+        None,
+        description=(
+            "JWT passed as a query parameter — browser EventSource cannot set "
+            "Authorization headers (same pattern as the Communication Hub chat "
+            "WebSocket)."
+        ),
+    ),
+    include_terminal: bool = Query(False),
+    max_nodes: int = Query(200, ge=1, le=1000),
+    recent_minutes: int = Query(30, ge=0, le=10080),
+) -> StreamingResponse:
+    """Server-sent-events stream of the live runtime topology projection.
+
+    The payload contract is identical to ``GET /agents/runtime/topology`` (the
+    same ``RuntimeTopologyRead`` JSON). Events are emitted only when the
+    projection actually changes (content-hash comparison); ``: heartbeat``
+    comments keep the connection alive through idle periods. Auth: the JWT is
+    accepted via the ``?token=`` query param or the ``Authorization`` header,
+    and the SAME agent-read permission as the REST endpoint is enforced
+    BEFORE the stream opens (401 for a bad token, 403 for a denied
+    permission — no events are ever sent on a rejected connection).
+    """
+    claims, is_super_admin = await _authenticate_stream_request(request, token)
+    if claims is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing authentication token",
+        )
+    # Same permission as GET /agents/runtime/topology — permission parity.
+    await authorize_identity(db, claims, RT_AGENT, "read", is_super_admin=is_super_admin)
+
+    return StreamingResponse(
+        _topology_stream_events(
+            db,
+            include_terminal=include_terminal,
+            max_nodes=max_nodes,
+            recent_minutes=recent_minutes,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # Disable intermediary buffering so events flush immediately.
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

@@ -142,6 +142,17 @@ class TopologyNode:
     trigger_source: str = "unknown"
     # Human-readable trigger source label (user display name or schedule name).
     trigger_source_label: str | None = None
+    # Resolved USER behind the trigger — the chat user for direct/delegated
+    # runs, the schedule CREATOR for schedule-triggered runs.  Lets the UI
+    # render person entities (who triggered it) separately from schedule
+    # entities (what triggered it).
+    trigger_user_label: str | None = None
+    # Identity id of that user (for fetching the user's own details).
+    trigger_user_id: uuid.UUID | None = None
+    # The schedule entity's own details (schedule-triggered nodes only).
+    schedule_id: uuid.UUID | None = None
+    schedule_cron: str | None = None
+    schedule_description: str | None = None
     # Tool-call history for this node (latest first), each resolved to an
     # MCP server slug via ``parse_tool_name``.
     tool_calls: list["ToolCallRoute"] = field(default_factory=list)
@@ -694,14 +705,27 @@ class RuntimeTopologyController:
 
         # Detect schedule-triggered jobs: JobExecution.result stores the
         # launched {"session_id": ...} for agent-target schedules.  Resolve
-        # the schedule name so schedule-triggered nodes surface it.
-        schedule_by_session: dict[uuid.UUID, str] = {}
+        # the schedule (name + id + cron + description) so schedule-triggered
+        # nodes can surface the schedule entity's own details.
+        schedule_by_session: dict[uuid.UUID, tuple[str, uuid.UUID, str | None, str | None]] = {}
         exec_result = await db.execute(
-            select(JobExecution.result, ScheduledJob.name)
+            select(
+                JobExecution.result,
+                ScheduledJob.name,
+                ScheduledJob.id,
+                ScheduledJob.cron_expression,
+                ScheduledJob.description,
+            )
             .join(ScheduledJob, ScheduledJob.id == JobExecution.job_id)
             .where(JobExecution.result.isnot(None))
         )
-        for result_payload, schedule_name in exec_result.fetchall():
+        for (
+            result_payload,
+            schedule_name,
+            schedule_id,
+            schedule_cron,
+            schedule_description,
+        ) in exec_result.fetchall():
             if not isinstance(result_payload, dict):
                 continue
             sid = result_payload.get("session_id")
@@ -711,34 +735,65 @@ class RuntimeTopologyController:
                 session_uuid = uuid.UUID(str(sid))
             except (ValueError, TypeError):
                 continue
-            schedule_by_session[session_uuid] = schedule_name
+            schedule_by_session[session_uuid] = (
+                schedule_name,
+                schedule_id,
+                schedule_cron,
+                schedule_description,
+            )
 
         for node in nodes:
             if node.session_id in schedule_by_session:
+                (
+                    schedule_name,
+                    schedule_id,
+                    schedule_cron,
+                    schedule_description,
+                ) = schedule_by_session[node.session_id]
                 node.trigger_source = "schedule"
-                node.trigger_source_label = schedule_by_session[node.session_id]
+                node.schedule_id = schedule_id
+                node.schedule_cron = schedule_cron
+                node.schedule_description = schedule_description
+                # Label = schedule NAME (it identifies the schedule entity
+                # itself); the resolved creator user (passed through at
+                # dispatch as ``triggered_by_user_id``) goes to
+                # ``trigger_user_label`` — null when the creator is unknown
+                # (schedules created before creator tracking).  The schedule
+                # name must NEVER appear as the user label: downstream
+                # consumers render it as a person.
+                node.trigger_source_label = schedule_name
+                node.trigger_user_id = session_to_user.get(node.session_id)
+                node.trigger_user_label = identity_names.get(
+                    session_to_user.get(node.session_id)
+                )
             elif node.kind == "conversation":
                 # Conversations report their own chat user — a backing agent
                 # job does NOT make the conversation "delegated".
                 if node.session_id in session_to_user:
                     node.trigger_source = "user"
+                    node.trigger_user_id = session_to_user[node.session_id]
                     node.trigger_source_label = identity_names.get(
                         session_to_user[node.session_id]
                     )
+                    node.trigger_user_label = node.trigger_source_label
                 else:
                     node.trigger_source = "unknown"
                     node.trigger_source_label = None
             elif node.parent_session_id is not None:
                 # Delegated children inherit the original trigger user.
                 node.trigger_source = "delegated"
+                node.trigger_user_id = session_to_user.get(node.session_id)
                 node.trigger_source_label = identity_names.get(
                     session_to_user.get(node.session_id)
                 )
+                node.trigger_user_label = node.trigger_source_label
             elif node.session_id in session_to_user:
                 node.trigger_source = "user"
+                node.trigger_user_id = session_to_user[node.session_id]
                 node.trigger_source_label = identity_names.get(
                     session_to_user[node.session_id]
                 )
+                node.trigger_user_label = node.trigger_source_label
             else:
                 node.trigger_source = "unknown"
                 node.trigger_source_label = None

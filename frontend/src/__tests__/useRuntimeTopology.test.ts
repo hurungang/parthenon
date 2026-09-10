@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
+import { API_CONFIG } from '../api/API_CONFIG'
 
 // The hook module imports the apiClient (default export); stub it so the
 // pure predicate import has no side effects. The get stub is hoisted so the
@@ -150,5 +151,167 @@ describe('useRuntimeTopology — recent_minutes wiring', () => {
     expect(mockGet.mock.calls[1][0]).toBe(
       '/agents/runtime/topology?include_terminal=false&recent_minutes=360',
     )
+  })
+})
+
+// ── Stream-first live updates (Phase 15) ───────────────────────────────────────
+
+/** Minimal EventSource double: records the URL, exposes the handlers, and
+ *  lets tests simulate open / message / error. */
+class MockEventSource {
+  static instances: MockEventSource[] = []
+  url: string
+  onopen: ((ev?: unknown) => void) | null = null
+  onmessage: ((ev: { data: string }) => void) | null = null
+  onerror: ((ev?: unknown) => void) | null = null
+  closed = false
+
+  constructor(url: string) {
+    this.url = url
+    MockEventSource.instances.push(this)
+  }
+
+  close(): void {
+    this.closed = true
+  }
+
+  simulateOpen(): void {
+    this.onopen?.()
+  }
+
+  simulateMessage(payload: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(payload) })
+  }
+
+  simulateError(): void {
+    this.onerror?.()
+  }
+}
+
+describe('useRuntimeTopology — stream-first live updates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    MockEventSource.instances = []
+    localStorage.setItem('access_token', 'test-jwt')
+    mockGet.mockResolvedValue({ data: emptyTopology })
+    vi.stubGlobal('EventSource', MockEventSource)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('opens an EventSource with token + window params when a token exists', async () => {
+    const { result } = renderHook(() => useRuntimeTopology(false, 30), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(MockEventSource.instances).toHaveLength(1)
+    expect(MockEventSource.instances[0].url).toBe(
+      `${API_CONFIG.BASE_URL}/agents/runtime/topology/stream` +
+        '?include_terminal=false&recent_minutes=30&token=test-jwt',
+    )
+  })
+
+  it('does not open a stream without a stored token (polling-only mode)', async () => {
+    localStorage.removeItem('access_token')
+    const { result } = renderHook(() => useRuntimeTopology(false, 30), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(MockEventSource.instances).toHaveLength(0)
+  })
+
+  it('reconnects the stream when the window parameters change', async () => {
+    const { result, rerender } = renderHook(
+      ({ recent }: { recent: number }) => useRuntimeTopology(false, recent),
+      { wrapper: createWrapper(), initialProps: { recent: 30 } },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(MockEventSource.instances).toHaveLength(1)
+    expect(MockEventSource.instances[0].closed).toBe(false)
+
+    rerender({ recent: 120 })
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(2))
+    // The old stream is closed; the new one carries the new window.
+    expect(MockEventSource.instances[0].closed).toBe(true)
+    expect(MockEventSource.instances[1].url).toContain('recent_minutes=120')
+  })
+
+  it('writes a pushed payload into the cache without an extra fetch', async () => {
+    const pushed: RuntimeTopologyProjection = {
+      nodes: [node({ session_id: 'pushed-1', agent_type_name: 'Pushed Agent' })],
+      edges: [],
+      root_session_ids: ['pushed-1'],
+    }
+    const { result, rerender } = renderHook(() => useRuntimeTopology(false, 30), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    mockGet.mockClear()
+
+    act(() => MockEventSource.instances[0].simulateMessage(pushed))
+    // React 19 act environments defer react-query's external-store render;
+    // a rerender flushes it so the pushed cache state reaches the hook.
+    await act(async () => {})
+    rerender()
+
+    expect(result.current.data?.nodes[0]?.session_id).toBe('pushed-1')
+    expect(mockGet).not.toHaveBeenCalled()
+  })
+
+  it('closes the EventSource on unmount', async () => {
+    const { result, unmount } = renderHook(() => useRuntimeTopology(false, 30), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(MockEventSource.instances[0].closed).toBe(false)
+
+    unmount()
+    expect(MockEventSource.instances[0].closed).toBe(true)
+  })
+
+  it('does not poll while the stream is connected; falls back to 5s polling when it drops; returns to push on reopen', async () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useRuntimeTopology(false, 30), {
+      wrapper: createWrapper(),
+    })
+
+    // Initial REST fetch resolves (microtask flush under fake timers).
+    await vi.advanceTimersByTimeAsync(0)
+    expect(result.current.isSuccess).toBe(true)
+
+    const stream = MockEventSource.instances[0]
+    act(() => stream.simulateOpen())
+
+    // While connected: no polling for well over the 5s fallback interval.
+    mockGet.mockClear()
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(mockGet).not.toHaveBeenCalled()
+
+    // Stream drops: close + poll fallback + a backoff reconnect attempt.
+    act(() => stream.simulateError())
+    expect(stream.closed).toBe(true)
+    await vi.advanceTimersByTimeAsync(5_500)
+    expect(mockGet.mock.calls.length).toBeGreaterThanOrEqual(1)
+
+    // The reconnect attempt opened a NEW stream (backoff timer fired).
+    await vi.advanceTimersByTimeAsync(2_000)
+    const reopened = MockEventSource.instances[MockEventSource.instances.length - 1]
+    expect(reopened).not.toBe(stream)
+    expect(reopened?.closed).toBe(false)
+
+    // Stream (re)opens: live push resumes and polling pauses again.
+    mockGet.mockClear()
+    act(() => reopened?.simulateOpen())
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(mockGet).not.toHaveBeenCalled()
   })
 })

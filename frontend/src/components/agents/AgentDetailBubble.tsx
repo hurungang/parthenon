@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   CircularProgress,
   Divider,
   IconButton,
@@ -14,13 +15,14 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import LogoutIcon from '@mui/icons-material/Logout'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useTranslation } from 'react-i18next'
 import apiClient from '../../api/apiClient'
 import type { AgentJob, RuntimeTopologyNode } from '../../types'
 import { useAgentType } from '../../hooks/useAgentTypes'
 import { useConversationSessions, useEndConversationSession } from '../../hooks/useConversationSessions'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
-import { nodeKind, statusChipColor, statusLabelKey } from './runtimeNodeMeta'
+import { nodeKind, formatTokenCountK, statusChipColor, statusLabelKey } from './runtimeNodeMeta'
 
 interface AgentDetailBubbleProps {
   node: RuntimeTopologyNode
@@ -143,10 +145,20 @@ export function AgentDetailBubble({
   const { data: agentType } = useAgentType(node.agent_type_id)
   const endConversation = useEndConversationSession(node.agent_type_id)
   const [endError, setEndError] = useState<string | null>(null)
+  // Guardrail summary is folded by default to keep the bubble compact.
+  const [guardrailsOpen, setGuardrailsOpen] = useState(false)
   const [executionLogOpen, setExecutionLogOpen] = useState(false)
 
   const isSleepConversation = kind === 'conversation' && node.status === 'sleep'
   const latestCall = node.tool_calls?.[0]
+
+  // The human shown on the "Triggered by" row: the resolved creator/user
+  // label when known; for schedule-triggered nodes the schedule name is
+  // NEVER substituted (Phase 13) — it degrades to the unknown label like
+  // any other node whose trigger human is unknown.
+  const triggeredByDisplay =
+    node.trigger_user_label ??
+    (node.trigger_source === 'schedule' ? null : node.trigger_source_label)
 
   // Agent-kind: lazily fetch the backing job for its recorded guardrail
   // usage (``output_data.guardrail_usage``).  Failures degrade to "no
@@ -296,7 +308,11 @@ export function AgentDetailBubble({
               sx={{ m: 0 }}
               data-testid="agent-detail-trigger-source"
             >
-              {node.trigger_source_label ?? t('agents.sessions.runtimeTriggerSourceUnknown')}
+              {/* "Triggered by" always names the triggering HUMAN — for
+                  schedule-triggered nodes that is the schedule's creator
+                  (or "Unknown"), never the schedule name, which only
+                  identifies the schedule entity itself. */}
+              {triggeredByDisplay ?? t('agents.sessions.runtimeTriggerSourceUnknown')}
             </Typography>
           </>
         )}
@@ -324,35 +340,75 @@ export function AgentDetailBubble({
           borderRadius: 1,
           bgcolor: 'action.hover',
           px: 1.25,
-          py: 1,
+          py: 0.5,
           mb: 1.5,
         }}
+        data-testid="agent-detail-guardrails"
       >
-        <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={0.5}>
-          {t('agents.sessions.runtimeMonitorGuardrailSummary')}
-        </Typography>
-        {guardrailRows.map((row) => {
-          const state = resolveGuardrailState(row.current, row.limit)
-          // Usage missing → "—" placeholder; limits unknown → "—" as well.
-          const currentText = row.current != null ? formatCount(row.current) : '—'
-          const limitText = row.limit != null ? formatCount(row.limit) : '—'
-          return (
-            <Box key={row.key} display="flex" justifyContent="space-between" py={0.25}>
-              <Typography variant="caption" color="text.secondary">
-                {row.label}
-              </Typography>
-              <Typography
-                variant="caption"
-                fontWeight={600}
-                color={usageValueColor(state)}
-                data-testid={`guardrail-usage-${row.key}`}
-                data-state={state ?? 'none'}
-              >
-                {`${currentText} / ${limitText}`}
-              </Typography>
-            </Box>
-          )
-        })}
+        <Box
+          component="button"
+          type="button"
+          onClick={() => setGuardrailsOpen((v) => !v)}
+          aria-expanded={guardrailsOpen}
+          data-testid="agent-detail-guardrails-toggle"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            p: 0.25,
+            textAlign: 'left',
+          }}
+        >
+          <Typography variant="caption" fontWeight={700} color="text.secondary">
+            {t('agents.sessions.runtimeMonitorGuardrailSummary')}
+          </Typography>
+          <ExpandMoreIcon
+            sx={{
+              fontSize: 16,
+              color: 'text.secondary',
+              transform: guardrailsOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s ease',
+            }}
+          />
+        </Box>
+        {/* Folded by default — expand to inspect usage vs limits. */}
+        <Collapse in={guardrailsOpen} timeout="auto" unmountOnExit>
+          <Box sx={{ pt: 0.5, pb: 0.5 }}>
+            {guardrailRows.map((row) => {
+              const state = resolveGuardrailState(row.current, row.limit)
+              // Usage missing → "—" placeholder; limits unknown → "—" as well.
+              // Token counts use the compact "k" unit.
+              const formatValue = (v: number | null): string => {
+                if (v == null) {
+                  return '—'
+                }
+                return row.key === 'tokens' ? formatTokenCountK(v) : formatCount(v)
+              }
+              const currentText = formatValue(row.current)
+              const limitText = formatValue(row.limit)
+              return (
+                <Box key={row.key} display="flex" justifyContent="space-between" py={0.25}>
+                  <Typography variant="caption" color="text.secondary">
+                    {row.label}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    fontWeight={600}
+                    color={usageValueColor(state)}
+                    data-testid={`guardrail-usage-${row.key}`}
+                    data-state={state ?? 'none'}
+                  >
+                    {`${currentText} / ${limitText}`}
+                  </Typography>
+                </Box>
+              )
+            })}
+          </Box>
+        </Collapse>
       </Box>
 
       {isAgentKind && (

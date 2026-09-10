@@ -743,6 +743,11 @@ class RuntimeTopologyNodeRead(BaseModel):
     trigger_source: str = "unknown"
     # Human-readable trigger source label (user display name or schedule name).
     trigger_source_label: str | None = None
+    trigger_user_label: str | None = None
+    trigger_user_id: uuid.UUID | None = None
+    schedule_id: uuid.UUID | None = None
+    schedule_cron: str | None = None
+    schedule_description: str | None = None
     # Tool-call history (latest first), each resolved to an MCP server slug.
     tool_calls: list[ToolCallRouteRead] = []
 

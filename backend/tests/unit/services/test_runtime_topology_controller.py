@@ -97,7 +97,7 @@ def _build_db(
     statements: list | None = None,
     *,
     identity_rows: list[tuple[uuid.UUID, str]] | None = None,
-    schedule_rows: list[tuple[dict, str]] | None = None,
+    schedule_rows: list[tuple[dict, str, uuid.UUID, str | None, str | None]] | None = None,
     tool_call_rows: list[tuple[uuid.UUID, uuid.UUID | None, str, datetime]] | None = None,
     runtime_tool_call_rows: list[
         tuple[uuid.UUID, str, str | None, datetime | None]
@@ -135,7 +135,7 @@ def _build_db(
     —    chat tool-call history (``FROM tool_call_records``)   ``fetchall()``
     ==  ====================================================  =====================
 
-    ``schedule_rows`` — ``(result_payload, schedule_name)`` tuples: the
+    ``schedule_rows`` — ``(result_payload, schedule_name, schedule_id, cron, description)`` tuples: the
     controller reads ``JobExecution.result`` (a dict with ``{"session_id":
     ...}``) joined with ``ScheduledJob.name``.
 
@@ -765,22 +765,46 @@ async def test_user_triggered_node_resolves_user_display_name():
 
 
 @pytest.mark.asyncio
-async def test_schedule_triggered_node_resolves_schedule_name():
+async def test_schedule_triggered_node_resolves_schedule_creator():
     """A schedule-triggered node returns ``trigger_source="schedule"`` with the
-    schedule *name* (not the scheduled-by user name) as the label.
+    schedule NAME as ``trigger_source_label`` and the schedule CREATOR's
+    display name (the scheduler passes ``scheduled_by_user_id`` through as
+    ``triggered_by_user_id``) as ``trigger_user_label``.
+
+    Phase 13: the creator attribution NEVER falls back to the schedule name —
+    the schedule name belongs only in ``trigger_source_label`` (it identifies
+    the schedule entity), while ``trigger_user_label`` stays a HUMAN name or
+    ``None`` so downstream UI never renders the schedule name as a person.
     """
     job_id = uuid.uuid4()
     job = _make_agent_job(job_id, uuid.uuid4(), triggered_by_user_id=uuid.uuid4())
     db = _build_db(
         agent_jobs=[job],
         identity_rows=[(job.triggered_by_user_id, "Alice Operator")],
-        schedule_rows=[({"session_id": str(job_id)}, "nightly-cleanup")],
+        schedule_rows=[({"session_id": str(job_id)}, "nightly-cleanup", uuid.uuid4(), "0 2 * * *", "Nightly cleanup")],
     )
     projection = await RuntimeTopologyController().get_active_topology(db)
 
     node = projection.nodes[0]
     assert node.trigger_source == "schedule"
+    # Label = schedule NAME; creator user goes to trigger_user_label.
     assert node.trigger_source_label == "nightly-cleanup"
+    assert node.trigger_user_label == "Alice Operator"
+
+    # Unknown creator (pre-provenance schedule / deleted identity) → the
+    # user label is null while the schedule name stays on the source label.
+    orphan_job_id = uuid.uuid4()
+    orphan_job = _make_agent_job(orphan_job_id, uuid.uuid4(), triggered_by_user_id=None)
+    db2 = _build_db(
+        agent_jobs=[orphan_job],
+        identity_rows=[],
+        schedule_rows=[({"session_id": str(orphan_job_id)}, "nightly-cleanup", uuid.uuid4(), "0 2 * * *", None)],
+    )
+    projection2 = await RuntimeTopologyController().get_active_topology(db2)
+    orphan_node = projection2.nodes[0]
+    assert orphan_node.trigger_source == "schedule"
+    assert orphan_node.trigger_source_label == "nightly-cleanup"
+    assert orphan_node.trigger_user_label is None
 
 
 @pytest.mark.asyncio

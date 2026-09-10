@@ -86,7 +86,8 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Fullscreen | `Agent Runtime Monitor > toggles fullscreen and restores` | Maximize the map to fullscreen and back |
 | Cross-type delegation | `Agent Runtime Monitor > shows a cross-type parent/child delegation connector` | Parent and delegated child laid out adjacent across agent types with a connector |
 | Filter empty-state recovery | `Agent Runtime Monitor > recovers from the filtered-empty state via "Reset filters"` | Legend/toolbar stay usable when a filter hides all agents; "Reset filters" restores them |
-| Trigger provenance | `Agent Runtime Monitor > shows trigger provenance on the tile and detail bubble` | Who triggered each agent (user / inherited / schedule) on the tile and bubble |
+| Trigger provenance | `Agent Runtime Monitor > shows trigger provenance as a person entity wired to the execution` | Person/schedule entity in the left column wired by trigger lines to the executions |
+| Schedule creator attribution | `Agent Runtime Monitor > shows schedule creator attribution and no person line for a null-creator schedule` | Schedule card shows the human creator; legacy null-creator schedules show no person line |
 | Tool-call routes (CH + MCP) | `Agent Runtime Monitor > renders the Communication Hub and tool-call routes to MCP servers` | Communication Hub node + agent→Hub→MCP tool-call routes, latest highlighted |
 
 ## Prerequisites

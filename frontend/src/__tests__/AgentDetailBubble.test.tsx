@@ -73,6 +73,11 @@ function mockAgentJobUsage(usage: Record<string, unknown> | null) {
   } as never)
 }
 
+/** The guardrail summary is folded by default — expand it via the toggle. */
+function expandGuardrails() {
+  fireEvent.click(screen.getByTestId('agent-detail-guardrails-toggle'))
+}
+
 describe('AgentDetailBubble', () => {
   beforeEach(() => {
     useQueryMock.mockReset()
@@ -95,10 +100,11 @@ describe('AgentDetailBubble', () => {
     expect(screen.getByTestId('agent-detail-bubble')).toBeDefined()
     expect(screen.getByText('Support Agent')).toBeDefined()
     expect(screen.getByText('sess-001')).toBeDefined()
-    // Guardrail summary section (current/limit rows; usage missing → "—").
+    // Guardrail summary section — folded by default, expand to see rows.
     expect(screen.getByText('agents.sessions.runtimeMonitorGuardrailSummary')).toBeDefined()
+    expandGuardrails()
     expect(screen.getByText('agents.sessions.logViewer.summary.currentSessionTokens')).toBeDefined()
-    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('— / 5,000')
+    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('— / 5k')
     expect(screen.getByTestId('guardrail-usage-iterations').textContent).toBe('— / 10')
     expect(screen.getByTestId('guardrail-usage-delegated-steps').textContent).toBe('— / 20')
     expect(screen.getByTestId('guardrail-usage-delegation-depth').textContent).toBe('— / 3')
@@ -126,7 +132,8 @@ describe('AgentDetailBubble', () => {
       />,
     )
 
-    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('1,234 / 5,000')
+    expandGuardrails()
+    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('1.2k / 5k')
     expect(screen.getByTestId('guardrail-usage-iterations').textContent).toBe('2 / 10')
     expect(screen.getByTestId('guardrail-usage-delegated-steps').textContent).toBe('1 / 20')
     expect(screen.getByTestId('guardrail-usage-delegation-depth').textContent).toBe('1 / 3')
@@ -147,6 +154,7 @@ describe('AgentDetailBubble', () => {
       />,
     )
 
+    expandGuardrails()
     expect(screen.getByTestId('guardrail-usage-tokens').getAttribute('data-state')).toBe('near')
     expect(screen.getByTestId('guardrail-usage-iterations').getAttribute('data-state')).toBe('over')
     // delegated_steps 1/20 → well within limits; delegation depth has no usage.
@@ -169,7 +177,8 @@ describe('AgentDetailBubble', () => {
       />,
     )
 
-    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('— / 5,000')
+    expandGuardrails()
+    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('— / 5k')
     expect(screen.getByTestId('guardrail-usage-iterations').textContent).toBe('— / 10')
   })
 
@@ -200,7 +209,8 @@ describe('AgentDetailBubble', () => {
       />,
     )
 
-    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('900 / 1,000')
+    expandGuardrails()
+    expect(screen.getByTestId('guardrail-usage-tokens').textContent).toBe('0.9k / 1k')
     expect(screen.getByTestId('guardrail-usage-iterations').textContent).toBe('1 / 4')
   })
 
@@ -310,12 +320,17 @@ describe('AgentDetailBubble', () => {
     expect(screen.getByText('Alice Operator')).toBeDefined()
   })
 
-  it('shows the schedule name as the trigger source', () => {
+  it('shows the schedule CREATOR (never the schedule name) as the trigger source', () => {
+    // Phase 13: the "Triggered by" row must name the triggering HUMAN —
+    // for schedule-triggered nodes that is the schedule's creator
+    // (`trigger_user_label`); the schedule name only identifies the
+    // schedule entity and must never render as a person.
     render(
       <AgentDetailBubble
         node={makeNode({
           trigger_source: 'schedule',
           trigger_source_label: 'nightly-cleanup',
+          trigger_user_label: 'Alice Operator',
         })}
         position={{ left: 0, top: 0 }}
         onDismiss={vi.fn()}
@@ -324,7 +339,29 @@ describe('AgentDetailBubble', () => {
     )
 
     expect(screen.getByTestId('agent-detail-trigger-source')).toBeDefined()
-    expect(screen.getByText('nightly-cleanup')).toBeDefined()
+    expect(screen.getByText('Alice Operator')).toBeDefined()
+    expect(screen.queryByText('nightly-cleanup')).toBeNull()
+  })
+
+  it('shows the unknown label for a schedule-triggered node without a known creator', () => {
+    // Phase 13: the schedule name is no longer substituted for the human —
+    // an unknown creator degrades to the unknown label.
+    render(
+      <AgentDetailBubble
+        node={makeNode({
+          trigger_source: 'schedule',
+          trigger_source_label: 'nightly-cleanup',
+          trigger_user_label: null,
+        })}
+        position={{ left: 0, top: 0 }}
+        onDismiss={vi.fn()}
+        onTerminate={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('agent-detail-trigger-source')).toBeDefined()
+    expect(screen.getByText('agents.sessions.runtimeTriggerSourceUnknown')).toBeDefined()
+    expect(screen.queryByText('nightly-cleanup')).toBeNull()
   })
 
   it('does not show a trigger source row for an unknown-trigger node', () => {

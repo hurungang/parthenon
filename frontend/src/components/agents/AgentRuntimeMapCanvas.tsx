@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge,
   Box,
@@ -18,9 +18,12 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen'
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import AutorenewIcon from '@mui/icons-material/Autorenew'
 import MemoryIcon from '@mui/icons-material/Memory'
 import ForumIcon from '@mui/icons-material/Forum'
 import ExtensionIcon from '@mui/icons-material/Extension'
+import PersonIcon from '@mui/icons-material/Person'
+import ScheduleIcon from '@mui/icons-material/Schedule'
 import HubIcon from '@mui/icons-material/Hub'
 import DnsIcon from '@mui/icons-material/Dns'
 import BuildIcon from '@mui/icons-material/Build'
@@ -28,6 +31,8 @@ import { useTranslation } from 'react-i18next'
 import type { RuntimeTopologyNode, RuntimeTopologyProjection, ToolCallRoute } from '../../types'
 import { isNodeVisibleByDefault } from '../../hooks/useRuntimeTopology'
 import { AgentDetailBubble } from './AgentDetailBubble'
+import { TriggerDetailBubble } from './TriggerDetailBubble'
+import type { TriggerExecution } from './TriggerDetailBubble'
 import { kindLabelKey, nodeKind, statusDotColor, statusLabelKey } from './runtimeNodeMeta'
 
 interface AgentRuntimeMapCanvasProps {
@@ -54,8 +59,8 @@ interface AgentRuntimeMapCanvasProps {
 // Team containers (left region): one delegation tree per container, stacked
 // vertically.  Inside a container, column X = delegation depth from the root
 // (col 0 = main agent, col 1 = 1st-level delegation, …).
-const TILE_W = 158
-const TILE_H = 92
+const TILE_W = 230
+const TILE_H = 80
 /** Tile-free vertical gutter between two depth columns (routing channel). */
 const COLUMN_GAP = 28
 /** Vertical gap between tiles stacked inside the same depth column. */
@@ -67,6 +72,11 @@ const CONTAINER_BOTTOM_CHANNEL = 26
 /** Vertical gap between stacked team containers. */
 const ROW_GAP = 44
 const WORLD_PAD = 26
+// Trigger entities (persons / schedules) live in their own leftmost column;
+// team containers start right of it.
+const TRIGGER_COL_W = 150
+const TRIGGER_CARD_H = 48
+const TRIGGER_GAP = 56
 /** Horizontal gap between the container region and the Communication Hub. */
 const INTER_REGION_GAP = 90
 // Communication Hub: a vertical "firewall" bar spanning the FULL height of
@@ -88,6 +98,11 @@ const TOOL_CHIP_GAP = 8
 const TOOL_ELBOW_X = 14
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 2.5
+// Relaxed minimum zoom used ONLY by the auto-fit computation (initial load,
+// resize/fullscreen re-fit, fit button) so large populations fit on first
+// load however many agents are running.  User zoom interactions keep the
+// MIN_ZOOM/MAX_ZOOM clamps unchanged.
+const INITIAL_MIN_ZOOM = 0.05
 const BUBBLE_W = 288
 const BUBBLE_H = 320
 // Per-agent route colours (latest-call / selected-history highlight).
@@ -164,12 +179,30 @@ interface ToolRouteDef {
   /** Orthogonal path from the hub's right edge to the MCP (+ tool chip). */
   outboundD: string | null
   mcpKey: string | null
+  /** `${mcpKey}::${bareToolName}` when the route carries a real tool call. */
+  chipKey: string | null
 }
 
 interface ViewportTransform {
   zoom: number
   panX: number
   panY: number
+}
+
+/** A trigger entity in the leftmost map column: a person or a schedule. */
+interface TriggerEntity {
+  key: string
+  kind: 'person' | 'schedule'
+  /** Person display name, or the schedule name. */
+  name: string
+  /** For schedules: the user who created the schedule (if known). */
+  creator: string | null
+  /** Person: Identity id — for fetching the user's own details. */
+  userId: string | null
+  /** Schedule: id + own details — for fetching the schedule's details. */
+  scheduleId: string | null
+  cron: string | null
+  description: string | null
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -225,6 +258,26 @@ const GENERIC_STATUS_LABEL: Record<string, string> = {
   created: 'agents.sessions.statusCreated',
 }
 
+/**
+ * Compact triggered-at display for agent tiles, e.g. "Sep 4, 08:12".
+ * Locale-aware; returns an em-dash when the timestamp is missing/invalid.
+ */
+function formatTriggeredTime(iso: string | null | undefined): string {
+  if (!iso) {
+    return '—'
+  }
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 function genericStatusDotColor(status: string): string {
   if (status === 'active') return '#00695C'
   if (status === 'sleep') return '#F57F17'
@@ -261,6 +314,7 @@ function kindIcon(kind: 'agent' | 'conversation' | 'instance') {
 function layoutTrees(
   nodes: RuntimeTopologyNode[],
   edges: { parent_session_id: string; child_session_id: string }[],
+  x0: number = WORLD_PAD,
 ): {
   containers: TeamContainer[]
   worldW: number
@@ -330,7 +384,7 @@ function layoutTrees(
         positioned.push({
           node,
           depth,
-          x: WORLD_PAD + GROUP_PAD_SIDE + depth * (TILE_W + COLUMN_GAP),
+          x: x0 + GROUP_PAD_SIDE + depth * (TILE_W + COLUMN_GAP),
           y: ty,
           w: TILE_W,
           h: TILE_H,
@@ -342,13 +396,13 @@ function layoutTrees(
     containers.push({
       rootId: root.session_id,
       nodes: positioned,
-      x: WORLD_PAD,
+      x: x0,
       y,
       bw,
       bh,
       bottomChannelY: y + GROUP_PAD_TOP + contentH + CONTAINER_BOTTOM_CHANNEL / 2,
     })
-    maxRight = Math.max(maxRight, WORLD_PAD + bw)
+    maxRight = Math.max(maxRight, x0 + bw)
     y += bh + ROW_GAP
     stackBottom = y - ROW_GAP
   }
@@ -381,6 +435,16 @@ export function AgentRuntimeMapCanvas({
   const [filterOpen, setFilterOpen] = useState(false)
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set())
   const [hiddenKinds, setHiddenKinds] = useState<Set<string>>(new Set())
+  // Focus model: any map entity — a trigger (person/schedule), an agent
+  // execution, an MCP server, or a single tool — can be focused by hover
+  // (transient) or click (persisted).  The focus highlights the whole
+  // connected topology: everything upstream and downstream of that entity.
+  const [clickedFocus, setClickedFocus] = useState<string | null>(null)
+  const [hoverFocus, setHoverFocus] = useState<string | null>(null)
+  // Trigger-entity detail bubble: the entity key whose TriggerDetailBubble is
+  // open, independent of `selectedSessionId` so focusing an entity never
+  // clobbers the agent selection.
+  const [triggerDetailKey, setTriggerDetailKey] = useState<string | null>(null)
 
   const panningRef = useRef(false)
   const lastPointerRef = useRef({ x: 0, y: 0 })
@@ -470,13 +534,66 @@ export function AgentRuntimeMapCanvas({
     [allNodes, hiddenStatuses, hiddenKinds],
   )
 
+  // Trigger entities (persons / schedules) derived from the VISIBLE root
+  // nodes.  Each root maps to at most one entity: user/delegated roots map to
+  // the triggering person, schedule roots to the schedule entity.  These live
+  // in a leftmost column with edges to the executions they triggered.
+  const triggerEntities = useMemo<TriggerEntity[]>(() => {
+    const nodeMap = new Map(visibleNodes.map((n) => [n.session_id, n]))
+    const hasVisibleParent = new Set<string>()
+    for (const edge of topology?.edges ?? []) {
+      if (nodeMap.has(edge.parent_session_id) && nodeMap.has(edge.child_session_id)) {
+        hasVisibleParent.add(edge.child_session_id)
+      }
+    }
+    const byKey = new Map<string, TriggerEntity>()
+    for (const node of visibleNodes) {
+      if (hasVisibleParent.has(node.session_id)) continue
+      if (node.trigger_source === 'schedule') {
+        const name = node.trigger_source_label
+        if (!name) continue
+        const key = `schedule:${name}`
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            key,
+            kind: 'schedule',
+            name,
+            creator: node.trigger_user_label ?? null,
+            userId: node.trigger_user_id ?? null,
+            scheduleId: node.schedule_id ?? null,
+            cron: node.schedule_cron ?? null,
+            description: node.schedule_description ?? null,
+          })
+        }
+      } else if (node.trigger_source === 'user' || node.trigger_source === 'delegated') {
+        const name = node.trigger_user_label ?? node.trigger_source_label
+        if (!name) continue
+        const key = `person:${name}`
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            key,
+            kind: 'person',
+            name,
+            creator: null,
+            userId: node.trigger_user_id ?? null,
+            scheduleId: node.schedule_id ?? null,
+            cron: node.schedule_cron ?? null,
+            description: node.schedule_description ?? null,
+          })
+        }
+      }
+    }
+    return [...byKey.values()]
+  }, [visibleNodes, topology?.edges])
+
   const layout = useMemo(
     () =>
       layoutTrees(
         visibleNodes,
         (topology?.edges ?? []) as { parent_session_id: string; child_session_id: string }[],
+        triggerEntities.length > 0 ? WORLD_PAD + TRIGGER_COL_W + TRIGGER_GAP : WORLD_PAD,
       ),
-    [visibleNodes, topology?.edges],
+    [visibleNodes, topology?.edges, triggerEntities.length],
   )
 
   const positionedMap = useMemo(() => {
@@ -487,7 +604,172 @@ export function AgentRuntimeMapCanvas({
     return m
   }, [layout.containers])
 
-  // Per-agent route colour (deterministic by visible order).
+  // Trigger entity cards (evenly distributed along the container stack) plus
+  // orthogonal edges: person/schedule → the root tile it triggered, and
+  // person → schedule when the person created that schedule.  Each entity
+  // owns a distinct colour used for all of its lines.  Selecting an entity
+  // highlights it, every line it participates in, and the entities/sessions
+  // on the other end of those lines.
+  const triggerLayout = useMemo(() => {
+    const entityByRoot = new Map<string, string>()
+    const n = triggerEntities.length
+    if (n === 0) {
+      return {
+        cards: [] as (TriggerEntity & { rect: Rect; color: string })[],
+        edges: [] as { key: string; fromKey: string; toKey: string | null; toSession: string | null; d: string }[],
+        entityByRoot,
+      }
+    }
+    const top = WORLD_PAD
+    const bottom = Math.max(layout.worldH - WORLD_PAD, top + 1)
+    const span = bottom - top
+    const cards = triggerEntities.map((e, i) => ({
+      ...e,
+      color: AGENT_ROUTE_COLORS[i % AGENT_ROUTE_COLORS.length],
+      rect: {
+        x: WORLD_PAD,
+        y: top + span * ((i + 1) / (n + 1)) - TRIGGER_CARD_H / 2,
+        w: TRIGGER_COL_W,
+        h: TRIGGER_CARD_H,
+      } as Rect,
+    }))
+    const cardByKey = new Map(cards.map((c) => [c.key, c]))
+    const gx = WORLD_PAD + TRIGGER_COL_W + TRIGGER_GAP / 2
+    const edges: { key: string; fromKey: string; toKey: string | null; toSession: string | null; d: string }[] = []
+    for (const container of layout.containers) {
+      const rootPos = container.nodes.find((p) => p.depth === 0)
+      if (!rootPos) continue
+      const root = rootPos.node
+      let key: string | null = null
+      if (root.trigger_source === 'schedule' && root.trigger_source_label) {
+        key = `schedule:${root.trigger_source_label}`
+      } else if (root.trigger_source === 'user' || root.trigger_source === 'delegated') {
+        const name = root.trigger_user_label ?? root.trigger_source_label
+        if (name) key = `person:${name}`
+      }
+      const card = key ? cardByKey.get(key) : undefined
+      if (!key || !card) continue
+      entityByRoot.set(root.session_id, key)
+      const x1 = card.rect.x + card.rect.w
+      const y1 = card.rect.y + card.rect.h / 2
+      const x2 = rootPos.x
+      const y2 = rootPos.y + rootPos.h / 2
+      const d =
+        x2 >= x1 + 8
+          ? `M ${x1} ${y1} L ${gx} ${y1} L ${gx} ${y2} L ${x2} ${y2}`
+          : `M ${x1} ${y1} L ${x2} ${y2}`
+      edges.push({ key: `${key}->${root.session_id}`, fromKey: key, toKey: null, toSession: root.session_id, d })
+    }
+    for (const card of cards) {
+      if (card.kind !== 'schedule' || !card.creator) continue
+      const person = cards.find((c) => c.kind === 'person' && c.name === card.creator)
+      if (!person) continue
+      const x1 = person.rect.x + person.rect.w
+      const y1 = person.rect.y + person.rect.h / 2
+      const x2 = card.rect.x
+      const y2 = card.rect.y + card.rect.h / 2
+      edges.push({
+        key: `${person.key}->${card.key}`,
+        fromKey: person.key,
+        toKey: card.key,
+        toSession: null,
+        d: `M ${x1} ${y1} L ${gx} ${y1} L ${gx} ${y2} L ${x2} ${y2}`,
+      })
+    }
+    return { cards, edges, entityByRoot }
+  }, [triggerEntities, layout])
+
+  // ── Topology focus graph ─────────────────────────────────────────────────
+  // DIRECTED adjacency over every map node, following the semantic flow:
+  //   person → schedule → execution → (delegation) → execution → MCP → tool
+  // Focusing any node highlights everything DOWNSTREAM of it and everything
+  // UPSTREAM of it, with one deliberate asymmetry: the mcp←execution edge is
+  // NOT traversable backwards (focusing an MCP highlights its callers, but
+  // focusing an execution never leaks to sibling executions that merely share
+  // an MCP).
+  const topologyGraph = useMemo(() => {
+    const down = new Map<string, Set<string>>()
+    const up = new Map<string, Set<string>>()
+    const link = (from: string, to: string) => {
+      if (!down.has(from)) down.set(from, new Set())
+      down.get(from)!.add(to)
+      if (!up.has(to)) up.set(to, new Set())
+      up.get(to)!.add(from)
+    }
+    // Trigger edges: entity → execution, person → schedule (creator).
+    for (const edge of triggerLayout.edges) {
+      if (edge.toSession) link(edge.fromKey, `session:${edge.toSession}`)
+      if (edge.toKey) link(edge.fromKey, edge.toKey)
+    }
+    // Delegation: parent execution → child execution.
+    const nodeMap = new Map(visibleNodes.map((n) => [n.session_id, n]))
+    for (const edge of topology?.edges ?? []) {
+      if (nodeMap.has(edge.parent_session_id) && nodeMap.has(edge.child_session_id)) {
+        link(`session:${edge.parent_session_id}`, `session:${edge.child_session_id}`)
+      }
+    }
+    // Tool calls: execution → MCP server → tool chip.
+    for (const node of visibleNodes) {
+      for (const call of node.tool_calls ?? []) {
+        if (call.route_type === 'a2a') continue
+        const key = classifyMcpKey(call.mcp_slug)
+        if (key === null) continue
+        link(`session:${node.session_id}`, `mcp:${key}`)
+        link(`session:${node.session_id}`, `tool:${key}::${bareToolName(call.tool_name)}`)
+      }
+    }
+    return { down, up }
+  }, [triggerLayout, visibleNodes, topology?.edges])
+
+  const { activeKeys, activeSessions, activeCallChips } = useMemo(() => {
+    const focusRaw =
+      hoverFocus ?? clickedFocus ?? (selectedSessionId ? `session:${selectedSessionId}` : null)
+    if (focusRaw === null) {
+      return {
+        activeKeys: new Set<string>(),
+        activeSessions: new Set<string>(),
+        activeCallChips: new Set<string>(),
+      }
+    }
+    const keys = new Set<string>([focusRaw])
+    // Two strict walks: downstream from the focus (semantic flow direction)
+    // and upstream from it.  No direction-switching mid-walk — focusing an
+    // execution lights its trigger (up) and its tools (down) without leaking
+    // sideways through shared MCP servers.
+    const queue: Array<{ key: string; direction: 'down' | 'up' }> = [
+      { key: focusRaw, direction: 'down' },
+      { key: focusRaw, direction: 'up' },
+    ]
+    while (queue.length > 0) {
+      const { key: cur, direction } = queue.pop() as { key: string; direction: 'down' | 'up' }
+      const map = direction === 'down' ? topologyGraph.down : topologyGraph.up
+      for (const next of map.get(cur) ?? []) {
+        if (!keys.has(next)) {
+          keys.add(next)
+          queue.push({ key: next, direction })
+        }
+      }
+    }
+    const sessions = new Set<string>()
+    for (const key of keys) {
+      if (key.startsWith('session:')) sessions.add(key.slice('session:'.length))
+    }
+    // Exact chip calls made by the active executions — chip precision stays
+    // call-based (the MCP link alone must not light sibling tools nobody called).
+    const activeCallChips = new Set<string>()
+    for (const node of visibleNodes) {
+      if (!sessions.has(node.session_id)) continue
+      for (const call of node.tool_calls ?? []) {
+        if (call.route_type === 'a2a') continue
+        const key = classifyMcpKey(call.mcp_slug)
+        if (key === null) continue
+        activeCallChips.add(`${key}::${bareToolName(call.tool_name)}`)
+      }
+    }
+    return { activeKeys: keys, activeSessions: sessions, activeCallChips }
+  }, [hoverFocus, clickedFocus, selectedSessionId, topologyGraph, visibleNodes])
+
+  const focusActive = hoverFocus !== null || clickedFocus !== null || selectedSessionId !== null
   const agentColor = useMemo(() => {
     const m = new Map<string, string>()
     visibleNodes.forEach((n, i) => m.set(n.session_id, AGENT_ROUTE_COLORS[i % AGENT_ROUTE_COLORS.length]))
@@ -630,6 +912,7 @@ export function AgentRuntimeMapCanvas({
           inboundD,
           outboundD,
           mcpKey: key,
+          chipKey: mcp && outboundD ? `${key}::${bareToolName(call.tool_name)}` : null,
         })
       })
     }
@@ -652,24 +935,14 @@ export function AgentRuntimeMapCanvas({
   // MCP → tool is obvious.  Precision: only the (mcp_slug, bare_tool) pairs
   // the agent ACTUALLY called are highlighted — never the whole MCP's chip
   // list.  A2A rows are delegations, not tool calls, and are excluded.
-  const selectedColor = selectedSessionId ? (agentColor.get(selectedSessionId) ?? null) : null
-  const selectedCallPairs = useMemo(() => {
-    const pairs = new Map<string, Set<string>>()
-    if (!selectedSessionId) return pairs
-    const agent = visibleNodes.find((n) => n.session_id === selectedSessionId)
-    for (const call of agent?.tool_calls ?? []) {
-      if (call.route_type === 'a2a') continue
-      const key = classifyMcpKey(call.mcp_slug)
-      if (key === null) continue
-      let tools = pairs.get(key)
-      if (!tools) {
-        tools = new Set()
-        pairs.set(key, tools)
-      }
-      tools.add(bareToolName(call.tool_name))
-    }
-    return pairs
-  }, [selectedSessionId, visibleNodes])
+  // Highlight accent for the current focus: the trigger entity's own colour
+  // when a person/schedule is focused, otherwise the primary blue.
+  const focusColor =
+    (() => {
+      const key = clickedFocus ?? hoverFocus
+      const triggerCard = key ? triggerLayout.cards.find((c) => c.key === key) : undefined
+      return triggerCard?.color ?? '#1976D2'
+    })()
 
   const availableStatuses = useMemo(() => {
     const set = new Set<string>()
@@ -696,7 +969,9 @@ export function AgentRuntimeMapCanvas({
     const vh = el.clientHeight
     const m = 56
     const s = Math.min((vw - m * 2) / w, (vh - m * 2) / h)
-    const zoom = clamp(s, MIN_ZOOM, MAX_ZOOM)
+    // Auto-fit may zoom out past the interactive MIN_ZOOM so the whole
+    // population is visible on first load (user zoom keeps the clamps).
+    const zoom = clamp(s, INITIAL_MIN_ZOOM, MAX_ZOOM)
     const panX = (vw - w * zoom) / 2
     const panY = (vh - h * zoom) / 2
     setTransform({ zoom, panX, panY })
@@ -710,6 +985,25 @@ export function AgentRuntimeMapCanvas({
       hasFittedRef.current = true
     }
   }, [worldW, worldH, fitToScreen])
+
+  // The initial fit often runs against the empty placeholder world (zero
+  // agents); re-fit once when the first non-empty population arrives so it
+  // is fully visible without a manual fit.
+  const hasFittedContentRef = useRef(false)
+  useEffect(() => {
+    if (visibleNodes.length > 0 && !hasFittedContentRef.current) {
+      hasFittedContentRef.current = true
+      if (hasFittedRef.current) fitToScreen()
+    }
+  }, [visibleNodes, fitToScreen])
+
+  // Measure the stage BEFORE the first paint so the world is sized ≥ stage
+  // from the very first frame (full-height hub on an empty load, before the
+  // ResizeObserver fires).
+  useLayoutEffect(() => {
+    const el = viewportRef.current
+    if (el) setViewportSize({ width: el.clientWidth, height: el.clientHeight })
+  }, [])
 
   // Re-fit on resize (and fullscreen size changes) via ResizeObserver.
   useEffect(() => {
@@ -840,6 +1134,97 @@ export function AgentRuntimeMapCanvas({
     return { left: bx, top: by }
   }, [selectedPositioned, transform, viewportSize])
 
+  // ── Trigger-entity detail bubble ─────────────────────────────────────────
+  // Executions of the focused trigger entity, derived client-side from the
+  // existing focus graph (no new API): a downstream walk from the entity key
+  // reaches DIRECT executions (entity → session) and, for a person, the
+  // executions VIA their schedules (person → schedule → session).  Sorted
+  // newest-first to match the container stack.
+  const triggerDetail = useMemo<{
+    card: TriggerEntity & { rect: Rect; color: string }
+    executions: TriggerExecution[]
+  } | null>(() => {
+    if (triggerDetailKey === null) return null
+    const card = triggerLayout.cards.find((c) => c.key === triggerDetailKey)
+    if (!card) return null
+    const reachable = new Set<string>()
+    const queue: string[] = [triggerDetailKey]
+    while (queue.length > 0) {
+      const cur = queue.shift() as string
+      for (const next of topologyGraph.down.get(cur) ?? []) {
+        if (!reachable.has(next)) {
+          reachable.add(next)
+          queue.push(next)
+        }
+      }
+    }
+    const hits: PositionedNode[] = []
+    for (const key of reachable) {
+      if (!key.startsWith('session:')) continue
+      const pos = positionedMap.get(key.slice('session:'.length))
+      if (pos) hits.push(pos)
+    }
+    hits.sort((a, b) => {
+      if (a.node.created_at !== b.node.created_at) {
+        return a.node.created_at < b.node.created_at ? 1 : -1
+      }
+      return a.node.session_id < b.node.session_id ? -1 : 1
+    })
+    const executions: TriggerExecution[] = hits.map(({ node }) => ({
+      sessionId: node.session_id,
+      label: node.agent_type_name ?? t('agents.sessions.runtimeUnknownAgent'),
+      status: node.status,
+    }))
+    return { card, executions }
+  }, [triggerDetailKey, triggerLayout, topologyGraph, positionedMap, t])
+
+  // Screen-space position beside the entity card, clamped to the viewport
+  // like the agent bubble (works identically in fullscreen).
+  const triggerBubblePosition = useMemo(() => {
+    if (triggerDetail === null) return null
+    const r = triggerDetail.card.rect
+    const tx = r.x * transform.zoom + transform.panX
+    const ty = r.y * transform.zoom + transform.panY
+    const vw = viewportSize.width
+    const vh = viewportSize.height
+    let bx = tx + r.w * transform.zoom + 12
+    let by = ty - 6
+    if (bx + BUBBLE_W > vw - 8) bx = tx - BUBBLE_W - 12
+    if (bx < 8) bx = 8
+    if (by + BUBBLE_H > vh - 8) by = vh - BUBBLE_H - 8
+    if (by < 8) by = 8
+    return { left: bx, top: by }
+  }, [triggerDetail, transform, viewportSize])
+
+  // Escape closes the trigger bubble (the filter panel has the same
+  // document-level convention).
+  useEffect(() => {
+    if (triggerDetailKey === null) return
+    const onDocKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setTriggerDetailKey(null)
+    }
+    document.addEventListener('keydown', onDocKeyDown)
+    return () => document.removeEventListener('keydown', onDocKeyDown)
+  }, [triggerDetailKey])
+
+  // If the focused entity loses every reachable execution (e.g. a filter
+  // change hides its roots), drop the bubble state entirely — so it cannot
+  // reappear when the filter is later reverted.
+  useEffect(() => {
+    if (triggerDetail !== null && triggerDetail.executions.length > 0) return
+    setTriggerDetailKey((prev) => (prev === null ? prev : null))
+  }, [triggerDetail])
+
+  const showTriggerBubble =
+    triggerDetail !== null && triggerBubblePosition !== null && triggerDetail.executions.length > 0
+
+  /** Entity click: toggle the focus highlight AND the detail bubble. */
+  const focusTriggerEntity = useCallback((nextFocus: string) => {
+    setClickedFocus((prev) => (prev === nextFocus ? null : nextFocus))
+    setTriggerDetailKey((prev) => (prev === nextFocus ? null : nextFocus))
+    onSelectSession(null)
+  }, [onSelectSession])
+
   if (topology === undefined) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height={520}>
@@ -848,24 +1233,10 @@ export function AgentRuntimeMapCanvas({
     )
   }
 
-  // Truly empty population (no nodes at all) — a clean empty state with
-  // no toolbar/legend, distinct from the filter-driven empty state.
-  if (allNodes.length === 0) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        height={520}
-        data-testid="runtime-monitor-empty"
-      >
-        <Typography variant="body2" color="text.secondary">
-          {t('agents.sessions.runtimeMonitorEmpty')}
-        </Typography>
-      </Box>
-    )
-  }
-
+  // A truly empty population (no nodes at all) falls through to the full map
+  // render: the stage grid + full-height Communication Hub render from the
+  // first frame (world sizing ≥ stage) and the empty-state message shows as
+  // an overlay — matching the filter-driven empty state's presentation.
   const zoomPct = Math.round(transform.zoom * 100)
   const filteredEmpty = visibleNodes.length === 0
 
@@ -883,6 +1254,11 @@ export function AgentRuntimeMapCanvas({
         minHeight: isFullscreen ? undefined : 520,
         overflow: 'hidden',
         bgcolor: '#EFF3F7',
+        // Dot grid at the STAGE level (fixed, untransformed) so the pattern
+        // covers the ENTIRE visible canvas at every pan/zoom offset and in
+        // the empty state — no plain band beyond the world-layer bounds.
+        backgroundImage: 'radial-gradient(#D7E0EA 1px, transparent 1px)',
+        backgroundSize: '22px 22px',
         border: isFullscreen ? 'none' : '1px solid',
         borderColor: 'divider',
         borderRadius: isFullscreen ? 0 : 1,
@@ -900,9 +1276,8 @@ export function AgentRuntimeMapCanvas({
           transform: `translate(${transform.panX}px, ${transform.panY}px) scale(${transform.zoom})`,
           transformOrigin: '0 0',
           userSelect: 'none',
-          backgroundColor: '#F4F7FA',
-          backgroundImage: 'radial-gradient(#D7E0EA 1px, transparent 1px)',
-          backgroundSize: '22px 22px',
+          // Transparent so the stage-level dot grid shows through with no
+          // seam at the world bounds or uncovered region beyond the content.
         }}
       >
         {/* Team containers: one delegation tree per container, one row each */}
@@ -956,6 +1331,32 @@ export function AgentRuntimeMapCanvas({
               <path d="M0,0 L9,4.5 L0,9 z" fill="#90A4AE" />
             </marker>
           </defs>
+          {/* Trigger edges: person/schedule entity → the root tile it
+              triggered, and person → schedule when the person created that
+              schedule.  Every line carries its entity's colour; selecting an
+              entity or an agent highlights the related lines and dims the
+              rest. */}
+          {triggerLayout.edges.map((edge) => {
+            const highlighted =
+              activeKeys.has(edge.fromKey) &&
+              ((edge.toKey !== null && activeKeys.has(edge.toKey)) ||
+                (edge.toSession !== null && activeSessions.has(edge.toSession)))
+            const stroke = triggerLayout.cards.find((c) => c.key === edge.fromKey)?.color ?? '#B0BEC5'
+            return (
+              <path
+                key={edge.key}
+                d={edge.d}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={highlighted ? 2.4 : 1.5}
+                strokeOpacity={focusActive ? (highlighted ? 1 : 0.18) : 0.85}
+                strokeDasharray={edge.toSession === null ? '5 3' : undefined}
+                data-testid={`trigger-edge-${edge.key}`}
+                data-highlighted={highlighted ? 'true' : undefined}
+              />
+            )
+          })}
+
           {/* Delegation connectors: parent right edge → gutter elbow → child left edge */}
           {(topology?.edges ?? []).map((edge) => {
             const from = positionedMap.get(edge.parent_session_id)
@@ -990,9 +1391,25 @@ export function AgentRuntimeMapCanvas({
           {/* Tool-call routes: agent → hub (inbound) and hub → MCP → tool (outbound).
               The hub node visually joins the two halves at its own Y. */}
           {routes.map((route) => {
-            const highlighted = selectedSessionId === route.sessionId
-            const dimmed = selectedSessionId !== null && !highlighted
+            // A route lights up when BOTH its execution and its tool belong
+            // to the focused topology — focusing one tool dims sibling tools
+            // of the same MCP; focusing a person lights every call their
+            // agents made.
+            const highlighted =
+              activeSessions.has(route.sessionId) &&
+              (route.chipKey === null ||
+                activeCallChips.has(route.chipKey) ||
+                activeKeys.has(`tool:${route.chipKey}`))
+            const dimmed = focusActive && !highlighted
             const isGray = route.color === ROUTE_GRAY
+            // A focused execution brightens ALL its routes in the agent's
+            // own colour — hover lights the grey historical calls exactly
+            // like selection does, so no hub line stays grey while its
+            // agent is highlighted.
+            const stroke =
+              highlighted && isGray
+                ? (agentColor.get(route.sessionId) ?? '#3949AB')
+                : route.color
             const strokeWidth = highlighted ? 2.5 : isGray ? 1.2 : 2
             const strokeOpacity = dimmed ? 0.3 : highlighted ? 1 : isGray ? 0.5 : 0.9
             const renderPath = (d: string, kind: 'inbound' | 'outbound', idx: number) => (
@@ -1000,7 +1417,7 @@ export function AgentRuntimeMapCanvas({
                 key={`${route.id}-${kind}-${idx}`}
                 d={d}
                 fill="none"
-                stroke={route.color}
+                stroke={stroke}
                 strokeWidth={strokeWidth}
                 strokeOpacity={strokeOpacity}
                 data-route-kind="tool"
@@ -1018,27 +1435,114 @@ export function AgentRuntimeMapCanvas({
           })}
         </svg>
 
+        {/* Trigger entities — persons and schedules in the leftmost column.
+            A person card lists the user who triggered executions directly
+            (or via inherited delegation); a schedule card shows the schedule
+            name and its creator.  Clicking follows the same selection flow. */}
+        {triggerLayout.cards.map((card) => {
+          const highlighted = activeKeys.has(card.key)
+          return (
+            <Box
+              key={card.key}
+              data-testid={`trigger-entity-${card.key}`}
+              data-map-interactive="true"
+              role="button"
+              tabIndex={0}
+              aria-pressed={clickedFocus === card.key}
+              aria-label={card.name}
+              data-highlighted={highlighted ? 'true' : undefined}
+              onClick={(e) => {
+                e.stopPropagation()
+                focusTriggerEntity(card.key)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  focusTriggerEntity(card.key)
+                }
+              }}
+              onMouseEnter={(e) => {
+                e.stopPropagation()
+                setHoverFocus(card.key)
+              }}
+              onMouseLeave={() => setHoverFocus(null)}
+              sx={{
+                position: 'absolute',
+                left: card.rect.x,
+                top: card.rect.y,
+                width: card.rect.w,
+                height: card.rect.h,
+                zIndex: 3,
+                backgroundColor: '#FFFFFF',
+                border: highlighted ? `2px solid ${card.color}` : '1px dashed #B0BEC5',
+                borderRadius: '10px',
+                boxShadow: highlighted ? 2 : 1,
+                p: 0.75,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.75,
+                minWidth: 0,
+                cursor: 'pointer',
+                opacity: focusActive && !highlighted ? 0.45 : 1,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  bgcolor: card.kind === 'schedule' ? '#FFF3E0' : '#E3F2FD',
+                  color: card.kind === 'schedule' ? '#EF6C00' : '#1565C0',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {card.kind === 'schedule' ? <ScheduleIcon sx={{ fontSize: 14 }} /> : <PersonIcon sx={{ fontSize: 14 }} />}
+              </Box>
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <Typography
+                  variant="caption"
+                  fontWeight={600}
+                  sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                >
+                  {card.name}
+                </Typography>
+                {card.kind === 'schedule' && card.creator && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  >
+                    {t('agents.sessions.runtimeMonitorScheduleCreator', { creator: card.creator })}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )
+        })}
+
         {/* Tiles (delegation-depth column + owning container exposed for tests) */}
         {layout.containers.map((container) =>
           container.nodes.map(({ node, depth, x, y, w, h }) => {
             const kind = nodeKind(node)
             const isSelected = selectedSessionId === node.session_id
+            // When any entity is focused, the executions in its reachable
+            // topology light up — accent follows a trigger entity's colour.
+            const isRelated = !isSelected && activeKeys.has(`session:${node.session_id}`)
+            const focusSourceKey = clickedFocus ?? hoverFocus ?? ''
+            const relatedColor = triggerLayout.cards.some((c) => c.key === focusSourceKey)
+              ? (triggerLayout.cards.find((c) => c.key === focusSourceKey)?.color ?? '#1976D2')
+              : '#1976D2'
             // Any node awaiting human intervention gets the alert treatment —
             // including agent jobs paused in `waiting_for_human`.
             const needsAlert = node.needs_intervention === true
+            // Running agents carry a spinning execution indicator and a
+            // highlight so active executions pop off the map.
+            const isRunning = node.status === 'running'
             // First non-delegation call (A2A rows are not tool executions).
             const latestTool = node.tool_calls?.find((c) => c.route_type !== 'a2a')
-            const triggerLabel =
-              node.trigger_source_label ??
-              t(
-                node.trigger_source === 'delegated'
-                  ? 'agents.sessions.runtimeTriggerSourceDelegated'
-                  : node.trigger_source === 'schedule'
-                    ? 'agents.sessions.runtimeTriggerSourceSchedule'
-                    : node.trigger_source === 'user'
-                      ? 'agents.sessions.runtimeTriggerSourceUser'
-                      : 'agents.sessions.runtimeTriggerSourceUnknown',
-              )
             return (
               <Box
                 key={node.session_id}
@@ -1047,12 +1551,24 @@ export function AgentRuntimeMapCanvas({
                 tabIndex={0}
                 data-container={container.rootId}
                 data-depth={depth}
+                data-running={isRunning ? 'true' : undefined}
                 aria-label={`${node.agent_type_name ?? t('agents.sessions.runtimeUnknownAgent')} — ${t(statusLabelKey(node.status, kind), node.status)}`}
-                onClick={() => onSelectSession(node.session_id)}
+                onClick={() => {
+                  setClickedFocus(`session:${node.session_id}`)
+                  onSelectSession(node.session_id)
+                  // Selecting an agent dismisses any open trigger bubble.
+                  setTriggerDetailKey(null)
+                }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation()
+                  setHoverFocus(`session:${node.session_id}`)
+                }}
+                onMouseLeave={() => setHoverFocus(null)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     onSelectSession(node.session_id)
+                    setTriggerDetailKey(null)
                   }
                 }}
                 sx={{
@@ -1062,19 +1578,44 @@ export function AgentRuntimeMapCanvas({
                   width: w,
                   height: h,
                   zIndex: 3,
-                  backgroundColor: needsAlert ? '#FFFBEB' : '#FFFFFF',
-                  border: isSelected ? '2px solid #1976D2' : needsAlert ? '2px solid #FF9800' : '1px solid #CFD8DC',
-                  borderColor: isSelected ? '#1976D2' : needsAlert ? '#FF9800' : '#CFD8DC',
+                  backgroundColor: needsAlert
+                    ? '#FFFBEB'
+                    : isRunning
+                      ? '#F0F7FF'
+                      : '#FFFFFF',
+                  border: isSelected
+                    ? '2px solid #1976D2'
+                    : isRelated
+                      ? `2px solid ${relatedColor}`
+                      : needsAlert
+                        ? '2px solid #FF9800'
+                        : isRunning
+                          ? '2px solid #64B5F6'
+                          : '1px solid #CFD8DC',
+                  borderColor: isSelected
+                    ? '#1976D2'
+                    : isRelated
+                      ? relatedColor
+                      : needsAlert
+                        ? '#FF9800'
+                        : isRunning
+                          ? '#64B5F6'
+                          : '#CFD8DC',
                   borderRadius: '10px',
-                  boxShadow: isSelected ? 2 : 1,
-                  p: 1,
+                  boxShadow: isSelected
+                    ? 2
+                    : isRunning
+                      ? '0 0 0 3px rgba(21,101,192,0.12)'
+                      : 1,
+                  p: 0.75,
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 0.5,
+                  gap: 0.25,
                   '&:hover': { borderColor: needsAlert ? '#FB8C00' : '#90CAF9' },
                 }}
               >
+                {/* Row 1 — kind icon · agent name · status dot */}
                 <Box display="flex" alignItems="center" gap={0.75} minWidth={0}>
                   <Box
                     sx={{
@@ -1099,6 +1640,22 @@ export function AgentRuntimeMapCanvas({
                   >
                     {node.agent_type_name ?? t('agents.sessions.runtimeUnknownAgent')}
                   </Typography>
+                  {isRunning && (
+                    <AutorenewIcon
+                      aria-hidden
+                      data-testid={`running-spinner-${node.session_id}`}
+                      sx={{
+                        width: 13,
+                        height: 13,
+                        color: '#1565C0',
+                        flexShrink: 0,
+                        animation: 'armRunningSpin 1.4s linear infinite',
+                        '@keyframes armRunningSpin': {
+                          to: { transform: 'rotate(360deg)' },
+                        },
+                      }}
+                    />
+                  )}
                   <Box
                     sx={{
                       width: 8,
@@ -1111,62 +1668,82 @@ export function AgentRuntimeMapCanvas({
                     aria-hidden
                   />
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {node.session_id}
-                </Typography>
-                <Box display="flex" alignItems="center" gap={0.75}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
-                    {t(statusLabelKey(node.status, kind), node.status)}
+
+                {/* Row 2 — session id · triggered at */}
+                <Box display="flex" alignItems="center" gap={0.75} minWidth={0}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: 10.5,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {node.session_id}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.disabled"
+                    sx={{ fontSize: 10, flexShrink: 0 }}
+                    data-testid={`triggered-at-${node.session_id}`}
+                  >
+                    {formatTriggeredTime(node.created_at)}
                   </Typography>
                 </Box>
 
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  data-testid={`trigger-source-${node.session_id}`}
-                >
-                  {t('agents.sessions.runtimeTriggeredBy', { source: triggerLabel })}
-                </Typography>
-
-                {latestTool && (
-                  <Tooltip
-                    title={t('agents.sessions.runtimeMonitorLatestToolTitle', {
-                      tool: latestTool.tool_name,
-                      server: latestTool.mcp_slug,
-                    })}
+                {/* Row 3 — status label · latest tool call (when present) */}
+                <Box display="flex" alignItems="center" gap={0.5} minWidth={0} sx={{ mt: 'auto' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontSize: 10.5, flexShrink: 0 }}
                   >
-                    <Box
-                      display="flex"
-                      alignItems="center"
-                      gap={0.5}
-                      data-testid={`latest-tool-${node.session_id}`}
-                      sx={{
-                        mt: 'auto',
-                        maxWidth: '100%',
-                        bgcolor: '#F1F5F9',
-                        borderRadius: '5px',
-                        px: 0.5,
-                        py: '1px',
-                      }}
+                    {t(statusLabelKey(node.status, kind), node.status)}
+                  </Typography>
+                  {latestTool && (
+                    <Tooltip
+                      title={t('agents.sessions.runtimeMonitorLatestToolTitle', {
+                        tool: latestTool.tool_name,
+                        server: latestTool.mcp_slug,
+                      })}
                     >
-                      <BuildIcon sx={{ fontSize: 10, color: '#607D8B', flexShrink: 0 }} />
-                      <Typography
-                        variant="caption"
+                      <Box
+                        display="flex"
+                        alignItems="center"
+                        gap={0.5}
+                        data-testid={`latest-tool-${node.session_id}`}
                         sx={{
-                          fontSize: 10,
-                          color: '#455A64',
-                          fontFamily: 'monospace',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
+                          ml: 'auto',
+                          minWidth: 0,
+                          bgcolor: '#F1F5F9',
+                          borderRadius: '5px',
+                          px: 0.5,
+                          py: '1px',
                         }}
                       >
-                        {latestTool.tool_name}
-                      </Typography>
-                    </Box>
-                  </Tooltip>
-                )}
+                        <BuildIcon sx={{ fontSize: 10, color: '#607D8B', flexShrink: 0 }} />
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: 10,
+                            color: '#455A64',
+                            fontFamily: 'monospace',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {latestTool.tool_name}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  )}
+                </Box>
 
                 {needsAlert && (
                   <Tooltip title={t('agents.sessions.runtimeMonitorRequiresIntervention')}>
@@ -1252,16 +1829,46 @@ export function AgentRuntimeMapCanvas({
           </Typography>
         </Box>
 
-        {/* MCP server nodes — evenly distributed along the hub's height */}
+        {/* MCP server nodes — evenly distributed along the hub's height.
+            Hovering or clicking an MCP focuses the whole topology around it. */}
         {mcpNodes.map((mcp) => {
-          const involved = selectedSessionId !== null && selectedCallPairs.has(mcp.key)
-          const dimmed = selectedSessionId !== null && !involved
+          const focusKey = `mcp:${mcp.key}`
+          const highlighted =
+            activeKeys.has(focusKey) ||
+            [...activeCallChips].some((chipKey) => chipKey.startsWith(`${mcp.key}::`))
+          const dimmed = focusActive && !highlighted
+          const toggleFocus = () => {
+            setClickedFocus((prev) => (prev === focusKey ? null : focusKey))
+            onSelectSession(null)
+            // Focus moved off the trigger entity — dismiss its bubble.
+            setTriggerDetailKey(null)
+          }
           return (
             <Box
               key={mcp.key}
               data-testid={mcp.isSystem ? 'system-tools-node' : `mcp-server-node-${mcp.key}`}
-              data-highlighted={involved ? 'true' : undefined}
+              data-map-interactive="true"
+              role="button"
+              tabIndex={0}
+              aria-pressed={clickedFocus === focusKey}
+              aria-label={mcp.isSystem ? t('agents.sessions.runtimeMonitorSystemTools') : mcp.key}
+              data-highlighted={highlighted ? 'true' : undefined}
               data-dimmed={dimmed ? 'true' : undefined}
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleFocus()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleFocus()
+                }
+              }}
+              onMouseEnter={(e) => {
+                e.stopPropagation()
+                setHoverFocus(focusKey)
+              }}
+              onMouseLeave={() => setHoverFocus(null)}
               sx={{
                 position: 'absolute',
                 left: mcp.rect.x,
@@ -1269,15 +1876,16 @@ export function AgentRuntimeMapCanvas({
                 width: mcp.rect.w,
                 height: mcp.rect.h,
                 zIndex: 3,
-                border: involved && selectedColor ? `2px solid ${selectedColor}` : '1px solid #CFD8DC',
+                border: highlighted ? `2px solid ${focusColor}` : '1px solid #CFD8DC',
                 borderRadius: '10px',
                 backgroundColor: '#FFFFFF',
-                boxShadow: involved && selectedColor ? `0 0 0 3px ${selectedColor}22` : 1,
+                boxShadow: highlighted ? `0 0 0 3px ${focusColor}22` : 1,
                 opacity: dimmed ? 0.55 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 0.5,
                 px: 1,
+                cursor: 'pointer',
               }}
             >
               <Box
@@ -1311,19 +1919,46 @@ export function AgentRuntimeMapCanvas({
           )
         })}
 
-        {/* Tool chips — distinct bare tool names per MCP, centred on the MCP node.
-            Only chips matching the selected agent's ACTUAL calls are highlighted. */}
+        {/* Tool chips — distinct bare tool names per MCP, centred on the MCP
+            node.  Hovering or clicking a chip focuses that exact tool: its
+            MCP, every agent that called it, and those agents' triggers. */}
         {mcpNodes.flatMap((mcp) =>
           mcp.chips.map((chip) => {
-            const usedTools = selectedSessionId !== null ? selectedCallPairs.get(mcp.key) : undefined
-            const involved = usedTools !== undefined && usedTools.has(chip.label)
-            const dimmed = selectedSessionId !== null && !involved
+            const focusKey = `tool:${chip.key}`
+            const highlighted = activeKeys.has(focusKey) || activeCallChips.has(chip.key)
+            const dimmed = focusActive && !highlighted
+            const toggleFocus = () => {
+              setClickedFocus((prev) => (prev === focusKey ? null : focusKey))
+              onSelectSession(null)
+              // Focus moved off the trigger entity — dismiss its bubble.
+              setTriggerDetailKey(null)
+            }
             return (
               <Tooltip key={chip.key} title={chip.label}>
                 <Box
                   data-testid={`tool-chip-${mcp.key === SYSTEM_MCP_KEY ? 'system' : mcp.key}-${chip.label}`}
-                  data-highlighted={involved ? 'true' : undefined}
+                  data-map-interactive="true"
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={clickedFocus === focusKey}
+                  aria-label={chip.label}
+                  data-highlighted={highlighted ? 'true' : undefined}
                   data-dimmed={dimmed ? 'true' : undefined}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleFocus()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      toggleFocus()
+                    }
+                  }}
+                  onMouseEnter={(e) => {
+                    e.stopPropagation()
+                    setHoverFocus(focusKey)
+                  }}
+                  onMouseLeave={() => setHoverFocus(null)}
                   sx={{
                     position: 'absolute',
                     left: chip.rect.x,
@@ -1331,7 +1966,7 @@ export function AgentRuntimeMapCanvas({
                     width: chip.rect.w,
                     height: chip.rect.h,
                     zIndex: 3,
-                    border: involved && selectedColor ? `1.5px solid ${selectedColor}` : '1px solid #CFD8DC',
+                    border: highlighted ? `1.5px solid ${focusColor}` : '1px solid #CFD8DC',
                     borderRadius: '6px',
                     backgroundColor: '#FFFFFF',
                     boxShadow: 1,
@@ -1341,6 +1976,7 @@ export function AgentRuntimeMapCanvas({
                     gap: 0.5,
                     px: 0.75,
                     overflow: 'hidden',
+                    cursor: 'pointer',
                   }}
                 >
                   <BuildIcon sx={{ fontSize: 10, color: '#607D8B', flexShrink: 0 }} />
@@ -1364,12 +2000,13 @@ export function AgentRuntimeMapCanvas({
         )}
       </Box>
 
-      {/* Filter-driven empty state: overlay on the canvas, keeping the
-          toolbar + legend visible and usable so the operator can always
-          reset filters and restore the population. */}
+      {/* Empty state (no nodes at all, or every node filtered out): overlay
+          on the canvas, keeping the map (grid + full-height hub), toolbar,
+          and legend visible and usable so the operator can always reset
+          filters and restore the population. */}
       {filteredEmpty && (
         <Box
-          data-testid="runtime-monitor-filtered-empty"
+          data-testid={hasActiveFilters ? 'runtime-monitor-filtered-empty' : 'runtime-monitor-empty'}
           sx={{
             position: 'absolute',
             inset: 0,
@@ -1665,6 +2302,32 @@ export function AgentRuntimeMapCanvas({
             onDismiss={() => onSelectSession(null)}
             onTerminate={onTerminateNode}
             onChanged={onChanged}
+          />
+        </Box>
+      )}
+
+      {/* Trigger-entity detail bubble (person / schedule card) */}
+      {showTriggerBubble && triggerDetail !== null && triggerBubblePosition !== null && (
+        <Box data-map-interactive="true">
+          <TriggerDetailBubble
+            entityKey={triggerDetail.card.key}
+            kind={triggerDetail.card.kind}
+            name={triggerDetail.card.name}
+            creator={triggerDetail.card.creator}
+            userId={triggerDetail.card.userId}
+            scheduleId={triggerDetail.card.scheduleId}
+            cron={triggerDetail.card.cron}
+            description={triggerDetail.card.description}
+            executions={triggerDetail.executions}
+            position={triggerBubblePosition}
+            onSelectExecution={(sessionId) => {
+              // Selecting an execution focuses its tile and opens the
+              // agent detail bubble (the trigger bubble dismisses).
+              setClickedFocus(`session:${sessionId}`)
+              onSelectSession(sessionId)
+              setTriggerDetailKey(null)
+            }}
+            onDismiss={() => setTriggerDetailKey(null)}
           />
         </Box>
       )}
