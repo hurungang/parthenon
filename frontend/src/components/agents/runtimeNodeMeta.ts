@@ -95,3 +95,16 @@ export function statusDotColor(
   if (status === 'queued') return '#F57F17'
   return '#B0BEC5'
 }
+
+/**
+ * Format a token count using the compact "k" unit (e.g. 12345 → "12.3k").
+ * Returns an em-dash placeholder for null/undefined values.
+ */
+export function formatTokenCountK(value: number | null | undefined): string {
+  if (value == null) {
+    return '—'
+  }
+  const tokenCountK = value / 1000
+  const rounded = Math.round(tokenCountK * 10) / 10
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}k`
+}

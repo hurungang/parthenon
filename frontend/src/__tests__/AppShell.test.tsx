@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -232,9 +232,13 @@ describe('AppShell — sidebar interactions', () => {
     // Children now visible
     expect(screen.getAllByText('nav.mcpHub').length).toBeGreaterThanOrEqual(1)
 
-    // Click again to collapse
+    // Click again to collapse. The MUI Collapse uses unmountOnExit, so children are
+    // removed only after the (timer-driven in jsdom) exit transition completes —
+    // wait for it instead of asserting synchronously (flaky under load).
     await user.click(groupHeaderButton)
-    expect(screen.queryAllByText('nav.mcpHub')).toHaveLength(0)
+    await waitFor(() => {
+      expect(screen.queryAllByText('nav.mcpHub')).toHaveLength(0)
+    })
   })
 
   it('clicking one group header does not collapse other groups', async () => {
@@ -256,8 +260,10 @@ describe('AppShell — sidebar interactions', () => {
     // Collapse System again
     await user.click(systemHeaderButton)
 
-    // System children hidden again
-    expect(screen.queryAllByText('nav.observability')).toHaveLength(0)
+    // System children hidden again (wait for the Collapse exit transition to unmount)
+    await waitFor(() => {
+      expect(screen.queryAllByText('nav.observability')).toHaveLength(0)
+    })
     // Agents still expanded (active route)
     expect(screen.getAllByText('nav.agentTypes').length).toBeGreaterThanOrEqual(1)
     // Integrations remains collapsed (not affected by System toggle)

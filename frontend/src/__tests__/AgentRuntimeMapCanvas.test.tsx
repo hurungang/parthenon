@@ -1,13 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { AgentRuntimeMapCanvas } from '../components/agents/AgentRuntimeMapCanvas'
 import type {
   RuntimeTopologyNode,
   RuntimeTopologyProjection,
 } from '../types'
 
+// The canvas hosts TriggerDetailBubble, which fetches trigger-own details
+// (schedule cron / identity email) via react-query — stub it; detail-fetch
+// behaviour is covered in TriggerDetailBubble.test.tsx.
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: vi.fn(() => ({ data: undefined, isLoading: false })),
+}))
+
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  // Interpolate only the `count` param (execution-count heading); every
+  // other call — including `t(key, defaultValueString)` — resolves to the
+  // raw key, as the previous mock did.
+  useTranslation: () => ({
+    t: (k: string, params?: unknown) =>
+      params !== null && typeof params === 'object' && 'count' in params
+        ? `${k} (${String((params as Record<string, unknown>).count)})`
+        : k,
+  }),
 }))
 
 // Isolate the detail bubble so the canvas tests focus on map behaviour.
@@ -88,16 +103,19 @@ function clickLegendChip(label: string) {
 }
 
 /** Read a layout value from the element's emotion-generated class rule
- * (MUI ``sx`` values are compiled into classes, not inline styles). */
-function sxValue(el: HTMLElement, property: string): string | null {
-  const classes = el.className.split(/\s+/)
+ *  (MUI ``sx`` values are compiled into classes, not inline styles). */
+function sxValue(el: HTMLElement | SVGElement, property: string): string | null {
+  // SVG elements expose className as an SVGAnimatedString, not a string.
+  const classStr =
+    typeof el.className === 'string' ? el.className : el.className.baseVal
+  const classes = classStr.split(/\s+/)
   for (const sheet of Array.from(document.styleSheets)) {
     const css = sheet as CSSStyleSheet
     if (!css.cssRules) continue
     for (const rule of Array.from(css.cssRules)) {
       if (!(rule instanceof CSSStyleRule)) continue
       const selector = rule.selectorText ?? ''
-      if (!classes.some((c) => selector === `.${c}`)) continue
+      if (!classes.some((c: string) => selector === `.${c}`)) continue
       const value = rule.style.getPropertyValue(property)
       if (value) return value
     }
@@ -164,6 +182,90 @@ describe('AgentRuntimeMapCanvas', () => {
     fireEvent.click(screen.getByRole('button', { name: 'agents.sessions.runtimeMonitorZoomOut' }))
     const zoomedOut = readZoomPct()
     expect(zoomedOut).toBeLessThan(zoomedIn)
+  })
+
+  it('renders the dot grid on the STAGE so it covers the whole canvas in the empty state', () => {
+    renderCanvas({ topology: mkTopology([]) })
+    const stage = screen.getByTestId('agent-runtime-map-canvas')
+    expect(sxValue(stage, 'background-image')).toContain('radial-gradient')
+    expect(sxValue(stage, 'background-size')).toBe('22px 22px')
+  })
+
+  it('keeps the world layer transparent so the stage grid shows through beyond content', () => {
+    renderCanvas({ topology: mkTopology([mkNode()]) })
+    const world = screen.getByTestId('agent-runtime-map-canvas')
+      .firstElementChild as HTMLElement
+    expect(sxValue(world, 'background-image')).toBeNull()
+    expect(sxValue(world, 'background-color')).toBeNull()
+  })
+
+  it('renders the hub full canvas height on a zero-agent load from the first paint', () => {
+    renderCanvas({ topology: mkTopology([]) })
+
+    // The full map renders (not a bare placeholder): the hub is a
+    // full-height fixture pinned near the right edge of the 1000x700 stage.
+    const hub = screen.getByTestId('communication-hub-node')
+    const left = parseInt(sxValue(hub, 'left') ?? '', 10)
+    const width = parseInt(sxValue(hub, 'width') ?? '', 10)
+    const height = parseInt(sxValue(hub, 'height') ?? '', 10)
+    expect(height).toBeGreaterThanOrEqual(700)
+    expect(left).toBeGreaterThan(500)
+    expect(left).toBeLessThanOrEqual(1000 - width)
+    // …and the empty-state message shows as an overlay on top of it.
+    expect(screen.getByTestId('runtime-monitor-empty')).toBeDefined()
+    expect(screen.getByText('agents.sessions.runtimeMonitorEmpty')).toBeDefined()
+  })
+
+  it('auto-fits a large population below the interactive minimum zoom', async () => {
+    const nodes = Array.from({ length: 40 }, (_, i) =>
+      mkNode({ session_id: `pop-${i}`, agent_type_name: `Agent ${i}` }),
+    )
+    renderCanvas({ topology: mkTopology(nodes) })
+    await settle()
+
+    // The initial fit is NOT clamped to MIN_ZOOM (25%) — the whole
+    // population fits on first load — but never below the relaxed floor.
+    const pct = readZoomPct()
+    expect(pct).toBeLessThan(25)
+    expect(pct).toBeGreaterThanOrEqual(5)
+  })
+
+  it('keeps the interactive zoom-out clamp at 25% after a sub-minimum auto-fit', async () => {
+    const nodes = Array.from({ length: 40 }, (_, i) =>
+      mkNode({ session_id: `pop-${i}`, agent_type_name: `Agent ${i}` }),
+    )
+    renderCanvas({ topology: mkTopology(nodes) })
+    await settle()
+    expect(readZoomPct()).toBeLessThan(25)
+
+    // User zoom interactions keep the MIN_ZOOM/MAX_ZOOM clamps intact.
+    fireEvent.click(screen.getByRole('button', { name: 'agents.sessions.runtimeMonitorZoomOut' }))
+    expect(readZoomPct()).toBe(25)
+  })
+
+  it('re-fits when the first non-empty population arrives after an empty load', async () => {
+    const view = renderCanvas({ topology: mkTopology([]) })
+    await settle()
+    const emptyZoom = readZoomPct()
+
+    // Live data arrives: the first non-empty population gets auto-fitted
+    // (the empty placeholder fit must not stick).
+    const nodes = Array.from({ length: 5 }, (_, i) =>
+      mkNode({ session_id: `late-${i}`, agent_type_name: `Agent ${i}` }),
+    )
+    view.rerender(
+      <AgentRuntimeMapCanvas
+        topology={mkTopology(nodes)}
+        selectedSessionId={null}
+        onSelectSession={vi.fn()}
+        onOpenIntervention={vi.fn()}
+        onTerminateNode={vi.fn()}
+        isFullscreen={false}
+        onToggleFullscreen={vi.fn()}
+      />,
+    )
+    await settle()
+    expect(readZoomPct()).not.toBe(emptyZoom)
   })
 
   it('drags to pan the empty canvas', async () => {
@@ -660,6 +762,66 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(greyAfter).toBeLessThan(greyBefore)
   })
 
+  it('brightens historical hub routes on HOVER too (agent colour, not grey)', () => {
+    const node = mkNode({
+      session_id: 'agent-hover',
+      agent_type_name: 'Hoverable',
+      tool_calls: [
+        { tool_name: 'github____latest', mcp_slug: 'github', called_at: '2026-06-01T00:00:05Z' },
+        { tool_name: 'github____older', mcp_slug: 'github', called_at: '2026-06-01T00:00:01Z' },
+      ],
+    })
+    const { container } = renderCanvas({ topology: mkTopology([node]) })
+
+    const routesFor = (sid: string) =>
+      Array.from(
+        container.querySelectorAll(`path[data-route-kind="tool"][data-route-session="${sid}"]`),
+      )
+
+    // Before hover: the older call renders grey.
+    expect(routesFor('agent-hover').some((p) => p.getAttribute('stroke') === ROUTE_GRAY_HEX)).toBe(
+      true,
+    )
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /Hoverable/ }))
+
+    // After hover: every route of the agent is highlighted in the agent's
+    // own colour — the grey historical hub lines brighten like on selection.
+    const paths = routesFor('agent-hover')
+    expect(paths.length).toBeGreaterThan(0)
+    for (const p of paths) {
+      expect(p.getAttribute('data-highlighted')).toBe('true')
+      expect(p.getAttribute('stroke')).toBe('#E53935')
+    }
+  })
+
+  it('marks running agents with a spinning execution indicator and a highlight', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({ session_id: 'run-1', status: 'running', agent_type_name: 'Spinning' }),
+        mkNode({ session_id: 'queue-1', status: 'queued', agent_type_name: 'Waiting' }),
+        mkNode({ session_id: 'done-1', status: 'completed', kind: 'agent', agent_type_name: 'Finished' }),
+      ]),
+    })
+
+    // Spinner only on the running tile, driven by the spin keyframes.
+    const spinner = screen.getByTestId('running-spinner-run-1')
+    expect(sxValue(spinner, 'animation')).toContain('armRunningSpin')
+    expect(sxValue(spinner, 'animation')).toContain('infinite')
+    expect(screen.queryByTestId('running-spinner-queue-1')).toBeNull()
+    expect(screen.queryByTestId('running-spinner-done-1')).toBeNull()
+
+    // The running tile is highlighted (blue tint + data-running cue);
+    // non-running tiles stay plain without the cue.
+    const runningTile = screen.getByRole('button', { name: /Spinning/ })
+    expect(runningTile.getAttribute('data-running')).toBe('true')
+    expect(sxValue(runningTile, 'background-color')).toBe('#F0F7FF')
+
+    const queuedTile = screen.getByRole('button', { name: /Waiting/ })
+    expect(queuedTile.getAttribute('data-running')).toBeNull()
+    expect(sxValue(queuedTile, 'background-color')).toBe('#FFFFFF')
+  })
+
   it('marks the selected agent routes and involved MCP + tool nodes as highlighted', () => {
     const agent = mkNode({
       session_id: 'agent-hl',
@@ -795,19 +957,197 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(onOpenIntervention.mock.calls[0][0].session_id).toBe('hitl-2')
   })
 
-  // ── Trigger / latest-tool tile lines (live-data round) ───────────────────────
+  // ── Trigger entities (leftmost column) + latest-tool tile line ───────────────
 
-  it('renders the trigger source line on the tile', () => {
+  it('renders a person entity for a user-triggered root with a trigger edge to the tile', () => {
     renderCanvas({
       topology: mkTopology([
         mkNode({
           session_id: 'trigger-1',
           trigger_source: 'user',
           trigger_source_label: 'Alice Operator',
+          trigger_user_label: 'Alice Operator',
         }),
       ]),
     })
-    expect(screen.getByTestId('trigger-source-trigger-1')).toBeDefined()
+    expect(screen.getByTestId('trigger-entity-person:Alice Operator')).toBeDefined()
+    expect(screen.getByTestId('trigger-edge-person:Alice Operator->trigger-1')).toBeDefined()
+    // The tile itself no longer carries the inline trigger line.
+    expect(screen.queryByTestId('trigger-source-trigger-1')).toBeNull()
+  })
+
+  it('renders a schedule entity with its creator and person→schedule edge', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'sched-run-1',
+          trigger_source: 'schedule',
+          trigger_source_label: 'hourly-run-query',
+          trigger_user_label: 'Tom',
+        }),
+        mkNode({
+          session_id: 'direct-1',
+          trigger_source: 'user',
+          trigger_source_label: 'Tom',
+          trigger_user_label: 'Tom',
+        }),
+      ]),
+    })
+    expect(screen.getByTestId('trigger-entity-schedule:hourly-run-query')).toBeDefined()
+    expect(screen.getByText('hourly-run-query')).toBeDefined()
+    // Creator caption on the schedule card (i18n mock renders the raw key).
+    expect(screen.getByText('agents.sessions.runtimeMonitorScheduleCreator')).toBeDefined()
+    // person → schedule edge (dashed connector).
+    expect(screen.getByTestId('trigger-edge-person:Tom->schedule:hourly-run-query')).toBeDefined()
+    // schedule → its execution edge.
+    expect(screen.getByTestId('trigger-edge-schedule:hourly-run-query->sched-run-1')).toBeDefined()
+    // person → directly triggered execution edge.
+    expect(screen.getByTestId('trigger-edge-person:Tom->direct-1')).toBeDefined()
+  })
+
+  it('gives each trigger entity its own line colour', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'ent-a',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+        mkNode({
+          session_id: 'ent-b',
+          trigger_source: 'user',
+          trigger_source_label: 'Bob',
+          trigger_user_label: 'Bob',
+        }),
+      ]),
+    })
+    const aliceEdge = screen.getByTestId('trigger-edge-person:Alice->ent-a')
+    const bobEdge = screen.getByTestId('trigger-edge-person:Bob->ent-b')
+    expect(aliceEdge.getAttribute('stroke')).toBeTruthy()
+    expect(bobEdge.getAttribute('stroke')).toBeTruthy()
+    expect(aliceEdge.getAttribute('stroke')).not.toBe(bobEdge.getAttribute('stroke'))
+  })
+
+  it('clicking a person entity highlights it, its lines, its schedules and its executions', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'tom-run-1',
+          agent_type_name: 'Run One',
+          trigger_source: 'user',
+          trigger_source_label: 'Tom',
+          trigger_user_label: 'Tom',
+        }),
+        mkNode({
+          session_id: 'sched-run-1',
+          agent_type_name: 'Scheduled Run',
+          trigger_source: 'schedule',
+          trigger_source_label: 'hourly-run',
+          trigger_user_label: 'Tom',
+        }),
+      ]),
+    })
+
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Tom'))
+
+    // The person card is highlighted, plus the schedule on the other end.
+    const personCard = screen.getByTestId('trigger-entity-person:Tom')
+    expect(personCard.getAttribute('data-highlighted')).toBe('true')
+    const schedCard = screen.getByTestId('trigger-entity-schedule:hourly-run')
+    expect(schedCard.getAttribute('data-highlighted')).toBe('true')
+    // All Tom-related lines are highlighted (both executions + the schedule).
+    expect(screen.getByTestId('trigger-edge-person:Tom->tom-run-1').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('trigger-edge-person:Tom->schedule:hourly-run').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('trigger-edge-schedule:hourly-run->sched-run-1').getAttribute('data-highlighted')).toBe('true')
+    // Related executions light up too (entity colour border via inline style).
+    expect(screen.getByTestId('triggered-at-tom-run-1')).toBeDefined()
+  })
+
+  it('clicking a schedule entity highlights its creator person and its execution', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'sched-run-2',
+          trigger_source: 'schedule',
+          trigger_source_label: 'nightly',
+          trigger_user_label: 'Erin',
+        }),
+      ]),
+    })
+    fireEvent.click(screen.getByTestId('trigger-entity-schedule:nightly'))
+    expect(screen.getByTestId('trigger-entity-schedule:nightly').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('trigger-edge-schedule:nightly->sched-run-2').getAttribute('data-highlighted')).toBe('true')
+  })
+
+  it('hovering a person entity highlights the whole downstream topology', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'hv-1',
+          agent_type_name: 'HV Agent',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+          tool_calls: [
+            { tool_name: 'github____list_prs', mcp_slug: 'github', called_at: '2026-06-01T00:00:05Z', route_type: 'mcp' },
+          ],
+        }),
+      ]),
+    })
+    // No focus yet — nothing highlighted.
+    expect(screen.getByTestId('trigger-edge-person:Alice->hv-1').getAttribute('data-highlighted')).toBeNull()
+    fireEvent.mouseEnter(screen.getByTestId('trigger-entity-person:Alice'))
+    // Trigger edge, execution, MCP node and tool chip all light up.
+    expect(screen.getByTestId('trigger-edge-person:Alice->hv-1').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('mcp-server-node-github').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('tool-chip-github-list_prs').getAttribute('data-highlighted')).toBe('true')
+    // Hover out clears the focus.
+    fireEvent.mouseLeave(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-edge-person:Alice->hv-1').getAttribute('data-highlighted')).toBeNull()
+  })
+
+  it('clicking a tool chip highlights its MCP, the agents that called it and their trigger', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'caller-1',
+          agent_type_name: 'Caller',
+          trigger_source: 'user',
+          trigger_source_label: 'Bob',
+          trigger_user_label: 'Bob',
+          tool_calls: [
+            { tool_name: 'github____list_prs', mcp_slug: 'github', called_at: '2026-06-01T00:00:05Z', route_type: 'mcp' },
+          ],
+        }),
+        mkNode({
+          session_id: 'other-1',
+          agent_type_name: 'Other',
+          trigger_source: 'user',
+          trigger_source_label: 'Erin',
+          trigger_user_label: 'Erin',
+          tool_calls: [
+            { tool_name: 'slack____post', mcp_slug: 'slack', called_at: '2026-06-01T00:00:06Z', route_type: 'mcp' },
+          ],
+        }),
+      ]),
+    })
+    fireEvent.click(screen.getByTestId('tool-chip-github-list_prs'))
+    // The MCP and the caller's trigger light up…
+    expect(screen.getByTestId('mcp-server-node-github').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('trigger-entity-person:Bob').getAttribute('data-highlighted')).toBe('true')
+    expect(screen.getByTestId('trigger-edge-person:Bob->caller-1').getAttribute('data-highlighted')).toBe('true')
+    // …while the unrelated MCP stays dimmed.
+    expect(screen.getByTestId('mcp-server-node-slack').getAttribute('data-dimmed')).toBe('true')
+  })
+
+  it('renders the triggered-at datetime on the tile', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({ session_id: 'when-1', created_at: '2026-09-04T08:30:00Z' }),
+      ]),
+    })
+    expect(screen.getByTestId('triggered-at-when-1')).toBeDefined()
   })
 
   it('renders the latest tool call line on the tile', () => {
@@ -828,6 +1168,298 @@ describe('AgentRuntimeMapCanvas', () => {
   it('omits the latest tool call line when the node has no calls', () => {
     renderCanvas({ topology: mkTopology([mkNode({ session_id: 'no-calls-1' })]) })
     expect(screen.queryByTestId('latest-tool-no-calls-1')).toBeNull()
+  })
+
+  // ── Trigger entity detail bubble (Phase 13) ───────────────────────────────
+
+  it('clicking a person card opens the detail bubble with name, count and execution rows', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'p-run-1',
+          agent_type_name: 'Alpha Agent',
+          status: 'running',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+        mkNode({
+          session_id: 'p-run-2',
+          agent_type_name: 'Beta Agent',
+          status: 'completed',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+        mkNode({
+          session_id: 'p-run-3',
+          agent_type_name: 'Gamma Agent',
+          status: 'running',
+          trigger_source: 'user',
+          trigger_source_label: 'Bob',
+          trigger_user_label: 'Bob',
+        }),
+      ]),
+    })
+
+    // Closed until an entity is clicked.
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+
+    const bubble = screen.getByTestId('trigger-detail-bubble')
+    expect(bubble.getAttribute('data-trigger-entity')).toBe('person:Alice')
+    // Name header + person kind caption.
+    expect(within(bubble).getByText('Alice')).toBeDefined()
+    expect(within(bubble).getByText('agents.sessions.runtimeMonitorTriggerPersonKind')).toBeDefined()
+    // Execution count reflects ONLY this entity's executions…
+    expect(
+      within(bubble).getByText('agents.sessions.runtimeMonitorTriggerDetailExecutions (2)'),
+    ).toBeDefined()
+    // …and the rows list exactly those sessions.
+    expect(within(bubble).getByTestId('trigger-detail-execution-p-run-1')).toBeDefined()
+    expect(within(bubble).getByTestId('trigger-detail-execution-p-run-2')).toBeDefined()
+    expect(within(bubble).queryByTestId('trigger-detail-execution-p-run-3')).toBeNull()
+    // Rows carry the agent type label + a status chip.
+    expect(within(bubble).getByText('Alpha Agent')).toBeDefined()
+    expect(within(bubble).getByText('agents.sessions.statusRunning')).toBeDefined()
+    expect(within(bubble).getByText('agents.sessions.statusCompleted')).toBeDefined()
+  })
+
+  it('clicking an execution row selects that session and dismisses the bubble', () => {
+    const onSelectSession = vi.fn()
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'row-1',
+          agent_type_name: 'Row Agent',
+          status: 'running',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+      ]),
+      onSelectSession,
+    })
+
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-detail-bubble')).toBeDefined()
+
+    fireEvent.click(screen.getByTestId('trigger-detail-execution-row-1'))
+    // The row selection is routed to the page (which owns the selection)…
+    expect(onSelectSession).toHaveBeenLastCalledWith('row-1')
+    // …and the trigger bubble is dismissed.
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+  })
+
+  it('re-clicking the entity toggles the bubble; clicking another entity switches it', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'alice-1',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+        mkNode({
+          session_id: 'bob-1',
+          trigger_source: 'user',
+          trigger_source_label: 'Bob',
+          trigger_user_label: 'Bob',
+        }),
+      ]),
+    })
+
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-detail-bubble').getAttribute('data-trigger-entity')).toBe(
+      'person:Alice',
+    )
+
+    // Same entity again → toggle closed.
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+
+    // A different entity → the bubble opens for it.
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Bob'))
+    expect(screen.getByTestId('trigger-detail-bubble').getAttribute('data-trigger-entity')).toBe(
+      'person:Bob',
+    )
+  })
+
+  it('dismisses the trigger bubble via its close button', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'dismiss-1',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+      ]),
+    })
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-detail-bubble')).toBeDefined()
+
+    fireEvent.click(screen.getByTestId('trigger-detail-bubble-close'))
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+  })
+
+  it('dismisses the trigger bubble on Escape', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'esc-1',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+      ]),
+    })
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-detail-bubble')).toBeDefined()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+  })
+
+  it('clicking an agent tile dismisses the trigger bubble and selects the agent', () => {
+    const onSelectSession = vi.fn()
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'tile-1',
+          agent_type_name: 'Tile Agent',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+      ]),
+      onSelectSession,
+    })
+
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-detail-bubble')).toBeDefined()
+
+    // The bubble's execution row shares the tile's accessible name — pick
+    // the map TILE via its container attribute.
+    const tile = screen
+      .getAllByRole('button', { name: /Tile Agent/ })
+      .find((el) => el.getAttribute('data-container') === 'tile-1') as HTMLElement
+    fireEvent.click(tile)
+    expect(onSelectSession).toHaveBeenLastCalledWith('tile-1')
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+  })
+
+  it('schedule bubble shows the creator row only when the creator is known', () => {
+    // Known creator → schedule kind caption + creator row.
+    const known = renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'sch-1',
+          agent_type_name: 'Nightly Agent',
+          status: 'completed',
+          trigger_source: 'schedule',
+          trigger_source_label: 'nightly',
+          trigger_user_label: 'Tom',
+        }),
+      ]),
+    })
+    fireEvent.click(screen.getByTestId('trigger-entity-schedule:nightly'))
+    const bubble = screen.getByTestId('trigger-detail-bubble')
+    expect(within(bubble).getByText('agents.sessions.runtimeMonitorTriggerScheduleKind')).toBeDefined()
+    expect(within(bubble).getByTestId('trigger-detail-creator')).toBeDefined()
+    expect(within(bubble).getByText('Tom')).toBeDefined()
+    // A schedule bubble is never labelled as a person.
+    expect(within(bubble).queryByText('agents.sessions.runtimeMonitorTriggerPersonKind')).toBeNull()
+    known.unmount()
+
+    // Unknown creator (Phase 13: backend no longer substitutes the schedule
+    // name) → no creator caption on the card and no creator row in the bubble.
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'sch-2',
+          agent_type_name: 'Nightly Agent',
+          status: 'completed',
+          trigger_source: 'schedule',
+          trigger_source_label: 'nightly',
+          trigger_user_label: null,
+        }),
+      ]),
+    })
+    fireEvent.click(screen.getByTestId('trigger-entity-schedule:nightly'))
+    expect(screen.getByTestId('trigger-detail-bubble')).toBeDefined()
+    expect(screen.queryByTestId('trigger-detail-creator')).toBeNull()
+    expect(screen.queryByText('agents.sessions.runtimeMonitorScheduleCreator')).toBeNull()
+  })
+
+  it('person bubble counts executions directly AND via their schedules', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'direct-run',
+          agent_type_name: 'Direct Agent',
+          status: 'running',
+          trigger_source: 'user',
+          trigger_source_label: 'Tom',
+          trigger_user_label: 'Tom',
+        }),
+        mkNode({
+          session_id: 'sched-run',
+          agent_type_name: 'Scheduled Agent',
+          status: 'completed',
+          trigger_source: 'schedule',
+          trigger_source_label: 'hourly-run',
+          trigger_user_label: 'Tom',
+        }),
+      ]),
+    })
+
+    // The schedule entity sees only its own execution.
+    fireEvent.click(screen.getByTestId('trigger-entity-schedule:hourly-run'))
+    const scheduleBubble = screen.getByTestId('trigger-detail-bubble')
+    expect(
+      within(scheduleBubble).getByText('agents.sessions.runtimeMonitorTriggerDetailExecutions (1)'),
+    ).toBeDefined()
+    expect(within(scheduleBubble).getByTestId('trigger-detail-execution-sched-run')).toBeDefined()
+    fireEvent.click(screen.getByTestId('trigger-detail-bubble-close'))
+
+    // The creator person sees BOTH the direct execution and the one via
+    // their schedule (person → schedule → execution focus-graph walk).
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Tom'))
+    const personBubble = screen.getByTestId('trigger-detail-bubble')
+    expect(
+      within(personBubble).getByText('agents.sessions.runtimeMonitorTriggerDetailExecutions (2)'),
+    ).toBeDefined()
+    expect(within(personBubble).getByTestId('trigger-detail-execution-direct-run')).toBeDefined()
+    expect(within(personBubble).getByTestId('trigger-detail-execution-sched-run')).toBeDefined()
+  })
+
+  it('hides the trigger bubble when a filter removes its executions and it does not reappear after reset', () => {
+    renderCanvas({
+      topology: mkTopology([
+        mkNode({
+          session_id: 'filt-1',
+          status: 'running',
+          trigger_source: 'user',
+          trigger_source_label: 'Alice',
+          trigger_user_label: 'Alice',
+        }),
+      ]),
+    })
+
+    fireEvent.click(screen.getByTestId('trigger-entity-person:Alice'))
+    expect(screen.getByTestId('trigger-detail-bubble')).toBeDefined()
+
+    // Hide the execution's status via the legend chip → the entity loses its
+    // only execution and the bubble disappears.
+    clickLegendChip('agents.sessions.statusRunning')
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
+
+    // Restoring the population must NOT resurrect the dismissed bubble.
+    fireEvent.click(screen.getByTestId('runtime-monitor-reset-filters'))
+    expect(screen.getByRole('button', { name: /Test Agent/ })).toBeDefined()
+    expect(screen.queryByTestId('trigger-detail-bubble')).toBeNull()
   })
 })
 

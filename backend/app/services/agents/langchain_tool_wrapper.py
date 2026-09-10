@@ -76,13 +76,15 @@ def build_langchain_tools_from_definitions(
         sanitized_name = _sanitize_tool_name(original_name)
 
         # Build a sync wrapper (LangChain requires _run to be sync)
-        def _make_tool_func(orig_name: str, san_name: str) -> Any:
+        args_schema = _schema_to_pydantic(sanitized_name, parameters)
+
+        def _make_tool_func(orig_name: str, san_name: str, schema: Any) -> Any:
             async def _arun(**kwargs: Any) -> str:
                 """Dispatch tool call to CommHub via mTLS-authenticated client."""
                 try:
                     result = await comm_hub_client.call_tool(
                         tool_name=orig_name,
-                        tool_args=kwargs,
+                        tool_args=_restore_schema_keys(schema, kwargs),
                         session_id=session_id,
                         agent_type_id=agent_type_id,
                     )
@@ -109,14 +111,14 @@ def build_langchain_tools_from_definitions(
 
             return _run, _arun
 
-        sync_fn, async_fn = _make_tool_func(original_name, sanitized_name)
+        sync_fn, async_fn = _make_tool_func(original_name, sanitized_name, args_schema)
 
         tool = StructuredTool.from_function(
             func=sync_fn,
             coroutine=async_fn,
             name=sanitized_name,
             description=description or f"Call the {original_name} tool.",
-            args_schema=_schema_to_pydantic(sanitized_name, parameters),
+            args_schema=args_schema,
             return_direct=False,
         )
         # Attach original name for reverse-mapping
@@ -127,43 +129,102 @@ def build_langchain_tools_from_definitions(
     return tools
 
 
+def _safe_field_name(name: str) -> str:
+    """Return a Python-identifier-safe version of a JSON-schema property name.
+
+    LLMs frequently normalise hyphenated keys (e.g. ``project-id``) to
+    snake_case (``project_id``), so generated fields use the safe name while
+    the original name is preserved as a validation alias — both forms are
+    accepted (see ``_schema_to_pydantic``).
+    """
+    import re
+
+    safe = re.sub(r"\W", "_", name)
+    if not safe or not safe[0].isalpha():
+        safe = f"f_{safe}" if safe else "field"
+    return safe
+
+
 def _schema_to_pydantic(tool_name: str, parameters: dict[str, Any]) -> Any:
     """Build a Pydantic v2 model from a JSON Schema parameters dict.
 
     Falls back to a permissive Any-typed model on schema parse errors.
+
+    Deliberately tolerant by design:
+
+    - Fields are generated with Python-safe names (hyphens → underscores) so
+      LangChain's derived ``tool_call_schema`` behaves predictably; the safe →
+      original mapping is attached as ``__schema_alias_map__`` and dispatch
+      sites restore the original keys via ``_restore_schema_keys``.
+    - Every field is OPTIONAL and the model allows extra keys.  LangChain's
+      tool-call validation must never reject or silently drop arguments: LLMs
+      frequently normalise hyphenated keys (``project-id`` → ``project_id``) or
+      echo the original spelling, and a strict schema either blocks the call or
+      loses fields.  Required-field enforcement stays the responsibility of the
+      downstream receiver (A2A enqueue / MCP tool), whose precise validation
+      errors are surfaced back to the LLM as tool results.
     """
     try:
-        from pydantic import BaseModel, create_model
+        from pydantic import BaseModel, ConfigDict, create_model
         from pydantic.fields import FieldInfo
 
         props: dict[str, Any] = parameters.get("properties") or {}
         required_fields: list[str] = parameters.get("required") or []
 
+        class _TolerantBase(BaseModel):
+            model_config = ConfigDict(populate_by_name=True, extra="allow")
+
         field_definitions: dict[str, Any] = {}
+        alias_map: dict[str, str] = {}
         for field_name, field_schema in props.items():
             py_type = _json_type_to_python(field_schema.get("type", "string"))
             description = field_schema.get("description", "")
             if field_name in required_fields:
-                field_definitions[field_name] = (py_type, FieldInfo(description=description))
-            else:
-                field_definitions[field_name] = (
-                    py_type | None,
-                    FieldInfo(default=None, description=description),
-                )
+                description = f"(required) {description}".strip()
+            safe_name = _safe_field_name(field_name)
+            if safe_name != field_name:
+                alias_map[safe_name] = field_name
+            # NOTE: `FieldInfo(alias=...)` alone does not populate
+            # `validation_alias` in pydantic 2.13 — validation aliases must be
+            # set explicitly so either spelling validates when possible.
+            field_definitions[safe_name] = (
+                py_type | None,
+                FieldInfo(
+                    default=None,
+                    validation_alias=field_name,
+                    serialization_alias=field_name,
+                    description=description,
+                ),
+            )
 
         if not field_definitions:
             return None  # StructuredTool accepts None → no args schema
 
         model_class = create_model(
             f"{tool_name}_Args",
-            __base__=BaseModel,
+            __base__=_TolerantBase,
             **field_definitions,
         )
+        if alias_map:
+            setattr(model_class, "__schema_alias_map__", alias_map)
         return model_class
 
     except Exception as exc:
         logger.warning("Failed to build Pydantic schema for tool '%s': %s", tool_name, exc)
         return None
+
+
+def _restore_schema_keys(args_schema: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Map normalised (safe) argument keys back to the schema's original keys.
+
+    LangChain hands tools the validated ``model_dump()`` which uses field names
+    (safe identifiers).  Downstream consumers — A2A request payloads, MCP tool
+    args — expect the exact keys from the tool's JSON schema (e.g. ``project-id``).
+    """
+    alias_map = getattr(args_schema, "__schema_alias_map__", None)
+    if not alias_map:
+        return kwargs
+    return {alias_map.get(key, key): value for key, value in kwargs.items()}
 
 
 def _json_type_to_python(json_type: str) -> type:
@@ -310,10 +371,11 @@ def build_langchain_tools_for_ar_path(
         if target_slug is not None:
             sanitized_name = _sanitize_tool_name(original_name)
 
-            def _make_delegation_tool(slug: str, orig_name: str) -> tuple:
+            def _make_delegation_tool(slug: str, orig_name: str, schema: Any) -> tuple:
                 async def _arun(**kwargs: Any) -> str:
                     import uuid as _uuid
                     import time as _time
+                    kwargs = _restore_schema_keys(schema, kwargs)
                     _started = _time.monotonic()
                     _call_status = "success"
                     _call_error: str | None = None
@@ -527,13 +589,14 @@ def build_langchain_tools_for_ar_path(
 
                 return _run, _arun
 
-            sync_fn, async_fn = _make_delegation_tool(target_slug, original_name)
+            delegation_schema = _schema_to_pydantic(sanitized_name, parameters)
+            sync_fn, async_fn = _make_delegation_tool(target_slug, original_name, delegation_schema)
             tool = StructuredTool.from_function(
                 func=sync_fn,
                 coroutine=async_fn,
                 name=sanitized_name,
                 description=description or f"Delegate task to the {target_slug} agent.",
-                args_schema=_schema_to_pydantic(sanitized_name, parameters),
+                args_schema=delegation_schema,
                 return_direct=False,
             )
             tool.metadata = tool.metadata or {}
@@ -551,9 +614,10 @@ def build_langchain_tools_for_ar_path(
             else original_name
         )
 
-        def _make_commhub_tool(orig_name: str, comm_name: str) -> tuple:
+        def _make_commhub_tool(orig_name: str, comm_name: str, schema: Any) -> tuple:
             async def _arun(**kwargs: Any) -> str:
                 import time as _time
+                kwargs = _restore_schema_keys(schema, kwargs)
                 _started = _time.monotonic()
                 _call_status = "success"
                 _call_error: str | None = None
@@ -612,13 +676,14 @@ def build_langchain_tools_for_ar_path(
 
             return _run, _arun
 
-        sync_fn, async_fn = _make_commhub_tool(original_name, canonical_comm_name)
+        commhub_schema = _schema_to_pydantic(sanitized_name, parameters)
+        sync_fn, async_fn = _make_commhub_tool(original_name, canonical_comm_name, commhub_schema)
         tool = StructuredTool.from_function(
             func=sync_fn,
             coroutine=async_fn,
             name=sanitized_name,
             description=description or f"Call the {original_name} tool.",
-            args_schema=_schema_to_pydantic(sanitized_name, parameters),
+            args_schema=commhub_schema,
             return_direct=False,
         )
         tool.metadata = tool.metadata or {}

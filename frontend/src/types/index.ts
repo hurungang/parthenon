@@ -305,6 +305,11 @@ export interface RuntimeTopologyNode {
   trigger_source?: 'user' | 'schedule' | 'delegated' | 'unknown'
   // Human-readable trigger source label (user display name or schedule name).
   trigger_source_label?: string | null
+  trigger_user_label?: string | null
+  trigger_user_id?: string | null
+  schedule_id?: string | null
+  schedule_cron?: string | null
+  schedule_description?: string | null
   // Tool-call history (latest first), each resolved to an MCP server slug.
   tool_calls?: ToolCallRoute[]
 }

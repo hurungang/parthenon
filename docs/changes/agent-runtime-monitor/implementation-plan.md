@@ -668,6 +668,250 @@ rows produce no MCP node/chip/route.
 
 ---
 
+## Phase 13 — Creator attribution fix + trigger entity detail cards
+
+Schedule-triggered executions must always attribute to the human who created
+the schedule. Live data showed the controller falling back to the schedule
+NAME for `trigger_user_label` when the creator identity is unknown, so the
+frontend rendered the schedule name as a person (the schedule card's
+"by <creator>" caption and the agent bubble's trigger row showed the schedule
+name as a human). The frontend is already null-safe — the schedule card shows
+the creator caption only when the creator is known — so this phase removes
+the backend fallback and makes the trigger-entity cards (person / schedule)
+in the leftmost column clickable, opening dismissible detail bubbles with the
+executions each entity triggered (client-side derivation from the existing
+focus graph — no new API).
+
+### 13.1 — Creator attribution fix in `RuntimeTopologyController`
+In the provenance-resolution block of
+`backend/app/services/control_center/runtime_topology_controller.py`, the
+schedule branch currently resolves
+`trigger_user_label = identity_names.get(session_to_user.get(node.session_id))
+or schedule_by_session[node.session_id]`. Remove the
+`or schedule_by_session[...]` fallback (and its stale comment) so
+`trigger_user_label` is ONLY the creator identity resolved from the dispatched
+`triggered_by_user_id` — `null` when the creator is unknown (schedules created
+before creator tracking). `trigger_source_label` keeps the schedule name (it
+identifies the schedule entity itself). Downstream consumers are already
+null-safe: the schedule entity card renders "by <creator>" only when the
+creator is known, and the agent detail bubble / person cards consume the
+human label.
+**Done when:** a schedule-triggered node with a resolvable creator carries the
+creator's display name in `trigger_user_label`; a schedule-triggered node
+without a creator resolves `trigger_user_label=None`; the schedule name never
+appears in `trigger_user_label`.
+
+### 13.2 — Backend unit tests for creator attribution
+Extend `backend/tests/unit/services/test_runtime_topology_controller.py`:
+(a) schedule-triggered job whose creator identity resolves →
+`trigger_user_label == <creator display name>`; (b) schedule-triggered job
+with unknown/missing creator → `trigger_user_label is None` while
+`trigger_source_label` remains the schedule name.
+**Done when:** new tests pass and the existing topology controller suite
+stays green.
+
+### 13.3 — `TriggerDetailBubble` component
+Create `frontend/src/components/agents/TriggerDetailBubble.tsx`: a dismissible
+detail bubble beside the clicked trigger entity, mirroring `AgentDetailBubble`
+positioning/dismissal conventions. **Person**: name, kind, count of triggered
+executions (direct + via schedules), list of executions (agent type name +
+status chip). **Schedule**: schedule name, creator (rendered only when known,
+per 13.1), count + list of executions it triggered (same row layout). Clicking
+an execution row selects that session (focuses its tile + opens the agent
+bubble). Data is derived client-side from the existing focus graph (sessions
+reachable from the entity key) — no new API; all strings via `t()`.
+**Done when:** both card kinds render their fields + execution rows; clicking
+a row selects the session; the bubble is dismissible; no hardcoded
+user-facing strings.
+
+### 13.4 — Canvas wiring in `AgentRuntimeMapCanvas`
+Clicking a person/schedule entity card opens `TriggerDetailBubble` beside it
+(world→screen transform + viewport clamping, same approach as the agent
+bubble position). Dismissal mirrors `AgentDetailBubble` (close button,
+re-click on the entity toggles, selecting an agent clears it) and is
+independent of the selected session id so focusing an entity does not clobber
+agent selection. An execution row click focuses that tile and opens
+`AgentDetailBubble`.
+**Done when:** clicking a person/schedule opens the bubble beside the card;
+clicking again or dismissing closes it; an execution row click focuses that
+tile and opens the agent bubble; behaviour holds in fullscreen, and entities
+with no reachable executions (e.g. after filtering) render no bubble rows.
+
+### 13.5 — i18n coverage
+Add the bubble strings (person/schedule kind labels, creator row, execution
+count/list headings, dismiss control, etc.) as
+`agents.sessions.runtimeMonitorTrigger*` keys in
+`frontend/src/i18n/locales/en.json`; every rendered string resolves via
+`t()`.
+**Done when:** `TriggerDetailBubble` contains no hardcoded user-facing text
+and all new keys resolve.
+
+### 13.6 — Tests + verification
+Frontend: `TriggerDetailBubble` unit tests (person + schedule rendering,
+schedule with unknown creator shows no creator row, row-click selection,
+dismissal) and canvas tests (entity click → bubble open/dismiss, row →
+session selection). Backend: the 13.2 attribution suite.
+`npx tsc --noEmit` clean for production code; `python -m compileall app`
+clean; monitor-related frontend suites and the backend controller suite
+green.
+**Done when:** new tests pass, no regressions, no type/compile errors.
+
+### Task Checklist
+
+- [x] 13.1 — Backend: `RuntimeTopologyController` — schedule-triggered `trigger_user_label` = resolved creator identity name or `null` (drop the schedule-name fallback)
+- [x] 13.2 — Backend tests: creator attribution (known creator → name; unknown creator → `null`; schedule name only in `trigger_source_label`)
+- [x] 13.3 — Frontend: new `TriggerDetailBubble` component (person + schedule cards, execution rows with status chips, row-click selection)
+- [x] 13.4 — Canvas wiring: entity click opens/dismisses the bubble beside the card; execution row focuses the tile + opens `AgentDetailBubble`
+- [x] 13.5 — i18n: `agents.sessions.runtimeMonitorTrigger*` keys added; all strings via `t()`
+- [x] 13.6 — Tests + verification: bubble/canvas suites green, `npx tsc --noEmit` + `python -m compileall app` clean
+
+
+---
+
+## Phase 14 — Trigger-entity own details (cron / user identity)
+
+### Task Checklist
+
+- [x] 14.1 — Backend: carry schedule id/cron/description + `trigger_user_id` on topology nodes
+- [x] 14.2 — Frontend: `TriggerDetailBubble` fetches the schedule's own details (`GET /schedules/{id}`) and the person's identity details (`GET /identities/{id}`), rendering cron (humanised), description, status, email and identity type
+- [x] 14.3 — Tests: controller fixture 5-tuple contract, bubble fetch/detail-row tests, canvas suite green
+
+### 14.1 — Backend node fields — _Done when: topology nodes expose `trigger_user_id`, `schedule_id`, `schedule_cron`, `schedule_description`; controller tests pass._
+
+### 14.2 — Trigger detail fetches — _Done when: schedule card shows humanised cron/description/status; person card shows email/type; fetch failures hide the rows silently._
+
+### 14.3 — Tests — _Done when: controller + API tests and the four frontend suites pass with the new fields._
+
+
+---
+
+## Phase 15 — Real-time stream + canvas polish
+
+The monitor must keep itself current without operator action and look right
+from the first frame. Live delivery moves to a server-sent-events push
+channel (stream-first on the frontend, with the existing 5s polling kept
+only as the automatic fallback), and three canvas defects are fixed: the
+dot-grid background stops at the world-layer edges instead of covering the
+whole visible canvas, large populations cannot fit on first load because
+the initial auto-fit is clamped to the interactive minimum zoom
+(`MIN_ZOOM = 0.25`), and the hub's empty-state height must be verified
+full-canvas from the moment the map loads with zero agents.
+
+### Task Checklist
+
+- [x] 15.1 — Backend: SSE stream endpoint `GET /agents/runtime/topology/stream` — `?token=` query-param auth (OIDC client validation + the same agent-read permission), ~2s projection loop, hash-gated full-payload emits, ~15s heartbeat comments
+- [x] 15.2 — Frontend: `useRuntimeTopology` stream-first — EventSource pushes payloads into the React Query cache; 5s `refetchInterval` polling is the automatic fallback while the stream is down; live push resumes on reconnect
+- [x] 15.3 — Canvas: dot-grid background moved to the STAGE level so it always covers the whole visible canvas (world layer keeps the grid too or transparent)
+- [x] 15.4 — Canvas: relaxed minimum zoom for the INITIAL auto-fit only (e.g. 0.05 floor) so large populations fit on first load; user zoom interactions keep the existing `MIN_ZOOM`/`MAX_ZOOM` clamps
+- [x] 15.5 — Canvas verification: hub is full canvas height on load with zero agents (world sizing ≥ stage)
+- [x] 15.6 — Tests + verification: backend stream (auth/hash/heartbeat), hook fallback semantics, canvas grid + initial-fit + empty-height; `python -m compileall app` + `npx tsc --noEmit` clean
+
+### 15.1 — SSE stream endpoint + auth (backend)
+Add `stream_runtime_topology` (`GET /agents/runtime/topology/stream`) to the
+runtime-control section of `backend/app/api/v1/agents.py` (Control Center —
+DB access lives here, satisfying the service-segregation rules). It returns
+a `text/event-stream` `StreamingResponse`:
+- **Auth** — EventSource cannot set request headers, so the JWT is read from
+  the `?token=` query parameter and validated against the OIDC client — the
+  same pattern as the Communication Hub chat WebSocket
+  (`WebSocketServer.authenticate` in `backend/app/api/ws/chat.py`). After
+  token validation, enforce the SAME agent-read permission as the REST
+  endpoint (`RT_AGENT` "read") using the validated claims before the stream
+  opens. Missing/invalid token or denied permission → reject the connection
+  (never open the event stream).
+- **Loop** — every ~2s recompute the projection via
+  `_runtime_topology_controller.get_active_topology(...)` with the same
+  query parameters as the REST endpoint (`include_terminal`, `max_nodes`,
+  `recent_minutes` accepted as query params), serialise to the existing
+  `RuntimeTopologyRead` JSON, and emit it as an SSE `data:` event ONLY when
+  its hash changed (e.g. SHA-256 of the serialised payload); unchanged
+  projections emit nothing.
+- **Heartbeats** — emit an SSE comment line (`: heartbeat`) at least every
+  ~15s (interleaved with the loop cadence) so idle connections are not
+  closed by proxies/load balancers.
+- Clean up (cancel the loop) on client disconnect.
+**Done when:** a valid `?token=` connection receives an initial payload and
+subsequent payloads only after the projection actually changes; a
+missing/invalid token or a caller without the agent-read permission is
+rejected before any event is sent; heartbeats arrive on idle connections;
+an API-level smoke test shows state changes reaching the stream within ~2s.
+
+### 15.2 — EventSource hook + fallback semantics (frontend)
+Rework `frontend/src/hooks/useRuntimeTopology.ts` to be **stream-first**:
+- Open an `EventSource` to `/agents/runtime/topology/stream` with the auth
+  token as a query param (the stream path mirrors the REST query params:
+  `include_terminal` + `recent_minutes` stay in the React Query key so
+  changing the window reconnects the stream and refetches).
+- On each SSE message, parse the `RuntimeTopologyRead` payload and write it
+  into the React Query cache via `setQueryData` — consumers (page, canvas)
+  keep reading through the existing `useQuery` untouched.
+- **Fallback semantics**: keep the existing 5s `refetchInterval` polling as
+  the automatic fallback — while the stream is down (EventSource error /
+  before it opens), polling refreshes the cache; once the stream is open
+  again, live push resumes (EventSource auto-reconnects; re-arm polling on
+  `onerror`). The view never silently goes stale in either mode.
+- Close the EventSource on unmount and on query-key change.
+**Done when:** a pushed payload updates the cache without a fetch; killing
+the stream falls back to 5s polling and restoring it returns to push (no
+manual refresh in either direction); the hook test pins open/close,
+cache-write, and fallback behaviour.
+
+### 15.3 — Grid at stage level (frontend)
+In `AgentRuntimeMapCanvas.tsx` the dot-grid background
+(`radial-gradient(#D7E0EA 1px, transparent 1px)`, `22px 22px`) currently
+lives on the transformed WORLD layer, so it ends at the world bounds and
+the plain stage `bgcolor` shows beyond it. Move the dot-grid to the STAGE
+level (the fixed, untransformed viewport Box) so the grid always covers the
+whole visible canvas at every pan/zoom offset and when the map is empty;
+the world layer keeps its own grid too (or becomes transparent so the stage
+grid shows through) — either way no visible seam or uncovered region.
+**Done when:** the grid dots cover the entire visible canvas under any
+pan/zoom position and on a fully-filtered/empty map, with no plain band at
+the world edges; canvas tests still render the grid.
+
+### 15.4 — Initial-fit clamp fix (frontend)
+`fitToScreen` clamps to the interactive `MIN_ZOOM` (0.25), so with a large
+population the initial auto-fit refuses to zoom out far enough and content
+is cut off on first load. Introduce a relaxed minimum zoom used ONLY by the
+initial (and resize/fullscreen re-fit) fit computation — e.g. a 0.05 floor —
+so the whole population fits on first load however many agents are running.
+User zoom interactions (wheel/buttons/`applyZoomAt`) KEEP the existing
+`MIN_ZOOM = 0.25` / `MAX_ZOOM = 2.5` clamps unchanged, so operators cannot
+zoom further out interactively than before.
+**Done when:** first load auto-fits the entire visible population for a
+large node set (initial zoom may land below 0.25); wheel/button zoom still
+clamps to 0.25–2.5; canvas tests pin the relaxed initial fit and the intact
+interactive clamps.
+
+### 15.5 — Hub empty-height verification (frontend)
+Verify the Communication Hub renders FULL canvas height from the moment the
+map loads with zero agents: the world sizing guard
+(`worldW = max(layout.worldW, viewportSize.width)`,
+`worldH = max(layout.worldH, viewportSize.height)`) must guarantee
+world ≥ stage so the full-height hub (`h = worldH`, pinned to
+`max(containersRight + INTER_REGION_GAP, viewportSize.width - HUB_W - 24)`)
+spans the visible canvas in the empty and fully-filtered states. Fix any
+gap found (e.g. `viewportSize` not yet measured on first paint); no
+behaviour change beyond the empty-state height if the guard already holds.
+**Done when:** on an empty (or fully-filtered) load the hub bar spans the
+full canvas height immediately, pinned at the right edge, with no
+shrink/drift; canvas tests assert the empty-state hub geometry.
+
+### 15.6 — Tests + verification
+Backend: stream tests covering token-query auth (valid/invalid/missing),
+permission enforcement, change-gated emission (hash stable → no event),
+heartbeat cadence, and disconnect cleanup. Frontend: `useRuntimeTopology`
+tests (EventSource cache-write, poll fallback while down, push resume on
+reconnect, close on unmount/key change) and canvas tests (stage-level grid,
+relaxed initial fit vs interactive clamps, empty-state full-height hub).
+Run `python -m compileall app` and `npx tsc --noEmit` clean for production
+code; monitor-related frontend suites and the backend agents/topology
+suites stay green.
+**Done when:** new tests pass, no regressions, no compile/type errors.
+
+
+---
+
 ## Completion Checklist
 
 - [x] Backend topology endpoint returns `needs_intervention` per node (no DB schema change)
@@ -700,3 +944,8 @@ rows produce no MCP node/chip/route.
 - [x] Communication Hub firewall bar + evenly distributed MCP nodes + tool chips
 - [x] System Tools node instead of "unknown"; orthogonal multi-segment tool routes
 - [x] Selection highlights the full agent → hub → MCP → tool path (colour + non-color cues)
+- [x] SSE stream endpoint: `?token=` auth (OIDC validation + agent-read permission parity), ~2s hash-gated emits, ~15s heartbeats, clean disconnect
+- [x] `useRuntimeTopology` is stream-first: EventSource → React Query cache; 5s polling is the automatic fallback; push resumes on reconnect
+- [x] Stage-level dot grid covers the whole canvas (world layer transparent, no seams at any pan/zoom)
+- [x] Initial auto-fit uses a relaxed floor (0.05) — large populations fit on first load; interactive zoom keeps the 0.25–2.5 clamps
+- [x] Hub renders full canvas height from the first paint with zero agents (world ≥ stage; empty state renders the map + overlay)

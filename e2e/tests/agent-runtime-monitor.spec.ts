@@ -25,6 +25,13 @@ interface MockNode {
   title?: string | null
   trigger_source?: 'user' | 'schedule' | 'delegated' | 'unknown'
   trigger_source_label?: string | null
+  /**
+   * Creator-attribution contract (Phase 13): the resolved HUMAN for the
+   * trigger — the triggering user, the schedule creator (for schedule
+   * sources), or the inherited delegation source. `null`/absent when
+   * unknown; the schedule name must never be sent here.
+   */
+  trigger_user_label?: string | null
   tool_calls?: Array<{
     tool_name: string
     mcp_slug: string
@@ -457,12 +464,13 @@ test.describe('Agent Runtime Monitor', () => {
     await expect(page.getByRole('button', { name: /Type A/ }).first()).toBeVisible()
   })
 
-  test('shows trigger provenance on the tile and detail bubble', async ({ page }) => {
+  test('shows trigger provenance as a person entity wired to the execution', async ({ page }) => {
     const node = mkNode({
       session_id: 'prove-1',
       agent_type_name: 'Provenance Agent',
       trigger_source: 'user',
       trigger_source_label: 'Alice Operator',
+      trigger_user_label: 'Alice Operator',
     })
     await page.route('**/api/v1/agents/runtime/topology**', (route) =>
       route.fulfill({
@@ -484,13 +492,101 @@ test.describe('Agent Runtime Monitor', () => {
 
     await expect(page.getByTestId('agent-runtime-map-canvas')).toBeVisible()
 
-    // Tile shows the trigger source.
-    await expect(page.getByTestId('trigger-source-prove-1')).toBeVisible()
+    // The person entity lives in the leftmost column with a trigger edge
+    // to the execution it triggered; the tile has no inline trigger line.
+    await expect(page.getByTestId('trigger-entity-person:Alice Operator')).toBeVisible()
+    await expect(page.getByTestId('trigger-edge-person:Alice Operator->prove-1')).toBeVisible()
+    await expect(page.getByTestId('triggered-at-prove-1')).toBeVisible()
+    await expect(page.getByTestId('trigger-source-prove-1')).toHaveCount(0)
 
     // Select the node → the detail bubble shows the trigger source.
     await page.getByRole('button', { name: /Provenance Agent/ }).click()
     await expect(page.getByTestId('agent-detail-trigger-source')).toBeVisible()
     await expect(page.getByText('Alice Operator').first()).toBeVisible()
+  })
+
+  test('shows schedule creator attribution and no person line for a null-creator schedule', async ({
+    page,
+  }) => {
+    // Creator-attribution contract (Phase 13): a schedule-triggered node's
+    // human is the schedule CREATOR (`trigger_user_label`); a legacy schedule
+    // with an unknown creator renders no creator caption and never shows the
+    // schedule name as a person.
+    const nodes = [
+      mkNode({
+        session_id: 'sched-1',
+        agent_type_name: 'Cleanup Agent',
+        trigger_source: 'schedule',
+        trigger_source_label: 'nightly-cleanup',
+        trigger_user_label: 'Alice Operator',
+      }),
+      mkNode({
+        session_id: 'sched-2',
+        agent_type_name: 'Sync Agent',
+        trigger_source: 'schedule',
+        trigger_source_label: 'legacy-sync',
+        trigger_user_label: null,
+      }),
+    ]
+    await page.route('**/api/v1/agents/runtime/topology**', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify(mkTopology(nodes.map(fullNode))),
+      }),
+    )
+    // The agent detail bubble fetches the agent type on selection; without
+    // this mock the request hits the real backend, 401s, and the auth
+    // interceptor logs the session out mid-test.
+    await page.route('**/api/v1/agents/types/**', (route) =>
+      route.fulfill({ status: 200, body: JSON.stringify(MOCK_AGENT_TYPE) }),
+    )
+
+    await page.goto('/agents/runtime-control')
+    await page.waitForLoadState('load')
+
+    if (page.url().includes('/login')) {
+      test.skip()
+      return
+    }
+
+    await expect(page.getByTestId('agent-runtime-map-canvas')).toBeVisible()
+
+    // Both schedule entities render in the trigger column, each wired to the
+    // execution it triggered.
+    await expect(page.getByTestId('trigger-entity-schedule:nightly-cleanup')).toBeVisible()
+    await expect(page.getByTestId('trigger-entity-schedule:legacy-sync')).toBeVisible()
+    await expect(page.getByTestId('trigger-edge-schedule:nightly-cleanup->sched-1')).toBeVisible()
+    await expect(page.getByTestId('trigger-edge-schedule:legacy-sync->sched-2')).toBeVisible()
+
+    // Known creator: the schedule card shows the creator caption and the
+    // execution list.
+    await page.getByTestId('trigger-entity-schedule:nightly-cleanup').click()
+    const creatorCard = page.getByTestId('trigger-detail-bubble')
+    await expect(creatorCard).toHaveAttribute('data-trigger-entity', 'schedule:nightly-cleanup')
+    await expect(creatorCard.getByTestId('trigger-detail-creator')).toContainText('Alice Operator')
+    await expect(creatorCard.getByTestId('trigger-detail-execution-sched-1')).toBeVisible()
+
+    // Dismissing the card closes it (same dismissal pattern as the agent
+    // detail bubble; the clamped bubble overlaps its own tile, so dismissal
+    // goes through the card's close button).
+    await creatorCard.getByTestId('trigger-detail-bubble-close').click()
+    await expect(page.getByTestId('trigger-detail-bubble')).toHaveCount(0)
+
+    // Legacy null-creator schedule: the card shows the schedule name and its
+    // executions but NO creator caption and no placeholder.
+    await page.getByTestId('trigger-entity-schedule:legacy-sync').click()
+    const legacyCard = page.getByTestId('trigger-detail-bubble')
+    await expect(legacyCard).toHaveAttribute('data-trigger-entity', 'schedule:legacy-sync')
+    await expect(legacyCard.getByTestId('trigger-detail-creator')).toHaveCount(0)
+    await expect(legacyCard.getByTestId('trigger-detail-execution-sched-2')).toBeVisible()
+
+    // Selecting the legacy execution opens the agent detail bubble — the
+    // "Triggered by" line degrades to the unknown label and NEVER shows the
+    // schedule name as a person.
+    await legacyCard.getByTestId('trigger-detail-execution-sched-2').click()
+    const triggerLine = page.getByTestId('agent-detail-trigger-source')
+    await expect(triggerLine).toHaveText('Unknown')
+    await expect(triggerLine).not.toContainText('legacy-sync')
   })
 
   test('renders the Communication Hub and tool-call routes to MCP servers', async ({ page }) => {
