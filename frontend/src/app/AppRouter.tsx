@@ -8,6 +8,7 @@ import { McpHubPage } from '../pages/mcp/McpHubPage'
 import { SkillListPage } from '../pages/skills/SkillListPage'
 import { SopListPage } from '../pages/skills/SopListPage'
 import { AgentManagementPage } from '../pages/agents/AgentManagementPage'
+import { AgentManagementPanelPage } from '../pages/agents/AgentManagementPanelPage'
 import { AgentRoleListPage } from '../pages/agents/AgentRoleListPage'
 import { AgentIdentityListPage } from '../pages/agents/AgentIdentityListPage'
 import { AgentJobPage } from '../pages/agents/AgentJobPage'
@@ -72,6 +73,7 @@ export function AppRouter() {
           <Route path="/skills" element={<SkillListPage />} />
           <Route path="/sops" element={<SopListPage />} />
           <Route path="/agents" element={<AgentManagementPage />} />
+          <Route path="/agents/panel" element={<AgentManagementPanelPage />} />
           <Route path="/agents/roles" element={<AgentRoleListPage />} />
           <Route path="/agents/identities" element={<AgentIdentityListPage />} />
           <Route path="/agents/sessions/:id" element={<AgentJobPage />} />

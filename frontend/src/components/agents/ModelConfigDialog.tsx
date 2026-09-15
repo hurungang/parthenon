@@ -21,14 +21,19 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { useTranslation } from 'react-i18next'
 import apiClient from '../../api/apiClient'
-import type { ModelConfig, ModelProviderType } from '../../types'
+import type { CreateAndAssignResult, ModelConfig, ModelProviderType } from '../../types'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 
 interface ModelConfigDialogProps {
   open: boolean
   config: ModelConfig | null
   onClose: () => void
-  onSaved: () => void
+  /**
+   * Invoked after a successful save. In create mode the created config is
+   * passed as a create-and-assign result (with its enabled models); existing
+   * callers may ignore the argument.
+   */
+  onSaved: (result?: CreateAndAssignResult) => void
 }
 
 const PROVIDERS: { value: ModelProviderType; label: string }[] = [
@@ -96,10 +101,18 @@ export function ModelConfigDialog({ open, config, onClose, onSaved }: ModelConfi
 
       if (isEdit) {
         await apiClient.put(`/agents/model-configs/${config!.id}`, payload)
+        onSaved()
       } else {
-        await apiClient.post('/agents/model-configs', payload)
+        const { data } = await apiClient.post<{ id: string; display_name: string }>(
+          '/agents/model-configs',
+          payload,
+        )
+        onSaved({
+          id: data.id,
+          label: data.display_name,
+          enabledModelIds: enabledModels,
+        })
       }
-      onSaved()
     } catch (err) {
       setDialogError(err)
     } finally {

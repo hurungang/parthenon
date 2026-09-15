@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { TriggerDetailBubble } from '../components/agents/TriggerDetailBubble'
 import type { TriggerExecution } from '../components/agents/TriggerDetailBubble'

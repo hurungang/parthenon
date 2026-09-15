@@ -727,7 +727,7 @@ erDiagram
 
 ---
 
-## Communication & Conversations
+## Communication, Conversations & Runtime Topology
 
 ```mermaid
 erDiagram
@@ -764,6 +764,18 @@ erDiagram
         int duration_ms
         datetime created_at
     }
+    RuntimeToolCall {
+        uuid id
+        uuid session_id "logical ref: agent job OR conversation session, no FK"
+        enum session_kind "agent|conversation"
+        string tool_name
+        enum route_type "system|mcp|a2a"
+        string mcp_slug "nullable; MCP-routed calls only"
+        enum status "success|error"
+        int duration_ms "nullable"
+        string error "nullable"
+        datetime created_at
+    }
     InterveneRequest {
         uuid id
         uuid agent_session_id
@@ -790,10 +802,11 @@ erDiagram
     AgentJob {
         uuid id
         uuid agent_type_id
+        uuid triggered_by_user_id
         uuid parent_job_id
         uuid root_job_id
         int delegation_depth
-        enum status
+        enum status "queued|running|waiting_for_human|completed|failed|terminated"
         datetime created_at
     }
     Identity {
@@ -821,9 +834,15 @@ erDiagram
     InterveneResponse }o--|| Identity : "responded by"
     ConversationSession }o--o| AgentJob : "backed by"
     AgentA2ASessionLink ||--o| ConversationSession : "links delegated execution context"
+    Identity ||--o{ AgentJob : "triggered by"
+    AgentJob ||--o{ AgentJob : "delegates to (child inherits trigger)"
+    AgentJob ||--o{ RuntimeToolCall : "tool executions (logical ref, no FK)"
+    ConversationSession ||--o{ RuntimeToolCall : "tool executions (logical ref, no FK)"
 ```
 
-**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/intervene.py`, `backend/app/db/models/agents.py`
+**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/intervene.py`, `backend/app/db/models/agents.py`, `backend/app/db/models/tool_calls.py`
+
+**Runtime topology projection:** Per execution node, the topology API exposes `trigger_source` (`user | schedule | delegated | unknown`), `trigger_source_label`, and `trigger_user_label` — all **derived at read time**, never persisted columns. `trigger_source=user` resolves `AgentJob.triggered_by_user_id` to its `Identity.display_name`; `trigger_source=delegated` inherits the parent job's trigger source via `AgentJob.parent_job_id`; `trigger_source=schedule` uses the schedule **name** as `trigger_source_label` and — when the creator is known — the `ScheduledJob.scheduled_by_user_id` creator's display name as `trigger_user_label`. Each node's `tool_calls` list is the runtime tool-call history (from `RuntimeToolCall`, non-A2A rows) resolved to MCP server slugs; A2A delegation rows (`route_type=a2a`) are recorded permanently in `runtime_tool_calls` but rendered as delegation edges rather than in-node tool calls.
 
 ---
 
@@ -849,6 +868,7 @@ erDiagram
         json payload
         enum status "active|paused|deleted"
         string scheduler_job_id
+        uuid scheduled_by_user_id "nullable; FK -> Identity (schedule creator)"
         datetime created_at
         datetime updated_at
     }
@@ -860,6 +880,11 @@ erDiagram
         json result
         datetime started_at
         datetime finished_at
+    }
+    Identity {
+        uuid id
+        string subject
+        string display_name
     }
     NotificationChannel {
         uuid id
@@ -911,6 +936,7 @@ erDiagram
     }
 
     ScheduledJob ||--o{ JobExecution : "has executions"
+    Identity ||--o{ ScheduledJob : "scheduled by"
     NotificationChannel ||--o{ ChannelProperty : "configured via"
     NotificationChannel ||--o{ GroupChannelMapping : "assigned to"
     RecipientGroup ||--o{ GroupChannelMapping : "delivered via"
@@ -925,7 +951,7 @@ erDiagram
 - `GroupChannelMapping` — many-to-many association between recipient groups and channels.
 - `NotificationLog` — immutable delivery record per channel attempt. Records source (`SOP`, `AGENT`, or `MANUAL`), delivery status, and any error detail.
 
-**Sources**: `backend/app/db/models/results.py`, `backend/app/db/models/scheduling.py`, `backend/app/db/models/notifications.py`
+**Sources**: `backend/app/db/models/results.py`, `backend/app/db/models/scheduling.py`, `backend/app/db/models/notifications.py`, `backend/app/db/models/identity.py`
 
 ---
 
@@ -999,6 +1025,11 @@ erDiagram
     AgentType ||--o{ AgentTypeSkillBinding : "curates skills via"
     AgentTypeSkillBinding }o--|| Skill : "references"
     ScheduledJob ||--o{ JobExecution : "has executions"
+    Identity ||--o{ ScheduledJob : "scheduled by"
+    Identity ||--o{ AgentJob : "triggered by"
+    AgentJob ||--o{ AgentJob : "delegates to (child inherits trigger)"
+    AgentJob ||--o{ RuntimeToolCall : "tool executions (logical ref, no FK)"
+    ConversationSession ||--o{ RuntimeToolCall : "tool executions (logical ref, no FK)"
     Role ||--o{ PolicyStatement : "contains"
     PlatformUser }o--o{ Role : "assigned via"
     PlatformUser }o--o{ Group : "member of"

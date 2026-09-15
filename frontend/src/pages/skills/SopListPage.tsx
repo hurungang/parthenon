@@ -26,7 +26,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { usePagination } from '../../hooks/usePagination'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import { SopEditor } from './SopEditor'
+import { SopEditor } from '../../components/agents/SopEditor'
 import type { Sop, SopDetail } from '../../types'
 
 /**

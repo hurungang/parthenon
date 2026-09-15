@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Agent Management Panel (Prototype)</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --topbar-h:60px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5;overflow:hidden}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+a{color:inherit;text-decoration:none}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* ── AGENT SIDEBAR ── */
+.agent-sidebar{width:270px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:100}
+.sidebar-logo{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.sidebar-logo h1{font-size:17px;font-weight:700;letter-spacing:-.5px}
+.sidebar-logo small{display:block;font-size:10.5px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.sidebar-section-label{padding:14px 20px 6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between}
+.count-badge{background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:600;padding:1px 8px;border-radius:20px}
+.sidebar-search{margin:0 14px 10px}
+.sidebar-search input{width:100%;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);outline:none;font-size:13px;transition:border-color var(--transition)}
+.sidebar-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.agent-list{flex:1;overflow-y:auto;padding:0 8px}
+.agent-list::-webkit-scrollbar{width:4px}.agent-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.agent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);cursor:pointer;transition:background var(--transition);margin-bottom:2px;border:1px solid transparent;position:relative}
+.agent-item:hover{background:rgba(0,0,0,.03)}
+.agent-item.active{background:var(--primary-light);border-color:#BFDBFE}
+.agent-item-icon{width:34px;height:34px;border-radius:var(--radius-sm);background:#E0E7FF;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.agent-item-main{flex:1;min-width:0}
+.agent-item-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-item-meta{font-size:11px;color:var(--text-secondary)}
+.pending-dot{width:8px;height:8px;border-radius:50%;background:var(--warning);flex-shrink:0;animation:livepulse 1.4s infinite}
+.sidebar-footer{padding:12px 14px;border-top:1px solid var(--border);flex-shrink:0}
+
+/* ── TOP BAR ── */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;z-index:50}
+.topbar-title{font-size:17px;font-weight:600;flex:1;display:flex;align-items:center;gap:10px}
+.proto-chip{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:#F1F5F9;color:#64748B;padding:2px 8px;border-radius:4px;border:1px solid var(--border)}
+.unsaved-badge{display:none;align-items:center;gap:6px;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px}
+.unsaved-badge.show{display:inline-flex}
+.unsaved-badge .udot{width:7px;height:7px;border-radius:50%;background:var(--warning);animation:livepulse 1.4s infinite}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* ── PANEL LAYOUT ── */
+.panel-layout{flex:1;display:grid;grid-template-columns:1fr 360px;gap:16px;padding:16px 20px 20px;overflow:hidden}
+.center-col{overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:14px}
+.center-col::-webkit-scrollbar{width:6px}.center-col::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.equip-col{overflow-y:auto;padding-right:2px}
+.equip-col::-webkit-scrollbar{width:6px}.equip-col::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── CARDS / BUTTONS / CHIPS (master prototype conventions) ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-ghost-danger{background:none;border:none;color:var(--error);padding:4px 8px}.btn-ghost-danger:hover{background:#FEE2E2}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-indigo{background:#E0E7FF;color:#3730A3}
+.chip-pink{background:#FCE7F3;color:#9D174D}
+
+/* ── CHANGE BANNER ── */
+.change-banner{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius)}
+.change-banner .cb-icon{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0}
+.change-banner h4{font-size:13.5px;margin-bottom:2px;color:var(--primary-dark)}
+.change-banner p{font-size:12px;color:var(--text-secondary);line-height:1.5}
+
+/* ── AGENT HEADER ── */
+.agent-header{display:flex;align-items:center;gap:14px;padding:16px 20px}
+.ah-icon{width:48px;height:48px;border-radius:var(--radius);background:#E0E7FF;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ah-main{flex:1;min-width:0}
+.ah-name-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ah-name{font-size:18px;font-weight:700}
+.ah-desc{font-size:12.5px;color:var(--text-secondary);margin-top:2px}
+.ah-actions{display:flex;gap:6px;flex-shrink:0}
+
+/* ── TOPOLOGY ── */
+.topo-card{display:flex;flex-direction:column;overflow:hidden}
+.topo-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.topo-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.topo-head-right{display:flex;align-items:center;gap:10px}
+.topo-hint{font-size:11px;color:var(--text-secondary)}
+.live{display:inline-flex;align-items:center;gap:6px;color:#1D4ED8;font-weight:600;font-size:11px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#60A5FA;animation:livepulse 1.1s infinite}
+.topo-canvas{background:#FAFBFD;border-bottom:1px solid var(--border)}
+.topo-canvas svg{width:100%;height:auto;display:block;user-select:none}
+.topo-node{cursor:pointer}
+.topo-node text{pointer-events:none}
+.topo-node .n-box{transition:stroke-width .15s}
+.topo-node:hover .n-box{stroke-width:3}
+.topo-node.ghost .n-box{stroke-dasharray:5 4;fill:#FFFFFF}
+.topo-node.ghost:hover .n-box{fill:#F8FAFC}
+.legend-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 18px;font-size:12px}
+.legend-strip strong{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-right:2px}
+.legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:11.5px}
+.legend-item svg{flex-shrink:0}
+
+/* ── VIEW TOGGLE (Design | Runtime) ── */
+.view-toggle{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
+.vt-btn{border:none;background:transparent;padding:5px 13px;font-size:11.5px;font-weight:600;color:var(--text-secondary);transition:all var(--transition);white-space:nowrap}
+.vt-btn:hover{background:var(--bg)}
+.vt-btn.active{background:var(--primary);color:#fff}
+.vt-btn+.vt-btn{border-left:1px solid var(--border)}
+
+/* ── RUNTIME CALL FEED ── */
+.rt-feed{display:none;border-top:1px solid var(--border);background:#FDFDFF;padding:9px 18px 11px}
+.rt-feed.show{display:block}
+.rt-feed-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#64748B;margin-bottom:6px;flex-wrap:wrap}
+.rt-feed-status{text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:#475569;display:inline-flex;align-items:center;gap:6px}
+.rt-feed-status b{font-family:ui-monospace,SFMono-Regular,monospace;font-weight:600;color:#1E293B}
+.rt-call{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:3px 0;color:#334155}
+.rt-call.fresh{animation:feedIn .3s ease}
+.rt-call .rt-t{font-family:ui-monospace,SFMono-Regular,monospace;font-size:10.5px;color:#64748B;flex-shrink:0}
+.rt-call .rt-skill{font-weight:600;color:#5B21B6;white-space:nowrap}
+.rt-call .rt-arrow{color:#7C3AED;font-weight:700}
+.rt-call .rt-tool{font-family:ui-monospace,SFMono-Regular,monospace;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:4px;padding:0 6px;font-size:10.5px;white-space:nowrap}
+.rt-call.warn .rt-tool{background:#FFFBEB;border-color:#FDE68A}
+.rt-call .rt-via{color:#94A3B8;font-size:10.5px;white-space:nowrap}
+@keyframes feedIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes dashflow{to{stroke-dashoffset:-24}}
+.rt-flow{animation:dashflow .9s linear infinite}
+.blinkdot{animation:livepulse 1.1s infinite}
+.topo-chip{cursor:default}
+
+/* ── EQUIPMENT SLOTS ── */
+.equip-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.equip-head h3{font-size:14px;font-weight:600}
+.perm-note{display:none;align-items:flex-start;gap:8px;margin:12px 14px 0;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);font-size:11.5px;color:#92400E;line-height:1.5}
+.perm-note.show{display:flex}
+.slots-wrap{padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.slot{border:1px solid var(--border);border-radius:var(--radius);background:#FDFDFE;overflow:hidden}
+.slot-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:#F8FAFC}
+.slot-head .sh-icon{font-size:14px}
+.slot-head .sh-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);flex:1}
+.slot-body{padding:8px 10px;display:flex;flex-direction:column;gap:6px;min-height:40px}
+.slot-empty{font-size:12px;color:#94A3B8;font-style:italic;padding:6px 2px}
+.slot-locked{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#64748B;background:#F8FAFC;border:1px dashed var(--border);border-radius:var(--radius-sm);padding:8px 10px;line-height:1.5}
+.slot-item{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+.slot-item .si-icon{font-size:15px;flex-shrink:0}
+.slot-item .si-main{flex:1;min-width:0}
+.slot-item .si-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot-item .si-meta{font-size:10.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot-item .si-remove{background:none;border:none;color:#94A3B8;font-size:14px;padding:2px 6px;border-radius:4px;line-height:1;transition:all var(--transition)}
+.slot-item .si-remove:hover{background:#FEE2E2;color:var(--error)}
+.slot-actions{display:flex;gap:6px;padding:8px 10px;border-top:1px dashed var(--border);flex-wrap:wrap}
+.slot-actions .btn{flex:1;justify-content:center;min-width:0}
+
+/* ── PENDING CHANGES ── */
+.pending-box{margin:0 14px 14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#FDFDFE}
+.pending-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#F8FAFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)}
+.pending-list{padding:8px 12px;display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto}
+.pending-list::-webkit-scrollbar{width:4px}.pending-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pending-entry{display:flex;align-items:center;gap:8px;font-size:12px;color:#475569;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:5px 8px}
+.pending-entry .pe-icon{flex-shrink:0}
+.pending-entry .pe-text{flex:1;min-width:0}
+.pending-empty{font-size:11.5px;color:#94A3B8;font-style:italic;padding:6px 2px}
+.pending-foot{padding:7px 12px;border-top:1px dashed var(--border);font-size:10.5px;color:var(--text-secondary)}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:540px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;animation:modalIn .18s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.modal-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.modal-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px}
+.modal-close{background:none;border:none;padding:4px 8px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1}
+.modal-close:hover{background:var(--bg)}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;align-items:center}
+.reuse-chip{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;padding:2px 8px;border-radius:4px}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12.5px;font-weight:600;color:var(--text-primary);margin-bottom:5px}
+.form-control{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 2px rgba(244,67,54,.15)}
+textarea.form-control{resize:vertical;min-height:84px}
+select.form-control{cursor:pointer}
+.inline-form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.inline-form-error.visible{display:block}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.5}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pick-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px}
+.pick-list::-webkit-scrollbar{width:4px}.pick-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pick-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s;border:1px solid transparent}
+.pick-item:hover{background:#F0F7FE}
+.pick-item input{accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.pi-icon{font-size:16px;flex-shrink:0}
+.pi-main{min-width:0}
+.pi-main b{font-size:13px;display:block}
+.pi-main small{font-size:11px;color:var(--text-secondary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grant-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px}
+.grant-col-title{grid-column:1/-1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)}
+.grant-item{display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer}
+.grant-item input{accent-color:var(--primary);cursor:pointer}
+.field-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F1F5F9}
+.field-row:last-child{border-bottom:none}
+.field-row .fr-name{flex:2}
+.field-row .fr-type{flex:1.4}
+.field-row .fr-req{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-secondary);flex-shrink:0}
+.field-row .fr-req input{accent-color:var(--primary)}
+.field-row .fr-del{background:none;border:none;color:#94A3B8;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px}
+.field-row .fr-del:hover{background:#FEE2E2;color:var(--error)}
+.add-field-btn{width:100%;background:none;border:1px dashed var(--border);color:var(--text-secondary);padding:6px;border-radius:var(--radius-sm);font-size:12px;margin-top:6px}
+.add-field-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.provision-steps{list-style:none;margin:14px 0}
+.provision-step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--text-secondary)}
+.provision-step.done{color:var(--success)}
+.provision-step .ps-icon{width:20px;text-align:center;flex-shrink:0}
+.success-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:12px 14px;font-size:12.5px;color:#166534;line-height:1.7;margin-top:8px}
+.success-box b{color:#14532D}
+.mini-spinner{width:16px;height:16px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite;display:inline-block;vertical-align:-3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes livepulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+
+/* ── TOASTS ── */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:11px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease;display:flex;align-items:center;gap:8px;max-width:520px}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.toast-success{background:#2E7D32}.toast-error{background:#C62828}.toast-info{background:#1565C0}
+
+/* ── DEMO PANEL ── */
+.demo-panel{position:fixed;bottom:16px;right:16px;background:rgba(15,23,42,.92);color:#fff;border-radius:var(--radius-lg);padding:12px 16px;font-size:11px;z-index:500;min-width:250px;backdrop-filter:blur(8px);box-shadow:0 10px 25px rgba(0,0,0,.12)}
+.demo-panel-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;margin-bottom:8px}
+.demo-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;font-size:12px}
+.demo-row .demo-label{color:#CBD5E1}
+.demo-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:all var(--transition);font-weight:500}
+.demo-btn:hover{background:rgba(255,255,255,.18)}
+.demo-btn.active{background:var(--primary);border-color:var(--primary)}
+
+@media(max-width:1200px){.panel-layout{grid-template-columns:1fr 320px}}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ══════════ LEFT: AGENT LIST / SELECTOR ══════════ -->
+  <aside class="agent-sidebar">
+    <div class="sidebar-logo">
+      <div>
+        <h1>⚡ Parthenon</h1>
+        <small>Enterprise AI Harness</small>
+      </div>
+    </div>
+    <div class="sidebar-section-label">
+      <span>Agent Types</span>
+      <span class="count-badge" id="agent-count">3</span>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="search-agents" placeholder="🔍 Search agents…" oninput="onSearch(this.value)">
+    </div>
+    <div class="agent-list" id="agent-list"></div>
+    <div class="sidebar-footer">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" id="btn-create-agent" onclick="openCreateAgent()">＋ Create Agent</button>
+    </div>
+  </aside>
+
+  <!-- ══════════ MAIN WRAPPER ══════════ -->
+  <div class="main-wrapper">
+
+    <div class="topbar">
+      <div class="topbar-title">
+        Agent Management Panel
+        <span class="proto-chip">UX Prototype</span>
+      </div>
+      <span class="unsaved-badge" id="unsaved-badge"><span class="udot"></span><span id="unsaved-text">0 unsaved changes</span></span>
+      <button class="btn btn-ghost btn-sm" id="btn-discard" onclick="discardChanges()" disabled>Discard</button>
+      <button class="btn btn-primary btn-sm" id="btn-save" onclick="saveChanges()" disabled>💾 Save Changes</button>
+      <div class="avatar" title="Alex Harper — Agent Administrator">AH</div>
+    </div>
+
+    <div class="panel-layout">
+
+      <!-- ══════════ CENTER: TOPOLOGY (character screen) ══════════ -->
+      <section class="center-col">
+        <div class="change-banner">
+          <div class="cb-icon">🎛️</div>
+          <div>
+            <h4>Equip an agent like an RPG character screen</h4>
+            <p>Assign roles, identity, skills, SOPs, data types and a model from one panel — create missing resources inline.
+               The <b>zoned topology</b> (① Configuration → ② Capabilities → ③ Runtime) re-renders <b>live on every change, before saving</b>.
+               Toggle <b>Runtime view</b> to overlay simulated live sessions and tool calls routed through the Communication Hub.</p>
+          </div>
+        </div>
+
+        <div class="card agent-header" id="agent-header"></div>
+
+        <div class="card topo-card">
+          <div class="topo-head">
+            <h3>
+              Agent Topology
+              <span class="live" id="topo-live"><span class="live-dot"></span>LIVE</span>
+            </h3>
+            <div class="topo-head-right">
+              <div class="view-toggle">
+                <button class="vt-btn active" id="vt-design" onclick="setView('design')">Design view</button>
+                <button class="vt-btn" id="vt-runtime" onclick="setView('rt')">Runtime view</button>
+              </div>
+              <span class="topo-hint" id="topo-hint-el">updates instantly — no save required</span>
+              <span class="chip chip-green" id="topo-state-chip">✓ saved</span>
+            </div>
+          </div>
+          <div class="topo-canvas">
+            <svg id="topo-svg" viewBox="0 0 1120 640" xmlns="http://www.w3.org/2000/svg" aria-label="agent topology"></svg>
+          </div>
+          <div class="rt-feed" id="rt-feed">
+            <div class="rt-feed-head">
+              <span>🛰 Tool-call feed — routed via Communication Hub</span>
+              <span class="rt-feed-status" id="rt-feed-status"></span>
+            </div>
+            <div id="rt-feed-list"></div>
+          </div>
+          <div class="legend-strip" id="legend"></div>
+        </div>
+      </section>
+
+      <!-- ══════════ RIGHT: EQUIPMENT SLOTS ══════════ -->
+      <aside class="equip-col">
+        <div class="card" style="display:flex;flex-direction:column">
+          <div class="equip-head">
+            <h3>🎒 Equipment</h3>
+            <span class="chip chip-gray" id="equip-agent-name"></span>
+          </div>
+          <div class="perm-note" id="perm-note">
+            <span>🔒</span>
+            <span><b>Read-only mode.</b> Your account lacks write permissions on one or more equipment modules (e.g. <code>agent::roles</code>, <code>agent::identities</code>). Assignment actions are disabled.</span>
+          </div>
+          <div class="slots-wrap" id="slots"></div>
+          <div class="pending-box">
+            <div class="pending-head"><span>📝</span><span>Pending changes (<span id="pending-count">0</span>)</span></div>
+            <div class="pending-list" id="pending-list"></div>
+            <div class="pending-foot">Persisted only when you click <b>Save Changes</b> — the topology already reflects them.</div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ GENERIC MODAL ══════════ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-title"></h3>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- ══════════ DEMO CONTROLS ══════════ -->
+<div class="demo-panel">
+  <div class="demo-panel-title">Prototype Controls</div>
+  <div class="demo-row"><span class="demo-label">Sign in as</span>
+    <span>
+      <button class="demo-btn active" id="perm-admin" onclick="setPerm('admin')">Administrator</button>
+      <button class="demo-btn" id="perm-viewer" onclick="setPerm('viewer')">Process Owner (read-only)</button>
+    </span>
+  </div>
+  <div class="demo-row"><span class="demo-label">Reset data</span>
+    <button class="demo-btn" onclick="location.reload()">↺ Reset</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+'use strict';
+/* ════════════════════════════ CATEGORY METADATA ════════════════════════════ */
+const CATS = {
+  role:     {icon:'👤', bg:'#DBEAFE', fg:'#1D4ED8', label:'Role',        catKey:'roles',      perm:'agent::roles:write'},
+  identity: {icon:'🆔', bg:'#FEF3C7', fg:'#92400E', label:'Identity',    catKey:'identities', perm:'agent::identities:write'},
+  skill:    {icon:'🔧', bg:'#EDE9FE', fg:'#6D28D9', label:'Skill',       catKey:'skills',     perm:'agent::skills:write'},
+  sop:      {icon:'📋', bg:'#CFFAFE', fg:'#155E75', label:'SOP',         catKey:'sops',       perm:'agent::sops:write'},
+  input:    {icon:'📥', bg:'#DCFCE7', fg:'#15803D', label:'Input Type',  catKey:'datatypes',  perm:'agent::data_types:write'},
+  output:   {icon:'📤', bg:'#FCE7F3', fg:'#9D174D', label:'Output Type', catKey:'datatypes',  perm:'agent::data_types:write'},
+  model:    {icon:'🧠', bg:'#FED7AA', fg:'#C2410C', label:'Model',       catKey:'models',     perm:'agent::model_configs:write'},
+  hub:      {icon:'📡', bg:'#E0E7FF', fg:'#3730A3', label:'Communication Hub'}
+};
+
+/* ════════════════════════════ MOCK DATA ════════════════════════════ */
+let uidSeq = 100;
+const nextId = p => p + '-' + (++uidSeq);
+
+const catalog = {
+  roles: [
+    {id:'r-dev',      name:'Developer',         desc:'Code-review permissions across Git tooling', scope:['s-pr-analysis','s-git-blame','o-pr']},
+    {id:'r-docproc',  name:'Document Processor',desc:'OCR and document parsing capabilities',      scope:['s-ocr','s-pdf','o-inv']},
+    {id:'r-ops',      name:'Platform Operator', desc:'Cluster inspection and runbook access',      scope:['s-kubectl-logs','s-runbook','o-incident']},
+    {id:'r-auditor',  name:'Security Auditor',  desc:'Read-only audit trails and policy tools',    scope:[]},
+    {id:'r-analyst',  name:'Data Analyst',      desc:'Query and charting capabilities',            scope:['s-chart']},
+  ],
+  identities: [
+    {id:'i-pr',   name:'PR Reviewer Bot',   account:'svc-pr-reviewer@agents.parthenon.local',   provider:'Keycloak',       realm:'ai_agents'},
+    {id:'i-inv',  name:'Invoice Bot',       account:'svc-invoice-bot@agents.parthenon.local',   provider:'Keycloak',       realm:'ai_agents'},
+    {id:'i-ops',  name:'Ops Assistant Bot', account:'svc-ops-assistant@agents.parthenon.local', provider:'Keycloak',       realm:'ai_agents'},
+    {id:'i-rep',  name:'Weekly Report Bot', account:'svc-weekly-report@contoso.com',            provider:'Azure EntraID',  realm:'agents'},
+  ],
+  skills: [
+    {id:'s-pr-analysis', name:'github-pr-analysis', mcp:'mcp-github',     tool:'analyze_pull_request'},
+    {id:'s-git-blame',   name:'git-blame-lookup',   mcp:'mcp-github',     tool:'get_blame'},
+    {id:'s-ocr',         name:'ocr-extract-text',   mcp:'mcp-vision',     tool:'extract_text'},
+    {id:'s-pdf',         name:'pdf-parse',          mcp:'mcp-filesystem', tool:'parse_pdf'},
+    {id:'s-kubectl-logs',name:'kubectl-logs-query', mcp:'mcp-kubernetes', tool:'query_logs'},
+    {id:'s-runbook',     name:'runbook-search',     mcp:'mcp-wiki',       tool:'search_runbooks'},
+    {id:'s-chart',       name:'chart-render',       mcp:'mcp-filesystem', tool:'render_chart'},
+  ],
+  sops: [
+    {id:'o-pr',       name:'github-pr-workflow',           steps:['s-pr-analysis','s-git-blame'], desc:'Fetch, analyse and summarise a pull request'},
+    {id:'o-inv',      name:'invoice-processing-pipeline',  steps:['s-pdf','s-ocr'],               desc:'Parse document then extract structured invoice fields'},
+    {id:'o-incident', name:'incident-triage',              steps:['s-kubectl-logs','s-runbook'],  desc:'Correlate cluster logs with matching runbooks'},
+    {id:'o-weekly',   name:'weekly-report',                steps:['s-chart'],                     desc:'Render KPI charts into a weekly summary'},
+  ],
+  datatypes: [
+    {id:'d-prctx', name:'PR Context',    slug:'pr-context',    kind:'json',   fields:[{n:'repo',t:'string',r:true},{n:'pr_number',t:'number',r:true},{n:'diff',t:'string',r:false}]},
+    {id:'d-review',name:'Review Report', slug:'review-report', kind:'json',   fields:[{n:'verdict',t:'enum',r:true},{n:'findings',t:'number',r:true},{n:'summary',t:'string',r:true}]},
+    {id:'d-doc',   name:'Document Blob', slug:'document-blob', kind:'binary', fields:[]},
+    {id:'d-inv',   name:'Invoice Record',slug:'invoice-record',kind:'json',   fields:[{n:'vendor',t:'string',r:true},{n:'total',t:'number',r:true},{n:'currency',t:'enum',r:true},{n:'due_date',t:'date',r:false}]},
+    {id:'d-chat',  name:'Chat Message',  slug:'chat-message',  kind:'text',   fields:[]},
+  ],
+  models: [
+    {id:'m-azure',    name:'Azure GPT-4o',     provider:'azure_openai', endpoint:'https://cc-eu.openai.azure.com'},
+    {id:'m-openai',   name:'OpenAI GPT-4o',    provider:'openai',       endpoint:'https://api.openai.com/v1'},
+    {id:'m-anthropic',name:'Claude Sonnet 4',  provider:'anthropic',    endpoint:'https://api.anthropic.com'},
+    {id:'m-gemini',   name:'Gemini 2.0 Flash', provider:'gemini',       endpoint:'https://generativelanguage.googleapis.com'},
+    {id:'m-groq',     name:'Llama 3.3 70B',    provider:'groq',         endpoint:'https://api.groq.com/openai/v1'},
+  ],
+};
+
+function mkAgent(id,name,kind,desc,si,config){return {id,name,kind,desc,systemInstruction:si,config};}
+let agents = [
+  mkAgent('ag-1','PR Reviewer','typed','Reviews pull requests against team guidelines and posts structured verdicts.',
+    'You are a senior code reviewer. Analyse the provided pull request diff, check it against team guidelines, and produce a structured verdict.',
+    {role:'r-dev',identity:'i-pr',skills:['s-pr-analysis','s-git-blame'],sops:['o-pr'],input:'d-prctx',output:'d-review',model:'m-azure'}),
+  mkAgent('ag-2','Invoice Extractor','typed','Reads scanned invoices and emits schema-validated invoice records.',
+    'You extract structured invoice data from parsed documents. Always validate totals and currency against the invoice schema.',
+    {role:'r-docproc',identity:'i-inv',skills:['s-ocr','s-pdf'],sops:['o-inv'],input:'d-doc',output:'d-inv',model:'m-openai'}),
+  mkAgent('ag-3','Ops Assistant','conversational','Conversational on-call assistant that triages incidents using cluster logs and runbooks.',
+    'You are an on-call operations assistant. Investigate incidents using cluster logs and the runbook library, and guide the engineer step by step.',
+    {role:'r-ops',identity:'i-ops',skills:['s-kubectl-logs','s-runbook'],sops:['o-incident'],input:'d-chat',output:null,model:'m-anthropic'}),
+];
+
+/* ════════════════════════════ STATE ════════════════════════════ */
+let SAVED = {}, pending = {};
+agents.forEach(a => SAVED[a.id] = deep(a));
+let selectedId = agents[0].id;
+let perm = 'admin';               // 'admin' | 'viewer'
+let searchQ = '';
+let modalSave = null;             // footer primary handler
+
+/* ── Topology view + simulated runtime state (mirrors RuntimeTopologyNode:
+      session status, trigger source, tool_calls routed to MCP slugs,
+      needs_intervention) ── */
+let runtimeView = false;          // false = Design view · true = Runtime view
+const collapsed = new Set();      // skill/SOP ids whose tool-chips are collapsed
+let rtTimer = null;               // simulated-call interval handle
+
+const RUNTIME = {
+  'ag-1':{status:'running',session:'sess-8f3a21c4',startedAt:'13:58:02',trigger:'triggered by user · Ming Li',
+    intervention:{tool:'get_blame',reason:'Force-push rewrite detected — human approval required'},
+    calls:[
+      {t:'13:58:31',skill:'github-pr-analysis',tool:'analyze_pull_request',mcp:'mcp-github',ok:true},
+      {t:'13:59:04',skill:'git-blame-lookup',tool:'get_blame',mcp:'mcp-github',ok:false},
+    ]},
+  'ag-2':{status:'idle',session:'sess-2b7d90e1',startedAt:'12:45:02',trigger:'schedule · invoice-ingest-15min',
+    intervention:null,
+    calls:[
+      {t:'12:45:10',skill:'pdf-parse',tool:'parse_pdf',mcp:'mcp-filesystem',ok:true},
+      {t:'12:45:41',skill:'ocr-extract-text',tool:'extract_text',mcp:'mcp-vision',ok:true},
+    ]},
+  'ag-3':{status:'running',session:'sess-c4e77b19',startedAt:'14:01:44',trigger:'triggered by user · J. Rivera',
+    intervention:{tool:'search_runbooks',reason:'No matching runbook — escalation requested'},
+    calls:[
+      {t:'14:02:02',skill:'kubectl-logs-query',tool:'query_logs',mcp:'mcp-kubernetes',ok:true},
+    ]},
+};
+function rt(){
+  if(!RUNTIME[selectedId])RUNTIME[selectedId]={status:'idle',session:null,startedAt:'—',trigger:'manual trigger',intervention:null,calls:[]};
+  return RUNTIME[selectedId];
+}
+
+/* ════════════════════════════ UTILS ════════════════════════════ */
+function $(id){return document.getElementById(id)}
+function deep(o){return JSON.parse(JSON.stringify(o))}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function cur(){return agents.find(a=>a.id===selectedId)}
+function cfg(){return cur().config}
+function item(catKey,id){return catalog[catKey].find(x=>x.id===id)||null}
+function canWrite(){return perm==='admin'}
+function slugify(s){return s.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}
+function truncate(s,n){s=String(s);return s.length>n?s.slice(0,n-1)+'…':s}
+function hasPending(id){return (pending[id]||[]).length}
+function itemMeta(catKey,it){
+  switch(catKey){
+    case 'roles':      return (it.scope&&it.scope.length? it.scope.length+' grants · ':'')+(it.desc||'');
+    case 'identities': return it.account+' · '+it.provider;
+    case 'skills':     return it.mcp+' · '+it.tool;
+    case 'sops':       return (it.steps?it.steps.length:0)+' steps · '+(it.desc||'');
+    case 'datatypes':  return it.slug+' · '+it.kind;
+    case 'models':     return it.provider+' · '+it.endpoint;
+  }
+  return '';
+}
+
+function toast(msg,type){
+  const t=document.createElement('div');
+  t.className='toast toast-'+(type||'info');
+  t.innerHTML=(type==='success'?'✓ ':type==='error'?'✕ ':'ℹ ')+esc(msg);
+  $('toasts').appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),320)},2600);
+}
+
+/* ════════════════════════════ SIDEBAR ════════════════════════════ */
+function onSearch(v){searchQ=v.toLowerCase().trim();renderSidebar()}
+function renderSidebar(){
+  const list=agents.filter(a=>!searchQ||a.name.toLowerCase().includes(searchQ));
+  $('agent-count').textContent=agents.length;
+  $('btn-create-agent').disabled=!canWrite();
+  $('btn-create-agent').title=canWrite()?'':'Read-only: requires write permission on agent::types';
+  $('agent-list').innerHTML=list.map(a=>`
+    <div class="agent-item ${a.id===selectedId?'active':''}" onclick="selectAgent('${a.id}')">
+      <div class="agent-item-icon">🤖</div>
+      <div class="agent-item-main">
+        <div class="agent-item-name">${esc(a.name)}</div>
+        <div class="agent-item-meta">${a.kind==='typed'?'Typed output':'Conversational'} · ${equipmentCount(a)} equipped</div>
+      </div>
+      ${hasPending(a.id)?'<span class="pending-dot" title="Has unsaved changes"></span>':''}
+    </div>`).join('')||'<div class="slot-empty" style="padding:10px 12px">No agents match your search.</div>';
+}
+function equipmentCount(a){
+  const c=a.config;
+  return (c.role?1:0)+(c.identity?1:0)+c.skills.length+c.sops.length+(c.input?1:0)+(c.output?1:0)+(c.model?1:0);
+}
+function selectAgent(id){selectedId=id;renderAll()}
+
+/* ════════════════════════════ AGENT HEADER ════════════════════════════ */
+function renderHeader(){
+  const a=cur();
+  $('agent-header').innerHTML=`
+    <div class="ah-icon">🤖</div>
+    <div class="ah-main">
+      <div class="ah-name-row">
+        <span class="ah-name">${esc(a.name)}</span>
+        <span class="chip ${a.kind==='typed'?'chip-purple':'chip-blue'}">${a.kind==='typed'?'📤 Typed output':'💬 Conversational'}</span>
+        ${hasPending(a.id)?'<span class="chip chip-yellow">● unsaved draft</span>':''}
+      </div>
+      <div class="ah-desc">${esc(a.desc)}</div>
+    </div>
+    <div class="ah-actions">
+      <button class="btn btn-secondary btn-sm" ${canWrite()?'':'disabled'} title="${canWrite()?'':'Read-only: missing write permission on agent::types'}" onclick="openEditAgent()">✏️ Edit Agent</button>
+      <button class="btn btn-ghost-danger btn-sm" ${canWrite()?'':'disabled'} title="${canWrite()?'':'Read-only: missing write permission on agent::types'}" onclick="confirmDeleteAgent()">🗑 Delete</button>
+    </div>`;
+}
+
+/* ════════════════════════════ TOPOLOGY — zoned layered graph ════════════════════════════ */
+const NS='http://www.w3.org/2000/svg';
+function svgEl(name,attrs,parent){const e=document.createElementNS(NS,name);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+
+/* MCP server palette — Zone 3 tool nodes are grouped/coloured by server */
+const MCP_COLORS={
+  'mcp-github':    {fg:'#15803D',bg:'#F0FDF4'},
+  'mcp-vision':    {fg:'#0E7490',bg:'#ECFEFF'},
+  'mcp-filesystem':{fg:'#B45309',bg:'#FFFBEB'},
+  'mcp-kubernetes':{fg:'#1D4ED8',bg:'#EFF6FF'},
+  'mcp-wiki':      {fg:'#A21CAF',bg:'#FDF4FF'},
+};
+/* Relationship edge colours (documented in the legend) */
+const EDGE={
+  equipped:'#64748B', /* solid arrow — agent is equipped with */
+  grants:'#2563EB',   /* dotted      — role grants permission */
+  call:'#7C3AED',     /* dashed      — call path via Communication Hub */
+};
+function nowT(){const d=new Date();return [d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');}
+function equippedSkillPool(){
+  const c=cfg();const ids=new Set(c.skills);
+  c.sops.forEach(sid=>{const s=item('sops',sid);s&&s.steps.forEach(t=>ids.add(t));});
+  return [...ids].map(id=>item('skills',id)).filter(Boolean);
+}
+function toolGroups(){
+  const map=new Map();
+  equippedSkillPool().forEach(s=>{if(!map.has(s.mcp))map.set(s.mcp,[]);if(!map.get(s.mcp).includes(s.tool))map.get(s.mcp).push(s.tool);});
+  return [...map.entries()].map(([slug,tools])=>({slug,tools}));
+}
+
+function renderTopology(){
+  const svg=$('topo-svg');
+  if(!cur()){svg.innerHTML='';renderFeed();syncSim();return;}
+  svg.setAttribute('viewBox','0 0 1120 640');
+  svg.innerHTML='';
+  const a=cur(),c=cfg(),r=rt(),pend=hasPending(selectedId);
+
+  const defs=svgEl('defs',{},svg);
+  [['ah-eq',EDGE.equipped],['ah-grant',EDGE.grants],['ah-call',EDGE.call]].forEach(p=>{
+    const m=svgEl('marker',{id:p[0],viewBox:'0 0 10 10',refX:8.5,refY:5,markerWidth:6.5,markerHeight:6.5,orient:'auto'},defs);
+    svgEl('path',{d:'M0 0L10 5L0 10z',fill:p[1]},m);
+  });
+
+  const zoneLayer=svgEl('g',{},svg);
+  const edgeLayer=svgEl('g',{},svg);
+  const nodeLayer=svgEl('g',{},svg);
+  const pulseLayer=svgEl('g',{id:'pulse-layer'},svg);
+
+  const identity=c.identity?item('identities',c.identity):null;
+  const role=c.role?item('roles',c.role):null;
+  const inputIt=c.input?item('datatypes',c.input):null;
+  const outputIt=(a.kind==='typed'&&c.output)?item('datatypes',c.output):null;
+  const modelIt=c.model?item('models',c.model):null;
+  const sops=c.sops.map(id=>item('sops',id)).filter(Boolean);
+  const skills=c.skills.map(id=>item('skills',id)).filter(Boolean);
+  const groups=toolGroups();
+
+  const halo='paint-order:stroke;stroke:#FAFBFD;stroke-width:4px';
+  function txt(x,y,s,o){
+    o=o||{};
+    const t=svgEl('text',{x,y,'font-size':o.fs||10,'font-weight':o.fw||'normal',fill:o.fill||'#334155','text-anchor':o.anchor||'start',style:o.halo?halo:''},o.layer||nodeLayer);
+    if(o.ls)t.setAttribute('letter-spacing',o.ls);
+    if(o.mono)t.setAttribute('font-family','ui-monospace,SFMono-Regular,monospace');
+    t.textContent=s;return t;
+  }
+  function zone(x,y,w,h,title,sub,tcol,fill,stroke,dashed){
+    const g=svgEl('g',{},zoneLayer);
+    svgEl('rect',{x,y,width:w,height:h,rx:14,fill,stroke,'stroke-width':1.4,...(dashed?{'stroke-dasharray':'7 5'}:{})},g);
+    txt(x+14,y+22,title,{fs:11,fw:700,fill:tcol,ls:'.5px',layer:g});
+    txt(x+14,y+37,sub,{fs:9.5,fill:'#64748B',layer:g});
+  }
+  function drawNode(o){
+    const g=svgEl('g',{class:'topo-node'+(o.ghost?' ghost':'')},nodeLayer);
+    if(o.onClick)g.addEventListener('click',o.onClick);
+    svgEl('title',{},g).textContent=o.title||'';
+    svgEl('rect',{class:'n-box',x:o.cx-o.w/2,y:o.cy-o.h/2,width:o.w,height:o.h,rx:10,
+      fill:o.ghost?'#FFFFFF':(o.fill||'#FFFFFF'),
+      stroke:o.ghost?'#CBD5E1':(o.stroke||'#94A3B8'),'stroke-width':o.sw||1.6,
+      ...(o.ghost?{'stroke-dasharray':'5 4'}:{})},g);
+    const isz=o.iconSize||16;
+    const t0=svgEl('text',{x:o.cx-o.w/2+12,y:o.cy+isz/2-3,'font-size':isz},g);t0.textContent=o.icon||'';
+    const tx=o.cx-o.w/2+12+isz+8;
+    const t1=svgEl('text',{x:tx,y:o.cy+(o.sub?-3:5),'font-size':o.fs||11.5,'font-weight':600,fill:o.ghost?'#94A3B8':'#1E293B'},g);
+    t1.textContent=truncate(o.label,o.lw||20);
+    if(o.sub){const t2=svgEl('text',{x:tx,y:o.cy+12,'font-size':o.subFs||8.8,fill:'#64748B'},g);t2.textContent=truncate(o.sub,30);}
+    if(o.aff){const t3=svgEl('text',{x:o.cx+o.w/2-10,y:o.cy+4,'font-size':10,fill:'#94A3B8','text-anchor':'end'},g);t3.textContent=o.aff;}
+    return g;
+  }
+  function chipRow(cx,y,s,fg,bg,o){
+    o=o||{};const w=188,x=cx-w/2;
+    const g=svgEl('g',{class:'topo-chip',...(o.id?{id:o.id}:{})},nodeLayer);
+    if(o.title)svgEl('title',{},g).textContent=o.title;
+    svgEl('rect',{x,y,width:w,height:20,rx:6,fill:bg||'#fff',stroke:fg||'#CBD5E1','stroke-width':o.sw||1.1},g);
+    svgEl('circle',{cx:x+11,cy:y+10,r:3,fill:fg||'#CBD5E1'},g);
+    const t=svgEl('text',{x:x+20,y:y+13.5,'font-size':9.5,fill:'#334155','font-family':'ui-monospace,SFMono-Regular,monospace'},g);
+    t.textContent=truncate(s,24);
+    return g;
+  }
+  function secLabel(y,s,fill){const t=svgEl('text',{x:312,y,'font-size':9,'font-weight':700,fill:fill||'#6D28D9','letter-spacing':'.6px'},nodeLayer);t.textContent=s.toUpperCase();}
+  function inLabel(y,s){const t=svgEl('text',{x:48,y,'font-size':8.5,'font-weight':700,fill:'#64748B','letter-spacing':'.8px'},nodeLayer);t.textContent=s.toUpperCase();}
+
+  /* ── zone backgrounds ── */
+  zone(14,40,268,584,'① CONFIGURATION','who the agent IS','#1E40AF','#F0F6FF','#BFDBFE',false);
+  zone(296,40,296,584,'② CAPABILITIES',"what it's EQUIPPED WITH",'#5B21B6','#FAF5FF','#DDD6FE',false);
+  zone(606,40,500,584,'③ RUNTIME',runtimeView?'how it ACTS — live session':'how it WOULD act (static call-path preview)','#334155','#F8FAFC','#94A3B8',true);
+
+  /* ── capability stack layout (Zone 2) ── */
+  const CAP_CX=444,CAP_W=212,CAP_H=44,CHIP_STEP=24;
+  const L={sops:[],skills:[],sopLabelY:0,skillLabelY:0};
+  (function(){
+    let yy=94;
+    L.sopLabelY=yy;yy+=16;
+    if(!sops.length){L.sops.push({ghost:true,cy:yy+22});yy+=CAP_H+20;}
+    else sops.forEach(s=>{const exp=!collapsed.has(s.id);L.sops.push({it:s,cy:yy+CAP_H/2,exp});yy+=CAP_H;if(exp)yy+=6+s.steps.length*CHIP_STEP+2;yy+=20;});
+    yy+=6;
+    L.skillLabelY=yy;yy+=16;
+    if(!skills.length){L.skills.push({ghost:true,cy:yy+22});yy+=CAP_H+20;}
+    else skills.forEach(s=>{const exp=!collapsed.has(s.id);L.skills.push({it:s,cy:yy+CAP_H/2,exp});yy+=CAP_H;if(exp)yy+=6+CHIP_STEP+2;yy+=20;});
+  })();
+
+  /* ── edges (drawn beneath nodes) ── */
+  const targets=[
+    ...L.sops.map(e=>({cy:e.cy,ghost:!!e.ghost})),
+    ...L.skills.map(e=>({cy:e.cy,ghost:!!e.ghost})),
+  ];
+  let firstTy=null;
+  targets.forEach(tg=>{
+    const sy=Math.max(130,Math.min(tg.cy,470));
+    if(tg.ghost){
+      svgEl('line',{x1:264,y1:sy,x2:332,y2:tg.cy,stroke:'#CBD5E1','stroke-width':1.4,'stroke-dasharray':'3 5'},edgeLayer);
+    }else{
+      svgEl('path',{d:'M 264 '+sy+' C 302 '+sy+', 300 '+tg.cy+', 332 '+tg.cy,fill:'none',stroke:EDGE.equipped,'stroke-width':1.8,'marker-end':'url(#ah-eq)'},edgeLayer);
+      if(firstTy===null)firstTy=tg.cy;
+    }
+  });
+  if(firstTy!==null)txt(299,firstTy-8,'equipped with',{fs:8.5,fill:EDGE.equipped,anchor:'middle',halo:true,layer:edgeLayer});
+  if(role&&targets.some(t=>!t.ghost)){
+    targets.filter(t=>!t.ghost).forEach(tg=>{
+      svgEl('path',{d:'M 248 276 C 298 276, 292 '+tg.cy+', 332 '+tg.cy,fill:'none',stroke:EDGE.grants,'stroke-width':1.7,'stroke-dasharray':'2 4.5','marker-end':'url(#ah-grant)',opacity:.95},edgeLayer);
+    });
+    txt(300,262,'grants',{fs:8.5,fill:EDGE.grants,anchor:'middle',halo:true,layer:edgeLayer});
+  }
+  /* call-path: Agent → Hub → MCP tools */
+  svgEl('path',{id:'path-agent-hub',d:'M 264 480 C 420 480, 520 320, 652 320',fill:'none',stroke:EDGE.call,'stroke-width':2,'stroke-dasharray':'7 5',...(runtimeView?{class:'rt-flow'}:{}),'marker-end':'url(#ah-call)'},edgeLayer);
+  txt(420,420,'executes via',{fs:9.5,fw:600,fill:EDGE.call,anchor:'middle',halo:true,layer:edgeLayer});
+
+  let gy=76;
+  const gpos=groups.map(g=>{
+    let cy=gy+26;
+    g.tools.forEach(t=>{cy+=(runtimeView&&r.intervention&&r.intervention.tool===t)?44:CHIP_STEP;});
+    const gh=cy-gy+2,pos={slug:g.slug,tools:g.tools,top:gy,gh,mid:gy+gh/2};
+    gy+=gh+16;return pos;
+  });
+  gpos.forEach(gp=>{
+    svgEl('path',{id:'path-hub-'+gp.slug,d:'M 828 320 C 864 320, 860 '+gp.mid+', 892 '+gp.mid,fill:'none',stroke:EDGE.call,'stroke-width':1.8,'stroke-dasharray':'6 5',...(runtimeView?{class:'rt-flow'}:{}),'marker-end':'url(#ah-call)'},edgeLayer);
+  });
+  if(gpos.length)txt(858,296,'routes to',{fs:9.5,fw:600,fill:EDGE.call,anchor:'middle',halo:true,layer:edgeLayer});
+
+  /* ══ ZONE 1 — agent boundary (containment) ══ */
+  const bg=svgEl('g',{class:'topo-node'},nodeLayer);
+  bg.addEventListener('click',()=>toast('Agent Type: '+a.name+' — '+(a.kind==='typed'?'typed output':'conversational')+' · '+equipmentCount(a)+' items equipped','info'));
+  svgEl('title',{},bg).textContent=a.name+' — Agent Type boundary (identity & role are part of it)';
+  svgEl('rect',{class:'n-box',x:32,y:88,width:232,height:422,rx:14,fill:pend?'#FEF3C7':'#DBEAFE','fill-opacity':.32,stroke:pend?'#D97706':'#1D4ED8','stroke-width':3},bg);
+  txt(48,112,'🤖 '+truncate(a.name,16),{fs:13.5,fw:700,fill:'#1E3A8A'});
+  txt(48,128,'Agent Type · '+(a.kind==='typed'?'typed output':'conversational')+(pend?' · unsaved draft':''),{fs:9.5,fill:'#475569'});
+  if(runtimeView){
+    const run=r.status==='running';
+    svgEl('rect',{x:186,y:95,width:64,height:17,rx:8.5,fill:run?'#DCFCE7':'#F1F5F9',stroke:run?'#16A34A':'#CBD5E1','stroke-width':1},nodeLayer);
+    svgEl('circle',{cx:196,cy:103.5,r:3,fill:run?'#16A34A':'#94A3B8',...(run?{class:'blinkdot'}:{})},nodeLayer);
+    txt(203,107,run?'running':'idle',{fs:9,fw:700,fill:run?'#166534':'#475569'});
+    txt(48,148,(r.session||'no active session')+' · '+r.trigger+(r.startedAt&&r.startedAt!=='—'?' · started '+r.startedAt:''),{fs:8.5,fill:'#64748B',mono:true});
+  }
+  inLabel(170,'signs in as');
+  drawNode({cx:148,cy:196,w:200,h:48,icon:'🆔',label:identity?identity.name:'No identity assigned',
+    sub:identity?identity.account:'click to assign',ghost:!identity,
+    fill:CATS.identity.bg,stroke:CATS.identity.fg,
+    onClick:identity?()=>toast('Identity: '+identity.name+' — '+identity.account+' ('+identity.provider+' · '+identity.realm+')','info'):()=>openAssign('identity'),
+    title:identity?'Identity: '+identity.name:'Empty slot — click to assign an identity'});
+  inLabel(250,'assumes as');
+  drawNode({cx:148,cy:276,w:200,h:48,icon:'👤',label:role?role.name:'No role assigned',
+    sub:role?(role.scope.length+' grants · permission source'):'click to assign',ghost:!role,
+    fill:CATS.role.bg,stroke:CATS.role.fg,
+    onClick:role?()=>toast('Role: '+role.name+' — grants '+role.scope.length+' skills/SOPs; permission flows via the dotted edges','info'):()=>openAssign('role'),
+    title:role?'Role: '+role.name:'Empty slot — click to assign a role'});
+  svgEl('line',{x1:48,y1:324,x2:248,y2:324,stroke:'#93C5FD','stroke-dasharray':'4 4'},nodeLayer);
+  inLabel(344,'contract & model');
+  const inchips=[
+    {it:inputIt,cat:'input',slot:'input',ph:'No input type'},
+    ...(a.kind==='typed'?[{it:outputIt,cat:'output',slot:'output',ph:'No output type'}]:[]),
+    {it:modelIt,cat:'model',slot:'model',ph:'No model'},
+  ];
+  let chipY=366;
+  inchips.forEach(ch=>{
+    drawNode({cx:148,cy:chipY+17,w:200,h:34,icon:CATS[ch.cat].icon,iconSize:14,label:ch.it?ch.it.name:ch.ph,
+      sub:ch.it?(ch.cat==='model'?ch.it.provider:ch.it.slug+' · '+ch.it.kind):'click to assign',
+      ghost:!ch.it,fs:10.5,subFs:8.2,fill:CATS[ch.cat].bg,stroke:CATS[ch.cat].fg,
+      onClick:ch.it?()=>toast(CATS[ch.cat].label+': '+ch.it.name,'info'):()=>openAssign(ch.slot),
+      title:ch.it?CATS[ch.cat].label+': '+ch.it.name:'Empty slot — click to assign'});
+    chipY+=46;
+  });
+  txt(32,540,'⬤ Identity & Role are part of the agent (containment — thick blue boundary)',{fs:8.5,fill:'#64748B'});
+
+  /* ══ ZONE 2 — capabilities ══ */
+  secLabel(L.sopLabelY,'SOPs — procedures');
+  L.sops.forEach(e=>{
+    if(e.ghost){
+      drawNode({cx:CAP_CX,cy:e.cy,w:CAP_W,h:CAP_H,icon:'📋',label:'No SOPs equipped',sub:'click to assign',ghost:true,
+        onClick:()=>openMultiAssign('sop'),title:'Empty slot — click to assign SOPs'});
+      return;
+    }
+    const s=e.it,exp=e.exp;
+    drawNode({cx:CAP_CX,cy:e.cy,w:CAP_W,h:CAP_H,icon:'📋',label:s.name,lw:17,sub:truncate(s.steps.length+' steps · '+(s.desc||''),30),
+      fill:CATS.sop.bg,stroke:CATS.sop.fg,aff:exp?'▾':'▸',
+      onClick:()=>{collapsed.has(s.id)?collapsed.delete(s.id):collapsed.add(s.id);renderTopology();},
+      title:(exp?'Click to collapse':'Click to expand')+' — '+s.name});
+    if(exp){let cy=e.cy+CAP_H/2+6;s.steps.forEach(st=>{const sk=item('skills',st);chipRow(CAP_CX,cy,sk?'🔧 '+sk.name:'🔧 '+st,'#6D28D9','#F5F3FF',{title:sk?('composed skill — calls '+sk.tool+' via '+sk.mcp):st});cy+=CHIP_STEP;});}
+  });
+  secLabel(L.skillLabelY,'Skills — capabilities');
+  L.skills.forEach(e=>{
+    if(e.ghost){
+      drawNode({cx:CAP_CX,cy:e.cy,w:CAP_W,h:CAP_H,icon:'🔧',label:'No skills equipped',sub:'click to assign',ghost:true,
+        onClick:()=>openMultiAssign('skill'),title:'Empty slot — click to assign skills'});
+      return;
+    }
+    const s=e.it,exp=e.exp,mc=MCP_COLORS[s.mcp]||{fg:'#475569',bg:'#F8FAFC'};
+    drawNode({cx:CAP_CX,cy:e.cy,w:CAP_W,h:CAP_H,icon:'🔧',label:s.name,lw:17,sub:s.mcp+' · '+s.tool,
+      fill:CATS.skill.bg,stroke:CATS.skill.fg,aff:exp?'▾':'▸',
+      onClick:()=>{collapsed.has(s.id)?collapsed.delete(s.id):collapsed.add(s.id);renderTopology();},
+      title:(exp?'Click to collapse':'Click to expand')+' — calls '+s.tool+' via '+s.mcp});
+    if(exp)chipRow(CAP_CX,e.cy+CAP_H/2+6,'⚙ '+s.tool,mc.fg,mc.bg,{id:'toolchip-'+s.mcp+'-'+s.tool,title:'MCP tool — routed via Communication Hub to '+s.mcp});
+  });
+
+  /* ══ ZONE 3 — runtime ══ */
+  const hg=svgEl('g',{class:'topo-node'},nodeLayer);
+  hg.addEventListener('click',()=>toast('Communication Hub — platform broker & MCP gateway. Every tool call is routed through the Hub.','info'));
+  svgEl('title',{},hg).textContent='Communication Hub — broker · agent gateway · MCP endpoint';
+  svgEl('rect',{class:'n-box',x:652,y:288,width:176,height:64,rx:12,fill:'#E0E7FF',stroke:'#3730A3','stroke-width':2.2},hg);
+  txt(664,330,'📡',{fs:22});
+  txt(696,314,'Communication Hub',{fs:12,fw:700,fill:'#312E81'});
+  txt(696,330,'broker · agent gateway · MCP',{fs:8.8,fill:'#4338CA'});
+  if(runtimeView)txt(696,346,r.status==='running'?'● live — routing calls':'○ idle — awaiting trigger',{fs:8.5,fw:600,fill:r.status==='running'?'#16A34A':'#64748B'});
+
+  if(!gpos.length){
+    drawNode({cx:990,cy:112,w:196,h:48,icon:'⚙',label:'No tools resolved',sub:'equip skills or SOPs →',ghost:true,
+      title:'No MCP tools — equip skills or SOPs to build a call path'});
+  }
+  gpos.forEach(gp=>{
+    const mc=MCP_COLORS[gp.slug]||{fg:'#475569',bg:'#F8FAFC'};
+    const g=svgEl('g',{},nodeLayer);
+    svgEl('rect',{x:892,y:gp.top,width:196,height:gp.gh,rx:10,fill:mc.bg,'fill-opacity':.6,stroke:mc.fg,'stroke-width':1.3},g);
+    svgEl('circle',{cx:904,cy:gp.top+13,r:3.5,fill:mc.fg},g);
+    txt(912,gp.top+17,gp.slug,{fs:9.5,fw:700,fill:mc.fg,layer:g});
+    txt(1078,gp.top+17,gp.tools.length+(gp.tools.length===1?' tool':' tools'),{fs:8.5,fill:'#64748B',anchor:'end',layer:g});
+    let cy=gp.top+26;
+    gp.tools.forEach(tool=>{
+      const tagged=runtimeView&&r.intervention&&r.intervention.tool===tool;
+      chipRow(990,cy,tool,mc.fg,'#FFFFFF',{id:'toolchip-'+gp.slug+'-'+tool,title:tagged?('⚠ '+r.intervention.reason):('MCP tool on '+gp.slug)});
+      if(tagged){
+        svgEl('rect',{x:900,y:cy+22,width:180,height:15,rx:4,fill:'#FEF3C7',stroke:'#D97706','stroke-width':1},nodeLayer);
+        txt(906,cy+33,'⚠ needs intervention',{fs:8,fw:700,fill:'#92400E'});
+      }
+      cy+=tagged?44:CHIP_STEP;
+    });
+  });
+
+  renderFeed();syncSim();
+}
+
+/* ════════════════════════════ RUNTIME VIEW — feed, pulse simulation, toggle ════════════════════════════ */
+function renderFeed(){
+  const wrap=$('rt-feed');
+  if(!runtimeView||!cur()){wrap.classList.remove('show');return;}
+  wrap.classList.add('show');
+  const r=rt();
+  $('rt-feed-status').innerHTML=r.status==='running'
+    ?'<span class="live"><span class="live-dot"></span>LIVE</span> session <b>'+esc(r.session||'—')+'</b> · '+esc(r.trigger)+(r.startedAt&&r.startedAt!=='—'?' · started '+esc(r.startedAt):'')
+    :'<span style="color:#64748B;font-weight:700">○ IDLE</span> session <b>'+esc(r.session||'—')+'</b> · '+esc(r.trigger)+' — waiting for next run';
+  $('rt-feed-list').innerHTML=r.calls.slice(0,5).map((cl,i)=>
+    '<div class="rt-call'+(i===0?' fresh':'')+(cl.ok?'':' warn')+'">'+
+    '<span class="rt-t">'+esc(cl.t)+'</span><span class="rt-skill">'+esc(cl.skill)+'</span><span class="rt-arrow">→</span>'+
+    '<span class="rt-tool">'+esc(cl.tool)+'</span><span class="rt-via">via Communication Hub · '+esc(cl.mcp)+'</span>'+
+    '<span>'+(cl.ok?'<span style="color:#16A34A">✓</span>':'<span style="color:#D97706" title="'+esc((r.intervention||{}).reason||'needs intervention')+'">⚠</span>')+'</span></div>'
+  ).join('')||'<div class="rt-call" style="color:#94A3B8;font-style:italic">No tool calls yet in this session.</div>';
+}
+function syncSim(){
+  if(rtTimer){clearInterval(rtTimer);rtTimer=null;}
+  if(runtimeView&&cur()&&rt().status==='running')rtTimer=setInterval(fireSimCall,3800);
+}
+function fireSimCall(){
+  const pool=equippedSkillPool();if(!pool.length)return;
+  firePulse(pool[Math.floor(Math.random()*pool.length)]);
+}
+function firePulse(sk){
+  const r=rt(),warn=!!(r.intervention&&r.intervention.tool===sk.tool);
+  const pulse=(path,dur,done)=>{
+    if(!path){done&&done();return;}
+    const len=path.getTotalLength();
+    const dot=svgEl('circle',{r:5.5,fill:warn?'#D97706':'#7C3AED',stroke:'#fff','stroke-width':1.5},$('pulse-layer'));
+    const t0=performance.now();
+    (function st(t){
+      const p=Math.min((t-t0)/dur,1);
+      const pt=path.getPointAtLength(len*p);
+      dot.setAttribute('cx',pt.x);dot.setAttribute('cy',pt.y);
+      if(p>.85)dot.setAttribute('opacity',String(Math.max(0,1-(p-.85)/.15)));
+      if(p<1)requestAnimationFrame(st);else{dot.remove();done&&done();}
+    })(t0);
+  };
+  pulse($('path-agent-hub'),850,()=>{
+    const chip=$('toolchip-'+sk.mcp+'-'+sk.tool);
+    if(chip){chip.setAttribute('stroke-width','2.4');setTimeout(()=>chip.setAttribute('stroke-width','1.1'),900);}
+    pulse($('path-hub-'+sk.mcp),700,()=>{
+      r.calls.unshift({t:nowT(),skill:sk.name,tool:sk.tool,mcp:sk.mcp,ok:!warn});
+      r.calls=r.calls.slice(0,8);
+      renderFeed();
+      if(warn&&!r._warned){r._warned=true;toast('⚠ Needs intervention: '+r.intervention.reason,'info');}
+    });
+  });
+}
+function setView(v){
+  runtimeView=(v==='rt');
+  $('vt-design').classList.toggle('active',!runtimeView);
+  $('vt-runtime').classList.toggle('active',runtimeView);
+  $('topo-hint-el').textContent=runtimeView?'simulated runtime — a call fires every few seconds':'updates instantly — no save required';
+  renderTopology();renderLegend();
+}
+
+/* ════════════════════════════ LEGEND ════════════════════════════ */
+function renderLegend(){
+  const uniq=[...new Set(equippedSkillPool().map(s=>s.mcp))];
+  $('legend').innerHTML='<strong>Legend</strong>'+
+    '<span class="legend-item"><svg width="22" height="14"><rect x="2" y="2" width="18" height="10" rx="3" fill="none" stroke="#1D4ED8" stroke-width="2.5"/></svg>agent boundary — identity &amp; role <b>are part of</b> the agent</span>'+
+    '<span class="legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#64748B" stroke-width="2"/><path d="M19 1l6 3-6 3z" fill="#64748B"/></svg>equipped with</span>'+
+    '<span class="legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#2563EB" stroke-width="2" stroke-dasharray="2 3"/><path d="M19 1l6 3-6 3z" fill="#2563EB"/></svg>role grants permission</span>'+
+    '<span class="legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#7C3AED" stroke-width="2" stroke-dasharray="5 3"/><path d="M19 1l6 3-6 3z" fill="#7C3AED"/></svg>call path via Hub'+(runtimeView?' <b style="color:#7C3AED">(live)</b>':' (static preview)')+'</span>'+
+    '<span class="legend-item">🆔 Identity · 👤 Role · 🔧 Skill · 📋 SOP · 📥 Input · 📤 Output · 🧠 Model · 📡 Hub</span>'+
+    uniq.map(s=>'<span class="legend-item"><span style="width:9px;height:9px;border-radius:50%;display:inline-block;background:'+(MCP_COLORS[s]?MCP_COLORS[s].fg:'#94A3B8')+'"></span>'+esc(s)+'</span>').join('')+
+    '<span class="legend-item">⬚ dashed = empty slot, click to assign · ▸ expand skill/SOP tool calls'+(runtimeView?' · ⚠ needs intervention':'')+'</span>';
+}
+
+/* ════════════════════════════ EQUIPMENT SLOTS ════════════════════════════ */
+const SLOT_DEFS=[
+  {key:'role',    multi:false, module:'Agent Roles',        reuse:'agent::roles'},
+  {key:'identity',multi:false, module:'Agent Identities',   reuse:'agent::identities'},
+  {key:'skill',   multi:true,  module:'Skills',             reuse:'agent::skills'},
+  {key:'sop',     multi:true,  module:'SOPs',               reuse:'agent::sops'},
+  {key:'input',   multi:false, module:'Agent Data Types',   reuse:'agent::data_types'},
+  {key:'output',  multi:false, module:'Agent Data Types',   reuse:'agent::data_types'},
+  {key:'model',   multi:false, module:'Model Configurations',reuse:'agent::model_configs'},
+];
+function slotConfigKey(k){return {role:'role',identity:'identity',skill:'skills',sop:'sops',input:'input',output:'output',model:'model'}[k]}
+
+function slotItemRow(icon,name,meta,onRemove){
+  return `<div class="slot-item">
+    <span class="si-icon">${icon}</span>
+    <div class="si-main"><div class="si-name">${esc(name)}</div><div class="si-meta">${esc(meta||'')}</div></div>
+    ${onRemove?`<button class="si-remove" title="Unassign" ${canWrite()?'':'disabled'} onclick="${onRemove}">✕</button>`:''}
+  </div>`;
+}
+
+function renderSlots(){
+  $('equip-agent-name').textContent=cur().name;
+  $('perm-note').classList.toggle('show',!canWrite());
+  const c=cfg();
+  const lockBtn=(fn,title)=>canWrite()?`onclick="${fn}"`:'disabled title="'+(title||'Read-only')+'"';
+
+  $('slots').innerHTML=SLOT_DEFS.map(def=>{
+    const cat2=CATS[def.key];
+    const permTitle=canWrite()?'':'Read-only: requires '+cat2.perm;
+    let body='',actions='';
+
+    if(def.key==='output' && cur().kind==='conversational'){
+      body=`<div class="slot-locked"><span>🔒</span><span><b>Not available.</b> Conversational agents do not support typed outputs (Agent Data Type rule). Switch the agent kind to “Typed output” to equip one.</span></div>`;
+    }else if(def.multi){
+      const arr=c[slotConfigKey(def.key)];
+      body=arr.length?arr.map(id=>{const it=item(cat2.catKey,id);return it?slotItemRow(cat2.icon,it.name,itemMeta(cat2.catKey,it),`unassignMulti('${def.key}','${id}')`):''}).join('')
+        :'<div class="slot-empty">Nothing equipped yet.</div>';
+      actions=`<button class="btn btn-secondary btn-xs" ${lockBtn(`openMultiAssign('${def.key}')`,permTitle)}>Assign existing…</button>
+               <button class="btn btn-secondary btn-xs" ${lockBtn(`openCreate('${def.key}')`,permTitle)}>＋ Create new</button>`;
+    }else{
+      const id=c[slotConfigKey(def.key)], it=id?item(cat2.catKey,id):null;
+      body=it?slotItemRow(cat2.icon,it.name,itemMeta(cat2.catKey,it),`unassignSingle('${def.key}')`)
+             :'<div class="slot-empty">— not equipped —</div>';
+      actions=`<button class="btn btn-secondary btn-xs" ${lockBtn(`openAssign('${def.key}')`,permTitle)}>Assign existing…</button>
+               <button class="btn btn-secondary btn-xs" ${lockBtn(`openCreate('${def.key}')`,permTitle)}>＋ Create new</button>
+               ${it?`<button class="btn btn-ghost-danger btn-xs" ${lockBtn(`unassignSingle('${def.key}')`,permTitle)}>Unassign</button>`:''}`;
+    }
+
+    return `<div class="slot">
+      <div class="slot-head"><span class="sh-icon">${cat2.icon}</span><span class="sh-label">${cat2.label}</span>
+        ${def.multi?`<span class="count-badge">${c[slotConfigKey(def.key)].length}</span>`:''}
+      </div>
+      <div class="slot-body">${body}</div>
+      <div class="slot-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════ PENDING / SAVE STATE ════════════════════════════ */
+function markPending(text){
+  if(!pending[selectedId])pending[selectedId]=[];
+  pending[selectedId].push({icon:'✎',text,t:'just now'});
+  renderPending(); renderSidebar(); renderHeader();
+}
+function renderPending(){
+  const n=hasPending(selectedId);
+  // topbar
+  $('unsaved-badge').classList.toggle('show',n>0);
+  $('unsaved-text').textContent=n+' unsaved change'+(n===1?'':'s');
+  $('btn-save').disabled=n===0||!canWrite();
+  $('btn-discard').disabled=n===0||!canWrite();
+  // canvas chip
+  const chip=$('topo-state-chip');
+  if(n>0){chip.className='chip chip-yellow';chip.textContent='● unsaved ('+n+')';}
+  else{chip.className='chip chip-green';chip.textContent='✓ saved';}
+  // list
+  $('pending-count').textContent=n;
+  const entries=(pending[selectedId]||[]).slice(-6).reverse();
+  $('pending-list').innerHTML=entries.length
+    ? entries.map(e=>`<div class="pending-entry"><span class="pe-icon">${e.icon}</span><span class="pe-text">${esc(e.text)}</span></div>`).join('')
+    : '<div class="pending-empty">No pending changes — panel is in sync with the saved configuration.</div>';
+}
+function saveChanges(){
+  SAVED[selectedId]=deep(cur()); pending[selectedId]=[];
+  toast('Configuration for “'+cur().name+'” saved.','success');
+  renderPending(); renderSidebar(); renderTopology();
+}
+function discardChanges(){
+  const i=agents.findIndex(a=>a.id===selectedId);
+  agents[i]=deep(SAVED[selectedId]); pending[selectedId]=[];
+  toast('Draft changes discarded.','info');
+  renderAll();
+}
+
+/* ════════════════════════════ ASSIGN / UNASSIGN ════════════════════════════ */
+function applyAssign(slotKey,id){
+  const cat2=CATS[slotKey], key=slotConfigKey(slotKey), it=item(cat2.catKey,id), prev=cfg()[key];
+  if(prev===id){toast(cat2.label+' “'+it.name+'” is already equipped.','info');return;}
+  cfg()[key]=id;
+  const prevIt=prev?item(cat2.catKey,prev):null;
+  markPending(`${cat2.icon} ${cat2.label} → ${it.name}${prevIt?' (was '+prevIt.name+')':' (newly equipped)'}`);
+  toast(cat2.label+' equipped: '+it.name,'success');
+  renderTopology(); renderSlots(); renderHeader();
+}
+function unassignSingle(slotKey){
+  const cat2=CATS[slotKey], key=slotConfigKey(slotKey), it=item(cat2.catKey,cfg()[key]);
+  if(!it)return;
+  cfg()[key]=null;
+  markPending(`➖ ${cat2.label} removed: ${it.name}`);
+  toast(cat2.label+' unequipped: '+it.name,'info');
+  renderTopology(); renderSlots(); renderHeader();
+}
+function applyMulti(slotKey,newIds){
+  const cat2=CATS[slotKey], key=slotConfigKey(slotKey);
+  const before=cfg()[key];
+  const added=newIds.filter(id=>!before.includes(id)), removed=before.filter(id=>!newIds.includes(id));
+  if(!added.length&&!removed.length){closeModal();return;}
+  cfg()[key]=newIds;
+  added.forEach(id=>markPending(`➕ ${cat2.label} attached: ${item(cat2.catKey,id).name}`));
+  removed.forEach(id=>markPending(`➖ ${cat2.label} removed: ${item(cat2.catKey,id).name}`));
+  toast(cat2.label+'s updated (+'+added.length+' / −'+removed.length+').','success');
+  renderTopology(); renderSlots();
+}
+function unassignMulti(slotKey,id){
+  const cat2=CATS[slotKey], key=slotConfigKey(slotKey), it=item(cat2.catKey,id);
+  cfg()[key]=cfg()[key].filter(x=>x!==id);
+  markPending(`➖ ${cat2.label} removed: ${it.name}`);
+  toast(cat2.label+' unequipped: '+it.name,'info');
+  renderTopology(); renderSlots();
+}
+
+/* ════════════════════════════ MODAL SYSTEM ════════════════════════════ */
+function openModal(title,sub,body,footer){
+  $('modal-title').innerHTML=title; $('modal-sub').innerHTML=sub||'';
+  $('modal-body').innerHTML=body; $('modal-footer').innerHTML=footer;
+  $('modal-overlay').classList.add('open');
+}
+function closeModal(){$('modal-overlay').classList.remove('open');modalSave=null;}
+$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+function stdFooter(saveLabel,onSave,extra){
+  modalSave=onSave;
+  return `${extra||''}<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="modalSave&&modalSave()">${saveLabel}</button>`;
+}
+function setErr(id,msg){$(id).classList.add('error');const e=$(id+'-err');if(e){e.textContent=msg;e.classList.add('visible')}}
+function clearErrs(){document.querySelectorAll('#modal-body .error').forEach(x=>x.classList.remove('error'));document.querySelectorAll('#modal-body .inline-form-error').forEach(x=>{x.classList.remove('visible');x.textContent=''})}
+function dupCheck(catKey,name,exceptId){
+  return catalog[catKey].some(x=>x.id!==exceptId&&x.name.toLowerCase()===name.toLowerCase());
+}
+
+/* ── Assign existing ── */
+function openAssign(slotKey){
+  const cat2=CATS[slotKey], def=SLOT_DEFS.find(d=>d.key===slotKey), list=catalog[cat2.catKey];
+  const curId=cfg()[slotConfigKey(slotKey)];
+  const body=`<div class="pick-list">${list.map(it=>`
+    <label class="pick-item">
+      <input type="radio" name="assign-pick" value="${it.id}" ${curId===it.id?'checked':''}>
+      <span class="pi-icon">${cat2.icon}</span>
+      <span class="pi-main"><b>${esc(it.name)}</b><small>${esc(itemMeta(cat2.catKey,it))}</small></span>
+    </label>`).join('')||'<div class="slot-empty">No existing resources.</div>'}</div>
+    <div class="form-hint" style="margin-top:8px">Need something new? Close this and use <b>＋ Create new</b> — the same ${esc(def.module)} dialog opens inline.</div>`;
+  const footer=stdFooter('Assign',()=>{
+    const sel=document.querySelector('input[name="assign-pick"]:checked');
+    if(!sel){toast('Select a resource first.','error');return;}
+    applyAssign(slotKey,sel.value); closeModal();
+  });
+  openModal(`Assign ${cat2.label}`,`Pick from existing ${def.module.toLowerCase()} resources · source: <span class="reuse-chip">${def.reuse}</span>`,body,footer);
+}
+
+/* ── Multi assign (skills / sops) ── */
+function openMultiAssign(slotKey){
+  const cat2=CATS[slotKey], def=SLOT_DEFS.find(d=>d.key===slotKey), list=catalog[cat2.catKey];
+  const curArr=cfg()[slotConfigKey(slotKey)];
+  const body=`<div class="pick-list">${list.map(it=>`
+    <label class="pick-item">
+      <input type="checkbox" name="multi-pick" value="${it.id}" ${curArr.includes(it.id)?'checked':''}>
+      <span class="pi-icon">${cat2.icon}</span>
+      <span class="pi-main"><b>${esc(it.name)}</b><small>${esc(itemMeta(cat2.catKey,it))}</small></span>
+    </label>`).join('')||'<div class="slot-empty">No existing resources.</div>'}</div>`;
+  const footer=stdFooter('Apply',()=>{
+    applyMulti(slotKey,Array.from(document.querySelectorAll('input[name="multi-pick"]:checked')).map(x=>x.value));
+    closeModal();
+  });
+  openModal(`Assign ${cat2.label}s`,`Attach one or more ${def.module.toLowerCase()} · source: <span class="reuse-chip">${def.reuse}</span>`,body,footer);
+}
+
+/* ════════════════════════════ INLINE CREATE (reuses source module dialogs) ════════════════════════════ */
+function openCreate(slotKey){
+  clearErrs();
+  switch(slotKey){
+    case 'role':     return createRoleDialog();
+    case 'identity': return createIdentityDialog();
+    case 'skill':    return createSkillDialog();
+    case 'sop':      return createSopDialog();
+    case 'input':    return createDatatypeDialog('input');
+    case 'output':   return createDatatypeDialog('output');
+    case 'model':    return createModelDialog();
+  }
+}
+
+function createRoleDialog(){
+  const def=SLOT_DEFS.find(d=>d.key==='role');
+  const grants=`
+    <div class="grant-grid">
+      <div class="grant-col-title">Skills</div>
+      ${catalog.skills.map(s=>`<label class="grant-item"><input type="checkbox" class="g-skill" value="${s.id}">🔧 ${esc(s.name)}</label>`).join('')}
+      <div class="grant-col-title">SOPs</div>
+      ${catalog.sops.map(s=>`<label class="grant-item"><input type="checkbox" class="g-sop" value="${s.id}">📋 ${esc(s.name)}</label>`).join('')}
+    </div>`;
+  const body=`
+    <div class="form-group"><label>Role Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Auditor"><div class="inline-form-error" id="f-name-err"></div></div>
+    <div class="form-group"><label>Description</label><textarea id="f-desc" class="form-control" style="min-height:60px" placeholder="What this role grants…"></textarea></div>
+    <div class="form-group"><label>Grants access to (Skills & SOPs)</label>${grants}</div>`;
+  const footer=stdFooter('Create & Assign',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Role name is required.');ok=false;}
+    else if(dupCheck('roles',name)){setErr('f-name','A role with this name already exists.');ok=false;}
+    if(!ok)return;
+    const role={id:nextId('r'),name,desc:$('f-desc').value.trim(),
+      scope:[...document.querySelectorAll('.g-skill:checked'),...document.querySelectorAll('.g-sop:checked')].map(x=>x.value)};
+    catalog.roles.push(role);
+    applyAssign('role',role.id); closeModal();
+    toast('Role “'+name+'” created inline (reused Agent Roles dialog) and equipped.','success');
+  });
+  openModal('👤 New Agent Role','Inline creation — identical to the <span class="reuse-chip">agent::roles</span> module dialog',body,footer);
+}
+
+function createIdentityDialog(){
+  const def=SLOT_DEFS.find(d=>d.key==='identity');
+  const body=`
+    <div id="idp-form">
+      <div class="form-row-2">
+        <div class="form-group"><label>Display Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Scanner Bot"><div class="inline-form-error" id="f-name-err"></div></div>
+        <div class="form-group"><label>Identity Provider *</label>
+          <select id="f-provider" class="form-control"><option>Keycloak</option><option>Azure EntraID</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Preferred Username *</label><input id="f-user" class="form-control" placeholder="svc-security-scanner"><div class="inline-form-error" id="f-user-err"></div></div>
+      <div class="form-hint">Provisioning signs in to the agent realm (<code>ai_agents</code>) via OIDC and stores the token encrypted. Tokens are resolved by Control Center at call time — agents never hold identity tokens.</div>
+    </div>
+    <div id="idp-progress" style="display:none;text-align:center;padding:8px 0">
+      <span class="mini-spinner" style="width:22px;height:22px"></span>
+      <ul class="provision-steps" style="text-align:left;max-width:340px;margin:14px auto 0">
+        <li class="provision-step" id="ps1"><span class="ps-icon">·</span>Redirecting to identity provider…</li>
+        <li class="provision-step" id="ps2"><span class="ps-icon">·</span>OAuth sign-in & consent</li>
+        <li class="provision-step" id="ps3"><span class="ps-icon">·</span>Principal provisioned in agent realm</li>
+      </ul>
+    </div>
+    <div id="idp-success" style="display:none">
+      <div class="success-box" id="idp-success-box"></div>
+    </div>`;
+  const footer=stdFooter('🔐 Sign in & Provision',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), user=$('f-user').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Display name is required.');ok=false;}
+    if(!user){setErr('f-user','Preferred username is required.');ok=false;}
+    if(!ok)return;
+    // simulate OIDC provisioning
+    $('idp-form').style.display='none';
+    const foot=$('modal-footer'); foot.style.display='none';
+    const prog=$('idp-progress'); prog.style.display='block';
+    const step=(id,txt,delay)=>new Promise(res=>setTimeout(()=>{const li=$(id);li.classList.add('done');li.querySelector('.ps-icon').textContent='✓';res()},delay));
+    step('ps1',null,500).then(()=>step('ps2',null,900)).then(()=>step('ps3',null,800)).then(()=>{
+      prog.style.display='none';
+      const provider=$('f-provider').value, realm=provider==='Keycloak'?'ai_agents':'agents';
+      const account=(user.includes('@')?user:user+'@'+(provider==='Keycloak'?'agents.parthenon.local':'contoso.com'));
+      $('idp-success-box').innerHTML=`✓ Identity provisioned.<br><b>${esc(account)}</b><br>realm <b>${realm}</b> · provider ${esc(provider)} · token stored encrypted`;
+      $('idp-success').style.display='block';
+      foot.style.display='flex';
+      modalSave=()=>{
+        const identity={id:nextId('i'),name,account,provider,realm};
+        catalog.identities.push(identity);
+        applyAssign('identity',identity.id); closeModal();
+        toast('Identity “'+account+'” provisioned inline (reused Agent Identities sign-in flow) and equipped.','success');
+      };
+      foot.innerHTML=`<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="modalSave&&modalSave()">Assign to agent</button>`;
+    });
+  });
+  openModal('🆔 New Agent Identity','Inline sign-in / provisioning — identical to the <span class="reuse-chip">agent::identities</span> OIDC flow',body,footer);
+}
+
+function createSkillDialog(){
+  const def=SLOT_DEFS.find(d=>d.key==='skill');
+  const body=`
+    <div class="form-group"><label>Skill Name *</label><input id="f-name" class="form-control" placeholder="e.g. secret-scan-diff"><div class="inline-form-error" id="f-name-err"></div></div>
+    <div class="form-row-2">
+      <div class="form-group"><label>MCP Server *</label>
+        <select id="f-mcp" class="form-control"><option>mcp-github</option><option>mcp-kubernetes</option><option>mcp-filesystem</option><option>mcp-wiki</option><option>mcp-vision</option></select>
+      </div>
+      <div class="form-group"><label>MCP Tool *</label><input id="f-tool" class="form-control" placeholder="e.g. scan_secrets"><div class="inline-form-error" id="f-tool-err"></div></div>
+    </div>
+    <div class="form-group"><label>Description</label><input id="f-desc" class="form-control" placeholder="What this skill does…"></div>
+    <div class="form-hint">Skills wrap one or more MCP tool calls and are the permission-grantable unit for agents.</div>`;
+  const footer=stdFooter('Create & Attach',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), tool=$('f-tool').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Skill name is required.');ok=false;}
+    else if(dupCheck('skills',name)){setErr('f-name','A skill with this name already exists.');ok=false;}
+    if(!tool){setErr('f-tool','MCP tool is required.');ok=false;}
+    if(!ok)return;
+    const skill={id:nextId('s'),name,mcp:$('f-mcp').value,tool,desc:$('f-desc').value.trim()};
+    catalog.skills.push(skill);
+    applyMulti('skill',[...cfg().skills,skill.id]); closeModal();
+    toast('Skill “'+name+'” created inline (reused Skill dialog) and attached.','success');
+  });
+  openModal('🔧 New Skill','Inline creation — identical to the <span class="reuse-chip">agent::skills</span> module dialog',body,footer);
+}
+
+function createSopDialog(){
+  const def=SLOT_DEFS.find(d=>d.key==='sop');
+  const body=`
+    <div class="form-group"><label>SOP Name *</label><input id="f-name" class="form-control" placeholder="e.g. dependency-audit-flow"><div class="inline-form-error" id="f-name-err"></div></div>
+    <div class="form-group"><label>Description</label><input id="f-desc" class="form-control" placeholder="What this SOP accomplishes…"></div>
+    <div class="form-group"><label>Composed Skills (run in selected order) *</label>
+      <div class="pick-list" style="max-height:170px">
+        ${catalog.skills.map(s=>`<label class="pick-item"><input type="checkbox" class="sop-step" value="${s.id}"><span class="pi-icon">🔧</span><span class="pi-main"><b>${esc(s.name)}</b><small>${esc(itemMeta('skills',s))}</small></span></label>`).join('')}
+      </div>
+      <div class="inline-form-error" id="f-steps-err"></div>
+      <div class="form-hint">SOPs are higher-level Skills with sequencing logic; they may delegate to other agents.</div>
+    </div>`;
+  const footer=stdFooter('Create & Attach',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim();
+    const steps=Array.from(document.querySelectorAll('.sop-step:checked')).map(x=>x.value);
+    let ok=true;
+    if(!name){setErr('f-name','SOP name is required.');ok=false;}
+    else if(dupCheck('sops',name)){setErr('f-name','An SOP with this name already exists.');ok=false;}
+    if(!steps.length){const e=$('f-steps-err');e.textContent='Select at least one skill step.';e.classList.add('visible');ok=false;}
+    if(!ok)return;
+    const sop={id:nextId('o'),name,steps,desc:$('f-desc').value.trim()};
+    catalog.sops.push(sop);
+    applyMulti('sop',[...cfg().sops,sop.id]); closeModal();
+    toast('SOP “'+name+'” created inline (reused SOP dialog) and attached.','success');
+  });
+  openModal('📋 New SOP','Inline creation — identical to the <span class="reuse-chip">agent::sops</span> module dialog',body,footer);
+}
+
+let fieldRowSeq=0;
+function addFieldRow(){
+  const wrap=$('f-fields'); if(!wrap)return;
+  const i=++fieldRowSeq;
+  const row=document.createElement('div'); row.className='field-row'; row.id='frow-'+i;
+  row.innerHTML=`
+    <input class="form-control fr-name" placeholder="field_name">
+    <select class="form-control fr-type"><option>string</option><option>number</option><option>boolean</option><option>date</option><option>enum</option></select>
+    <label class="fr-req"><input type="checkbox" class="fr-req-cb">req</label>
+    <button class="fr-del" onclick="this.parentNode.remove()">✕</button>`;
+  wrap.appendChild(row);
+}
+function createDatatypeDialog(slotKey){
+  const def=SLOT_DEFS.find(d=>d.key===slotKey);
+  const cat2=CATS[slotKey];
+  const body=`
+    <div class="form-row-2">
+      <div class="form-group"><label>Type Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Finding" oninput="$('f-slug').value=slugify(this.value)"><div class="inline-form-error" id="f-name-err"></div></div>
+      <div class="form-group"><label>Slug *</label><input id="f-slug" class="form-control" placeholder="security-finding"><div class="inline-form-error" id="f-slug-err"></div></div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-group"><label>Base Kind</label>
+        <select id="f-kind" class="form-control" onchange="$('f-fields-wrap').style.display=this.value==='json'?'block':'none'">
+          <option value="json">json — typed fields</option><option value="text">text</option><option value="binary">binary</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Description</label><input id="f-desc" class="form-control"></div>
+    </div>
+    <div class="form-group" id="f-fields-wrap">
+      <label>Typed Fields</label>
+      <div id="f-fields">
+        <div class="field-row">
+          <input class="form-control fr-name" placeholder="field_name">
+          <select class="form-control fr-type"><option>string</option><option>number</option><option>boolean</option><option>date</option><option>enum</option></select>
+          <label class="fr-req"><input type="checkbox" class="fr-req-cb" checked>req</label>
+          <button class="fr-del" onclick="this.parentNode.remove()">✕</button>
+        </div>
+      </div>
+      <button class="add-field-btn" onclick="addFieldRow()">＋ Add field</button>
+    </div>
+    <div class="form-hint">⚠️ Data types cannot be deleted while referenced by agent types, and conversational agents do not support typed outputs.</div>`;
+  const footer=stdFooter('Create & Assign',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), slug=$('f-slug').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Type name is required.');ok=false;}
+    else if(dupCheck('datatypes',name)){setErr('f-name','A data type with this name already exists.');ok=false;}
+    if(!slug){setErr('f-slug','Slug is required.');ok=false;}
+    if(!ok)return;
+    const kind=$('f-kind').value;
+    const fields=kind==='json'?Array.from(document.querySelectorAll('#f-fields .field-row')).map(r=>({
+      n:r.querySelector('.fr-name').value.trim(), t:r.querySelector('.fr-type').value, r:r.querySelector('.fr-req-cb').checked
+    })).filter(f=>f.n):[];
+    const dt={id:nextId('d'),name,slug,kind,fields,desc:$('f-desc').value.trim()};
+    catalog.datatypes.push(dt);
+    applyAssign(slotKey,dt.id); closeModal();
+    toast('Data type “'+name+'” created inline (reused Agent Data Types dialog) and assigned as '+cat2.label.toLowerCase()+'.','success');
+  });
+  openModal(`${cat2.icon} New Agent Data Type`,`${slotKey==='output'?'Output':'Input'} type — inline creation, identical to the <span class="reuse-chip">agent::data_types</span> module dialog`,body,footer);
+}
+
+function createModelDialog(){
+  const def=SLOT_DEFS.find(d=>d.key==='model');
+  const body=`
+    <div class="form-row-2">
+      <div class="form-group"><label>Config Name *</label><input id="f-name" class="form-control" placeholder="e.g. Azure GPT-4o mini"><div class="inline-form-error" id="f-name-err"></div></div>
+      <div class="form-group"><label>Provider *</label>
+        <select id="f-provider" class="form-control">
+          <option>openai</option><option>azure_openai</option><option>anthropic</option><option>gemini</option><option>groq</option><option>cohere</option><option>litellm_proxy</option><option>deepseek</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>API Key *</label><input id="f-key" type="password" class="form-control" placeholder="•••••••••••• (stored AES-256 encrypted)"><div class="inline-form-error" id="f-key-err"></div></div>
+    <div class="form-row-2">
+      <div class="form-group"><label>Base URL</label><input id="f-url" class="form-control" placeholder="https://…"></div>
+      <div class="form-group"><label>Enabled Models *</label><input id="f-models" class="form-control" placeholder="gpt-4o-mini, gpt-4o"><div class="inline-form-error" id="f-models-err"></div></div>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="toast('Connection test OK — provider reachable (mock).','success')">🔌 Test Connection</button>
+    <div class="form-hint" style="margin-top:8px">Credentials are encrypted (AES-256) and decrypted only at call time. Agent types reference model IDs resolved to configs at runtime.</div>`;
+  const footer=stdFooter('Create & Select',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), key=$('f-key').value, models=$('f-models').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Config name is required.');ok=false;}
+    else if(dupCheck('models',name)){setErr('f-name','A model config with this name already exists.');ok=false;}
+    if(!key){setErr('f-key','API key is required.');ok=false;}
+    if(!models){setErr('f-models','List at least one enabled model.');ok=false;}
+    if(!ok)return;
+    const model={id:nextId('m'),name,provider:$('f-provider').value,endpoint:$('f-url').value.trim()||'https://api.'+$('f-provider').value+'.example'};
+    catalog.models.push(model);
+    applyAssign('model',model.id); closeModal();
+    toast('Model config “'+name+'” created inline (reused Model Configurations dialog) and selected.','success');
+  });
+  openModal('🧠 New Model Configuration','Inline creation — identical to the <span class="reuse-chip">agent::model_configs</span> module dialog',body,footer);
+}
+
+/* ════════════════════════════ AGENT CRUD ════════════════════════════ */
+function agentFormBody(a){
+  a=a||{};
+  return `
+    <div class="form-group"><label>Agent Name *</label><input id="f-ag-name" class="form-control" value="${esc(a.name||'')}" placeholder="e.g. Compliance Reporter"><div class="inline-form-error" id="f-ag-name-err"></div></div>
+    <div class="form-row-2">
+      <div class="form-group"><label>Agent Kind *</label>
+        <select id="f-ag-kind" class="form-control">
+          <option value="typed" ${a.kind==='typed'?'selected':''}>Typed output (structured)</option>
+          <option value="conversational" ${a.kind==='conversational'?'selected':''}>Conversational</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Description</label><input id="f-ag-desc" class="form-control" value="${esc(a.desc||'')}"></div>
+    </div>
+    <div class="form-group"><label>System Instruction *</label><textarea id="f-ag-si" class="form-control" placeholder="Core behaviour of the agent…">${esc(a.systemInstruction||'')}</textarea><div class="inline-form-error" id="f-ag-si-err"></div></div>
+    <div class="form-hint">Equipment (role, identity, skills, SOPs, data types, model) is configured via the equipment slots after creation — or kept if editing.</div>`;
+}
+function validateAgentForm(exceptId){
+  clearErrs();
+  const name=$('f-ag-name').value.trim(), si=$('f-ag-si').value.trim();
+  let ok=true;
+  if(!name){setErr('f-ag-name','Agent name is required.');ok=false;}
+  else if(agents.some(a=>a.id!==exceptId&&a.name.toLowerCase()===name.toLowerCase())){setErr('f-ag-name','An agent with this name already exists. Duplicate names are rejected.');ok=false;}
+  if(!si){setErr('f-ag-si','System instruction is required.');ok=false;}
+  return ok?{name,kind:$('f-ag-kind').value,desc:$('f-ag-desc').value.trim(),systemInstruction:si}:null;
+}
+function openCreateAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to create agents.','error');return;}
+  const footer=stdFooter('Create Agent',()=>{
+    const v=validateAgentForm(null); if(!v)return;
+    const agent={id:nextId('ag'),...v,config:{role:null,identity:null,skills:[],sops:[],input:null,output:v.kind==='typed'?null:null,model:null}};
+    agents.push(agent); SAVED[agent.id]=deep(agent); pending[agent.id]=[];
+    selectedId=agent.id; closeModal(); renderAll();
+    toast('Agent “'+v.name+'” created — now equip it via the equipment slots.','success');
+  });
+  openModal('🤖 Create Agent','New agent type with required fields — equipment is added afterwards via slots','',footer);
+  $('modal-body').innerHTML=agentFormBody(null);
+}
+function openEditAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to edit agents.','error');return;}
+  const a=cur();
+  const footer=stdFooter('Save Agent',()=>{
+    const v=validateAgentForm(a.id); if(!v)return;
+    const wasKind=a.kind;
+    Object.assign(a,v);
+    if(wasKind==='typed'&&v.kind==='conversational'&&a.config.output){
+      a.config.output=null;
+      markPending(`📤 Output type removed — agent is now conversational (rule: no typed outputs)`);
+      toast('Output type cleared: conversational agents do not support typed outputs.','info');
+    }
+    SAVED[a.id]=deep(a); closeModal(); renderAll();
+    toast('Agent “'+v.name+'” updated.','success');
+  });
+  openModal('✏️ Edit Agent','Pre-populated with current values · changes are visible immediately',agentFormBody(a),footer);
+}
+function confirmDeleteAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to delete agents.','error');return;}
+  const a=cur();
+  const body=`<p style="font-size:13.5px;line-height:1.6">Delete agent type <b>“${esc(a.name)}”</b>?
+    <br><span class="text-secondary" style="font-size:12px">Related resources (roles, skills, SOPs, data types, models) remain available for reuse. A new agent can be created with the same name afterwards.</span></p>`;
+  const footer=`<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-danger" onclick="doDeleteAgent('${a.id}')">🗑 Delete Agent</button>`;
+  openModal('Delete Agent','',body,footer);
+}
+function doDeleteAgent(id){
+  const a=agents.find(x=>x.id===id), name=a.name;
+  agents=agents.filter(x=>x.id!==id);
+  delete SAVED[id]; delete pending[id];
+  if(selectedId===id)selectedId=agents[0]?agents[0].id:null;
+  closeModal();
+  if(!agents.length){
+    if(rtTimer){clearInterval(rtTimer);rtTimer=null;}
+    $('agent-list').innerHTML='<div class="slot-empty" style="padding:12px">No agents. Create one to get started.</div>';
+    $('agent-header').innerHTML='<div class="ah-main"><span class="ah-name">No agents</span></div>';
+    $('topo-svg').innerHTML=''; $('slots').innerHTML='<div class="slot-empty" style="padding:12px">Create an agent first.</div>';
+    $('rt-feed').classList.remove('show');
+    toast('Agent “'+name+'” deleted.','info'); return;
+  }
+  renderAll();
+  toast('Agent “'+name+'” deleted. You can recreate it with the same name.','info');
+}
+
+/* ════════════════════════════ PERMISSIONS ════════════════════════════ */
+function setPerm(p){
+  perm=p;
+  $('perm-admin').classList.toggle('active',p==='admin');
+  $('perm-viewer').classList.toggle('active',p==='viewer');
+  renderAll();
+  toast(p==='admin'?'Signed in as Administrator — full write access.':'Signed in as Process Owner — read-only view for review & audit.','info');
+}
+
+/* ════════════════════════════ RENDER ALL ════════════════════════════ */
+function renderAll(){
+  renderSidebar(); renderHeader(); renderTopology(); renderLegend(); renderSlots(); renderPending();
+}
+renderAll();
+</script>
+</body>
+</html>

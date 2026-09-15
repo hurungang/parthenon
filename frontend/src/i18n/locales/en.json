@@ -48,6 +48,7 @@
     "sops": "SOPs",
     "agents": "Agents",
     "agentTypes": "Agent Management",
+    "agentManagementPanel": "Agent Management Panel",
     "agentExecutions": "Agent Executions",
     "runtimeControl": "Agent Runtime Monitor",
     "agentLogs": "Conversation History",
@@ -343,6 +344,84 @@
     "title": "Agent Management",
     "createType": "Create Agent Type",
     "editType": "Edit Agent Type",
+    "panel": {
+      "title": "Agent Management Panel",
+      "subtitle": "Equip an agent — role, identity, skills, SOPs, data types and model — from one place",
+      "agentList": "Agent Types",
+      "searchPlaceholder": "Search agents…",
+      "createAgent": "Create Agent",
+      "noAgents": "No agents found",
+      "noSearchResults": "No agents match your search",
+      "selectAgentPrompt": "Select an agent to view and equip its configuration",
+      "agentCount": "{{count}} agents",
+      "headerName": "Agent",
+      "headerDescription": "Description",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete agent \"{{name}}\"? This cannot be undone.",
+      "topology": "Agent Topology",
+      "topologyHint": "updates instantly — no save required",
+      "topologyLive": "LIVE",
+      "topologyFullscreen": "Expand topology to full screen",
+      "topologyFullscreenExit": "Exit full screen",
+      "topologyZoomIn": "Zoom in",
+      "topologyZoomOut": "Zoom out",
+      "topologyZoomFit": "Fit to screen",
+      "topologyOutputLocked": "Output locked — conversational",
+      "savedChip": "saved",
+      "unsavedChip": "unsaved changes",
+      "equipment": "Equipment",
+      "properties": {
+        "label": "Properties",
+        "hint": "Base agent configuration — edits stay pending until you save changes"
+      },
+      "assignExisting": "Assign existing",
+      "createNew": "Create new",
+      "remove": "Remove",
+      "emptySlot": "Nothing equipped yet",
+      "lockedOutputNote": "Conversational agents do not support typed outputs — switch the input type away from conversation to assign an output data type.",
+      "permissionNote": "Your account lacks permission for this module ({{resourceType}}) — actions are disabled.",
+      "readHint": "Read-only: assignment actions are disabled.",
+      "pendingChanges": "Pending changes ({{count}})",
+      "pendingHint": "Persisted only when you click Save Changes — the topology already reflects them.",
+      "save": "Save Changes",
+      "discard": "Discard",
+      "dirtyBadge": "{{count}} unsaved",
+      "bindingOrderUp": "Move up",
+      "bindingOrderDown": "Move down",
+      "noInputType": "None",
+      "inputTypeConversation": "Conversation",
+      "slots": {
+        "role": {
+          "label": "Role",
+          "hint": "Permission set controlling this agent's SOPs and skills"
+        },
+        "identity": {
+          "label": "Identity",
+          "hint": "OIDC identity the agent runs as (OAuth sign-in to provision)"
+        },
+        "skills": {
+          "label": "Skills",
+          "hint": "Invocable units that wrap MCP tool calls"
+        },
+        "sops": {
+          "label": "SOPs",
+          "hint": "Standard operating procedures composed of skills"
+        },
+        "input_data_type": {
+          "label": "Input Data Type",
+          "hint": "Typed input schema from the Agent Data Type registry"
+        },
+        "output_data_type": {
+          "label": "Output Data Type",
+          "hint": "Typed output schema for structured results"
+        },
+        "model": {
+          "label": "Model",
+          "hint": "LLM model the agent runs on"
+        }
+      }
+    },
     "llmModel": "LLM Model",
     "instances": "Active Instances",
     "terminate": "Terminate",
@@ -670,6 +749,7 @@
       "runtimeTriggerSourceUnknown": "Unknown",
       "runtimeLatestToolCall": "Latest tool call",
       "runtimeMonitorLatestToolTitle": "Latest tool call: {{tool}} ({{server}})",
+      "runtimeMonitorLatestDelegationTitle": "Delegated to {{agent}}",
       "runtimeMonitorScheduleCreator": "by {{creator}}",
       "runtimeMonitorTriggerDetailCron": "Schedule",
       "runtimeMonitorTriggerDetailDescription": "Description",
@@ -945,6 +1025,31 @@
       "steps": "Implementation Steps",
       "noSteps": "No steps generated",
       "topology": "Agent Topology",
+      "hubEdgeLabel": "platform messaging",
+      "edgeEquipped": "equipped with",
+      "edgeGrants": "grants",
+      "edgeComposed": "composed of",
+      "zoneConfigTitle": "① CONFIGURATION",
+      "zoneConfigSubtitle": "who the agent IS",
+      "zoneCapabilitiesTitle": "② CAPABILITIES",
+      "zoneCapabilitiesSubtitle": "what it's EQUIPPED WITH",
+      "zoneToolsTitle": "③ TOOLS",
+      "zoneToolsSubtitle": "what it can CALL (routes cross the Hub)",
+      "sectionSops": "SOPs — procedures",
+      "sectionSkills": "Skills — capabilities",
+      "sectionContract": "contract & model",
+      "signsInAs": "signs in as",
+      "assumesAs": "assumes as",
+      "boundaryTyped": "Agent Type · typed output",
+      "boundaryConversational": "Agent Type · conversational",
+      "noTools": "No tools resolved",
+      "legend": {
+        "title": "Legend",
+        "boundary": "agent boundary — identity & role are part of the agent",
+        "equippedWith": "equipped with",
+        "grants": "role grants permission",
+        "callPath": "call path via Hub"
+      },
       "generationFailed": "Plan generation failed",
       "generationFailedDetail": "{{error}}",
       "close": "Close",
@@ -956,13 +1061,24 @@
         "tool_call": "Tool Call"
       },
       "nodeTypes": {
-        "agent": "Agent",
-        "identity": "Identity",
-        "role": "Agent Role",
-        "sop": "SOP",
-        "skill": "Skill",
-        "agent_type": "Delegated Agent",
-        "tool": "Tool"
+      "agent": "Agent",
+      "identity": "Identity",
+      "role": "Agent Role",
+      "sop": "SOP",
+      "skill": "Skill",
+      "agent_type": "Delegated Agent",
+      "tool": "Tool",
+      "communication_hub": "Communication Hub",
+      "input_data_type": "Input Data Type",
+      "output_data_type": "Output Data Type",
+      "model": "Model",
+      "empty_role": "Role (empty)",
+      "empty_identity": "Identity (empty)",
+      "empty_skills": "Skills (empty)",
+      "empty_sops": "SOPs (empty)",
+      "empty_input_data_type": "Input Data Type (empty)",
+      "empty_output_data_type": "Output Data Type (empty)",
+      "empty_model": "Model (empty)"
       }
     }
   },

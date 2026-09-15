@@ -17,7 +17,7 @@ vi.mock('react-router-dom', async () => {
 })
 
 // Mock AgentRoleDialog so opening edit mode doesn't require complex setup
-vi.mock('../pages/agents/AgentRoleDialog', () => ({
+vi.mock('../components/agents/AgentRoleDialog', () => ({
   AgentRoleDialog: ({ open }: { open: boolean }) =>
     open ? <div data-testid="role-edit-dialog">edit-role-form</div> : null,
 }))

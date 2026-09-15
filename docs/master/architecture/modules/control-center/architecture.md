@@ -199,6 +199,132 @@ This is the same model used by internal agents — the API key provides an alter
 - **Pending Intervention Query**: Returns outstanding intervention requests for a task agent session, used by the execution log viewer on reconnect to re-surface dialogs.
 - **Delegation Status Query**: Returns current delegation state (active sub-agent types, depths, exit conditions) by querying recent delegation-related `ExecutionLogEntry` entries.
 
+## Agent Runtime Monitoring
+
+Runtime observability of the agent topology is a Control Center responsibility. The **Agent Runtime Monitor** is a real-time, map-style operator view of the running agent topology — executions, delegation tree, trigger entities, and the Communication Hub / MCP tool layer. Every read, event ingest, and live push for this view is served by the Control Center, preserving the rule that only Control Center accesses the database.
+
+### Live Update Channel
+
+The monitor's data is delivered over a **push-based live update channel** served by the Control Center. The projection is recomputed on a short server-side cadence and the full payload is emitted only when it changed (hash comparison against the last emission); heartbeat traffic keeps the channel alive through intermediaries, and each channel session has a bounded lifetime after which the client re-subscribes or drops to the fallback path.
+
+```mermaid
+flowchart LR
+    Operator[Operator]
+    subgraph FE[Web UI - Agent Runtime Monitor]
+        MON[Monitor Page]
+        HOOK[Stream-First Data Hook<br/>push to cache · poll fallback]
+        CANVAS[Map Canvas]
+    end
+    subgraph CC[Control Center]
+        STREAM[Live Update Channel<br/>SSE push · change-gated emission · heartbeat]
+        READ[Topology Read Endpoint<br/>initial fetch + fallback]
+        CTRL[Runtime Topology Controller]
+        INGEST[Tool-Call Event Ingest]
+        AUTH[Auth Middleware]
+    end
+    DB[(Platform DB)]
+    AR[Agent Runtime]
+
+    Operator --> MON
+    MON --> CANVAS
+    MON --> HOOK
+    HOOK -->|subscribe · token auth| STREAM
+    HOOK -.->|automatic fallback poll| READ
+    STREAM --> CTRL
+    READ --> CTRL
+    CTRL --> DB
+    AR -->|records every tool execution| INGEST
+    INGEST --> DB
+    AUTH --> STREAM
+    AUTH --> READ
+```
+
+**Delivery properties:**
+
+| Property | Behavior |
+|---|---|
+| **Push base** | Server-sent events over the existing runtime-topology surface |
+| **Emission policy** | Full projection payload, emitted only when the projection hash differs from the last emission — no redundant traffic on idle systems |
+| **Keep-alive** | Heartbeat keeps the channel open through intermediaries |
+| **Lifetime** | Each channel session is bounded; on expiry the client re-subscribes or falls back |
+| **Authentication** | Session token passed as a query parameter (the event-stream transport cannot carry an Authorization header) and validated against the OIDC client — the established pattern of the Communication Hub chat channel |
+| **Authorization** | The same agent-read permission as the topology read endpoint |
+
+### Stream-First Data Flow
+
+The monitor is **stream-first**: on open, the frontend data hook subscribes to the live channel and writes each pushed projection into the client cache immediately, so no polling occurs while the channel is healthy. The fixed-interval poll survives only as an **automatic fallback** while the channel is disconnected, and reverts to the stream on recovery.
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant Hook as Stream-First Data Hook
+    participant Chan as Live Update Channel
+    participant Ctrl as Runtime Topology Controller
+    participant Canvas as Map Canvas
+
+    Op->>Hook: open the monitor
+    Hook->>Chan: subscribe (token auth)
+    loop server-side recompute cadence
+        Chan->>Ctrl: recompute projection
+        Ctrl-->>Chan: projection
+        alt projection changed
+            Chan-->>Hook: full payload
+            Hook->>Hook: write client cache immediately
+            Hook->>Canvas: re-render without manual refresh
+        else unchanged
+            Chan-->>Hook: heartbeat
+        end
+    end
+    Note over Hook: channel disconnected
+    Hook->>Ctrl: fixed-interval fallback poll
+    Ctrl-->>Hook: projection
+    Note over Hook: channel recovered → polling stops, push resumes
+```
+
+### Canvas Presentation Guarantees
+
+The map canvas is the monitor's primary surface and must remain legible in every state. Three guarantees hold architecturally:
+
+| Guarantee | Intent |
+|---|---|
+| **Stage-level backdrop** | The grid-dot background is painted at stage level so it covers the entire canvas when panning or zooming beyond drawn content and when the view is filtered empty |
+| **Full-height hub fixture** | The Communication Hub fixture spans the full canvas height from first load, even when the map is empty |
+| **Unclamped initial fit** | The initial auto-fit is not constrained by the interactive minimum zoom — only interactive zooming is |
+
+```mermaid
+flowchart LR
+    V[Any canvas state]
+    PAN[Panned or zoomed beyond content]
+    EMPTY[Empty or filtered-empty map]
+    BG[Stage-level backdrop covers canvas]
+    HUB[Hub fixture at full height from first load]
+    FIT[Initial auto-fit not clamped by min-zoom]
+
+    V --> PAN
+    V --> EMPTY
+    PAN --> BG
+    EMPTY --> BG
+    EMPTY --> HUB
+    FIT --> V
+```
+
+### Canvas Structure and Focus
+
+- **Delegation-tree team containers** — one tree per row, columns represent delegation depth
+- **Trigger-entity column** — person and schedule cards with per-entity coloured edges into the execution graph
+- **Communication Hub fixture** — MCP nodes and tool-call chips with orthogonal tool-call routes
+- **Directed focus graph** — hovering or clicking any entity highlights its full up- and downstream reachable set; the execution-to-MCP edge is one-way, so shared tool servers never leak focus sideways
+- Intervention-waiting and terminal-direct executions stay visible so delegation chains remain readable
+
+### Permission Parity
+
+The live channel enforces the same access model as the read endpoint: the presenting identity is resolved and validated against the OIDC client, and the same agent-read permission gates both paths. Parity matters operationally — a client that can view the topology can equally subscribe to its live updates, and no separate permission is granted for the push channel. The resolved identity also feeds the monitor's provenance attribution.
+
+### Provenance and Tool-Call Observability
+
+- **Trigger provenance** — every execution carries a human attribution anchor resolved from the requesting identity at creation (manual runs, conversation sessions, schedules, and delegated children inherit it); unknown originators are shown as none, never a placeholder
+- **Tool-call events** — Agent Runtime records every tool execution and reports it to the Control Center ingest; the projection unions these event records with conversation tool-call history. Reporting is fire-and-forget: a failed report never breaks tool execution, and Agent Runtime never writes the database
+
 ## Agent Data Type Registry
 
 - **Data Type Registry**: Centralized catalogue of reusable typed schemas (`AgentDataType` model) stored in the `agent_data_types` table. Each data type defines a name, slug (canonical runtime identifier), description, and an ordered array of field definitions with types: `string`, `number`, `boolean`, `date`, `enum`. Administrators manage data types via CRUD REST endpoints. The registry enforces uniqueness on name and slug, blocks deletion when referenced by agent types (409 Conflict with referencing type list), and requires at least one field per data type.

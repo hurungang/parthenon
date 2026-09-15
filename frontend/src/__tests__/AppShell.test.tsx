@@ -57,12 +57,17 @@ const AGENTS_CHILDREN = [
   'nav.agentRoles',
   'nav.agentIdentities',
   'nav.agentTypes',
+  'nav.agentManagementPanel',
   'nav.runtimeControl',
   'nav.skills',
   'nav.sops',
   'nav.modelConfigs',
   'nav.schedules',
   'nav.agentTrails',
+  'nav.humanIntervene',
+  'nav.dataTypes',
+  'nav.agentData',
+  'nav.agentOutputs',
 ] as const
 
 const INTEGRATIONS_CHILDREN = [
@@ -122,14 +127,14 @@ describe('AppShell — sidebar structure', () => {
     expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders the Agents group with exactly 9 children (in declaration order)', async () => {
+  it('renders the Agents group with exactly 14 children (in declaration order)', async () => {
     mockPathname = '/agents/roles'
     const { AppShell } = await import('../app/AppShell')
     render(<AppShell />, { wrapper })
     for (const label of AGENTS_CHILDREN) {
       expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1)
     }
-    expect(AGENTS_CHILDREN).toHaveLength(9)
+    expect(AGENTS_CHILDREN).toHaveLength(14)
   })
 
   it('renders the Integrations group with exactly 2 children (in declaration order)', async () => {
@@ -185,6 +190,11 @@ describe('AppShell — i18n catalog', () => {
     for (const key of allKeys) {
       expect(nav[key], `Missing nav.${key} in en.json`).toBeDefined()
     }
+  })
+
+  it('defines the Agent Management Panel nav label', () => {
+    const nav = (enCatalog as { nav: Record<string, string> }).nav
+    expect(nav.agentManagementPanel).toBe('Agent Management Panel')
   })
 })
 

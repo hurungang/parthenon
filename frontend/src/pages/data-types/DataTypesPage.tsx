@@ -28,7 +28,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useDataTypes, useDeleteDataType, fetchDataTypeUsage } from '../../hooks/useDataTypes'
 import { usePagination } from '../../hooks/usePagination'
-import { DataTypeFormDialog } from './DataTypeFormDialog'
+import { DataTypeFormDialog } from '../../components/agents/DataTypeFormDialog'
 import type { AgentDataType, ReferencingAgentType } from '../../types'
 
 /**

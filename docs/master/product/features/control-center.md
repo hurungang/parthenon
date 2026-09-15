@@ -1,11 +1,11 @@
 # Control Center
 
 ## Overview
-Control Center is the governance center for policy-driven operation of Parthenon. It provides administrators with a consistent place to manage agent policy controls, including a **vendor → model → guardrail hierarchy** for model-usage guardrails, per-Agent-Type guardrail profiles that keep execution behavior predictable, auditable, and aligned with enterprise risk and cost expectations, and a **runtime control dashboard** that surfaces live execution state, delegation topology, and operator-controlled termination actions.
+Control Center is the governance center for policy-driven operation of Parthenon. It provides administrators with a consistent place to manage agent policy controls, including a **vendor → model → guardrail hierarchy** for model-usage guardrails, per-Agent-Type guardrail profiles that keep execution behavior predictable, auditable, and aligned with enterprise risk and cost expectations, and the **Agent Runtime Monitor** — a live, interactive map that surfaces execution state, delegation relationships, trigger sources, and operator-controlled termination and intervention actions.
 
 ## Who Uses It
 - Platform Administrators: Define and maintain governance policies for agent execution behavior
-- AI Operations Leads: Review policy outcomes, monitor live runtime topology, and tune limits for reliability and predictable operations
+- AI Operations Leads: Review policy outcomes, monitor live agent activity on the Agent Runtime Monitor, and tune limits for reliability and predictable operations
 - Security and Compliance Owners: Verify that policy boundaries are enforced and auditable, and that high-risk recursion and uncontrolled delegation are prevented
 - FinOps or Platform Governance Leads: Manage model consumption across vendors and disable expensive or risky models without touching others
 
@@ -25,9 +25,8 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Reflects saved guardrail values in policy views used for governance and oversight
 - Provides system-level configuration for selecting the model used by AI-assisted Skill and SOP workflow authoring
 - Uses centrally managed model options so workflow-generation governance aligns with enterprise model policy
-- Provides a **runtime control dashboard** showing all currently running agents, their delegated children, configured model-usage limits, and current usage posture (within limit, approaching limit, breached) alongside execution guardrail status
-- Provides a **topology diagram view** of active agent-to-agent delegation relationships
-- Provides **node-level termination** from the dashboard for authorized users, with **cascade termination** of delegated children when a parent is terminated
+- Provides the **Agent Runtime Monitor** — a full-page interactive map of the running agent population showing all currently running agents and their delegated children, each with configured model-usage limits, current usage posture (within limit, approaching limit, breached), and execution guardrail status; the map auto-fits on load, arranges agents in a team-row layout by delegation depth, and stays current through live server push updates (with automatic fallback to polling)
+- Provides **node-level termination** from the map for authorized users, with **cascade termination** of delegated children when a parent is terminated
 - Provides **disabled-vendor** and **disabled-model** block surfaces in the operator UI, with the cascade source clearly visible
 
 ## Key Concepts
@@ -39,8 +38,7 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - **Per-Model Disable**: A temporary disable flag on a model that blocks any agent execution that would use that model
 - **Per-Vendor Disable**: A temporary disable flag on a vendor that cascades to every model under it. The per-model disable affordances remain visible to show the cascade source
 - **Usage Posture**: The current state of a model's usage against its configured guardrail limits — `within limit`, `approaching limit`, or `breached`
-- **Runtime Control Dashboard**: A read-only operator view of all currently running agents, their delegation relationships, and operator-controlled termination actions
-- **Topology Diagram**: A visual representation of active parent-child agent execution relationships with selectable nodes
+- **Agent Runtime Monitor**: A full-page, interactive, map-style canvas that auto-fits the running agent population and arranges agents in a team-row layout whose columns represent delegation depth. It is a read-only operator view of all currently running agents, their delegation relationships, and operator-controlled termination and intervention actions. It adds a trigger-entity column (people and schedules, connected by per-entity coloured lines), whole-chain focus on hover/click of any entity, dismissible detail bubbles for agents and trigger entities, intervention alerts on any awaiting node, the Communication Hub as a full-height fixture with tool-call routes through its MCP servers, live self-updating behaviour (server push channel with automatic fallback to polling), and a filter popover with a recent-completed window and legend recovery
 - **Cascade Termination**: Terminating a parent execution that also stops all active delegated child executions it triggered
 - **Execution Boundaries**: Policy limits that bound run behavior to approved operational ranges
 - **Delegation Boundaries**: Policy limits that bound delegation depth and delegated-step volume
@@ -68,10 +66,12 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - When a vendor is disabled, the per-model disable affordances remain visible so operators can see the cascade source, not a hidden state
 - When a model is under a disabled vendor, attempts to use it surface a clear operator-visible reason that points to the disabled vendor as the root cause
 - The runtime or dashboard experience shows the configured model-level usage limits together with current model usage posture in a way operators can interpret without leaving the monitoring workflow, including whether each period is within limit, approaching limit, or breached
-- Operators can view a consolidated list of all currently running agents and associated delegated agents
-- A runtime topology dashboard displays active agent and delegation relationships in a user-comprehensible diagram
+- Operators can view a consolidated live map of all currently running agents and associated delegated agents
+- The Agent Runtime Monitor displays all running agents and their delegation relationships on an interactive, auto-fitting map, arranged in a team-row layout by delegation depth, and keeps itself current through live server push updates (with automatic fallback to polling) — executions starting, changing state, or finishing appear within about a second or two
+- The map supports zoom in/out, drag-to-pan, and fullscreen; the grid-dot background covers the entire visible canvas at all times, and the initial view on first load fits the entire running population even when it is large
+- The Agent Runtime Monitor shows a trigger-entity column (every person and schedule that triggered executions, each connected by per-entity coloured lines), schedule-creator attribution (never the schedule name in place of a human), whole-chain focus on hover/click of any entity, dismissible detail bubbles for agents and trigger entities, intervention alerts on any node awaiting human intervention, tool-call routes through the Communication Hub and its MCP servers, and a filter popover with a recent-completed window whose controls remain usable even when the filter hides every entity
 - The runtime or dashboard experience shows both execution guardrails and model-usage guardrails together so operators can assess runtime risk and consumption risk in one place
-- Authorized users can select any running or delegated node and request termination from the dashboard
+- Authorized users can select any running or delegated node on the Agent Runtime Monitor and request termination from the map
 - Terminating a parent execution also terminates all active delegated child executions it triggered
 - If a user lacks required permission, termination controls are unavailable or rejected with a clear user-visible message
 - Guardrail, termination, and disable-state outcomes (including model-disabled and vendor-disabled blocks) are reflected in execution logs so operators can distinguish policy events from functional failures
@@ -89,5 +89,5 @@ Control Center is the governance center for policy-driven operation of Parthenon
 - Must remain compatible with existing enterprise audit and compliance standards
 - Requires trustworthy model-usage measurement and period rollup data so hourly, daily, weekly, and monthly posture can be shown accurately
 - Requires a vendor and model catalogue that the new hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
-- Requires reliable runtime state and delegation relationship signals to render accurate running-agent topology
+- Requires reliable runtime state and delegation relationship signals to render an accurate running-agent map on the Agent Runtime Monitor
 - Terminate operations must be routed through the Communication Hub to Agent Runtime to preserve service segregation and certificate-based authentication boundaries

@@ -19,18 +19,21 @@ describe('SuperAdminConfigSection', () => {
     is_enabled: true,
     username: 'admin',
     env_controlled: false,
+      last_login_at: null,
   }
 
   const disabledStatus = {
     is_enabled: false,
     username: 'admin',
     env_controlled: false,
+      last_login_at: null,
   }
 
   const envControlledStatus = {
     is_enabled: true,
     username: 'admin',
     env_controlled: true,
+      last_login_at: null,
   }
 
   it('renders the title', () => {
@@ -63,7 +66,7 @@ describe('SuperAdminConfigSection', () => {
 
   it('shows placeholder when username is null', () => {
     render(React.createElement(SuperAdminConfigSection, {
-      status: { is_enabled: false, username: null, env_controlled: false },
+      status: { is_enabled: false, username: null, env_controlled: false, last_login_at: null },
     }), { wrapper: Wrapper })
     expect(screen.getByText('app.noData')).toBeDefined()
   })

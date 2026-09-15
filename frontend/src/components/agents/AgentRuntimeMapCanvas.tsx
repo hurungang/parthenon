@@ -19,6 +19,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import MemoryIcon from '@mui/icons-material/Memory'
 import ForumIcon from '@mui/icons-material/Forum'
 import ExtensionIcon from '@mui/icons-material/Extension'
@@ -521,6 +522,28 @@ export function AgentRuntimeMapCanvas({
   )
 
   const allNodes = topology?.nodes ?? []
+
+  // Latest delegation per parent session: the most recently created direct
+  // child (A2A delegation).  The tile's latest-action chip shows the
+  // delegation when it is more recent than the parent's last tool call —
+  // e.g. after a human intervention the master delegates, and the tile must
+  // not keep showing the stale `human_intervene` tool until the end.
+  const latestDelegationByParent = useMemo(() => {
+    const nodeById = new Map(allNodes.map((n) => [n.session_id, n]))
+    const byParent = new Map<string, { childName: string; at: string }>()
+    for (const edge of topology?.edges ?? []) {
+      const child = nodeById.get(edge.child_session_id)
+      if (!child || !child.created_at) continue
+      const prev = byParent.get(edge.parent_session_id)
+      if (!prev || Date.parse(child.created_at) > Date.parse(prev.at)) {
+        byParent.set(edge.parent_session_id, {
+          childName: child.agent_type_name ?? child.session_id,
+          at: child.created_at,
+        })
+      }
+    }
+    return byParent
+  }, [allNodes, topology?.edges])
 
   // Default-visibility predicate + legend (status/kind) filter.
   const visibleNodes = useMemo(
@@ -1543,6 +1566,17 @@ export function AgentRuntimeMapCanvas({
             const isRunning = node.status === 'running'
             // First non-delegation call (A2A rows are not tool executions).
             const latestTool = node.tool_calls?.find((c) => c.route_type !== 'a2a')
+            // The tile's chip shows the agent's most recent ACTION: a
+            // delegation to another agent or a tool call, whichever happened
+            // last (an untimestamped tool call is treated as older).
+            const delegation = latestDelegationByParent.get(node.session_id)
+            const toolAtMs =
+              latestTool?.called_at ? Date.parse(latestTool.called_at) : null
+            const delegationNewer =
+              delegation !== undefined &&
+              (latestTool === undefined ||
+                toolAtMs === null ||
+                Date.parse(delegation.at) > toolAtMs)
             return (
               <Box
                 key={node.session_id}
@@ -1705,7 +1739,42 @@ export function AgentRuntimeMapCanvas({
                   >
                     {t(statusLabelKey(node.status, kind), node.status)}
                   </Typography>
-                  {latestTool && (
+                  {delegationNewer && delegation ? (
+                    <Tooltip
+                      title={t('agents.sessions.runtimeMonitorLatestDelegationTitle', {
+                        agent: delegation.childName,
+                      })}
+                    >
+                      <Box
+                        display="flex"
+                        alignItems="center"
+                        gap={0.5}
+                        data-testid={`latest-delegation-${node.session_id}`}
+                        sx={{
+                          ml: 'auto',
+                          minWidth: 0,
+                          bgcolor: '#E8F5E9',
+                          borderRadius: '5px',
+                          px: 0.5,
+                          py: '1px',
+                        }}
+                      >
+                        <AccountTreeIcon sx={{ fontSize: 10, color: '#2E7D32', flexShrink: 0 }} />
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: 10,
+                            color: '#455A64',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {delegation.childName}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  ) : latestTool && (
                     <Tooltip
                       title={t('agents.sessions.runtimeMonitorLatestToolTitle', {
                         tool: latestTool.tool_name,

@@ -89,6 +89,13 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Trigger provenance | `Agent Runtime Monitor > shows trigger provenance as a person entity wired to the execution` | Person/schedule entity in the left column wired by trigger lines to the executions |
 | Schedule creator attribution | `Agent Runtime Monitor > shows schedule creator attribution and no person line for a null-creator schedule` | Schedule card shows the human creator; legacy null-creator schedules show no person line |
 | Tool-call routes (CH + MCP) | `Agent Runtime Monitor > renders the Communication Hub and tool-call routes to MCP servers` | Communication Hub node + agent→Hub→MCP tool-call routes, latest highlighted |
+| **Agent Management Panel** (agent-management-panel) | | |
+| Create agent | `Agent Management Panel — CRUD lifecycle > creates an agent from the panel and shows it in sidebar + header immediately (no reload)` | RPG-style panel: create dialog → agent appears in sidebar + header instantly, no reload |
+| Inline create-and-assign | `Agent Management Panel — equipment slots (inline create-and-assign) > role slot: create-new mounts the real Agent Role dialog and assigns the created role` | Create a role inside the panel via the real module dialog; it's assigned to the agent immediately |
+| Live topology | `Agent Management Panel — live topology > topology updates immediately on draft mutations with zero network requests` | Topology re-renders on every equip/unequip BEFORE saving — zero API calls |
+| Hub in preview topology | `Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology` | Communication Hub node rendered in the existing Agent Types plan preview topology |
+| Permission degradation | `Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation` | Denied slot disables gracefully with an explanation — no error surface |
+| Single-PUT save | `Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT` | Pending-changes tray persists the whole draft with exactly one agent-type update call |
 
 ## Prerequisites
 

@@ -12,11 +12,16 @@ import {
 import LoginIcon from '@mui/icons-material/Login'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import type { CreateAndAssignResult } from '../../types'
 
 interface AgentIdentityDialogProps {
   open: boolean
   onClose: () => void
-  onSaved: () => Promise<void>
+  /**
+   * Invoked after a successful OAuth sign-in. The provisioned identity is
+   * passed as a create-and-assign result; existing callers may ignore it.
+   */
+  onSaved: (result?: CreateAndAssignResult) => Promise<void>
 }
 
 /**
@@ -77,7 +82,12 @@ export function AgentIdentityDialog({
           window.removeEventListener('message', messageHandler)
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
           setOauthInitiating(false)
-          await onSaved()
+          const identity = event.data.identity as { id?: string; name?: string } | undefined
+          await onSaved(
+            identity?.id
+              ? { id: identity.id, label: identity.name ?? identity.id }
+              : undefined,
+          )
           onClose() // Close dialog after successful creation
         } else if (event.data?.type === 'AGENT_OAUTH_ERROR') {
           window.removeEventListener('message', messageHandler)

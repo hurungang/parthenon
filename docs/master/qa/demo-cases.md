@@ -171,6 +171,20 @@
 - API Key Management - Create Key Flow > can select identity and role then create
 - API Key Management - Revoke Key Flow > revoke dialog shows key name and warning
 - API Key Management - Filtering > status filter has all/active/revoked options
+- Agent Runtime Monitor > presents the view as "Agent Runtime Monitor" and renders the map canvas
+- Agent Runtime Monitor > auto-fits the map and groups each delegation tree into a team container
+- Agent Runtime Monitor > renders a delegation connector between parent and child
+- Agent Runtime Monitor > surfaces a sleeping agent awaiting intervention and opens the intervention dialog
+- Agent Runtime Monitor > selects a node and opens the termination dialog from the detail bubble
+- Agent Runtime Monitor > zooms in and out via the toolbar
+- Agent Runtime Monitor > pans the canvas via drag
+- Agent Runtime Monitor > toggles fullscreen and restores
+- Agent Runtime Monitor > shows a cross-type parent/child delegation connector
+- Agent Runtime Monitor > recovers from the filtered-empty state via "Reset filters"
+- Agent Runtime Monitor > shows trigger provenance as a person entity wired to the execution
+- Agent Runtime Monitor > renders the Communication Hub and tool-call routes to MCP servers
+- Agent Runtime Monitor > renders the System Tools node and skips unknown-slug and a2a tool calls
+- Agent Runtime Monitor > shows schedule creator attribution and no person line for a null-creator schedule
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -370,4 +384,18 @@
 | 183 | Env Variable Override Config | All infrastructure config resolved from environment variables — no YAML editing, no container rebuilds | production-ready-configuration | (manual) |
 | 184 | Fail-Fast Startup Validation | Services detect unreachable dependencies at startup and exit with clear, actionable diagnostics | production-ready-configuration | (manual) |
 | 185 | Setup Tool Full Idempotency | Operators can safely re-run `setup dev` without errors — all steps detect existing resources and report `skipped` | production-ready-configuration | (manual) |
+| 186 | Page rename & map composition | The runtime view opens as "Agent Runtime Monitor" with the interactive map canvas as the primary view (no residual "topology" naming). | agent-runtime-monitor | runtime-control-dashboard.spec.ts |
+| 187 | Map auto-fit & team containers | Many agents fit on screen automatically and each delegation tree groups into a labelled team container (`team-container-*`): root at depth 0, delegated children at deeper depth columns, with a count chip. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 188 | Delegation relationship | A parent agent and its delegated child render adjacent with a visible connector line. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 189 | Human-intervention alert | A sleeping agent awaiting intervention shows an alert icon; clicking it opens the human-intervention dialog for that session. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 190 | Selection & terminate | Selecting a node opens the detail bubble with a terminate action; the termination flow completes with the correct payload. | agent-runtime-monitor | runtime-control-dashboard.spec.ts |
+| 191 | Zoom in/out | The toolbar zoom controls scale the map canvas up and down. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 192 | Drag-to-pan | Dragging empty canvas pans the viewport across the map. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 193 | Fullscreen toggle | Maximising expands the map to fullscreen and toggling again restores the normal layout. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 194 | Cross-type delegation | A parent agent and its delegated child of a different type remain adjacent and joined by a visible connector line. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 195 | Filter reset recovery | Hiding every agent-kind node empties the map; the "Reset filters" control restores the population without a page reload. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 196 | Trigger provenance | Person/schedule entities appear in the leftmost column, wired by trigger lines to the executions they triggered. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 197 | Communication Hub & MCP routes | The Communication Hub renders as a full-height vertical bar and tool-call routes run orthogonally to MCP server nodes (per tool slug) with tool chips; selecting an agent highlights its route and involved MCP/tools. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 198 | System Tools & excluded calls | System-slug tool calls collapse into the single synthetic "System Tools" node with its tool chip; unknown-slug calls (NULL route_type degrade rows) render no MCP node or chip, and a2a rows (delegations) are excluded outright. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 199 | Creator attribution & trigger cards | Schedule entities render in the trigger column wired to their executions. The schedule card with a known creator shows the creator caption ("by Alice Operator"); a legacy null-creator schedule shows no creator caption, and its execution degrades the "Triggered by" line to "Unknown" — the schedule name never appears as a person. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
 

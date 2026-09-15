@@ -1,19 +1,31 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { AgentPlan } from '../types'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string, opts?: Record<string, unknown>) => opts?.defaultValue ?? k }),
 }))
 
+const { mockTopologyNodes, mockTopologyEdges } = vi.hoisted(() => ({
+  mockTopologyNodes: [] as unknown[],
+  mockTopologyEdges: [] as unknown[],
+}))
+
 // Mock TopologyDiagramRenderer to avoid SVG rendering complexity
 vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
-  default: ({ nodes, edges }: { nodes: unknown[]; edges: unknown[] }) => (
-    <div data-testid="topology-renderer">
-      <span data-testid="node-count">{nodes.length}</span>
-      <span data-testid="edge-count">{edges.length}</span>
-    </div>
-  ),
+  default: ({ nodes, edges }: { nodes: unknown[]; edges: unknown[] }) => {
+    // Record props so tests can assert on the composed graph (hub coverage).
+    mockTopologyNodes.length = 0
+    mockTopologyNodes.push(...nodes)
+    mockTopologyEdges.length = 0
+    mockTopologyEdges.push(...edges)
+    return (
+      <div data-testid="topology-renderer">
+        <span data-testid="node-count">{nodes.length}</span>
+        <span data-testid="edge-count">{edges.length}</span>
+      </div>
+    )
+  },
 }))
 
 // ── Test fixtures ──────────────────────────────────────────────────────────────
@@ -139,11 +151,12 @@ describe('PlanPreviewModal', () => {
       />,
     )
 
-    // TopologyDiagramRenderer mock renders node/edge counts
+    // TopologyDiagramRenderer mock renders node/edge counts — the plan's own
+    // 2 nodes/1 edge plus the appended Communication Hub node and its edge.
     const nodeCount = screen.getByTestId('node-count')
     const edgeCount = screen.getByTestId('edge-count')
-    expect(nodeCount.textContent).toBe('2')
-    expect(edgeCount.textContent).toBe('1')
+    expect(nodeCount.textContent).toBe('3')
+    expect(edgeCount.textContent).toBe('2')
   })
 
   it('renders error state when generation_status is failed', async () => {
@@ -325,5 +338,54 @@ describe('PlanPreviewModal', () => {
     )
 
     expect(screen.getByText('agents.plan.stepTypes.agent_delegation')).toBeDefined()
+  })
+
+  // ── Communication Hub node in the plan topology (Phase 5.2) ────────────────
+
+  it('appends the Communication Hub node and dashed edge to the plan topology', async () => {
+    const { PlanPreviewModal } = await import('../components/agents/PlanPreviewModal')
+
+    render(
+      <PlanPreviewModal open={true} onClose={vi.fn()} plan={SUCCESS_PLAN} agentTypeName="Test Agent" />,
+    )
+
+    await waitFor(() => {
+      const hub = mockTopologyNodes.find((n) => (n as { id: string }).id === 'communication_hub')
+      expect(hub).toBeDefined()
+    })
+    const hub = mockTopologyNodes.find((n) => (n as { id: string }).id === 'communication_hub') as {
+      type: string
+    }
+    expect(hub.type).toBe('communication_hub')
+
+    const hubEdge = mockTopologyEdges.find(
+      (e) => (e as { target: string }).target === 'communication_hub',
+    ) as { source: string; style?: string } | undefined
+    expect(hubEdge).toBeDefined()
+    expect(hubEdge?.source).toBe('agent')
+    expect(hubEdge?.style).toBe('dashed')
+    // Original plan nodes are preserved.
+    expect(mockTopologyNodes).toHaveLength(SUCCESS_PLAN.topology_nodes.length + 1)
+  })
+
+  it('never duplicates the hub node when the plan object is reused/recomposed', async () => {
+    const { PlanPreviewModal } = await import('../components/agents/PlanPreviewModal')
+
+    const { rerender } = render(
+      <PlanPreviewModal open={true} onClose={vi.fn()} plan={SUCCESS_PLAN} agentTypeName="Test Agent" />,
+    )
+
+    // Re-render with the same plan instance (equivalent to a regenerations cache hit).
+    rerender(
+      <PlanPreviewModal open={true} onClose={vi.fn()} plan={SUCCESS_PLAN} agentTypeName="Test Agent" />,
+    )
+
+    await waitFor(() => {
+      expect(mockTopologyNodes.length).toBeGreaterThan(0)
+    })
+    const hubCount = mockTopologyNodes.filter(
+      (n) => (n as { id: string }).id === 'communication_hub',
+    ).length
+    expect(hubCount).toBe(1)
   })
 })

@@ -1170,6 +1170,115 @@ describe('AgentRuntimeMapCanvas', () => {
     expect(screen.queryByTestId('latest-tool-no-calls-1')).toBeNull()
   })
 
+  it('shows the latest delegation as the tile action once it is newer than the last tool call', () => {
+    // Master recorded a human_intervene system call, the human responded,
+    // and THEN the master delegated — the tile must show the delegation
+    // instead of the stale human_intervente tool.
+    const master = mkNode({
+      session_id: 'del-master',
+      agent_type_name: 'Master',
+      kind: 'agent',
+      tool_calls: [
+        {
+          tool_name: 'human_intervene',
+          mcp_slug: 'system',
+          called_at: '2026-06-01T00:00:05Z',
+          route_type: 'system',
+        },
+      ],
+    })
+    const child = mkNode({
+      session_id: 'del-child',
+      agent_type_name: 'Researcher',
+      parent_session_id: 'del-master',
+      depth_from_root: 1,
+      created_at: '2026-06-01T00:00:30Z',
+    })
+    renderCanvas({
+      topology: mkTopology([master, child], [
+        { parent_session_id: 'del-master', child_session_id: 'del-child', depth_from_root: 1 },
+      ]),
+    })
+
+    const chip = screen.getByTestId('latest-delegation-del-master')
+    expect(chip.textContent).toContain('Researcher')
+    expect(screen.queryByTestId('latest-tool-del-master')).toBeNull()
+  })
+
+  it('shows the delegation chip for a delegating agent with no tool calls', () => {
+    const master = mkNode({ session_id: 'solo-master', agent_type_name: 'Orchestrator', kind: 'agent' })
+    const child = mkNode({
+      session_id: 'solo-child',
+      agent_type_name: 'Worker',
+      parent_session_id: 'solo-master',
+      depth_from_root: 1,
+    })
+    renderCanvas({
+      topology: mkTopology([master, child], [
+        { parent_session_id: 'solo-master', child_session_id: 'solo-child', depth_from_root: 1 },
+      ]),
+    })
+
+    expect(screen.getByTestId('latest-delegation-solo-master').textContent).toContain('Worker')
+    expect(screen.queryByTestId('latest-tool-solo-master')).toBeNull()
+  })
+
+  it('keeps the latest TOOL chip when a tool call is newer than the delegation', () => {
+    // The master delegated first, then kept calling tools — the tool call
+    // is the latest action and stays on the tile.
+    const master = mkNode({
+      session_id: 'tool-master',
+      agent_type_name: 'Master',
+      kind: 'agent',
+      tool_calls: [
+        { tool_name: 'github____summarize', mcp_slug: 'github', called_at: '2026-06-01T00:02:00Z' },
+      ],
+    })
+    const child = mkNode({
+      session_id: 'tool-child',
+      agent_type_name: 'Researcher',
+      parent_session_id: 'tool-master',
+      depth_from_root: 1,
+      created_at: '2026-06-01T00:01:00Z',
+    })
+    renderCanvas({
+      topology: mkTopology([master, child], [
+        { parent_session_id: 'tool-master', child_session_id: 'tool-child', depth_from_root: 1 },
+      ]),
+    })
+
+    expect(screen.getByTestId('latest-tool-tool-master')).toBeDefined()
+    expect(screen.queryByTestId('latest-delegation-tool-master')).toBeNull()
+  })
+
+  it('picks the MOST RECENT child when a master delegated several times', () => {
+    const master = mkNode({ session_id: 'multi-master', agent_type_name: 'Master', kind: 'agent' })
+    const first = mkNode({
+      session_id: 'multi-child-a',
+      agent_type_name: 'FirstWorker',
+      parent_session_id: 'multi-master',
+      depth_from_root: 1,
+      created_at: '2026-06-01T00:00:10Z',
+    })
+    const second = mkNode({
+      session_id: 'multi-child-b',
+      agent_type_name: 'SecondWorker',
+      parent_session_id: 'multi-master',
+      depth_from_root: 1,
+      created_at: '2026-06-01T00:01:00Z',
+    })
+    renderCanvas({
+      topology: mkTopology([master, first, second], [
+        { parent_session_id: 'multi-master', child_session_id: 'multi-child-a', depth_from_root: 1 },
+        { parent_session_id: 'multi-master', child_session_id: 'multi-child-b', depth_from_root: 1 },
+      ]),
+    })
+
+    expect(screen.getByTestId('latest-delegation-multi-master').textContent).toContain(
+      'SecondWorker',
+    )
+  })
+
   // ── Trigger entity detail bubble (Phase 13) ───────────────────────────────
 
   it('clicking a person card opens the detail bubble with name, count and execution rows', () => {

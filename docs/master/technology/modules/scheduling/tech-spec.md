@@ -34,9 +34,9 @@ The scheduling module provides cron-based trigger capabilities for the platform,
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/api/v1/schedules` | List all scheduled jobs (paginated) |
-| `POST` | `/api/v1/schedules` | Create a cron schedule |
+| `POST` | `/api/v1/schedules` | Create a cron schedule; stamps `scheduled_by_user_id` from the requesting user's identity (trigger-provenance anchor for schedule-triggered runs) |
 | `GET` | `/api/v1/schedules/{job_id}` | Get schedule detail |
-| `PUT` | `/api/v1/schedules/{job_id}` | Update a schedule (re-registers cron) |
+| `PUT` | `/api/v1/schedules/{job_id}` | Update a schedule (re-registers cron; re-stamps `scheduled_by_user_id`) |
 | `DELETE` | `/api/v1/schedules/{job_id}` | Soft-delete a schedule |
 | `POST` | `/api/v1/schedules/{job_id}/pause` | Pause a scheduled job |
 | `POST` | `/api/v1/schedules/{job_id}/resume` | Resume a paused job |
@@ -70,11 +70,11 @@ The scheduling module provides cron-based trigger capabilities for the platform,
 | `SchedulingEngine.shutdown()` | method | Shutdown scheduler | `backend/app/services/scheduling/scheduler.py` |
 | `SchedulingEngine.add_job()` | method | Register cron job with scheduler | `backend/app/services/scheduling/scheduler.py` |
 | `SchedulingEngine._execute_job()` | method | Execute job: load from DB, create execution record, dispatch, record result | `backend/app/services/scheduling/scheduler.py` |
-| `SchedulingEngine._dispatch()` | method | Route to gateway lifecycle handler for agent-target jobs | `backend/app/services/scheduling/scheduler.py` |
+| `SchedulingEngine._dispatch()` | method | Route to gateway lifecycle handler for agent-target jobs; passes `job.scheduled_by_user_id` into `launch(...)` so schedule-triggered executions are attributed to the schedule's creator | `backend/app/services/scheduling/scheduler.py` |
 | `SchedulingEngine.recover_schedules()` | method | Load active jobs from DB and re-register with scheduler on restart | `backend/app/services/scheduling/scheduler.py` |
 | `get_scheduling_engine()` | function | Singleton accessor for `SchedulingEngine` | `backend/app/services/scheduling/scheduler.py` |
 | `ScheduleRouter` | router | FastAPI `APIRouter` with CRUD, pause, resume, and execution-history endpoints for scheduled jobs | `backend/app/api/v1/scheduling.py` |
-| `ScheduledJob` | model | SQLAlchemy model for a cron-based schedule record (expression, target, payload, state) | `backend/app/db/models/scheduling.py` |
+| `ScheduledJob` | model | SQLAlchemy model for a cron-based schedule record (expression, target, payload, state); includes `scheduled_by_user_id` (nullable FK → `identities.id`) stamped from the creating/updating user's identity | `backend/app/db/models/scheduling.py` |
 | `JobExecution` | model | SQLAlchemy model for a single execution run of a scheduled job | `backend/app/db/models/scheduling.py` |
 | `ScheduledJobCreate` | schema | Pydantic create schema | `backend/app/schemas/scheduling.py` |
 | `ScheduledJobUpdate` | schema | Pydantic update schema | `backend/app/schemas/scheduling.py` |

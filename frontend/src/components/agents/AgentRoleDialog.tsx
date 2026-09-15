@@ -37,8 +37,8 @@ import apiClient from '../../api/apiClient'
 import { useAllTools } from '../../hooks/useMcpServers'
 import { canonicalizeToolName } from '../../utils/toolNaming'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import { AssignIdentitiesToRoleDialog } from './AssignIdentitiesToRoleDialog'
-import type { AgentIdentity, AgentRole, McpServer, McpSession, McpTool, Skill, Sop } from '../../types'
+import { AssignIdentitiesToRoleDialog } from '../../pages/agents/AssignIdentitiesToRoleDialog'
+import type { AgentIdentity, AgentRole, CreateAndAssignResult, McpServer, McpSession, McpTool, Skill, Sop } from '../../types'
 
 interface McpSessionInfo {
   id: string
@@ -53,7 +53,11 @@ interface AgentRoleDialogProps {
   editRole: AgentRole | null
   mode?: 'create' | 'edit' | 'view'
   onClose: () => void
-  onSaved: () => Promise<void>
+  /**
+   * Invoked after a successful save. In create mode the created role is passed
+   * as a create-and-assign result; existing callers may ignore the argument.
+   */
+  onSaved: (result?: CreateAndAssignResult) => Promise<void>
 }
 
 /**
@@ -434,6 +438,9 @@ export function AgentRoleDialog({ open, editRole, mode: modeProp, onClose, onSav
             mcp_session_id: sessionId,
           })
         }
+
+        await onSaved({ id: newRole.id, label: newRole.name })
+        return
       }
 
       await onSaved()

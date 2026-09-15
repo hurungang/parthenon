@@ -255,7 +255,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentPermissionManager` | class | Resolves `AgentRole → SOPs → Skills → MCP tools`; tool identifiers use `mcp_slug/tool_name`; includes A2A permission evaluation for target agent type slugs derived from SOP `agent_delegation` steps; LRU cache keyed on `role_id`; `invalidate(role_id)` called on role writes | `backend/app/services/agents/permission_manager.py` |
 | `RealmManager` | class | Agent realm initialization in OIDC provider; realm-level token policies; registers platform OAuth client | `backend/app/services/identity/realm_manager.py` |
 | `TokenRefreshService` | class | Background proactive token refresh for agent identities approaching expiry; updates `AgentIdentity` with re-encrypted token pair | `backend/app/services/agents/token_refresh_service.py` |
-| `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
+| `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued) with delegation inheritance (copies parent `triggered_by_user_id` when `parent_job_id` set), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
 | `SessionDispatcher` | class | Background dispatch worker; `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor` | `backend/app/services/agents/session_dispatcher.py` |
 | `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; enforces A2A target-agent permission checks and session-link lifecycle handoff metadata during delegation; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token; enforces 1-level delegation depth limit for non-conversational agents; emits delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) for non-conversational delegation; injects output type formatting instructions into system prompt based on `output_type` | `backend/app/services/agents/runtime_executor.py` |
 | `_extract_agent_delegation_target` | function | Extracts delegated target slug from canonical delegation tool names for status/event labeling | `backend/app/services/agents/runtime_executor.py` |
@@ -311,6 +311,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agent_data` | module | Internal API surface for agent-specific data operations and A2A routing metadata | `backend/app/api/v1/internal/agent_data.py` |
 | `get_agent_context` | endpoint | Returns runtime context including SOP content and role-derived SOP summaries for system-instruction assembly | `backend/app/api/v1/internal/agent_data.py` |
 | `session_data` | module | Internal API surface for session-bound state and lifecycle transitions used by A2A flows | `backend/app/api/v1/internal/session_data.py` |
+| `prepare_a2a_request` | function | A2A delegation enqueue; resolves the chat user from the source `ConversationSession` and passes it as `user_id` so chat-originated delegations carry the human trigger | `backend/app/api/v1/internal/session_data.py` |
+| `record_tool_calls` | endpoint | `POST /api/v1/internal/data/tool-calls` (service-cert auth); persists one or a batch of `RuntimeToolCall` rows reported by Agent Runtime | `backend/app/api/v1/internal/session_data.py` |
 | `system_tools` (router) | router | Internal system tool dispatch router; mounts `POST /save-data`, `/get-data`, `/get-output` handlers with mTLS service certificate auth; delegates to `AgentDataService` and `OutputService` | `backend/app/api/v1/internal/system_tools.py` |
 | `save_data_tool` | endpoint | `POST /api/v1/internal/system-tools/save-data` — saves one `AgentData` record; called by CommHub when routing a `save_data` tool call | `backend/app/api/v1/internal/system_tools.py` |
 | `get_data_tool` | endpoint | `POST /api/v1/internal/system-tools/get-data` — queries `AgentData` records by filter; at least one filter required | `backend/app/api/v1/internal/system_tools.py` |
@@ -335,7 +337,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `LangChainSaveDataTool` | class | LangChain `BaseTool` subclass for `save_data`; holds `comm_hub_client` injected at session construction; `_arun` calls `comm_hub_client.call_tool("save_data", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
 | `LangChainGetDataTool` | class | LangChain `BaseTool` subclass for `get_data`; `_arun` calls `comm_hub_client.call_tool("get_data", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
 | `LangChainGetOutputTool` | class | LangChain `BaseTool` subclass for `get_output`; `_arun` calls `comm_hub_client.call_tool("get_output", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
-| `build_langchain_tools_for_ar_path` | function | Assembles LangChain tools for AR execution path; now includes `save_data`, `get_data`, `get_output`; removed `save_result` binding | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `build_langchain_tools_for_ar_path` | function | Assembles LangChain tools for AR execution path; now includes `save_data`, `get_data`, `get_output`; removed `save_result` binding; records tool calls under the CANONICAL name (restored via `tool_name_map`, the same mapping used for CommHub dispatch) instead of the sanitised definition name; delegation tools record `agent____<slug>` | `backend/app/services/agents/langchain_tool_wrapper.py` |
 
 ### Agent Runtime Tool Clients (`backend/app/agent_runtime/`)
 
@@ -604,6 +606,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `AgentRuntimeExecutor` (structured output) | class | **MODIFIED**: When `agent_type.output_data_type_id` is set, passes `ToolStrategy(schema=output_json_schema)` as `response_format` to `create_agent()` — LangChain enforces structured output natively via tool calling (or provider-native JSON mode when model profile supports it); no system instruction injection | `backend/app/services/agents/runtime_executor.py` |
 | `AgentRuntimeExecutor` (completion flow) | class | **MODIFIED**: After agent completes, if `output_data_type_id` is set: (1) calls `POST /internal/validate-output` to validate payload against schema, (2) calls `POST /internal/agent-outputs` to persist typed output, (3) wires returned `output_id` back to `AgentJob.output_id`; if `output_data_type_id` is null, uses existing untyped completion flow | `backend/app/services/agents/runtime_executor.py` |
+| `_record_tool_call_safely` / `_build_tool_call_recorder` | methods | Executor-side best-effort tool-call recording hooks; resolve a working data client (executor client or app-level fallback) so conversation turns — whose call sites pass `data_client=None` — are recorded too; failures logged and swallowed, never break tool execution | `backend/app/services/agents/runtime_executor.py` |
 
 ### Data Type & Output Test Files
 
@@ -625,24 +628,29 @@ The agents module is the central execution layer for AI agents on the platform. 
 
 ## Runtime Control & Model Guardrail Hierarchy
 
-The following components and services support the **vendor → model → guardrail hierarchy** for model-usage guardrails and the **Runtime Control Dashboard** for live execution visibility and operator-controlled termination. Operator-initiated termination is a distinct `terminated` state, separate from `failed` (genuine agent or runtime error). The dashboard merges three node kinds — `agent` (live `AgentJob`), `conversation` (`ConversationSession` with synthetic active/sleep status), and `instance` (`AgentInstance`) — and supports a tickable filter legend.
+The following components and services support the **Agent Runtime Monitor** (rebranded from "Runtime Control Dashboard") for live execution visibility, tool-call provenance, and operator-controlled termination, along with the **vendor → model → guardrail hierarchy** for model-usage guardrails. Operator-initiated termination is a distinct `terminated` state, separate from `failed` (genuine agent or runtime error). The monitor renders the live delegation/tool-call map through a single full-page canvas (`AgentRuntimeMapCanvas`): delegation-tree team containers (one tree per row, columns = delegation depth), a Communication Hub firewall bar with orthogonal tool-call routes through evenly distributed MCP nodes, and tool chips (System Tools node) with per-agent colouring, grey history, and selection highlight. The map merges three node kinds — `agent` (live `AgentJob`), `conversation` (`ConversationSession` with synthetic active/sleep status), and `instance` (`AgentInstance`) — each carrying trigger provenance (user/schedule/delegated/unknown), pending-intervention state (`needs_intervention`), and a tool-call route list. The feed is **stream-first**: `useRuntimeTopology` opens an `EventSource` to the SSE endpoint (`GET /agents/runtime/topology/stream`) for near-instant map updates, with 5s polling as the automatic fallback while the stream is down. The model guardrail hierarchy (vendor → model → guardrail) is managed on the Model Config page via `VendorModelGuardrailPanel`/`AddGuardrailForm`, which this page no longer renders.
 
 ### Frontend Components (`frontend/src/components/agents/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `RuntimeControlDashboardPage` | page | Dedicated runtime control dashboard at `/agents/runtime-control`; hosts the live SVG topology, selected-node details, the new Model Guardrails view (vendor → model → guardrail hierarchy), and the terminate entry point. Owns the `Set<string>` filter state and `SleepConversationActions` sub-component | `frontend/src/pages/agents/RuntimeControlDashboardPage.tsx` |
-| `RuntimeTopologyDiagram` | component | SVG-based live delegation topology with rounded-rect nodes, status fills, click-to-select, tickable filter legend (12 entries: 5 agent + 4 conversation + 3 instance), single-row-per-depth layout, and horizontal scrollbar via `overflowX:'auto'` wrapping Box | `frontend/src/components/agents/RuntimeTopologyDiagram.tsx` |
-| `RuntimeTopologyPanel` | component | Legacy flat-card grouped-by-depth runtime execution-tree view with selected-node details and terminate entry point (retained for compatibility) | `frontend/src/components/agents/RuntimeTopologyPanel.tsx` |
+| `RuntimeControlDashboardPage` | page | Dedicated runtime monitor dashboard at `/agents/runtime-control` (title: "Agent Runtime Monitor"); hosts the map canvas (`AgentRuntimeMapCanvas`), the selected-node detail bubble, the trigger detail bubble, and the terminate entry point. Owns the `Set<string>` filter state and `SleepConversationActions` sub-component; the Model Guardrails view is removed from this page | `frontend/src/pages/agents/RuntimeControlDashboardPage.tsx` |
+| `AgentRuntimeMapCanvas` | component | Full-page interactive map canvas: zoom/pan/auto-fit, delegation-tree team containers (one tree per row, columns = delegation depth), Communication Hub firewall bar + orthogonal tool-call routes through evenly distributed MCP nodes and tool chips (System Tools node, per-agent colour / grey history / selection highlight), filter/legend recovery, fullscreen; contrast-focus isolation — hovering (transient) or clicking (persisted) any entity focuses its complete upstream + downstream walk so tool routes leak no sibling noise through shared MCP servers; dot-grid background rendered at the STAGE level (world layer transparent so the stage grid shows through); initial auto-fit uses a relaxed minimum-zoom floor (~0.05) so large populations fit on first load while user zoom keeps the existing `MIN_ZOOM`/`MAX_ZOOM` clamps; hub renders full canvas height from the first paint with zero agents (world sizing ≥ stage; the empty state renders the map + message overlay instead of a bare placeholder); `?recent_minutes=` window toggle for terminal-job visibility | `frontend/src/components/agents/AgentRuntimeMapCanvas.tsx` |
+| `AgentDetailBubble` | component | Inline detail bubble for a selected node (detail + terminate + trigger provenance); agent-kind nodes open the "Execution log" link to `AgentExecutionDetailsDialog` and show the guardrail USAGE-vs-limits box (4 metrics, `current / limit` rows, near ≥80% / over colour semantics + `data-state` cue); sleep conversation nodes show "End session" (`runtime.runtimeEndSession`) instead of "Terminate"; the "Triggered by" row shows the triggering human (`trigger_user_label`) — for schedule-triggered nodes the creator or the unknown label, never the schedule name | `frontend/src/components/agents/AgentDetailBubble.tsx` |
+| `TriggerDetailBubble` | component | New dismissible trigger-entity detail bubble beside a person/schedule card: person (name, kind, triggered-execution count direct + via schedules, execution rows with agent type + status chip) / schedule (name, creator when known, executions); row click selects the session (focus + agent bubble); data derived client-side from the focus graph — no new API; positioning/dismissal mirror `AgentDetailBubble` | `frontend/src/components/agents/TriggerDetailBubble.tsx` |
+| `runtimeNodeMeta` | module | Shared presentation helpers (`nodeKind`, `kindLabelKey`, `statusLabelKey`, `statusChipColor`, `statusDotColor`) | `frontend/src/components/agents/runtimeNodeMeta.ts` |
+| `RuntimeTopologyPanel` | component | Legacy flat-card grouped-by-depth runtime execution-tree view with selected-node details and terminate entry point (retained for compatibility; no longer rendered by the dashboard) | `frontend/src/components/agents/RuntimeTopologyPanel.tsx` |
 | `NodeTerminationDialog` | component | Terminate modal with permission/API denial feedback and cascade scope selection | `frontend/src/components/agents/NodeTerminationDialog.tsx` |
-| `VendorModelGuardrailPanel` | component | Hierarchy-aware panel: vendor rows (with vendor enable/disable toggle and enabled-model count) → model rows (with per-model enable/disable toggle, cascade source indicator) → guardrail rows (with period, limit, unit, posture state, per-guardrail enable/edit/remove) | `frontend/src/components/agents/VendorModelGuardrailPanel.tsx` |
+| `VendorModelGuardrailPanel` | component | **Removed from this page** — still used by `ModelConfigListPage` for the hierarchy-aware panel: vendor rows (with vendor enable/disable toggle and enabled-model count) → model rows (with per-model enable/disable toggle, cascade source indicator) → guardrail rows (with period, limit, unit, posture state, per-guardrail enable/edit/remove) | `frontend/src/components/agents/VendorModelGuardrailPanel.tsx` |
 | `AddGuardrailForm` | component | Inline (non-modal) form inside an expanded model row; period select filtered to periods not yet configured on the model; single per-period create dispatch | `frontend/src/components/agents/AddGuardrailForm.tsx` |
 
 ### Frontend Hooks (`frontend/src/hooks/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `useRuntimeTopology` | hook | Server-state hook for active runtime topology and polling refresh | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `useRuntimeTopology` | hook | **Stream-first** topology feed (Phase 15): `EventSource` to the SSE stream (`GET /agents/runtime/topology/stream`) pushes projection payloads into the React Query cache (`setQueryData`); the 5s `refetchInterval` polling is the automatic fallback while the stream is down, returning to live push on reconnect; exposes `isNodeVisibleByDefault`; consumes provenance + tool-call routes; keeps filter/legend usable on empty map | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `isNodeVisibleByDefault` | function | Default-visibility predicate: active nodes visible; sleep nodes visible only when `needs_intervention === true` | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `getPendingInterventionForNode` | function | Resolves the pending `InterveneRequest` for a node (conversation-scoped vs agent-scoped endpoint) | `frontend/src/api/interveneApi.ts` |
 | `useNodeTermination` | hook | Mutation/query hooks for terminate requests and cascade outcome polling | `frontend/src/hooks/useNodeTermination.ts` |
 | `useModelUsagePosture` | hook | Server-state hook for model-usage posture data and refresh | `frontend/src/hooks/useModelUsagePosture.ts` |
 | `useModelUsageLimits` | hook | Server-state hook for per-guardrail configurations and refresh | `frontend/src/hooks/useModelUsagePosture.ts` |
@@ -660,10 +668,11 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `AgentJobStatus` | enum | Extended with `terminated` (distinct from `failed`) |
-| `RuntimeTopologyNode` | interface | Topology node: `kind: 'agent' \| 'conversation' \| 'instance'`, `status: string`, `title?: string`, plus delegation metadata |
-| `RuntimeTopologyEdge` | interface | Topology edge: `source: string`, `target: string` |
-| `RuntimeTopologyRead` | interface | Topology response: `nodes: RuntimeTopologyNode[]`, `edges: RuntimeTopologyEdge[]` |
+| `AgentJobStatus` | enum | Extended with `terminated` (distinct from `failed`) and `waiting_for_human` |
+| `RuntimeTopologyNode` | interface | Topology node: `kind: 'agent' \| 'conversation' \| 'instance'`, `status: string`, `title?: string`, `needs_intervention?`, trigger provenance (`trigger_source`, `trigger_source_label`, `trigger_user_label`, `trigger_user_id`, `schedule_id`, `schedule_cron`, `schedule_description`) and `tool_calls?: ToolCallRoute[]` |
+| `RuntimeTopologyEdge` | interface | Topology edge: `parent_session_id: string`, `child_session_id: string`, `depth_from_root: number` |
+| `RuntimeTopologyProjection` | interface | Topology response: `nodes: RuntimeTopologyNode[]`, `edges: RuntimeTopologyEdge[]`, `root_session_ids: string[]` |
+| `ToolCallRoute` | interface | Frontend tool-call route: `tool_name`, `mcp_slug`, `called_at`, optional `route_type: 'system' \| 'mcp' \| 'a2a' \| null` |
 | `LogSummary` | interface | Extended with `terminated` outcome distinct from `failed` (renders amber `BlockIcon` Chip) |
 | `AvailableModel` | interface | `model_id`, `model_name`, `vendor` |
 | `ModelAvailability` | interface | `model_id`, `model_name`, `is_disabled`, `disabled_reason?: 'manual' \| 'vendor_cascaded'` |
@@ -673,7 +682,8 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Kind | Description |
 |--------|------|-------------|
-| `runtime.runtimeControlTitle` | i18n key | Title for the runtime control dashboard page |
+| `runtime.runtimeControlTitle` | i18n key | Title for the runtime control dashboard page ("Agent Runtime Monitor") |
+| `agents.sessions.runtimeControlTitle` | i18n key | "Agent Runtime Monitor" page title (rebranded) |
 | `runtime.statusActive` | i18n key | "Active" runtime status label |
 | `runtime.statusSleep` | i18n key | "Sleep" runtime status label (synthetic, no live agent job) |
 | `runtime.statusClosed` | i18n key | "Closed" runtime status label |
@@ -682,6 +692,7 @@ The following components and services support the **vendor → model → guardra
 | `runtime.runtimeEndSession` | i18n key | "End session" button label (sleep conversations) |
 | `runtime.runtimeTopologyConversationLabel` | i18n key | Prefix label for conversation nodes in topology |
 | `runtime.runtimeTopologyFilteredEmpty` | i18n key | Empty state message when all nodes are filtered out |
+| `agents.sessions.runtimeMonitor*` | i18n namespace | Map canvas + bubble UI strings: zoom/pan/fullscreen controls, filter/legend keys, Communication Hub label, System Tools label, depth labels, session/trigger labels, recent-minutes window toggle (`runtimeMonitorWindowLabel`, `runtimeMonitorWindowUnitHours`/`Minutes`), guardrail usage summary (`runtimeMonitorGuardrailSummary`), execution-log link, terminate, empty/filtered-empty states |
 | `agents.statusCreated` | i18n key | "Created" instance status label |
 | `agents.statusTerminated` | i18n key | "Terminated" agent job status label (2 places: dialog badge, page warning) |
 
@@ -689,7 +700,10 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `RuntimeTopologyController` | service | Active runtime topology projection; merges `AgentJob` (live), `ConversationSession` (synthetic active/sleep), and `AgentInstance` (created/active/closed/error) sources | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `RuntimeTopologyController` | service | Active runtime topology projection; merges `AgentJob` (live), `ConversationSession` (synthetic active/sleep), and `AgentInstance` (created/active/closed/error) sources; resolves provenance and tool-call history (union of `RuntimeToolCall` + `ToolCallRecord`, latest-first, cap 20) and `needs_intervention`; delegation edges derived from `AgentJob.parent_job_id` (unioned with `AgentRunRelationship`, deduped) with `depth_from_root` computed by walking parent chains; conversation nodes linked to jobs via `input_data.__conv_session_id`; schedule-triggered nodes set `trigger_user_label` to the resolved creator identity name only (`null` when unknown — the `or schedule_name` fallback is removed); `get_active_topology()` supports the `recent_minutes` window (default 30) — terminal jobs (completed/failed/terminated) whose `completed_at` (fallback `created_at`) falls inside the window join the live set, `created_at desc`, live statuses first, `max_nodes`-budgeted; skipped when `include_statuses` already contains terminal statuses | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `_resolve_mcp_slug` | function | Controller-side slug resolution: canonical `parse_tool_name` first, then a sanitised-name fallback splitting on the FIRST `__` (empty parts → `unknown`; bare legacy system names keep the `system` slug; legacy `server/tool` → server part) so rows recorded with OpenAI-sanitised names still resolve | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `parse_tool_name` | function | Splits canonical `server____tool` names into (server slug, tool name) for MCP-server routing | `backend/app/services/agents/tool_naming.py` |
+| `build_tool_name` | function | Builds canonical `server____tool` names (inverse of `parse_tool_name`); used for `mcp_<id>::<tool>` canonical tool names | `backend/app/services/agents/tool_naming.py` |
 | `TerminationOrchestrator` | service | Permission-gated node terminate and cascade orchestration; routes terminate requests from CC through CH to AR; records `TerminationRequest` and `TerminationCascadeOutcome` rows | `backend/app/services/control_center/termination_orchestrator.py` |
 | `RecursionValidationService` | service | Recursion/dead-loop risk validation at create, update, and run entry points; persists `SopRecursionValidationCheck` and `SopRecursionValidationFinding` | `backend/app/services/control_center/recursion_validation_service.py` |
 | `ModelAvailabilityService` | service | Vendor and per-model enabled state; exposes the pre-execution availability check; materialises the vendor-cascade transaction | `backend/app/services/control_center/model_availability_service.py` |
@@ -728,7 +742,12 @@ The following components and services support the **vendor → model → guardra
 | `SopRecursionValidationCheck` | model | Validation-check audit model for create/update/run contexts | `backend/app/db/models/sop_recursion_validation_check.py` |
 | `SopRecursionValidationFinding` | model | Detailed recursion-risk finding model linked to validation checks | `backend/app/db/models/sop_recursion_validation_finding.py` |
 | `AgentInstance` | model | Agent instance dashboard record; `instance_id`, `status: created \| active \| closed \| error` | `backend/app/db/models/agents.py` |
-| `AgentJobStatus.terminated` | enum value | New `terminated` value added to `agent_job_status_enum`; distinct from `failed` | `backend/app/db/models/agents.py` |
+| `AgentJobStatus.terminated` | enum value | New `terminated` value added to `agent_job_status_enum`; distinct from `failed` |
+| `AgentJobStatus.waiting_for_human` | enum value | `waiting_for_human` value in `agent_job_status_enum`; the run is parked awaiting human intervention | `backend/app/db/models/agents.py` |
+| `RuntimeToolCall` | model | Recorded tool execution (MCP/system/A2A); polymorphic `session_id` (agent job OR conversation id, no FK, indexed) with `session_kind`, `tool_name`, `route_type`, `mcp_slug`, `status`, `duration_ms`, `error` | `backend/app/db/models/tool_calls.py` |
+| `RuntimeToolCallSessionKind` | enum | `agent` / `conversation` — which kind of session a recorded tool call belongs to | `backend/app/db/models/tool_calls.py` |
+| `RuntimeToolCallRouteType` | enum | `system` / `mcp` / `a2a` — routing path the tool call took through Communication Hub | `backend/app/db/models/tool_calls.py` |
+| `RuntimeToolCallStatus` | enum | `success` / `error` — outcome of the tool execution | `backend/app/db/models/tool_calls.py` |
 | `ExecutionEventCategory.guardrail_breached` | enum value | New `guardrail_breached` event category | `backend/app/db/models/session_logs.py` |
 | `ExecutionEventCategory.model_disabled` | enum value | New `model_disabled` event category for vendor-cascaded or manual model blocks | `backend/app/db/models/session_logs.py` |
 | `ExecutionEventCategory.vendor_disabled` | enum value | New `vendor_disabled` event category for vendor-level blocks | `backend/app/db/models/session_logs.py` |
@@ -742,7 +761,8 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `get_runtime_topology` | endpoint | Returns active runtime topology projection (nodes, edges, depth, statuses) for the dashboard |
+| `get_runtime_topology` | endpoint | Returns active runtime topology projection (nodes, edges, roots, provenance, tool-call routes, `needs_intervention`) for the dashboard; includes `waiting_for_human` in the default and non-terminal status lists; `recent_minutes: int = Query(30, ge=0, le=10080)` (0 disables the recent-terminal window; `include_terminal` unchanged) passed through to the controller |
+| `stream_runtime_topology` | endpoint | SSE `StreamingResponse` (`text/event-stream`) at `GET /agents/runtime/topology/stream`; `?token=` query-param auth validated against the OIDC client (same pattern as the CH chat WebSocket) + the same `RT_AGENT` "read" permission; loop recomputes the projection every ~2s and emits the full `RuntimeTopologyRead` payload only when its hash changed; ~15s heartbeat comments keep proxies alive; rejected connections never emit events (401 bad token, 403 denied permission) |
 | `request_runtime_termination` | endpoint | Performs permission-gated terminate requests with explicit denial reasons |
 | `get_runtime_termination_outcomes` | endpoint | Returns per-node cascade outcomes for a termination request |
 | `list_runtime_policy_events` | endpoint | Returns structured policy/guardrail/termination log events for runtime correlation |
@@ -764,13 +784,16 @@ The following components and services support the **vendor → model → guardra
 | `test_agent_runtime_controls_api` | test | Backend API tests for recursion validation 422 on create/update and instance termination 204/404 | `backend/tests/api/v1/test_agent_runtime_controls_api.py` |
 | `test_model_usage_guardrails_api` | test | Backend API tests for per-guardrail CRUD endpoints and posture refresh query; per-period shape, `unit` round-trip, `(model_id, model_name, period)` conflict 409 | `backend/tests/api/v1/test_model_usage_guardrails_api.py` |
 | `test_model_availability_api` | test | Backend API tests for the four new availability endpoints (vendor toggle, per-model toggle, list, preflight); cascade semantics and deny paths | `backend/tests/api/v1/test_model_availability_api.py` |
-| `test_runtime_topology_controller` | test | 19 unit tests for topology controller: 14 conversation + 5 instance scenarios | `backend/tests/unit/services/test_runtime_topology_controller.py` |
+| `test_runtime_topology_controller` | test | 45 unit tests for topology controller: conversation/instance scenarios, delegation edges, tool-call routes, provenance, recent-terminal window | `backend/tests/unit/services/test_runtime_topology_controller.py` |
 | `test_termination_orchestrator` | test | 3 orchestrator tests updated for `terminated` handling | `backend/tests/services/test_termination_orchestrator.py` |
 | `test_agent_runtime_client_terminate` | test | 4 CH-routed terminate tests | `backend/tests/services/test_agent_runtime_client_terminate.py` |
 | `test_session_status_update_guards` | test | 2 new `terminated` late-update guard tests | `backend/tests/api/v1/internal/test_session_status_update_guards.py` |
 | `test_model_availability_service` | test | 5 unit tests for guardrail breach enforcement | `backend/tests/services/test_model_availability_service.py` |
-| `RuntimeControlDashboardPage.test` | frontend test | 4 tests for the dedicated `/agents/runtime-control` page — route registration, live SVG topology rendering, rect/line counts, sleep conversation gets "End session" instead of "Terminate" | `frontend/src/__tests__/RuntimeControlDashboardPage.test.tsx` |
-| `RuntimeTopologyPanel.test` | frontend test | 2 tests for topology grouping/selection and permission-gated terminate control state | `frontend/src/__tests__/RuntimeTopologyPanel.test.tsx` |
+| `RuntimeControlDashboardPage.test` | frontend test | 5 tests for the `/agents/runtime-control` page — route registration, map canvas rendering, sleep conversation gets "End session" instead of "Terminate" | `frontend/src/__tests__/RuntimeControlDashboardPage.test.tsx` |
+| `AgentRuntimeMapCanvas.test` | frontend test | 72 tests for the map canvas — delegation-tree containers, hub firewall bar, tool-call routes through MCP nodes and tool chips, zoom/pan/auto-fit, filter/legend recovery, fullscreen, empty state | `frontend/src/__tests__/AgentRuntimeMapCanvas.test.tsx` |
+| `AgentDetailBubble.test` | frontend test | 15 tests for the detail bubble — detail/terminate/provenance rows, execution-log link, guardrail usage-vs-limits box colour semantics | `frontend/src/__tests__/AgentDetailBubble.test.tsx` |
+| `TriggerDetailBubble.test` | frontend test | 10 tests for the trigger-entity detail bubble — person/schedule cards, execution rows, session selection, dismissal | `frontend/src/__tests__/TriggerDetailBubble.test.tsx` |
+| `RuntimeTopologyPanel.test` | frontend test | 2 tests for topology grouping/selection and permission-gated terminate control state (legacy panel, retained) | `frontend/src/__tests__/RuntimeTopologyPanel.test.tsx` |
 | `LogPresenter.test` | frontend test | 116 tests verifying `terminated` mapping to a distinct `terminated` outcome (not `failed`) | `frontend/src/__tests__/LogPresenter.test.ts` |
 | `LogSummaryPanel.test` | frontend test | 17 tests verifying amber `BlockIcon` Chip for `terminated` distinct from red `ErrorIcon` for `failed` | `frontend/src/__tests__/LogSummaryPanel.test.tsx` |
 | `runtime-control-dashboard.spec` | E2E test | Observe-only policy visibility, topology/terminate flow, recursion contract, real-backend runtime-control checks, vendor/model availability hierarchy | `e2e/tests/runtime-control-dashboard.spec.ts` |

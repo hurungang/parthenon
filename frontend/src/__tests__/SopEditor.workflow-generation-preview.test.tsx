@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { SopEditor } from '../pages/skills/SopEditor'
+import { SopEditor } from '../components/agents/SopEditor'
 import apiClient from '../api/apiClient'
 
 vi.mock('react-i18next', () => ({

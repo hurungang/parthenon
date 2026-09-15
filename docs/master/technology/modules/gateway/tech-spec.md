@@ -37,7 +37,7 @@ The gateway module exposes registered agent types to external consumers through 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `GatewayRouter` | router | Lifecycle protocol endpoints (init/request/question/answer/close) | `backend/app/api/gateway/lifecycle.py` |
-| `GatewayLifecycleHandler` | class | Orchestrates gateway state machine: routes launch requests through `AgentSessionService.enqueue`; `validate_agent_identity_token()` validates OAuth token presence, expiry, and identity type; `get_role_tools_for_agent()` returns tool stubs without descriptions/schemas; `AgentAuthError` raised on validation failure | `backend/app/services/gateway/lifecycle_handler.py` |
+| `GatewayLifecycleHandler` | class | Orchestrates gateway state machine: routes launch requests through `AgentSessionService.enqueue`; `validate_agent_identity_token()` validates OAuth token presence, expiry, and identity type; `get_role_tools_for_agent()` returns tool stubs without descriptions/schemas; `AgentAuthError` raised on validation failure. `launch()` forwards a resolved `user_id` → `AgentJob.triggered_by_user_id` so schedule-triggered executions are attributed to the schedule creator | `backend/app/services/gateway/lifecycle_handler.py` |
 | `AgentAuthError` | exception | Raised by `GatewayLifecycleHandler` when agent identity token validation fails | `backend/app/services/gateway/lifecycle_handler.py` |
 | `GatewayEndpointRegistry` | class | Persists and resolves gateway route mappings per agent type | `backend/app/services/gateway/registry.py` |
 | `HttpGatewayTransport` | class | HTTP adapter marshalling FastAPI requests to GatewayLifecycleHandler | `backend/app/services/gateway/transports/http.py` |

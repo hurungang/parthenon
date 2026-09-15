@@ -20,6 +20,7 @@ The Communication Hub provides centralized, reliable message routing between the
 - Resolves API key authentication to the bound agent identity, role, and permissions via Control Center's internal API
 - Provides the `load_skills` system tool for agents to discover all accessible skills and SOPs with full tool definitions, input/output schemas, and `updated_at` timestamps
 - Retains the existing REST `/mcp/tools/load_skills` skill-discovery endpoint for backward compatibility
+- Appears as a **full-height fixture on the Agent Runtime Monitor**: the hub spans the full canvas height with its MCP servers attached and the tools they expose shown as chips, and each agent's tool calls are drawn as routes from the agent, through the hub, to the MCP server that served the call (agent → Communication Hub → MCP server)
 
 
 ## Key Concepts
@@ -31,6 +32,7 @@ The Communication Hub provides centralized, reliable message routing between the
 - **API Key Authentication**: External agents authenticate to the Communication Hub's MCP endpoint using a Bearer token or query parameter. The Communication Hub validates the key against Control Center's internal API and resolves the bound agent identity role and permissions, then injects the identity token into proxied MCP requests without exposing it to the external agent.
 - **MCP Protocol Server**: The Communication Hub's first-class MCP protocol interface. External MCP clients complete a standard handshake (initialize), list the tools they are permitted to use (tools/list), and invoke them (tools/call). Both system tools (such as `load_skills`) and MCP tools proxied from registered MCP servers are exposed through this single interface, governed by the same role-based permission resolution used for internal agents.
 - **load_skills System Tool**: A built-in tool that returns all skills and SOPs the authenticated agent is permitted to access, with full tool definitions, input/output schemas, and `updated_at` timestamps. Supports an optional `since` parameter for incremental sync — only skills updated after the given timestamp are returned, enabling efficient local caching by external agents.
+- **Runtime Map Fixture**: On the Agent Runtime Monitor, the Communication Hub is rendered as a full-height fixture with its MCP servers attached and the tools they expose as chips. Every agent tool call is drawn as a route from the agent, through the hub, to the MCP server that served it, so operators can see at a glance what each agent is currently doing.
 
 
 ## Central Tool Router
@@ -64,6 +66,7 @@ This design centralizes routing, ensures consistent authorization, and allows ne
 - The `load_skills` system tool returns all permitted skills with `updated_at` timestamps
 - The `load_skills` tool supports a `since` parameter for incremental sync of only updated skills
 - The existing REST `/mcp/tools/load_skills` endpoint continues to work for current consumers
+- On the Agent Runtime Monitor, the Communication Hub is shown as a full-height fixture with its MCP servers and tool chips, and each agent's tool calls are drawn as routes from the agent, through the hub, to the MCP server that served the call, with the most recent call highlighted
 - Internal Agent Runtime mTLS certificate authentication is unchanged
 - All API key authentication events (success and failure) are logged for security monitoring
 

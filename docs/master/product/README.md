@@ -26,6 +26,7 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 - **Agent Save Data and Historical Retrieval** — Separate intermediate data saves from final outputs; agents can save and query historical data and outputs across sessions; read-only result repository in the UI
 - **API Key Management** — API keys for third-party AI agents connecting to the MCP Hub; keys hashed at rest and bound to agent identity and role
 - **Control Center** — Governance management for agent policies, guardrail profiles, and operational oversight
+- **Agent Runtime Monitor** — Live, interactive map of the running agent population: team-row layout by delegation depth, trigger-entity column with human attribution for schedule-triggered executions, whole-chain focus, tool-call routes through the Communication Hub and MCP servers, intervention alerts, inline termination, auto-fit canvas with zoom/pan/fullscreen, live server push updates, and recoverable filters
 - **Communication Hub** — Message broker, WebSocket, session context, and agent-to-agent routing
 - **Human-in-the-Loop Intervention** — Agents can pause execution and request human input (approval, choice, or free-form text) via the `system____human_intervene` tool; operators respond through the UI and execution resumes automatically
 - **Schedule Management** — Cron scheduling, job management, and execution history

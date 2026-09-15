@@ -109,6 +109,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'nav.agentRoles', path: '/agents/roles', icon: <AssignmentIndIcon /> },
       { labelKey: 'nav.agentIdentities', path: '/agents/identities', icon: <BadgeIcon /> },
       { labelKey: 'nav.agentTypes', path: '/agents', icon: <SmartToyIcon /> },
+      { labelKey: 'nav.agentManagementPanel', path: '/agents/panel', icon: <DashboardIcon /> },
       { labelKey: 'nav.runtimeControl', path: '/agents/runtime-control', icon: <AccountTreeIcon /> },
       { labelKey: 'nav.skills', path: '/skills', icon: <BuildIcon /> },
       { labelKey: 'nav.sops', path: '/sops', icon: <AccountTreeIcon /> },

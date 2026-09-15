@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildGeneratedToolSectionFromSelection,
   extractGeneratedToolSection,
-} from '../pages/skills/SkillEditor'
+} from '../components/agents/SkillEditor'
 
 describe('SkillEditor generated tool reference extraction', () => {
   it('uses the last generated Tools section when instructions also contain Tools headers', () => {

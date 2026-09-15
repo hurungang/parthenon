@@ -113,7 +113,7 @@ describe('Issue 3 — AgentRoleDialog: SOP→Skill Auto-Selection (FIX-20260518-
 
   it('auto-checks required skill when its SOP is selected', async () => {
     setupMocks()
-    const { AgentRoleDialog } = await import('../../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../../components/agents/AgentRoleDialog')
 
     render(
       <AgentRoleDialog open={true} editRole={null} onClose={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />,
@@ -141,7 +141,7 @@ describe('Issue 3 — AgentRoleDialog: SOP→Skill Auto-Selection (FIX-20260518-
 
   it('makes required skill checkbox disabled (read-only) when its SOP is selected', async () => {
     setupMocks()
-    const { AgentRoleDialog } = await import('../../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../../components/agents/AgentRoleDialog')
 
     render(
       <AgentRoleDialog open={true} editRole={null} onClose={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />,
@@ -163,7 +163,7 @@ describe('Issue 3 — AgentRoleDialog: SOP→Skill Auto-Selection (FIX-20260518-
 
   it('does NOT disable optional skills when a SOP is selected', async () => {
     setupMocks()
-    const { AgentRoleDialog } = await import('../../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../../components/agents/AgentRoleDialog')
 
     render(
       <AgentRoleDialog open={true} editRole={null} onClose={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />,
@@ -184,7 +184,7 @@ describe('Issue 3 — AgentRoleDialog: SOP→Skill Auto-Selection (FIX-20260518-
 
   it('un-checks and re-enables required skill when SOP is deselected', async () => {
     setupMocks()
-    const { AgentRoleDialog } = await import('../../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../../components/agents/AgentRoleDialog')
 
     render(
       <AgentRoleDialog open={true} editRole={null} onClose={vi.fn()} onSaved={vi.fn().mockResolvedValue(undefined)} />,

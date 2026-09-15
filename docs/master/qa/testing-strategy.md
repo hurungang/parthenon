@@ -60,6 +60,35 @@ Changes that introduce content-type detection, HTML rendering, or content saniti
 
 Refer to `agent-response-rendering-test-plan.md` for module-specific coverage and test file references.
 
+## Real-Time Stream (SSE / Server Push) Testing
+
+Changes that introduce a server-sent event (SSE) stream — a live push channel with automatic polling fallback (e.g. the Agent Runtime Monitor topology stream, `GET /agents/runtime/topology/stream`) — require:
+
+**Pre-test checklist:**
+1. The stream endpoint authenticates via query-param JWT (browser `EventSource` cannot set an `Authorization` header); missing/expired/invalid tokens are rejected **before any event**
+2. The stream enforces the **same permission** as the equivalent REST endpoint (the stream must never be a permission bypass)
+3. A content-derived projection hash gates emission — identical projections produce **no** data events, only heartbeats on a fixed keepalive interval
+4. Data event payloads deserialise to the **same response shape** as the REST endpoint (no push/pull field drift)
+
+**Backend integration tests must:**
+- Drive the projection through the controller twice (unchanged → changed) rather than sleeping on real intervals — inject or patch the change-detection/heartbeat clock
+- Assert auth rejection happens before any event (never a 200 followed by an error event)
+- Assert permission parity, heartbeat delivery on unchanged state, prompt data emission on change, and clean cancellation of the server-side generator on client disconnect (no leaked subscribers)
+- Verify the streamed population/fields match the REST endpoint for the same principal
+
+**E2E tests must cover:**
+- A mocked stream (intercept the endpoint via `page.route()` or a Playwright raw-response mock) that emits a mid-test event carrying one additional execution
+- Assert the new tile appears with **no polling request** by counting `GET` REST requests via the route handler — never by absence-of-visibility timing alone
+- The fallback variant (abort the stream → REST polling resumes) and the recovery variant (stream unblocked → polling stops and the pushed update still lands)
+- Give the mocked stream a distinctive test execution ID (e.g. `sess-stream-live-<ts>`) so the "new tile appears" assertion is unambiguous
+
+**Frontend component tests must:**
+- Verify a pushed stream payload lands in the query cache immediately (no polling request while the stream is healthy)
+- Verify stream error activates the polling fallback, recovery stops polling and resyncs the cache, and unmount closes the `EventSource` and stops the fallback poller (no orphan connections or timers)
+- Verify reconnect backoff for flapping connections (jittered, bounded — no stacked pollers/`EventSource`s) and that auth failures are terminal at the transport level
+
+Refer to `agent-runtime-monitor-test-plan.md` for module-specific coverage and test file references.
+
 ## Critical Quality Gates
 - 100% pass rate required for all test layers before release
 - All PRD acceptance criteria must be mapped to at least one test scenario

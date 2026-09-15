@@ -34,6 +34,7 @@ import PermissionDeniedAlert from '../../components/permissions/PermissionDenied
 import type {
   AgentRole,
   AgentType,
+  CreateAndAssignResult,
   Skill,
   SopDetail,
   SopStep,
@@ -47,7 +48,11 @@ interface SopEditorProps {
   sop: SopDetail | null
   mode?: 'create' | 'edit' | 'view'
   onClose: () => void
-  onSaved: () => void
+  /**
+   * Invoked after a successful save. In create mode the created SOP is
+   * passed as a create-and-assign result; existing callers may ignore it.
+   */
+  onSaved: (result?: CreateAndAssignResult) => void
 }
 
 interface StepDraft {
@@ -193,12 +198,14 @@ export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopE
         is_active: form.is_active,
       }
       let sopId: string
+      let savedSopName = form.name
       if (sop) {
         await apiClient.put(`/sops/${sop.id}`, sopPayload)
         sopId = sop.id
       } else {
         const { data } = await apiClient.post<SopDetail>('/sops', sopPayload)
         sopId = data.id
+        savedSopName = data.name
       }
       // Replace steps
       const stepsPayload = steps.map((s, i) => ({
@@ -213,12 +220,23 @@ export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopE
       // Save role assignments
       await apiClient.put(`/sops/${sopId}/roles`, { role_ids: selectedRoleIds })
       await queryClient.invalidateQueries({ queryKey: ['sops'] })
-      onSaved()
+      if (sop) {
+        onSaved()
+      } else {
+        onSaved({ id: sopId, label: savedSopName })
+      }
     } catch (err) {
       setEditorError(err)
     } finally {
       setSaving(false)
     }
+  }
+
+  // Dialog Error Handling Standard: clear the error on every close path so a
+  // stale failure is never shown when the dialog is reopened.
+  const handleClose = () => {
+    setEditorError(null)
+    onClose()
   }
 
   const stepsForWorkflow = steps.map((s, i) => ({
@@ -267,13 +285,13 @@ export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopE
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6">
               {mode === 'view' ? t('sops.viewSop') : sop ? t('sops.editSop') : t('sops.createSop')}
             </Typography>
-            <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+            <IconButton size="small" onClick={handleClose}><CloseIcon /></IconButton>
           </Box>
         </DialogTitle>
         <DialogContent dividers>
@@ -476,7 +494,7 @@ export function SopEditor({ open, sop, mode = 'create', onClose, onSaved }: SopE
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={saving}>{t('app.cancel')}</Button>
+          <Button onClick={handleClose} disabled={saving}>{t('app.cancel')}</Button>
           {!isViewMode && (
             <Button variant="contained" onClick={handleSave} disabled={saving || !form.name || !!nameError}>
               {saving ? t('app.loading') : t('app.save')}

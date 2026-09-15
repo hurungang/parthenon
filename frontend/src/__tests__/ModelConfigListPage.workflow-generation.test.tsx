@@ -18,7 +18,7 @@ vi.mock('../api/apiClient', () => ({
   },
 }))
 
-vi.mock('../pages/agents/ModelConfigDialog', () => ({
+vi.mock('../components/agents/ModelConfigDialog', () => ({
   ModelConfigDialog: () => null,
 }))
 

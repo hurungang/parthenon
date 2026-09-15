@@ -21,6 +21,7 @@ This directory contains all master QA documentation for the Parthenon Enterprise
 **Agents & Execution:**
 - [Agent Engine](test-plans/agent-engine-test-plan.md)
 - [Agent Runtime](test-plans/agent-runtime-test-plan.md)
+- [Agent Runtime Monitor](test-plans/agent-runtime-monitor-test-plan.md)
 - [Agents UI](test-plans/agents-ui-test-plan.md)
 - [Agent Gateway](test-plans/gateway-test-plan.md)
 - [Agent Data Module](test-plans/agent-data-test-plan.md)

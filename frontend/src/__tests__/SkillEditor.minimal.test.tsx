@@ -21,7 +21,7 @@ vi.mock('../api/apiClient', () => ({
 
 describe('SkillEditor — import only', () => {
   it('can import the component without errors', async () => {
-    const module = await import('../pages/skills/SkillEditor')
+    const module = await import('../components/agents/SkillEditor')
     expect(module.SkillEditor).toBeDefined()
     expect(typeof module.SkillEditor).toBe('function')
   })

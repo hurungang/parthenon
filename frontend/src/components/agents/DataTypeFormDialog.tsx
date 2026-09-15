@@ -19,13 +19,17 @@ import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import { useCreateDataType, useUpdateDataType } from '../../hooks/useDataTypes'
-import type { AgentDataType, AgentDataTypeField, DataTypeFieldType } from '../../types'
+import type { AgentDataType, AgentDataTypeField, CreateAndAssignResult, DataTypeFieldType } from '../../types'
 
 interface DataTypeFormDialogProps {
   open: boolean
   editDataType: AgentDataType | null
   onClose: () => void
-  onSaved: () => Promise<void>
+  /**
+   * Invoked after a successful save. In create mode the created data type is
+   * passed as a create-and-assign result; existing callers may ignore it.
+   */
+  onSaved: (result?: CreateAndAssignResult) => Promise<void>
 }
 
 const FIELD_TYPE_OPTIONS: DataTypeFieldType[] = ['string', 'number', 'boolean', 'date', 'enum']
@@ -132,7 +136,10 @@ export function DataTypeFormDialog({
       if (editDataType) {
         await updateMutation.mutateAsync({ id: editDataType.id, payload })
       } else {
-        await createMutation.mutateAsync(payload)
+        const created = await createMutation.mutateAsync(payload)
+        await onSaved({ id: created.id, label: created.name })
+        onClose()
+        return
       }
 
       await onSaved()

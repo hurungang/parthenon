@@ -31,6 +31,7 @@ import { useSkillRoles } from '../../hooks/useSkills'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
 import type {
   AgentRole,
+  CreateAndAssignResult,
   McpTool,
   Skill,
   SkillWorkflowGenerateResponse,
@@ -42,7 +43,11 @@ interface SkillEditorProps {
   skill: Skill | null
   mode?: 'create' | 'edit' | 'view'
   onClose: () => void
-  onSaved: () => void
+  /**
+   * Invoked after a successful save. In create mode the created skill is
+   * passed as a create-and-assign result; existing callers may ignore it.
+   */
+  onSaved: (result?: CreateAndAssignResult) => void
 }
 
 export function extractGeneratedToolSection(instructionsWithTools?: string | null): string | null {
@@ -219,17 +224,23 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
         tool_ids: selectedToolIds,
       }
       let skillId: string
+      let savedSkillName = form.name
       if (skill) {
         await apiClient.put(`/skills/${skill.id}`, payload)
         skillId = skill.id
       } else {
         const { data } = await apiClient.post<Skill>('/skills', payload)
         skillId = data.id
+        savedSkillName = data.name
       }
       // Save role assignments
       await apiClient.put(`/skills/${skillId}/roles`, { role_ids: selectedRoleIds })
       await queryClient.invalidateQueries({ queryKey: ['skills'] })
-      onSaved()
+      if (skill) {
+        onSaved()
+      } else {
+        onSaved({ id: skillId, label: savedSkillName })
+      }
     } catch (err) {
       setEditorError(err)
     } finally {
@@ -366,7 +377,13 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
                 ? t('skills.editSkill')
                 : t('skills.createSkill')}
           </Typography>
-          <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setEditorError(null)
+              onClose()
+            }}
+          ><CloseIcon /></IconButton>
         </Box>
       </DialogTitle>
       <DialogContent dividers>
@@ -545,7 +562,7 @@ export function SkillEditor({ open, skill, mode = 'create', onClose, onSaved }: 
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>{t('app.cancel')}</Button>
+        <Button onClick={() => { setEditorError(null); onClose() }} disabled={saving}>{t('app.cancel')}</Button>
         {!isViewMode && (
           <Button variant="contained" onClick={handleSave} disabled={saving || !form.name || !!nameError}>
             {saving ? t('app.loading') : t('app.save')}

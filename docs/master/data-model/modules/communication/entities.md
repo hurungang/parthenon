@@ -35,6 +35,18 @@ erDiagram
         int duration_ms
         datetime created_at
     }
+    RuntimeToolCall {
+        uuid id
+        uuid session_id "logical ref: agent job OR conversation session, no FK"
+        enum session_kind "agent|conversation"
+        string tool_name
+        enum route_type "system|mcp|a2a"
+        string mcp_slug "nullable; MCP-routed calls only"
+        enum status "success|error"
+        int duration_ms "nullable"
+        string error "nullable"
+        datetime created_at
+    }
     InterveneRequest {
         uuid id
         uuid agent_session_id
@@ -84,8 +96,12 @@ erDiagram
     AgentJob {
         uuid id
         uuid agent_type_id
+        uuid triggered_by_user_id
+        uuid parent_job_id
+        uuid root_job_id
         int delegation_depth
-        enum status
+        enum status "queued|running|waiting_for_human|completed|failed|terminated"
+        datetime created_at
     }
     Identity {
         uuid id
@@ -105,6 +121,10 @@ erDiagram
     InterveneRequest ||--o| InterveneResponse : "resolved by"
     InterveneResponse }o--|| Identity : "responded by"
     AgentA2ASessionLink ||--o| ConversationSession : "links delegated context"
+    Identity ||--o{ AgentJob : "triggered by"
+    AgentJob ||--o{ AgentJob : "delegates to (child inherits trigger)"
+    AgentJob ||--o{ RuntimeToolCall : "tool executions (logical ref, no FK)"
+    ConversationSession ||--o{ RuntimeToolCall : "tool executions (logical ref, no FK)"
 ```
 
 **ConversationStatus enum values:**
@@ -116,7 +136,11 @@ erDiagram
 | `archived` | Hidden from the active sessions list; retained for audit and history |
 | `error` | Session encountered an unrecoverable error |
 
-**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/intervene.py`, `backend/app/db/models/agents.py`
+**Source**: `backend/app/db/models/conversations.py`, `backend/app/db/models/intervene.py`, `backend/app/db/models/agents.py`, `backend/app/db/models/tool_calls.py`
+
+**Trigger-provenance semantics:** `triggered_by_user_id` is populated per launch path — direct user triggers set it to the triggering user's `Identity`; delegated child jobs inherit it from their parent via `parent_job_id`; schedule-triggered jobs copy it from `ScheduledJob.scheduled_by_user_id` at trigger time (the schedule **name** is shown as the trigger source). The topology projection additionally exposes `trigger_source`, `trigger_source_label`, and `trigger_user_label` — all **derived at read time**, never persisted columns on `AgentJob`.
+
+**RuntimeToolCall notes:** `session_id` is a polymorphic **logical reference with no enforced FK** — it holds an `AgentJob` id when `session_kind=agent` and a `ConversationSession` id when `session_kind=conversation` (conversation turns execute without a backing agent job). `mcp_slug` maps to `McpServer.slug` at render time for MCP-routed calls (no FK). A2A delegation rows (`route_type=a2a`) are recorded permanently in `runtime_tool_calls` but rendered as delegation edges, not in-node tool calls.
 
 | Entity | Description |
 |--------|-------------|
@@ -125,4 +149,6 @@ erDiagram
 | **ToolCallRecord** | A record of a specific tool invocation made during a conversation turn — what was called, with what arguments, what was returned, and any error encountered. |
 | **InterveneRequest** | An agent-initiated request for human intervention surfaced in a conversation session. Links to the originating `AgentJob` and parent `ConversationSession`. Tracks intervention type (approval, choice, text), lifecycle status, and delegation depth. |
 | **InterveneResponse** | The operator's response to an `InterveneRequest`. Carries the type-specific response value (approval boolean, selected choice, or free-form text) and the responding operator identity. |
+| **AgentJob** | A single provisioned agent execution tracked from submission through completion; carries trigger provenance via `triggered_by_user_id` (direct, delegated, or schedule-inherited) and delegation via `parent_job_id`/`root_job_id`. |
+| **RuntimeToolCall** | Append-only runtime log of every tool execution performed by Agent Runtime — system tools, MCP tools, and A2A delegations — keyed to an agent job or conversation session (polymorphic `session_id`, no FK). Powers the per-node tool-call routes and history in the runtime topology. |
 | **AgentA2ASessionLink** | Tracks requester/receiver linkage when one agent delegates to another in a shared session context. Supports lifecycle visibility and disconnection handling for delegated conversations. |

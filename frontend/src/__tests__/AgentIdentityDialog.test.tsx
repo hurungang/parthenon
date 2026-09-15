@@ -39,7 +39,7 @@ describe('AgentIdentityDialog', () => {
   // ── OAuth-only creation mode ────────────────────────────────────────────────
 
   it('renders create dialog title', async () => {
-    const { AgentIdentityDialog } = await import('../pages/agents/AgentIdentityDialog')
+    const { AgentIdentityDialog } = await import('../components/agents/AgentIdentityDialog')
     render(<AgentIdentityDialog open={true} onClose={onClose} onSaved={onSaved} />, { wrapper })
     await waitFor(() => {
       expect(screen.getByText('agents.identities.createTitle')).toBeDefined()
@@ -47,7 +47,7 @@ describe('AgentIdentityDialog', () => {
   })
 
   it('renders OAuth instructions and Sign In as Agent button', async () => {
-    const { AgentIdentityDialog } = await import('../pages/agents/AgentIdentityDialog')
+    const { AgentIdentityDialog } = await import('../components/agents/AgentIdentityDialog')
     render(<AgentIdentityDialog open={true} onClose={onClose} onSaved={onSaved} />, { wrapper })
     await waitFor(() => {
       expect(screen.getByText('agents.identities.oauthInstructions')).toBeDefined()
@@ -56,7 +56,7 @@ describe('AgentIdentityDialog', () => {
   })
 
   it('renders OAuth note about bootstrap config', async () => {
-    const { AgentIdentityDialog } = await import('../pages/agents/AgentIdentityDialog')
+    const { AgentIdentityDialog } = await import('../components/agents/AgentIdentityDialog')
     render(<AgentIdentityDialog open={true} onClose={onClose} onSaved={onSaved} />, { wrapper })
     await waitFor(() => {
       expect(screen.getByText('agents.identities.oauthNote')).toBeDefined()
@@ -70,7 +70,7 @@ describe('AgentIdentityDialog', () => {
     const mockOpen = vi.fn()
     vi.stubGlobal('open', mockOpen)
 
-    const { AgentIdentityDialog } = await import('../pages/agents/AgentIdentityDialog')
+    const { AgentIdentityDialog } = await import('../components/agents/AgentIdentityDialog')
     render(<AgentIdentityDialog open={true} onClose={onClose} onSaved={onSaved} />, { wrapper })
 
     await waitFor(() => {
@@ -101,7 +101,7 @@ describe('AgentIdentityDialog', () => {
     const mockOpen = vi.fn(() => mockPopup)
     vi.stubGlobal('open', mockOpen)
 
-    const { AgentIdentityDialog } = await import('../pages/agents/AgentIdentityDialog')
+    const { AgentIdentityDialog } = await import('../components/agents/AgentIdentityDialog')
     render(<AgentIdentityDialog open={true} onClose={onClose} onSaved={onSaved} />, { wrapper })
 
     await waitFor(() => {
@@ -141,7 +141,7 @@ describe('AgentIdentityDialog', () => {
     const mockOpen = vi.fn(() => mockPopup)
     vi.stubGlobal('open', mockOpen)
 
-    const { AgentIdentityDialog } = await import('../pages/agents/AgentIdentityDialog')
+    const { AgentIdentityDialog } = await import('../components/agents/AgentIdentityDialog')
     render(<AgentIdentityDialog open={true} onClose={onClose} onSaved={onSaved} />, { wrapper })
 
     await waitFor(() => {

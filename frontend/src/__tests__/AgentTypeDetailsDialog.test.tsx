@@ -7,7 +7,10 @@ import type { AgentType, AgentJob, AgentPlan } from '../types'
 
 // ── Hoisted mock refs ─────────────────────────────────────────────────────────
 
-const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }))
+const { mockNavigate, mockTopologyProps } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockTopologyProps: { nodes: [] as unknown[], edges: [] as unknown[], onNodeClick: undefined as ((n: unknown) => void) | undefined },
+}))
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -21,7 +24,32 @@ vi.mock('react-router-dom', async () => {
 })
 
 vi.mock('../components/agents/TopologyDiagramRenderer', () => ({
-  default: () => <div data-testid="topology-diagram" />,
+  default: (props: {
+    nodes: unknown[]
+    edges: unknown[]
+    onNodeClick?: (node: unknown) => void
+  }) => {
+    // Record props so tests can assert on the composed topology graph.
+    mockTopologyProps.nodes = props.nodes
+    mockTopologyProps.edges = props.edges
+    mockTopologyProps.onNodeClick = props.onNodeClick
+    return (
+      <div data-testid="topology-diagram">
+        {(props.onNodeClick ? props.nodes : []).map((n) => {
+          const node = n as { id: string }
+          return (
+            <button
+              key={node.id}
+              data-testid={`topology-node-${node.id}`}
+              onClick={() => props.onNodeClick?.(n)}
+            >
+              {node.id}
+            </button>
+          )
+        })}
+      </div>
+    )
+  },
 }))
 
 vi.mock('../components/agents/AgentPlanContent', () => ({
@@ -159,6 +187,9 @@ describe('AgentTypeDetailsDialog', () => {
     mockAgentTypeData = undefined
     mockAgentTypeLoading = false
     mockAgentTypeError = null
+    mockTopologyProps.nodes = []
+    mockTopologyProps.edges = []
+    mockTopologyProps.onNodeClick = undefined
     vi.resetAllMocks()
     mockApiGet.mockImplementation(async (url: string) => {
       if (url === '/agents/roles') {
@@ -621,5 +652,96 @@ describe('AgentTypeDetailsDialog', () => {
     // Details tab (index 0) should be selected again
     const updatedTabs = screen.getAllByRole('tab')
     expect(updatedTabs[0]).toHaveAttribute('aria-selected', 'true')
+  })
+
+  // ── Communication Hub node in the preview topology (Phase 5.1 / 5.3) ────────
+
+  it('includes the Communication Hub node and dashed agent↔hub edge in the conversation preview topology', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    // Switch to the Agent Preview tab where the conversation topology renders.
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    await waitFor(() => {
+      const hubNode = mockTopologyProps.nodes.find(
+        (n) => (n as { id: string }).id === 'communication_hub',
+      )
+      expect(hubNode).toBeDefined()
+    })
+    const hubNode = mockTopologyProps.nodes.find(
+      (n) => (n as { id: string }).id === 'communication_hub',
+    ) as { id: string; type: string; label: string }
+    expect(hubNode.type).toBe('communication_hub')
+    expect(mockTopologyProps.nodes.some((n) => (n as { id: string }).id === 'agent')).toBe(true)
+
+    const hubEdge = mockTopologyProps.edges.find(
+      (e) => (e as { target: string }).target === 'communication_hub',
+    ) as { source: string; style?: string }
+    expect(hubEdge).toBeDefined()
+    expect(hubEdge.source).toBe('agent')
+    expect(hubEdge.style).toBe('dashed')
+  })
+
+  it('does not duplicate the hub node on topology recomposition', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    const { rerender } = render(
+      <AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />,
+      { wrapper },
+    )
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    // Re-render the dialog (e.g. parent refresh) — hub count stays at one.
+    rerender(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />)
+
+    await waitFor(() => {
+      expect(mockTopologyProps.nodes.length).toBeGreaterThan(0)
+    })
+    const hubCount = mockTopologyProps.nodes.filter(
+      (n) => (n as { id: string }).id === 'communication_hub',
+    ).length
+    expect(hubCount).toBe(1)
+  })
+
+  it('clicking the hub node is a safe no-op — no entity view opens and nothing throws', async () => {
+    mockAgentTypeData = { ...MOCK_AGENT_TYPE, input_type: 'conversation' }
+
+    const { AgentTypeDetailsDialog } = await import(
+      '../components/agents/AgentTypeDetailsDialog'
+    )
+    render(<AgentTypeDetailsDialog open agentTypeId="at-1" onClose={vi.fn()} />, { wrapper })
+
+    const tabs = screen.getAllByRole('tab')
+    await act(async () => {
+      fireEvent.click(tabs[1])
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('topology-node-communication_hub')).toBeDefined()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('topology-node-communication_hub'))
+    })
+
+    // Hub click must not open the role/identity view dialogs or navigate.
+    expect(screen.queryByTestId('role-view-dialog')).toBeNull()
+    expect(screen.queryByTestId('identity-view-dialog')).toBeNull()
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 })
