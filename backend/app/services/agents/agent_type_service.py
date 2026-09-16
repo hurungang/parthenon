@@ -4,15 +4,36 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeVar
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agents import AgentType, AgentTypeSopBinding, AgentTypeSkillBinding
 from app.schemas.agent_type_bindings import SkillBindingCreate, SopBindingCreate
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
+
+
+def _dedupe_by_id(items: list[_T], id_of: Any) -> list[_T]:
+    """Return *items* with duplicate ids removed — first occurrence wins.
+
+    Keeps the payload idempotent: a client that (re)submits the same binding
+    list — possibly with duplicated entries — never trips the per-agent-type
+    unique binding constraints. Order of first occurrences is preserved so
+    the caller's binding order semantics survive deduplication.
+    """
+    seen: set[Any] = set()
+    deduped: list[_T] = []
+    for item in items:
+        key = id_of(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
 
 
 class AgentTypeService:
@@ -27,37 +48,45 @@ class AgentTypeService:
     ) -> None:
         """Atomically replace all bindings for the given agent type.
 
-        1. Delete all existing AgentTypeSopBinding and AgentTypeSkillBinding rows.
-        2. Create new rows from the input lists.
-        3. Commit.
-        """
-        # Delete existing bindings
-        await db.execute(
-            select(AgentTypeSopBinding).where(
-                AgentTypeSopBinding.agent_type_id == agent_type_id
-            )
-        )
-        existing_sop = await db.execute(
-            select(AgentTypeSopBinding).where(
-                AgentTypeSopBinding.agent_type_id == agent_type_id
-            )
-        )
-        for row in existing_sop.scalars().all():
-            await db.delete(row)
+        1. Deduplicate the incoming lists by sop_id / skill_id (first
+           occurrence wins — repeated saves of the same payload are a no-op).
+        2. Bulk-delete all existing AgentTypeSopBinding and
+           AgentTypeSkillBinding rows.
+        3. Create new rows from the deduplicated lists and flush.
 
-        existing_skill = await db.execute(
-            select(AgentTypeSkillBinding).where(
+        The caller owns the transaction (flush only, no commit).
+        """
+        deduped_sop_bindings = _dedupe_by_id(sop_bindings, lambda b: b.sop_id)
+        deduped_skill_bindings = _dedupe_by_id(skill_bindings, lambda b: b.skill_id)
+
+        dropped_sop = len(sop_bindings) - len(deduped_sop_bindings)
+        dropped_skill = len(skill_bindings) - len(deduped_skill_bindings)
+        if dropped_sop or dropped_skill:
+            logger.warning(
+                "Deduplicated binding payload for agent_type=%s: dropped %d duplicate SOP "
+                "and %d duplicate Skill entries (first occurrence wins)",
+                agent_type_id,
+                dropped_sop,
+                dropped_skill,
+            )
+
+        # Bulk-delete existing bindings (single DELETE per table).
+        await db.execute(
+            delete(AgentTypeSopBinding).where(
+                AgentTypeSopBinding.agent_type_id == agent_type_id
+            )
+        )
+        await db.execute(
+            delete(AgentTypeSkillBinding).where(
                 AgentTypeSkillBinding.agent_type_id == agent_type_id
             )
         )
-        for row in existing_skill.scalars().all():
-            await db.delete(row)
 
         await db.flush()
 
         # Create new SOP bindings
         now = datetime.now(timezone.utc)
-        for item in sop_bindings:
+        for item in deduped_sop_bindings:
             binding = AgentTypeSopBinding(
                 id=uuid.uuid4(),
                 agent_type_id=agent_type_id,
@@ -68,7 +97,7 @@ class AgentTypeService:
             db.add(binding)
 
         # Create new Skill bindings
-        for item in skill_bindings:
+        for item in deduped_skill_bindings:
             binding = AgentTypeSkillBinding(
                 id=uuid.uuid4(),
                 agent_type_id=agent_type_id,
@@ -81,8 +110,8 @@ class AgentTypeService:
         await db.flush()
         logger.info(
             "Set %d SOP bindings and %d Skill bindings for agent_type=%s",
-            len(sop_bindings),
-            len(skill_bindings),
+            len(deduped_sop_bindings),
+            len(deduped_skill_bindings),
             agent_type_id,
         )
 

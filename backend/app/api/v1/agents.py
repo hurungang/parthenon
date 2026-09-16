@@ -40,6 +40,13 @@ from app.db.models.agents import (
 )
 from app.db.models.sop_recursion_validation_check import SopRecursionCheckContext
 from app.db.session import DbSession
+from app.schemas.agent_type_bindings import (
+    BindingConflictFailureDetail,
+    BindingError,
+    BindingResourceType,
+    BindingRule,
+    BindingValidationFailureDetail,
+)
 from app.schemas.agents import (
     AgentIdentityCreate,
     AgentIdentityOAuthAuthorizeResponse,
@@ -1221,6 +1228,57 @@ async def _run_plan_generation_bg(agent_type_id: uuid.UUID) -> None:
             )
 
 
+def _binding_conflict_detail(exc: IntegrityError) -> dict[str, object]:
+    """Map a binding-write IntegrityError to a structured 409 detail payload.
+
+    Best-effort parses the offending ``Key (agent_type_id, skill_id|sop_id)=(...)``
+    from the asyncpg/pg8000 message so the response pinpoints the conflicting
+    binding; falls back to a generic conflict message when unparseable.
+    """
+    import re
+
+    text = str(exc)
+    match = re.search(
+        r"Key \(agent_type_id, (skill_id|sop_id)\)=\([^)]*,\s*([0-9a-fA-F-]{36})\)",
+        text,
+    )
+    if match:
+        kind, resource_id = match.group(1), match.group(2)
+        resource_type = (
+            BindingResourceType.SKILL if kind == "skill_id" else BindingResourceType.SOP
+        )
+        resource_label = "Skill" if kind == "skill_id" else "SOP"
+        binding_error = BindingError(
+            resource_type=resource_type,
+            resource_id=uuid.UUID(resource_id),
+            rule=BindingRule.CONFLICT,
+            message=(
+                f"{resource_label} {resource_id} is already bound to this agent type by a "
+                "concurrent save — review the current bindings and retry."
+            ),
+        )
+        return BindingConflictFailureDetail(
+            error="binding_conflict",
+            messages=[binding_error.message],
+            errors=[binding_error],
+        ).model_dump(mode="json")
+
+    binding_error = BindingError(
+        resource_type=BindingResourceType.ROLE,
+        resource_id=None,
+        rule=BindingRule.CONFLICT,
+        message=(
+            "Binding conflict while saving — the agent type's bindings were modified "
+            "concurrently. Review the current bindings and retry."
+        ),
+    )
+    return BindingConflictFailureDetail(
+        error="binding_conflict",
+        messages=[binding_error.message],
+        errors=[binding_error],
+    ).model_dump(mode="json")
+
+
 # ── Agent Type Endpoints ───────────────────────────────────────────────────────
 
 @AgentTypeRouter.get("", response_model=list[AgentTypeRead])
@@ -1271,7 +1329,11 @@ async def create_agent_type(
         if binding_errors:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"error": "binding_validation_failed", "messages": binding_errors},
+                detail=BindingValidationFailureDetail(
+                    error="binding_validation_failed",
+                    messages=[e.message for e in binding_errors],
+                    errors=binding_errors,
+                ).model_dump(mode="json"),
             )
 
     try:
@@ -1299,12 +1361,19 @@ async def create_agent_type(
         )
 
     # Save bindings
-    await _agent_type_service.set_bindings(
-        db=db,
-        agent_type_id=agent_type.id,
-        sop_bindings=body.sop_bindings,
-        skill_bindings=body.skill_bindings,
-    )
+    try:
+        await _agent_type_service.set_bindings(
+            db=db,
+            agent_type_id=agent_type.id,
+            sop_bindings=body.sop_bindings,
+            skill_bindings=body.skill_bindings,
+        )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_binding_conflict_detail(exc),
+        ) from exc
 
     # Recursion/dead-loop validation (may block in strict_block mode)
     claims = get_current_claims(request)
@@ -1334,6 +1403,12 @@ async def create_agent_type(
                 ],
             },
         )
+
+    # Commit before scheduling plan regeneration: the background task runs
+    # with its own session while the LLM call takes tens of seconds — leaving
+    # the binding write uncommitted for that window makes a concurrent save
+    # block on the unique binding index and 500 (UniqueViolationError).
+    await db.commit()
 
     # Schedule plan generation in background (non-blocking)
     background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
@@ -1457,10 +1532,11 @@ async def update_agent_type(
         if binding_errors:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "error": "binding_validation_failed",
-                    "messages": binding_errors,
-                },
+                detail=BindingValidationFailureDetail(
+                    error="binding_validation_failed",
+                    messages=[e.message for e in binding_errors],
+                    errors=binding_errors,
+                ).model_dump(mode="json"),
             )
 
     # Separate binding fields from regular fields to handle binding updates differently
@@ -1474,12 +1550,22 @@ async def update_agent_type(
 
     # Update bindings if provided — use raw Pydantic model objects (not dicts)
     if sop_bindings_provided or skill_bindings_provided:
-        await _agent_type_service.set_bindings(
-            db=db,
-            agent_type_id=agent_type.id,
-            sop_bindings=raw_sop_bindings or [],
-            skill_bindings=raw_skill_bindings or [],
-        )
+        try:
+            await _agent_type_service.set_bindings(
+                db=db,
+                agent_type_id=agent_type.id,
+                sop_bindings=raw_sop_bindings or [],
+                skill_bindings=raw_skill_bindings or [],
+            )
+        except IntegrityError as exc:
+            # Race-safe: a concurrent save resubmitting the same bindings can
+            # collide on the per-agent-type unique binding index. Surface a
+            # precise 409 (per-binding detail) instead of a raw 500.
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_binding_conflict_detail(exc),
+            ) from exc
 
     await db.refresh(agent_type, attribute_names=["sop_bindings", "skill_bindings"])
 
@@ -1511,6 +1597,12 @@ async def update_agent_type(
                 ],
             },
         )
+
+    # Commit before scheduling plan regeneration: the background task runs
+    # with its own session while the LLM call takes tens of seconds — leaving
+    # the binding write uncommitted for that window makes a concurrent save
+    # block on the unique binding index and 500 (UniqueViolationError).
+    await db.commit()
 
     # Schedule plan regeneration in background (non-blocking)
     background_tasks.add_task(_run_plan_generation_bg, agent_type.id)

@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 os.environ.setdefault("CREDENTIAL_VAULT_KEY", "test-32-byte-key-for-aes-256-enc!")
@@ -756,3 +757,180 @@ class TestValidationErrors:
         assert any("role" in m.lower() for m in messages), (
             f"Expected role-related error, got: {messages}"
         )
+
+
+class TestBindingValidationDetailShape:
+    """422 responses carry structured per-binding error detail."""
+
+    @pytest.mark.asyncio
+    async def test_update_validation_failure_carries_per_binding_detail(self, db_session: AsyncSession):
+        """PUT with a skill not in the role → 422 with structured `errors` array."""
+        await _seed_platform_user(db_session)
+        role = AgentRole(name=_unique_name("role"), description="Role with one skill")
+        db_session.add(role)
+        await db_session.flush()
+        allowed_skill = Skill(name=_unique_name("skill"), description="Allowed skill")
+        db_session.add(allowed_skill)
+        await db_session.flush()
+        db_session.add(AgentRoleSkill(role_id=role.id, skill_id=allowed_skill.id))
+        await db_session.flush()
+
+        agent_type = AgentType(
+            name=_unique_name("agent"),
+            model_id="gpt-4o-mini",
+            input_type=AgentInputType.conversation,
+            output_type=AgentOutputType.auto,
+            role_id=role.id,
+        )
+        db_session.add(agent_type)
+        await db_session.flush()
+        db_session.add(
+            AgentTypeSkillBinding(
+                id=uuid.uuid4(),
+                agent_type_id=agent_type.id,
+                skill_id=allowed_skill.id,
+                order=1,
+            )
+        )
+        await db_session.commit()
+
+        forbidden_skill = Skill(
+            name=_unique_name("skill"),
+            description="Not assigned to the role",
+        )
+        db_session.add(forbidden_skill)
+        await db_session.commit()
+
+        app = _build_app(db_session)
+        patch1, patch2 = _patch_side_effects()
+        with _bypass_auth(), _mock_permission_allow(), patch1, patch2:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    f"/api/v1/agents/types/{agent_type.id}",
+                    json={
+                        "skill_bindings": [
+                            {"skill_id": str(forbidden_skill.id), "order": 1}
+                        ],
+                    },
+                )
+
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+        detail = resp.json().get("detail", {})
+        assert detail.get("error") == "binding_validation_failed"
+        # Backwards-compatible message list still present and specific.
+        messages = detail.get("messages", [])
+        assert any(str(forbidden_skill.id) in m for m in messages), (
+            f"Expected messages to name the failing skill id, got: {messages}"
+        )
+        # Structured per-binding detail: which resource, which rule, why.
+        errors = detail.get("errors", [])
+        assert errors, f"Expected structured errors array, got: {detail}"
+        entry = errors[0]
+        assert entry["resource_type"] == "skill"
+        assert entry["resource_id"] == str(forbidden_skill.id)
+        assert entry["rule"] == "role_access"
+        assert "not accessible" in entry["message"]
+
+
+class TestBindingResubmitIdempotency:
+    """Resubmitting identical bindings via PUT succeeds (no duplicate-key 500)."""
+
+    @pytest.mark.asyncio
+    async def test_resubmitting_identical_bindings_succeeds(self, db_session: AsyncSession):
+        await _seed_platform_user(db_session)
+        role, sop, skill = await _seed_role_with_sop(db_session, skill_name="resubmit-skill")
+
+        agent_type = AgentType(
+            name=_unique_name("agent"),
+            model_id="gpt-4o-mini",
+            input_type=AgentInputType.conversation,
+            output_type=AgentOutputType.auto,
+            role_id=role.id,
+        )
+        db_session.add(agent_type)
+        await db_session.commit()
+
+        app = _build_app(db_session)
+        patch1, patch2 = _patch_side_effects()
+        payload = {
+            "sop_bindings": [{"sop_id": str(sop.id), "order": 1}],
+            "skill_bindings": [{"skill_id": str(skill.id), "order": 1}],
+        }
+        with _bypass_auth(), _mock_permission_allow(), patch1, patch2:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                first = await client.put(
+                    f"/api/v1/agents/types/{agent_type.id}", json=payload
+                )
+                second = await client.put(
+                    f"/api/v1/agents/types/{agent_type.id}", json=payload
+                )
+
+        assert first.status_code == 200, f"First save failed: {first.text}"
+        assert second.status_code == 200, f"Resubmit failed: {second.text}"
+        data = second.json()
+        assert len(data["sop_bindings"]) == 1
+        assert data["sop_bindings"][0]["sop_id"] == str(sop.id)
+        assert len(data["skill_bindings"]) == 1
+        assert data["skill_bindings"][0]["skill_id"] == str(skill.id)
+
+
+class TestBindingConflictMapping:
+    """A binding write that hits the unique constraint → 409, never a raw 500."""
+
+    @pytest.mark.asyncio
+    async def test_integrity_error_maps_to_409_with_binding_conflict_detail(self, db_session: AsyncSession):
+        await _seed_platform_user(db_session)
+        role, sop, skill = await _seed_role_with_sop(db_session, skill_name="conflict-skill")
+        agent_type = AgentType(
+            name=_unique_name("agent"),
+            model_id="gpt-4o-mini",
+            input_type=AgentInputType.conversation,
+            output_type=AgentOutputType.auto,
+            role_id=role.id,
+        )
+        db_session.add(agent_type)
+        await db_session.commit()
+
+        app = _build_app(db_session)
+        patch1, patch2 = _patch_side_effects()
+
+        # Simulate the concurrent-save collision on the unique binding index.
+        # Capture plain values first: the endpoint's rollback() expires ORM
+        # objects shared with this test session.
+        skill_id_str = str(skill.id)
+        integrity_error = IntegrityError(
+            statement="INSERT INTO agent_type_skill_bindings",
+            params=None,
+            orig=Exception(
+                'duplicate key value violates unique constraint "uq_agent_type_skill_binding"\n'
+                f"DETAIL:  Key (agent_type_id, skill_id)=({agent_type.id}, {skill_id_str}) already exists."
+            ),
+        )
+
+        with _bypass_auth(), _mock_permission_allow(), patch1, patch2, patch(
+            "app.api.v1.agents._agent_type_service.set_bindings",
+            AsyncMock(side_effect=integrity_error),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    f"/api/v1/agents/types/{agent_type.id}",
+                    json={
+                        "skill_bindings": [{"skill_id": str(skill.id), "order": 1}]
+                    },
+                )
+
+        assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
+        detail = resp.json().get("detail", {})
+        assert detail.get("error") == "binding_conflict"
+        errors = detail.get("errors", [])
+        assert errors, f"Expected structured errors array, got: {detail}"
+        assert errors[0]["resource_type"] == "skill"
+        assert errors[0]["resource_id"] == skill_id_str
+        assert errors[0]["rule"] == "conflict"
+        assert any(skill_id_str in m for m in detail.get("messages", []))

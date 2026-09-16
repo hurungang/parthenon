@@ -383,6 +383,61 @@ describe('useAgentDraftComposition', () => {
     expect(mockApiPut).not.toHaveBeenCalled()
   })
 
+  it('save payload dedupes duplicate skill bindings (first occurrence wins for order)', async () => {
+    // A skill both directly bound and composed under a SOP can end up twice
+    // in the draft — the PUT must carry it exactly once.
+    const duplicated: AgentType = {
+      ...AGENT,
+      skill_bindings: [
+        SKILL_BINDINGS[0],
+        SKILL_BINDINGS[1],
+        { id: 'sb-3', skill_id: 'skill-1', skill_name: 'Skill One again', order: 3, created_at: '2026-01-01T00:00:00Z' },
+      ],
+      sop_bindings: [
+        SOP_BINDINGS[0],
+        { id: 'sob-2', sop_id: 'sop-1', sop_name: 'SOP One again', order: 2, created_at: '2026-01-01T00:00:00Z' },
+      ],
+    }
+    mockApiPut.mockResolvedValue({ data: SAVED_AGENT })
+    const { result } = renderHook(() => useAgentDraftComposition(duplicated), { wrapper })
+
+    await act(async () => {
+      await result.current.save()
+    })
+
+    expect(mockApiPut).toHaveBeenCalledOnce()
+    const body = mockApiPut.mock.calls[0][1]
+    expect(body.skill_bindings).toEqual([
+      { skill_id: 'skill-1', order: 1 },
+      { skill_id: 'skill-2', order: 2 },
+    ])
+    expect(body.sop_bindings).toEqual([{ sop_id: 'sop-1', order: 1 }])
+  })
+
+  it('save never overlaps itself: a second concurrent call is a no-op', async () => {
+    let resolvePut!: (value: { data: AgentType }) => void
+    mockApiPut.mockImplementation(
+      () => new Promise((resolve) => { resolvePut = resolve }),
+    )
+    const { result } = renderHook(() => useAgentDraftComposition(AGENT), { wrapper })
+
+    act(() => result.current.setRole('role-2'))
+
+    let first!: Promise<AgentType | null>
+    let second!: Promise<AgentType | null>
+    act(() => {
+      first = result.current.save()
+      second = result.current.save()
+    })
+    await act(async () => {
+      resolvePut({ data: SAVED_AGENT })
+      await Promise.all([first, second])
+    })
+
+    // Exactly ONE PUT hit the API — no overlapping/retried save.
+    expect(mockApiPut).toHaveBeenCalledTimes(1)
+  })
+
   it('re-initializes the draft when a different agent is selected', () => {
     const { result, rerender } = renderHook(
       ({ agent }: { agent: AgentType | null }) => useAgentDraftComposition(agent),

@@ -100,6 +100,26 @@ function renumber<T extends { order: number }>(items: T[]): T[] {
   return items.map((item, index) => ({ ...item, order: index + 1 }))
 }
 
+/**
+ * Deduplicates a binding list by its resource id — the FIRST occurrence wins
+ * (direct bindings keep their order). Guards the save payload against
+ * duplicates (e.g. a skill both directly bound and composed under a SOP) so
+ * the backend never sees the same (agent_type_id, resource_id) twice — a
+ * duplicate would trip the unique binding constraint.
+ */
+function dedupeBindings<T extends { order: number }>(
+  bindings: T[],
+  idOf: (binding: T) => string,
+): T[] {
+  const seen = new Set<string>()
+  return bindings.filter((binding) => {
+    const id = idOf(binding)
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
 export interface UseAgentDraftCompositionResult {
   /** Id of the agent the draft belongs to (null when nothing selected). */
   agentId: string | null
@@ -166,6 +186,10 @@ export function useAgentDraftComposition(agent: AgentType | null | undefined): U
   )
   const isDirtyRef = useRef(false)
   isDirtyRef.current = isDirty
+
+  // Single-attempt save: an in-flight PUT is never retried or overlapped —
+  // a concurrent duplicate PUT would race the unique binding constraint.
+  const saveInFlightRef = useRef(false)
 
   useEffect(() => {
     if (!agent) {
@@ -402,6 +426,9 @@ export function useAgentDraftComposition(agent: AgentType | null | undefined): U
 
   const save = useCallback(async (): Promise<AgentType | null> => {
     if (!baseline) return null
+    // Never overlap saves: retries are disabled for this write (the backend
+    // plan-regeneration window makes a duplicate PUT race-prone).
+    if (saveInFlightRef.current) return null
     // Same validation rules as AgentTypeForm: required slug-pattern name.
     if (!draft.name.trim() || !SLUG_PATTERN.test(draft.name)) {
       throw new Error('slugNameValidationError')
@@ -418,8 +445,10 @@ export function useAgentDraftComposition(agent: AgentType | null | undefined): U
       output_type: draft.outputType,
       output_schema: draft.outputSchema,
       output_data_type_id: draft.outputDataTypeId,
-      sop_bindings: draft.sopBindings,
-      skill_bindings: draft.skillBindings,
+      // Dedupe by resource id (first occurrence wins): a skill that is both
+      // directly bound and composed under a SOP must appear exactly once.
+      sop_bindings: dedupeBindings(draft.sopBindings, (b) => b.sop_id),
+      skill_bindings: dedupeBindings(draft.skillBindings, (b) => b.skill_id),
       guardrail_max_iterations: draft.guardrails.maxIterations,
       guardrail_max_delegation_depth: draft.guardrails.maxDelegationDepth,
       guardrail_max_delegated_steps: draft.guardrails.maxDelegatedSteps,
@@ -432,14 +461,19 @@ export function useAgentDraftComposition(agent: AgentType | null | undefined): U
       guardrail_conversational_continuation_policy:
         draft.guardrails.conversationalContinuationPolicy,
     }
-    const { data: saved } = await apiClient.put<AgentType>(`/agents/types/${baseline.id}`, body)
-    // Single write done — adopt the server response as the new snapshot.
-    initRef.current = { id: saved.id, updatedAt: saved.updated_at }
-    setBaseline(saved)
-    setDraft(draftFromAgent(saved))
-    setIsDirty(false)
-    void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
-    return saved
+    saveInFlightRef.current = true
+    try {
+      const { data: saved } = await apiClient.put<AgentType>(`/agents/types/${baseline.id}`, body)
+      // Single write done — adopt the server response as the new snapshot.
+      initRef.current = { id: saved.id, updatedAt: saved.updated_at }
+      setBaseline(saved)
+      setDraft(draftFromAgent(saved))
+      setIsDirty(false)
+      void queryClient.invalidateQueries({ queryKey: ['agents', 'types'] })
+      return saved
+    } finally {
+      saveInFlightRef.current = false
+    }
   }, [baseline, draft, queryClient])
 
   return {

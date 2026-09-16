@@ -26,6 +26,8 @@ import { AgentListSidebar } from '../../components/agents/panel/AgentListSidebar
 import { EquipmentSlots, dataTypeToInputSchema } from '../../components/agents/panel/EquipmentSlots'
 import { AgentPropertiesSection } from '../../components/agents/panel/AgentPropertiesSection'
 import { SharedDialogHost } from '../../components/agents/panel/SharedDialogHost'
+import { SlotResourcePickerDialog } from '../../components/agents/panel/SlotResourcePickerDialog'
+import { getSlotPickerConfig } from '../../components/agents/panel/slotPickerConfigs'
 import { PendingChangesTray } from '../../components/agents/panel/PendingChangesTray'
 import { PanelTopologyCanvas } from '../../components/agents/panel/PanelTopologyCanvas'
 import {
@@ -84,6 +86,12 @@ export function AgentManagementPanelPage() {
 
   // ── Shared dialog host state (one dialog at a time) ───────────────────────
   const [dialogRequest, setDialogRequest] = useState<PanelDialogRequest | null>(null)
+
+  // ── Assign-existing picker state (one picker at a time) ───────────────────
+  // pickerSlot registers the open ResourcePickerDialog; presetIds carries the
+  // inline-created resource so the refreshed picker list pre-selects it.
+  const [pickerSlot, setPickerSlot] = useState<AgentEquipmentSlotId | null>(null)
+  const [pickerPresetIds, setPickerPresetIds] = useState<string[] | null>(null)
 
   // ── Draft save tray state ─────────────────────────────────────────────────
   const [draftSaving, setDraftSaving] = useState(false)
@@ -186,6 +194,13 @@ export function AgentManagementPanelPage() {
 
   // ── Create-and-assign: route created resources into the draft ─────────────
   const assignCreatedResource = (slotId: AgentEquipmentSlotId, result: CreateAndAssignResult) => {
+    // Picker-driven create ("find or create" journey): the created resource is
+    // pre-selected in the refreshed picker list instead of applied directly —
+    // the operator confirms it with the picker's Assign button.
+    if (pickerSlot !== null && pickerSlot === slotId) {
+      setPickerPresetIds(getSlotPickerConfig(slotId).createdSelectionIds(result))
+      return
+    }
     switch (slotId) {
       case 'role':
         draftApi.setRole(result.id)
@@ -359,7 +374,11 @@ export function AgentManagementPanelPage() {
             <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ mt: 2 }}>
               {t('agents.panel.equipment')}
             </Typography>
-            <EquipmentSlots draftApi={draftApi} onOpenDialog={setDialogRequest} />
+            <EquipmentSlots
+              draftApi={draftApi}
+              onOpenDialog={setDialogRequest}
+              onOpenPicker={setPickerSlot}
+            />
           </Box>
           <PendingChangesTray
             dirty={draftApi.isDirty}
@@ -379,6 +398,20 @@ export function AgentManagementPanelPage() {
         request={dialogRequest}
         onClose={() => setDialogRequest(null)}
         onCreateAndAssign={assignCreatedResource}
+      />
+
+      {/* Assign-existing picker — search + pagination + selection per slot.
+          Stays mounted behind a create-new module dialog so the "find or
+          create" journey completes in one place. */}
+      <SlotResourcePickerDialog
+        slotId={pickerSlot}
+        draftApi={draftApi}
+        presetIds={pickerPresetIds}
+        onClose={() => {
+          setPickerSlot(null)
+          setPickerPresetIds(null)
+        }}
+        onCreateNew={setDialogRequest}
       />
 
       {/* Create agent dialog — hosts the shared AgentTypeForm (editing

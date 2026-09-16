@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { Box, Button, Chip, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, Typography } from '@mui/material'
 import DiscardIcon from '@mui/icons-material/Undo'
 import SaveIcon from '@mui/icons-material/Save'
 import PermissionDeniedAlert from '../../permissions/PermissionDeniedAlert'
+import { extractBindingValidationErrors } from '../../../utils/errorUtils'
 import type { AgentEquipmentSlotId } from '../../../types'
 
 interface PendingChangesTrayProps {
@@ -42,9 +43,28 @@ export function PendingChangesTray({
 
   const changedCount = changedSlotIds.length + (propertiesChanged ? 1 : 0)
 
+  // Structured binding-validation failures (backend 422 detail) render every
+  // specific error (which role/skill/SOP + which rule failed); anything else
+  // falls back to the generic error alert.
+  const bindingErrors = extractBindingValidationErrors(saveError)
+
   return (
     <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1.5, mt: 'auto' }}>
-      {saveError != null && (
+      {saveError != null && bindingErrors && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography variant="body2" fontWeight={600}>
+            {t('agents.panel.bindingValidationFailed')}
+          </Typography>
+          <Box component="ul" sx={{ m: 0.5, pl: 2.5 }}>
+            {bindingErrors.map((message, index) => (
+              <Typography key={index} component="li" variant="caption" sx={{ display: 'list-item' }}>
+                {message}
+              </Typography>
+            ))}
+          </Box>
+        </Alert>
+      )}
+      {saveError != null && !bindingErrors && (
         <PermissionDeniedAlert error={saveError} fallbackMessage={t('app.error')} />
       )}
       <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>

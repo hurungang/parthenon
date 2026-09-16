@@ -384,6 +384,7 @@
       "readHint": "Read-only: assignment actions are disabled.",
       "pendingChanges": "Pending changes ({{count}})",
       "pendingHint": "Persisted only when you click Save Changes — the topology already reflects them.",
+      "bindingValidationFailed": "Binding validation failed",
       "save": "Save Changes",
       "discard": "Discard",
       "dirtyBadge": "{{count}} unsaved",
@@ -391,6 +392,12 @@
       "bindingOrderDown": "Move down",
       "noInputType": "None",
       "inputTypeConversation": "Conversation",
+      "picker": {
+        "title": "Assign {{resource}}",
+        "searchPlaceholder": "Search…",
+        "noMatch": "No matching resources found",
+        "assign": "Assign"
+      },
       "slots": {
         "role": {
           "label": "Role",

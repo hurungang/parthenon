@@ -105,4 +105,58 @@ describe('PendingChangesTray', () => {
     // The failure does not stop the tray from offering Save again.
     expect(screen.getByRole('button', { name: 'agents.panel.save' }).hasAttribute('disabled')).toBe(false)
   })
+
+  it('renders each structured binding-validation error from the backend 422 detail', () => {
+    const bindingError = {
+      response: {
+        status: 422,
+        data: {
+          detail: {
+            error: 'binding_validation_failed',
+            messages: [
+              'Skill 38ec91c7-4378-42f6-b5b8-61d8cf5bfdba is not accessible through the assigned role.',
+              'Duplicate SOP binding: sop_id=sop-9 appears more than once.',
+            ],
+            errors: [
+              {
+                resource_type: 'skill',
+                resource_id: '38ec91c7-4378-42f6-b5b8-61d8cf5bfdba',
+                rule: 'role_access',
+                message: 'Skill 38ec91c7-4378-42f6-b5b8-61d8cf5bfdba is not accessible through the assigned role.',
+              },
+              {
+                resource_type: 'sop',
+                resource_id: 'sop-9',
+                rule: 'duplicate',
+                message: 'Duplicate SOP binding: sop_id=sop-9 appears more than once.',
+              },
+            ],
+          },
+        },
+      },
+    }
+    renderTray({ dirty: true, changedSlotIds: ['skills'], saveError: bindingError })
+
+    // Title renders (i18n key) and BOTH specific errors are listed — not the
+    // generic fallback and not just the vague error code.
+    expect(screen.getByText('agents.panel.bindingValidationFailed')).toBeDefined()
+    expect(screen.getByText(/Skill 38ec91c7-4378-42f6-b5b8-61d8cf5bfdba is not accessible/)).toBeDefined()
+    expect(screen.getByText(/Duplicate SOP binding: sop_id=sop-9 appears more than once/)).toBeDefined()
+    expect(screen.queryByTestId('tray-error')).toBeNull()
+    // Save stays available after the failure.
+    expect(screen.getByRole('button', { name: 'agents.panel.save' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('falls back to the generic error alert when a 422 detail has no messages', () => {
+    const emptyBindingError = {
+      response: {
+        status: 422,
+        data: { detail: { error: 'binding_validation_failed', messages: [], errors: [] } },
+      },
+    }
+    renderTray({ dirty: true, changedSlotIds: ['skills'], saveError: emptyBindingError })
+
+    expect(screen.queryByText('agents.panel.bindingValidationFailed')).toBeNull()
+    expect(screen.getByTestId('tray-error')).toBeDefined()
+  })
 })

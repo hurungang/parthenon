@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Box,
@@ -145,6 +144,8 @@ interface EquipmentSlotsProps {
   draftApi: UseAgentDraftCompositionResult
   /** Opens one of the shared module dialogs (create-new flows). */
   onOpenDialog: (request: PanelDialogRequest) => void
+  /** Opens the slot's searchable assign-existing picker dialog. */
+  onOpenPicker: (slotId: AgentEquipmentSlotId) => void
 }
 
 /**
@@ -152,9 +153,11 @@ interface EquipmentSlotsProps {
  * Each slot renders the current draft value(s), assign-existing / create-new
  * actions, dashed placeholders for empty slots, the locked output slot for
  * conversational agents, and disabled-with-explanation actions when the slot's
- * backing list query is denied (403 graceful degradation).
+ * backing list query is denied (403 graceful degradation). "Assign existing"
+ * opens the shared ResourcePickerDialog (search + pagination + selection)
+ * instead of an inline dropdown, so the flow scales as resources grow.
  */
-export function EquipmentSlots({ draftApi, onOpenDialog }: EquipmentSlotsProps) {
+export function EquipmentSlots({ draftApi, onOpenDialog, onOpenPicker }: EquipmentSlotsProps) {
   const { draft } = draftApi
 
   // Backing list queries — same endpoints/cache keys as the source module pages.
@@ -208,8 +211,9 @@ export function EquipmentSlots({ draftApi, onOpenDialog }: EquipmentSlotsProps) 
           slot={slot}
           error={slotErrors[slot.id]}
           draft={draft}
-          onOpenDialog={onOpenDialog}
           draftApi={draftApi}
+          onOpenDialog={onOpenDialog}
+          onOpenPicker={onOpenPicker}
           roles={roles ?? []}
           identities={identities ?? []}
           skills={skills ?? []}
@@ -230,6 +234,7 @@ interface SlotCardProps {
   draft: AgentDraftComposition
   draftApi: UseAgentDraftCompositionResult
   onOpenDialog: (request: PanelDialogRequest) => void
+  onOpenPicker: (slotId: AgentEquipmentSlotId) => void
   roles: AgentRole[]
   identities: AgentIdentity[]
   skills: Skill[]
@@ -244,6 +249,7 @@ function SlotCard({
   draft,
   draftApi,
   onOpenDialog,
+  onOpenPicker,
   roles,
   identities,
   skills,
@@ -252,7 +258,6 @@ function SlotCard({
   availableModels,
 }: SlotCardProps) {
   const { t } = useTranslation()
-  const [assigning, setAssigning] = useState(false)
   const denied = error != null
 
   // Conversational lock: conversational agents do not support typed outputs.
@@ -323,20 +328,14 @@ function SlotCard({
         <>
           <Divider sx={{ my: 1 }} />
           <Box display="flex" gap={1} flexWrap="wrap">
-            {!assigning ? (
-              <Button
-                size="small"
-                startIcon={<PersonAddAltIcon />}
-                onClick={() => setAssigning(true)}
-                disabled={denied}
-              >
-                {t('agents.panel.assignExisting')}
-              </Button>
-            ) : (
-              <Button size="small" onClick={() => setAssigning(false)}>
-                {t('app.cancel')}
-              </Button>
-            )}
+            <Button
+              size="small"
+              startIcon={<PersonAddAltIcon />}
+              onClick={() => onOpenPicker(slot.id)}
+              disabled={denied}
+            >
+              {t('agents.panel.assignExisting')}
+            </Button>
             <Button
               size="small"
               startIcon={<AddIcon />}
@@ -346,22 +345,6 @@ function SlotCard({
               {t('agents.panel.createNew')}
             </Button>
           </Box>
-          {assigning && (
-            <Box sx={{ mt: 1 }}>
-              <AssignExistingPicker
-                slot={slot}
-                draft={draft}
-                draftApi={draftApi}
-                roles={roles}
-                identities={identities}
-                skills={skills}
-                sops={sops}
-                dataTypes={dataTypes}
-                availableModels={availableModels}
-                onDone={() => setAssigning(false)}
-              />
-            </Box>
-          )}
         </>
       )}
     </Paper>
@@ -370,7 +353,7 @@ function SlotCard({
 
 // ── Slot body (current values) ────────────────────────────────────────────────
 
-interface SlotBodyProps extends Omit<SlotCardProps, 'error' | 'onOpenDialog'> {}
+type SlotBodyProps = Omit<SlotCardProps, 'error' | 'onOpenDialog' | 'onOpenPicker'>
 
 function SlotBody({
   slot,
@@ -668,111 +651,3 @@ function SlotBody({
   return null
 }
 
-// ── Assign-existing picker ────────────────────────────────────────────────────
-
-interface AssignExistingPickerProps {
-  slot: EquipmentSlotDefinition
-  draft: AgentDraftComposition
-  draftApi: UseAgentDraftCompositionResult
-  roles: AgentRole[]
-  identities: AgentIdentity[]
-  skills: Skill[]
-  sops: Sop[]
-  dataTypes: AgentDataType[]
-  availableModels: { model_id: string; config_display_name: string }[]
-  onDone: () => void
-}
-
-function AssignExistingPicker({
-  slot,
-  draft,
-  draftApi,
-  roles,
-  identities,
-  skills,
-  sops,
-  dataTypes,
-  availableModels,
-  onDone,
-}: AssignExistingPickerProps) {
-  const { t } = useTranslation()
-  const [value, setValue] = useState('')
-
-  const pick = (id: string) => {
-    if (!id) return
-    if (slot.id === 'role') draftApi.setRole(id)
-    else if (slot.id === 'identity') draftApi.setIdentity(id)
-    else if (slot.id === 'skills') draftApi.assignSkill(id)
-    else if (slot.id === 'sops') draftApi.assignSop(id)
-    else if (slot.id === 'input_data_type') {
-      const dataType = dataTypes.find((dt) => dt.id === id)
-      if (dataType) {
-        draftApi.setInputType('typed')
-        draftApi.setInputSchema(dataTypeToInputSchema(dataType))
-      }
-    } else if (slot.id === 'output_data_type') {
-      draftApi.setOutputType('typed')
-      draftApi.setOutputDataType(id)
-    } else if (slot.id === 'model') {
-      draftApi.setModel(id)
-    }
-    setValue('')
-    onDone()
-  }
-
-  const options: { id: string; label: string }[] =
-    slot.id === 'role'
-      ? roles.map((r) => ({ id: r.id, label: r.name }))
-      : slot.id === 'identity'
-        ? identities.map((i) => ({ id: i.id, label: i.name }))
-        : slot.id === 'skills'
-          ? skills
-              .filter((s) => !draft.skillBindings.some((b) => b.skill_id === s.id))
-              .map((s) => ({ id: s.id, label: s.name }))
-          : slot.id === 'sops'
-            ? sops
-                .filter((s) => !draft.sopBindings.some((b) => b.sop_id === s.id))
-                .map((s) => ({ id: s.id, label: s.name }))
-            : slot.id === 'input_data_type' || slot.id === 'output_data_type'
-              ? dataTypes.map((dt) => ({ id: dt.id, label: dt.name }))
-              : slot.id === 'model'
-                ? availableModels.map((m) => ({
-                    id: m.model_id,
-                    label: `${m.model_id} (${m.config_display_name})`,
-                  }))
-                : []
-
-  const label = t(slot.labelKey)
-
-  return (
-    <FormControl size="small" fullWidth>
-      <InputLabel id={`panel-assign-${slot.id}-label`}>{label}</InputLabel>
-      <Select
-        labelId={`panel-assign-${slot.id}-label`}
-        value={value}
-        label={label}
-        onChange={(e) => pick(e.target.value)}
-        autoWidth
-        MenuProps={{
-          sx: { maxHeight: 360 },
-          // Cap the dropdown at the property-bar column width so long
-          // resource names truncate instead of widening past the panel.
-          slotProps: { paper: { sx: { maxWidth: 360 } } },
-        }}
-      >
-        <MenuItem value="" disabled>
-          <em>{t('agents.types.bindings.selectPlaceholder')}</em>
-        </MenuItem>
-        {options.map((option) => (
-          <MenuItem key={option.id} value={option.id}>
-            <Tooltip title={option.label}>
-              <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
-                {option.label}
-              </Typography>
-            </Tooltip>
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  )
-}

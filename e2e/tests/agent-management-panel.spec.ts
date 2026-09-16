@@ -253,13 +253,15 @@ test.describe('Agent Management Panel — CRUD lifecycle', () => {
   }) => {
     if (!(await gotoPanel(page))) return
 
-    // Beta has no model equipped — assign one via the model slot.
+    // Beta has no model equipped — assign one via the model slot's
+    // searchable picker dialog.
     await selectAgent(page, 'panel-e2e-beta')
-
     const modelSlot = slot(page, 'Model')
     await modelSlot.getByRole('button', { name: 'Assign existing' }).click()
-    await modelSlot.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'gpt-4o (Panel E2E GPT)' }).click()
+    const modelPicker = page.getByRole('dialog')
+    await expect(modelPicker.getByRole('heading', { name: 'Assign Model' })).toBeVisible()
+    await modelPicker.locator('.MuiListItemButton-root').filter({ hasText: 'gpt-4o (Panel E2E GPT)' }).click()
+    await modelPicker.getByRole('button', { name: 'Assign', exact: true }).click()
 
     // Slot reflects the assignment and the tray lists the changed slot.
     await expect(modelSlot.getByText('gpt-4o (Panel E2E GPT)')).toBeVisible()
@@ -283,6 +285,71 @@ test.describe('Agent Management Panel — CRUD lifecycle', () => {
       name: 'panel-e2e-beta',
       description: 'Beta agent (role only)',
     })
+  })
+
+  test('save failure with structured binding-validation detail renders each error', async ({
+    page,
+  }) => {
+    if (!(await gotoPanel(page))) return
+
+    // Highest-priority PUT route (registered last): backend 422 with the
+    // structured binding_validation_failed detail.
+    await page.route(/\/api\/v1\/agents\/types\/at-b(\?.*)?$/, (route) => {
+      if (route.request().method() !== 'PUT') return route.fallback()
+      return route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          detail: {
+            error: 'binding_validation_failed',
+            messages: [
+              'Skill 38ec91c7-4378-42f6-b5b8-61d8cf5bfdba is not accessible through the assigned role.',
+              'Duplicate SOP binding: sop_id=sop-77 appears more than once.',
+            ],
+            errors: [
+              {
+                resource_type: 'skill',
+                resource_id: '38ec91c7-4378-42f6-b5b8-61d8cf5bfdba',
+                rule: 'role_access',
+                message:
+                  'Skill 38ec91c7-4378-42f6-b5b8-61d8cf5bfdba is not accessible through the assigned role.',
+              },
+              {
+                resource_type: 'sop',
+                resource_id: 'sop-77',
+                rule: 'duplicate',
+                message: 'Duplicate SOP binding: sop_id=sop-77 appears more than once.',
+              },
+            ],
+          },
+        }),
+      })
+    })
+
+    await selectAgent(page, 'panel-e2e-beta')
+
+    // Arm the tray the same way as the single-PUT test (beta has no model):
+    // model slot → searchable picker dialog → Assign.
+    const modelSlot = slot(page, 'Model')
+    await modelSlot.getByRole('button', { name: 'Assign existing' }).click()
+    const modelPicker = page.getByRole('dialog')
+    await expect(modelPicker.getByRole('heading', { name: 'Assign Model' })).toBeVisible()
+    await modelPicker.locator('.MuiListItemButton-root').filter({ hasText: 'gpt-4o (Panel E2E GPT)' }).click()
+    await modelPicker.getByRole('button', { name: 'Assign', exact: true }).click()
+    await expect(page.getByText('unsaved changes')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Save Changes' }).click()
+
+    // The tray lists EACH specific binding error — not just the vague code.
+    await expect(page.getByText('Binding validation failed')).toBeVisible()
+    await expect(
+      page.getByText(
+        'Skill 38ec91c7-4378-42f6-b5b8-61d8cf5bfdba is not accessible through the assigned role.',
+      ),
+    ).toBeVisible()
+    await expect(
+      page.getByText('Duplicate SOP binding: sop_id=sop-77 appears more than once.'),
+    ).toBeVisible()
   })
 
   test('sidebar search filters the agent list client-side', async ({ page }) => {

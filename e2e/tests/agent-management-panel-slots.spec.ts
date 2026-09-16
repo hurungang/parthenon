@@ -42,6 +42,11 @@ function slot(page: Page, label: string) {
   })
 }
 
+/** A picker row (ListItemButton) whose text contains the given resource name. */
+function pickerRow(scope: Locator, name: string) {
+  return scope.locator('.MuiListItemButton-root').filter({ hasText: name })
+}
+
 async function selectAgent(page: Page, name: string) {
   await page.getByRole('button', { name }).click()
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
@@ -150,13 +155,52 @@ test.describe('Agent Management Panel — equipment slots (inline create-and-ass
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()
 
-    // Assign-existing path (the automatable half of the identity story).
+    // Assign-existing path (the automatable half of the identity story):
+    // opens the searchable picker dialog; picking a row + Assign equips it.
     await identitySlot.getByRole('button', { name: 'Assign existing' }).click()
-    await identitySlot.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'panel-e2e-identity' }).click()
+    const identityPicker = page.getByRole('dialog')
+    await expect(
+      identityPicker.getByRole('heading', { name: 'Assign Identity' }),
+    ).toBeVisible()
+    await identityPicker.getByPlaceholder('Search…').fill('panel-e2e')
+    await pickerRow(identityPicker, 'panel-e2e-identity').click()
+    await identityPicker.getByRole('button', { name: 'Assign', exact: true }).click()
     await expect(identitySlot.getByText('panel-e2e-identity')).toBeVisible()
     await expect(page.getByText('Pending changes (1)')).toBeVisible()
     expect(state.agentPostBodies).toHaveLength(0)
+  })
+
+  test('role slot: picker Create new mounts the role dialog and pre-selects the created role', async ({
+    page,
+  }) => {
+    if (!(await gotoPanel(page))) return
+    await selectAgent(page, 'panel-e2e-empty')
+
+    const roleSlot = slot(page, 'Role')
+    await roleSlot.getByRole('button', { name: 'Assign existing' }).click()
+    const picker = page.getByRole('dialog')
+    await expect(picker.getByRole('heading', { name: 'Assign Role' })).toBeVisible()
+
+    // Create new from inside the picker — the real Agent Role dialog mounts
+    // on top of the still-open picker ("find or create" in one place).
+    await picker.getByRole('button', { name: 'Create new' }).click()
+    const createDialog = page.getByRole('dialog').last()
+    await expect(
+      createDialog.getByRole('heading', { name: 'Create Agent Role' }),
+    ).toBeVisible()
+
+    const roleName = `e2e-picker-role-${Date.now()}`
+    await createDialog.getByLabel('Name').fill(roleName)
+    await createDialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Create Agent Role' })).toBeHidden()
+
+    // The picker's list refreshed and pre-selected the created role.
+    await expect(picker.getByRole('heading', { name: 'Assign Role' })).toBeVisible()
+    await expect(pickerRow(picker, roleName)).toBeVisible()
+    await picker.getByRole('button', { name: 'Assign', exact: true }).click()
+    await expect(roleSlot.getByText(roleName)).toBeVisible()
+    await expect(page.getByText('Pending changes (1)')).toBeVisible()
+    expect(state.roles.find((r) => r.name === roleName)).toBeTruthy()
   })
 
   test('skills slot: create-new mounts the real Skill editor and binds the created skill', async ({
@@ -284,10 +328,13 @@ test.describe('Agent Management Panel — equipment slots (inline create-and-ass
     // No enabled models were picked in create mode → nothing auto-assigned.
     await expect(modelSlot.getByText('Nothing equipped yet')).toBeVisible()
 
-    // Assign-existing: the model becomes selectable and equips the draft.
+    // Assign-existing: the picker dialog lists the flattened model and
+    // equips it on Assign.
     await modelSlot.getByRole('button', { name: 'Assign existing' }).click()
-    await modelSlot.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'gpt-4o (Panel E2E GPT)' }).click()
+    const modelPicker = page.getByRole('dialog')
+    await expect(modelPicker.getByRole('heading', { name: 'Assign Model' })).toBeVisible()
+    await pickerRow(modelPicker, 'gpt-4o (Panel E2E GPT)').click()
+    await modelPicker.getByRole('button', { name: 'Assign', exact: true }).click()
     await expect(modelSlot.getByText('gpt-4o (Panel E2E GPT)')).toBeVisible()
     await expect(page.getByText('Pending changes (1)')).toBeVisible()
   })
@@ -325,8 +372,9 @@ test.describe('Agent Management Panel — equipment slots (inline create-and-ass
 
     const roleSlot = slot(page, 'Role')
     await roleSlot.getByRole('button', { name: 'Assign existing' }).click()
-    await roleSlot.getByRole('combobox').click()
-    await page.getByRole('option', { name: 'panel-e2e-role' }).click()
+    const rolePicker = page.getByRole('dialog')
+    await pickerRow(rolePicker, 'panel-e2e-role').click()
+    await rolePicker.getByRole('button', { name: 'Assign', exact: true }).click()
     await expect(roleSlot.getByText('panel-e2e-role')).toBeVisible()
 
     // Unassign via the chip's remove icon — draft reverts to placeholder.

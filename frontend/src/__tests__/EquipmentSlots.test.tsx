@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAgentDraftComposition } from '../hooks/useAgentDraftComposition'
 import { EquipmentSlots } from '../components/agents/panel/EquipmentSlots'
-import type { AgentType, PanelDialogRequest } from '../types'
+import type { AgentEquipmentSlotId, AgentType, PanelDialogRequest } from '../types'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -120,26 +120,24 @@ const EQUIPPED_AGENT: AgentType = {
 function TestHost({
   agent = EMPTY_AGENT,
   onOpenDialog = () => {},
+  onOpenPicker = () => {},
 }: {
   agent?: AgentType
   onOpenDialog?: (request: PanelDialogRequest) => void
+  onOpenPicker?: (slotId: AgentEquipmentSlotId) => void
 }) {
   const draftApi = useAgentDraftComposition(agent)
   return (
     <>
-      <EquipmentSlots draftApi={draftApi} onOpenDialog={onOpenDialog} />
+      <EquipmentSlots
+        draftApi={draftApi}
+        onOpenDialog={onOpenDialog}
+        onOpenPicker={onOpenPicker}
+      />
       <pre data-testid="draft-dump">{JSON.stringify(draftApi.draft)}</pre>
       <pre data-testid="dirty-dump">{String(draftApi.isDirty)}</pre>
     </>
   )
-}
-
-/** Opens a MUI Select in jsdom (requires mouseDown) and clicks an option. */
-async function pickFromSelect(labelText: string, optionText: string) {
-  const select = screen.getByLabelText(labelText)
-  fireEvent.mouseDown(select)
-  const option = await screen.findByRole('option', { name: optionText })
-  fireEvent.click(option)
 }
 
 function renderSlots(props: Parameters<typeof TestHost>[0] = {}) {
@@ -197,19 +195,31 @@ describe('EquipmentSlots', () => {
     expect(screen.getByLabelText('agents.types.inputType')).toBeDefined()
   })
 
-  it('assign-existing picks a role into the draft without API writes', async () => {
-    renderSlots()
+  it('assign-existing opens the picker dialog carrying the matching slot id (draft untouched)', () => {
+    const onOpenPicker = vi.fn()
+    renderSlots({ onOpenPicker })
 
-    // Open the role slot's assign picker (first slot) and pick the role.
+    // Slots render in definition order: role, identity, skills, sops, input, output, model.
     const assignButtons = screen.getAllByRole('button', { name: 'agents.panel.assignExisting' })
+    expect(assignButtons).toHaveLength(7)
     fireEvent.click(assignButtons[0])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('role')
+    fireEvent.click(assignButtons[1])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('identity')
+    fireEvent.click(assignButtons[2])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('skills')
+    fireEvent.click(assignButtons[3])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('sops')
+    fireEvent.click(assignButtons[4])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('input_data_type')
+    fireEvent.click(assignButtons[5])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('output_data_type')
+    fireEvent.click(assignButtons[6])
+    expect(onOpenPicker).toHaveBeenLastCalledWith('model')
 
-    await pickFromSelect('agents.panel.slots.role.label', 'Researcher')
-
-    await waitFor(() => {
-      expect(JSON.parse(screen.getByTestId('draft-dump').textContent ?? '{}').roleId).toBe('role-1')
-    })
-    expect(screen.getByTestId('dirty-dump').textContent).toBe('true')
+    // Opening the picker is draft-neutral: no values, no dirt, no API writes.
+    expect(JSON.parse(screen.getByTestId('draft-dump').textContent ?? '{}').roleId).toBeNull()
+    expect(screen.getByTestId('dirty-dump').textContent).toBe('false')
     expect(mockApiPut).not.toHaveBeenCalled()
     expect(mockApiPost).not.toHaveBeenCalled()
   })
@@ -245,39 +255,25 @@ describe('EquipmentSlots', () => {
     expect(screen.getAllByRole('button', { name: 'agents.panel.createNew' })).toHaveLength(6)
   })
 
-  it('assign-existing on the output slot applies the data type and switches output to typed', async () => {
-    renderSlots()
+  it('assign-existing on the output slot opens the picker for output_data_type', () => {
+    const onOpenPicker = vi.fn()
+    renderSlots({ onOpenPicker })
 
     // Output data type slot is the 6th "Assign existing" button (role, identity, skills, sops, input, output).
     const assignButtons = screen.getAllByRole('button', { name: 'agents.panel.assignExisting' })
     fireEvent.click(assignButtons[5])
 
-    await pickFromSelect('agents.panel.slots.output_data_type.label', 'final-report')
-
-    await waitFor(() => {
-      const draft = JSON.parse(screen.getByTestId('draft-dump').textContent ?? '{}')
-      expect(draft.outputDataTypeId).toBe('dt-2')
-      expect(draft.outputType).toBe('typed')
-    })
+    expect(onOpenPicker).toHaveBeenLastCalledWith('output_data_type')
   })
 
-  it('assign-existing on the input slot composes the typed input schema from the registry', async () => {
-    renderSlots()
+  it('assign-existing on the input slot opens the picker for input_data_type', () => {
+    const onOpenPicker = vi.fn()
+    renderSlots({ onOpenPicker })
 
     const assignButtons = screen.getAllByRole('button', { name: 'agents.panel.assignExisting' })
     fireEvent.click(assignButtons[4])
 
-    await pickFromSelect('agents.panel.slots.input_data_type.label', 'research-summary')
-
-    await waitFor(() => {
-      const draft = JSON.parse(screen.getByTestId('draft-dump').textContent ?? '{}')
-      expect(draft.inputType).toBe('typed')
-      expect(draft.inputSchema).toEqual({
-        type: 'object',
-        properties: { topic: { type: 'string' } },
-        required: ['topic'],
-      })
-    })
+    expect(onOpenPicker).toHaveBeenLastCalledWith('input_data_type')
   })
 
   it('disables slot actions with an explanation when the backing list query is denied (403)', async () => {
