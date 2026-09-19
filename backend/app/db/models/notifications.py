@@ -71,7 +71,9 @@ class NotificationChannel(Base):
         "GroupChannelMapping", back_populates="channel", cascade="all, delete-orphan"
     )
     logs: Mapped[list["NotificationLog"]] = relationship(
-        "NotificationLog", back_populates="channel"
+        "NotificationLog",
+        back_populates="channel",
+        passive_deletes=True,
     )
     events: Mapped[list["NotificationEvent"]] = relationship(
         "NotificationEvent", back_populates="channel", cascade="all, delete-orphan"

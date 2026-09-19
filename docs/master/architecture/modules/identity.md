@@ -141,3 +141,7 @@ sequenceDiagram
 ## Agent Authentication Paths
 
 Both agent authentication paths converge at the same permission engine. The resolution chain — `identity → role → policy evaluation → allowed tools/skills/SOPs` — is identical regardless of whether the agent authenticated via mTLS certificate or API key. For the full dual-auth architecture with Mermaid diagrams, see [Communication Hub Architecture](communication-hub/architecture.md#dual-authentication-flow).
+
+## Inline Identity Provisioning (Agent Management Panel)
+
+The [Agent Management Panel](agent-management-panel.md) provisions an agent identity inline by mounting the shared identity dialog, which reuses the **existing OAuth sign-in popup flow** end-to-end via Control Center only: the authorization URL is requested from the existing Control Center endpoint, the provider consent happens in the popup, and the existing popup callback route completes sign-in. No new authentication path is introduced; tokens remain stored encrypted and refreshed automatically by Control Center, and the identity → role → permission resolution chain is unchanged.

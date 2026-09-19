@@ -2,7 +2,7 @@
 
 ## Epic Overview
 
-Schedule Management enables platform administrators to automate recurring Agent executions through cron-based schedules, eliminating the need for manual triggers. Administrators create schedules using a visual cron editor, configure input parameters that match the target agent's expected inputs, and monitor every execution through a detailed history view. The scheduler runs within the Control Center, survives service restarts by recovering active schedules from the database, and provides full auditability through tracked execution history with drill-down into individual agent session results.
+Schedule Management enables platform administrators to automate recurring Agent executions through cron-based schedules, eliminating the need for manual triggers. Administrators create schedules using a visual cron editor, configure input parameters that match the target agent's expected inputs, and monitor every execution through a detailed history view. The scheduler runs within the Control Center, survives service restarts by recovering active schedules from the database, and provides full auditability through tracked execution history with drill-down into individual agent session results. Every schedule records the human who created it, so that schedule-triggered executions remain attributable to a responsible person on the Agent Runtime Monitor.
 
 ## Business Goals
 
@@ -27,6 +27,13 @@ Schedule Management enables platform administrators to automate recurring Agent 
 - As an Operator, I want to view execution history for each schedule with pagination, so that I can verify successful runs and investigate failures across many executions
 - As an Operator, I want to click a "View Agent Result" button on any execution, so that I can drill into the agent session details and see the full execution output
 - As an Administrator, I want the scheduler to recover automatically after a service restart, so that active schedules continue running without manual intervention
+- As an Administrator, I want the human who created each schedule to be recorded, so that schedule-triggered executions on the Agent Runtime Monitor are attributed to a responsible person rather than to the schedule itself
+
+## Schedule Creator Provenance
+
+- Every schedule records the human who created it, and that human is shown as the trigger attribution wherever schedule-triggered executions are displayed on the Agent Runtime Monitor — trigger entity cards, agent detail bubbles, and tooltips
+- The schedule name identifies the schedule entity itself (its tile in the monitor's trigger column and its own detail card) and never appears in place of a human name
+- Schedules created before creator tracking existed have no attributable creator and are displayed without one on the Agent Runtime Monitor — never a placeholder or generic label
 
 ## Acceptance Criteria
 
@@ -42,6 +49,7 @@ Schedule Management enables platform administrators to automate recurring Agent 
 - After Control Center restart, all active schedules are reloaded from the database and resume execution
 - Scheduler check/poll interval is configurable via environment variable through the existing config system
 - Validation errors shown for invalid input; required fields (name, cron expression, target) enforced on save
+- Every schedule records its human creator; schedule-triggered executions are attributed to that creator on the Agent Runtime Monitor, and schedules with no known creator are shown without attribution rather than with a placeholder
 
 ## Out of Scope
 

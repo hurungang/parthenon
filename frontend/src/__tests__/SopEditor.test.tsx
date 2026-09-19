@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { SopEditor } from '../pages/skills/SopEditor'
+import { SopEditor } from '../components/agents/SopEditor'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -164,7 +164,7 @@ describe('SopEditor — editing existing SOP', () => {
   })
 
   it('renders step type selectors for each step', async () => {
-    const { SopEditor } = await import('../pages/skills/SopEditor')
+    const { SopEditor } = await import('../components/agents/SopEditor')
     render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {
       // Step type comboboxes or selects
@@ -181,7 +181,7 @@ describe('SopEditor — editing existing SOP', () => {
       if (!msg.includes('Warning') && !msg.includes('act(')) errors.push(msg)
       origErr(...args)
     }
-    const { SopEditor } = await import('../pages/skills/SopEditor')
+    const { SopEditor } = await import('../components/agents/SopEditor')
     render(<SopEditor open={true} sop={existingSop as any} onClose={mockOnClose} onSaved={mockOnSaved} />, { wrapper })
     await waitFor(() => {}, { timeout: 500 })
     console.error = origErr

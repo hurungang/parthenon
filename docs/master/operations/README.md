@@ -77,22 +77,13 @@ The consolidated `setup` command bootstraps all infrastructure dependencies befo
 
 ### Running the Setup Tool
 
-```bash
-# Identity provider (Keycloak realm, clients, admin user)
-setup identity
+The setup tool sub-commands are:
 
-# Database schema verification and default data seeding
-setup database
-
-# Certificate authority bootstrapping
-setup certificates
-
-# Development environment (combines all of the above)
-setup dev
-
-# Verify all components are in expected state
-setup verify
-```
+- `setup identity` — identity provider (Keycloak realm, clients, admin user)
+- `setup database` — database schema verification and default data seeding
+- `setup certificates` — certificate authority bootstrapping
+- `setup dev` — development environment (combines all of the above)
+- `setup verify` — verify all components are in expected state
 
 The setup tool uses its own environment variables for Keycloak administration (`KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`), which must not be set on the runtime services. All sub-commands are idempotent — running `setup identity` on an already-provisioned realm will log `setup.identity.realm_exists` and skip creation.
 

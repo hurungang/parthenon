@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { ApiKeyStatus, type ApiKey } from '../../types/apiKeys'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 
@@ -19,7 +20,7 @@ const { mockApiClient } = vi.hoisted(() => {
 
 vi.mock('../../api/apiClient', () => ({ default: mockApiClient }))
 
-const MOCK_KEY = {
+const MOCK_KEY: ApiKey = {
   id: 'key-to-revoke',
   name: 'Production Agent Key',
   key_prefix: 'phn_sk_',
@@ -27,9 +28,10 @@ const MOCK_KEY = {
   agent_identity_name: 'Agent Alpha',
   agent_role_id: 'role-1',
   agent_role_name: 'Developer',
-  status: 'active',
+  status: ApiKeyStatus.Active,
   created_at: '2026-01-01T00:00:00Z',
   last_used_at: '2026-06-15T00:00:00Z',
+  expires_at: null,
 }
 
 function Wrapper({ children }: { children: React.ReactNode }) {

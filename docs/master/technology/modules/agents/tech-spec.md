@@ -4,6 +4,8 @@
 
 The agents module is the central execution layer for AI agents on the platform. It manages agent type definitions, a role-governed permission model, first-class OIDC agent identities, and an asynchronous session queue dispatched by a background `SessionDispatcher` and executed by `AgentRuntimeExecutor` using the **LangChain deep agent** observe-reason-act loop. Permissions flow through `AgentRole → SOPs → Skills → MCP tools` and are resolved by `AgentPermissionManager` with an LRU cache. Agent identities are registered users in a dedicated agent realm and authenticate via the OAuth authorization code flow; their tokens are stored AES-256 encrypted and proactively refreshed by `TokenRefreshService`. LLM provider configuration is managed through `ModelConfig` records, and `ModelBindingLayer` resolves an `AgentType.model_id` string to the correct provider client at runtime. The module also owns workflow-generation model selection settings consumed by Skill and SOP AI authoring endpoints. Agent Types support ordered lists of SOP and skill bindings (`AgentTypeSopBinding`, `AgentTypeSkillBinding`) that define a curated capability subset drawn from the role's permissions. On every agent type save, `PlanGenerationService` traverses the curated binding list (or the full role→SOP→Skill→Tool graph when no bindings exist), invokes the configured LLM, and persists a structured implementation plan and topology in the `agent_plans` table; plan generation is non-blocking (failures write a `failed` status row without blocking the save). When a session starts, `AgentRuntimeLoader` injects the saved plan into the agent's system context to ensure compliant, predictable execution.
 
+The module's admin surface is anchored by the **Agent Management Panel** (`/agents/panel`): a three-region composition page (agent list sidebar / live topology / property bar). The right-hand property bar is the **single editing surface for all agent properties** — a "Properties" section edits every base property (name, description, system instruction, execution guardrails) and the equipment slots below it edit the equipped resources (role, identity, skills, SOPs, input/output data types, model); there is no edit dialog. "Assign existing" opens a shared searchable + paginated `ResourcePickerDialog` (per-slot bindings in `SLOT_PICKER_CONFIGS`), and inline creation mounts the six shared module dialogs through `SharedDialogHost` with a create-and-assign contract. All edits mutate a client-side **draft composition** (`useAgentDraftComposition`); a single Save maps the draft onto the existing agent-type update endpoint with race-safety (deduplicated binding lists, in-flight guard, commit-before-plan-regeneration, structured 409/422 binding errors). The live topology is composed client-side from the draft by `buildPanelTopology` and rendered as a zoned graph with a Communication Hub vertical bar — a static platform node, no Communication Hub runtime integration. Agent creation keeps a dedicated dialog hosting the shared `AgentTypeForm`.
+
 **Dependency**: `langchain` and `langchain-community` (replaces the removed `langgraph` dependency).
 
 ---
@@ -67,7 +69,6 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentRoleListPage` | Table view of all agent roles; Name, SOP count chip, Skill count chip, Edit/Delete actions; launches `AgentRoleDialog` |
 | `AgentRoleDialog` | **MODIFIED**: Create/edit form with SOP multi-select, Skill multi-select, real-time MCP tool preview panel (debounced 300 ms, edit mode only); assigned identities data table with Assign/Remove actions; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; each dropdown has a Refresh button; passthrough badge on server labels; uses `useQueries` batch for per-server session fetch; `maxWidth="lg"` |
 | `AssignIdentitiesToRoleDialog` | Multi-select dialog to bulk-assign identities to a role |
-| `AssignMcpSessionsToRoleDialog` | **REMOVED** — replaced by inline dropdowns in `AgentRoleDialog`; component file deleted |
 | `AgentIdentityListPage` | Table view of all agent identities; realm_name, realm_username, token status chip (Active/Expired), identity status chip; Refresh Token and Re-Authenticate actions per row |
 | `AgentIdentityDialog` | Create/edit form for `AgentIdentity`; realm_name and realm_username text fields; **"Sign In as Agent"** OAuth button that fetches the authorization URL and opens the agent realm sign-in in a popup; reflects updated token status after OAuth callback |
 | `AssignRolesToIdentityDialog` | Multi-select dialog to bulk-assign roles to an identity |
@@ -76,11 +77,29 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentJobLaunchDialog` | Dynamic input form per `input_type` (none / typed / conversation); POSTs to `/agents/sessions`; shows returned session ID |
 | `AgentJobPage` | Session metadata, status chip, 3 s polling for task agents; WebSocket chat UI for conversational agents; result panel (typed JSON or markdown); execution log section (system instruction + user prompt from `ExecutionLogEntry`) |
 | `AgentManagementPage` | Modified — uses updated `AgentTypeForm`; sends `primary_sop_id` for all input types while requiring it only when `input_type = none`; adds Launch (▶) action per row linking to `AgentJobPage`; after a successful save reads `plan` from the response, stores it in `planData` state, and opens `PlanPreviewModal`; clears plan state on modal close |
-| `PlanPreviewModal` | MUI Dialog opened after a successful agent type save; displays plan steps as an ordered list with step-type chips; hosts `TopologyDiagramRenderer`; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard |
-| `TopologyDiagramRenderer` | Renders node-edge topology payload as a visual diagram; distinguishes node types (role, sop, skill, tool) by colour/icon; handles empty state |
+| `PlanPreviewModal` | MUI Dialog opened after a successful agent type save; displays plan steps as an ordered list with step-type chips; hosts `TopologyDiagramRenderer`; renders its own plan layout (not `AgentPlanContent`) and appends the Communication Hub node client-side at render time via `withCommunicationHub`; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard |
+| `TopologyDiagramRenderer` | Shared layered SVG topology renderer; distinguishes node types (role, sop, skill, tool, `communication_hub`) by colour/icon; zoned mode adds the Communication Hub vertical bar, per-capability accent colours, entity-type icons, width-fitted labels, and a `fillHeight` fullscreen mode with viewBox-based zoom/pan; handles empty state |
 | `AgentInstanceDashboardPage` | Admin view of all `AgentJob` instances; columns: agent type name, status chip, triggered by, started/completed times; `status` and `since` filter controls |
 | `ModelConfigListPage` | Table view of all model configurations; display_name, provider_type, credential status chip, Edit/Delete actions; includes workflow generation model selection and persistence |
 | `ModelConfigDialog` | Create/edit form for `ModelConfig`; provider_type select, display_name, api_base_url, api_key (masked), enabled_models chip multi-select via **"List Models"** button |
+
+### Agent Management Panel (frontend)
+
+Unified composition page at `/agents/panel` (route registered in `AppRouter`; sidebar entry in `AppShell`'s Agents group). Three-region layout — agent list sidebar / live topology / property bar. The property bar is the single editing surface for ALL agent properties (no edit dialog); every edit mutates a client-side draft composition persisted by exactly one agent-type PUT on Save.
+
+| Component | Description |
+|-----------|-------------|
+| `AgentManagementPanelPage` | Panel page: three-region layout, selection state, header card (create dialog + delete confirm), property bar wiring; registers the open assign-existing picker and routes inline-created resources into the picker's pre-selection |
+| `AgentPropertiesSection` | Property-bar "Properties" section: name (required slug with validation), description, system instruction, and the full execution-guardrail set, mirroring `AgentTypeForm` labels/validation; every edit mutates the draft only |
+| `AgentListSidebar` | Agent list with client-side search/filter and selection highlight; loading/empty/permission-error states |
+| `EquipmentSlots` | Seven permission-gated slots (role, identity, skills, SOPs, input data type, output data type, model) bound to draft state; dashed placeholders for empty slots, locked slot for conversational output types, disabled-with-explanation actions on 403; "Assign existing" opens `ResourcePickerDialog` |
+| `ResourcePickerDialog` | Generic searchable + paginated selection dialog: debounced client-side search, `usePagination` page clamp, single/multi selection, equipped pre-selection with `baselineIds` change detection, inline "Create new" (picker stays mounted behind the module dialog), Dialog Error Handling Standard |
+| `SlotResourcePickerDialog` | Slot binding wrapper: runs the slot's shared-cache list query, maps rows, derives pre-selection/preset, applies confirmed ids to the draft |
+| `SLOT_PICKER_CONFIGS` | Strongly-typed per-slot picker registry built with a generic `defineSlotPickerConfig<T>` builder: shared react-query key, list fetch + row mapping, selection mode, equipped-id pre-selection, draft apply, create request, created-resource preset |
+| `SharedDialogHost` | Single mount point for the six shared module dialogs; owns the create-and-assign contract; guarantees the Dialog Error Handling Standard for every mounted dialog |
+| `PendingChangesTray` | Dirty-state summary bar with Save/Discard; lists changed equipment slots plus a "Properties" chip; renders structured per-binding save errors; Save disabled while the draft name fails slug validation or a save is in flight |
+| `PanelTopologyCanvas` | Live topology region: composes nodes/edges from the draft via `buildPanelTopology` and renders through the shared renderer with the Communication Hub vertical bar; fetches bound SOP details to source the SOP → composed-skill chain; fullscreen toggle with zoom controls (reset on enter/exit) |
+| `useAgentDraftComposition` | Core state hook: typed in-memory draft (base properties + equipment), mark-dirty on mutation, snapshot/discard, save mapping to the existing update payload (binding lists deduplicated by resource id, first occurrence wins; single-attempt write with in-flight guard), unsaved-changes guard integration |
 
 ---
 
@@ -126,9 +145,9 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/api/v1/agents/types` | List all agent types |
-| `POST` | `/api/v1/agents/types` | Create an agent type; triggers `PlanGenerationService` after commit; response includes `plan: AgentPlanRead \| null` |
+| `POST` | `/api/v1/agents/types` | Create an agent type; commits before scheduling background `PlanGenerationService` (so plan generation never runs against an uncommitted binding write); binding-validation failures return 422 `binding_validation_failed` with backwards-compatible `messages` list plus structured `errors` array; residual concurrent-write collisions return 409 `binding_conflict` with per-binding detail; response includes `plan: AgentPlanRead \| null` |
 | `GET` | `/api/v1/agents/types/{type_id}` | Get agent type detail |
-| `PUT` | `/api/v1/agents/types/{type_id}` | Update an agent type; triggers `PlanGenerationService` after commit; response includes `plan: AgentPlanRead \| null` |
+| `PUT` | `/api/v1/agents/types/{type_id}` | Update an agent type; same commit-before-plan-regeneration ordering and structured 409/422 binding error contract as POST; response includes `plan: AgentPlanRead \| null` |
 | `DELETE` | `/api/v1/agents/types/{type_id}` | Delete an agent type |
 | `GET` | `/api/v1/agents/types/{type_id}/instances` | List active instances for a type |
 | `DELETE` | `/api/v1/agents/instances/{instance_id}` | Terminate an agent instance |
@@ -236,6 +255,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `TopologyNodeRead` | Pydantic model | Topology node: `id`, `type`, `label`, `meta` | `backend/app/schemas/agents.py` |
 | `TopologyEdgeRead` | Pydantic model | Topology edge: `source`, `target`, `label` | `backend/app/schemas/agents.py` |
 | `AgentPlanRead` | Pydantic model | Full plan record with embedded `plan_steps`, `topology_nodes`, `topology_edges`, `generation_status`, `generation_error`, `agent_config_hash` | `backend/app/schemas/agents.py` |
+| `BindingError` | Pydantic model | One structured binding-validation error: `resource_type`, `resource_id`, `rule`, `message`; returned in the 422 `binding_validation_failed` `errors` array; each error also logged individually | `backend/app/schemas/agent_type_bindings.py` |
+| binding error envelopes | Pydantic models | Structured error response contracts: `binding_validation_failed` (422; `messages` list for backwards compatibility + structured `errors: list[BindingError]`) and `binding_conflict` (409; per-binding detail for genuinely concurrent save collisions) | `backend/app/schemas/agent_type_bindings.py` |
 
 ### Backend Schemas (`backend/app/schemas/intervene.py`)
 
@@ -256,7 +277,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentPermissionManager` | class | Resolves `AgentRole → SOPs → Skills → MCP tools`; tool identifiers use `mcp_slug/tool_name`; includes A2A permission evaluation for target agent type slugs derived from SOP `agent_delegation` steps; LRU cache keyed on `role_id`; `invalidate(role_id)` called on role writes | `backend/app/services/agents/permission_manager.py` |
 | `RealmManager` | class | Agent realm initialization in OIDC provider; realm-level token policies; registers platform OAuth client | `backend/app/services/identity/realm_manager.py` |
 | `TokenRefreshService` | class | Background proactive token refresh for agent identities approaching expiry; updates `AgentIdentity` with re-encrypted token pair | `backend/app/services/agents/token_refresh_service.py` |
-| `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
+| `AgentSessionService` | class | Session lifecycle management: `enqueue()` (INSERT queued) with delegation inheritance (copies parent `triggered_by_user_id` when `parent_job_id` set), state transitions, result persistence; tracks `conversation_history` | `backend/app/services/agents/session_service.py` |
 | `SessionDispatcher` | class | Background dispatch worker; `SELECT … FOR UPDATE SKIP LOCKED`; dispatches to `AgentRuntimeExecutor` | `backend/app/services/agents/session_dispatcher.py` |
 | `AgentRuntimeExecutor` | class | LangChain deep agent observe-reason-act loop; validates identity→role assignment via `agent_role_identities`; captures `ExecutionLogEntry` before first LLM call; injects MCP session context into system instruction; enforces A2A target-agent permission checks and session-link lifecycle handoff metadata during delegation; detects passthrough sessions and calls `_get_agent_identity_jwt()` to retrieve the agent's access token; enforces 1-level delegation depth limit for non-conversational agents; emits delegation status events (`delegation_started`, `delegation_waiting`, `delegation_resumed`, `delegation_depth_blocked`, `delegation_timeout`, `delegation_failed`) for non-conversational delegation; injects output type formatting instructions into system prompt based on `output_type` | `backend/app/services/agents/runtime_executor.py` |
 | `_extract_agent_delegation_target` | function | Extracts delegated target slug from canonical delegation tool names for status/event labeling | `backend/app/services/agents/runtime_executor.py` |
@@ -276,7 +297,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentInstanceManager` | class | Session handle management; execution logic removed | `backend/app/services/agents/instance_manager.py` |
 | `PlanGenerationService` | class | LLM-based plan generation on agent type save; reads curated binding list from `AgentTypeSopBinding`/`AgentTypeSkillBinding`; when bindings exist, only bound SOPs/skills enter the plan prompt; when no bindings, falls back to all role-assigned SOPs/skills; constructs prompt with agent context; invokes LLM; parses response into structured plan steps; traverses graph; upserts `AgentPlan`; non-blocking error handling | `backend/app/services/agents/plan_generation_service.py` |
 | `TopologyBuilderService` | class | Converts binding-filtered role→SOP→Skill→Tool graph to `nodes`/`edges` topology dict; deterministic node IDs for stable rendering; only bound entries appear when SOP scope is narrowed | `backend/app/services/agents/topology_builder_service.py` |
-| `validate_bindings` | function | Validates SOP/skill binding entries against role-granted permissions; rejects references outside the role's assigned SOPs/skills with per-entry error messages; prevents duplicate references; invoked on agent type create and update | `backend/app/services/agents/binding_validation.py` |
+| `validate_bindings` | function | Validates SOP/skill binding entries against role-granted permissions; rejects references outside the role's assigned SOPs/skills with structured per-binding errors (`resource_type`/`resource_id`/`rule`/`message`); prevents duplicate references; invoked on agent type create and update | `backend/app/services/agents/binding_validation.py` |
+| `AgentTypeService.set_bindings` | method | Replaces an agent type's SOP/skill binding lists; dedupes incoming lists and bulk delete-then-inserts (idempotent for resubmits); unique-constraint collisions from genuinely concurrent saves surface as structured 409 `binding_conflict` | `backend/app/services/agents/agent_type_service.py` |
 | `AgentRuntimeLoader` | class | Loads saved plan from `agent_plans` on session init; injects plan into system context for execution guidance; graceful degradation when no plan exists | `backend/app/services/agents/runtime_loader.py` |
 | `AgentDataService` | class | Control Center service for saving and querying AgentData records; `save()` creates a record; `query_by_filters()` retrieves records matching `data_name`, `agent_type_id`, and/or `session_id`; enforces at least one filter to prevent full-table scans | `backend/app/services/agent_data/service.py` |
 | `OutputService.query_output_history` | method | New agent-facing query on existing `OutputService`; filters `AgentOutput` rows by `agent_type_id`, `session_id`, `date_from`, `date_to`; used by the `get_output` system tool | `backend/app/services/outputs/service.py` |
@@ -294,9 +316,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentIdentityRouter` | router | Mounts all `/agents/identities` endpoints | `backend/app/api/v1/agents.py` |
 | `AgentOAuthRouter` | router | Mounts `/agents/identities/oauth/authorize` and `/agents/oauth/callback` | `backend/app/api/v1/agents.py` |
 | `AgentJobRouter` | router | Mounts all `/agents/sessions` endpoints | `backend/app/api/v1/agents.py` |
-| `AgentTypeRouter` | router | CRUD for AgentType; create and update handlers call `PlanGenerationService` after commit; response includes `plan: AgentPlanRead \| null` | `backend/app/api/v1/agents.py` |
-| `create_agent_type` | endpoint | Agent type create endpoint where guardrail policy defaults and validation are applied before persistence | `backend/app/api/v1/agents.py` |
-| `update_agent_type` | endpoint | Agent type update endpoint where guardrail policy compatibility checks and validation are applied | `backend/app/api/v1/agents.py` |
+| `AgentTypeRouter` | router | CRUD for AgentType; create and update handlers commit before scheduling background plan regeneration; structured 409/422 binding error contract; response includes `plan: AgentPlanRead \| null` | `backend/app/api/v1/agents.py` |
+| `create_agent_type` | endpoint | Agent type create endpoint where guardrail policy defaults and validation are applied before persistence; commits before scheduling the background plan-generation task | `backend/app/api/v1/agents.py` |
+| `update_agent_type` | endpoint | Agent type update endpoint where guardrail policy compatibility checks and validation are applied; commits before scheduling the background plan-generation task | `backend/app/api/v1/agents.py` |
+| `_binding_conflict_detail` | function | Maps a binding-write unique-constraint `IntegrityError` to the structured 409 `binding_conflict` detail payload with per-binding entries | `backend/app/api/v1/agents.py` |
 | `AgentInstanceRouter` | router | Instance listing and force-termination; unchanged | `backend/app/api/v1/agents.py` |
 | `ModelConfigRouter` | router | Mounts all `/agents/model-configs` endpoints | `backend/app/api/v1/agents.py` |
 | `get_session_execution_logs` | endpoint | Pull endpoint returning ordered `ExecutionLogEntryRead[]` for a session | `backend/app/api/v1/agents.py` |
@@ -312,6 +335,8 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agent_data` | module | Internal API surface for agent-specific data operations and A2A routing metadata | `backend/app/api/v1/internal/agent_data.py` |
 | `get_agent_context` | endpoint | Returns runtime context including SOP content and role-derived SOP summaries for system-instruction assembly | `backend/app/api/v1/internal/agent_data.py` |
 | `session_data` | module | Internal API surface for session-bound state and lifecycle transitions used by A2A flows | `backend/app/api/v1/internal/session_data.py` |
+| `prepare_a2a_request` | function | A2A delegation enqueue; resolves the chat user from the source `ConversationSession` and passes it as `user_id` so chat-originated delegations carry the human trigger | `backend/app/api/v1/internal/session_data.py` |
+| `record_tool_calls` | endpoint | `POST /api/v1/internal/data/tool-calls` (service-cert auth); persists one or a batch of `RuntimeToolCall` rows reported by Agent Runtime | `backend/app/api/v1/internal/session_data.py` |
 | `system_tools` (router) | router | Internal system tool dispatch router; mounts `POST /save-data`, `/get-data`, `/get-output` handlers with mTLS service certificate auth; delegates to `AgentDataService` and `OutputService` | `backend/app/api/v1/internal/system_tools.py` |
 | `save_data_tool` | endpoint | `POST /api/v1/internal/system-tools/save-data` — saves one `AgentData` record; called by CommHub when routing a `save_data` tool call | `backend/app/api/v1/internal/system_tools.py` |
 | `get_data_tool` | endpoint | `POST /api/v1/internal/system-tools/get-data` — queries `AgentData` records by filter; at least one filter required | `backend/app/api/v1/internal/system_tools.py` |
@@ -336,7 +361,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `LangChainSaveDataTool` | class | LangChain `BaseTool` subclass for `save_data`; holds `comm_hub_client` injected at session construction; `_arun` calls `comm_hub_client.call_tool("save_data", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
 | `LangChainGetDataTool` | class | LangChain `BaseTool` subclass for `get_data`; `_arun` calls `comm_hub_client.call_tool("get_data", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
 | `LangChainGetOutputTool` | class | LangChain `BaseTool` subclass for `get_output`; `_arun` calls `comm_hub_client.call_tool("get_output", ...)` and returns JSON string | `backend/app/services/agents/langchain_system_tools.py` |
-| `build_langchain_tools_for_ar_path` | function | Assembles LangChain tools for AR execution path; now includes `save_data`, `get_data`, `get_output`; removed `save_result` binding | `backend/app/services/agents/langchain_tool_wrapper.py` |
+| `build_langchain_tools_for_ar_path` | function | Assembles LangChain tools for AR execution path; now includes `save_data`, `get_data`, `get_output`; removed `save_result` binding; records tool calls under the CANONICAL name (restored via `tool_name_map`, the same mapping used for CommHub dispatch) instead of the sanitised definition name; delegation tools record `agent____<slug>` | `backend/app/services/agents/langchain_tool_wrapper.py` |
 
 ### Agent Runtime Tool Clients (`backend/app/agent_runtime/`)
 
@@ -366,11 +391,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `AgentRoleListPage` | component | Table view; Name, SOP count chip, Skill count chip, Edit/Delete actions | `frontend/src/pages/agents/AgentRoleListPage.tsx` |
-| `AgentRoleDialog` | component | **MODIFIED**: Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); includes allowed target agent type slug preview derived from SOP `agent_delegation` policy mappings; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills, excluding system tools), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; uses `useQueries` batch for per-server session fetch; each dropdown has a Refresh button that preserves valid selections; passthrough badge on server labels; assigned identities with Assign/Remove | `frontend/src/pages/agents/AgentRoleDialog.tsx` |
+| `AgentRoleDialog` | component | **MODIFIED**: Create/edit; SOP checkbox list, Skill checkbox list, MCP tool preview panel (debounced, edit mode only); includes allowed target agent type slug preview derived from SOP `agent_delegation` policy mappings; inline MCP session dropdowns per required server (computed client-side from selected SOPs/Skills, excluding system tools), replacing the separate Assign button and session table; Save blocked until all required servers have sessions; uses `useQueries` batch for per-server session fetch; each dropdown has a Refresh button that preserves valid selections; passthrough badge on server labels; assigned identities with Assign/Remove | `frontend/src/components/agents/AgentRoleDialog.tsx` (shared; relocated from the page folder) |
 | `AssignIdentitiesToRoleDialog` | component | Multi-select dialog to bulk-assign identities to a role | `frontend/src/pages/agents/AssignIdentitiesToRoleDialog.tsx` |
-| `AssignMcpSessionsToRoleDialog` | component | **REMOVED** — replaced by inline dropdowns in AgentRoleDialog | `frontend/src/pages/agents/AssignMcpSessionsToRoleDialog.tsx` (deleted) |
 | `AgentIdentityListPage` | component | Table view; realm_name, realm_username, token status chip, identity status chip; Refresh Token and Re-Authenticate per row | `frontend/src/pages/agents/AgentIdentityListPage.tsx` |
-| `AgentIdentityDialog` | component | Create/edit; realm_name, realm_username; "Sign In as Agent" OAuth button opens agent realm popup; reflects token status after callback | `frontend/src/pages/agents/AgentIdentityDialog.tsx` |
+| `AgentIdentityDialog` | component | Create/edit; realm_name, realm_username; "Sign In as Agent" OAuth button opens agent realm popup; reflects token status after callback | `frontend/src/components/agents/AgentIdentityDialog.tsx` (shared; relocated from the page folder) |
 | `AssignRolesToIdentityDialog` | component | Multi-select dialog to bulk-assign roles to an identity | `frontend/src/pages/agents/AssignRolesToIdentityDialog.tsx` |
 | `AgentOAuthCallbackPage` | component | Loaded in OAuth popup; exchanges code via backend callback; postMessages result to opener; calls `window.close()` | `frontend/src/pages/agents/AgentOAuthCallbackPage.tsx` |
 | `AgentTypeForm` | component | Modified — fields: `identity_id`, `role_id`, `model_id` (string dropdown across all configs), `system_instruction`, `input_type`/`output_type` (+schemas); includes SOP/Skill binding list section with add/remove/reorder controls; binding picker filtered by role-accessible items; orphan detection warning banner with "Remove All" button when role swap leaves stale bindings; per-item orphan visual (warning border); save button disabled when no bindings; empty state hint text; removed `model_config_id`, `model_name`, `llm_*`, `primary_sop_id`; validates identity is assigned to selected role; validates binding entries are role-accessible | `frontend/src/pages/agents/AgentTypeForm.tsx` |
@@ -380,8 +404,61 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `AgentManagementPage` | component | Agent types table; row click opens `AgentTypeDetailsDialog` (via `detailsDialogTypeId` state); inline instances sub-table removed; added "Role" and "Identity" columns resolved via `useAgentRoles()`/`useAgentIdentities()` name lookup maps; submits binding lists (sop_bindings, skill_bindings) with save payload; `AgentTypeDetailsDialog` invalidates `['agents','types']` query on close; Launch (▶) action per row retained; plan preview opens `PlanPreviewModal` after save | `frontend/src/pages/agents/AgentManagementPage.tsx` |
 | `AgentInstanceDashboardPage` | component | Renamed to "Agent Executions"; route `/agents/executions` (redirect from `/agents/instances`); optional `agentTypeId` prop for dialog embedding; agent type filter dropdown via `useAgentTypes()`; View button opens `AgentExecutionDetailsDialog` instead of navigating away; status, date range, and agent type filter controls; columns include Agent Type and Triggered By (populated via `agent_type_name`, `triggered_by_user_name`) | `frontend/src/pages/agents/AgentInstanceDashboardPage.tsx` |
 | `ModelConfigListPage` | component | Table view; display_name, provider_type, credential status chip, Edit/Delete; workflow generation model section loads and saves `/agents/model-configs/workflow-generation` | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
-| `ModelConfigDialog` | component | Create/edit; provider_type select, display_name, api_base_url, api_key (masked), enabled_models chip multi-select via "List Models" | `frontend/src/pages/agents/ModelConfigDialog.tsx` |
+| `ModelConfigDialog` | component | Create/edit; provider_type select, display_name, api_base_url, api_key (masked), enabled_models chip multi-select via "List Models" | `frontend/src/components/agents/ModelConfigDialog.tsx` (shared; relocated from the page folder) |
 | `ModelConfigListPage.handleSaveWorkflowModel` | function | Persists selected workflow generation model while preserving existing selection when save is invoked without change | `frontend/src/pages/agents/ModelConfigListPage.tsx` |
+
+### Agent Management Panel — Panel Page & Regions (`frontend/src/pages/agents/`, `frontend/src/components/agents/panel/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `AgentManagementPanelPage` | component | Agent Management Panel page: three-region layout, selection state, header card (create dialog + delete confirm), property bar wiring; registers the open assign-existing picker (`pickerSlot` + `pickerPresetIds`) and routes inline-created resources into the open picker's pre-selection instead of direct draft assignment when the picker is open for that slot | `frontend/src/pages/agents/AgentManagementPanelPage.tsx` |
+| `AgentPropertiesSection` | component | Property-bar "Properties" section: every base agent property (name, description, system instruction, guardrails) edited through the draft, mirroring `AgentTypeForm` validation | `frontend/src/components/agents/panel/AgentPropertiesSection.tsx` |
+| `AgentListSidebar` | component | Agent list with search/filter and selection | `frontend/src/components/agents/panel/AgentListSidebar.tsx` |
+| `EquipmentSlots` | component | Seven permission-gated equipment slots bound to draft state; "Assign existing" opens the shared picker dialog via `onOpenPicker(slotId)` | `frontend/src/components/agents/panel/EquipmentSlots.tsx` |
+| `EQUIPMENT_SLOT_DEFINITIONS` | constant | Declarative definitions of the seven slots (id, gating resource type, i18n keys, multi flag) | `frontend/src/components/agents/panel/EquipmentSlots.tsx` |
+| `dataTypeToInputSchema` | function | Maps an `AgentDataType`'s typed fields to a JSON-schema input schema for the input slot | `frontend/src/components/agents/panel/EquipmentSlots.tsx` |
+| `SharedDialogHost` | component | Mount point for shared dialogs; create-and-assign contract | `frontend/src/components/agents/panel/SharedDialogHost.tsx` |
+| `PendingChangesTray` | component | Dirty-changes summary; save/discard actions | `frontend/src/components/agents/panel/PendingChangesTray.tsx` |
+
+### Agent Management Panel — Resource Picker (`frontend/src/components/agents/panel/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `ResourcePickerDialog` | component | Generic searchable + paginated selection dialog (single/multi selection, equipped pre-selection + `baselineIds` change detection, inline create-new, Dialog Error Handling Standard) | `frontend/src/components/agents/panel/ResourcePickerDialog.tsx` |
+| `ResourcePickerItem` / `ResourcePickerSelectionMode` | interface / type | Picker row contract (id, label, sublabel, optional `dataType` registry entity) and the `single`/`multi` selection union | `frontend/src/components/agents/panel/ResourcePickerDialog.tsx` |
+| `SlotResourcePickerDialog` | component | Slot binding wrapper: runs the slot's shared-cache list query, maps rows, derives pre-selection/preset, applies confirmed ids to the draft | `frontend/src/components/agents/panel/SlotResourcePickerDialog.tsx` |
+| `SLOT_PICKER_CONFIGS` / `getSlotPickerConfig` | constant / function | Strongly-typed per-slot picker bindings (query key + fetch, row mapping, selection mode, equipped pre-selection, draft apply, create request, created-resource preset) | `frontend/src/components/agents/panel/slotPickerConfigs.tsx` |
+| `SlotPickerConfig` / `SlotDraftApi` | interface / type | Picker binding contract and the narrowed draft-mutation surface the picker may touch | `frontend/src/components/agents/panel/slotPickerConfigs.tsx` |
+
+### Agent Management Panel — Topology (`frontend/src/components/agents/`)
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `PanelTopologyCanvas` | component | Live topology region; renders composer output via the shared renderer; declares the Communication Hub vertical bar between the Capabilities and Tools zones; fetches each bound SOP's detail (react-query key `['sops', 'details', sopIds]`) to source the SOP → composed-skill chain; fullscreen toggle (fixed overlay, Escape exits) with Zoom in / Zoom out / Fit controls + zoom % readout, stepped and clamped (0.5×–3×); zoom resets to auto-fit on fullscreen enter/exit | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `buildPanelTopology` | function | Maps draft composition to topology nodes/edges (placeholders; per-capability accent colours; direct skill→tool route connectors crossing the hub bar; SOP composition chain reusing already-bound skill nodes; the hub itself is NOT a node in the zoned graph) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `PanelTopologyNames` | interface | Label/resolution maps consumed by `buildPanelTopology` (incl. `sopComposedSkillIds` derived from SOP detail `skill_invocation` steps) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `capabilityColor` | function | Deterministic distinct accent colour for a capability node (skill/SOP) — reused by route connectors | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `mcpGroupColor` | function | Deterministic palette colour for an MCP server slug (tools-zone group boxes) | `frontend/src/components/agents/panel/PanelTopologyCanvas.tsx` |
+| `TopologyHubBar` | interface | Declaration of the zoned Communication Hub vertical bar (label + `afterZone`) | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
+| `TopologyNodeIcon` / `NODE_TYPE_ICONS` | component / constant | Entity-type icons for topology nodes (role, identity, skill, SOP, data types, model, tool, MCP server, agent, hub); nested SVG with an explicit geometry contract (size + placement + own viewBox) so icons never fall back to the parent SVG viewport size | `frontend/src/components/agents/topologyNodeIcons.tsx` |
+| `estimateTextWidth` / `fitTextToWidth` | functions | Width-aware label fitting for topology SVG text, decided in viewBox units: per-character em-width estimation and prefix+ellipsis truncation so node/badge/caption/group/zone labels always fit their boxes | `frontend/src/components/agents/topologyTextFit.ts` |
+| `withCommunicationHub` | function | Idempotently appends Communication Hub node + dashed edge to a topology (generic preview topologies; the zoned panel uses the hub bar instead) | `frontend/src/components/agents/topologyHub.ts` |
+| `COMMUNICATION_HUB_NODE_ID` | constant | Fixed node id of the Communication Hub platform node in topology graphs | `frontend/src/components/agents/topologyHub.ts` |
+
+### Agent Management Panel — Draft Hook & Route Registration
+
+| Symbol | Type | Description | File |
+|--------|------|-------------|------|
+| `useAgentDraftComposition` | hook | Draft state (base properties + equipment): init from agent, dirty + properties-changed tracking, save/discard, unsaved guard; save payload deduplicates binding lists by resource id (first occurrence wins) with a single-attempt in-flight-guarded write | `frontend/src/hooks/useAgentDraftComposition.ts` |
+| Panel draft/slot interfaces | interface | `AgentDraftComposition` (base properties + guardrails group + equipment), `AgentEquipmentSlotId` union, `EquipmentSlotDefinition`, `CreateAndAssignResult`, `PanelDialogRequest` union | `frontend/src/types/index.ts` |
+| `/agents/panel` route + sidebar entry | route / nav (EXTENDED) | Protected route registered in `AppRouter`; Agents-group sidebar entry (`nav.agentManagementPanel`) in `AppShell`'s `NAV_GROUPS` | `frontend/src/app/AppRouter.tsx`, `frontend/src/app/AppShell.tsx` |
+| `AgentTypeForm` / `AgentTypeFormValues` / `defaultAgentTypeFormValues` | component / interface / constant | Shared controlled agent create form hosted by the panel's create dialog only (editing an existing agent has no dialog); still shared with `AgentManagementPage` create/edit flows | `frontend/src/pages/agents/AgentTypeForm.tsx` |
+| `RESOURCE_TYPE_MANIFEST` | constant | Source of truth for slot permission gating resource types (`agent::roles`, `agent::identities`, `agent::skills`, `agent::sops`, `agent::data_types`, `agent::model_configs`); no new resource types introduced by the panel | `frontend/src/constants/resourceTypes.ts` |
+| `useDialogErrorHandler` | hook | Standard dialog error state (Dialog Error Handling Standard) used by the picker dialog and every hosted module dialog | `frontend/src/hooks/useDialogErrorHandler.ts` |
+| `useUnsavedChangesDialog` | hook | Discard/keep-editing confirmation for unsaved draft changes on agent switch or navigation | `frontend/src/hooks/useUnsavedChangesDialog.tsx` |
+| `useAgentTypes` / `useAgentType` / `useDeleteAgentType` | hooks | Agent types list query, single agent type query, delete mutation — the panel's primary data access | `frontend/src/hooks/useAgentTypes.ts` |
+| `useDataTypes` / `useCreateDataType` / `useUpdateDataType` | hooks | Data type registry list query and mutations used by the relocated data type dialog | `frontend/src/hooks/useDataTypes.ts` |
+| `usePagination` | hook | Shared table pagination state; drives client-side pagination inside `ResourcePickerDialog` | `frontend/src/hooks/usePagination.ts` |
 
 ### Frontend Intervene Pages
 
@@ -426,6 +503,9 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `WorkingStep` | interface | Single LLM iteration or tool call: `message`, `timestamp`, `iconType: WorkingStepIconType`, and optional `detail: WorkingStepDetail` | `frontend/src/types/index.ts` |
 | `WorkingStepDetail` | interface | Collapsible detail block for a step: `label` and `content` string | `frontend/src/types/index.ts` |
 | `WorkingStepIconType` | type alias | `'llm' \| 'tool' \| 'success' \| 'error' \| 'info'` | `frontend/src/types/index.ts` |
+| `AgentDraftComposition` | interface | Panel draft composition: base properties (name, description, system instruction, guardrails group) + equipment (identity, role, ordered skills, ordered SOPs, input type/schema, output data type, model) | `frontend/src/types/index.ts` |
+| `AgentEquipmentSlotId` | type alias | The seven equipment slot ids (`role`, `identity`, `skills`, `sops`, `input_data_type`, `output_data_type`, `model`) | `frontend/src/types/index.ts` |
+| `EquipmentSlotDefinition` / `CreateAndAssignResult` / `PanelDialogRequest` | interface / interface / type | Slot definition (id, resource type, current values, capability flags), inline create-and-assign result (id + label), and the shared-dialog request union mounted by `SharedDialogHost` | `frontend/src/types/index.ts` |
 
 ### Test Files
 
@@ -433,21 +513,20 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `test_agent_runtime_executor` | test module | Unit tests for `AgentRuntimeExecutor`; 2 passthrough tests: proxy called with `agent_jwt`, error returned when no JWT available | `backend/tests/unit/test_agent_runtime_executor.py` |
 | `test_permission_manager` | test module | Unit tests for permission resolution and allow/deny behavior, including A2A delegation permission checks | `backend/tests/unit/test_permission_manager.py` |
-| `AssignMcpSessionsToRoleDialog.test` | test module | **REMOVED** — component deleted, tests migrated to `AgentRoleDialog.test` | `frontend/src/__tests__/AssignMcpSessionsToRoleDialog.test.tsx` (deleted) |
 | `AgentRoleDialog.test` | test module | **UPDATED**: Inline dropdown rendering, server computation, pre-save validation, refresh, save integration, passthrough badge, error states, removal of old popup elements | `frontend/src/__tests__/AgentRoleDialog.test.tsx` |
 
 ### Frontend Components (`frontend/src/components/agents/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `AgentTypeDetailsDialog` | component | Three-tab dialog (Details, Plan Preview, Execution Logs) for an agent type; fetches via `useAgentType(id)`; Details tab has clickable role/identity names opening `AgentRoleViewDialog`/`AgentIdentityViewDialog`; Execution Logs tab shows last 10 sessions with "View" opening `AgentExecutionDetailsDialog`; "Run Agent" opens `AgentJobLaunchDialog`; follows Dialog Error Handling Standard | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
+| `AgentTypeDetailsDialog` | component | Three-tab dialog (Details, Plan Preview, Execution Logs) for an agent type; fetches via `useAgentType(id)`; Details tab has clickable role/identity names opening `AgentRoleViewDialog`/`AgentIdentityViewDialog`; conversation topology includes the Communication Hub node (built via `withCommunicationHub`) with a hub click guard; Execution Logs tab shows last 10 sessions with "View" opening `AgentExecutionDetailsDialog`; "Run Agent" opens `AgentJobLaunchDialog`; follows Dialog Error Handling Standard | `frontend/src/components/agents/AgentTypeDetailsDialog.tsx` |
 | `AgentExecutionsDialog` | component | Dialog wrapper for `AgentInstanceDashboardPage`; allows viewing the full execution list in dialog context without navigating away; pre-filtered by `agentTypeId` | `frontend/src/components/agents/AgentExecutionsDialog.tsx` |
 | `AgentExecutionDetailsDialog` | component | Dialog wrapper for `AgentJobPage`; shows full session details and logs in dialog context; three dynamic conditional tabs — Execution (0), Result (1), Conversation History (2); each tab only appears when corresponding data exists; tab bar hidden if only one tab qualifies; fetches conversation history on open; auto-opens after intervene response submission | `frontend/src/components/agents/AgentExecutionDetailsDialog.tsx` |
-| `AgentPlanContent` | component | Presentational component for plan steps and topology diagram; includes `agent_delegation` step rendering in ordered plan previews; extracted from `PlanPreviewModal`; receives `plan: AgentPlan \| null \| undefined`; reused by both `PlanPreviewModal` and the Plan Preview tab of `AgentTypeDetailsDialog` | `frontend/src/components/agents/AgentPlanContent.tsx` |
+| `AgentPlanContent` | component | Presentational component for plan steps and topology diagram; includes `agent_delegation` step rendering in ordered plan previews; extracted from `PlanPreviewModal`; receives `plan: AgentPlan \| null \| undefined`; appends the Communication Hub node client-side at render time via `withCommunicationHub`; reused by the Plan Preview tab of `AgentTypeDetailsDialog` (PlanPreviewModal renders its own layout) | `frontend/src/components/agents/AgentPlanContent.tsx` |
 | `AgentRoleViewDialog` | component | Read-only view dialog for a single agent role; two-column detail grid; Edit and Close actions; opened from clickable role name in `AgentTypeDetailsDialog` Details tab | `frontend/src/components/agents/AgentRoleViewDialog.tsx` |
 | `AgentIdentityViewDialog` | component | Read-only view dialog for a single agent identity; two-column detail grid; Edit and Close actions; opened from clickable identity name in `AgentTypeDetailsDialog` Details tab | `frontend/src/components/agents/AgentIdentityViewDialog.tsx` |
-| `PlanPreviewModal` | component | MUI Dialog displaying plan steps as an ordered list with step-type chips and topology diagram after agent type save; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard; plan content rendered via `AgentPlanContent` | `frontend/src/components/agents/PlanPreviewModal.tsx` |
-| `TopologyDiagramRenderer` | component | Renders node-edge topology payload as a visual diagram; includes delegation nodes/edges for A2A plan preview; distinguishes node types (role, sop, skill, tool) by colour/icon; handles empty state | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
+| `PlanPreviewModal` | component | MUI Dialog displaying plan steps as an ordered list with step-type chips and topology diagram after agent type save; shows error state when `generation_status = failed`; follows Dialog Error Handling Standard; renders its own plan layout (not `AgentPlanContent`) and applies `withCommunicationHub` directly at render time so the topology includes the Communication Hub node | `frontend/src/components/agents/PlanPreviewModal.tsx` |
+| `TopologyDiagramRenderer` | component | Shared layered SVG topology renderer; `communication_hub` node type + localized legend chip; zoned mode gains the Communication Hub vertical bar (`hubBar` prop), per-node `accentColor` borders, per-edge explicit colours with matching arrow markers, orthogonal routes crossing the hub bar, vertical same-column routing for SOP → composed-skill edges, entity-type icons with explicit nested-SVG geometry and a `fillHeight` fullscreen mode; every label width-fitted via `fitTextToWidth` (ellipsis on overflow), full text on hover (`<title>`) and on click (tooltip; Escape/outside-click dismiss); fullscreen auto-fit keeps the entire graph in view (bounded flex svg + `preserveAspectRatio`); viewBox-based fullscreen zoom/pan (`viewZoom` clamped view transform, drag-to-pan + wheel panning on the svg background, inert at zoom 1); includes delegation nodes/edges for A2A plan preview; handles empty state | `frontend/src/components/agents/TopologyDiagramRenderer.tsx` |
 
 ### Frontend Components (`frontend/src/components/executions/`)
 
@@ -509,6 +588,10 @@ The agents module is the central execution layer for AI agents on the platform. 
 | `agents.roles.noAvailableMcpSessions` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
 | `agents.roles.removeMcpSession` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
 | `agents.roles.selectedForServer` | i18n key | **REMOVED** | `frontend/src/i18n/locales/en.json` |
+| `nav.agentManagementPanel` | i18n key | "Agent Management Panel" sidebar nav label (Agents group) | `frontend/src/i18n/locales/en.json` |
+| `agents.panel.*` | translation namespace | All Agent Management Panel UI strings: page title, regions, property section, equipment slot hints, permission-degradation notes, pending-changes tray, save/discard, delete confirm | `frontend/src/i18n/locales/en.json` |
+| `agents.panel.picker.*` | translation namespace | Resource picker dialog strings: title, search placeholder, no-match empty state, Assign button, create-new | `frontend/src/i18n/locales/en.json` |
+| `agents.plan.nodeTypes.communication_hub` | i18n key | Localized label for the Communication Hub node in plan/preview topologies and legend | `frontend/src/i18n/locales/en.json` |
 
 
 ### Tests
@@ -607,6 +690,7 @@ The agents module is the central execution layer for AI agents on the platform. 
 |--------|------|-------------|------|
 | `AgentRuntimeExecutor` (structured output) | class | **MODIFIED**: When `agent_type.output_data_type_id` is set, passes `ToolStrategy(schema=output_json_schema)` as `response_format` to `create_agent()` — LangChain enforces structured output natively via tool calling (or provider-native JSON mode when model profile supports it); no system instruction injection | `backend/app/services/agents/runtime_executor.py` |
 | `AgentRuntimeExecutor` (completion flow) | class | **MODIFIED**: After agent completes, if `output_data_type_id` is set: (1) calls `POST /internal/validate-output` to validate payload against schema, (2) calls `POST /internal/agent-outputs` to persist typed output, (3) wires returned `output_id` back to `AgentJob.output_id`; if `output_data_type_id` is null, uses existing untyped completion flow | `backend/app/services/agents/runtime_executor.py` |
+| `_record_tool_call_safely` / `_build_tool_call_recorder` | methods | Executor-side best-effort tool-call recording hooks; resolve a working data client (executor client or app-level fallback) so conversation turns — whose call sites pass `data_client=None` — are recorded too; failures logged and swallowed, never break tool execution | `backend/app/services/agents/runtime_executor.py` |
 
 ### Data Type & Output Test Files
 
@@ -628,24 +712,29 @@ The agents module is the central execution layer for AI agents on the platform. 
 
 ## Runtime Control & Model Guardrail Hierarchy
 
-The following components and services support the **vendor → model → guardrail hierarchy** for model-usage guardrails and the **Runtime Control Dashboard** for live execution visibility and operator-controlled termination. Operator-initiated termination is a distinct `terminated` state, separate from `failed` (genuine agent or runtime error). The dashboard merges three node kinds — `agent` (live `AgentJob`), `conversation` (`ConversationSession` with synthetic active/sleep status), and `instance` (`AgentInstance`) — and supports a tickable filter legend.
+The following components and services support the **Agent Runtime Monitor** (rebranded from "Runtime Control Dashboard") for live execution visibility, tool-call provenance, and operator-controlled termination, along with the **vendor → model → guardrail hierarchy** for model-usage guardrails. Operator-initiated termination is a distinct `terminated` state, separate from `failed` (genuine agent or runtime error). The monitor renders the live delegation/tool-call map through a single full-page canvas (`AgentRuntimeMapCanvas`): delegation-tree team containers (one tree per row, columns = delegation depth), a Communication Hub firewall bar with orthogonal tool-call routes through evenly distributed MCP nodes, and tool chips (System Tools node) with per-agent colouring, grey history, and selection highlight. The map merges three node kinds — `agent` (live `AgentJob`), `conversation` (`ConversationSession` with synthetic active/sleep status), and `instance` (`AgentInstance`) — each carrying trigger provenance (user/schedule/delegated/unknown), pending-intervention state (`needs_intervention`), and a tool-call route list. The feed is **stream-first**: `useRuntimeTopology` opens an `EventSource` to the SSE endpoint (`GET /agents/runtime/topology/stream`) for near-instant map updates, with 5s polling as the automatic fallback while the stream is down. The model guardrail hierarchy (vendor → model → guardrail) is managed on the Model Config page via `VendorModelGuardrailPanel`/`AddGuardrailForm`, which this page no longer renders.
 
 ### Frontend Components (`frontend/src/components/agents/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `RuntimeControlDashboardPage` | page | Dedicated runtime control dashboard at `/agents/runtime-control`; hosts the live SVG topology, selected-node details, the new Model Guardrails view (vendor → model → guardrail hierarchy), and the terminate entry point. Owns the `Set<string>` filter state and `SleepConversationActions` sub-component | `frontend/src/pages/agents/RuntimeControlDashboardPage.tsx` |
-| `RuntimeTopologyDiagram` | component | SVG-based live delegation topology with rounded-rect nodes, status fills, click-to-select, tickable filter legend (12 entries: 5 agent + 4 conversation + 3 instance), single-row-per-depth layout, and horizontal scrollbar via `overflowX:'auto'` wrapping Box | `frontend/src/components/agents/RuntimeTopologyDiagram.tsx` |
-| `RuntimeTopologyPanel` | component | Legacy flat-card grouped-by-depth runtime execution-tree view with selected-node details and terminate entry point (retained for compatibility) | `frontend/src/components/agents/RuntimeTopologyPanel.tsx` |
+| `RuntimeControlDashboardPage` | page | Dedicated runtime monitor dashboard at `/agents/runtime-control` (title: "Agent Runtime Monitor"); hosts the map canvas (`AgentRuntimeMapCanvas`), the selected-node detail bubble, the trigger detail bubble, and the terminate entry point. Owns the `Set<string>` filter state and `SleepConversationActions` sub-component; the Model Guardrails view is removed from this page | `frontend/src/pages/agents/RuntimeControlDashboardPage.tsx` |
+| `AgentRuntimeMapCanvas` | component | Full-page interactive map canvas: zoom/pan/auto-fit, delegation-tree team containers (one tree per row, columns = delegation depth), Communication Hub firewall bar + orthogonal tool-call routes through evenly distributed MCP nodes and tool chips (System Tools node, per-agent colour / grey history / selection highlight), filter/legend recovery, fullscreen; contrast-focus isolation — hovering (transient) or clicking (persisted) any entity focuses its complete upstream + downstream walk so tool routes leak no sibling noise through shared MCP servers; dot-grid background rendered at the STAGE level (world layer transparent so the stage grid shows through); initial auto-fit uses a relaxed minimum-zoom floor (~0.05) so large populations fit on first load while user zoom keeps the existing `MIN_ZOOM`/`MAX_ZOOM` clamps; hub renders full canvas height from the first paint with zero agents (world sizing ≥ stage; the empty state renders the map + message overlay instead of a bare placeholder); `?recent_minutes=` window toggle for terminal-job visibility | `frontend/src/components/agents/AgentRuntimeMapCanvas.tsx` |
+| `AgentDetailBubble` | component | Inline detail bubble for a selected node (detail + terminate + trigger provenance); agent-kind nodes open the "Execution log" link to `AgentExecutionDetailsDialog` and show the guardrail USAGE-vs-limits box (4 metrics, `current / limit` rows, near ≥80% / over colour semantics + `data-state` cue); sleep conversation nodes show "End session" (`runtime.runtimeEndSession`) instead of "Terminate"; the "Triggered by" row shows the triggering human (`trigger_user_label`) — for schedule-triggered nodes the creator or the unknown label, never the schedule name | `frontend/src/components/agents/AgentDetailBubble.tsx` |
+| `TriggerDetailBubble` | component | New dismissible trigger-entity detail bubble beside a person/schedule card: person (name, kind, triggered-execution count direct + via schedules, execution rows with agent type + status chip) / schedule (name, creator when known, executions); row click selects the session (focus + agent bubble); data derived client-side from the focus graph — no new API; positioning/dismissal mirror `AgentDetailBubble` | `frontend/src/components/agents/TriggerDetailBubble.tsx` |
+| `runtimeNodeMeta` | module | Shared presentation helpers (`nodeKind`, `kindLabelKey`, `statusLabelKey`, `statusChipColor`, `statusDotColor`) | `frontend/src/components/agents/runtimeNodeMeta.ts` |
+| `RuntimeTopologyPanel` | component | Legacy flat-card grouped-by-depth runtime execution-tree view with selected-node details and terminate entry point (retained for compatibility; no longer rendered by the dashboard) | `frontend/src/components/agents/RuntimeTopologyPanel.tsx` |
 | `NodeTerminationDialog` | component | Terminate modal with permission/API denial feedback and cascade scope selection | `frontend/src/components/agents/NodeTerminationDialog.tsx` |
-| `VendorModelGuardrailPanel` | component | Hierarchy-aware panel: vendor rows (with vendor enable/disable toggle and enabled-model count) → model rows (with per-model enable/disable toggle, cascade source indicator) → guardrail rows (with period, limit, unit, posture state, per-guardrail enable/edit/remove) | `frontend/src/components/agents/VendorModelGuardrailPanel.tsx` |
+| `VendorModelGuardrailPanel` | component | **Removed from this page** — still used by `ModelConfigListPage` for the hierarchy-aware panel: vendor rows (with vendor enable/disable toggle and enabled-model count) → model rows (with per-model enable/disable toggle, cascade source indicator) → guardrail rows (with period, limit, unit, posture state, per-guardrail enable/edit/remove) | `frontend/src/components/agents/VendorModelGuardrailPanel.tsx` |
 | `AddGuardrailForm` | component | Inline (non-modal) form inside an expanded model row; period select filtered to periods not yet configured on the model; single per-period create dispatch | `frontend/src/components/agents/AddGuardrailForm.tsx` |
 
 ### Frontend Hooks (`frontend/src/hooks/`)
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `useRuntimeTopology` | hook | Server-state hook for active runtime topology and polling refresh | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `useRuntimeTopology` | hook | **Stream-first** topology feed (Phase 15): `EventSource` to the SSE stream (`GET /agents/runtime/topology/stream`) pushes projection payloads into the React Query cache (`setQueryData`); the 5s `refetchInterval` polling is the automatic fallback while the stream is down, returning to live push on reconnect; exposes `isNodeVisibleByDefault`; consumes provenance + tool-call routes; keeps filter/legend usable on empty map | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `isNodeVisibleByDefault` | function | Default-visibility predicate: active nodes visible; sleep nodes visible only when `needs_intervention === true` | `frontend/src/hooks/useRuntimeTopology.ts` |
+| `getPendingInterventionForNode` | function | Resolves the pending `InterveneRequest` for a node (conversation-scoped vs agent-scoped endpoint) | `frontend/src/api/interveneApi.ts` |
 | `useNodeTermination` | hook | Mutation/query hooks for terminate requests and cascade outcome polling | `frontend/src/hooks/useNodeTermination.ts` |
 | `useModelUsagePosture` | hook | Server-state hook for model-usage posture data and refresh | `frontend/src/hooks/useModelUsagePosture.ts` |
 | `useModelUsageLimits` | hook | Server-state hook for per-guardrail configurations and refresh | `frontend/src/hooks/useModelUsagePosture.ts` |
@@ -654,8 +743,8 @@ The following components and services support the **vendor → model → guardra
 | `useUpdateModelUsageLimit` | hook | Mutation hook to update a per-period guardrail row using the per-guardrail shape | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
 | `useDeleteModelUsageLimit` | hook | Mutation hook to delete a per-period guardrail row | `frontend/src/hooks/useModelUsageGuardrailMutations.ts` |
 | `useModelAvailability` | hook | Server-state hook for the full vendor → model → enabled state and refresh | `frontend/src/hooks/useModelAvailability.ts` |
-| `useToggleVendorDisabled` | hook | Mutation hook for the vendor-level `is_disabled` toggle | `frontend/src/hooks/useModelAvailabilityMutations.ts` |
-| `useToggleModelDisabled` | hook | Mutation hook for the per-model availability toggle | `frontend/src/hooks/useModelAvailabilityMutations.ts` |
+| `useSetVendorDisabled` | hook | Mutation hook for the vendor-level `is_disabled` toggle | `frontend/src/hooks/useModelAvailability.ts` |
+| `useSetModelDisabled` | hook | Mutation hook for the per-model availability toggle | `frontend/src/hooks/useModelAvailability.ts` |
 | `usePreflightAvailability` | hook | Mutation hook Agent Runtime (or server-to-server test harness) uses for the pre-execution availability check | `frontend/src/hooks/usePreflightAvailability.ts` |
 | `useEndConversationSession` | hook | Mutation hook to end a sleep conversation session | `frontend/src/hooks/useConversationSessions.ts` |
 
@@ -663,10 +752,11 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `AgentJobStatus` | enum | Extended with `terminated` (distinct from `failed`) |
-| `RuntimeTopologyNode` | interface | Topology node: `kind: 'agent' \| 'conversation' \| 'instance'`, `status: string`, `title?: string`, plus delegation metadata |
-| `RuntimeTopologyEdge` | interface | Topology edge: `source: string`, `target: string` |
-| `RuntimeTopologyRead` | interface | Topology response: `nodes: RuntimeTopologyNode[]`, `edges: RuntimeTopologyEdge[]` |
+| `AgentJobStatus` | enum | Extended with `terminated` (distinct from `failed`) and `waiting_for_human` |
+| `RuntimeTopologyNode` | interface | Topology node: `kind: 'agent' \| 'conversation' \| 'instance'`, `status: string`, `title?: string`, `needs_intervention?`, trigger provenance (`trigger_source`, `trigger_source_label`, `trigger_user_label`, `trigger_user_id`, `schedule_id`, `schedule_cron`, `schedule_description`) and `tool_calls?: ToolCallRoute[]` |
+| `RuntimeTopologyEdge` | interface | Topology edge: `parent_session_id: string`, `child_session_id: string`, `depth_from_root: number` |
+| `RuntimeTopologyProjection` | interface | Topology response: `nodes: RuntimeTopologyNode[]`, `edges: RuntimeTopologyEdge[]`, `root_session_ids: string[]` |
+| `ToolCallRoute` | interface | Frontend tool-call route: `tool_name`, `mcp_slug`, `called_at`, optional `route_type: 'system' \| 'mcp' \| 'a2a' \| null` |
 | `LogSummary` | interface | Extended with `terminated` outcome distinct from `failed` (renders amber `BlockIcon` Chip) |
 | `AvailableModel` | interface | `model_id`, `model_name`, `vendor` |
 | `ModelAvailability` | interface | `model_id`, `model_name`, `is_disabled`, `disabled_reason?: 'manual' \| 'vendor_cascaded'` |
@@ -676,7 +766,8 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Kind | Description |
 |--------|------|-------------|
-| `runtime.runtimeControlTitle` | i18n key | Title for the runtime control dashboard page |
+| `runtime.runtimeControlTitle` | i18n key | Title for the runtime control dashboard page ("Agent Runtime Monitor") |
+| `agents.sessions.runtimeControlTitle` | i18n key | "Agent Runtime Monitor" page title (rebranded) |
 | `runtime.statusActive` | i18n key | "Active" runtime status label |
 | `runtime.statusSleep` | i18n key | "Sleep" runtime status label (synthetic, no live agent job) |
 | `runtime.statusClosed` | i18n key | "Closed" runtime status label |
@@ -685,6 +776,7 @@ The following components and services support the **vendor → model → guardra
 | `runtime.runtimeEndSession` | i18n key | "End session" button label (sleep conversations) |
 | `runtime.runtimeTopologyConversationLabel` | i18n key | Prefix label for conversation nodes in topology |
 | `runtime.runtimeTopologyFilteredEmpty` | i18n key | Empty state message when all nodes are filtered out |
+| `agents.sessions.runtimeMonitor*` | i18n namespace | Map canvas + bubble UI strings: zoom/pan/fullscreen controls, filter/legend keys, Communication Hub label, System Tools label, depth labels, session/trigger labels, recent-minutes window toggle (`runtimeMonitorWindowLabel`, `runtimeMonitorWindowUnitHours`/`Minutes`), guardrail usage summary (`runtimeMonitorGuardrailSummary`), execution-log link, terminate, empty/filtered-empty states |
 | `agents.statusCreated` | i18n key | "Created" instance status label |
 | `agents.statusTerminated` | i18n key | "Terminated" agent job status label (2 places: dialog badge, page warning) |
 
@@ -692,7 +784,10 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
-| `RuntimeTopologyController` | service | Active runtime topology projection; merges `AgentJob` (live), `ConversationSession` (synthetic active/sleep), and `AgentInstance` (created/active/closed/error) sources | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `RuntimeTopologyController` | service | Active runtime topology projection; merges `AgentJob` (live), `ConversationSession` (synthetic active/sleep), and `AgentInstance` (created/active/closed/error) sources; resolves provenance and tool-call history (union of `RuntimeToolCall` + `ToolCallRecord`, latest-first, cap 20) and `needs_intervention`; delegation edges derived from `AgentJob.parent_job_id` (unioned with `AgentRunRelationship`, deduped) with `depth_from_root` computed by walking parent chains; conversation nodes linked to jobs via `input_data.__conv_session_id`; schedule-triggered nodes set `trigger_user_label` to the resolved creator identity name only (`null` when unknown — the `or schedule_name` fallback is removed); `get_active_topology()` supports the `recent_minutes` window (default 30) — terminal jobs (completed/failed/terminated) whose `completed_at` (fallback `created_at`) falls inside the window join the live set, `created_at desc`, live statuses first, `max_nodes`-budgeted; skipped when `include_statuses` already contains terminal statuses | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `_resolve_mcp_slug` | function | Controller-side slug resolution: canonical `parse_tool_name` first, then a sanitised-name fallback splitting on the FIRST `__` (empty parts → `unknown`; bare legacy system names keep the `system` slug; legacy `server/tool` → server part) so rows recorded with OpenAI-sanitised names still resolve | `backend/app/services/control_center/runtime_topology_controller.py` |
+| `parse_tool_name` | function | Splits canonical `server____tool` names into (server slug, tool name) for MCP-server routing | `backend/app/services/agents/tool_naming.py` |
+| `build_tool_name` | function | Builds canonical `server____tool` names (inverse of `parse_tool_name`); used for `mcp_<id>::<tool>` canonical tool names | `backend/app/services/agents/tool_naming.py` |
 | `TerminationOrchestrator` | service | Permission-gated node terminate and cascade orchestration; routes terminate requests from CC through CH to AR; records `TerminationRequest` and `TerminationCascadeOutcome` rows | `backend/app/services/control_center/termination_orchestrator.py` |
 | `RecursionValidationService` | service | Recursion/dead-loop risk validation at create, update, and run entry points; persists `SopRecursionValidationCheck` and `SopRecursionValidationFinding` | `backend/app/services/control_center/recursion_validation_service.py` |
 | `ModelAvailabilityService` | service | Vendor and per-model enabled state; exposes the pre-execution availability check; materialises the vendor-cascade transaction | `backend/app/services/control_center/model_availability_service.py` |
@@ -714,7 +809,7 @@ The following components and services support the **vendor → model → guardra
 | `terminate_agent_session` | endpoint | AR-internal terminate endpoint; cancels in-flight task via task registry; walks delegation graph to cascade children; updates `AgentJob.status` to `terminated` | `backend/app/agent_runtime/api/terminate.py` |
 | `ControlCenterCertificateMiddleware` | middleware | Accepts only `service:communication-hub` service certificates on `/internal/agent/*` paths (including terminate); `_EXPECTED_SERVICE_NAME = "communication-hub"` | `backend/app/agent_runtime/middleware.py` |
 | `AgentRuntimeExecutor._preflight_availability` | method | Pre-execution availability check; calls Control Center preflight endpoint for the resolved model; on deny, produces a policy-block outcome with `termination_category` of `model_disabled` or `vendor_disabled` | `backend/app/services/agents/runtime_executor.py` |
-| `add_done_callback` (session task registry) | mechanism | Cleans up session entries in the in-flight task registry on completion | `backend/app/agent_runtime/session_task_registry.py` |
+| `session_tasks` (in-flight registry) | mechanism | `app.state.session_tasks` dict keyed by `session_id`; `Task.add_done_callback` pops the entry on completion to keep the registry clean | `backend/app/agent_runtime/api/execute.py` |
 
 ### Backend Database Models (`backend/app/db/models/`)
 
@@ -730,12 +825,17 @@ The following components and services support the **vendor → model → guardra
 | `TerminationCascadeOutcome` | model | Per-node cascade result for terminate orchestration | `backend/app/db/models/termination_cascade_outcome.py` |
 | `SopRecursionValidationCheck` | model | Validation-check audit model for create/update/run contexts | `backend/app/db/models/sop_recursion_validation_check.py` |
 | `SopRecursionValidationFinding` | model | Detailed recursion-risk finding model linked to validation checks | `backend/app/db/models/sop_recursion_validation_finding.py` |
-| `AgentInstance` | model | Agent instance dashboard record; `instance_id`, `status: created \| active \| closed \| error` | `backend/app/db/models/agent_instance.py` |
-| `AgentJobStatus.terminated` | enum value | New `terminated` value added to `agent_job_status_enum`; distinct from `failed` | `backend/app/db/models/agents.py` |
+| `AgentInstance` | model | Agent instance dashboard record; `instance_id`, `status: created \| active \| closed \| error` | `backend/app/db/models/agents.py` |
+| `AgentJobStatus.terminated` | enum value | New `terminated` value added to `agent_job_status_enum`; distinct from `failed` |
+| `AgentJobStatus.waiting_for_human` | enum value | `waiting_for_human` value in `agent_job_status_enum`; the run is parked awaiting human intervention | `backend/app/db/models/agents.py` |
+| `RuntimeToolCall` | model | Recorded tool execution (MCP/system/A2A); polymorphic `session_id` (agent job OR conversation id, no FK, indexed) with `session_kind`, `tool_name`, `route_type`, `mcp_slug`, `status`, `duration_ms`, `error` | `backend/app/db/models/tool_calls.py` |
+| `RuntimeToolCallSessionKind` | enum | `agent` / `conversation` — which kind of session a recorded tool call belongs to | `backend/app/db/models/tool_calls.py` |
+| `RuntimeToolCallRouteType` | enum | `system` / `mcp` / `a2a` — routing path the tool call took through Communication Hub | `backend/app/db/models/tool_calls.py` |
+| `RuntimeToolCallStatus` | enum | `success` / `error` — outcome of the tool execution | `backend/app/db/models/tool_calls.py` |
 | `ExecutionEventCategory.guardrail_breached` | enum value | New `guardrail_breached` event category | `backend/app/db/models/session_logs.py` |
 | `ExecutionEventCategory.model_disabled` | enum value | New `model_disabled` event category for vendor-cascaded or manual model blocks | `backend/app/db/models/session_logs.py` |
 | `ExecutionEventCategory.vendor_disabled` | enum value | New `vendor_disabled` event category for vendor-level blocks | `backend/app/db/models/session_logs.py` |
-| `AgentInstanceStatus` | enum | `created` / `active` / `closed` / `error` for the agent instance dashboard | `backend/app/db/models/agent_instance.py` |
+| `AgentInstanceStatus` | enum | `created` / `active` / `closed` / `error` for the agent instance dashboard | `backend/app/db/models/agents.py` |
 | `ModelGuardrailPeriod` | enum | `hour` / `day` / `week` / `month` for per-period guardrail rows | `backend/app/db/models/model_guardrail_configuration.py` |
 | `ModelGuardrailEnforcementPosture` | enum | `terminate` (default) / `observe_only` for per-guardrail posture | `backend/app/db/models/model_guardrail_configuration.py` |
 | `ModelUsageUnit` | enum | `k` (thousand tokens, default) / `tokens` (raw tokens) for per-period limit value | `backend/app/db/models/model_guardrail_configuration.py` |
@@ -745,7 +845,8 @@ The following components and services support the **vendor → model → guardra
 
 | Symbol | Type | Description |
 |--------|------|-------------|
-| `get_runtime_topology` | endpoint | Returns active runtime topology projection (nodes, edges, depth, statuses) for the dashboard |
+| `get_runtime_topology` | endpoint | Returns active runtime topology projection (nodes, edges, roots, provenance, tool-call routes, `needs_intervention`) for the dashboard; includes `waiting_for_human` in the default and non-terminal status lists; `recent_minutes: int = Query(30, ge=0, le=10080)` (0 disables the recent-terminal window; `include_terminal` unchanged) passed through to the controller |
+| `stream_runtime_topology` | endpoint | SSE `StreamingResponse` (`text/event-stream`) at `GET /agents/runtime/topology/stream`; `?token=` query-param auth validated against the OIDC client (same pattern as the CH chat WebSocket) + the same `RT_AGENT` "read" permission; loop recomputes the projection every ~2s and emits the full `RuntimeTopologyRead` payload only when its hash changed; ~15s heartbeat comments keep proxies alive; rejected connections never emit events (401 bad token, 403 denied permission) |
 | `request_runtime_termination` | endpoint | Performs permission-gated terminate requests with explicit denial reasons |
 | `get_runtime_termination_outcomes` | endpoint | Returns per-node cascade outcomes for a termination request |
 | `list_runtime_policy_events` | endpoint | Returns structured policy/guardrail/termination log events for runtime correlation |
@@ -767,13 +868,16 @@ The following components and services support the **vendor → model → guardra
 | `test_agent_runtime_controls_api` | test | Backend API tests for recursion validation 422 on create/update and instance termination 204/404 | `backend/tests/api/v1/test_agent_runtime_controls_api.py` |
 | `test_model_usage_guardrails_api` | test | Backend API tests for per-guardrail CRUD endpoints and posture refresh query; per-period shape, `unit` round-trip, `(model_id, model_name, period)` conflict 409 | `backend/tests/api/v1/test_model_usage_guardrails_api.py` |
 | `test_model_availability_api` | test | Backend API tests for the four new availability endpoints (vendor toggle, per-model toggle, list, preflight); cascade semantics and deny paths | `backend/tests/api/v1/test_model_availability_api.py` |
-| `test_runtime_topology_controller` | test | 19 unit tests for topology controller: 14 conversation + 5 instance scenarios | `backend/tests/unit/services/test_runtime_topology_controller.py` |
+| `test_runtime_topology_controller` | test | 45 unit tests for topology controller: conversation/instance scenarios, delegation edges, tool-call routes, provenance, recent-terminal window | `backend/tests/unit/services/test_runtime_topology_controller.py` |
 | `test_termination_orchestrator` | test | 3 orchestrator tests updated for `terminated` handling | `backend/tests/services/test_termination_orchestrator.py` |
 | `test_agent_runtime_client_terminate` | test | 4 CH-routed terminate tests | `backend/tests/services/test_agent_runtime_client_terminate.py` |
 | `test_session_status_update_guards` | test | 2 new `terminated` late-update guard tests | `backend/tests/api/v1/internal/test_session_status_update_guards.py` |
 | `test_model_availability_service` | test | 5 unit tests for guardrail breach enforcement | `backend/tests/services/test_model_availability_service.py` |
-| `RuntimeControlDashboardPage.test` | frontend test | 4 tests for the dedicated `/agents/runtime-control` page — route registration, live SVG topology rendering, rect/line counts, sleep conversation gets "End session" instead of "Terminate" | `frontend/src/__tests__/RuntimeControlDashboardPage.test.tsx` |
-| `RuntimeTopologyPanel.test` | frontend test | 2 tests for topology grouping/selection and permission-gated terminate control state | `frontend/src/__tests__/RuntimeTopologyPanel.test.tsx` |
+| `RuntimeControlDashboardPage.test` | frontend test | 5 tests for the `/agents/runtime-control` page — route registration, map canvas rendering, sleep conversation gets "End session" instead of "Terminate" | `frontend/src/__tests__/RuntimeControlDashboardPage.test.tsx` |
+| `AgentRuntimeMapCanvas.test` | frontend test | 72 tests for the map canvas — delegation-tree containers, hub firewall bar, tool-call routes through MCP nodes and tool chips, zoom/pan/auto-fit, filter/legend recovery, fullscreen, empty state | `frontend/src/__tests__/AgentRuntimeMapCanvas.test.tsx` |
+| `AgentDetailBubble.test` | frontend test | 15 tests for the detail bubble — detail/terminate/provenance rows, execution-log link, guardrail usage-vs-limits box colour semantics | `frontend/src/__tests__/AgentDetailBubble.test.tsx` |
+| `TriggerDetailBubble.test` | frontend test | 10 tests for the trigger-entity detail bubble — person/schedule cards, execution rows, session selection, dismissal | `frontend/src/__tests__/TriggerDetailBubble.test.tsx` |
+| `RuntimeTopologyPanel.test` | frontend test | 2 tests for topology grouping/selection and permission-gated terminate control state (legacy panel, retained) | `frontend/src/__tests__/RuntimeTopologyPanel.test.tsx` |
 | `LogPresenter.test` | frontend test | 116 tests verifying `terminated` mapping to a distinct `terminated` outcome (not `failed`) | `frontend/src/__tests__/LogPresenter.test.ts` |
 | `LogSummaryPanel.test` | frontend test | 17 tests verifying amber `BlockIcon` Chip for `terminated` distinct from red `ErrorIcon` for `failed` | `frontend/src/__tests__/LogSummaryPanel.test.tsx` |
 | `runtime-control-dashboard.spec` | E2E test | Observe-only policy visibility, topology/terminate flow, recursion contract, real-backend runtime-control checks, vendor/model availability hierarchy | `e2e/tests/runtime-control-dashboard.spec.ts` |

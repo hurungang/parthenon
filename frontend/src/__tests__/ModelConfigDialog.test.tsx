@@ -49,7 +49,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('renders provider type selector with all provider options', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -62,7 +62,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('shows API key field for openai provider', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -74,7 +74,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('shows endpoint URL field in create mode', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -86,7 +86,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('blocks save when display name is empty', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -100,7 +100,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('pre-populates name and endpoint in edit mode', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -113,7 +113,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('does NOT pre-populate api key field in edit mode', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -133,7 +133,7 @@ describe('ModelConfigDialog', () => {
   it('shows PermissionDeniedAlert when save returns 403', async () => {
     mockPost.mockRejectedValue({ response: { status: 403, data: { detail: 'Forbidden' } } })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -164,7 +164,7 @@ describe('ModelConfigDialog', () => {
     const onClose = vi.fn()
     mockPost.mockRejectedValue({ response: { status: 403 } })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const wrap = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={qc}>
@@ -191,7 +191,7 @@ describe('ModelConfigDialog', () => {
   it('shows conflict error message on 409 response', async () => {
     mockPut.mockRejectedValue({ response: { status: 409, data: { detail: 'Referenced by AgentType' } } })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -207,7 +207,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('shows api key optional hint for litellm_proxy provider', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -220,7 +220,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('Fetch Models button is visible in edit mode', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -234,7 +234,7 @@ describe('ModelConfigDialog', () => {
   })
 
   it('Fetch Models button is NOT visible in create mode', async () => {
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -249,7 +249,7 @@ describe('ModelConfigDialog', () => {
     const AVAILABLE = ['gpt-4o', 'gpt-4-turbo', 'gpt-4o-mini']
     mockGet.mockResolvedValue({ data: AVAILABLE })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -280,7 +280,7 @@ describe('ModelConfigDialog', () => {
     mockGet.mockResolvedValue({ data: AVAILABLE })
     mockPut.mockResolvedValue({ data: { ...MOCK_EXISTING_CONFIG, enabled_models: ['gpt-4o'] } })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -316,7 +316,7 @@ describe('ModelConfigDialog', () => {
     const configWithModels = { ...MOCK_EXISTING_CONFIG, enabled_models: ['gpt-4o'] }
     mockGet.mockRejectedValue(new Error('provider unreachable'))
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={configWithModels as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -336,7 +336,7 @@ describe('ModelConfigDialog', () => {
   it('edit mode renders previously saved enabled_models count hint', async () => {
     const configWithModels = { ...MOCK_EXISTING_CONFIG, enabled_models: ['gpt-4o', 'gpt-4-turbo'] }
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={configWithModels as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -353,7 +353,7 @@ describe('ModelConfigDialog', () => {
       ...MOCK_EXISTING_CONFIG,
       enabled_models: ['gpt-4o', 'gpt-4-turbo'],
     }
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={configWithModels as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -371,7 +371,7 @@ describe('ModelConfigDialog', () => {
       ...MOCK_EXISTING_CONFIG,
       has_credentials: true,
     }
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={configWithKey as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -387,7 +387,7 @@ describe('ModelConfigDialog', () => {
       ...MOCK_EXISTING_CONFIG,
       has_credentials: false,
     }
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={configWithoutKey as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -401,7 +401,7 @@ describe('ModelConfigDialog', () => {
   it('save payload includes enabled_models array even when empty', async () => {
     mockPost.mockResolvedValue({ data: MOCK_EXISTING_CONFIG })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -428,7 +428,7 @@ describe('ModelConfigDialog', () => {
   it('does not include api_key in payload when bullets are unchanged in edit mode', async () => {
     mockPut.mockResolvedValue({ data: MOCK_EXISTING_CONFIG })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -463,7 +463,7 @@ describe('ModelConfigDialog', () => {
       },
     })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={null} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },
@@ -489,7 +489,7 @@ describe('ModelConfigDialog', () => {
   it('includes new api_key in payload when user changes it from bullets', async () => {
     mockPut.mockResolvedValue({ data: MOCK_EXISTING_CONFIG })
 
-    const { ModelConfigDialog } = await import('../pages/agents/ModelConfigDialog')
+    const { ModelConfigDialog } = await import('../components/agents/ModelConfigDialog')
     render(
       <ModelConfigDialog open config={MOCK_EXISTING_CONFIG as any} onClose={vi.fn()} onSaved={vi.fn()} />,
       { wrapper },

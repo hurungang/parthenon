@@ -44,6 +44,48 @@ export async function mockApiCatchAll(page: Page) {
 }
 
 /**
+ * Origin-agnostic API catch-all — covers BOTH topologies:
+ *  - direct backend: http://localhost:8000/api/v1 (VITE_API_BASE_URL set), and
+ *  - same-origin Vite dev proxy: /api/v1 on the dev-server origin (no
+ *    VITE_API_BASE_URL, the default), which mockApiCatchAll never matched.
+ *
+ * Must be registered FIRST (before standardSetup and any test-specific
+ * mocks): Playwright resolves route handlers last-registered-first, so this
+ * stays the lowest-priority handler.
+ *
+ * Why it matters: an unmocked API request that reaches the real backend gets
+ * a 401, which trips the frontend axios response interceptor — it clears the
+ * stored token and redirects to /login, aborting the test mid-flight with a
+ * navigation. Fulfilling every API request keeps mock-first tests hermetic.
+ * The public bootstrap endpoints (identity-status, health) return realistic
+ * payloads so the app does not divert to the setup wizard.
+ */
+export async function mockApiCatchAllProxyAware(page: Page) {
+  await page.route(/\/api\/v1\//, (route) => {
+    const url = route.request().url()
+    if (url.includes('/setup/identity-status')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          setup_state: 'CONFIGURED',
+          provider_type: 'keycloak_bundled',
+          oidc_provider_url: 'http://localhost:8082/realms/parthenon',
+        }),
+      })
+    }
+    if (url.endsWith('/api/v1/health')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }),
+      })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+}
+
+/**
  * Mocks the standard API health endpoint.
  * Uses explicit localhost:8000 URL to ensure cross-origin matching works.
  */

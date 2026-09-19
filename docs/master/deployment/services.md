@@ -86,19 +86,23 @@ Use this model for the `add-agent-execution-guardrails` deployment and future gu
 
 ## Service Dependencies
 
-```
-postgres ──┐
-           ├──► keycloak (bundled only) ◄── setup (one-shot)
-redis ─────┤         │
-           │         ▼
-           └──► control-center ──┬──► agent-runtime
-                                 └──► communication-hub
-
-agent-runtime ──────────────────────► communication-hub (tool calls)
-
-nginx ◄──── control-center, communication-hub
-web-ui ◄──── nginx
-otel-collector ◄──── (all services emit OTLP)
+```mermaid
+flowchart TD
+    postgres --> keycloak
+    redis --> keycloak
+    setup[setup — one-shot] --> keycloak
+    keycloak --> control-center
+    postgres --> control-center
+    redis --> control-center
+    control-center --> agent-runtime
+    control-center --> communication-hub
+    agent-runtime -->|tool calls| communication-hub
+    control-center --> nginx
+    communication-hub --> nginx
+    nginx --> web-ui
+    agent-runtime --> otel-collector
+    communication-hub --> otel-collector
+    control-center --> otel-collector
 ```
 
 All services depend on `postgres` and `redis` being healthy. Keycloak is optional in production — only start it for dev/demo deployments or when `SUPER_ADMIN_ENABLED=true` with no OIDC DB config and the setup wizard provisions the bundled Keycloak. Agent Runtime and Communication Hub bootstrap by requesting certificates from Control Center — Control Center must be healthy before they start. `nginx` must be deployed after all backend services are healthy. `mcp-demo-app` depends on `keycloak` (healthy) and `control-center` (healthy).

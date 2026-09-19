@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Agent Management Panel (Prototype)</title>
+<!--
+  UX prototype for docs/changes/agent-management-panel — reconciled with the SHIPPED implementation:
+  · Header card = Create (sidebar dialog) + Delete ONLY — no edit dialog; every edit of an existing
+    agent happens in the property bar.
+  · Right property bar: "Properties" section (name, description, system instruction, execution
+    guardrails — max iterations / delegation depth / delegated steps / timeout / token budget with
+    k<->raw conversion + enforcement/fallback or conversational visibility/continuation modes),
+    then the seven equipment slots, then the PendingChangesTray (Save = one PUT - Discard -
+    unsaved-changes guard on agent switch). All edits are draft-based.
+  · Equipment slots: "Assign existing" opens the searchable + paginated ResourcePickerDialog
+    (single vs multi select, equipped pre-selection + baseline change detection, "Create new"
+    inside the picker opens the module dialog and pre-selects the created item); Create new;
+    unassign. Conversational agents lock the output slot.
+  · Zoned topology: (1) Configuration (agent containment boundary - identity "signs in as",
+    role "assumes as", input/output/model contract chips) -> (2) Capabilities (SOPs with composed
+    skills INDENTED as children + elbow "composed of" connectors in the SOP's accent colour;
+    Skills section hidden when empty; per-capability coloured borders/connectors) ->
+    Communication Hub as a VERTICAL BAR (not a node) -> (3) Tools (MCP-server-grouped tool nodes;
+    dashed connectors cross the hub bar coloured per skill). Small type icons on every node;
+    text truncates with ellipsis (full text on hover/click); live re-render on every draft change;
+    fullscreen toggle with auto-fit + zoom in/out/fit + drag pan; edge-semantics legend.
+  Self-contained: inline CSS/JS, placeholder data only, works from file://.
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --topbar-h:60px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5;overflow:hidden}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+a{color:inherit;text-decoration:none}
+
+/* -- APP SHELL -- */
+.app-shell{display:flex;height:100vh;overflow:hidden}
+
+/* -- AGENT SIDEBAR -- */
+.agent-sidebar{width:270px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;z-index:100}
+.sidebar-logo{padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.sidebar-logo h1{font-size:17px;font-weight:700;letter-spacing:-.5px}
+.sidebar-logo small{display:block;font-size:10.5px;color:var(--text-secondary);letter-spacing:.5px;text-transform:uppercase}
+.sidebar-section-label{padding:14px 20px 6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between}
+.count-badge{background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:600;padding:1px 8px;border-radius:20px}
+.sidebar-search{margin:0 14px 10px}
+.sidebar-search input{width:100%;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);outline:none;font-size:13px;transition:border-color var(--transition)}
+.sidebar-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.agent-list{flex:1;overflow-y:auto;padding:0 8px}
+.agent-list::-webkit-scrollbar{width:4px}.agent-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.agent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);cursor:pointer;transition:background var(--transition);margin-bottom:2px;border:1px solid transparent;position:relative}
+.agent-item:hover{background:rgba(0,0,0,.03)}
+.agent-item.active{background:var(--primary-light);border-color:#BFDBFE}
+.agent-item-icon{width:34px;height:34px;border-radius:var(--radius-sm);background:#E0E7FF;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.agent-item-main{flex:1;min-width:0}
+.agent-item-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-item-meta{font-size:11px;color:var(--text-secondary)}
+.pending-dot{width:8px;height:8px;border-radius:50%;background:var(--warning);flex-shrink:0;animation:livepulse 1.4s infinite}
+.sidebar-footer{padding:12px 14px;border-top:1px solid var(--border);flex-shrink:0}
+
+/* -- TOP BAR -- */
+.main-wrapper{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;z-index:50}
+.topbar-title{font-size:17px;font-weight:600;flex:1;display:flex;align-items:center;gap:10px}
+.proto-chip{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:#F1F5F9;color:#64748B;padding:2px 8px;border-radius:4px;border:1px solid var(--border)}
+.unsaved-badge{display:none;align-items:center;gap:6px;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px}
+.unsaved-badge.show{display:inline-flex}
+.unsaved-badge .udot{width:7px;height:7px;border-radius:50%;background:var(--warning);animation:livepulse 1.4s infinite}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* -- PANEL LAYOUT (three regions: list / topology / property bar) -- */
+.panel-layout{flex:1;display:grid;grid-template-columns:1fr 372px;gap:16px;padding:14px 20px 18px;overflow:hidden}
+.center-col{overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:14px}
+.center-col::-webkit-scrollbar{width:6px}.center-col::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.equip-col{overflow-y:auto;padding-right:2px;display:flex;flex-direction:column;gap:14px}
+.equip-col::-webkit-scrollbar{width:6px}.equip-col::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* -- CARDS / BUTTONS / CHIPS (master prototype conventions) -- */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark);box-shadow:var(--shadow-md)}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+.btn-ghost-danger{background:none;border:none;color:var(--error);padding:4px 8px}.btn-ghost-danger:hover{background:#FEE2E2}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.chip-orange{background:#FED7AA;color:#C2410C}
+.chip-indigo{background:#E0E7FF;color:#3730A3}
+.chip-pink{background:#FCE7F3;color:#9D174D}
+
+/* -- CHANGE BANNER -- */
+.change-banner{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border:1px solid #BBD8F0;background:#E8F1FB;border-left:4px solid var(--primary);border-radius:var(--radius)}
+.change-banner .cb-icon{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0}
+.change-banner h4{font-size:13.5px;margin-bottom:2px;color:var(--primary-dark)}
+.change-banner p{font-size:12px;color:var(--text-secondary);line-height:1.5}
+
+/* -- AGENT HEADER (Create + Delete only - editing happens in the property bar) -- */
+.agent-header{display:flex;align-items:center;gap:14px;padding:16px 20px}
+.ah-icon{width:48px;height:48px;border-radius:var(--radius);background:#E0E7FF;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ah-main{flex:1;min-width:0}
+.ah-name-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ah-name{font-size:18px;font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace}
+.ah-desc{font-size:12.5px;color:var(--text-secondary);margin-top:2px}
+.ah-actions{display:flex;gap:6px;flex-shrink:0}
+
+/* -- PROPERTIES SECTION (top of the property bar) -- */
+.prop-head{padding:13px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.prop-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.prop-body{padding:12px 14px 14px}
+.guard-box{border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:2px;overflow:hidden}
+.guard-summary{list-style:none;display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:12.5px;font-weight:600;cursor:pointer;background:#F8FAFC;user-select:none}
+.guard-summary::-webkit-details-marker{display:none}
+.guard-summary .g-caret{margin-left:auto;font-size:10px;color:var(--text-secondary);transition:transform var(--transition)}
+.guard-box[open] .guard-summary .g-caret{transform:rotate(180deg)}
+.guard-body{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;background:#FDFDFE}
+.gr-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gr-grid .full{grid-column:1/-1}
+.gr-title{grid-column:1/-1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);padding-bottom:2px;border-bottom:1px dashed var(--border)}
+.unit-adorn{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);pointer-events:none}
+.num-wrap{position:relative}
+
+/* -- TOPOLOGY -- */
+.topo-card{display:flex;flex-direction:column;overflow:hidden}
+.topo-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);flex-shrink:0;gap:10px;flex-wrap:wrap}
+.topo-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.topo-head-right{display:flex;align-items:center;gap:10px}
+.topo-hint{font-size:11px;color:var(--text-secondary)}
+.live{display:inline-flex;align-items:center;gap:6px;color:#1D4ED8;font-weight:600;font-size:11px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#60A5FA;animation:livepulse 1.1s infinite}
+.topo-canvas{background:#FAFBFD;border-bottom:1px solid var(--border)}
+.topo-stage svg{width:100%;height:auto;display:block;user-select:none;touch-action:none}
+.topo-node{cursor:pointer}
+.topo-node text{pointer-events:none}
+.topo-node .n-box{transition:stroke-width .15s}
+.topo-node:hover .n-box{stroke-width:3}
+.topo-node.ghost .n-box{stroke-dasharray:5 4;fill:#FFFFFF}
+.topo-node.ghost:hover .n-box{fill:#F8FAFC}
+.legend-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 18px;font-size:12px}
+.legend-strip strong{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-right:2px}
+.legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:11.5px}
+.legend-item svg{flex-shrink:0}
+
+/* -- FULLSCREEN TOPOLOGY -- */
+.fs-overlay{display:none;position:fixed;inset:0;background:var(--surface);z-index:1300;flex-direction:column;padding:16px;gap:10px}
+.fs-overlay.open{display:flex}
+.fs-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;flex-wrap:wrap}
+.fs-toolbar .fs-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px}
+.fs-controls{display:flex;align-items:center;gap:6px}
+.fs-zoom-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);width:30px;height:30px;font-size:14px;font-weight:700;color:var(--text-primary);display:inline-flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.fs-zoom-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.fs-zoom-btn:disabled{opacity:.4;cursor:not-allowed}
+.fs-zoom-pct{min-width:44px;text-align:center;font-size:12px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.fs-fit-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-primary);display:inline-flex;align-items:center;gap:6px;transition:all var(--transition)}
+.fs-fit-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.fs-fit-btn:disabled{opacity:.4;cursor:not-allowed}
+.fs-exit-btn{background:none;border:none;color:var(--text-secondary);padding:6px 10px;font-size:12.5px;font-weight:600;border-radius:var(--radius-sm)}
+.fs-exit-btn:hover{background:var(--bg);color:var(--text-primary)}
+.fs-body{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius);background:#FAFBFD;overflow:hidden}
+.fs-body .topo-stage{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+.fs-body .topo-stage svg{flex:1 1 0;min-height:0;width:100%;height:100%}
+.fs-body .legend-strip{flex-shrink:0}
+.fs-hint{font-size:11px;color:var(--text-secondary);text-align:center;flex-shrink:0}
+
+/* -- EQUIPMENT SLOTS -- */
+.equip-head{padding:13px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.equip-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.perm-note{display:none;align-items:flex-start;gap:8px;margin:12px 14px 0;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);font-size:11.5px;color:#92400E;line-height:1.5}
+.perm-note.show{display:flex}
+.slots-wrap{padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.slot{border:1px solid var(--border);border-radius:var(--radius);background:#FDFDFE;overflow:hidden}
+.slot-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:#F8FAFC}
+.slot-head .sh-icon{font-size:14px}
+.slot-head .sh-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);flex:1}
+.slot-body{padding:8px 10px;display:flex;flex-direction:column;gap:6px;min-height:40px}
+.slot-empty{font-size:12px;color:#94A3B8;font-style:italic;padding:6px 2px}
+.slot-locked{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#64748B;background:#F8FAFC;border:1px dashed var(--border);border-radius:var(--radius-sm);padding:8px 10px;line-height:1.5}
+.slot-item{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+.slot-item .si-icon{font-size:15px;flex-shrink:0}
+.slot-item .si-main{flex:1;min-width:0}
+.slot-item .si-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot-item .si-meta{font-size:10.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot-item .si-remove{background:none;border:none;color:#94A3B8;font-size:14px;padding:2px 6px;border-radius:4px;line-height:1;transition:all var(--transition)}
+.slot-item .si-remove:hover{background:#FEE2E2;color:var(--error)}
+.slot-actions{display:flex;gap:6px;padding:8px 10px;border-top:1px dashed var(--border);flex-wrap:wrap}
+.slot-actions .btn{flex:1;justify-content:center;min-width:0}
+
+/* -- PENDING CHANGES TRAY -- */
+.pending-box{margin:0 14px 14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#FDFDFE}
+.pending-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:#F8FAFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)}
+.pending-chips{display:flex;gap:5px;flex-wrap:wrap;padding:10px 12px 2px}
+.pending-chips:empty{display:none}
+.tray-chip{font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;border:1px solid #FDE68A;background:#FFFBEB;color:#92400E;display:inline-flex;align-items:center;gap:4px}
+.pending-foot{padding:8px 12px 4px;font-size:10.5px;color:var(--text-secondary);line-height:1.5}
+.pending-actions{display:flex;gap:8px;justify-content:flex-end;padding:8px 12px 12px}
+
+/* -- MODALS -- */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1200;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:540px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;animation:modalIn .18s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.modal-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.modal-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px}
+.modal-close{background:none;border:none;padding:4px 8px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1}
+.modal-close:hover{background:var(--bg)}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}.modal-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;align-items:center}
+.reuse-chip{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;padding:2px 8px;border-radius:4px}
+
+/* -- RESOURCE PICKER (searchable + paginated selection dialog) -- */
+.picker-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.picker-overlay.open{display:flex}
+.picker{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;animation:modalIn .18s ease}
+.picker-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
+.picker-header h3{font-size:16px;font-weight:600}
+.picker-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px}
+.picker-search{margin:14px 24px 0;position:relative}
+.picker-search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:var(--radius-sm);outline:none;font-size:13px;transition:border-color var(--transition)}
+.picker-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.picker-search .ps-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-secondary)}
+.picker-list{margin:10px 24px 0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow-y:auto;flex:1;min-height:180px;max-height:340px}
+.picker-list::-webkit-scrollbar{width:4px}.picker-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pick-row{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #F1F5F9;transition:background .12s}
+.pick-row:last-child{border-bottom:none}
+.pick-row:hover{background:#F0F7FE}
+.pick-row.selected{background:#E3F2FD;box-shadow:inset 3px 0 0 var(--primary)}
+.pick-row .pr-check{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.pick-row .pr-radio{width:13px;height:13px;border-radius:50%;border:2px solid #CBD5E1;flex-shrink:0;transition:border var(--transition);background:#fff}
+.pick-row.selected .pr-radio{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 2.5px #fff}
+.pick-row .pr-main{flex:1;min-width:0}
+.pick-row .pr-label{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick-row .pr-sub{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.picker-empty{padding:26px 12px;text-align:center;font-size:12.5px;color:#94A3B8;font-style:italic}
+.picker-pg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 24px 0;font-size:11.5px;color:var(--text-secondary);flex-wrap:wrap}
+.picker-pg .pg-nav{display:flex;align-items:center;gap:4px}
+.picker-pg .pg-btn{background:none;border:1px solid var(--border);border-radius:4px;width:24px;height:24px;font-size:12px;color:var(--text-primary);display:inline-flex;align-items:center;justify-content:center}
+.picker-pg .pg-btn:disabled{opacity:.35;cursor:not-allowed}
+.picker-pg select{padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11.5px;outline:none;cursor:pointer}
+.picker-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.picker-footer .spacer{flex:1}
+
+/* -- FORMS (module dialogs - identical to source modules) -- */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12.5px;font-weight:600;color:var(--text-primary);margin-bottom:5px}
+.form-control{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 2px rgba(244,67,54,.15)}
+.form-control:disabled{background:#F8FAFC;color:var(--text-secondary);cursor:not-allowed}
+textarea.form-control{resize:vertical;min-height:84px}
+select.form-control{cursor:pointer}
+.inline-form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.inline-form-error.visible{display:block}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.5}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pick-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px}
+.pick-list::-webkit-scrollbar{width:4px}.pick-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pick-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s;border:1px solid transparent}
+.pick-item:hover{background:#F0F7FE}
+.pick-item input{accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.pi-icon{font-size:16px;flex-shrink:0}
+.pi-main{min-width:0}
+.pi-main b{font-size:13px;display:block}
+.pi-main small{font-size:11px;color:var(--text-secondary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grant-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px}
+.grant-col-title{grid-column:1/-1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)}
+.grant-item{display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer}
+.grant-item input{accent-color:var(--primary);cursor:pointer}
+.field-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F1F5F9}
+.field-row:last-child{border-bottom:none}
+.field-row .fr-name{flex:2}
+.field-row .fr-type{flex:1.4}
+.field-row .fr-req{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-secondary);flex-shrink:0}
+.field-row .fr-req input{accent-color:var(--primary)}
+.field-row .fr-del{background:none;border:none;color:#94A3B8;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px}
+.field-row .fr-del:hover{background:#FEE2E2;color:var(--error)}
+.add-field-btn{width:100%;background:none;border:1px dashed var(--border);color:var(--text-secondary);padding:6px;border-radius:var(--radius-sm);font-size:12px;margin-top:6px}
+.add-field-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.provision-steps{list-style:none;margin:14px 0}
+.provision-step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--text-secondary)}
+.provision-step.done{color:var(--success)}
+.provision-step .ps-icon{width:20px;text-align:center;flex-shrink:0}
+.success-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:12px 14px;font-size:12.5px;color:#166534;line-height:1.7;margin-top:8px}
+.success-box b{color:#14532D}
+.mini-spinner{width:16px;height:16px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite;display:inline-block;vertical-align:-3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes livepulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+
+/* -- TOASTS -- */
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:11px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease;display:flex;align-items:center;gap:8px;max-width:520px}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.toast-success{background:#2E7D32}.toast-error{background:#C62828}.toast-info{background:#1565C0}
+
+/* -- DEMO PANEL -- */
+.demo-panel{position:fixed;bottom:16px;right:16px;background:rgba(15,23,42,.92);color:#fff;border-radius:var(--radius-lg);padding:12px 16px;font-size:11px;z-index:500;min-width:250px;backdrop-filter:blur(8px);box-shadow:0 10px 25px rgba(0,0,0,.12)}
+.demo-panel-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94A3B8;margin-bottom:8px}
+.demo-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;font-size:12px}
+.demo-row .demo-label{color:#CBD5E1}
+.demo-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:all var(--transition);font-weight:500}
+.demo-btn:hover{background:rgba(255,255,255,.18)}
+.demo-btn.active{background:var(--primary);border-color:var(--primary)}
+
+@media(max-width:1240px){.panel-layout{grid-template-columns:1fr 330px}}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ============ LEFT: AGENT LIST / SELECTOR ============ -->
+  <aside class="agent-sidebar">
+    <div class="sidebar-logo">
+      <div>
+        <h1>⚡ Parthenon</h1>
+        <small>Enterprise AI Harness</small>
+      </div>
+    </div>
+    <div class="sidebar-section-label">
+      <span>Agent Types</span>
+      <span class="count-badge" id="agent-count">4</span>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="search-agents" placeholder="🔍 Search agents…" oninput="onSearch(this.value)">
+    </div>
+    <div class="agent-list" id="agent-list"></div>
+    <div class="sidebar-footer">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" id="btn-create-agent" onclick="openCreateAgent()">＋ Create Agent</button>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN WRAPPER ============ -->
+  <div class="main-wrapper">
+
+    <div class="topbar">
+      <div class="topbar-title">
+        Agent Management Panel
+        <span class="proto-chip">UX Prototype</span>
+      </div>
+      <span class="unsaved-badge" id="unsaved-badge"><span class="udot"></span><span id="unsaved-text">0 unsaved changes</span></span>
+      <div class="avatar" title="Alex Harper — Agent Administrator">AH</div>
+    </div>
+
+    <div class="panel-layout">
+
+      <!-- ============ CENTER: HEADER CARD + LIVE ZONED TOPOLOGY ============ -->
+      <section class="center-col">
+        <div class="change-banner">
+          <div class="cb-icon">🎛️</div>
+          <div>
+            <h4>Equip an agent like an RPG character screen — one panel, one save</h4>
+            <p>The property bar on the right edits <b>every</b> agent property: a <b>Properties</b> section
+               (name, description, system instruction, execution guardrails) plus the seven <b>equipment slots</b>
+               (assign existing via the searchable picker · create new inline · unassign). Everything is draft-based —
+               the tray saves it all as <b>one update</b>. The <b>zoned topology</b>
+               (① Configuration → ② Capabilities → ③ Tools, with the <b>Communication Hub as a vertical bar</b>)
+               re-renders <b>live on every change, before saving</b> — open it <b>fullscreen</b> for zoom &amp; pan.</p>
+          </div>
+        </div>
+
+        <div class="card agent-header" id="agent-header"></div>
+
+        <div class="card topo-card">
+          <div class="topo-head">
+            <h3>
+              Agent Topology
+              <span class="live" id="topo-live"><span class="live-dot"></span>LIVE</span>
+            </h3>
+            <div class="topo-head-right">
+              <span class="topo-hint">updates instantly — no save required · drag to pan in fullscreen</span>
+              <span class="chip chip-green" id="topo-state-chip">✓ saved</span>
+              <button class="btn btn-secondary btn-xs" onclick="enterFs()" title="Expand the topology over the whole viewport (Esc exits)">⛶ Fullscreen</button>
+            </div>
+          </div>
+          <div class="topo-canvas" id="topo-host">
+            <div class="topo-stage" id="topo-stage">
+              <svg id="topo-svg" viewBox="0 0 1120 640" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-label="agent topology"></svg>
+              <div class="legend-strip" id="legend"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ RIGHT: PROPERTY BAR (Properties · Equipment · PendingChangesTray) ============ -->
+      <aside class="equip-col">
+
+        <!-- -- Properties section (draft edits - no dialog) -- -->
+        <div class="card">
+          <div class="prop-head">
+            <h3>⚙️ Properties</h3>
+            <span class="chip chip-gray">draft edits</span>
+          </div>
+          <div class="prop-body">
+            <div class="form-group">
+              <label>Name (slug) *</label>
+              <input id="p-name" class="form-control" placeholder="e.g. compliance-reporter" oninput="onPropName(this.value)">
+              <div class="inline-form-error" id="p-name-err"></div>
+              <div class="form-hint">Lowercase letters, numbers and hyphens — the agent's slug identity.</div>
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="p-desc" class="form-control" rows="2" placeholder="What this agent does…" oninput="onPropText('desc',this.value)"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:8px">
+              <label>System Instruction</label>
+              <textarea id="p-si" class="form-control" rows="3" placeholder="Core behaviour of the agent…" oninput="onPropText('systemInstruction',this.value)"></textarea>
+            </div>
+            <details class="guard-box" id="guard-box">
+              <summary class="guard-summary">🛡 Execution Guardrails <span class="g-caret">▼</span></summary>
+              <div class="guard-body">
+                <div class="gr-grid">
+                  <div class="gr-title">Loop &amp; time limits</div>
+                  <div class="num-wrap"><input id="g-maxIter" type="number" min="1" max="1000" class="form-control" placeholder="Max iterations" oninput="onGrNum('maxIterations',this)"></div>
+                  <div class="num-wrap"><input id="g-timeout" type="number" min="1" max="86400" class="form-control" placeholder="Timeout (s)" oninput="onGrNum('executionTimeoutSeconds',this)"></div>
+                  <div class="num-wrap"><input id="g-depth" type="number" min="0" max="32" class="form-control" placeholder="Max delegation depth" oninput="onGrNum('maxDelegationDepth',this)"></div>
+                  <div class="num-wrap"><input id="g-steps" type="number" min="0" max="5000" class="form-control" placeholder="Max delegated steps" oninput="onGrNum('maxDelegatedSteps',this)"></div>
+                </div>
+                <div class="gr-grid">
+                  <div class="gr-title">Token budget</div>
+                  <div class="full num-wrap">
+                    <input id="g-budget" type="number" min="1" class="form-control" style="padding-right:56px" placeholder="Token budget" oninput="onGrBudget(this)">
+                    <span class="unit-adorn">k tokens</span>
+                  </div>
+                  <div class="form-hint full" id="g-budget-hint" style="margin-top:0"></div>
+                </div>
+                <div class="gr-grid" id="gr-typed-controls">
+                  <div class="gr-title">Budget enforcement (typed agents)</div>
+                  <select id="g-enforce" class="form-control" onchange="onGrSel('tokenEnforcementMode',this)">
+                    <option value="observe">Observe — log only</option>
+                    <option value="enforce">Enforce — stop over budget</option>
+                  </select>
+                  <select id="g-fallback" class="form-control" onchange="onGrSel('tokenFallbackMode',this)">
+                    <option value="observe_and_log">Fallback: observe &amp; log</option>
+                    <option value="stop_on_next_hard_guardrail">Fallback: stop at next hard guardrail</option>
+                  </select>
+                </div>
+                <div class="gr-grid" id="gr-conv-controls" style="display:none">
+                  <div class="gr-title">Conversational controls</div>
+                  <select id="g-visibility" class="form-control" onchange="onGrSel('conversationalTokenVisibilityMode',this)">
+                    <option value="enabled">Token visibility: enabled</option>
+                    <option value="disabled">Token visibility: disabled</option>
+                  </select>
+                  <select id="g-continuation" class="form-control" onchange="onGrSel('conversationalContinuationPolicy',this)">
+                    <option value="allow">Continuation: allowed</option>
+                  </select>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- -- Equipment slots -- -->
+        <div class="card" style="display:flex;flex-direction:column">
+          <div class="equip-head">
+            <h3>🎒 Equipment</h3>
+            <span class="chip chip-gray" id="equip-agent-name"></span>
+          </div>
+          <div class="perm-note" id="perm-note">
+            <span>🔒</span>
+            <span><b>Read-only mode.</b> Your account lacks write permissions on one or more equipment modules (e.g. <code>agent::roles</code>, <code>agent::identities</code>). Assignment actions are disabled.</span>
+          </div>
+          <div class="slots-wrap" id="slots"></div>
+          <div class="pending-box">
+            <div class="pending-head">
+              <span>📝 Pending changes (<span id="pending-count">0</span>)</span>
+              <span class="chip chip-green" id="tray-state-chip">✓ saved</span>
+            </div>
+            <div class="pending-chips" id="pending-chips"></div>
+            <div class="pending-foot">Save issues a <b>single agent-type update</b> (one PUT — binding lists deduplicated by resource id). The topology already reflects every draft change.</div>
+            <div class="pending-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-discard" onclick="discardChanges()" disabled>↩ Discard</button>
+              <button class="btn btn-primary btn-sm" id="btn-save" onclick="saveChanges()" disabled>💾 Save Changes</button>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ GENERIC MODAL (create-agent + shared module dialogs) ============ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-title"></h3>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- ============ RESOURCE PICKER DIALOG (Assign existing — searchable + paginated) ============ -->
+<div class="picker-overlay" id="picker-overlay">
+  <div class="picker">
+    <div class="picker-header">
+      <div>
+        <h3 id="picker-title">Assign</h3>
+        <div class="picker-sub" id="picker-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closePicker()">×</button>
+    </div>
+    <div class="picker-search">
+      <span class="ps-ico">🔍</span>
+      <input type="text" id="picker-search" placeholder="Search by name or detail…" oninput="pickerSearch(this.value)">
+    </div>
+    <div class="picker-list" id="picker-list"></div>
+    <div class="picker-pg">
+      <span id="picker-pg-info">0 of 0</span>
+      <span class="pg-nav">
+        <span>Rows:</span>
+        <select id="picker-rows" onchange="pickerRows(this.value)"><option>10</option><option>25</option><option>50</option></select>
+        <button class="pg-btn" id="pg-prev" onclick="pickerPage(-1)">‹</button>
+        <button class="pg-btn" id="pg-next" onclick="pickerPage(1)">›</button>
+      </span>
+    </div>
+    <div class="picker-footer">
+      <button class="btn btn-secondary btn-sm" id="picker-create-btn" onclick="pickerCreateNew()">＋ Create new</button>
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="closePicker()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="picker-assign-btn" onclick="pickerAssign()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FULLSCREEN TOPOLOGY ============ -->
+<div class="fs-overlay" id="fs-overlay">
+  <div class="fs-toolbar">
+    <div class="fs-title">
+      Agent Topology
+      <span class="live" id="fs-live"><span class="live-dot"></span>LIVE</span>
+      <span class="chip chip-green" id="fs-state-chip">✓ saved</span>
+    </div>
+    <div class="fs-controls">
+      <button class="fs-zoom-btn" id="fs-zoom-out" onclick="zoomOut()" title="Zoom out">−</button>
+      <span class="fs-zoom-pct" id="fs-zoom-pct">100%</span>
+      <button class="fs-zoom-btn" id="fs-zoom-in" onclick="zoomIn()" title="Zoom in">＋</button>
+      <button class="fs-fit-btn" id="fs-fit" onclick="zoomFit()" title="Back to auto-fit">⤢ Fit</button>
+      <button class="fs-exit-btn" onclick="exitFs()" title="Exit (Esc)">✕ Exit fullscreen</button>
+    </div>
+  </div>
+  <div class="fs-body" id="fs-body"></div>
+  <div class="fs-hint">Drag the canvas to pan · zoom steps ≈20% (0.5×–3×) · Esc exits</div>
+</div>
+
+<!-- ============ DEMO CONTROLS ============ -->
+<div class="demo-panel">
+  <div class="demo-panel-title">Prototype Controls</div>
+  <div class="demo-row"><span class="demo-label">Sign in as</span>
+    <span>
+      <button class="demo-btn active" id="perm-admin" onclick="setPerm('admin')">Administrator</button>
+      <button class="demo-btn" id="perm-viewer" onclick="setPerm('viewer')">Process Owner (read-only)</button>
+    </span>
+  </div>
+  <div class="demo-row"><span class="demo-label">Reset data</span>
+    <button class="demo-btn" onclick="location.reload()">↺ Reset</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+'use strict';
+/* ============ CATEGORY METADATA ============ */
+const CATS = {
+  role:     {icon:'👤', label:'Role',             catKey:'roles',      perm:'agent::roles'},
+  identity: {icon:'🆔', label:'Identity',         catKey:'identities', perm:'agent::identities'},
+  skill:    {icon:'🔧', label:'Skill',            catKey:'skills',     perm:'agent::skills'},
+  sop:      {icon:'📋', label:'SOP',              catKey:'sops',       perm:'agent::sops'},
+  input:    {icon:'📥', label:'Input Data Type',  catKey:'datatypes',  perm:'agent::data_types'},
+  output:   {icon:'📤', label:'Output Data Type', catKey:'datatypes',  perm:'agent::data_types'},
+  model:    {icon:'🧠', label:'Model',            catKey:'models',     perm:'agent::model_configs'},
+};
+/* Plural aliases — the multi slots use the plural slot id ('skills' / 'sops') */
+CATS.skills = {icon:'🔧', label:'Skills', catKey:'skills', perm:'agent::skills'};
+CATS.sops   = {icon:'📋', label:'SOPs',   catKey:'sops',   perm:'agent::sops'};
+
+/* ============ MOCK DATA ============ */
+let uidSeq = 100;
+const nextId = p => p + '-' + (++uidSeq);
+
+const catalog = {
+  roles: [
+    {id:'r-dev',      name:'Developer',          desc:'Code-review permissions across Git tooling', scope:['s-pr-analysis','s-git-blame','o-pr']},
+    {id:'r-docproc',  name:'Document Processor', desc:'OCR and document parsing capabilities',      scope:['s-ocr','s-pdf','o-inv']},
+    {id:'r-ops',      name:'Platform Operator',  desc:'Cluster inspection and runbook access',      scope:['s-kubectl-logs','s-runbook','o-incident']},
+    {id:'r-auditor',  name:'Security Auditor',   desc:'Read-only audit trails and policy tools',    scope:[]},
+    {id:'r-analyst',  name:'Data Analyst',       desc:'Query and charting capabilities',            scope:['s-chart','o-weekly']},
+  ],
+  identities: [
+    {id:'i-pr',  name:'PR Reviewer Bot',   account:'svc-pr-reviewer@agents.parthenon.local', provider:'Keycloak',      realm:'ai_agents'},
+    {id:'i-inv', name:'Invoice Bot',       account:'svc-invoice-bot@agents.parthenon.local', provider:'Keycloak',      realm:'ai_agents'},
+    {id:'i-ops', name:'Ops Assistant Bot', account:'svc-ops-assistant@agents.parthenon.local', provider:'Keycloak',     realm:'ai_agents'},
+    {id:'i-rep', name:'Weekly Report Bot', account:'svc-weekly-report@contoso.com',          provider:'Azure EntraID', realm:'agents'},
+  ],
+  skills: [
+    {id:'s-pr-analysis', name:'github-pr-analysis', mcp:'mcp-github',     tool:'analyze_pull_request'},
+    {id:'s-git-blame',   name:'git-blame-lookup',   mcp:'mcp-github',     tool:'get_blame'},
+    {id:'s-ocr',         name:'ocr-extract-text',   mcp:'mcp-vision',     tool:'extract_text'},
+    {id:'s-pdf',         name:'pdf-parse',          mcp:'mcp-filesystem', tool:'parse_pdf'},
+    {id:'s-kubectl-logs',name:'kubectl-logs-query', mcp:'mcp-kubernetes', tool:'query_logs'},
+    {id:'s-runbook',     name:'runbook-search',     mcp:'mcp-wiki',       tool:'search_runbooks'},
+    {id:'s-chart',       name:'chart-render',       mcp:'mcp-filesystem', tool:'render_chart'},
+  ],
+  sops: [
+    {id:'o-pr',       name:'github-pr-workflow',          steps:['s-pr-analysis','s-git-blame'], desc:'Fetch, analyse and summarise a pull request'},
+    {id:'o-inv',      name:'invoice-processing-pipeline', steps:['s-pdf','s-ocr'],               desc:'Parse document then extract structured invoice fields'},
+    {id:'o-incident', name:'incident-triage',             steps:['s-kubectl-logs','s-runbook'],  desc:'Correlate cluster logs with matching runbooks'},
+    {id:'o-weekly',   name:'weekly-report',               steps:['s-chart','s-chart'],           desc:'Render KPI charts into a weekly summary (composed once — deduplicated)'},
+  ],
+  datatypes: [
+    {id:'d-prctx',  name:'PR Context',     slug:'pr-context',     kind:'json',   fields:[{n:'repo',t:'string',r:true},{n:'pr_number',t:'number',r:true},{n:'diff',t:'string',r:false}]},
+    {id:'d-review', name:'Review Report',  slug:'review-report',  kind:'json',   fields:[{n:'verdict',t:'enum',r:true},{n:'findings',t:'number',r:true},{n:'summary',t:'string',r:true}]},
+    {id:'d-doc',    name:'Document Blob',  slug:'document-blob',  kind:'binary', fields:[]},
+    {id:'d-inv',    name:'Invoice Record', slug:'invoice-record', kind:'json',   fields:[{n:'vendor',t:'string',r:true},{n:'total',t:'number',r:true},{n:'currency',t:'enum',r:true},{n:'due_date',t:'date',r:false}]},
+    {id:'d-chat',   name:'Chat Message',   slug:'chat-message',   kind:'text',   fields:[]},
+    {id:'d-report', name:'Report Pack',    slug:'report-pack',    kind:'json',   fields:[{n:'period',t:'string',r:true},{n:'kpis',t:'number',r:true}]},
+  ],
+  models: [
+    {id:'m-azure',     name:'gpt-4o (Azure GPT-4o)',       provider:'azure_openai', endpoint:'https://cc-eu.openai.azure.com'},
+    {id:'m-openai',    name:'gpt-4o (OpenAI GPT-4o)',      provider:'openai',       endpoint:'https://api.openai.com/v1'},
+    {id:'m-anthropic', name:'claude-sonnet-4 (Anthropic)', provider:'anthropic',    endpoint:'https://api.anthropic.com'},
+    {id:'m-gemini',    name:'gemini-2.0-flash (Gemini)',   provider:'gemini',       endpoint:'https://generativelanguage.googleapis.com'},
+    {id:'m-groq',      name:'llama-3.3-70b (Groq)',        provider:'groq',         endpoint:'https://api.groq.com/openai/v1'},
+  ],
+};
+
+/* Guardrail defaults — mirrors AgentTypeForm / useAgentDraftComposition fallbacks */
+const GR_DEFAULTS = {
+  maxIterations:10, maxDelegationDepth:3, maxDelegatedSteps:20, executionTimeoutSeconds:300,
+  tokenBudget:1000000, tokenEnforcementMode:'observe', tokenFallbackMode:'observe_and_log',
+  conversationalTokenVisibilityMode:'enabled', conversationalContinuationPolicy:'allow',
+};
+
+function mkAgent(id,name,kind,desc,si,config,guard){
+  return {id,name,kind,desc,systemInstruction:si,config,guardrails:Object.assign({},GR_DEFAULTS,guard||{})};}
+let agents = [
+  mkAgent('ag-1','pr-reviewer','typed','Reviews pull requests against team guidelines and posts structured verdicts.',
+    'You are a senior code reviewer. Analyse the provided pull request diff, check it against team guidelines, and produce a structured verdict.',
+    {role:'r-dev',identity:'i-pr',skills:['s-pr-analysis','s-git-blame'],sops:['o-pr'],input:'d-prctx',output:'d-review',model:'m-azure'},
+    {tokenEnforcementMode:'enforce'}),
+  mkAgent('ag-2','invoice-extractor','typed','Reads scanned invoices and emits schema-validated invoice records.',
+    'You extract structured invoice data from parsed documents. Always validate totals and currency against the invoice schema.',
+    {role:'r-docproc',identity:'i-inv',skills:['s-ocr','s-pdf'],sops:['o-inv'],input:'d-doc',output:'d-inv',model:'m-openai'},
+    {maxIterations:20,tokenBudget:2000000}),
+  mkAgent('ag-3','ops-assistant','conversational','Conversational on-call assistant that triages incidents using cluster logs and runbooks.',
+    'You are an on-call operations assistant. Investigate incidents using cluster logs and the runbook library, and guide the engineer step by step.',
+    {role:'r-ops',identity:'i-ops',skills:['s-kubectl-logs','s-runbook'],sops:['o-incident'],input:'d-chat',output:null,model:'m-anthropic'},
+    {maxIterations:30,executionTimeoutSeconds:600}),
+  /* No DIRECT skills — the Skills section is HIDDEN in the topology; the composed
+     skill under weekly-report still renders and still routes to its tool. */
+  mkAgent('ag-4','report-generator','typed','Compiles weekly KPI reports via the weekly-report SOP.',
+    'You compile weekly KPI summaries from chart outputs. Keep the narrative concise and factual.',
+    {role:'r-analyst',identity:'i-rep',skills:[],sops:['o-weekly'],input:'d-report',output:'d-report',model:'m-gemini'},
+    {maxDelegatedSteps:50}),
+];
+
+/* ============ STATE ============ */
+let SAVED = {};                    // last-saved snapshot per agent id (draft = agents[] entries)
+agents.forEach(a => SAVED[a.id] = deep(a));
+let selectedId = agents[0].id;
+let perm = 'admin';                // 'admin' | 'viewer'
+let searchQ = '';
+let modalSave = null;              // footer primary handler
+let pendingSelectTarget = null;    // agent switch requested while dirty
+
+/* Fullscreen topology view state (mirrors PanelTopologyCanvas:
+   zoom 1 = auto-fit; viewBox transform view = world / zoom, clamped) */
+let fsMode = false;
+let zoom = 1, panCx = 560, panCy = 320;
+const FS_MIN_ZOOM = 0.5, FS_MAX_ZOOM = 3, FS_ZOOM_STEP = 1.2;
+const WORLD = {w:1120, h:640};
+
+/* ============ UTILS ============ */
+function $(id){return document.getElementById(id)}
+function deep(o){return JSON.parse(JSON.stringify(o))}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function cur(){return agents.find(a=>a.id===selectedId)}
+function cfg(){return cur().config}
+function item(catKey,id){return catalog[catKey].find(x=>x.id===id)||null}
+function canWrite(){return perm==='admin'}
+function slugValid(s){return /^[a-z0-9-]+$/.test(s)}
+function truncate(s,n){s=String(s);return s.length>n?s.slice(0,n-1)+'…':s}
+function itemMeta(catKey,it){
+  switch(catKey){
+    case 'roles':      return (it.scope&&it.scope.length? it.scope.length+' grants · ':'')+(it.desc||'');
+    case 'identities': return it.account+' · '+it.provider;
+    case 'skills':     return it.mcp+' · '+it.tool;
+    case 'sops':       return (it.steps?it.steps.length:0)+' steps · '+(it.desc||'');
+    case 'datatypes':  return it.slug+' · '+it.kind+(it.fields&&it.fields.length?' · '+it.fields.length+' fields':'');
+    case 'models':     return it.provider+' · '+it.endpoint;
+  }
+  return '';
+}
+function toast(msg,type){
+  const t=document.createElement('div');
+  t.className='toast toast-'+(type||'info');
+  t.innerHTML=(type==='success'?'✓ ':type==='error'?'✕ ':'ℹ ')+esc(msg);
+  $('toasts').appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),320)},2600);
+}
+
+/* -- Dirty tracking (draft vs snapshot) — mirrors useAgentDraftComposition -- */
+function slotValue(a,key){
+  const c=a.config;
+  return {role:c.role,identity:c.identity,skills:c.skills,sops:c.sops,input:c.input,output:c.output,model:c.model}[key];
+}
+function changedSlotIds(a){
+  const s=SAVED[a.id];
+  return ['role','identity','skills','sops','input','output','model'].filter(k=>
+    JSON.stringify(slotValue(a,k))!==JSON.stringify(slotValue(s,k)));
+}
+function propertiesChanged(a){
+  const s=SAVED[a.id];
+  return a.name!==s.name || a.desc!==s.desc || a.systemInstruction!==s.systemInstruction ||
+         JSON.stringify(a.guardrails)!==JSON.stringify(s.guardrails);
+}
+function isDirty(a){return changedSlotIds(a).length>0||propertiesChanged(a)}
+function isNameInvalid(a){return !a.name||!slugValid(a.name)}
+
+/* ============ SIDEBAR ============ */
+function onSearch(v){searchQ=v.toLowerCase().trim();renderSidebar()}
+function renderSidebar(){
+  const list=agents.filter(a=>!searchQ||a.name.toLowerCase().includes(searchQ));
+  $('agent-count').textContent=agents.length;
+  $('btn-create-agent').disabled=!canWrite();
+  $('btn-create-agent').title=canWrite()?'':'Read-only: requires write permission on agent::types';
+  $('agent-list').innerHTML=list.map(a=>`
+    <div class="agent-item ${a.id===selectedId?'active':''}" onclick="selectAgentReq('${a.id}')">
+      <div class="agent-item-icon">🤖</div>
+      <div class="agent-item-main">
+        <div class="agent-item-name">${esc(a.name)}</div>
+        <div class="agent-item-meta">${a.kind==='typed'?'Typed output':'Conversational'} · ${equipmentCount(a)} equipped</div>
+      </div>
+      ${isDirty(a)?'<span class="pending-dot" title="Has unsaved changes"></span>':''}
+    </div>`).join('')||'<div class="slot-empty" style="padding:10px 12px">No agents match your search.</div>';
+}
+function equipmentCount(a){
+  const c=a.config;
+  return (c.role?1:0)+(c.identity?1:0)+c.skills.length+c.sops.length+(c.input?1:0)+(c.output?1:0)+(c.model?1:0);
+}
+/* Unsaved-changes guard on agent switch (useUnsavedChangesDialog) */
+function selectAgentReq(id){
+  if(id===selectedId)return;
+  if(isDirty(cur())){
+    pendingSelectTarget=id;
+    const a=cur();
+    const body='<p style="font-size:13.5px;line-height:1.6">You have <b>unsaved changes</b> on <b>“'+esc(a.name)+'”</b>. Switching agents discards the draft.</p>';
+    const footer='<button class="btn btn-secondary" onclick="closeModal()">Keep editing</button>'+
+      '<button class="btn btn-danger" onclick="confirmSwitch()">Discard &amp; switch</button>';
+    openModal('Unsaved changes','',body,footer);
+    return;
+  }
+  selectAgent(id);
+}
+function confirmSwitch(){
+  const target=pendingSelectTarget; pendingSelectTarget=null;
+  closeModal(); selectAgent(target);
+  toast('Draft discarded — switched agent.','info');
+}
+function selectAgent(id){selectedId=id;renderAll()}
+
+/* ============ AGENT HEADER (Create + Delete only) ============ */
+function renderHeader(){
+  const a=cur();
+  if(!a){$('agent-header').innerHTML='<div class="ah-main"><span class="ah-name">No agents</span></div>';return;}
+  const inChip=a.config.input?item('datatypes',a.config.input):null;
+  const modelChip=a.config.model?item('models',a.config.model):null;
+  $('agent-header').innerHTML=`
+    <div class="ah-icon">🤖</div>
+    <div class="ah-main">
+      <div class="ah-name-row">
+        <span class="ah-name">${esc(a.name)}</span>
+        <span class="chip ${a.kind==='typed'?'chip-purple':'chip-blue'}">${a.kind==='typed'?'📤 Typed output':'💬 Conversational'}</span>
+        ${inChip?`<span class="chip chip-green">📥 ${esc(inChip.name)}</span>`:''}
+        ${modelChip?`<span class="chip chip-orange">🧠 ${esc(modelChip.name)}</span>`:''}
+        ${isDirty(a)?'<span class="chip chip-yellow">● unsaved draft</span>':''}
+      </div>
+      <div class="ah-desc">${esc(a.desc)}</div>
+    </div>
+    <div class="ah-actions">
+      <button class="btn btn-ghost-danger btn-sm" ${canWrite()?'':'disabled'} title="${canWrite()?'Delete this agent type':'Read-only: missing write permission on agent::types'}" onclick="confirmDeleteAgent()">🗑 Delete</button>
+    </div>`;
+}
+
+/* ============ PROPERTIES SECTION (draft edits — no dialog) ============ */
+function renderProperties(){
+  const a=cur(); if(!a)return;
+  const g=a.guardrails, dis=!canWrite();
+  $('p-name').value=a.name; $('p-name').disabled=dis;
+  $('p-desc').value=a.desc; $('p-desc').disabled=dis;
+  $('p-si').value=a.systemInstruction; $('p-si').disabled=dis;
+  $('g-maxIter').value=g.maxIterations; $('g-maxIter').disabled=dis;
+  $('g-timeout').value=g.executionTimeoutSeconds; $('g-timeout').disabled=dis;
+  $('g-depth').value=g.maxDelegationDepth; $('g-depth').disabled=dis;
+  $('g-steps').value=g.maxDelegatedSteps; $('g-steps').disabled=dis;
+  $('g-budget').value=Math.round((g.tokenBudget||0)/1000); $('g-budget').disabled=dis;
+  $('g-budget-hint').textContent=a.kind==='conversational'
+    ?'Visible current-session usage threshold for conversational agents. Default: 1000k tokens.'
+    :'Budget for non-conversational enforcement. Default: 1000k tokens.';
+  $('g-enforce').value=g.tokenEnforcementMode; $('g-enforce').disabled=dis;
+  $('g-fallback').value=g.tokenFallbackMode; $('g-fallback').disabled=dis;
+  $('g-visibility').value=g.conversationalTokenVisibilityMode; $('g-visibility').disabled=dis;
+  $('g-continuation').value=g.conversationalContinuationPolicy; $('g-continuation').disabled=dis;
+  const conv=a.kind==='conversational';
+  $('gr-typed-controls').style.display=conv?'none':'grid';
+  $('gr-conv-controls').style.display=conv?'grid':'none';
+  renderNameValidity(a);
+}
+function renderNameValidity(a){
+  const bad=isNameInvalid(a);
+  const dup=!bad&&agents.some(x=>x.id!==a.id&&x.name.toLowerCase()===a.name.toLowerCase());
+  $('p-name').classList.toggle('error',bad||dup);
+  const e=$('p-name-err');
+  if(bad){e.textContent='Name must be a non-empty slug (lowercase letters, numbers, hyphens).';e.classList.add('visible');}
+  else if(dup){e.textContent='An agent with this name already exists. Duplicate names are rejected on save.';e.classList.add('visible');}
+  else e.classList.remove('visible');
+}
+function onPropName(v){
+  const a=cur(); a.name=v.trim();
+  onDraftMutated({skipProps:true});
+}
+function onPropText(key,v){
+  const a=cur(); a[key]=v; onDraftMutated({skipProps:true});
+}
+/* k-token <-> raw conversion (raw = k x 1000), mirroring AgentTypeForm */
+function onGrBudget(el){
+  const a=cur();
+  const k=Number(el.value);
+  a.guardrails.tokenBudget=(Number.isFinite(k)&&k>0)?Math.round(k*1000):GR_DEFAULTS.tokenBudget;
+  onDraftMutated({skipProps:true});
+}
+function onGrNum(key,el){
+  const a=cur();
+  const n=Number(el.value);
+  a.guardrails[key]=Number.isFinite(n)?n:GR_DEFAULTS[key];
+  onDraftMutated({skipProps:true});
+}
+function onGrSel(key,el){
+  const a=cur(); a.guardrails[key]=el.value; onDraftMutated({skipProps:true});
+}
+
+/* ============ TOPOLOGY — zoned graph + Communication Hub vertical bar ============ */
+const NS='http://www.w3.org/2000/svg';
+function svgEl(name,attrs,parent){const e=document.createElementNS(NS,name);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+
+/* Palettes + deterministic hash colours — mirrors capabilityColor / mcpGroupColor */
+const MCP_GROUP_PALETTE=['#15803d','#0e7490','#b45309','#1d4ed8','#a21caf','#4d7c0f','#b91c1c'];
+const CAPABILITY_COLOR_PALETTE=['#E53935','#8E24AA','#3949AB','#1E88E5','#00897B','#43A047','#F4511E','#6D4C41','#546E7A','#5E35B1','#00ACC1','#FB8C00'];
+function hashColor(str,palette){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))>>>0;return palette[h%palette.length]}
+function capabilityColor(nodeId){return hashColor(nodeId,CAPABILITY_COLOR_PALETTE)}
+function mcpGroupColor(slug){return hashColor(slug,MCP_GROUP_PALETTE)}
+
+const EDGE={equipped:'#64748B',grants:'#2563EB'}; /* solid = equipped with · dotted = role grants */
+const SECTION_GROUP_COLOR='#7c3aed';
+function equippedSkillPool(){
+  const c=cfg();const ids=new Set(c.skills);
+  c.sops.forEach(sid=>{const s=item('sops',sid);s&&s.steps.forEach(t=>ids.add(t));});
+  return [...ids].map(id=>item('skills',id)).filter(Boolean);
+}
+function toolGroups(){
+  const map=new Map();
+  equippedSkillPool().forEach(s=>{if(!map.has(s.mcp))map.set(s.mcp,[]);if(!map.get(s.mcp).includes(s.tool))map.get(s.mcp).push(s.tool);});
+  return [...map.entries()].map(([slug,tools])=>({slug,tools}));
+}
+function r3(n){return Math.round(n*1000)/1000}
+
+function renderTopology(){
+  const svg=$('topo-svg');
+  if(!cur()){svg.innerHTML='';return;}
+  svg.innerHTML='';
+  const a=cur(),c=cfg(),pend=isDirty(a);
+
+  const identity=c.identity?item('identities',c.identity):null;
+  const role=c.role?item('roles',c.role):null;
+  const inputIt=c.input?item('datatypes',c.input):null;
+  const outputLocked=a.kind==='conversational';
+  const outputIt=(!outputLocked&&c.output)?item('datatypes',c.output):null;
+  const modelIt=c.model?item('models',c.model):null;
+  const sops=c.sops.map(id=>item('sops',id)).filter(Boolean);
+  const directSkills=c.skills.map(id=>item('skills',id)).filter(Boolean);
+
+  /* arrow markers — one per edge colour (per-edge explicit colours with matching markers) */
+  const defs=svgEl('defs',{},svg);
+  const markerCols=new Set([EDGE.equipped,EDGE.grants]);
+  sops.forEach(s=>markerCols.add(capabilityColor('sop_'+s.id)));
+  directSkills.forEach(s=>markerCols.add(capabilityColor('skill_'+s.id)));
+  equippedSkillPool().forEach(s=>markerCols.add(capabilityColor('skill_'+s.id)));
+  [...markerCols].forEach(col=>{
+    const id='mk-'+col.replace('#','');
+    const m=svgEl('marker',{id,viewBox:'0 0 10 10',refX:8.5,refY:5,markerWidth:6,markerHeight:6,orient:'auto'},defs);
+    svgEl('path',{d:'M0 0L10 5L0 10z',fill:col},m);
+  });
+  const mkRef=col=>('url(#mk-'+col.replace('#','')+')');
+
+  const zoneLayer=svgEl('g',{},svg);
+  const groupLayer=svgEl('g',{},svg);
+  const edgeLayer=svgEl('g',{},svg);
+  const hubLayer=svgEl('g',{},svg);
+  const nodeLayer=svgEl('g',{},svg);
+
+  const halo='paint-order:stroke;stroke:#FAFBFD;stroke-width:4px';
+  function txt(x,y,s,o){
+    o=o||{};
+    const t=svgEl('text',{x,y,'font-size':o.fs||10,'font-weight':o.fw||'normal',fill:o.fill||'#334155','text-anchor':o.anchor||'start',style:o.halo?halo:'',...(o.transform?{transform:o.transform}:{})},o.layer||nodeLayer);
+    if(o.ls)t.setAttribute('letter-spacing',o.ls);
+    if(o.mono)t.setAttribute('font-family','ui-monospace,SFMono-Regular,monospace');
+    t.textContent=s;return t;
+  }
+  function zone(x,y,w,h,title,sub,tcol,fill,stroke,dashed){
+    const g=svgEl('g',{},zoneLayer);
+    svgEl('rect',{x,y,width:w,height:h,rx:14,fill,stroke,'stroke-width':1.4,...(dashed?{'stroke-dasharray':'7 5'}:{})},g);
+    txt(x+14,y+22,title,{fs:11,fw:700,fill:tcol,ls:'.5px',layer:g});
+    txt(x+14,y+37,sub,{fs:9.5,fill:'#64748B',layer:g});
+  }
+  /* Node renderer: small type icon (10px) in a left gutter + truncating labels.
+     Full text on hover (<title>) and on click (toast). */
+  function drawNode(o){
+    const g=svgEl('g',{class:'topo-node'+(o.ghost?' ghost':''),'data-topology-node':'1'},nodeLayer);
+    const fullText=(o.full||o.label)+(o.fullSub?(' — '+o.fullSub):(o.sub?(' — '+o.sub):''));
+    g.addEventListener('click',o.onClick||(()=>toast(fullText,'info')));
+    svgEl('title',{},g).textContent=fullText;
+    svgEl('rect',{class:'n-box',x:o.cx-o.w/2,y:o.cy-o.h/2,width:o.w,height:o.h,rx:10,
+      fill:o.ghost?'#FFFFFF':(o.fill||'#FFFFFF'),
+      stroke:o.ghost?'#CBD5E1':(o.stroke||'#94A3B8'),'stroke-width':o.ghost?1.4:(o.sw||1.6),
+      ...(o.ghost?{'stroke-dasharray':'5 4'}:{})},g);
+    const isz=o.iconSize||10;                                  /* small type icon — 10px */
+    const t0=svgEl('text',{x:o.cx-o.w/2+10,y:o.cy+isz/2-2,'font-size':isz},g);t0.textContent=o.icon||'';
+    const tx=o.cx-o.w/2+10+isz+7;
+    const t1=svgEl('text',{x:tx,y:o.cy+(o.sub?-3:4.5),'font-size':o.fs||11,'font-weight':600,fill:o.ghost?'#94A3B8':'#1E293B'},g);
+    t1.textContent=truncate(o.label,o.lw||19);
+    if(o.sub){const t2=svgEl('text',{x:tx,y:o.cy+11,'font-size':o.subFs||8.4,fill:'#64748B'},g);t2.textContent=truncate(o.sub,o.subLw||28);}
+    return g;
+  }
+  function secLabel(y,s,layer){const t=svgEl('text',{x:CAPX+4,y,'font-size':9,'font-weight':700,fill:SECTION_GROUP_COLOR,'letter-spacing':'.6px'},layer||nodeLayer);t.textContent=s.toUpperCase();}
+  function inLabel(y,s){const t=svgEl('text',{x:48,y,'font-size':8.5,'font-weight':700,fill:'#64748B','letter-spacing':'.8px'},nodeLayer);t.textContent=s.toUpperCase();}
+
+  /* -- dynamic layout -- */
+  const CAPX=316,CAPW=318,SOP_W=232,CHILD_W=200,NODE_H=44,CHILD_H=32;
+  let yy=94;
+
+  /* Zone 2 - SOPs section (ALWAYS rendered; keeps its empty placeholder) */
+  secLabel(yy+8,'SOPs — procedures');yy+=20;
+  const sopBoxes=[];
+  if(!sops.length){
+    sopBoxes.push({ghost:true,boxY:yy,boxH:NODE_H+20,nodeCy:yy+10+NODE_H/2});
+    yy+=NODE_H+20+12;
+  }else sops.forEach(s=>{
+    const color=capabilityColor('sop_'+s.id);
+    const kids=[...new Set(s.steps)];                       /* composed skills, deduplicated */
+    const pad=10,nodeCy=yy+pad+NODE_H/2;
+    let ky=nodeCy+NODE_H/2+14;
+    const kidCys=kids.map(()=>{const cy=ky+CHILD_H/2;ky+=CHILD_H+6;return cy;});
+    const boxH=pad+NODE_H+(kids.length?14+kids.length*CHILD_H+(kids.length-1)*6:0)+pad-4;
+    sopBoxes.push({sop:s,color,boxY:yy,boxH,nodeCy,kids,kidCys});
+    yy+=boxH+12;
+  });
+
+  /* Zone 2 - Skills section: HIDDEN entirely when no direct skills are equipped */
+  const skillBox={cys:[]};
+  if(directSkills.length){
+    secLabel(yy+8,'Skills — capabilities');yy+=20;
+    const pad=10;
+    let sy=yy+pad+NODE_H/2;
+    skillBox.boxY=yy;
+    directSkills.forEach(()=>{skillBox.cys.push(sy);sy+=NODE_H+12;});
+    skillBox.boxH=pad+directSkills.length*NODE_H+(directSkills.length-1)*12+pad-6;
+    yy=yy+skillBox.boxH+12;
+  }
+  const capEnd=yy;
+
+  /* Zone 3 - tools groups (MCP-server group boxes) */
+  const groups=toolGroups();
+  const TGX=756,TGW=334,CHIP_W=300;
+  let ty=94;const toolGpos=[];
+  if(!groups.length){
+    toolGpos.push({ghost:true,top:ty,gh:NODE_H+16});ty+=NODE_H+16+12;
+  }else groups.forEach(g=>{
+    let cy=ty+26;g.tools.forEach(()=>cy+=26);
+    const gh=cy-ty+6;
+    toolGpos.push({slug:g.slug,tools:g.tools,top:ty,gh});
+    ty+=gh+14;
+  });
+  const toolEnd=ty;
+
+  /* zone heights (uniform bands, grow with content) */
+  const ZH=Math.max(584,capEnd-40+16,toolEnd-40+16);
+  WORLD.h=40+ZH+24;
+
+  /* zone backgrounds */
+  zone(14,40,270,ZH,'① CONFIGURATION','who the agent IS','#1E40AF','#F0F6FF','#1D4ED8',false);
+  zone(298,40,342,ZH,'② CAPABILITIES',"what it's EQUIPPED WITH",'#5B21B6','#FAF5FF','#7C3AED',false);
+  zone(730,40,390,ZH,'③ TOOLS','MCP tools it can call — via the Hub','#334155','#F8FAFC','#64748B',true);
+
+  /* section group boxes (each SOP box wraps itself + its composed children) */
+  sopBoxes.forEach(b=>{
+    svgEl('rect',{x:CAPX,y:b.boxY,width:CAPW,height:b.boxH,rx:10,fill:'#FFFFFF','fill-opacity':.55,
+      stroke:SECTION_GROUP_COLOR,'stroke-width':1,opacity:.55},groupLayer);
+  });
+  if(directSkills.length){
+    svgEl('rect',{x:CAPX,y:skillBox.boxY,width:CAPW,height:skillBox.boxH,rx:10,fill:'#FFFFFF','fill-opacity':.55,
+      stroke:SECTION_GROUP_COLOR,'stroke-width':1,opacity:.55},groupLayer);
+  }
+
+  /* -- edges --
+     capability targets: SOP nodes + direct skill nodes (composed children are NOT targets) */
+  const targets=[];
+  sopBoxes.forEach(b=>targets.push(b.ghost?{cy:b.nodeCy,ghost:true}:{cy:b.nodeCy}));
+  directSkills.forEach((s,i)=>targets.push({cy:skillBox.cys[i]}));
+  let firstTy=null;
+  targets.forEach(tg=>{
+    const sy=Math.max(130,Math.min(tg.cy,40+ZH-60));
+    if(tg.ghost){
+      svgEl('line',{x1:268,y1:sy,x2:CAPX+10,y2:tg.cy,stroke:'#CBD5E1','stroke-width':1.4,'stroke-dasharray':'3 5'},edgeLayer);
+    }else{
+      svgEl('path',{d:'M 268 '+sy+' C 300 '+sy+', 296 '+tg.cy+', '+(CAPX+16)+' '+tg.cy,fill:'none',stroke:EDGE.equipped,'stroke-width':1.8,'marker-end':mkRef(EDGE.equipped)},edgeLayer);
+      if(firstTy===null)firstTy=tg.cy;
+    }
+  });
+  if(firstTy!==null)txt(299,firstTy-8,'equipped with',{fs:8.5,fill:EDGE.equipped,anchor:'middle',halo:true,layer:edgeLayer});
+  if(role&&targets.some(t=>!t.ghost)){
+    targets.filter(t=>!t.ghost).forEach(tg=>{
+      svgEl('path',{d:'M 252 280 C 300 280, 296 '+tg.cy+', '+(CAPX+16)+' '+tg.cy,fill:'none',stroke:EDGE.grants,'stroke-width':1.7,'stroke-dasharray':'2 4.5','marker-end':mkRef(EDGE.grants),opacity:.95},edgeLayer);
+    });
+    txt(296,266,'grants',{fs:8.5,fill:EDGE.grants,anchor:'middle',halo:true,layer:edgeLayer});
+  }
+
+  /* SOP -> composed skill: elbow connectors in the SOP's accent colour */
+  sopBoxes.forEach(b=>{
+    if(b.ghost||!b.kids.length)return;
+    const sopBottom=b.nodeCy+NODE_H/2;
+    b.kidCys.forEach((cy,i)=>{
+      svgEl('path',{d:'M '+(CAPX+10+SOP_W/2)+' '+sopBottom+' V '+cy+' H '+(CAPX+10+(SOP_W-CHILD_W)/2-4),
+        fill:'none',stroke:b.color,'stroke-width':1.6,'marker-end':mkRef(b.color),opacity:.9},edgeLayer);
+      if(i===0)txt(CAPX+10+SOP_W/2+7,sopBottom+13,'composed of',{fs:8.2,fill:b.color,halo:true,layer:edgeLayer});
+    });
+  });
+
+  /* skill -> tool: dashed connectors CROSS the hub bar, coloured per skill */
+  const capRight=CAPX+CAPW+10;
+  function skillToolEdges(skill,cy){
+    const color=capabilityColor('skill_'+skill.id);
+    groups.forEach(gp=>{
+      gp.tools.forEach((tool,ti)=>{
+        if(skill.tool!==tool)return;
+        const ty2=gp.top+26+ti*26+11;
+        svgEl('path',{d:'M '+capRight+' '+cy+' C '+(capRight+80)+' '+cy+', '+(TGX-96)+' '+ty2+', '+(TGX+14)+' '+ty2,
+          fill:'none',stroke:color,'stroke-width':1.8,'stroke-dasharray':'6 5','marker-end':mkRef(color),opacity:.92},edgeLayer);
+      });
+    });
+  }
+  directSkills.forEach((s,i)=>skillToolEdges(s,skillBox.cys[i]));
+  sopBoxes.forEach(b=>{
+    if(b.ghost)return;
+    b.kids.forEach((kidId,i)=>{
+      const sk=item('skills',kidId);if(!sk)return;
+      skillToolEdges(sk,b.kidCys[i]);
+    });
+  });
+
+  /* -- Communication Hub — VERTICAL BAR between 2 and 3 (not a node) -- */
+  const hb=svgEl('g',{'data-topology-node':'1'},hubLayer);
+  hb.style.cursor='default';
+  hb.addEventListener('click',()=>toast('Communication Hub — platform broker · agent gateway · MCP endpoint. Tool connectors cross this bar; every call is routed through the Hub.','info'));
+  svgEl('title',{},hb).textContent='Communication Hub — broker · agent gateway · MCP endpoint';
+  svgEl('rect',{class:'n-box',x:664,y:40,width:48,height:ZH,rx:12,fill:'#E0E7FF',stroke:'#3730A3','stroke-width':2},hb);
+  const hubCy=40+ZH/2;
+  txt(679,hubCy,'📡 COMMUNICATION HUB',{fs:11,fw:700,fill:'#312E81',anchor:'middle',transform:'rotate(-90 679 '+hubCy+')'});
+  txt(697,hubCy,'broker · agent gateway · MCP',{fs:8,fill:'#4338CA',anchor:'middle',transform:'rotate(-90 697 '+hubCy+')'});
+
+  /* == ZONE 1 — agent boundary (containment) == */
+  const bg=svgEl('g',{class:'topo-node','data-topology-node':'1'},nodeLayer);
+  bg.addEventListener('click',()=>toast('Agent Type: '+a.name+' — '+(a.kind==='typed'?'typed output':'conversational')+' · '+equipmentCount(a)+' items equipped. Identity & role are PART of the agent (containment).','info'));
+  svgEl('title',{},bg).textContent=a.name+' — Agent Type boundary (identity & role are part of it)';
+  svgEl('rect',{class:'n-box',x:32,y:88,width:236,height:424,rx:14,fill:pend?'#FEF3C7':'#DBEAFE','fill-opacity':.32,stroke:pend?'#D97706':'#1D4ED8','stroke-width':3},bg);
+  txt(48,112,'🤖 '+truncate(a.name,15),{fs:13.5,fw:700,fill:'#1E3A8A'});
+  txt(48,128,'Agent Type · '+(a.kind==='typed'?'typed output':'conversational')+(pend?' · unsaved draft':''),{fs:9.5,fill:'#475569'});
+  inLabel(170,'signs in as');
+  drawNode({cx:150,cy:198,w:204,h:48,icon:'🆔',label:identity?identity.name:'No identity assigned',
+    sub:identity?identity.account:'click to assign',ghost:!identity,
+    fill:'#FEF3C7',stroke:'#B45309',
+    onClick:identity?()=>toast('Identity: '+identity.name+' — '+identity.account+' ('+identity.provider+' · '+identity.realm+')','info'):()=>openPicker('identity'),
+    full:identity?('Identity: '+identity.name):'No identity assigned',fullSub:identity?identity.account:''});
+  inLabel(252,'assumes as');
+  drawNode({cx:150,cy:280,w:204,h:48,icon:'👤',label:role?role.name:'No role assigned',
+    sub:role?(role.scope.length+' grants · permission source'):'click to assign',ghost:!role,
+    fill:'#DBEAFE',stroke:'#1D4ED8',
+    onClick:role?()=>toast('Role: '+role.name+' — grants '+role.scope.length+' skills/SOPs; permission flows via the dotted grants edges','info'):()=>openPicker('role'),
+    full:role?('Role: '+role.name):'No role assigned',fullSub:role?(role.scope.length+' grants'):''});
+  svgEl('line',{x1:48,y1:326,x2:252,y2:326,stroke:'#93C5FD','stroke-dasharray':'4 4'},nodeLayer);
+  inLabel(346,'contract');
+  const inchips=[
+    {it:inputIt,cat:'input',slot:'input',ph:'No input type'},
+    ...(a.kind==='typed'?[{it:outputIt,cat:'output',slot:'output',ph:'No output type'}]:[]),
+    {it:modelIt,cat:'model',slot:'model',ph:'No model'},
+  ];
+  let chipY=366;
+  inchips.forEach(ch=>{
+    drawNode({cx:150,cy:chipY+17,w:204,h:34,icon:CATS[ch.cat].icon,iconSize:10,
+      label:ch.it?ch.it.name:ch.ph,lw:15,
+      sub:ch.it?(ch.cat==='model'?ch.it.provider:ch.it.slug+' · '+ch.it.kind):'click to assign',subLw:24,
+      ghost:!ch.it,fs:10,subFs:8,
+      fill:ch.cat==='input'?'#DCFCE7':ch.cat==='output'?'#FCE7F3':'#FED7AA',
+      stroke:ch.cat==='input'?'#15803D':ch.cat==='output'?'#9D174D':'#C2410C',
+      onClick:ch.it?()=>toast(CATS[ch.cat].label+': '+ch.it.name+' — '+itemMeta(CATS[ch.cat].catKey,ch.it),'info'):()=>openPicker(ch.slot),
+      full:ch.it?(CATS[ch.cat].label+': '+ch.it.name):ch.ph,fullSub:ch.it?itemMeta(CATS[ch.cat].catKey,ch.it):''});
+    chipY+=46;
+  });
+  txt(32,40+ZH-14,'⬤ Identity & Role are part of the agent (containment — thick boundary)',{fs:8.5,fill:'#64748B'});
+
+  /* == ZONE 2 — capabilities == */
+  sopBoxes.forEach(b=>{
+    if(b.ghost){
+      drawNode({cx:CAPX+10+SOP_W/2,cy:b.nodeCy,w:SOP_W,h:NODE_H,icon:'📋',label:'No SOPs equipped',sub:'click to assign',ghost:true,
+        onClick:()=>openPicker('sops'),full:'No SOPs equipped — empty slot, click to assign'});
+      return;
+    }
+    const s=b.sop;
+    drawNode({cx:CAPX+10+SOP_W/2,cy:b.nodeCy,w:SOP_W,h:NODE_H,icon:'📋',label:s.name,lw:17,
+      sub:s.steps.length+' steps · '+(s.desc||''),subLw:26,
+      fill:'#CFFAFE',stroke:b.color,sw:2,
+      onClick:()=>toast('SOP: '+s.name+' — '+s.desc+' Composes '+b.kids.length+' skill(s); composed skills render as its children.','info'),
+      full:'SOP: '+s.name,fullSub:s.desc});
+    b.kids.forEach((kidId,i)=>{
+      const sk=item('skills',kidId);if(!sk)return;
+      const kc=capabilityColor('skill_'+kidId);
+      drawNode({cx:CAPX+10+(SOP_W-CHILD_W)/2+CHILD_W/2,cy:b.kidCys[i],w:CHILD_W,h:CHILD_H,icon:'🔧',iconSize:10,
+        label:sk.name,lw:15,sub:sk.mcp+' · '+sk.tool,subLw:22,fs:10,subFs:7.8,
+        fill:'#EDE9FE',stroke:kc,sw:1.8,
+        onClick:()=>toast('Composed skill: '+sk.name+' — calls '+sk.tool+' via '+sk.mcp+' (composed under '+s.name+')','info'),
+        full:'Composed skill: '+sk.name,fullSub:sk.mcp+' · '+sk.tool});
+    });
+  });
+  directSkills.forEach((s,i)=>{
+    const kc=capabilityColor('skill_'+s.id);
+    drawNode({cx:CAPX+10+SOP_W/2,cy:skillBox.cys[i],w:SOP_W,h:NODE_H,icon:'🔧',label:s.name,lw:17,
+      sub:s.mcp+' · '+s.tool,subLw:26,
+      fill:'#EDE9FE',stroke:kc,sw:2,
+      onClick:()=>toast('Skill: '+s.name+' — calls '+s.tool+' via '+s.mcp+' (its connector reuses this colour)','info'),
+      full:'Skill: '+s.name,fullSub:s.mcp+' · '+s.tool});
+  });
+
+  /* == ZONE 3 — tools (MCP-server group boxes) == */
+  toolGpos.forEach(gp=>{
+    if(gp.ghost){
+      drawNode({cx:TGX+TGW/2,cy:gp.top+(NODE_H+16)/2,w:250,h:NODE_H,icon:'⚙',label:'No tools resolved',sub:'equip skills or SOPs →',ghost:true,
+        full:'No MCP tools — equip skills or SOPs to build a call path'});
+      return;
+    }
+    const mc=mcpGroupColor(gp.slug);
+    const g=svgEl('g',{},nodeLayer);
+    svgEl('rect',{x:TGX,y:gp.top,width:TGW,height:gp.gh,rx:10,fill:mc,'fill-opacity':.07,stroke:mc,'stroke-width':1.3},g);
+    svgEl('circle',{cx:TGX+13,cy:gp.top+14,r:3.5,fill:mc},g);
+    txt(TGX+22,gp.top+18,gp.slug,{fs:9.5,fw:700,fill:mc,layer:g});
+    txt(TGX+TGW-10,gp.top+18,gp.tools.length+(gp.tools.length===1?' tool':' tools'),{fs:8.5,fill:'#64748B',anchor:'end',layer:g});
+    let cy=gp.top+26;
+    gp.tools.forEach(tool=>{
+      const tg2=svgEl('g',{'data-topology-node':'1'},nodeLayer);
+      tg2.style.cursor='default';
+      tg2.addEventListener('click',()=>toast('MCP tool '+tool+' on '+gp.slug+' — routed via the Communication Hub (dashed connector in the calling skill colour).','info'));
+      svgEl('title',{},tg2).textContent='MCP tool on '+gp.slug+' — routed via the Communication Hub';
+      svgEl('rect',{x:TGX+14,y:cy,width:CHIP_W,height:22,rx:6,fill:'#FFFFFF',stroke:mc,'stroke-width':1.1},tg2);
+      const t=svgEl('text',{x:TGX+26,y:cy+14.5,'font-size':9.5,fill:'#334155','font-family':'ui-monospace,SFMono-Regular,monospace'},tg2);
+      t.textContent=truncate(tool,30);
+      cy+=26;
+    });
+  });
+
+  /* apply the current view (inline = whole world; fullscreen = zoom/pan view) */
+  updateViewBox();
+  renderLegend();
+}
+
+/* ============ FULLSCREEN + ZOOM/PAN ============ */
+function clampZoom(z){return Math.min(FS_MAX_ZOOM,Math.max(FS_MIN_ZOOM,z))}
+function updateViewBox(){
+  const svg=$('topo-svg');
+  if(!svg)return;
+  if(fsMode){
+    const w=WORLD.w/zoom,h=WORLD.h/zoom;
+    const cx=Math.min(Math.max(panCx,w/2),WORLD.w-w/2);
+    const cy=Math.min(Math.max(panCy,h/2),WORLD.h-h/2);
+    svg.setAttribute('viewBox',r3(cx-w/2)+' '+r3(cy-h/2)+' '+r3(w)+' '+r3(h));
+    const pct=$('fs-zoom-pct');if(pct)pct.textContent=Math.round(zoom*100)+'%';
+    const zin=$('fs-zoom-in'),zout=$('fs-zoom-out'),fit=$('fs-fit');
+    if(zin)zin.disabled=zoom>=FS_MAX_ZOOM;
+    if(zout)zout.disabled=zoom<=FS_MIN_ZOOM;
+    if(fit)fit.disabled=zoom===1;
+  }else{
+    svg.setAttribute('viewBox','0 0 '+WORLD.w+' '+WORLD.h);
+  }
+}
+/* Fullscreen enter/exit always reset zoom -> auto-fit (zoom 1), per PanelTopologyCanvas */
+function enterFs(){
+  if(!cur())return;
+  fsMode=true;zoom=1;panCx=WORLD.w/2;panCy=WORLD.h/2;
+  $('fs-body').appendChild($('topo-stage'));
+  $('fs-overlay').classList.add('open');
+  syncFsChip();
+  updateViewBox();
+}
+function exitFs(){
+  fsMode=false;zoom=1;panCx=WORLD.w/2;panCy=WORLD.h/2;
+  $('topo-host').appendChild($('topo-stage'));
+  $('fs-overlay').classList.remove('open');
+  updateViewBox();
+}
+function syncFsChip(){
+  const a=cur(),chip=$('fs-state-chip');if(!a||!chip)return;
+  chip.className=isDirty(a)?'chip chip-yellow':'chip chip-green';
+  chip.textContent=isDirty(a)?'● unsaved':'✓ saved';
+}
+function zoomIn(){zoom=clampZoom(zoom*FS_ZOOM_STEP);updateViewBox()}
+function zoomOut(){zoom=clampZoom(zoom/FS_ZOOM_STEP);updateViewBox()}
+function zoomFit(){zoom=1;panCx=WORLD.w/2;panCy=WORLD.h/2;updateViewBox()}
+(function bindPan(){
+  const svg=$('topo-svg');
+  let dragging=false,lx=0,ly=0;
+  svg.addEventListener('pointerdown',e=>{
+    if(!fsMode)return;
+    if(e.target.closest&&e.target.closest('[data-topology-node]'))return;
+    dragging=true;lx=e.clientX;ly=e.clientY;
+    try{svg.setPointerCapture(e.pointerId)}catch(err){}
+  });
+  svg.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    const dx=e.clientX-lx,dy=e.clientY-ly;
+    lx=e.clientX;ly=e.clientY;
+    const rect=svg.getBoundingClientRect();
+    panCx-=dx*(WORLD.w/zoom)/Math.max(rect.width,1);
+    panCy-=dy*(WORLD.h/zoom)/Math.max(rect.height,1);
+    updateViewBox();
+  });
+  svg.addEventListener('pointerup',()=>{dragging=false});
+  svg.addEventListener('wheel',e=>{
+    if(!fsMode)return;
+    e.preventDefault();
+    const rect=svg.getBoundingClientRect();
+    panCx+=e.deltaX*(WORLD.w/zoom)/Math.max(rect.width,1);
+    panCy+=e.deltaY*(WORLD.h/zoom)/Math.max(rect.height,1);
+    updateViewBox();
+  },{passive:false});
+})();
+
+/* ============ LEGEND (edge semantics) ============ */
+function renderLegend(){
+  if(!cur()){$('legend').innerHTML='';return;}
+  const uniq=[...new Set(equippedSkillPool().map(s=>s.mcp))];
+  $('legend').innerHTML='<strong>Legend</strong>'+
+    '<span class="legend-item"><svg width="22" height="14"><rect x="2" y="2" width="18" height="10" rx="3" fill="none" stroke="#1D4ED8" stroke-width="2.5"/></svg>agent boundary — identity &amp; role <b>are part of</b> the agent</span>'+
+    '<span class="legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#64748B" stroke-width="2"/><path d="M19 1l6 3-6 3z" fill="#64748B"/></svg>equipped with</span>'+
+    '<span class="legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#2563EB" stroke-width="2" stroke-dasharray="2 3"/><path d="M19 1l6 3-6 3z" fill="#2563EB"/></svg>role grants permission</span>'+
+    '<span class="legend-item"><svg width="30" height="12"><path d="M2 2v8h20" fill="none" stroke="#E53935" stroke-width="2"/><path d="M22 5l6 2.5-6 2.5z" fill="#E53935"/></svg>composed of (SOP accent colour)</span>'+
+    '<span class="legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#8E24AA" stroke-width="2" stroke-dasharray="5 3"/><path d="M19 1l6 3-6 3z" fill="#8E24AA"/></svg>call path via Hub <b>(crosses the bar — per-skill colour)</b></span>'+
+    '<span class="legend-item">🆔 Identity · 👤 Role · 🔧 Skill · 📋 SOP · 📥 Input · 📤 Output · 🧠 Model</span>'+
+    uniq.map(s=>'<span class="legend-item"><span style="width:9px;height:9px;border-radius:50%;display:inline-block;background:'+mcpGroupColor(s)+'"></span>'+esc(s)+'</span>').join('')+
+    '<span class="legend-item">⬚ dashed = empty slot · Skills section hidden when empty · hover/click a node for full text</span>';
+}
+
+/* ============ EQUIPMENT SLOTS ============ */
+const SLOT_DEFS=[
+  {key:'role',    multi:false, module:'Agent Roles',         reuse:'agent::roles'},
+  {key:'identity',multi:false, module:'Agent Identities',    reuse:'agent::identities'},
+  {key:'skills',  multi:true,  module:'Skills',              reuse:'agent::skills'},
+  {key:'sops',    multi:true,  module:'SOPs',                reuse:'agent::sops'},
+  {key:'input',   multi:false, module:'Agent Data Types',    reuse:'agent::data_types'},
+  {key:'output',  multi:false, module:'Agent Data Types',    reuse:'agent::data_types'},
+  {key:'model',   multi:false, module:'Model Configurations',reuse:'agent::model_configs'},
+];
+
+function slotItemRow(icon,name,meta,onRemove){
+  return '<div class="slot-item">'+
+    '<span class="si-icon">'+icon+'</span>'+
+    '<div class="si-main"><div class="si-name">'+esc(name)+'</div><div class="si-meta">'+esc(meta||'')+'</div></div>'+
+    (onRemove?'<button class="si-remove" title="Unassign" '+(canWrite()?'':'disabled')+' onclick="'+onRemove+'">✕</button>':'')+
+  '</div>';
+}
+
+function renderSlots(){
+  const a=cur();if(!a)return;
+  $('equip-agent-name').textContent=a.name;
+  $('perm-note').classList.toggle('show',!canWrite());
+  const c=cfg();
+  const lockBtn=(fn,title)=>canWrite()?'onclick="'+fn+'"':'disabled title="'+(title||'Read-only')+'"';
+
+  $('slots').innerHTML=SLOT_DEFS.map(def=>{
+    const cat2=CATS[def.key];
+    const permTitle=canWrite()?'':'Read-only: requires '+cat2.perm;
+    let body='',actions='';
+
+    if(def.key==='output' && a.kind==='conversational'){
+      body='<div class="slot-locked"><span>🔒</span><span><b>Not available.</b> Conversational agents do not support typed outputs (Agent Data Type rule).</span></div>';
+    }else if(def.multi){
+      const arr=c[def.key];
+      body=arr.length?arr.map(id=>{const it=item(cat2.catKey,id);return it?slotItemRow(cat2.icon,it.name,itemMeta(cat2.catKey,it),'unassignMulti(\''+def.key+'\',\''+id+'\')'):''}).join('')
+        :'<div class="slot-empty">Nothing equipped yet.</div>';
+      actions='<button class="btn btn-secondary btn-xs" '+lockBtn('openPicker(\''+def.key+'\')',permTitle)+'>Assign existing…</button>'+
+              '<button class="btn btn-secondary btn-xs" '+lockBtn('openCreate(\''+def.key+'\')',permTitle)+'>＋ Create new</button>';
+    }else{
+      const id=c[def.key], it=id?item(cat2.catKey,id):null;
+      body=it?slotItemRow(cat2.icon,it.name,itemMeta(cat2.catKey,it),'unassignSingle(\''+def.key+'\')')
+             :'<div class="slot-empty">— not equipped —</div>';
+      actions='<button class="btn btn-secondary btn-xs" '+lockBtn('openPicker(\''+def.key+'\')',permTitle)+'>Assign existing…</button>'+
+              '<button class="btn btn-secondary btn-xs" '+lockBtn('openCreate(\''+def.key+'\')',permTitle)+'>＋ Create new</button>'+
+              (it?'<button class="btn btn-ghost-danger btn-xs" '+lockBtn('unassignSingle(\''+def.key+'\')',permTitle)+'>Unassign</button>':'');
+    }
+
+    return '<div class="slot">'+
+      '<div class="slot-head"><span class="sh-icon">'+cat2.icon+'</span><span class="sh-label">'+cat2.label+'</span>'+
+        (def.multi?'<span class="count-badge">'+c[def.key].length+'</span>':'')+
+      '</div>'+
+      '<div class="slot-body">'+body+'</div>'+
+      '<div class="slot-actions">'+actions+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ============ PENDING CHANGES TRAY (Save = one PUT · Discard) ============ */
+function renderTray(){
+  const a=cur();
+  const slotIds=a?changedSlotIds(a):[], props=a?propertiesChanged(a):false, dirty=a?isDirty(a):false;
+  const n=slotIds.length+(props?1:0);
+  $('unsaved-badge').classList.toggle('show',dirty);
+  $('unsaved-text').textContent=n+' unsaved change'+(n===1?'':'s');
+  const setChip=(id)=>{const el=$(id);if(!el)return;el.className=dirty?'chip chip-yellow':'chip chip-green';el.textContent=dirty?'● unsaved draft':'✓ saved';};
+  setChip('topo-state-chip');setChip('tray-state-chip');
+  syncFsChip();
+  const tl=$('topo-live');if(tl)tl.style.color=dirty?'#B45309':'#1D4ED8';
+  $('pending-count').textContent=n;
+  const chips=[];
+  if(props)chips.push('<span class="tray-chip">⚙️ Properties</span>');
+  slotIds.forEach(k=>chips.push('<span class="tray-chip">'+CATS[k].icon+' '+CATS[k].label+'</span>'));
+  $('pending-chips').innerHTML=chips.join('');
+  const nameBad=a?isNameInvalid(a):true;
+  $('btn-save').disabled=!dirty||!canWrite()||nameBad;
+  $('btn-save').title=nameBad?'Fix the agent name (slug) before saving':'';
+  $('btn-discard').disabled=!dirty||!canWrite();
+}
+function saveChanges(){
+  const a=cur();
+  if(isNameInvalid(a)){toast('Fix the agent name before saving — it must be a non-empty slug.','error');return;}
+  if(agents.some(x=>x.id!==a.id&&x.name.toLowerCase()===a.name.toLowerCase())){toast('Duplicate agent name rejected — another agent type already uses "'+a.name+'".','error');return;}
+  SAVED[a.id]=deep(a);
+  toast('Saved — single PUT /agents/types/'+a.id+'.','success');
+  renderAll();
+}
+function discardChanges(){
+  const i=agents.findIndex(x=>x.id===selectedId);
+  agents[i]=deep(SAVED[selectedId]);
+  toast('Draft changes discarded — reverted to the last saved snapshot.','info');
+  renderAll();
+}
+
+/* ============ ASSIGN / UNASSIGN (draft mutations) ============ */
+function applyAssign(slotKey,id){
+  const cat2=CATS[slotKey], it=item(cat2.catKey,id), prev=cfg()[slotKey];
+  if(prev===id){toast(cat2.label+' "'+it.name+'" is already equipped.','info');return;}
+  cfg()[slotKey]=id;
+  toast(cat2.label+' equipped: '+it.name+' (draft — save to persist)','success');
+  onDraftMutated();
+}
+function unassignSingle(slotKey){
+  const cat2=CATS[slotKey], it=item(cat2.catKey,cfg()[slotKey]);
+  if(!it)return;
+  cfg()[slotKey]=null;
+  toast(cat2.label+' unequipped: '+it.name,'info');
+  onDraftMutated();
+}
+function applyMulti(slotKey,newIds){
+  const cat2=CATS[slotKey];
+  const before=cfg()[slotKey];
+  const added=newIds.filter(id=>!before.includes(id)), removed=before.filter(id=>!newIds.includes(id));
+  if(!added.length&&!removed.length)return;
+  cfg()[slotKey]=newIds;
+  toast(cat2.label+'s updated (+'+added.length+' / −'+removed.length+') — draft only.','success');
+  onDraftMutated();
+}
+function unassignMulti(slotKey,id){
+  const cat2=CATS[slotKey], it=item(cat2.catKey,id);
+  cfg()[slotKey]=cfg()[slotKey].filter(x=>x!==id);
+  toast(cat2.label+' unequipped: '+it.name,'info');
+  onDraftMutated();
+}
+/* Every draft mutation -> live topology re-render + slots + tray + header */
+function onDraftMutated(opts){
+  renderTopology();renderSlots();renderTray();renderHeader();renderSidebar();
+  if(!(opts&&opts.skipProps))renderProperties();
+  else renderNameValidity(cur());
+}
+
+/* ============ MODAL SYSTEM ============ */
+function openModal(title,sub,body,footer){
+  $('modal-title').innerHTML=title; $('modal-sub').innerHTML=sub||'';
+  $('modal-body').innerHTML=body; $('modal-footer').innerHTML=footer;
+  $('modal-overlay').classList.add('open');
+}
+function closeModal(){$('modal-overlay').classList.remove('open');modalSave=null;}
+$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))closeModal()});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(fsMode){exitFs();return;}
+  if($('modal-overlay').classList.contains('open')){closeModal();return;}
+  if($('picker-overlay').classList.contains('open'))closePicker();
+});
+function stdFooter(saveLabel,onSave){
+  modalSave=onSave;
+  return '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>'+
+         '<button class="btn btn-primary" onclick="modalSave&&modalSave()">'+saveLabel+'</button>';
+}
+function setErr(id,msg){$(id).classList.add('error');const e=$(id+'-err');if(e){e.textContent=msg;e.classList.add('visible')}}
+function clearErrs(){document.querySelectorAll('#modal-body .error').forEach(x=>x.classList.remove('error'));document.querySelectorAll('#modal-body .inline-form-error').forEach(x=>{x.classList.remove('visible');x.textContent=''})}
+function dupCheck(catKey,name,exceptId){
+  return catalog[catKey].some(x=>x.id!==exceptId&&x.name.toLowerCase()===name.toLowerCase());
+}
+
+/* ============ RESOURCE PICKER (searchable + paginated · single/multi · create-new inside) ============ */
+const PICKER_ROWS=[10,25,50];
+let picker={slot:null,mode:'single',items:[],sel:new Set(),baseline:[],q:'',page:0,rows:10};
+function equippedIds(slotKey){
+  const v=cfg()[slotKey];
+  return Array.isArray(v)?v.slice():(v?[v]:[]);
+}
+function pickerItems(slotKey){
+  const cat2=CATS[slotKey];
+  return catalog[cat2.catKey].map(it=>({id:it.id,label:it.name,sub:itemMeta(cat2.catKey,it)}));
+}
+function openPicker(slotKey){
+  if(!canWrite()){toast('Read-only: requires '+CATS[slotKey].perm+' to assign.','error');return;}
+  if(slotKey==='output'&&cur().kind==='conversational')return;
+  const def=SLOT_DEFS.find(d=>d.key===slotKey),cat2=CATS[slotKey];
+  picker={slot:slotKey,mode:def.multi?'multi':'single',items:pickerItems(slotKey),
+          sel:new Set(equippedIds(slotKey)),baseline:equippedIds(slotKey),q:'',page:0,rows:10};
+  $('picker-search').value='';
+  $('picker-rows').value='10';
+  $('picker-title').textContent='Assign '+cat2.label+(def.multi?'s':'');
+  $('picker-sub').innerHTML=(def.multi?'Attach one or more ':'Pick from existing ')+def.module.toLowerCase()+' resources · source: <span class="reuse-chip">'+def.reuse+'</span>';
+  $('picker-create-btn').style.display='';
+  renderPickerList();
+  $('picker-overlay').classList.add('open');
+}
+function closePicker(){
+  $('picker-overlay').classList.remove('open');
+  picker={slot:null,mode:'single',items:[],sel:new Set(),baseline:[],q:'',page:0,rows:10};
+}
+function pickerFiltered(){
+  const q=picker.q.trim().toLowerCase();
+  if(!q)return picker.items;
+  return picker.items.filter(it=>it.label.toLowerCase().includes(q)||(it.sub||'').toLowerCase().includes(q));
+}
+function renderPickerList(){
+  const filtered=pickerFiltered();
+  const pageCount=Math.max(1,Math.ceil(filtered.length/picker.rows));
+  if(picker.page>pageCount-1)picker.page=pageCount-1;
+  const start=picker.page*picker.rows;
+  const rows=filtered.slice(start,start+picker.rows);
+  const multi=picker.mode==='multi';
+  $('picker-list').innerHTML=rows.length?rows.map(it=>{
+    const sel=picker.sel.has(it.id);
+    return '<div class="pick-row'+(sel?' selected':'')+'" onclick="pickerToggle(\''+it.id+'\')">'+
+      (multi?'<input type="checkbox" class="pr-check" '+(sel?'checked':'')+' onclick="event.stopPropagation();pickerToggle(\''+it.id+'\')">':'<span class="pr-radio"></span>')+
+      '<div class="pr-main"><div class="pr-label" title="'+esc(it.label)+'">'+esc(it.label)+'</div>'+
+      (it.sub?'<div class="pr-sub" title="'+esc(it.sub)+'">'+esc(it.sub)+'</div>':'')+
+      '</div></div>';
+  }).join(''):'<div class="picker-empty">No resources match your search.</div>';
+  $('picker-pg-info').textContent=filtered.length===0?'0 of 0':(start+1)+'–'+Math.min(start+picker.rows,filtered.length)+' of '+filtered.length;
+  $('pg-prev').disabled=picker.page<=0;
+  $('pg-next').disabled=picker.page>=pageCount-1;
+  /* baseline change detection — Assign disabled until the selection differs from equipped */
+  const changed=picker.mode==='single'
+    ?(picker.sel.size>0?[...picker.sel][0]:null)!==(picker.baseline[0]||null)
+    :(picker.sel.size!==picker.baseline.length||[...picker.sel].some(id=>!picker.baseline.includes(id)));
+  $('picker-assign-btn').disabled=!changed;
+  $('picker-assign-btn').textContent=changed?('Assign ('+picker.sel.size+')'):'Assign';
+}
+function pickerToggle(id){
+  if(picker.mode==='single')picker.sel=new Set([id]);
+  else{const n=new Set(picker.sel);n.has(id)?n.delete(id):n.add(id);picker.sel=n;}
+  renderPickerList();
+}
+function pickerSearch(v){picker.q=v;picker.page=0;renderPickerList()}
+function pickerPage(dir){picker.page+=dir;renderPickerList()}
+function pickerRows(v){picker.rows=parseInt(v,10)||10;picker.page=0;renderPickerList()}
+function pickerAssign(){
+  const slotKey=picker.slot,ids=[...picker.sel];
+  const def=SLOT_DEFS.find(d=>d.key===slotKey);
+  closePicker();
+  if(def.multi)applyMulti(slotKey,ids);
+  else ids.length?applyAssign(slotKey,ids[0]):null;
+}
+/* "Create new" INSIDE the picker: opens the module dialog while the picker stays
+   mounted; the created resource is pre-selected in the refreshed list. */
+function pickerCreateNew(){
+  if(!picker.slot)return;
+  openCreate(picker.slot,true);
+}
+function refreshPickerWithPreset(id){
+  if(!$('picker-overlay').classList.contains('open')||!picker.slot)return;
+  const cat2=CATS[picker.slot];
+  picker.items=pickerItems(picker.slot);
+  picker.sel=new Set([id]);                       /* created resource pre-selected */
+  const it=picker.items.find(x=>x.id===id);
+  picker.page=it?Math.floor(picker.items.indexOf(it)/picker.rows):0;
+  toast(cat2.label+' created — pre-selected below. Review and click Assign.','info');
+  renderPickerList();
+}
+
+/* ============ INLINE CREATE (reuses source module dialogs — identical behaviour) ============ */
+function openCreate(slotKey,fromPicker){
+  clearErrs();
+  switch(slotKey){
+    case 'role':     return createRoleDialog(fromPicker);
+    case 'identity': return createIdentityDialog(fromPicker);
+    case 'skill':
+    case 'skills':   return createSkillDialog(fromPicker);
+    case 'sop':
+    case 'sops':     return createSopDialog(fromPicker);
+    case 'input':    return createDatatypeDialog('input',fromPicker);
+    case 'output':   return createDatatypeDialog('output',fromPicker);
+    case 'model':    return createModelDialog(fromPicker);
+  }
+}
+function afterCreate(slotKey,fromPicker,createdId,msg){
+  if(fromPicker){closeModal();refreshPickerWithPreset(createdId);}
+  else{applyAssign(slotKey,createdId);closeModal();}
+  toast(msg,'success');
+}
+
+function createRoleDialog(fromPicker){
+  const grants='<div class="grant-grid">'+
+    '<div class="grant-col-title">Skills</div>'+
+    catalog.skills.map(s=>'<label class="grant-item"><input type="checkbox" class="g-skill" value="'+s.id+'">🔧 '+esc(s.name)+'</label>').join('')+
+    '<div class="grant-col-title">SOPs</div>'+
+    catalog.sops.map(s=>'<label class="grant-item"><input type="checkbox" class="g-sop" value="'+s.id+'">📋 '+esc(s.name)+'</label>').join('')+
+    '</div>';
+  const body='<div class="form-group"><label>Role Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Auditor"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Description</label><textarea id="f-desc" class="form-control" style="min-height:60px" placeholder="What this role grants…"></textarea></div>'+
+    '<div class="form-group"><label>Grants access to (Skills &amp; SOPs)</label>'+grants+'</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Assign'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Role name is required.');ok=false;}
+    else if(dupCheck('roles',name)){setErr('f-name','A role with this name already exists.');ok=false;}
+    if(!ok)return;
+    const role={id:nextId('r'),name,desc:$('f-desc').value.trim(),
+      scope:[...document.querySelectorAll('.g-skill:checked'),...document.querySelectorAll('.g-sop:checked')].map(x=>x.value)};
+    catalog.roles.push(role);
+    afterCreate('role',fromPicker,role.id,'Role "'+name+'" created inline (reused Agent Roles dialog).');
+  });
+  openModal('👤 New Agent Role','Inline creation — identical to the <span class="reuse-chip">agent::roles</span> module dialog',body,footer);
+}
+
+function createIdentityDialog(fromPicker){
+  const body='<div id="idp-form">'+
+    '<div class="form-row-2">'+
+    '<div class="form-group"><label>Display Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Scanner Bot"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Identity Provider *</label><select id="f-provider" class="form-control"><option>Keycloak</option><option>Azure EntraID</option></select></div>'+
+    '</div>'+
+    '<div class="form-group"><label>Preferred Username *</label><input id="f-user" class="form-control" placeholder="svc-security-scanner"><div class="inline-form-error" id="f-user-err"></div></div>'+
+    '<div class="form-hint">Provisioning signs in to the agent realm (<code>ai_agents</code>) via OIDC and stores the token encrypted. Tokens are resolved by Control Center at call time — agents never hold identity tokens.</div>'+
+    '</div>'+
+    '<div id="idp-progress" style="display:none;text-align:center;padding:8px 0"><span class="mini-spinner" style="width:22px;height:22px"></span>'+
+    '<ul class="provision-steps" style="text-align:left;max-width:340px;margin:14px auto 0">'+
+    '<li class="provision-step" id="ps1"><span class="ps-icon">·</span>Redirecting to identity provider…</li>'+
+    '<li class="provision-step" id="ps2"><span class="ps-icon">·</span>OAuth sign-in &amp; consent</li>'+
+    '<li class="provision-step" id="ps3"><span class="ps-icon">·</span>Principal provisioned in agent realm</li>'+
+    '</ul></div>'+
+    '<div id="idp-success" style="display:none"><div class="success-box" id="idp-success-box"></div></div>';
+  const footer=stdFooter('🔐 Sign in & Provision',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), user=$('f-user').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Display name is required.');ok=false;}
+    if(!user){setErr('f-user','Preferred username is required.');ok=false;}
+    if(!ok)return;
+    $('idp-form').style.display='none';
+    const foot=$('modal-footer'); foot.style.display='none';
+    const prog=$('idp-progress'); prog.style.display='block';
+    const step=(id,delay)=>new Promise(res=>setTimeout(()=>{const li=$(id);li.classList.add('done');li.querySelector('.ps-icon').textContent='✓';res()},delay));
+    step('ps1',500).then(()=>step('ps2',900)).then(()=>step('ps3',800)).then(()=>{
+      prog.style.display='none';
+      const provider=$('f-provider').value, realm=provider==='Keycloak'?'ai_agents':'agents';
+      const account=(user.includes('@')?user:user+'@'+(provider==='Keycloak'?'agents.parthenon.local':'contoso.com'));
+      $('idp-success-box').innerHTML='✓ Identity provisioned.<br><b>'+esc(account)+'</b><br>realm <b>'+realm+'</b> · provider '+esc(provider)+' · token stored encrypted';
+      $('idp-success').style.display='block';
+      foot.style.display='flex';
+      modalSave=()=>{
+        const identity={id:nextId('i'),name,account,provider,realm};
+        catalog.identities.push(identity);
+        afterCreate('identity',fromPicker,identity.id,'Identity "'+account+'" provisioned inline (reused Agent Identities sign-in flow).');
+      };
+      foot.innerHTML='<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="modalSave&&modalSave()">'+(fromPicker?'Done — back to picker':'Assign to agent')+'</button>';
+    });
+  });
+  openModal('🆔 New Agent Identity','Inline sign-in / provisioning — identical to the <span class="reuse-chip">agent::identities</span> OIDC flow',body,footer);
+}
+
+function createSkillDialog(fromPicker){
+  const body='<div class="form-group"><label>Skill Name *</label><input id="f-name" class="form-control" placeholder="e.g. secret-scan-diff"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-row-2">'+
+    '<div class="form-group"><label>MCP Server *</label><select id="f-mcp" class="form-control"><option>mcp-github</option><option>mcp-kubernetes</option><option>mcp-filesystem</option><option>mcp-wiki</option><option>mcp-vision</option></select></div>'+
+    '<div class="form-group"><label>MCP Tool *</label><input id="f-tool" class="form-control" placeholder="e.g. scan_secrets"><div class="inline-form-error" id="f-tool-err"></div></div>'+
+    '</div>'+
+    '<div class="form-group"><label>Description</label><input id="f-desc" class="form-control" placeholder="What this skill does…"></div>'+
+    '<div class="form-hint">Skills wrap one or more MCP tool calls and are the permission-grantable unit for agents.</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Attach'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), tool=$('f-tool').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Skill name is required.');ok=false;}
+    else if(dupCheck('skills',name)){setErr('f-name','A skill with this name already exists.');ok=false;}
+    if(!tool){setErr('f-tool','MCP tool is required.');ok=false;}
+    if(!ok)return;
+    const skill={id:nextId('s'),name,mcp:$('f-mcp').value,tool,desc:$('f-desc').value.trim()};
+    catalog.skills.push(skill);
+    if(fromPicker){closeModal();refreshPickerWithPreset(skill.id);}
+    else{applyMulti('skills',[...cfg().skills,skill.id]);closeModal();}
+    toast('Skill "'+name+'" created inline (reused Skill dialog).','success');
+  });
+  openModal('🔧 New Skill','Inline creation — identical to the <span class="reuse-chip">agent::skills</span> module dialog',body,footer);
+}
+
+function createSopDialog(fromPicker){
+  const body='<div class="form-group"><label>SOP Name *</label><input id="f-name" class="form-control" placeholder="e.g. dependency-audit-flow"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Description</label><input id="f-desc" class="form-control" placeholder="What this SOP accomplishes…"></div>'+
+    '<div class="form-group"><label>Composed Skills (run in selected order) *</label>'+
+    '<div class="pick-list" style="max-height:170px">'+
+    catalog.skills.map(s=>'<label class="pick-item"><input type="checkbox" class="sop-step" value="'+s.id+'"><span class="pi-icon">🔧</span><span class="pi-main"><b>'+esc(s.name)+'</b><small>'+esc(itemMeta('skills',s))+'</small></span></label>').join('')+
+    '</div><div class="inline-form-error" id="f-steps-err"></div>'+
+    '<div class="form-hint">SOPs are higher-level Skills with sequencing logic; they may delegate to other agents.</div></div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Attach'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim();
+    const steps=Array.from(document.querySelectorAll('.sop-step:checked')).map(x=>x.value);
+    let ok=true;
+    if(!name){setErr('f-name','SOP name is required.');ok=false;}
+    else if(dupCheck('sops',name)){setErr('f-name','An SOP with this name already exists.');ok=false;}
+    if(!steps.length){const e=$('f-steps-err');e.textContent='Select at least one skill step.';e.classList.add('visible');ok=false;}
+    if(!ok)return;
+    const sop={id:nextId('o'),name,steps,desc:$('f-desc').value.trim()};
+    catalog.sops.push(sop);
+    if(fromPicker){closeModal();refreshPickerWithPreset(sop.id);}
+    else{applyMulti('sops',[...cfg().sops,sop.id]);closeModal();}
+    toast('SOP "'+name+'" created inline (reused SOP dialog).','success');
+  });
+  openModal('📋 New SOP','Inline creation — identical to the <span class="reuse-chip">agent::sops</span> module dialog',body,footer);
+}
+
+let fieldRowSeq=0;
+function addFieldRow(){
+  const wrap=$('f-fields'); if(!wrap)return;
+  const i=++fieldRowSeq;
+  const row=document.createElement('div'); row.className='field-row'; row.id='frow-'+i;
+  row.innerHTML='<input class="form-control fr-name" placeholder="field_name">'+
+    '<select class="form-control fr-type"><option>string</option><option>number</option><option>boolean</option><option>date</option><option>enum</option></select>'+
+    '<label class="fr-req"><input type="checkbox" class="fr-req-cb">req</label>'+
+    '<button class="fr-del" onclick="this.parentNode.remove()">✕</button>';
+  wrap.appendChild(row);
+}
+function createDatatypeDialog(slotKey,fromPicker){
+  const cat2=CATS[slotKey];
+  const body='<div class="form-row-2">'+
+    '<div class="form-group"><label>Type Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Finding" oninput="$(\'f-slug\').value=slugify(this.value)"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Slug *</label><input id="f-slug" class="form-control" placeholder="security-finding"><div class="inline-form-error" id="f-slug-err"></div></div>'+
+    '</div>'+
+    '<div class="form-row-2">'+
+    '<div class="form-group"><label>Base Kind</label><select id="f-kind" class="form-control" onchange="$(\'f-fields-wrap\').style.display=this.value===\'json\'?\'block\':\'none\'"><option value="json">json — typed fields</option><option value="text">text</option><option value="binary">binary</option></select></div>'+
+    '<div class="form-group"><label>Description</label><input id="f-desc" class="form-control"></div>'+
+    '</div>'+
+    '<div class="form-group" id="f-fields-wrap"><label>Typed Fields</label><div id="f-fields">'+
+    '<div class="field-row"><input class="form-control fr-name" placeholder="field_name">'+
+    '<select class="form-control fr-type"><option>string</option><option>number</option><option>boolean</option><option>date</option><option>enum</option></select>'+
+    '<label class="fr-req"><input type="checkbox" class="fr-req-cb" checked>req</label>'+
+    '<button class="fr-del" onclick="this.parentNode.remove()">✕</button></div></div>'+
+    '<button class="add-field-btn" onclick="addFieldRow()">＋ Add field</button></div>'+
+    '<div class="form-hint">⚠️ Data types cannot be deleted while referenced by agent types, and conversational agents do not support typed outputs.</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Assign'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), slug=$('f-slug').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Type name is required.');ok=false;}
+    else if(dupCheck('datatypes',name)){setErr('f-name','A data type with this name already exists.');ok=false;}
+    if(!slug){setErr('f-slug','Slug is required.');ok=false;}
+    if(!ok)return;
+    const kind=$('f-kind').value;
+    const fields=kind==='json'?Array.from(document.querySelectorAll('#f-fields .field-row')).map(r=>({
+      n:r.querySelector('.fr-name').value.trim(), t:r.querySelector('.fr-type').value, r:r.querySelector('.fr-req-cb').checked
+    })).filter(f=>f.n):[];
+    const dt={id:nextId('d'),name,slug,kind,fields,desc:$('f-desc').value.trim()};
+    catalog.datatypes.push(dt);
+    afterCreate(slotKey,fromPicker,dt.id,'Data type "'+name+'" created inline (reused Agent Data Types dialog).');
+  });
+  openModal(cat2.icon+' New Agent Data Type',(slotKey==='output'?'Output':'Input')+' type — inline creation, identical to the <span class="reuse-chip">agent::data_types</span> module dialog',body,footer);
+}
+function slugify(s){return s.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}
+
+function createModelDialog(fromPicker){
+  const body='<div class="form-row-2">'+
+    '<div class="form-group"><label>Config Name *</label><input id="f-name" class="form-control" placeholder="e.g. Azure GPT-4o mini"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Provider *</label><select id="f-provider" class="form-control"><option>openai</option><option>azure_openai</option><option>anthropic</option><option>gemini</option><option>groq</option><option>cohere</option><option>litellm_proxy</option><option>deepseek</option></select></div>'+
+    '</div>'+
+    '<div class="form-group"><label>API Key *</label><input id="f-key" type="password" class="form-control" placeholder="•••••••••••• (stored AES-256 encrypted)"><div class="inline-form-error" id="f-key-err"></div></div>'+
+    '<div class="form-row-2">'+
+    '<div class="form-group"><label>Base URL</label><input id="f-url" class="form-control" placeholder="https://…"></div>'+
+    '<div class="form-group"><label>Enabled Models *</label><input id="f-models" class="form-control" placeholder="gpt-4o-mini, gpt-4o"><div class="inline-form-error" id="f-models-err"></div></div>'+
+    '</div>'+
+    '<button class="btn btn-secondary btn-sm" onclick="toast(\'Connection test OK — provider reachable (mock).\',\'success\')">🔌 Test Connection</button>'+
+    '<div class="form-hint" style="margin-top:8px">Credentials are encrypted (AES-256) and decrypted only at call time. Agent types reference model IDs resolved to configs at runtime.</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Select'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), key=$('f-key').value, models=$('f-models').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Config name is required.');ok=false;}
+    else if(dupCheck('models',name)){setErr('f-name','A model config with this name already exists.');ok=false;}
+    if(!key){setErr('f-key','API key is required.');ok=false;}
+    if(!models){setErr('f-models','List at least one enabled model.');ok=false;}
+    if(!ok)return;
+    const model={id:nextId('m'),name,provider:$('f-provider').value,endpoint:$('f-url').value.trim()||'https://api.'+$('f-provider').value+'.example'};
+    catalog.models.push(model);
+    afterCreate('model',fromPicker,model.id,'Model config "'+name+'" created inline (reused Model Configurations dialog).');
+  });
+  openModal('🧠 New Model Configuration','Inline creation — identical to the <span class="reuse-chip">agent::model_configs</span> module dialog',body,footer);
+}
+
+/* ============ AGENT CRUD (Create dialog · Delete confirm — NO edit dialog) ============ */
+function agentFormBody(){
+  return '<div class="form-group"><label>Agent Name (slug) *</label><input id="f-ag-name" class="form-control" placeholder="e.g. compliance-reporter" oninput="validateAgentFormLive()"><div class="inline-form-error" id="f-ag-name-err"></div><div class="form-hint">Lowercase letters, numbers and hyphens.</div></div>'+
+    '<div class="form-row-2">'+
+    '<div class="form-group"><label>Agent Kind *</label><select id="f-ag-kind" class="form-control"><option value="typed">Typed output (structured)</option><option value="conversational">Conversational</option></select></div>'+
+    '<div class="form-group"><label>Description</label><input id="f-ag-desc" class="form-control" placeholder="What this agent does…"></div>'+
+    '</div>'+
+    '<div class="form-group"><label>System Instruction *</label><textarea id="f-ag-si" class="form-control" placeholder="Core behaviour of the agent…"></textarea><div class="inline-form-error" id="f-ag-si-err"></div></div>'+
+    '<div class="form-hint">Equipment (role, identity, skills, SOPs, data types, model) is configured via the equipment slots after creation. Guardrails default to the platform baseline and are editable in the Properties section.</div>';
+}
+function validateAgentFormLive(){
+  const name=$('f-ag-name').value.trim();
+  const bad=!name||!slugValid(name);
+  const dup=!bad&&agents.some(x=>x.name.toLowerCase()===name.toLowerCase());
+  $('f-ag-name').classList.toggle('error',bad||dup);
+  const e=$('f-ag-name-err');
+  if(bad){e.textContent='Name must be a non-empty slug (lowercase letters, numbers, hyphens).';e.classList.add('visible');}
+  else if(dup){e.textContent='An agent with this name already exists.';e.classList.add('visible');}
+  else e.classList.remove('visible');
+}
+function openCreateAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to create agents.','error');return;}
+  const footer=stdFooter('Create Agent',()=>{
+    clearErrs();
+    const name=$('f-ag-name').value.trim(), si=$('f-ag-si').value.trim();
+    let ok=true;
+    if(!name||!slugValid(name)){setErr('f-ag-name','Name must be a non-empty slug (lowercase letters, numbers, hyphens).');ok=false;}
+    else if(agents.some(a=>a.name.toLowerCase()===name.toLowerCase())){setErr('f-ag-name','An agent with this name already exists. Duplicate names are rejected.');ok=false;}
+    if(!si){setErr('f-ag-si','System instruction is required.');ok=false;}
+    if(!ok)return;
+    const kind=$('f-ag-kind').value;
+    const agent=mkAgent(nextId('ag'),name,kind,$('f-ag-desc').value.trim(),si,
+      {role:null,identity:null,skills:[],sops:[],input:null,output:null,model:null});
+    agents.push(agent); SAVED[agent.id]=deep(agent);
+    selectedId=agent.id; closeModal(); renderAll();
+    toast('Agent "'+name+'" created — now equip it via the equipment slots.','success');
+  });
+  openModal('🤖 Create Agent','New agent type with the required fields — equipment is added afterwards via the slots','',footer);
+  $('modal-body').innerHTML=agentFormBody();
+}
+function confirmDeleteAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to delete agents.','error');return;}
+  const a=cur();
+  const body='<p style="font-size:13.5px;line-height:1.6">Delete agent type <b>"'+esc(a.name)+'"</b>?'+
+    '<br><span style="font-size:12px;color:var(--text-secondary)">Related resources (roles, skills, SOPs, data types, models) remain available for reuse. A new agent can be created with the same name afterwards.</span></p>';
+  const footer='<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="doDeleteAgent(\''+a.id+'\')">🗑 Delete Agent</button>';
+  openModal('Delete Agent','',body,footer);
+}
+function doDeleteAgent(id){
+  const a=agents.find(x=>x.id===id), name=a.name;
+  agents=agents.filter(x=>x.id!==id);
+  delete SAVED[id];
+  if(selectedId===id)selectedId=agents[0]?agents[0].id:null;
+  closeModal();
+  if(!agents.length){
+    $('agent-list').innerHTML='<div class="slot-empty" style="padding:12px">No agents. Create one to get started.</div>';
+    $('agent-header').innerHTML='<div class="ah-main"><span class="ah-name">No agents</span></div>';
+    $('topo-svg').innerHTML='';$('legend').innerHTML='';
+    $('slots').innerHTML='<div class="slot-empty" style="padding:12px">Create an agent first.</div>';
+    renderTray();
+    toast('Agent "'+name+'" deleted.','info'); return;
+  }
+  renderAll();
+  toast('Agent "'+name+'" deleted. You can recreate it with the same name.','info');
+}
+
+/* ============ PERMISSIONS (graceful degradation demo) ============ */
+function setPerm(p){
+  perm=p;
+  $('perm-admin').classList.toggle('active',p==='admin');
+  $('perm-viewer').classList.toggle('active',p==='viewer');
+  renderAll();
+  toast(p==='admin'?'Signed in as Administrator — full write access.':'Signed in as Process Owner — read-only view for review & audit.','info');
+}
+
+/* ============ RENDER ALL ============ */
+function renderAll(){
+  renderSidebar(); renderHeader(); renderProperties(); renderTopology(); renderSlots(); renderTray();
+}
+renderAll();
+</script>
+</body>
+</html>

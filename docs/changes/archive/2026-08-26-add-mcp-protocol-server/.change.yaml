@@ -1,0 +1,17 @@
+name: add-mcp-protocol-server
+created_at: 2026-08-22
+status: master-updated
+master_updated_at: 2026-08-26
+scope:
+  has_ui_changes: true
+  has_architecture_changes: true
+  has_db_changes: true
+  has_deployment_changes: true
+  has_operations_changes: true
+agents_complete:
+  es-product-owner: true
+  es-ux-specialist: skipped
+  es-architect: true
+  es-database-designer: skipped
+  es-developer: true
+  es-tester: true

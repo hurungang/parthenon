@@ -75,6 +75,27 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Revoke API Key | `API Key Management - Revoke Key Flow > revoke dialog shows key name and warning` | Confirmation dialog with irreversible warning |
 | Filter API Keys | `API Key Management - Filtering > status filter has all/active/revoked options` | Dropdown filter toggling between key states |
 | Real Backend Auth | `Real Backend Integration - API Key Endpoints > GET /api/v1/api-keys returns 200 with valid admin token` | Backend integration verification |
+| **Agent Runtime Monitor** (agent-runtime-monitor) | | |
+| Page rename & map | `Agent Runtime Monitor > presents the view as "Agent Runtime Monitor" and renders the map canvas` | Page rebranded; interactive map canvas is the primary view (no guardrail panel) |
+| Auto-fit & grouping | `Agent Runtime Monitor > auto-fits the map and groups same-type agents into containers` | All agents on screen; same-type agents grouped in labelled containers |
+| Delegation connector | `Agent Runtime Monitor > renders a delegation connector between parent and child` | Parent → child delegation shown as a connecting line |
+| Human-intervention alert | `Agent Runtime Monitor > surfaces a sleeping agent awaiting intervention and opens the intervention dialog` | Sleeping agent shows alert icon; click opens the intervention dialog |
+| Selection & terminate | `Agent Runtime Monitor > selects a node and opens the termination dialog from the detail bubble` | Select agent → detail bubble → terminate |
+| Zoom | `Agent Runtime Monitor > zooms in and out via the toolbar` | Map zoom in/out via toolbar controls |
+| Drag-to-pan | `Agent Runtime Monitor > pans the canvas via drag` | Drag empty canvas to pan the map |
+| Fullscreen | `Agent Runtime Monitor > toggles fullscreen and restores` | Maximize the map to fullscreen and back |
+| Cross-type delegation | `Agent Runtime Monitor > shows a cross-type parent/child delegation connector` | Parent and delegated child laid out adjacent across agent types with a connector |
+| Filter empty-state recovery | `Agent Runtime Monitor > recovers from the filtered-empty state via "Reset filters"` | Legend/toolbar stay usable when a filter hides all agents; "Reset filters" restores them |
+| Trigger provenance | `Agent Runtime Monitor > shows trigger provenance as a person entity wired to the execution` | Person/schedule entity in the left column wired by trigger lines to the executions |
+| Schedule creator attribution | `Agent Runtime Monitor > shows schedule creator attribution and no person line for a null-creator schedule` | Schedule card shows the human creator; legacy null-creator schedules show no person line |
+| Tool-call routes (CH + MCP) | `Agent Runtime Monitor > renders the Communication Hub and tool-call routes to MCP servers` | Communication Hub node + agent→Hub→MCP tool-call routes, latest highlighted |
+| **Agent Management Panel** (agent-management-panel) | | |
+| Create agent | `Agent Management Panel — CRUD lifecycle > creates an agent from the panel and shows it in sidebar + header immediately (no reload)` | RPG-style panel: create dialog → agent appears in sidebar + header instantly, no reload |
+| Inline create-and-assign | `Agent Management Panel — equipment slots (inline create-and-assign) > role slot: create-new mounts the real Agent Role dialog and assigns the created role` | Create a role inside the panel via the real module dialog; it's assigned to the agent immediately |
+| Live topology | `Agent Management Panel — live topology > topology updates immediately on draft mutations with zero network requests` | Topology re-renders on every equip/unequip BEFORE saving — zero API calls |
+| Hub in preview topology | `Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology` | Communication Hub node rendered in the existing Agent Types plan preview topology |
+| Permission degradation | `Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation` | Denied slot disables gracefully with an explanation — no error surface |
+| Single-PUT save | `Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT` | Pending-changes tray persists the whole draft with exactly one agent-type update call |
 
 ## Prerequisites
 

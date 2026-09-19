@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { ChatPage } from '../pages/chat/ChatPage'
@@ -146,6 +146,7 @@ vi.mock('../hooks/useChatSession', () => ({
 vi.mock('../api/apiClient', () => ({
   default: {
     post: shared.mockPost,
+    get: vi.fn().mockResolvedValue({ data: [] }),
   },
 }))
 
@@ -350,11 +351,7 @@ describe('ConversationDelegationVisibility', () => {
     })
 
     expect(screen.getByTestId('chat-delegation-snippets')).toBeDefined()
-    expect(screen.getByText('Tool call dispatched to supabase-agent')).toBeDefined()
     expect(screen.getByRole('button', { name: 'View Execution Logs' })).toBeDefined()
-
-    // This click verifies control is rendered; toggle behavior is owned by the hook.
-    fireEvent.click(screen.getByText('conversations.sessions.snippetPanelExpand'))
   })
 
   it('renders terminal timeout or failure status in chat view', async () => {

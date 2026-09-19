@@ -6,6 +6,16 @@ Covers the Agent Data admin page at `/admin/agent-data`, system tool allowlist u
 
 ---
 
+## Critical Scenarios
+
+- **WHEN** an unauthenticated request hits `GET /api/v1/agent-data`, **THEN** the API returns 401.
+- **WHEN** an authorized operator filters by `agent_type_id` and `data_name`, **THEN** only matching records are returned with the correct total count.
+- **WHEN** a record ID does not exist, **THEN** `GET /api/v1/agent-data/{id}` returns 404.
+- **WHEN** a user lacks `agent::data:read`, **THEN** the API returns 403 and the UI renders a `PermissionDeniedAlert`.
+- **WHEN** an agent saves intermediate data via `save_data`, **THEN** it appears on the Agent Data page with name, agent type, session, and full JSON in the detail drawer.
+
+---
+
 ## Coverage Areas
 
 ### 1. Agent Data API

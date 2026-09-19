@@ -1,12 +1,17 @@
 """Agent management API routers: AgentRole, AgentIdentity, AgentJob, AgentType, AgentInstance, ModelConfig."""
 import asyncio
+import hashlib
 import json
 import logging
+import time
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -18,10 +23,12 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import get_current_claims, require_permission
+from app.api.deps import authorize_identity, get_current_claims, require_permission
 from app.core.resource_types import RT_AGENT
+from app.middleware.auth import validate_raw_token
 from app.db.models.agents import (
     AgentIdentity,
     AgentInstance,
@@ -33,6 +40,13 @@ from app.db.models.agents import (
 )
 from app.db.models.sop_recursion_validation_check import SopRecursionCheckContext
 from app.db.session import DbSession
+from app.schemas.agent_type_bindings import (
+    BindingConflictFailureDetail,
+    BindingError,
+    BindingResourceType,
+    BindingRule,
+    BindingValidationFailureDetail,
+)
 from app.schemas.agents import (
     AgentIdentityCreate,
     AgentIdentityOAuthAuthorizeResponse,
@@ -70,6 +84,7 @@ from app.schemas.agents import (
     RuntimeTopologyRead,
     TerminationCascadeOutcomeRead,
     TerminationRequestRead,
+    ToolCallRouteRead,
     VendorDisabledUpdate,
     WorkflowGenerationModelConfigRead,
     WorkflowGenerationModelConfigUpdate,
@@ -357,11 +372,11 @@ async def assign_mcp_session_to_role(
         session_id = uuid.UUID(body["mcp_session_id"])
         claims = get_current_claims(request)
         user_id_str: str | None = claims.get("platform_user_id")
-        user_id = uuid.UUID(user_id_str) if user_id_str else None
+        assigned_by = uuid.UUID(user_id_str) if user_id_str else None
         await _role_service.assign_mcp_session(
             role_id=role_id,
             mcp_session_id=session_id,
-            assigned_by=user_id,
+            assigned_by=assigned_by,
             db=db,
         )
     except AgentRoleNotFoundError as exc:
@@ -608,9 +623,15 @@ async def launch_agent_session(
     _: dict = Depends(require_permission(RT_AGENT, "execute")),
 ) -> AgentJob:
     """Validate agent identity OAuth token, enqueue a new agent session, and return 202 with session ID."""
-    claims = get_current_claims(request)
-    user_id_str: str | None = claims.get("platform_user_id")
-    user_id = uuid.UUID(user_id_str) if user_id_str else None
+    # Trigger provenance: the middleware resolves the authenticated human to
+    # their canonical Identity row (request.state.identity_id) — JWTs carry no
+    # platform user id, so the old claims lookup always yielded None and runs
+    # were never attributed to a user.
+    user_id: uuid.UUID | None = getattr(request.state, "identity_id", None)
+    if user_id is None:
+        claims = get_current_claims(request)
+        user_id_str: str | None = claims.get("platform_user_id")
+        user_id = uuid.UUID(user_id_str) if user_id_str else None
 
     # Recursion pre-flight validation before launching
     try:
@@ -1182,6 +1203,82 @@ async def agent_session_chat(
         await websocket.close(code=1011)
 
 
+async def _run_plan_generation_bg(agent_type_id: uuid.UUID) -> None:
+    """Background task: generate plan with its own DB session."""
+    from app.db.session import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            async with bg_db.begin():
+                result = await bg_db.execute(
+                    select(AgentType)
+                    .where(AgentType.id == agent_type_id)
+                    .options(
+                        selectinload(AgentType.sop_bindings),
+                        selectinload(AgentType.skill_bindings),
+                    )
+                )
+                agent_type = result.scalar_one_or_none()
+                if agent_type:
+                    await _plan_generation_service.generate_plan(agent_type, bg_db)
+        except Exception:
+            logger.exception(
+                "Background plan generation failed for agent_type=%s",
+                agent_type_id,
+            )
+
+
+def _binding_conflict_detail(exc: IntegrityError) -> dict[str, object]:
+    """Map a binding-write IntegrityError to a structured 409 detail payload.
+
+    Best-effort parses the offending ``Key (agent_type_id, skill_id|sop_id)=(...)``
+    from the asyncpg/pg8000 message so the response pinpoints the conflicting
+    binding; falls back to a generic conflict message when unparseable.
+    """
+    import re
+
+    text = str(exc)
+    match = re.search(
+        r"Key \(agent_type_id, (skill_id|sop_id)\)=\([^)]*,\s*([0-9a-fA-F-]{36})\)",
+        text,
+    )
+    if match:
+        kind, resource_id = match.group(1), match.group(2)
+        resource_type = (
+            BindingResourceType.SKILL if kind == "skill_id" else BindingResourceType.SOP
+        )
+        resource_label = "Skill" if kind == "skill_id" else "SOP"
+        binding_error = BindingError(
+            resource_type=resource_type,
+            resource_id=uuid.UUID(resource_id),
+            rule=BindingRule.CONFLICT,
+            message=(
+                f"{resource_label} {resource_id} is already bound to this agent type by a "
+                "concurrent save — review the current bindings and retry."
+            ),
+        )
+        return BindingConflictFailureDetail(
+            error="binding_conflict",
+            messages=[binding_error.message],
+            errors=[binding_error],
+        ).model_dump(mode="json")
+
+    binding_error = BindingError(
+        resource_type=BindingResourceType.ROLE,
+        resource_id=None,
+        rule=BindingRule.CONFLICT,
+        message=(
+            "Binding conflict while saving — the agent type's bindings were modified "
+            "concurrently. Review the current bindings and retry."
+        ),
+    )
+    return BindingConflictFailureDetail(
+        error="binding_conflict",
+        messages=[binding_error.message],
+        errors=[binding_error],
+    ).model_dump(mode="json")
+
+
 # ── Agent Type Endpoints ───────────────────────────────────────────────────────
 
 @AgentTypeRouter.get("", response_model=list[AgentTypeRead])
@@ -1212,6 +1309,7 @@ async def create_agent_type(
     body: AgentTypeCreate,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     _: dict = Depends(require_permission(RT_AGENT, "create")),
 ) -> AgentTypeRead:
     if not body.sop_bindings and not body.skill_bindings:
@@ -1231,33 +1329,51 @@ async def create_agent_type(
         if binding_errors:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"error": "binding_validation_failed", "messages": binding_errors},
+                detail=BindingValidationFailureDetail(
+                    error="binding_validation_failed",
+                    messages=[e.message for e in binding_errors],
+                    errors=binding_errors,
+                ).model_dump(mode="json"),
             )
 
-    agent_type = AgentType(
-        name=body.name,
-        description=body.description,
-        identity_id=body.identity_id,
-        role_id=body.role_id,
-        model_id=body.model_id,
-        system_instruction=body.system_instruction,
-        input_type=body.input_type,
-        input_schema=body.input_schema,
-        output_type=body.output_type,
-        output_schema=body.output_schema,
-        output_data_type_id=body.output_data_type_id,
-    )
-    db.add(agent_type)
-    await db.flush()
-    await db.refresh(agent_type)
+    try:
+        agent_type = AgentType(
+            name=body.name,
+            description=body.description,
+            identity_id=body.identity_id,
+            role_id=body.role_id,
+            model_id=body.model_id,
+            system_instruction=body.system_instruction,
+            input_type=body.input_type,
+            input_schema=body.input_schema,
+            output_type=body.output_type,
+            output_schema=body.output_schema,
+            output_data_type_id=body.output_data_type_id,
+        )
+        db.add(agent_type)
+        await db.flush()
+        await db.refresh(agent_type)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An agent type with name '{body.name}' already exists.",
+        )
 
     # Save bindings
-    await _agent_type_service.set_bindings(
-        db=db,
-        agent_type_id=agent_type.id,
-        sop_bindings=body.sop_bindings,
-        skill_bindings=body.skill_bindings,
-    )
+    try:
+        await _agent_type_service.set_bindings(
+            db=db,
+            agent_type_id=agent_type.id,
+            sop_bindings=body.sop_bindings,
+            skill_bindings=body.skill_bindings,
+        )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_binding_conflict_detail(exc),
+        ) from exc
 
     # Recursion/dead-loop validation (may block in strict_block mode)
     claims = get_current_claims(request)
@@ -1288,15 +1404,20 @@ async def create_agent_type(
             },
         )
 
-    # Generate plan after commit (non-blocking — failures are recorded, not raised)
-    await _plan_generation_service.generate_plan(agent_type, db)
+    # Commit before scheduling plan regeneration: the background task runs
+    # with its own session while the LLM call takes tens of seconds — leaving
+    # the binding write uncommitted for that window makes a concurrent save
+    # block on the unique binding index and 500 (UniqueViolationError).
+    await db.commit()
 
-    # Reload with relationships eagerly loaded so the response includes plan and bindings
+    # Schedule plan generation in background (non-blocking)
+    background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
+
+    # Reload with relationships eagerly loaded so the response includes bindings
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
         .options(
-            selectinload(AgentType.plan),
             selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
@@ -1334,6 +1455,7 @@ async def update_agent_type(
     body: AgentTypeUpdate,
     request: Request,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     _: dict = Depends(require_permission(RT_AGENT, "update")),
 ) -> AgentTypeRead:
     agent_type = await db.get(AgentType, type_id)
@@ -1410,10 +1532,11 @@ async def update_agent_type(
         if binding_errors:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "error": "binding_validation_failed",
-                    "messages": binding_errors,
-                },
+                detail=BindingValidationFailureDetail(
+                    error="binding_validation_failed",
+                    messages=[e.message for e in binding_errors],
+                    errors=binding_errors,
+                ).model_dump(mode="json"),
             )
 
     # Separate binding fields from regular fields to handle binding updates differently
@@ -1427,12 +1550,22 @@ async def update_agent_type(
 
     # Update bindings if provided — use raw Pydantic model objects (not dicts)
     if sop_bindings_provided or skill_bindings_provided:
-        await _agent_type_service.set_bindings(
-            db=db,
-            agent_type_id=agent_type.id,
-            sop_bindings=raw_sop_bindings or [],
-            skill_bindings=raw_skill_bindings or [],
-        )
+        try:
+            await _agent_type_service.set_bindings(
+                db=db,
+                agent_type_id=agent_type.id,
+                sop_bindings=raw_sop_bindings or [],
+                skill_bindings=raw_skill_bindings or [],
+            )
+        except IntegrityError as exc:
+            # Race-safe: a concurrent save resubmitting the same bindings can
+            # collide on the per-agent-type unique binding index. Surface a
+            # precise 409 (per-binding detail) instead of a raw 500.
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_binding_conflict_detail(exc),
+            ) from exc
 
     await db.refresh(agent_type, attribute_names=["sop_bindings", "skill_bindings"])
 
@@ -1465,15 +1598,20 @@ async def update_agent_type(
             },
         )
 
-    # Regenerate plan after update (non-blocking — failures are recorded, not raised)
-    await _plan_generation_service.generate_plan(agent_type, db)
+    # Commit before scheduling plan regeneration: the background task runs
+    # with its own session while the LLM call takes tens of seconds — leaving
+    # the binding write uncommitted for that window makes a concurrent save
+    # block on the unique binding index and 500 (UniqueViolationError).
+    await db.commit()
 
-    # Reload with relationships eagerly loaded so the response includes plan and bindings
+    # Schedule plan regeneration in background (non-blocking)
+    background_tasks.add_task(_run_plan_generation_bg, agent_type.id)
+
+    # Reload with relationships eagerly loaded so the response includes bindings
     result = await db.execute(
         select(AgentType)
         .where(AgentType.id == agent_type.id)
         .options(
-            selectinload(AgentType.plan),
             selectinload(AgentType.output_data_type),
             selectinload(AgentType.sop_bindings).selectinload(AgentTypeSopBinding.sop),
             selectinload(AgentType.skill_bindings).selectinload(AgentTypeSkillBinding.skill),
@@ -2072,33 +2210,35 @@ async def preflight_availability(
 # ── Runtime Control Endpoints ───────────────────────────────────────────────
 
 
-@RuntimeControlRouter.get("/topology", response_model=RuntimeTopologyRead)
-async def get_runtime_topology(
-    db: DbSession,
-    include_terminal: bool = Query(False),
-    max_nodes: int = Query(200, ge=1, le=1000),
-    _: dict = Depends(require_permission(RT_AGENT, "read")),
-) -> RuntimeTopologyRead:
-    from app.db.models.agents import AgentJobStatus
+def _topology_statuses(include_terminal: bool) -> list[AgentJobStatus]:
+    """Status list for the live topology projection.
 
-    statuses = (
-        [AgentJobStatus.queued, AgentJobStatus.running]
-        if not include_terminal
-        else [
-            AgentJobStatus.queued,
-            AgentJobStatus.running,
+    ``waiting_for_human`` is a non-terminal live state — jobs paused for a
+    human intervention must stay visible on the runtime monitor.
+    ``include_terminal=true`` means ALL terminal jobs (no recency window);
+    otherwise recently-terminal jobs join the live set via the controller's
+    ``recent_minutes`` window.
+    """
+    statuses = [
+        AgentJobStatus.queued,
+        AgentJobStatus.running,
+        AgentJobStatus.waiting_for_human,
+    ]
+    if include_terminal:
+        statuses += [
             AgentJobStatus.completed,
             AgentJobStatus.failed,
             AgentJobStatus.terminated,
         ]
-    )
+    return statuses
 
-    projection = await _runtime_topology_controller.get_active_topology(
-        db,
-        include_statuses=statuses,
-        max_nodes=max_nodes,
-    )  # include_conversations and include_instances default to True
 
+def _runtime_topology_read(projection: Any) -> RuntimeTopologyRead:
+    """Serialize a ``RuntimeTopologyProjection`` into the response schema.
+
+    Shared by the REST endpoint and the SSE stream so the pushed payload is
+    byte-for-byte the same shape as the polled one (no push/pull drift).
+    """
     return RuntimeTopologyRead(
         nodes=[
             RuntimeTopologyNodeRead(
@@ -2113,6 +2253,23 @@ async def get_runtime_topology(
                 termination_category=node.termination_category,
                 kind=node.kind,
                 title=node.title,
+                needs_intervention=node.needs_intervention,
+                trigger_source=node.trigger_source,
+                trigger_source_label=node.trigger_source_label,
+                trigger_user_label=node.trigger_user_label,
+                trigger_user_id=node.trigger_user_id,
+                schedule_id=node.schedule_id,
+                schedule_cron=node.schedule_cron,
+                schedule_description=node.schedule_description,
+                tool_calls=[
+                    ToolCallRouteRead(
+                        tool_name=call.tool_name,
+                        mcp_slug=call.mcp_slug,
+                        called_at=call.called_at,
+                        route_type=call.route_type,
+                    )
+                    for call in node.tool_calls
+                ],
             )
             for node in projection.nodes
         ],
@@ -2125,6 +2282,216 @@ async def get_runtime_topology(
             for edge in projection.edges
         ],
         root_session_ids=projection.root_session_ids,
+    )
+
+
+async def _compute_runtime_topology(
+    db: DbSession,
+    include_terminal: bool,
+    max_nodes: int,
+    recent_minutes: int,
+) -> RuntimeTopologyRead:
+    """Compute the topology projection with the live/terminal status split."""
+    projection = await _runtime_topology_controller.get_active_topology(
+        db,
+        include_statuses=_topology_statuses(include_terminal),
+        max_nodes=max_nodes,
+        recent_minutes=recent_minutes,
+    )  # include_conversations and include_instances default to True
+    return _runtime_topology_read(projection)
+
+
+@RuntimeControlRouter.get("/topology", response_model=RuntimeTopologyRead)
+async def get_runtime_topology(
+    db: DbSession,
+    include_terminal: bool = Query(False),
+    max_nodes: int = Query(200, ge=1, le=1000),
+    recent_minutes: int = Query(
+        30,
+        ge=0,
+        le=10080,
+        description=(
+            "Include terminal jobs (completed/failed/terminated) whose "
+            "completion time (completed_at, falling back to created_at) is "
+            "within this many minutes, so just-finished runs stay visible "
+            "on the live map. 0 disables the window; include_terminal=true "
+            "supersedes it (all terminal jobs, no window)."
+        ),
+    ),
+    _: dict = Depends(require_permission(RT_AGENT, "read")),
+) -> RuntimeTopologyRead:
+    """Return the live runtime topology projection for the Agent Runtime Monitor.
+
+    Includes jobs in live states (queued / running / waiting_for_human)
+    plus — within the ``recent_minutes`` window — recently terminal jobs
+    (completed_at, falling back to created_at, inside the window), so a
+    just-finished run and its recorded tool routes remain visible. The
+    existing "terminal direct children of included jobs" logic then pulls
+    in their children. Everything respects the ``max_nodes`` budget
+    (ordered by created_at desc, live statuses first).
+
+    ``include_terminal=true`` keeps its existing meaning — ALL terminal
+    jobs are returned regardless of age (no window). ``recent_minutes=0``
+    disables the recent-terminal window entirely.
+    """
+    return await _compute_runtime_topology(db, include_terminal, max_nodes, recent_minutes)
+
+
+# ── Runtime topology SSE stream ──────────────────────────────────────────────
+
+# Cadence of the server-side projection recompute (~2s per the tech spec).
+TOPOLOGY_STREAM_POLL_SECONDS = 2.0
+# SSE comment keep-alive interval so proxies/load balancers do not close an
+# idle connection (~15s per the tech spec).
+TOPOLOGY_STREAM_HEARTBEAT_SECONDS = 15.0
+# Generous max lifetime — the stream closes and browser EventSource clients
+# reconnect naturally, keeping connections and server tasks bounded.
+TOPOLOGY_STREAM_MAX_LIFETIME_SECONDS = 600.0
+
+# The stream path is registered in JWTAuthMiddleware.PUBLIC_PATHS because it
+# authenticates ITSELF via the ``?token=`` query param (EventSource cannot set
+# Authorization headers) — same pattern as the Communication Hub chat
+# WebSocket (``WebSocketServer.authenticate`` in ``app/api/ws/chat.py``).
+
+
+async def _authenticate_stream_request(
+    request: Request, token: str | None
+) -> tuple[dict | None, bool]:
+    """Validate the SSE stream JWT and return ``(claims, is_super_admin)``.
+
+    Token source precedence:
+      1. ``?token=`` query param — the EventSource path (browser EventSource
+         cannot set request headers).
+      2. ``Authorization: Bearer`` header — for header-capable clients.
+
+    When the auth middleware already validated an Authorization header (its
+    identity is on ``request.state``), those claims are reused. Validation
+    goes through the same tier pipeline the middleware uses
+    (``validate_raw_token``: super admin → OIDC registry → legacy client),
+    mirroring the Communication Hub chat WebSocket authenticate pattern.
+    """
+    identity = getattr(request.state, "identity", None)
+    if identity:
+        return identity, bool(getattr(request.state, "is_super_admin", False))
+
+    if not token:
+        header = request.headers.get("Authorization", "")
+        if header.startswith("Bearer "):
+            token = header[len("Bearer "):]
+    if not token:
+        return None, False
+
+    return await validate_raw_token(token)
+
+
+async def _topology_stream_events(
+    db: DbSession,
+    *,
+    include_terminal: bool,
+    max_nodes: int,
+    recent_minutes: int,
+) -> AsyncGenerator[str, None]:
+    """SSE event generator: hash-gated payload emission + heartbeat keep-alives.
+
+    - Recomputes the projection every ~2s with the SAME controller call and
+      query parameters as the REST endpoint.
+    - Emits the full ``RuntimeTopologyRead`` JSON as ``data:`` ONLY when its
+      SHA-256 hash differs from the last emission — unchanged state costs the
+      client nothing.
+    - Emits a ``: heartbeat`` comment when the connection would otherwise be
+      silent for ~15s.
+    - Stops cleanly after the max lifetime (clients reconnect naturally via
+      EventSource auto-reconnect). A client disconnect cancels the generator
+      (Starlette tears the stream down), which the ``finally`` below logs —
+      the same contract as the execution-log stream endpoint.
+    """
+    last_hash: str | None = None
+    last_write = time.monotonic()
+    deadline = time.monotonic() + TOPOLOGY_STREAM_MAX_LIFETIME_SECONDS
+    try:
+        while True:
+            if time.monotonic() >= deadline:
+                logger.info("Runtime topology stream closing: max lifetime reached")
+                return
+            try:
+                payload = (
+                    await _compute_runtime_topology(
+                        db, include_terminal, max_nodes, recent_minutes
+                    )
+                ).model_dump_json()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # A transient projection failure must not kill the connection —
+                # skip this tick; heartbeats keep the socket warm.
+                logger.exception("Runtime topology stream: projection computation failed")
+                payload = None
+
+            now = time.monotonic()
+            if payload is not None:
+                digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                if digest != last_hash:
+                    last_hash = digest
+                    last_write = now
+                    yield f"data: {payload}\n\n"
+            if now - last_write >= TOPOLOGY_STREAM_HEARTBEAT_SECONDS:
+                last_write = now
+                yield ": heartbeat\n\n"
+            await asyncio.sleep(TOPOLOGY_STREAM_POLL_SECONDS)
+    except (asyncio.CancelledError, GeneratorExit):
+        logger.info("Runtime topology stream cancelled: client disconnected")
+        raise
+
+
+@RuntimeControlRouter.get("/topology/stream")
+async def stream_runtime_topology(
+    request: Request,
+    db: DbSession,
+    token: str | None = Query(
+        None,
+        description=(
+            "JWT passed as a query parameter — browser EventSource cannot set "
+            "Authorization headers (same pattern as the Communication Hub chat "
+            "WebSocket)."
+        ),
+    ),
+    include_terminal: bool = Query(False),
+    max_nodes: int = Query(200, ge=1, le=1000),
+    recent_minutes: int = Query(30, ge=0, le=10080),
+) -> StreamingResponse:
+    """Server-sent-events stream of the live runtime topology projection.
+
+    The payload contract is identical to ``GET /agents/runtime/topology`` (the
+    same ``RuntimeTopologyRead`` JSON). Events are emitted only when the
+    projection actually changes (content-hash comparison); ``: heartbeat``
+    comments keep the connection alive through idle periods. Auth: the JWT is
+    accepted via the ``?token=`` query param or the ``Authorization`` header,
+    and the SAME agent-read permission as the REST endpoint is enforced
+    BEFORE the stream opens (401 for a bad token, 403 for a denied
+    permission — no events are ever sent on a rejected connection).
+    """
+    claims, is_super_admin = await _authenticate_stream_request(request, token)
+    if claims is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing authentication token",
+        )
+    # Same permission as GET /agents/runtime/topology — permission parity.
+    await authorize_identity(db, claims, RT_AGENT, "read", is_super_admin=is_super_admin)
+
+    return StreamingResponse(
+        _topology_stream_events(
+            db,
+            include_terminal=include_terminal,
+            max_nodes=max_nodes,
+            recent_minutes=recent_minutes,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # Disable intermediary buffering so events flush immediately.
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

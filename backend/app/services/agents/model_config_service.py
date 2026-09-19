@@ -220,8 +220,18 @@ class ModelConfigService:
                 "perplexity",
                 "deepseek",
             }:
-                # Six new OpenAI-compatible providers share the same /models endpoint shape.
-                models = await self._list_openai_compat_models(api_key, base_url)
+                # Six OpenAI-compatible providers share the same /models endpoint shape.
+                # Fall back to each provider's default base URL when none is configured.
+                compat_defaults: dict[str, str] = {
+                    "mistral": "https://api.mistral.ai/v1",
+                    "groq": "https://api.groq.com/openai/v1",
+                    "together": "https://api.together.xyz/v1",
+                    "fireworks": "https://api.fireworks.ai/inference/v1",
+                    "perplexity": "https://api.perplexity.ai",
+                    "deepseek": "https://api.deepseek.com/v1",
+                }
+                effective_url = base_url or compat_defaults.get(provider_value, "")
+                models = await self._list_openai_compat_models(api_key, effective_url)
             else:
                 models = []
         except Exception as exc:

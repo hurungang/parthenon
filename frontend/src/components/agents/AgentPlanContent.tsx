@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { AgentPlan, TopologyNode } from '../../types'
 import TopologyDiagramRenderer from './TopologyDiagramRenderer'
+import { withCommunicationHub } from './topologyHub'
 
 function getStepTypeChipColor(
   type: string,
@@ -38,7 +39,8 @@ interface AgentPlanContentProps {
 
 /**
  * Presentational component rendering agent plan steps and topology diagram.
- * Used by both PlanPreviewModal and AgentTypeDetailsDialog.
+ * Used by AgentTypeDetailsDialog's plan tab (PlanPreviewModal renders its own
+ * plan layout and applies the same hub helper to its topology).
  */
 const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage, onNodeClick }) => {
   const { t } = useTranslation()
@@ -66,6 +68,16 @@ const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage
       </Alert>
     )
   }
+
+  // Append the Communication Hub platform node client-side at render time —
+  // the helper is idempotent, so regenerated plans never duplicate the node
+  // and no backend/plan-schema change is needed.
+  const withHub = withCommunicationHub(
+    plan.topology_nodes,
+    plan.topology_edges,
+    t('agents.plan.nodeTypes.communication_hub'),
+    t('agents.plan.hubEdgeLabel'),
+  )
 
   return (
     <>
@@ -133,8 +145,8 @@ const AgentPlanContent: React.FC<AgentPlanContentProps> = ({ plan, noPlanMessage
             {t('agents.plan.topology')}
           </Typography>
           <TopologyDiagramRenderer
-            nodes={plan.topology_nodes}
-            edges={plan.topology_edges}
+            nodes={withHub.nodes}
+            edges={withHub.edges}
             onNodeClick={onNodeClick}
           />
         </>

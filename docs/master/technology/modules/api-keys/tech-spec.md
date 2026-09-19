@@ -10,7 +10,8 @@ The API Key management module provides an alternative authentication mechanism f
 - All CH→CC calls are mTLS-secured with service certificates
 - Identity tokens are held exclusively by the Communication Hub — never reach external agents
 - The existing certificate-based internal agent auth path is unchanged
-- One active key per identity-role pair is enforced via unique constraint
+- Key names are unique; any number of keys may exist per identity-role pair
+- Keys may optionally carry an `expires_at` timestamp (NULL = never expires); expired keys are rejected at authentication
 
 ---
 
@@ -22,7 +23,7 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Component | Description |
 |-----------|-------------|
-| `AgentApiKey` | SQLAlchemy model storing the SHA-256 hash of each API key, a human-readable prefix, status (active/revoked), and audit timestamps. Bound to an agent identity and role via foreign keys. Enforces one active key per identity-role pair via unique constraint. |
+| `AgentApiKey` | SQLAlchemy model storing the SHA-256 hash of each API key, a human-readable prefix, status (active/revoked), an optional `expires_at` timestamp, and audit timestamps. Bound to an agent identity and role via foreign keys. Key names are unique; any number of keys per identity-role pair. |
 | `ApiKeyUsageLog` | Append-only audit log recording every API key operation (validation, skill load, tool call). Captures action type, tool name, client IP, timestamp, and success/failure. |
 
 **File**: `backend/app/db/models/agent_api_key.py`
@@ -39,7 +40,8 @@ The API Key management module provides an alternative authentication mechanism f
 | `resolve_identity_token` | Decrypts and returns the identity token for a given agent identity |
 | `resolve_allowed_tools` | Resolves all tool names accessible to a given agent role |
 | `update_last_used_at` | Updates the `last_used_at` timestamp on an API key record |
-| `check_duplicate_active_key` | Checks whether an active key already exists for an identity-role pair; raises 409 if so |
+| `is_key_expired` | Returns `True` when a key's `expires_at` is in the past (a `NULL` value never expires) |
+| `check_duplicate_name` | Checks whether an API key with the given name already exists; raises 409 if so |
 
 **File**: `backend/app/services/api_key_service.py`
 
@@ -66,8 +68,9 @@ The API Key management module provides an alternative authentication mechanism f
 |-----------|-------------|
 | `AdminApiKeyRouter` | FastAPI APIRouter for JWT-protected admin-facing API key CRUD endpoints |
 | `list_api_keys` | `GET /api/v1/api-keys` — List all API keys with optional `?status=active|revoked` filter |
-| `create_api_key` | `POST /api/v1/api-keys` — Create a new API key bound to an agent identity and role; returns the clear-text key once |
+| `create_api_key` | `POST /api/v1/api-keys` — Create a new API key bound to an agent identity and role; accepts optional `expires_at`; returns the clear-text key once |
 | `revoke_api_key` | `POST /api/v1/api-keys/{key_id}/revoke` — Revoke an API key (idempotent) |
+| `delete_api_key` | `DELETE /api/v1/api-keys/{key_id}` — Permanently delete an API key (usage logs cascade) |
 | `list_identities_with_roles` | `GET /api/v1/api-keys/identities-with-roles` — List all agent identities with their available roles |
 
 **File**: `backend/app/api/v1/api_keys.py`
@@ -76,11 +79,12 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Component | Description |
 |-----------|-------------|
-| `ApiKeyCreate` | Pydantic schema for API key creation request (name, identity_id, role_id) |
-| `ApiKeyCreateResponse` | Pydantic schema for API key creation response (includes clear-text key shown once) |
+| `ApiKeyCreate` | Pydantic schema for API key creation request (name, identity_id, role_id, optional expires_at) |
+| `ApiKeyCreateResponse` | Pydantic schema for API key creation response (includes clear-text key shown once + expires_at) |
 | `ApiKeyRead` | Pydantic schema for API key data with optional identity/role name fields |
 | `ApiKeyListItem` | Pydantic schema for API key list items with denormalized identity/role names (metadata only, never includes secret) |
 | `ApiKeyRevokeResponse` | Pydantic schema for revoke response (status confirmation) |
+| `ApiKeyDeleteResponse` | Pydantic schema for delete response (status confirmation) |
 | `ApiKeyValidateRequest` | Pydantic schema for internal validation request (hashed key) |
 | `ApiKeyValidateResponse` | Pydantic schema for internal validation response (identity token + permissions) |
 | `SkillWithVersion` | Pydantic schema extending skill with `updated_at` and tool definitions |
@@ -95,7 +99,7 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Component | Description |
 |-----------|-------------|
-| `ApiKeyListPage` | Main API key management page. Displays a filterable, searchable table of API keys with columns for name, bound identity, bound role, status chip, key hint, creation date, last used date, and action buttons. Includes informational change banner, empty state, loading state, and error state with retry. |
+| `ApiKeyListPage` | Main API key management page. Displays a filterable, searchable table of API keys with columns for name, bound identity, bound role, status chip, key hint, creation date, last used date, expiration, and action buttons (revoke + delete). Includes an informational banner, a collapsible "Connection help" guide (MCP endpoint + client config), empty state, loading state, and error state with retry. |
 
 **File**: `frontend/src/pages/api-keys/ApiKeyListPage.tsx`
 
@@ -103,7 +107,7 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Component | Description |
 |-----------|-------------|
-| `CreateApiKeyDialog` | Two-step modal dialog for creating a new API key. Step 1 collects key name, agent identity (dropdown), and agent role (filtered dropdown). Step 2 displays the generated key (masked by default with reveal toggle), a copy button, and summary information. Follows the project's Dialog Error Handling Standard. |
+| `CreateApiKeyDialog` | Two-step modal dialog for creating a new API key. Step 1 collects key name, agent identity (dropdown), agent role (filtered dropdown), and an optional expiration date (checkbox + datetime, default no expiration). Step 2 displays the generated key (masked by default with reveal toggle), a copy button, summary information, and a collapsed MCP connection guide. Follows the project's Dialog Error Handling Standard. |
 
 **File**: `frontend/src/pages/api-keys/CreateApiKeyDialog.tsx`
 
@@ -115,14 +119,31 @@ The API Key management module provides an alternative authentication mechanism f
 
 **File**: `frontend/src/pages/api-keys/RevokeApiKeyDialog.tsx`
 
+#### DeleteApiKeyDialog
+
+| Component | Description |
+|-----------|-------------|
+| `DeleteApiKeyDialog` | Confirmation dialog for permanently deleting an API key. Displays a warning that deletion removes the key and its usage history and cannot be undone. On confirm, calls the delete API and refreshes the key list. |
+
+**File**: `frontend/src/pages/api-keys/DeleteApiKeyDialog.tsx`
+
+#### McpConnectionGuide
+
+| Component | Description |
+|-----------|-------------|
+| `McpConnectionGuide` | Collapsible guide showing the MCP endpoint URL, auth header (`Authorization: Bearer` / `?apiKey=`), and copyable Copilot/Claude client configs (`http` and `sse`). Collapsed by default (shows only the endpoint URL); expands to show the full instructions. |
+
+**File**: `frontend/src/pages/api-keys/RevokeApiKeyDialog.tsx`
+
 #### API Key Types & Client
 
 | Component | Description |
 |-----------|-------------|
-| `ApiKey` | TypeScript interface for API key list item |
-| `ApiKeyCreateRequest` | TypeScript interface for API key creation form data |
-| `ApiKeyCreateResponse` | TypeScript interface for API key creation response (includes one-time key) |
+| `ApiKey` | TypeScript interface for API key list item (includes `expires_at`) |
+| `ApiKeyCreateRequest` | TypeScript interface for API key creation form data (includes optional `expires_at`) |
+| `ApiKeyCreateResponse` | TypeScript interface for API key creation response (includes one-time key + `expires_at`) |
 | `ApiKeyStatus` | TypeScript enum: `active` / `revoked` |
+| `ApiKeyDeleteResponse` | TypeScript interface for delete response |
 | `IdentityWithRoles` | TypeScript interface for identity with available roles (dropdown data) |
 
 **File**: `frontend/src/types/apiKeys.ts`
@@ -130,8 +151,9 @@ The API Key management module provides an alternative authentication mechanism f
 | Component | Description |
 |-----------|-------------|
 | `fetchApiKeys` | HTTP GET `/api/v1/api-keys` — fetches key list with optional status filter |
-| `createApiKey` | HTTP POST `/api/v1/api-keys` — creates a new API key |
+| `createApiKey` | HTTP POST `/api/v1/api-keys` — creates a new API key (optional `expires_at`) |
 | `revokeApiKey` | HTTP POST `/api/v1/api-keys/{key_id}/revoke` — revokes an API key |
+| `deleteApiKey` | HTTP DELETE `/api/v1/api-keys/{key_id}` — permanently deletes an API key |
 | `fetchIdentitiesWithRoles` | HTTP GET `/api/v1/api-keys/identities-with-roles` — dropdown data for create dialog |
 
 **File**: `frontend/src/api/apiKeysApi.ts`
@@ -140,7 +162,7 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Component | Description |
 |-----------|-------------|
-| `useApiKeys` | React hook: fetches API key list with loading/error state, exposes `refresh()` for reloading after create/revoke operations |
+| `useApiKeys` | React hook: fetches API key list with loading/error state, exposes `refresh()` for reloading after create/revoke/delete operations |
 
 **File**: `frontend/src/hooks/useApiKeys.ts`
 
@@ -159,9 +181,10 @@ The API Key management module provides an alternative authentication mechanism f
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `GET` | `/api/v1/api-keys` | List all API keys. Optional query param `?status=active\|revoked` for filtering. Returns key metadata only — never the key value. |
-| `POST` | `/api/v1/api-keys` | Create a new API key bound to an agent identity and role. Returns the clear-text key once in the response. Enforces one active key per identity-role pair. |
+| `GET` | `/api/v1/api-keys` | List all API keys. Optional query param `?status=active\|revoked` for filtering. Returns key metadata (including `expires_at`) only — never the key value. |
+| `POST` | `/api/v1/api-keys` | Create a new API key bound to an agent identity and role, with an optional `expires_at`. Returns the clear-text key once in the response. Enforces unique key names. |
 | `POST` | `/api/v1/api-keys/{key_id}/revoke` | Revoke an API key. Idempotent — revoking an already-revoked key succeeds. |
+| `DELETE` | `/api/v1/api-keys/{key_id}` | Permanently delete an API key (usage logs cascade). |
 | `GET` | `/api/v1/api-keys/identities-with-roles` | List all agent identities with their available roles and role names. Used to populate create-key dialog dropdowns. |
 
 ---
@@ -211,7 +234,8 @@ The API Key management module provides an alternative authentication mechanism f
 | `resolve_identity_token` | function (async) | Decrypts and returns the identity token for a given agent identity | `backend/app/services/api_key_service.py` |
 | `resolve_allowed_tools` | function (async) | Resolves all tool names accessible to a given agent role | `backend/app/services/api_key_service.py` |
 | `update_last_used_at` | function (async) | Updates the `last_used_at` timestamp on an API key record | `backend/app/services/api_key_service.py` |
-| `check_duplicate_active_key` | function (async) | Checks whether an active key already exists for an identity-role pair; raises 409 if so | `backend/app/services/api_key_service.py` |
+| `is_key_expired` | function | Returns `True` when a key's `expires_at` is in the past (NULL = never expires) | `backend/app/services/api_key_service.py` |
+| `check_duplicate_name` | function (async) | Checks whether an API key with the given name already exists; raises 409 if so | `backend/app/services/api_key_service.py` |
 
 ### Permission Resolution
 
@@ -236,6 +260,7 @@ The API Key management module provides an alternative authentication mechanism f
 | `list_api_keys` | endpoint | `GET /api/v1/api-keys` — list keys with optional status filter | `backend/app/api/v1/api_keys.py` |
 | `create_api_key` | endpoint | `POST /api/v1/api-keys` — create key, return clear-text once | `backend/app/api/v1/api_keys.py` |
 | `revoke_api_key` | endpoint | `POST /api/v1/api-keys/{key_id}/revoke` — set key status to revoked | `backend/app/api/v1/api_keys.py` |
+| `delete_api_key` | endpoint | `DELETE /api/v1/api-keys/{key_id}` — permanently delete an API key | `backend/app/api/v1/api_keys.py` |
 | `list_identities_with_roles` | endpoint | `GET /api/v1/api-keys/identities-with-roles` — identities and their available roles | `backend/app/api/v1/api_keys.py` |
 
 ### Schemas
@@ -247,6 +272,7 @@ The API Key management module provides an alternative authentication mechanism f
 | `ApiKeyRead` | schema | Pydantic schema for API key data with optional identity/role name fields | `backend/app/schemas/api_key.py` |
 | `ApiKeyListItem` | schema | Pydantic schema for API key list items with denormalized identity/role names (metadata only, never includes secret) | `backend/app/schemas/api_key.py` |
 | `ApiKeyRevokeResponse` | schema | Pydantic schema for revoke response (status confirmation) | `backend/app/schemas/api_key.py` |
+| `ApiKeyDeleteResponse` | schema | Pydantic schema for delete response (status confirmation) | `backend/app/schemas/api_key.py` |
 | `RoleItem` | schema | Pydantic schema for a role item in identity-with-roles responses | `backend/app/schemas/api_key.py` |
 | `ToolDefinition` | schema | Pydantic schema for a resolved tool definition with input/output schemas | `backend/app/schemas/api_key.py` |
 | `ApiKeyValidateRequest` | schema | Pydantic schema for internal validation request (hashed key) | `backend/app/schemas/api_key.py` |
@@ -265,17 +291,21 @@ The API Key management module provides an alternative authentication mechanism f
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `ApiKeyListPage` | component | Main API key management page with table, filtering, search, empty/loading/error states | `frontend/src/pages/api-keys/ApiKeyListPage.tsx` |
-| `CreateApiKeyDialog` | component | Two-step modal: form (identity+role selection) → key reveal with copy | `frontend/src/pages/api-keys/CreateApiKeyDialog.tsx` |
+| `CreateApiKeyDialog` | component | Two-step modal: form (identity+role+optional expiration) → key reveal with copy | `frontend/src/pages/api-keys/CreateApiKeyDialog.tsx` |
 | `RevokeApiKeyDialog` | component | Confirmation modal for irreversible key revocation | `frontend/src/pages/api-keys/RevokeApiKeyDialog.tsx` |
+| `DeleteApiKeyDialog` | component | Confirmation modal for permanent key deletion | `frontend/src/pages/api-keys/DeleteApiKeyDialog.tsx` |
+| `McpConnectionGuide` | component | Collapsible MCP endpoint + client config guide | `frontend/src/pages/api-keys/McpConnectionGuide.tsx` |
 
 ### Frontend Data Layer
 
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `useApiKeys` | hook | React hook: fetches API key list with loading/error state, exposes `refresh()` | `frontend/src/hooks/useApiKeys.ts` |
+| `useDeleteApiKey` | hook | React mutation hook for permanently deleting an API key | `frontend/src/hooks/useApiKeys.ts` |
 | `fetchApiKeys` | function | HTTP GET `/api/v1/api-keys` — fetches key list with optional status filter | `frontend/src/api/apiKeysApi.ts` |
 | `createApiKey` | function | HTTP POST `/api/v1/api-keys` — creates a new API key | `frontend/src/api/apiKeysApi.ts` |
 | `revokeApiKey` | function | HTTP POST `/api/v1/api-keys/{key_id}/revoke` — revokes an API key | `frontend/src/api/apiKeysApi.ts` |
+| `deleteApiKey` | function | HTTP DELETE `/api/v1/api-keys/{key_id}` — permanently deletes an API key | `frontend/src/api/apiKeysApi.ts` |
 | `fetchIdentitiesWithRoles` | function | HTTP GET `/api/v1/api-keys/identities-with-roles` — dropdown data for create dialog | `frontend/src/api/apiKeysApi.ts` |
 | `ApiKey` | interface | TypeScript type for API key list item | `frontend/src/types/apiKeys.ts` |
 | `ApiKeyCreateRequest` | interface | TypeScript type for API key creation form data | `frontend/src/types/apiKeys.ts` |

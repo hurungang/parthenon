@@ -42,7 +42,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('renders create dialog title when editRole is null', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
     render(
@@ -56,7 +56,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('renders edit dialog title when editRole is provided', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
     const editRole = {
@@ -81,7 +81,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('pre-populates name field when editing', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
     const editRole = {
@@ -107,7 +107,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('clears dialogError on open', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
     const { rerender } = render(
@@ -127,7 +127,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('calls onSaved after successful create', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
     mockPost.mockResolvedValue({ data: { id: 'new-role', name: 'New Role' } })
 
@@ -157,7 +157,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('shows PermissionDeniedAlert when API call fails with 403', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
     const mockError = { response: { status: 403, data: { detail: 'Forbidden' } } }
     mockPost.mockRejectedValue(mockError)
@@ -183,7 +183,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('Save button remains enabled when preview fetch fails', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
     const editRole = {
@@ -214,7 +214,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('shows allowed agent type preview hint in create mode', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockResolvedValue({ data: [] })
 
     render(
@@ -228,7 +228,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('renders allowed agent type preview chips for selected SOPs in edit mode', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') {
         return Promise.resolve({ data: [{ id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] }] })
@@ -268,7 +268,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('requests allowed agent types using the selected SOP ids', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') {
         return Promise.resolve({ data: [{ id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] }] })
@@ -309,7 +309,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('shows the empty allowed agent type state when the preview response is empty', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') {
         return Promise.resolve({ data: [{ id: 'sop-1', name: 'Delegation SOP', required_skill_ids: [] }] })
@@ -353,7 +353,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('refreshes the allowed agent type preview when SOP selection changes', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') {
         return Promise.resolve({
@@ -414,7 +414,7 @@ describe('AgentRoleDialog', () => {
   // ── New: Inline MCP Session Assignment Tests ──
 
   it('shows MCP session assignment hint when no SOPs/Skills are selected', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') return Promise.resolve({ data: [] })
       if (url === '/skills') return Promise.resolve({ data: [] })
@@ -433,7 +433,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('disables save button when required MCP server lacks session assignment', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') return Promise.resolve({ data: [] })
       if (url === '/skills') {
@@ -510,7 +510,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('displays passthrough badge for servers with passthrough sessions', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (String(url).includes('/sops')) return Promise.resolve({ data: [] })
       if (String(url).includes('/skills') && !String(url).includes('tool')) {
@@ -577,7 +577,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('enables save after selecting sessions for all required servers', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') return Promise.resolve({ data: [] })
       if (url === '/skills') {
@@ -665,7 +665,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('creates role and assigns sessions in create mode', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (url === '/sops') return Promise.resolve({ data: [] })
       if (url === '/skills') {
@@ -757,7 +757,7 @@ describe('AgentRoleDialog', () => {
   })
 
   it('handles system tool exclusion in required servers computation', async () => {
-    const { AgentRoleDialog } = await import('../pages/agents/AgentRoleDialog')
+    const { AgentRoleDialog } = await import('../components/agents/AgentRoleDialog')
     mockGet.mockImplementation((url: string) => {
       if (String(url).includes('/sops')) return Promise.resolve({ data: [] })
       if (String(url).includes('/skills') && !String(url).includes('tool')) {

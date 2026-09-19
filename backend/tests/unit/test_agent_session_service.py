@@ -87,6 +87,101 @@ async def test_enqueue_with_no_user():
     assert result.triggered_by_user_id is None
 
 
+# ── Delegation inheritance (trigger provenance, agent-runtime-monitor) ──────────
+
+
+@pytest.mark.asyncio
+async def test_enqueue_delegated_child_inherits_parent_triggered_by_user_id():
+    """A delegated child (``parent_job_id`` set, no explicit user) inherits its
+    parent's ``triggered_by_user_id`` so the whole delegation chain shows the
+    original triggering user.
+    """
+    from unittest.mock import patch
+
+    service = AgentSessionService()
+    parent_id = uuid.uuid4()
+    parent_user = uuid.uuid4()
+
+    parent_job = _make_job(job_id=parent_id, user_id=parent_user)
+    child_job = _make_job(user_id=None)
+
+    db = _mock_db()
+    # db.get resolves the parent job for the inheritance lookup.
+    db.get = AsyncMock(return_value=parent_job)
+
+    with patch("app.services.agents.session_service.AgentJob", return_value=child_job) as mock_cls:
+        await service.enqueue(
+            agent_type_id=uuid.uuid4(),
+            input_data={"nested": True},
+            user_id=None,
+            db=db,
+            parent_job_id=parent_id,
+        )
+
+    # The constructed AgentJob must be built with the inherited user.
+    _, kwargs = mock_cls.call_args
+    assert kwargs["triggered_by_user_id"] == parent_user
+    assert kwargs["parent_job_id"] == parent_id
+
+
+@pytest.mark.asyncio
+async def test_enqueue_delegated_child_explicit_user_wins_over_parent():
+    """When a delegated child carries an explicit ``user_id``, that explicit
+    value is used (no parent lookup override).
+    """
+    from unittest.mock import patch
+
+    service = AgentSessionService()
+    parent_id = uuid.uuid4()
+    parent_user = uuid.uuid4()
+    explicit_user = uuid.uuid4()
+
+    parent_job = _make_job(job_id=parent_id, user_id=parent_user)
+    child_job = _make_job(user_id=explicit_user)
+
+    db = _mock_db()
+    db.get = AsyncMock(return_value=parent_job)
+
+    with patch("app.services.agents.session_service.AgentJob", return_value=child_job) as mock_cls:
+        await service.enqueue(
+            agent_type_id=uuid.uuid4(),
+            input_data=None,
+            user_id=explicit_user,
+            db=db,
+            parent_job_id=parent_id,
+        )
+
+    _, kwargs = mock_cls.call_args
+    assert kwargs["triggered_by_user_id"] == explicit_user
+
+
+@pytest.mark.asyncio
+async def test_enqueue_delegated_child_with_missing_parent_keeps_none():
+    """A delegated child whose parent no longer exists keeps ``None`` (no
+    crash, no false inheritance).
+    """
+    from unittest.mock import patch
+
+    service = AgentSessionService()
+    parent_id = uuid.uuid4()
+    child_job = _make_job(user_id=None)
+
+    db = _mock_db()
+    db.get = AsyncMock(return_value=None)  # parent missing
+
+    with patch("app.services.agents.session_service.AgentJob", return_value=child_job) as mock_cls:
+        await service.enqueue(
+            agent_type_id=uuid.uuid4(),
+            input_data=None,
+            user_id=None,
+            db=db,
+            parent_job_id=parent_id,
+        )
+
+    _, kwargs = mock_cls.call_args
+    assert kwargs["triggered_by_user_id"] is None
+
+
 # ── State transitions ──────────────────────────────────────────────────────────
 
 

@@ -266,6 +266,15 @@ export interface AgentJob {
   output_type?: AgentOutputType | null // Resolved from AgentType
 }
 
+export interface ToolCallRoute {
+  tool_name: string
+  mcp_slug: string
+  called_at: string | null
+  /** Routing path the call took (RuntimeToolCall.route_type: system/mcp/a2a).
+   *  Null for legacy chat-sourced rows that predate the runtime store. */
+  route_type?: 'system' | 'mcp' | 'a2a' | null
+}
+
 export interface RuntimeTopologyNode {
   session_id: string
   agent_type_id: string
@@ -290,6 +299,19 @@ export interface RuntimeTopologyNode {
   // Phase 3.13: optional human-friendly title for conversation
   // nodes (auto-generated conversation name).
   title?: string | null
+  // Whether this node has a pending human-intervention request.
+  needs_intervention?: boolean
+  // Trigger provenance: who/what triggered this node.
+  trigger_source?: 'user' | 'schedule' | 'delegated' | 'unknown'
+  // Human-readable trigger source label (user display name or schedule name).
+  trigger_source_label?: string | null
+  trigger_user_label?: string | null
+  trigger_user_id?: string | null
+  schedule_id?: string | null
+  schedule_cron?: string | null
+  schedule_description?: string | null
+  // Tool-call history (latest first), each resolved to an MCP server slug.
+  tool_calls?: ToolCallRoute[]
 }
 
 export interface RuntimeTopologyEdge {
@@ -419,13 +441,75 @@ export interface TopologyNode {
   label: string
   meta?: Record<string, unknown>
   usage?: string
+  /**
+   * Zoned topology (agent panel): id of the zone band this node renders in.
+   * Zones are declared via the renderer's `zones` prop; nodes are grouped
+   * into tinted, labeled zone bands laid out left → right.
+   */
+  zone?: string
+  /**
+   * Zoned topology (agent panel): the node renders INSIDE this container
+   * node's boundary (containment semantics — no edge is drawn).
+   */
+  containedIn?: string
+  /** Zoned topology (agent panel): nodes sharing a group id render inside a shared labeled group box. */
+  group?: string
+  /** Display label of the group box (defaults to the group id). */
+  groupLabel?: string
+  /** Accent colour of the group box stroke/label (defaults to a neutral slate). */
+  groupColor?: string
+  /** Small caption rendered with the node (e.g. "signs in as" inside the agent boundary). */
+  caption?: string
+  /**
+   * Optional explicit accent colour overriding the node-type colour map
+   * (zoned panel mode: per-capability deterministic border colours whose
+   * matching route connectors reuse the same colour).
+   */
+  accentColor?: string
+  /**
+   * Zoned topology (agent panel): id of the parent node this node renders
+   * BENEATH as an indented tree child inside its group box (e.g. a skill
+   * composed by a SOP). The parent's composition edges route as tree/folder
+   * elbow connectors into the child's left edge. Must reference a node in
+   * the same zone + group to take effect.
+   */
+  childOf?: string
 }
 
 export interface TopologyEdge {
   source: string
   target: string
   label?: string
+  /**
+   * Edge semantics: 'solid' (equipped-with), 'dotted' (role grants
+   * permission), 'dashed' (call path via the Communication Hub / platform
+   * messaging). The shared renderer maps each style to a distinct
+   * colour + dash pattern documented in the topology legend.
+   */
   style?: string
+  /**
+   * Optional explicit stroke colour overriding the style-semantics colour
+   * (zoned panel mode: per-capability route connectors reuse their source
+   * capability node's deterministic border colour).
+   */
+  color?: string
+}
+
+/**
+ * Zone band declaration for zoned topology rendering (agent panel —
+ * ① Configuration / ② Capabilities / ③ Tools prototype design; the
+ * Communication Hub renders as a vertical bar between ② and ③).
+ */
+export interface TopologyZone {
+  id: string
+  title: string
+  subtitle?: string
+  /** Zone background tint (hex colour). */
+  tint: string
+  /** Zone border colour (hex colour); also used for the zone title text. */
+  border: string
+  /** Render the zone border dashed (runtime preview zone). */
+  dashed?: boolean
 }
 
 export interface AgentPlan {
@@ -1072,3 +1156,84 @@ export type InterventionWsMessage =
   | InterveneRequestMessage
   | InterveneStatusMessage
   | ChatBlockedMessage
+
+// ── Agent Management Panel ─────────────────────────────────────────────────────
+
+/** The seven equipment slots of the Agent Management Panel. */
+export type AgentEquipmentSlotId =
+  | 'role'
+  | 'identity'
+  | 'skills'
+  | 'sops'
+  | 'input_data_type'
+  | 'output_data_type'
+  | 'model'
+
+/** Behaviour guardrails of an agent, drafted alongside the equipment slots. */
+export interface AgentDraftGuardrails {
+  maxIterations: number
+  maxDelegationDepth: number
+  maxDelegatedSteps: number
+  executionTimeoutSeconds: number
+  /** Raw token budget (k-value × 1000), null when unset. */
+  tokenBudget: number | null
+  tokenEnforcementMode: 'observe' | 'enforce'
+  tokenFallbackMode: 'observe_and_log' | 'stop_on_next_hard_guardrail'
+  conversationalTokenVisibilityMode: 'enabled' | 'disabled'
+  conversationalContinuationPolicy: 'allow'
+}
+
+/**
+ * Client-side in-memory draft of an agent: base properties (name, description,
+ * system instruction, guardrails) plus equipment. Mutating the draft never
+ * calls the API; Save maps it onto the agent-type update payload (one PUT).
+ */
+export interface AgentDraftComposition {
+  /** Slug-style agent name (required, /^[a-z0-9-]+$/). */
+  name: string
+  description: string | null
+  systemInstruction: string | null
+  guardrails: AgentDraftGuardrails
+  identityId: string | null
+  roleId: string | null
+  /** Skills attached to the agent, with binding order (mirrors skill_bindings). */
+  skillBindings: SkillBindingInput[]
+  /** SOPs attached to the agent, with binding order (mirrors sop_bindings). */
+  sopBindings: SopBindingInput[]
+  inputType: AgentInputType
+  inputSchema: Record<string, unknown> | null
+  outputType: AgentOutputType
+  outputSchema: Record<string, unknown> | null
+  outputDataTypeId: string | null
+  modelId: string | null
+}
+
+/** Result handed back by an inline create dialog for create-and-assign. */
+export interface CreateAndAssignResult {
+  id: string
+  label: string
+  /** For a created model config: its enabled model ids (model slot auto-assign). */
+  enabledModelIds?: string[]
+}
+
+/** Which shared dialog the panel's SharedDialogHost should mount, if any. */
+export type PanelDialogRequest =
+  | { kind: 'agent_create' }
+  | { kind: 'role' }
+  | { kind: 'identity' }
+  | { kind: 'skill' }
+  | { kind: 'sop' }
+  | { kind: 'input_data_type' }
+  | { kind: 'output_data_type' }
+  | { kind: 'model_config' }
+
+/** Definition of one equipment slot (id, gating resource type, i18n keys, capabilities). */
+export interface EquipmentSlotDefinition {
+  id: AgentEquipmentSlotId
+  /** Existing manifest resource type gating the slot's actions (read degradation). */
+  resourceType: string
+  labelKey: string
+  hintKey: string
+  /** Slots that hold multiple values (skills, SOPs). */
+  multi: boolean
+}

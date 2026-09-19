@@ -31,7 +31,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import { usePagination } from '../../hooks/usePagination'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import { SkillEditor } from './SkillEditor'
+import { SkillEditor } from '../../components/agents/SkillEditor'
 import type { Skill } from '../../types'
 
 /**

@@ -35,7 +35,16 @@ _intervene_store = InterveneRequestStore()
 
 
 def _get_requesting_user_id(request: Request) -> uuid.UUID | None:
-    """Extract the platform user ID from JWT claims."""
+    """Extract the requesting user's canonical Identity id.
+
+    The auth middleware resolves the authenticated human to their Identity row
+    (``request.state.identity_id``) — JWTs carry no platform user id, so the
+    old claims lookup always yielded None and conversations were never
+    attributed to a user.
+    """
+    identity_id = getattr(request.state, "identity_id", None)
+    if identity_id is not None:
+        return identity_id
     claims = get_current_claims(request)
     user_id_str: str | None = claims.get("platform_user_id")
     return uuid.UUID(user_id_str) if user_id_str else None

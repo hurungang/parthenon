@@ -168,8 +168,9 @@ describe('AddGuardrailForm - submit behaviour', () => {
       expect(shared.mockPost).toHaveBeenCalledWith(
         '/agents/guardrails/model-usage-limits',
         expect.objectContaining({
-          model_id: 'cfg-1',
+          model_id: 'gpt-4.1',
           model_name: 'gpt-4.1',
+          model_config_id: 'cfg-1',
           period: 'hour',
           limit_value: 100,
           unit: 'k',

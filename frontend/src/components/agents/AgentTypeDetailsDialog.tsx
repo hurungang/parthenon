@@ -37,14 +37,15 @@ import { useAgentType, useAgentTypes } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
 import AgentPlanContent from './AgentPlanContent'
 import TopologyDiagramRenderer from './TopologyDiagramRenderer'
+import { withCommunicationHub, COMMUNICATION_HUB_NODE_ID } from './topologyHub'
 import { AgentJobLaunchDialog } from '../../pages/agents/AgentJobLaunchDialog'
 import { AgentExecutionsDialog } from './AgentExecutionsDialog'
 import { AgentExecutionDetailsDialog } from './AgentExecutionDetailsDialog'
 import { ConversationSessionsTab } from './ConversationSessionsTab'
 import { ConversationDialog } from './ConversationDialog'
-import { SopEditor } from '../../pages/skills/SopEditor'
-import { SkillEditor } from '../../pages/skills/SkillEditor'
-import { AgentRoleDialog } from '../../pages/agents/AgentRoleDialog'
+import { SopEditor } from './SopEditor'
+import { SkillEditor } from './SkillEditor'
+import { AgentRoleDialog } from './AgentRoleDialog'
 import { AgentIdentityViewDialog } from './AgentIdentityViewDialog'
 import apiClient from '../../api/apiClient'
 import { canonicalizeToolName } from '../../utils/toolNaming'
@@ -416,8 +417,10 @@ export function AgentTypeDetailsDialog({
         })
     }
 
-    return { convTopologyNodes: nodes, convTopologyEdges: edges }
-  }, [agentType, isConversation, identityName, roleName, displaySops, displaySkills, sopDetails, allSkills, allMcpTools, allAgentTypes])
+    // Communication Hub — fixed platform node connected to the agent (dashed edge).
+    const hub = withCommunicationHub(nodes, edges, t('agents.plan.nodeTypes.communication_hub'), t('agents.plan.hubEdgeLabel'))
+    return { convTopologyNodes: hub.nodes, convTopologyEdges: hub.edges }
+  }, [agentType, isConversation, identityName, roleName, displaySops, displaySkills, sopDetails, allSkills, allMcpTools, allAgentTypes, t])
 
   const handleClose = () => {
     setDialogError(null)
@@ -437,6 +440,11 @@ export function AgentTypeDetailsDialog({
   }
 
   const handleNodeClick = useCallback((node: TopologyNode) => {
+    // Communication Hub is a static platform node — clicking it is a safe
+    // no-op (never misparse its id as an entity reference).
+    if (node.id === COMMUNICATION_HUB_NODE_ID || node.type === 'communication_hub') {
+      return
+    }
     const colonIdx = node.id.indexOf(':')
     const type = colonIdx >= 0 ? node.id.slice(0, colonIdx) : node.type
     const entityId = colonIdx >= 0 ? node.id.slice(colonIdx + 1) : node.id

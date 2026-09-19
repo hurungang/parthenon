@@ -51,7 +51,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 describe('SopEditor', () => {
   it('renders without crashing', async () => {
-    const { SopEditor } = await import('../pages/skills/SopEditor')
+    const { SopEditor } = await import('../components/agents/SopEditor')
     
     const { container } = render(
       <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
@@ -63,7 +63,7 @@ describe('SopEditor', () => {
   })
 
   it('renders instructions field for new SOP', async () => {
-    const { SopEditor } = await import('../pages/skills/SopEditor')
+    const { SopEditor } = await import('../components/agents/SopEditor')
     
     render(
       <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,
@@ -75,7 +75,7 @@ describe('SopEditor', () => {
   })
 
   it('renders Add Step button', async () => {
-    const { SopEditor } = await import('../pages/skills/SopEditor')
+    const { SopEditor } = await import('../components/agents/SopEditor')
     
     render(
       <SopEditor open={true} sop={null} onClose={() => {}} onSaved={() => {}} />,

@@ -3,7 +3,7 @@
 ## Overview
 This feature defines and governs a formal service-segregation security model for agent runtime execution in Parthenon. Agent Runtime is treated as a strictly bounded execution surface: it can run approved agent work, but it cannot access sensitive identity material or direct data stores. Identity handling and access governance remain centralized in the Control Center, and runtime access to internal business operations is constrained to an approved, caller-specific allowlist. A deny-by-default policy is applied to all non-approved paths, creating clear boundary enforcement and auditable evidence of blocked access attempts.
 
-The security model also covers API key authentication for external agents. API keys are stored as cryptographic hashes in Control Center's database — the clear-text key is never persisted or retrievable. When an external agent authenticates with an API key, the Communication Hub validates it against Control Center's internal API over mTLS-secured channels, and the resolved identity token is injected into proxied MCP requests without ever being exposed to the external agent. This ensures that sensitive credential and identity material never leaves the protected service boundary.
+The security model also covers API key authentication for external agents. API keys are stored as cryptographic hashes in Control Center's database — the clear-text key is never persisted or retrievable. When an external agent authenticates with an API key, the Communication Hub validates it against Control Center's internal API over mTLS-secured channels, and the resolved identity token is injected into proxied MCP requests without ever being exposed to the external agent. External MCP protocol sessions (initialize / tools/list / tools/call) inherit the same role-based permissions as internal agents, are authenticated by the existing API keys, and keep resolved identity tokens inside the protected boundary. This ensures that sensitive credential and identity material never leaves the protected service boundary.
 
 ## Business Goals
 - Reduce internal attack surface through explicit runtime boundary enforcement
@@ -22,6 +22,7 @@ The security model also covers API key authentication for external agents. API k
 - Caller-specific Control Center access allowlist restricts Agent Runtime to business-essential operations only
 - Deny-by-default boundary enforcement blocks all non-allowlisted Control Center paths
 - Centralized identity and authorization governance keeps sensitive identity handling outside runtime surfaces
+- External MCP protocol sessions inherit role-based permissions, keep identity tokens inside the protected boundary, and authenticate via the existing API keys
 - Security gaps are tracked with risk-ranked remediation ownership and target outcomes
 
 ## Business Value
@@ -44,6 +45,7 @@ The security model also covers API key authentication for external agents. API k
 - Centralized identity and authorization governance that keeps sensitive identity handling outside runtime surfaces
 - Security gap tracking with risk-ranked remediation ownership and target outcomes
 - **API Key Security Model**: API keys are stored as cryptographic hashes in Control Center's database — the clear-text key is never persisted or retrievable after creation. Authentication involves hashing the presented key and comparing against the stored hash. Identity tokens resolved during API key authentication are injected into proxied MCP requests by the Communication Hub and never exposed to the external agent, maintaining strict token isolation. All Communication Hub to Control Center calls for key validation are conducted over mTLS-secured service channels.
+- **MCP Protocol Session Security**: External MCP clients authenticate with an existing API key and inherit the bound role's permission set — exactly as internal agents do. Identity tokens resolved for the session are held by the Communication Hub and injected per proxied tool call, never exposed to the client. Unauthorized tool calls are rejected using the same permission resolution path.
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

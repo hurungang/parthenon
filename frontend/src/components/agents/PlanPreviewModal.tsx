@@ -17,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { AgentPlan } from '../../types'
 import TopologyDiagramRenderer from './TopologyDiagramRenderer'
+import { withCommunicationHub } from './topologyHub'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,19 @@ const PlanPreviewModal: React.FC<Props> = ({ open, onClose, plan, agentTypeName 
     !plan ||
     plan.generation_status === 'failed' ||
     plan.generation_status === 'pending'
+
+  // Append the Communication Hub platform node client-side at render time —
+  // the helper is idempotent, so regenerated plans never duplicate the node
+  // and no backend/plan-schema change is needed.
+  const withHub =
+    plan && !isFailed
+      ? withCommunicationHub(
+          plan.topology_nodes,
+          plan.topology_edges,
+          t('agents.plan.nodeTypes.communication_hub'),
+          t('agents.plan.hubEdgeLabel'),
+        )
+      : null
 
   return (
     <Dialog
@@ -149,15 +163,15 @@ const PlanPreviewModal: React.FC<Props> = ({ open, onClose, plan, agentTypeName 
             )}
 
             {/* ── Topology Diagram ──────────────────────────────────────── */}
-            {(plan!.topology_nodes.length > 0 || plan!.topology_edges.length > 0) && (
+            {(plan!.topology_nodes.length > 0 || plan!.topology_edges.length > 0) && withHub && (
               <>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
                   {t('agents.plan.topology')}
                 </Typography>
                 <TopologyDiagramRenderer
-                  nodes={plan!.topology_nodes}
-                  edges={plan!.topology_edges}
+                  nodes={withHub.nodes}
+                  edges={withHub.edges}
                 />
               </>
             )}

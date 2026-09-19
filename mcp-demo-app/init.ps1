@@ -33,6 +33,7 @@
 .PARAMETER UserRealm
     Optional user realm for dual-realm setup. When provided, verifies the realm
     exists and writes KEYCLOAK_USER_REALM / KEYCLOAK_USER_CLIENT_ID to .env.
+    Defaults to "parthenon" for standard Parthenon dual-realm setup.
 
 .EXAMPLE
     .\init.ps1
@@ -54,7 +55,7 @@ param(
     [string]$AdminUser = "admin",
     [string]$AdminPassword = "admin",
     [string]$HubApiToken = "",
-    [string]$UserRealm = "",
+    [string]$UserRealm = "parthenon",
     [switch]$Force
 )
 

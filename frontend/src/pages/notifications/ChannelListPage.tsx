@@ -47,7 +47,7 @@ export function ChannelListPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('app.confirm'))) return
+    if (!confirm(t('notifications.channels.confirmDelete'))) return
     setDeleteError(null)
     try {
       await deleteChannel(id)

@@ -36,6 +36,8 @@ Adding a new API-key-based provider is an engineering-led release activity. The 
 
 Administrators can create, read, update, and delete Model Configurations through the Agents → Model Configurations page.
 
+Model Configuration creation is also available inline from the Agent Management Panel, reusing the same create dialog — with no change to standalone Model Configurations behaviour.
+
 | Action | Description |
 |---|---|
 | **Create** | Select a provider type, give a display name, optionally set a base URL, enter an API key, and (optionally) fetch and enable specific models. The API key is encrypted before storage and never returned in read responses. |

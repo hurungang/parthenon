@@ -18,6 +18,7 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Controls which users and agents can access each Skill
 - Supports permission assignment and auditability for all Skills
 - Skills can be bound directly to Agent Types (in addition to SOPs), giving agent designers the flexibility to reference skills at any granularity
+- Skill creation is also available inline from the Agent Management Panel, which reuses the same create/edit dialogs — with no change to standalone Skill Management behaviour
 
 ## Key Concepts
 - **Skill**: A reusable, permission-controlled action wrapping one or more tool calls. Each skill carries an `updated_at` timestamp that changes whenever the skill definition is modified.
@@ -41,3 +42,8 @@ Skill Management allows administrators to define, organize, and govern Skills as
 - Only authorized entities can execute each Skill
 - All Skill usage is logged and auditable
 - Skills are discoverable and manageable from the UI
+
+## Out of Scope
+- SOP composition and sequencing (covered by SOP Management)
+- MCP server registration and tool sync (covered by MCP Hub)
+- Low-level execution runtime implementation details

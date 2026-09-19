@@ -20,7 +20,7 @@ def test_showcase_site_assets_and_workflow_exist() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     assert "actions/upload-pages-artifact" in workflow_text
     assert "actions/deploy-pages" in workflow_text
-    assert "branches:" in workflow_text and "main" in workflow_text
+    assert "branches:" in workflow_text and "develop" in workflow_text
 
 
 def test_showcase_index_contains_required_sections() -> None:

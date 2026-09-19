@@ -27,17 +27,7 @@ The deployment workflow triggers automatically on every push to `main` that incl
 
 Changes to other parts of the repository (backend, frontend application, documentation prose) do **not** trigger a rebuild.
 
-The workflow at `.github/workflows/deploy-github-pages.yml` uses a `paths` filter on the `push` trigger:
-
-```yaml
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - site/**
-      - .github/workflows/deploy-github-pages.yml
-```
+The workflow at `.github/workflows/deploy-github-pages.yml` uses a `paths` filter on the `push` trigger to restrict builds to the `main` branch and the two paths above (see the workflow file for the exact `on.push.branches` / `on.push.paths` configuration).
 
 ---
 
@@ -114,11 +104,7 @@ To serve the showcase at a custom domain (e.g., `parthenon.example.com`) instead
 
 ### Step 1 — Create the CNAME File
 
-Create `site/public/CNAME` with the custom domain as its sole content:
-
-```
-parthenon.example.com
-```
+Create `site/public/CNAME` with the custom domain as its sole content (a single line containing the domain, e.g. `parthenon.example.com`).
 
 Vite copies everything in `public/` verbatim into the build output, so this file will appear at the root of `docs/site/` after the build.
 

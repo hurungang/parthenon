@@ -90,7 +90,7 @@ All permission resource types follow the `module::submodule` naming convention, 
 | `agent::roles` | Agent Roles | Manage agent roles with SOP/Skill permissions |
 | `agent::identities` | Agent Identities | Manage agent identities and API key bindings |
 | `agent::management` | Agent Types / Agent Management | Manage agent type definitions |
-| `agent::runtime_control` | Runtime Control | Monitor and control running agent instances |
+| `agent::runtime_control` | Runtime Control | Monitor running agent instances via the Agent Runtime Monitor and control them (terminate nodes, respond to interventions) |
 | `agent::skills` | Skills | Manage reusable skill definitions |
 | `agent::sops` | SOPs | Manage standard operating procedures |
 | `agent::model_configs` | Model Configs | Manage model configuration entries |
@@ -207,3 +207,8 @@ The validation is instantaneous and read-only — it does not save, modify, or o
 - Policy changes from both Form and JSON views are saved as a single batch when the administrator clicks Save
 - Module-level wildcards (`agent::*`, `integration::*`, `system::*`, `*::*`) correctly grant access to all submodules within their scope
 - Invalid or unknown resource type identifiers are rejected with a clear error message indicating the required format
+
+## Out of Scope
+- Feature-specific business logic (each module has its own feature spec)
+- Identity provider implementation details (Keycloak / Azure EntraID internals)
+- Low-level database schema and API route definitions

@@ -28,9 +28,14 @@ class TestApiKeySchemaColumns:
         required = {
             "id", "name", "key_hash", "key_prefix",
             "agent_identity_id", "agent_role_id", "status",
-            "created_at", "last_used_at", "created_by",
+            "created_at", "last_used_at", "created_by", "expires_at",
         }
         assert required.issubset(col_names), f"Missing columns: {required - col_names}"
+
+    def test_expires_at_column_is_nullable(self):
+        from app.db.models.agent_api_key import AgentApiKey
+        col = AgentApiKey.__table__.columns["expires_at"]
+        assert col.nullable is True
 
     def test_key_hash_column_length(self):
         from app.db.models.agent_api_key import AgentApiKey
@@ -120,17 +125,14 @@ class TestApiKeyForeignKeyConstraints:
 class TestApiKeyUniqueConstraints:
     """Verify unique constraints on the agent_api_keys model."""
 
-    def test_unique_constraint_identity_role(self):
+    def test_unique_constraint_name(self):
         from app.db.models.agent_api_key import AgentApiKey
-        constraints = []
-        for c in AgentApiKey.__table__.constraints:
-            constraints.append(c)
-        # Check table args for UniqueConstraint
         uc_names = set()
         for constraint in AgentApiKey.__table__.constraints:
             if hasattr(constraint, 'name') and constraint.name:
                 uc_names.add(constraint.name)
-        assert "uq_agent_api_keys_identity_role" in uc_names
+        assert "uq_agent_api_keys_name" in uc_names
+        assert "uq_agent_api_keys_identity_role" not in uc_names
 
 
 class TestApiKeyIndexes:

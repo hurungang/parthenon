@@ -34,7 +34,7 @@ Agent Plan Mode provides a clear, actionable plan for each agent type, now acces
 
 - When a user saves an Agent Type, the system automatically invokes an LLM to generate a clear, step-by-step implementation plan based on the agent's instruction, role, and curated binding list (SOP and skill bindings).
 - The LLM-generated plan is persisted with the agent type and displayed in a human-readable format, outlining each action the agent will take.
-- A topology diagram visually shows the Agent Role, bound SOPs, bound skills, and their tools, with clear relationships.
+- A topology diagram visually shows the Agent Role, bound SOPs, bound skills, and their tools, with clear relationships. The Communication Hub is rendered as a connected node in the diagram — shown as a hub bar between capabilities and tools, with connectors crossing it — so the full runtime picture (including the messaging/gateway path) is visible.
 - Users can preview the full plan and diagram in the "Plan Preview" tab of the Agent Type Details dialog before finalizing the agent save.
 - The saved plan is loaded into the agent's execution context during runtime, guiding the agent to follow the pre-approved workflow.
 - Plan preview and execution context support both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection

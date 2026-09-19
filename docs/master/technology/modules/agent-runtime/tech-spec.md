@@ -83,6 +83,7 @@ The Agent Runtime does **not** automatically call `save_result` at agent complet
 | `get_agent_context` | method | Loads effective context payload including guardrail policy snapshot before execution starts | `backend/app/agent_runtime/data_client.py` |
 | `mark_session_failed` | method | Persists terminal guardrail stop outcomes through Control Center session-status APIs | `backend/app/agent_runtime/data_client.py` |
 | `log_execution_event` | method | Emits structured guardrail decision events and runtime counter snapshots to execution logs | `backend/app/agent_runtime/data_client.py` |
+| `record_tool_call` | method | Fire-and-forget write of one tool execution (name, MCP slug, route type, status, duration, error) to `POST /internal/data/tool-calls`; failures are logged and swallowed, never breaking tool execution | `backend/app/agent_runtime/data_client.py` |
 | `_allow_insecure_internal_fallback` | function | Development-only opt-in guard; production/default behavior remains fail-closed for missing internal trust material | `backend/app/agent_runtime/data_client.py` |
 | `CommHubToolClient` | class | Sends tool and A2A requests from Agent Runtime to Communication Hub internal routes with service identity headers or mTLS | `backend/app/agent_runtime/comm_hub_client.py` |
 | `trigger_execution` | endpoint | Runtime execution trigger endpoint used by Communication Hub for asynchronous session execution | `backend/app/agent_runtime/api/execute.py` |

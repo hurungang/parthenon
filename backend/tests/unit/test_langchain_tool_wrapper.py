@@ -374,3 +374,62 @@ async def test_regular_tool_still_uses_call_tool():
 
     mock_comm.call_tool.assert_called_once()
     mock_comm.call_a2a_request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_arun_accepts_normalised_key_for_hyphenated_schema_property():
+    """LLMs normalise hyphenated keys (project-id → project_id); both forms must
+    dispatch with the schema's ORIGINAL key so receivers validating typed input
+    (e.g. A2A enqueue requiring ``project-id``) accept the payload."""
+    from app.services.agents.langchain_tool_wrapper import build_langchain_tools_for_ar_path
+
+    mock_client = AsyncMock()
+    mock_client.call_a2a_request = AsyncMock(return_value={"receiver_session_id": "rx-1"})
+    mock_client.wait_for_a2a_response = AsyncMock(
+        return_value={"status": "completed", "output_data": {"result": "done"}}
+    )
+    mock_data_client = MagicMock()
+
+    defs = [
+        {
+            "type": "function",
+            "function": {
+                "name": "agent____target-agent",
+                "description": "Delegate to target agent",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project-id": {"type": "string", "description": "The project id"},
+                        "session_link_id": {
+                            "type": "string",
+                            "description": "Optional existing A2A session link",
+                        },
+                    },
+                    "required": ["project-id"],
+                },
+            },
+        }
+    ]
+    tools = build_langchain_tools_for_ar_path(
+        tool_definitions=defs,
+        comm_hub_client=mock_client,
+        data_client=mock_data_client,
+        session_id="sess-1",
+        agent_type_id="at-1",
+        role_id=None,
+    )
+    assert len(tools) == 1
+    tool = tools[0]
+
+    # The LLM sends the normalised (snake_case) key — must still validate and
+    # dispatch with the schema's original hyphenated key.
+    result_str = await tool.arun({"project_id": "abc123"})
+    payload = mock_client.call_a2a_request.call_args.kwargs["request_payload"]
+    assert payload == {"project-id": "abc123"}
+    assert "error" not in json.loads(result_str)
+
+    mock_client.call_a2a_request.reset_mock()
+    # The exact hyphenated key also keeps working.
+    await tool.arun({"project-id": "xyz789"})
+    payload = mock_client.call_a2a_request.call_args.kwargs["request_payload"]
+    assert payload == {"project-id": "xyz789"}

@@ -99,3 +99,26 @@ export async function getPendingInterventionForSession(sessionId: string): Promi
     }
   }
 }
+
+/**
+ * Fetch the currently pending intervention request for a runtime topology
+ * node.  Conversation-kind nodes resolve via the conversation-scoped
+ * endpoint (their `session_id` is a conversation session), while
+ * agent-kind nodes resolve via the task-agent endpoint.
+ */
+export async function getPendingInterventionForNode(
+  node: { session_id: string; kind?: 'agent' | 'conversation' | 'instance' },
+): Promise<InterveneRequest | null> {
+  if (node.kind === 'conversation') {
+    try {
+      const { data } = await apiClient.get<InterveneRequest[]>(
+        `/conversations/${node.session_id}/interventions/pending`,
+      )
+      const list = data ?? []
+      return list.length > 0 ? list[0] : null
+    } catch {
+      return null
+    }
+  }
+  return getPendingInterventionForSession(node.session_id)
+}

@@ -122,7 +122,7 @@ describe('IdentityProvidersConfigPage', () => {
   it('renders the page title', async () => {
     render(React.createElement(IdentityProvidersConfigPage), { wrapper: Wrapper })
     await waitFor(() => {
-      expect(screen.getByText('systemConfig.title')).toBeDefined()
+      expect(screen.getByText('systemConfig.identityProvidersTitle')).toBeDefined()
     })
   })
 
@@ -183,7 +183,7 @@ describe('IdentityProvidersConfigPage', () => {
     })
     fireEvent.click(screen.getByText('systemConfig.tabs.generalSettings'))
     await waitFor(() => {
-      expect(screen.queryByTestId('provider-form-user')).toBeNull()
+      expect(screen.queryByTestId('provider-form-user')).not.toBeVisible()
     })
   })
 
@@ -196,7 +196,7 @@ describe('IdentityProvidersConfigPage', () => {
     })
     fireEvent.click(screen.getByText('systemConfig.tabs.generalSettings'))
     await waitFor(() => {
-      expect(screen.queryByTestId('provider-form-user')).toBeNull()
+      expect(screen.queryByTestId('provider-form-user')).not.toBeVisible()
     })
 
     // Go back to user tab
@@ -249,7 +249,7 @@ describe('IdentityProvidersConfigPage', () => {
 
     // The component renders without crashing even on error
     await waitFor(() => {
-      expect(screen.getByText('systemConfig.title')).toBeDefined()
+      expect(screen.getByText('systemConfig.identityProvidersTitle')).toBeDefined()
     })
   })
 
@@ -294,7 +294,7 @@ describe('IdentityProvidersConfigPage', () => {
 
     render(React.createElement(IdentityProvidersConfigPage), { wrapper: Wrapper })
     await waitFor(() => {
-      expect(screen.getByText('systemConfig.title')).toBeDefined()
+      expect(screen.getByText('systemConfig.identityProvidersTitle')).toBeDefined()
     })
     // Should not crash
     expect(screen.getByTestId('provider-form-user')).toBeDefined()
@@ -305,7 +305,7 @@ describe('IdentityProvidersConfigPage', () => {
 
     render(React.createElement(IdentityProvidersConfigPage), { wrapper: Wrapper })
     await waitFor(() => {
-      expect(screen.getByText('systemConfig.title')).toBeDefined()
+      expect(screen.getByText('systemConfig.identityProvidersTitle')).toBeDefined()
     })
     // Should not crash; super admin section should still render with null status
     fireEvent.click(screen.getByText('systemConfig.tabs.generalSettings'))

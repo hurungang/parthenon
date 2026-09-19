@@ -7,11 +7,11 @@ Agent execution in Parthenon is governed by a secure, auditable, and policy-driv
 - Provide a secure, auditable execution environment for AI agents in enterprise settings
 - Enforce explicit service segregation between runtime execution and identity/credential management
 - Prevent recursive or unbounded agent delegation through guardrail policies
-- Give operators visibility into running agent topology and the ability to terminate execution trees
+- Give operators visibility into running agent activity and delegation on the Agent Runtime Monitor, and the ability to terminate execution trees
 - Support human-in-the-loop intervention for decisions requiring operator judgment
 
 ## User Stories
-- As a **platform operator**, I want to see all running agents and their delegation chains in a topology view so that I can understand execution relationships at a glance.
+- As a **platform operator**, I want to see all running agents and their delegation chains on the Agent Runtime Monitor map so that I can understand execution relationships at a glance.
 - As a **security administrator**, I want agent identities and credentials to never be accessible to agent runtime code so that credential exposure risk is eliminated.
 - As an **SOP author**, I want agents to be able to pause and request human input during execution so that critical decisions can be reviewed before proceeding.
 - As an **operations lead**, I want to identify cycle, iteration, delegation, timeout, and token-policy outcomes quickly in session summaries so that I can triage incidents efficiently.
@@ -112,14 +112,16 @@ When a **delegated sub-agent** calls `human_intervene` during a conversational s
 
 When a **delegated sub-agent** calls `human_intervene` during a non-conversational (task) agent execution, the intervention request is surfaced as an inline popup in the parent agent's execution log view — not as a separate modal. The execution log pauses and displays the intervention type (approval, choice, or text) with context. The operator can respond directly from the log view. After responding, the log stream resumes automatically and the response is recorded as a timeline event. If the popup is dismissed or the operator navigates away, a persistent banner at the top of the execution log indicates the session is waiting for human input. On reconnect, pending interventions are re-surfaced automatically.
 
-The runtime control dashboard now surfaces intervention requests from both non-conversational standalone agents and delegated agents in conversational sessions, giving operators a single view of all pending human interventions regardless of execution context.
+The Agent Runtime Monitor now surfaces intervention requests from both non-conversational standalone agents and delegated agents in conversational sessions, giving operators a single view of all pending human interventions regardless of execution context.
 
 The `human_intervene` tool follows the same explicit-trigger pattern as `system____save_data` — it is available to all agents by default and must be referenced in SOP or agent instructions to be used.
 
 ## Runtime Control and Termination Governance
-- A **runtime control dashboard** surfaces all currently running agents, their delegated children, and operator-controlled termination actions
-- A **topology diagram** visualises active parent-child agent execution relationships with selectable nodes
-- Authorized operators can **terminate any running or delegated node** from the dashboard
+- The **Agent Runtime Monitor** surfaces all currently running agents, their delegation relationships, trigger sources, intervention state, and operator-controlled termination actions on a full-page interactive map
+- The map arranges agents in a team-row layout whose columns represent delegation depth, showing a trigger-entity column (people and schedules with per-entity coloured lines), whole-chain focus on hover/click, and tool-call routes through the Communication Hub and its MCP servers, and keeps itself current through live server push updates (with automatic fallback to polling)
+- **Any node awaiting human intervention is visible on the map by default and carries an alert icon**, regardless of its state; sleeping agents not awaiting intervention remain hidden by default
+- Selecting an agent opens an inline detail bubble with a **terminate action**, guardrail usage against the agent's limits, a link to the execution log, and the agent's trigger source
+- Authorized operators can **terminate any running or delegated node** from the map
 - **Terminating a parent execution cascades** to all active delegated child executions it triggered
 - Operator-initiated termination is recorded as a distinct `terminated` outcome in execution logs, distinct from `failed` (genuine agent or runtime error)
 - Termination requests are routed from Control Center through the Communication Hub to Agent Runtime to preserve service segregation and certificate-based authentication boundaries
@@ -139,7 +141,7 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - Operators can review and respond to agent-initiated intervene requests (approval, choice, or text) from the Web UI
 - Tool naming is predictable and consistent across all agent interactions
 - Operations leads can identify cycle, iteration, delegation, timeout, and token-policy outcomes quickly in session summaries
-- Operations leads can see live execution topology and stop problematic execution trees quickly, including all active child delegations
+- Operations leads can see live execution activity and delegation on the Agent Runtime Monitor and stop problematic execution trees quickly, including all active child delegations
 - Compliance owners can verify evidence of observe-only guardrail alerts and disabled-model / disabled-vendor block events
 
 ## Acceptance Criteria
@@ -158,7 +160,7 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - **Agent execution is blocked when the requested model is disabled or when the model is under a disabled vendor, and the block is surfaced in execution logs**
 - Delegated sub-agent intervention requests in conversational sessions are routed to the parent conversation and surfaced as inline intervention dialogs in the conversation UI
 - Parallel intervention requests from multiple delegated sub-agents are queued and presented sequentially in the conversation — one at a time
-- The runtime control dashboard surfaces intervention requests from conversational delegated agents alongside those from standalone non-conversational agents
+- The Agent Runtime Monitor surfaces intervention requests from conversational delegated agents alongside those from standalone non-conversational agents, with any node awaiting human intervention visible on the map by default carrying an alert icon
 - When a non-conversational agent initiates delegation, the execution log displays a `delegating to <agent_type>` event in real time
 - While the non-conversational agent is waiting for a delegated sub-agent to complete, the execution log displays a `waiting` status with a visible indicator
 - When the delegated sub-agent completes and the parent agent resumes, the execution log displays a `delegation_resumed` event
@@ -187,6 +189,6 @@ The `human_intervene` tool follows the same explicit-trigger pattern as `system_
 - Must preserve secure handling of sensitive credentials and identity material; no expansion of agent access to sensitive data
 - Depends on trustworthy model-usage measurement and period rollup data so hourly, daily, weekly, and monthly posture can be shown accurately
 - Depends on a vendor and model catalogue that the new hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
-- Depends on reliable runtime state and delegation relationship signals to render accurate running-agent topology
+- Depends on reliable runtime state and delegation relationship signals to render the Agent Runtime Monitor map accurately
 - Depends on permission enforcement so only authorized users can configure guardrails, disable vendors or models, and terminate executions
 - Constrained by enterprise auditability requirements: guardrail alerts, model-usage posture changes, vendor/model disable changes, and termination actions must be visible in operational logs

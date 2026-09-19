@@ -57,7 +57,7 @@ All backend configuration in the Parthenon platform flows through a single layer
 | Priority | Source | Mechanism |
 |---|---|---|
 | 1 | Environment variables | `pydantic-settings` built-in `EnvSettingsSource` |
-| 2 | `config/<domain>.yaml` | `YamlSettingsSource` — a `PydanticBaseSettingsSource` subclass wired via `Settings.settings_customise_sources()` |
+| 2 | `config/<domain>.yaml` | `_SparseYamlSource` — a `YamlConfigSettingsSource` subclass wired via `Settings.settings_customise_sources()` |
 | 3 | Hard-coded defaults | Pydantic field `default` / `default_factory` |
 
 The YAML layer is inserted between env vars and defaults by overriding `settings_customise_sources()`. This gives operators the ability to manage config in version-controlled YAML files while still allowing environment variables to override any value at deploy time without changing files.
@@ -89,12 +89,12 @@ At startup, `Settings.log_config_sources` logs which source resolved each infras
 | `config/identity.yaml` | Identity / OIDC | Identity provider type, OIDC URL, realm, client ID, audience, setup-complete flag. Written by the Identity Bootstrap Service after first-run setup. |
 | `config/telemetry.yaml` | Telemetry | Telemetry export targets, signal enable/disable flags, and log levels. Overridable by `TELEMETRY_*` environment variables. |
 
-Additional `config/<domain>.yaml` files may be introduced by future modules following the same pattern — each domain owns its own YAML file and adds a corresponding `YamlSettingsSource` subclass to `config.py`.
+Additional `config/<domain>.yaml` files may be introduced by future modules following the same pattern — each domain owns its own YAML file and adds a corresponding `_SparseYamlSource` subclass to `config.py`.
 
 ### Adding Config for a New Module
 
 1. Add the new settings fields to `Settings` in `backend/app/core/config.py`.
-2. If the module needs file-based config (overridable by env), create `config/<domain>.yaml` and add a `YamlSettingsSource` subclass for that domain's key prefix.
+2. If the module needs file-based config (overridable by env), create `config/<domain>.yaml` and add a `_SparseYamlSource` subclass for that domain's key prefix.
 3. Wire the new source into `settings_customise_sources()` — it slots in between `EnvSettingsSource` and hard-coded defaults.
 4. All field types are validated by Pydantic automatically; no manual validation code is needed.
 5. Consume via `get_settings()` — never import the config module directly from outside `core/`.
@@ -129,10 +129,10 @@ The foundation module does not expose its own HTTP endpoints. It provides the sh
 | `TelemetrySettings` | class | Nested telemetry configuration model within Settings; controls export targets, signals, and log levels | `backend/app/core/config.py` |
 | `_SparseYamlSource` | class | Custom YAML source that drops null/empty placeholders, ensuring environment variables take priority over YAML | `backend/app/core/config.py` |
 | `settings_customise_sources` | method | Defines config source priority: init → env → dotenv → YAML → secrets | `backend/app/core/config.py` |
-| `YamlSettingsSource` | class | `PydanticBaseSettingsSource` subclass that reads a domain-specific `config/<domain>.yaml` file and feeds its values into `Settings` as the second-priority source after env vars | `backend/app/core/config.py` |
 | `get_db` | function | FastAPI dependency providing a scoped async SQLAlchemy session per request | `backend/app/db/session.py` |
 | `OIDCClient` | class | Fetches and caches JWKS; validates JWT signatures, expiry, and audience claims | `backend/app/core/oidc_client.py` |
-| `JWTAuthMiddleware` | class | Starlette middleware validating bearer tokens on all protected routes; attaches identity claims to `request.state`; also stores the raw bearer token string on `request.state.raw_token` immediately after extraction (used by passthrough session endpoints for JWT forwarding) | `backend/app/middleware/auth.py` |
+| `JWTAuthMiddleware` | class | Starlette middleware validating bearer tokens on all protected routes; attaches identity claims to `request.state`; also stores the raw bearer token string on `request.state.raw_token` immediately after extraction (used by passthrough session endpoints for JWT forwarding). Token validation itself is delegated to the shared `validate_raw_token()` tiered pipeline (super admin → OIDC registry → legacy client) so self-authenticating endpoints — e.g. the SSE runtime-topology stream registered in `PUBLIC_PATHS` — reuse the exact same validation as header-based auth | `backend/app/middleware/auth.py` |
+| `validate_raw_token` | function | Shared token-validation tiers (super admin → OIDC provider registry → legacy client) extracted from the auth middleware; returns the validated identity alongside claims; the single source of truth for self-authenticating endpoints (`?token=` query-param auth) | `backend/app/middleware/auth.py` |
 | `CredentialVault` | class | AES-256 encrypt/decrypt wrapper for stored credentials; decrypt at call time only | `backend/app/core/credential_vault.py` |
 | `setup_telemetry` | function | Configures TracerProvider, MeterProvider, and LoggerProvider with OTLP exporters; applies auto-instrumentation | `backend/app/core/telemetry.py` |
 | `_instrument_libraries` | function | Applies OTEL auto-instrumentation patches for FastAPI, SQLAlchemy, Redis, and httpx; isolated for fault tolerance | `backend/app/core/telemetry.py` |

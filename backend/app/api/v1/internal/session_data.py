@@ -9,8 +9,9 @@ Routes (all under /internal/data):
   GET   /users/{user_id}/permissions         — resolved tool permission set
   POST  /sessions/claim-queued              — atomically claim queued sessions
   PATCH /sessions/{session_id}/status       — transition session status
-  POST  /sessions/{session_id}/log          — write execution log entry
-  POST  /conversations/{conv_session_id}/auto-name  — generate and save conversation title
+   POST  /sessions/{session_id}/log          — write execution log entry
+   POST  /tool-calls                        — record tool executions (batch)
+   POST  /conversations/{conv_session_id}/auto-name  — generate and save conversation title
 """
 from __future__ import annotations
 
@@ -184,6 +185,31 @@ class ConversationTurnAppendResponse(BaseModel):
     """Result of appending an agent turn."""
 
     title: str | None = None
+
+
+class RuntimeToolCallRecord(BaseModel):
+    """A single tool-execution record reported by Agent Runtime."""
+
+    session_id: uuid.UUID
+    session_kind: Literal["agent", "conversation"]
+    tool_name: str = Field(..., min_length=1, max_length=400)
+    route_type: Literal["system", "mcp", "a2a"]
+    mcp_slug: str | None = Field(default=None, max_length=100)
+    status: Literal["success", "error"]
+    duration_ms: int | None = None
+    error: str | None = None
+
+
+class RuntimeToolCallIngestRequest(BaseModel):
+    """Request body for POST /tool-calls — one record or a batch."""
+
+    records: list[RuntimeToolCallRecord] = Field(..., min_length=1, max_length=100)
+
+
+class RuntimeToolCallIngestResponse(BaseModel):
+    """Result of ingesting tool-call records."""
+
+    recorded: int
 
 
 class A2ADataRequest(BaseModel):
@@ -777,10 +803,30 @@ async def prepare_a2a_request(
     if body.conv_session_id:
         enqueue_input["__conv_session_id"] = body.conv_session_id
     enqueue_input["__requester_session_id"] = body.requester_instance_id
+
+    # Trigger provenance: when the delegating session is a conversation
+    # (chat-originated delegation), resolve the chat user from the source
+    # ConversationSession so the delegated job carries the human trigger —
+    # otherwise the job would show "unknown" provenance in the runtime
+    # monitor.  Jobs delegated from another agent job inherit via
+    # session_service.enqueue (parent triggered_by_user_id).
+    delegation_user_id: uuid.UUID | None = None
+    if body.conv_session_id:
+        try:
+            conv_uuid = uuid.UUID(str(body.conv_session_id))
+        except (ValueError, AttributeError):
+            conv_uuid = None
+        if conv_uuid is not None:
+            from app.db.models.conversations import ConversationSession
+
+            conv_row = await db.get(ConversationSession, conv_uuid)
+            if conv_row is not None:
+                delegation_user_id = conv_row.triggered_by_user_id
+
     receiver_job = await session_service.enqueue(
         agent_type_id=target_agent_type.id,
         input_data=enqueue_input,
-        user_id=None,
+        user_id=delegation_user_id,
         db=db,
         parent_job_id=parent_job_id,
     )
@@ -1022,6 +1068,65 @@ async def log_execution_event(
         raise HTTPException(status_code=500, detail="Failed to persist log entry")
 
     return LogExecutionEventResponse(entry_id=entry_id)
+
+
+@InternalSessionDataRouter.post(
+    "/tool-calls",
+    response_model=RuntimeToolCallIngestResponse,
+    dependencies=[Depends(require_service_certificate)],
+    summary="Record tool executions performed by Agent Runtime",
+)
+async def record_tool_calls(
+    body: RuntimeToolCallIngestRequest,
+    db: DbSession,
+) -> RuntimeToolCallIngestResponse:
+    """Persist one or a batch of tool-call records from Agent Runtime.
+
+    ``session_id`` is polymorphic: an agent job id (``session_kind="agent"``)
+    or a conversation session id (``session_kind="conversation"``).  There is
+    intentionally no FK so conversation turns — which execute without a
+    backing AgentJob — can record their tool calls too.
+
+    Agent Runtime treats this write as fire-and-forget: recording failures
+    must never abort tool execution, so this endpoint always returns 200 with
+    the count of records persisted (invalid rows are dropped, not fatal).
+    """
+    from app.db.models.tool_calls import (
+        RuntimeToolCall,
+        RuntimeToolCallRouteType,
+        RuntimeToolCallSessionKind,
+        RuntimeToolCallStatus,
+    )
+
+    recorded = 0
+    for item in body.records:
+        try:
+            db.add(
+                RuntimeToolCall(
+                    session_id=item.session_id,
+                    session_kind=RuntimeToolCallSessionKind(item.session_kind),
+                    tool_name=item.tool_name,
+                    route_type=RuntimeToolCallRouteType(item.route_type),
+                    mcp_slug=item.mcp_slug,
+                    status=RuntimeToolCallStatus(item.status),
+                    duration_ms=item.duration_ms,
+                    error=item.error,
+                )
+            )
+            recorded += 1
+        except (ValueError, TypeError) as exc:
+            logger.warning("Dropping invalid tool-call record (%s): %s", item, exc)
+
+    if recorded == 0:
+        return RuntimeToolCallIngestResponse(recorded=0)
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        logger.warning("Failed to persist tool-call records: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to persist tool-call records")
+
+    return RuntimeToolCallIngestResponse(recorded=recorded)
 
 
 @InternalSessionDataRouter.post(

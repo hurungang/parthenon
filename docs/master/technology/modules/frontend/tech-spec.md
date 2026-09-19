@@ -31,7 +31,7 @@ The frontend module covers the global application shell, MUI theming infrastruct
 |-----------|-------------|
 | `AppShell` | Top-level layout component; renders a fixed sidebar `Drawer` (width `DRAWER_WIDTH`), a white-surface `AppBar` with `border-bottom` separator, a `<main>` outlet for routed page content, and mounts `PermissionErrorSnackbar` globally so all 403 denials surface without per-page handling. The sidebar is data-driven: three named collapsible groups (Agents, Integrations, System) and one standalone entry (Dashboard). Expansion state is managed by a single `expandedGroups: Record<string, boolean>` object. |
 | `DRAWER_WIDTH` | Module-level constant defining sidebar pixel width (256 px); referenced by both the `Drawer` and the `main` offset margin |
-| `NAV_GROUPS` | Declarative array of three sidebar groups: Agents (roles, identities, types, runtime control, skills, SOPs, model configs, schedules, agent trails), Integrations (MCP Hub, notifications), and System (observability, permissions, system config). Each group has `groupKey`, `labelKey`, `icon`, and `children: NavItem[]`. The Integrations group is locked open (`lockedOpen: true`). |
+| `NAV_GROUPS` | Declarative array of three sidebar groups: Agents (roles, identities, types, agent management panel, runtime control, skills, SOPs, model configs, schedules, agent trails), Integrations (MCP Hub, notifications), and System (observability, permissions, system config). Each group has `groupKey`, `labelKey`, `icon`, and `children: NavItem[]`. The Integrations group is locked open (`lockedOpen: true`). |
 | `STANDALONE_ITEMS` | Declarative array of top-level sidebar entries not in any collapsible group. Currently a single Dashboard entry at `/dashboard`. |
 
 ### Sidebar Navigation
@@ -180,7 +180,7 @@ The MUI theme is a static constant — no runtime state is introduced. Dark-mode
 | `STANDALONE_ITEMS` | const | Declarative array of top-level sidebar entries not in any collapsible group (currently Dashboard at `/dashboard`) | `frontend/src/app/AppShell.tsx` |
 | `NavItem` | interface | TypeScript shape for a single sidebar entry (`labelKey: string`, `path: string`, `icon: React.ReactNode`) | `frontend/src/app/AppShell.tsx` |
 | `NavGroup` | interface | TypeScript shape for a collapsible sidebar group (`groupKey: string`, `labelKey: string`, `icon: React.ReactNode`, `children: NavItem[]`, `lockedOpen?: boolean`) | `frontend/src/app/AppShell.tsx` |
-| `AppRouter` | component | Route configuration; first-run redirect guard (`getIdentityStatus` on mount); registers `/agents/executions` route and `/agents/instances` → `/agents/executions` redirect for backward compatibility; registers `/access-denied` route for `AccessDeniedPage` | `frontend/src/app/AppRouter.tsx` |
+| `AppRouter` | component | Route configuration; first-run redirect guard (`getIdentityStatus` on mount); registers `/agents/executions` route and `/agents/instances` → `/agents/executions` redirect for backward compatibility; registers the protected `/agents/panel` route for the Agent Management Panel; registers `/access-denied` route for `AccessDeniedPage` | `frontend/src/app/AppRouter.tsx` |
 | `index.css` | stylesheet | Global root layout rules (font-family removed, Inter via MUI theme) | `frontend/src/styles/index.css` |
 
 ### Sidebar Navigation

@@ -101,34 +101,21 @@ class TestSuperAdminStatus:
     def test_status_returns_data(self, client):
         """Super admin status should be accessible."""
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.get_status",
-            AsyncMock(return_value={
-                "is_enabled": True,
-                "username": "admin",
-                "last_login_at": None,
-            }),
+            "app.services.super_admin_auth_service.super_admin_enabled",
+            return_value=True,
         ):
             with patch(
-                "app.api.v1.system_config.SuperAdminAuthService.is_enabled",
-                MagicMock(return_value=True),
+                "app.services.super_admin_auth_service.super_admin_username",
+                return_value="admin",
             ):
-                response = client.get("/api/v1/system/super-admin/status")
-                assert response.status_code == 200
-                data = response.json()
-                assert "is_enabled" in data
-
-
-class TestSuperAdminToggle:
-    def test_toggle_needs_auth(self, client):
-        """Toggle should require auth."""
-        response = client.patch(
-            "/api/v1/system/super-admin/toggle",
-            json={"is_enabled": False},
-        )
-        # Without auth middleware, this returns whatever the endpoint decides
-        # It may be 401 or proceed (no middleware to enforce)
-        # Just verify the endpoint exists
-        assert response.status_code in (200, 401, 403, 404)
+                with patch(
+                    "app.services.super_admin_auth_service.is_env_controlled",
+                    return_value=True,
+                ):
+                    response = client.get("/api/v1/system/super-admin/status")
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert "is_enabled" in data
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────
@@ -144,8 +131,8 @@ class TestSuperAdminLogin:
         from app.services.super_admin_auth_service import SuperAdminAuthError
 
         with patch(
-            "app.api.v1.system_config.SuperAdminAuthService.login",
-            AsyncMock(side_effect=SuperAdminAuthError("Invalid")),
+            "app.services.super_admin_auth_service.super_admin_login",
+            side_effect=SuperAdminAuthError("Invalid"),
         ):
             response = client.post(
                 "/api/v1/auth/super-admin/login",

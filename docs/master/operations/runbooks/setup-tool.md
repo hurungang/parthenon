@@ -19,11 +19,7 @@ The consolidated `setup` command replaces the deprecated individual scripts prev
 
 ### `setup identity`
 
-Provisions the identity provider for bundled Keycloak deployments.
-
-```bash
-KEYCLOAK_ADMIN=admin KEYCLOAK_ADMIN_PASSWORD=secret setup identity
-```
+Provisions the identity provider for bundled Keycloak deployments. For a non-default admin credential: `KEYCLOAK_ADMIN=admin KEYCLOAK_ADMIN_PASSWORD=secret setup identity`.
 
 **What it does**:
 1. Verifies Keycloak is reachable at `KEYCLOAK_URL`
@@ -31,13 +27,12 @@ KEYCLOAK_ADMIN=admin KEYCLOAK_ADMIN_PASSWORD=secret setup identity
 3. Registers OIDC clients for the API UI and agent runtime (logs `setup.identity.client_created` or `setup.identity.client_exists`)
 4. Creates an admin user in the realm (logs `setup.identity.admin_created` or `setup.identity.admin_exists`)
 
-**Expected output on first run**:
-```
-setup.identity.realm_created     realm_name=parthenon
-setup.identity.client_created    client_id=parthenon-api-ui  realm=parthenon
-setup.identity.client_created    client_id=parthenon-agent-runtime  realm=parthenon
-setup.identity.admin_created     username=admin  realm=parthenon
-```
+**Expected output on first run** (one log line per resource):
+
+- `setup.identity.realm_created     realm_name=parthenon`
+- `setup.identity.client_created    client_id=parthenon-api-ui  realm=parthenon`
+- `setup.identity.client_created    client_id=parthenon-agent-runtime  realm=parthenon`
+- `setup.identity.admin_created     username=admin  realm=parthenon`
 
 **Idempotent behaviour**: Running `setup identity` a second time on the same environment logs `realm_exists`, `client_exists`, and `admin_exists` for each respective resource.
 
@@ -46,11 +41,7 @@ setup.identity.admin_created     username=admin  realm=parthenon
 
 ### `setup database`
 
-Verifies database connectivity and seeds default data.
-
-```bash
-setup database
-```
+Verifies database connectivity and seeds default data. Run with `setup database`.
 
 **What it does**:
 1. Confirms PostgreSQL schema and connectivity (logs `setup.database.verified`)
@@ -61,11 +52,7 @@ setup database
 
 ### `setup certificates`
 
-Bootstraps the Certificate Authority for service-to-service mTLS.
-
-```bash
-setup certificates
-```
+Bootstraps the Certificate Authority for service-to-service mTLS. Run with `setup certificates`.
 
 **What it does**:
 1. Generates a new CA certificate and key if none exists (logs `setup.certificates.ca_created` with `serial_number` and `expires_at`)
@@ -75,29 +62,15 @@ setup certificates
 
 ### `setup dev`
 
-Convenience command for development environments — runs `identity`, `database`, and `certificates` in sequence.
-
-```bash
-setup dev
-```
+Convenience command for development environments — runs `identity`, `database`, and `certificates` in sequence. Run with `setup dev`.
 
 ### `setup verify`
 
-Validates that all infrastructure components are in their expected state.
+Validates that all infrastructure components are in their expected state. Run with `setup verify`.
 
-```bash
-setup verify
-```
+**Expected output on success**: `setup.verify.all_ok`
 
-**Expected output on success**:
-```
-setup.verify.all_ok
-```
-
-**Expected output on partial failure**:
-```
-setup.verify.issues_found    issues=["Keycloak realm not found", "Database not seeded"]
-```
+**Expected output on partial failure**: `setup.verify.issues_found    issues=["Keycloak realm not found", "Database not seeded"]`
 
 ---
 

@@ -38,6 +38,7 @@ Agent identity management in Parthenon is centralized in the Control Center as a
 - Security administrators can audit and revoke agent identities centrally
 - Platform operators do not manage or distribute identity tokens
 - Compliance officers can demonstrate boundary enforcement using evidence of permitted and blocked identity access paths
+- Platform administrators can sign in / provision a new agent identity inline from the Agent Management Panel while configuring an agent; this reuses the existing identity sign-in/provisioning flow and does not change standalone identity management behaviour
 
 ## Out of Scope
 - Technical implementation details, code, or architecture diagrams

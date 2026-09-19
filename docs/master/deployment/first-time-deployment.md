@@ -100,19 +100,12 @@ Run the consolidated setup command BEFORE deploying backend services. The setup 
 
 **For bundled Keycloak deployments:**
 
-```bash
-# Provision the Keycloak realm, clients, roles, and admin user
-python -m setup.main identity
+Run the following sub-commands in order:
 
-# Verify the database is reachable and seed roles, permissions, and skills
-python setup/main.py database
-
-# Bootstrap the certificate authority for mTLS
-python setup/main.py certificates
-
-# Run a read-only check to confirm all components are in the expected state
-python setup/main.py verify
-```
+- `python -m setup.main identity` — provision the Keycloak realm, clients, roles, and admin user
+- `python setup/main.py database` — verify the database is reachable and seed roles, permissions, and skills
+- `python setup/main.py certificates` — bootstrap the certificate authority for mTLS
+- `python setup/main.py verify` — read-only check to confirm all components are in the expected state
 
 All operations are idempotent — safe to run on an already-initialized environment.
 
@@ -124,9 +117,7 @@ All operations are idempotent — safe to run on an already-initialized environm
 
 **Docker Compose:** The setup tool can be run as a one-shot service with `profiles: [setup]`:
 
-```bash
-docker compose --profile setup run --rm setup
-```
+Run `docker compose --profile setup run --rm setup` to execute the setup tool as a one-shot service.
 
 This service requires the Keycloak admin environment variables but runs independently of the runtime services and exits after completing.
 

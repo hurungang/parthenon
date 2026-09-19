@@ -23,13 +23,14 @@ from app.db.session import DbSession
 from app.schemas.api_key import (
     ApiKeyCreate,
     ApiKeyCreateResponse,
+    ApiKeyDeleteResponse,
     ApiKeyListItem,
     ApiKeyRevokeResponse,
     IdentityWithRoles,
     RoleItem,
 )
 from app.services.api_key_service import (
-    check_duplicate_active_key,
+    check_duplicate_name,
     generate_api_key,
     get_identity_name,
     get_role_name,
@@ -115,6 +116,7 @@ async def list_api_keys(
                 status=key.status.value,
                 created_at=key.created_at,
                 last_used_at=key.last_used_at,
+                expires_at=key.expires_at,
             )
         )
 
@@ -136,7 +138,7 @@ async def create_api_key(
     The clear-text key is returned once in the response — it is never stored
     and cannot be retrieved afterward.
 
-    Enforces one active key per identity-role pair.
+    Enforces unique key names (any number of keys per identity-role pair).
     """
     # Validate agent identity exists and is active
     identity = await db.get(AgentIdentity, body.agent_identity_id)
@@ -167,14 +169,12 @@ async def create_api_key(
             detail="The selected identity is not assigned to the selected role. Assign the identity to the role first.",
         )
 
-    # Enforce one active key per identity-role pair
-    is_duplicate = await check_duplicate_active_key(
-        body.agent_identity_id, body.agent_role_id, db
-    )
+    # Enforce unique key names (any number of keys per identity-role pair)
+    is_duplicate = await check_duplicate_name(body.name, db)
     if is_duplicate:
         raise HTTPException(
             status_code=409,
-            detail="An active API key already exists for this identity-role pair. Revoke the existing key first.",
+            detail="An API key with this name already exists. Choose a different name.",
         )
 
     # Generate key
@@ -188,6 +188,7 @@ async def create_api_key(
         agent_identity_id=body.agent_identity_id,
         agent_role_id=body.agent_role_id,
         status=ApiKeyStatus.active,
+        expires_at=body.expires_at,
     )
     db.add(api_key)
     await db.commit()
@@ -210,6 +211,7 @@ async def create_api_key(
         agent_identity_name=identity.name,
         agent_role_id=body.agent_role_id,
         agent_role_name=role.name,
+        expires_at=api_key.expires_at,
         created_at=api_key.created_at,
     )
 
@@ -249,6 +251,35 @@ async def revoke_api_key(
         id=api_key.id,
         status="revoked",
         message="API key revoked successfully",
+    )
+
+
+@AdminApiKeyRouter.delete(
+    "/{key_id}",
+    response_model=ApiKeyDeleteResponse,
+    dependencies=[Depends(_ADMIN_PERMISSION)],
+)
+async def delete_api_key(
+    key_id: uuid.UUID,
+    db: DbSession,
+) -> ApiKeyDeleteResponse:
+    """Permanently delete an API key and its usage logs.
+
+    Unlike revocation (which preserves the key and audit trail), deletion
+    removes the key record entirely. Any usage logs cascade with the key.
+    """
+    api_key = await db.get(AgentApiKey, key_id)
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    await db.delete(api_key)
+    await db.commit()
+
+    logger.info("API key deleted: id=%s name=%s", key_id, api_key.name)
+
+    return ApiKeyDeleteResponse(
+        id=key_id,
+        message="API key deleted successfully",
     )
 
 

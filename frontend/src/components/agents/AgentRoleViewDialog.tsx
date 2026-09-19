@@ -14,7 +14,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../permissions/PermissionDeniedAlert'
-import { AgentRoleDialog } from '../../pages/agents/AgentRoleDialog'
+import { AgentRoleDialog } from './AgentRoleDialog'
 import type { AgentRole } from '../../types'
 
 interface AgentRoleViewDialogProps {

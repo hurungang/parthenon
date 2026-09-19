@@ -109,15 +109,15 @@ The skills module defines the execution primitives that agents use to interact w
 | `useSkillRoles` | hook | React Query hook fetching role IDs for a skill (`GET /skills/{skillId}/roles`) | `frontend/src/hooks/useSkills.ts` |
 | `useSopRoles` | hook | React Query hook fetching role IDs for a SOP (`GET /sops/{sopId}/roles`) | `frontend/src/hooks/useSops.ts` |
 | `SkillListPage` | component | Skill list with tool count badges and role chips; hosts `SkillEditor` in-page panel | `frontend/src/pages/skills/SkillListPage.tsx` |
-| `SkillEditor` | component | In-page skill editor: name, description, instructions, MCP Tools multi-select grouped by server, role assignment sidebar | `frontend/src/pages/skills/SkillEditor.tsx` |
-| `extractGeneratedToolSection` | function | Extracts generated tool context section from a persisted instructions payload | `frontend/src/pages/skills/SkillEditor.tsx` |
-| `buildGeneratedToolSectionFromSelection` | function | Builds generated tool context section from current selected tools in editor state | `frontend/src/pages/skills/SkillEditor.tsx` |
-| `SkillEditor.handleGenerateWorkflow` | function | Calls Skill workflow generation API using unsaved form state | `frontend/src/pages/skills/SkillEditor.tsx` |
-| `SkillEditor.handlePreviewWorkflow` | function | Calls Skill workflow preview API and renders model-tagged preview content | `frontend/src/pages/skills/SkillEditor.tsx` |
+| `SkillEditor` | component | In-page skill editor: name, description, instructions, MCP Tools multi-select grouped by server, role assignment sidebar | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
+| `extractGeneratedToolSection` | function | Extracts generated tool context section from a persisted instructions payload | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
+| `buildGeneratedToolSectionFromSelection` | function | Builds generated tool context section from current selected tools in editor state | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
+| `SkillEditor.handleGenerateWorkflow` | function | Calls Skill workflow generation API using unsaved form state | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
+| `SkillEditor.handlePreviewWorkflow` | function | Calls Skill workflow preview API and renders model-tagged preview content | `frontend/src/components/agents/SkillEditor.tsx` (shared; relocated from the page folder) |
 | `SopListPage` | component | SOP list with step count; hosts `SopEditor` in-page panel | `frontend/src/pages/skills/SopListPage.tsx` |
-| `SopEditor` | component | In-page SOP editor: name, description, instructions field, step cards with drag reorder, and `agent_delegation` step authoring used for derived A2A permission mappings | `frontend/src/pages/skills/SopEditor.tsx` |
-| `SopEditor.handleGenerateWorkflow` | function | Calls SOP workflow generation API using unsaved description and ordered steps | `frontend/src/pages/skills/SopEditor.tsx` |
-| `SopEditor.handlePreviewWorkflow` | function | Calls SOP workflow preview API and renders model-tagged preview content | `frontend/src/pages/skills/SopEditor.tsx` |
+| `SopEditor` | component | In-page SOP editor: name, description, instructions field, step cards with drag reorder, and `agent_delegation` step authoring used for derived A2A permission mappings | `frontend/src/components/agents/SopEditor.tsx` (shared; relocated from the page folder) |
+| `SopEditor.handleGenerateWorkflow` | function | Calls SOP workflow generation API using unsaved description and ordered steps | `frontend/src/components/agents/SopEditor.tsx` (shared; relocated from the page folder) |
+| `SopEditor.handlePreviewWorkflow` | function | Calls SOP workflow preview API and renders model-tagged preview content | `frontend/src/components/agents/SopEditor.tsx` (shared; relocated from the page folder) |
 | `apiClient` | module | Shared REST client used by Skill and SOP editor workflow generation and preview actions | `frontend/src/api/apiClient.ts` |
 | `PermissionDeniedAlert` | component | Standard dialog-visible error rendering used by workflow generation and preview flows | `frontend/src/components/permissions/PermissionDeniedAlert.tsx` |
 | `test_skills_workflow_generation_preview` | test module | Backend API tests for Skill workflow generation and preview behavior | `backend/tests/api/v1/test_skills_workflow_generation_preview.py` |

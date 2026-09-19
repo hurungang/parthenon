@@ -95,8 +95,6 @@ async def super_admin_refresh(
         )
     except SuperAdminAuthError as exc:
         raise HTTPException(status_code=401, detail=str(exc))
-    except SuperAdminAuthError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

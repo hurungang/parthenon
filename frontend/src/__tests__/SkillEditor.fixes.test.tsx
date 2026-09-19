@@ -10,7 +10,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { SkillEditor } from '../pages/skills/SkillEditor'
+import { SkillEditor } from '../components/agents/SkillEditor'
 import { useAllTools, useMcpServers } from '../hooks/useMcpServers'
 import { useSkillRoles } from '../hooks/useSkills'
 

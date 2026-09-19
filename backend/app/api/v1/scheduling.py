@@ -2,10 +2,10 @@
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_claims, require_permission
 from app.core.resource_types import RT_AGENT_SCHEDULES
 from app.db.session import DbSession
 from app.db.models.scheduling import ExecutionStatus, JobExecution, JobStatus, ScheduledJob
@@ -15,6 +15,24 @@ from app.services.scheduling.scheduler import get_scheduling_engine
 logger = logging.getLogger(__name__)
 
 ScheduleRouter = APIRouter(prefix="/schedules", tags=["Scheduling"])
+
+
+def _get_requesting_user_id(request: Request) -> uuid.UUID | None:
+    """Extract the requesting user's identity id from JWT claims.
+
+    Mirrors the pattern used by the agent-launch endpoints: the
+    ``platform_user_id`` claim carries the identity that owns the trigger,
+    and is stored as ``scheduled_by_user_id`` — the provenance anchor for
+    schedule-triggered agent runs.
+    """
+    claims = get_current_claims(request)
+    user_id_str: str | None = claims.get("platform_user_id")
+    if not user_id_str:
+        return None
+    try:
+        return uuid.UUID(user_id_str)
+    except (ValueError, TypeError):
+        return None
 
 
 @ScheduleRouter.get("", response_model=list[ScheduledJobRead])
@@ -37,10 +55,14 @@ async def list_schedules(
 @ScheduleRouter.post("", response_model=ScheduledJobRead, status_code=status.HTTP_201_CREATED)
 async def create_schedule(
     body: ScheduledJobCreate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "create")),
 ) -> ScheduledJob:
-    job = ScheduledJob(**body.model_dump())
+    job = ScheduledJob(
+        **body.model_dump(),
+        scheduled_by_user_id=_get_requesting_user_id(request),
+    )
     db.add(job)
     await db.flush()
 
@@ -70,6 +92,7 @@ async def get_schedule(
 async def update_schedule(
     job_id: uuid.UUID,
     body: ScheduledJobUpdate,
+    request: Request,
     db: DbSession,
     _: dict = Depends(require_permission(RT_AGENT_SCHEDULES, "update")),
 ) -> ScheduledJob:
@@ -78,6 +101,10 @@ async def update_schedule(
         raise HTTPException(status_code=404, detail="Scheduled job not found")
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(job, field, value)
+    # Track the last editor as the schedule's trigger owner (provenance).
+    requesting_user_id = _get_requesting_user_id(request)
+    if requesting_user_id is not None:
+        job.scheduled_by_user_id = requesting_user_id
     await db.flush()
 
     # Re-register with updated cron expression

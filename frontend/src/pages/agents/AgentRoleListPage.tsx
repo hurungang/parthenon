@@ -23,7 +23,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
-import { AgentRoleDialog } from './AgentRoleDialog'
+import { AgentRoleDialog } from '../../components/agents/AgentRoleDialog'
 import type { AgentRole } from '../../types'
 import { usePagination } from '../../hooks/usePagination'
 

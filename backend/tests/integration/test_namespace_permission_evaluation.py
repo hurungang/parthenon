@@ -50,7 +50,7 @@ class TestNamespacePermissionEvaluationRealDB:
         # Three modules
         assert set(MODULE_GROUPS.keys()) == {"agent", "integration", "system"}
         # Correct counts
-        assert len(MODULE_GROUPS["agent"]) == 12
+        assert len(MODULE_GROUPS["agent"]) == 14
         assert len(MODULE_GROUPS["integration"]) == 2
         assert len(MODULE_GROUPS["system"]) == 3
         # All entries in manifest
@@ -58,13 +58,15 @@ class TestNamespacePermissionEvaluationRealDB:
             for rt in module:
                 assert rt in ResourceTypeManifest
 
-    async def test_manifest_has_17_entries(self):
-        """Manifest should contain exactly 17 namespaced resource types."""
-        assert len(ResourceTypeManifest) == 17
+    async def test_manifest_has_20_entries(self):
+        """Manifest should contain exactly 20 resource types (19 namespaced + bare 'agent')."""
+        assert len(ResourceTypeManifest) == 20
 
     async def test_all_entries_use_double_colon_delimiter(self):
-        """Every manifest entry must use the :: delimiter."""
+        """Every namespaced manifest entry must use the :: delimiter; bare 'agent' is the exception."""
         for rt in ResourceTypeManifest:
+            if rt == "agent":
+                continue
             assert "::" in rt
             assert rt.count("::") == 1, f"'{rt}' should have exactly one '::'"
 

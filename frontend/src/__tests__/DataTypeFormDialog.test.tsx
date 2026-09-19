@@ -55,7 +55,7 @@ describe('DataTypeFormDialog', () => {
   })
 
   it('renders create mode with empty fields', async () => {
-    const { DataTypeFormDialog } = await import('../pages/data-types/DataTypeFormDialog')
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(
       <DataTypeFormDialog open={true} editDataType={null} onClose={onClose} onSaved={onSaved} />,
       { wrapper },
@@ -67,7 +67,7 @@ describe('DataTypeFormDialog', () => {
   })
 
   it('renders edit mode with pre-populated data', async () => {
-    const { DataTypeFormDialog } = await import('../pages/data-types/DataTypeFormDialog')
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(
       <DataTypeFormDialog open={true} editDataType={MOCK_DATA_TYPE} onClose={onClose} onSaved={onSaved} />,
       { wrapper },
@@ -81,7 +81,7 @@ describe('DataTypeFormDialog', () => {
   })
 
   it('adds a new field when Add Field is clicked', async () => {
-    const { DataTypeFormDialog } = await import('../pages/data-types/DataTypeFormDialog')
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(
       <DataTypeFormDialog open={true} editDataType={null} onClose={onClose} onSaved={onSaved} />,
       { wrapper },
@@ -96,7 +96,7 @@ describe('DataTypeFormDialog', () => {
   })
 
   it('removes a field when remove button is clicked', async () => {
-    const { DataTypeFormDialog } = await import('../pages/data-types/DataTypeFormDialog')
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(
       <DataTypeFormDialog open={true} editDataType={MOCK_DATA_TYPE} onClose={onClose} onSaved={onSaved} />,
       { wrapper },
@@ -112,7 +112,7 @@ describe('DataTypeFormDialog', () => {
   })
 
   it('calls onClose when cancel is clicked', async () => {
-    const { DataTypeFormDialog } = await import('../pages/data-types/DataTypeFormDialog')
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(
       <DataTypeFormDialog open={true} editDataType={null} onClose={onClose} onSaved={onSaved} />,
       { wrapper },
@@ -125,7 +125,7 @@ describe('DataTypeFormDialog', () => {
 
   it('calls onClose when dialog is closed after successful save', async () => {
     apiClientMock.post.mockResolvedValue({ data: { id: 'new-dt', name: 'Test Type' } })
-    const { DataTypeFormDialog } = await import('../pages/data-types/DataTypeFormDialog')
+    const { DataTypeFormDialog } = await import('../components/agents/DataTypeFormDialog')
     render(
       <DataTypeFormDialog open={true} editDataType={null} onClose={onClose} onSaved={onSaved} />,
       { wrapper },

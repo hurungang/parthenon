@@ -15,7 +15,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-from app.core.oidc_client import OIDCClient, OIDCError
+from app.core.oidc_client import OIDCClient, OIDCError, get_oidc_client
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,11 @@ PUBLIC_PATHS: set[str] = {
     # New public endpoints for super admin and provider discovery
     "/api/v1/auth/super-admin/login",
     "/api/v1/auth/super-admin/refresh",
+    # Self-authenticating SSE endpoint — browser EventSource cannot set
+    # Authorization headers, so the endpoint validates the ``?token=``
+    # query param itself (same pattern as the Communication Hub chat
+    # WebSocket) and enforces the same permission as the REST endpoint.
+    "/api/v1/agents/runtime/topology/stream",
 }
 
 # Public path prefixes (for sub-resources like Swagger assets)
@@ -45,6 +50,114 @@ PUBLIC_PREFIXES: tuple[str, ...] = (
 
 # Dedicated header for super admin tokens (alternative to Bearer)
 SUPER_ADMIN_HEADER = "X-Super-Admin-Token"
+
+
+# ── Shared token-validation tiers ─────────────────────────────────────────────
+#
+# Extracted as module-level functions so self-authenticating endpoints (the
+# SSE topology stream, which receives its JWT via the ``?token=`` query param
+# because EventSource cannot set request headers) reuse the EXACT same
+# validation pipeline as the middleware — no duplicated OIDC logic.
+
+
+async def _try_super_admin_token(token: str) -> dict[str, Any] | None:
+    """Tier 1 — validate the token as a super admin JWT (or None)."""
+    try:
+        from app.services.super_admin_auth_service import (
+            SuperAdminAuthError,
+            super_admin_enabled,
+            validate_super_admin_token,
+        )
+    except ImportError:
+        logger.debug("Auth: SuperAdminAuthService not available")
+        return None
+
+    if not super_admin_enabled():
+        logger.debug("Auth: Super admin disabled")
+        return None
+
+    try:
+        claims = validate_super_admin_token(token)
+        logger.debug("Auth: Super admin token valid")
+        return claims
+    except SuperAdminAuthError as exc:
+        logger.debug("Auth: Super admin token invalid: %s", exc)
+        return None
+    except Exception as exc:
+        logger.warning("Auth: Unexpected error validating super admin token: %s", exc)
+        return None
+
+
+async def _try_oidc_token(token: str) -> dict[str, Any] | None:
+    """Tier 2 — validate the token against the OIDC registry / legacy client."""
+    try:
+        from app.main import _get_registry
+    except ImportError:
+        logger.debug("Auth: OIDCProviderRegistry not available")
+        return None
+
+    registry = _get_registry()
+    if not registry.initialized:
+        logger.debug("Auth: Provider registry not yet initialized")
+        return None
+
+    # Try user provider first, then agent provider
+    for scope in ("user", "agent"):
+        provider = registry.get_provider(scope)
+        if provider is None:
+            continue
+
+        try:
+            client = OIDCClient(
+                issuer_url=provider.issuer_url,
+                client_id=provider.client_id,
+                claim_mappings=provider.claim_mappings or {},
+                decrypted_client_secret=registry.get_decrypted_secret(scope),
+            )
+            claims = await client.validate_token(token)
+            claims["_provider_scope"] = scope
+            logger.debug("Auth: OIDC token valid for scope=%s", scope)
+            return claims
+        except OIDCError as exc:
+            logger.debug("Auth: OIDC validation failed for scope=%s: %s", scope, exc)
+        except Exception as exc:
+            logger.warning("Auth: Unexpected OIDC error for scope=%s: %s", scope, exc)
+
+    # Fallback: try legacy singleton if no providers in registry
+    if not registry.has_any_provider():
+        logger.debug("Auth: No providers in registry, trying legacy singleton")
+        try:
+            client = get_oidc_client()
+            claims = await client.validate_token(token)
+            claims["_provider_scope"] = "legacy"
+            logger.debug("Auth: Legacy OIDC token valid")
+            return claims
+        except OIDCError as exc:
+            logger.debug("Auth: Legacy OIDC validation failed: %s", exc)
+        except Exception as exc:
+            logger.warning("Auth: Unexpected legacy OIDC error: %s", exc)
+
+    return None
+
+
+async def validate_raw_token(token: str) -> tuple[dict[str, Any] | None, bool]:
+    """Validate a raw JWT through the full auth-tier pipeline.
+
+    Tier order matches the middleware pipeline: super-admin token first,
+    then OIDC (provider registry with legacy-singleton fallback).
+
+    Returns:
+        ``(claims, is_super_admin)`` — ``(None, False)`` when every tier fails.
+    """
+    super_admin_claims = await _try_super_admin_token(token)
+    if super_admin_claims is not None:
+        return super_admin_claims, True
+
+    oidc_claims = await _try_oidc_token(token)
+    if oidc_claims is not None:
+        return oidc_claims, False
+
+    return None, False
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -110,28 +223,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             logger.warning("Auth middleware: No token provided for %s", path)
             return self._unauthorized(request, "No token provided")
 
-        # ── Tier 1: Super admin token ──────────────────────────────────────
-        claims = await self._try_super_admin_auth(token, path)
+        # ── Tier 1 + 2: Super admin, then OIDC ─────────────────────────────
+        claims, is_super_admin = await validate_raw_token(token)
         if claims is not None:
             request.state.identity = claims
-            request.state.is_super_admin = True
+            request.state.is_super_admin = is_super_admin
             logger.debug(
-                "Auth middleware: Super admin auth succeeded for %s (user: %s)",
-                path, claims.get("username", "unknown"),
+                "Auth middleware: Token valid for %s (sub: %s, super_admin=%s)",
+                path, claims.get("sub", "unknown"), is_super_admin,
             )
-            return await call_next(request)
-
-        # ── Tier 2: OIDC JWT ───────────────────────────────────────────────
-        claims = await self._try_oidc_auth(token, path)
-        if claims is not None:
-            request.state.identity = claims
-            request.state.is_super_admin = False
-            logger.debug(
-                "Auth middleware: OIDC auth succeeded for %s (sub: %s)",
-                path, claims.get("sub", "unknown"),
-            )
-            # ── User cache upsert + group claim mapping ────────────────────
-            await self._sync_user_and_groups(request, claims)
+            if not is_super_admin:
+                # ── User cache upsert + group claim mapping ────────────────
+                await self._sync_user_and_groups(request, claims)
             return await call_next(request)
 
         # ── Tier 3: Auth failed ────────────────────────────────────────────
@@ -140,113 +243,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             path, len(token),
         )
         return self._unauthorized(request, "Authentication failed")
-
-    # ── Tier 1: Super admin ────────────────────────────────────────────────
-
-    async def _try_super_admin_auth(
-        self, token: str, path: str
-    ) -> dict[str, Any] | None:
-        """Try to validate the token as a super admin JWT."""
-        try:
-            from app.services.super_admin_auth_service import (
-                SuperAdminAuthError,
-                super_admin_enabled,
-                validate_super_admin_token,
-            )
-        except ImportError:
-            logger.debug("Auth middleware: SuperAdminAuthService not available")
-            return None
-
-        if not super_admin_enabled():
-            logger.debug("Auth middleware: Super admin disabled")
-            return None
-
-        try:
-            claims = validate_super_admin_token(token)
-            logger.debug(
-                "Auth middleware: Super admin token valid for %s", path
-            )
-            return claims
-        except SuperAdminAuthError as exc:
-            logger.debug(
-                "Auth middleware: Super admin token invalid for %s: %s", path, exc
-            )
-            return None
-        except Exception as exc:
-            logger.warning(
-                "Auth middleware: Unexpected error validating super admin token: %s", exc
-            )
-            return None
-
-    # ── Tier 2: OIDC ──────────────────────────────────────────────────────
-
-    async def _try_oidc_auth(
-        self, token: str, path: str
-    ) -> dict[str, Any] | None:
-        """Try to validate the token against active OIDC providers."""
-        try:
-            from app.main import _get_registry
-            from app.core.oidc_client import OIDCClient, OIDCError
-        except ImportError:
-            logger.debug("Auth middleware: OIDCProviderRegistry not available")
-            return None
-
-        registry = _get_registry()
-        if not registry.initialized:
-            logger.debug("Auth middleware: Provider registry not yet initialized")
-            return None
-
-        # Try user provider first, then agent provider
-        for scope in ("user", "agent"):
-            provider = registry.get_provider(scope)
-            if provider is None:
-                continue
-
-            try:
-                client = OIDCClient(
-                    issuer_url=provider.issuer_url,
-                    client_id=provider.client_id,
-                    claim_mappings=provider.claim_mappings or {},
-                    decrypted_client_secret=registry.get_decrypted_secret(scope),
-                )
-                claims = await client.validate_token(token)
-                claims["_provider_scope"] = scope
-                logger.debug(
-                    "Auth middleware: OIDC token valid for scope=%s (path=%s)",
-                    scope, path,
-                )
-                return claims
-            except OIDCError as exc:
-                logger.debug(
-                    "Auth middleware: OIDC validation failed for scope=%s: %s",
-                    scope, exc,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Auth middleware: Unexpected OIDC error for scope=%s: %s",
-                    scope, exc,
-                )
-
-        # Fallback: try legacy singleton if no providers in registry
-        if not registry.has_any_provider():
-            logger.debug("Auth middleware: No providers in registry, trying legacy singleton")
-            try:
-                from app.core.oidc_client import get_oidc_client
-                client = get_oidc_client()
-                claims = await client.validate_token(token)
-                claims["_provider_scope"] = "legacy"
-                logger.debug(
-                    "Auth middleware: Legacy OIDC token valid (path=%s)", path
-                )
-                return claims
-            except OIDCError as exc:
-                logger.debug("Auth middleware: Legacy OIDC validation failed: %s", exc)
-            except Exception as exc:
-                logger.warning(
-                    "Auth middleware: Unexpected legacy OIDC error: %s", exc
-                )
-
-        return None
 
     # ── User cache sync ────────────────────────────────────────────────────
 
@@ -275,12 +271,16 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                     )
                     request.state.platform_user_id = platform_user.id
 
-                    await user_cache.upsert_identity(
+                    identity = await user_cache.upsert_identity(
                         session,
                         sub=sub,
                         display_name=display_name,
                         email=email or None,
                     )
+                    # The Identity row is the canonical human-actor record —
+                    # provenance columns (agent_jobs.triggered_by_user_id,
+                    # conversation_sessions.triggered_by_user_id, …) FK to it.
+                    request.state.identity_id = identity.id
 
                     group_claims: list[str] = claims.get("groups", [])
                     logger.info(

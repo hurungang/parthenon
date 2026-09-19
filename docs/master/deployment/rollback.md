@@ -441,17 +441,13 @@ Stop the Control Center container or scale its Deployment to zero replicas. Leav
 
 Run the Alembic downgrade to revert the data migration from the `backend/` directory:
 
-```
-python -m alembic downgrade -1
-```
+Run `python -m alembic downgrade -1`.
 
 > **Downgrade behaviour:** The `downgrade()` function reverses all 1:1 renames and transforms `*::*` back to `*`. For consolidation reversals, `agent::trails` maps back to `conversation` (not `result`) and `system::permissions` maps back to `permissions` (not the other four consolidated types). Any policy statements or resources created after the migration using the new namespaced format will be **left unchanged** — these were not present before the upgrade and the downgrade is a best-effort reversal, not a magical undo.
 
 Verify the downgrade:
 
-```
-python -m alembic current
-```
+Run `python -m alembic current` and confirm the output shows the previous revision.
 
 **Completion condition:** Output shows the previous revision (the pre-upgrade head).
 

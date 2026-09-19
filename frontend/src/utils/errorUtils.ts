@@ -9,6 +9,39 @@ export interface PermissionDeniedDetail {
   required_permission: RequiredPermission
 }
 
+/** One structured binding-validation failure (backend `BindingError`). */
+export interface BindingErrorDetail {
+  resource_type: 'role' | 'sop' | 'skill'
+  resource_id?: string | null
+  rule: string
+  message: string
+}
+
+/** Backend 422 detail shape for `binding_validation_failed`. */
+export interface BindingValidationFailureDetail {
+  error: 'binding_validation_failed'
+  messages: string[]
+  errors: BindingErrorDetail[]
+}
+
+/**
+ * Extracts structured binding-validation errors from a failed save response
+ * (FastAPI 422 with `detail: {error: 'binding_validation_failed', messages,
+ * errors}`). Returns the per-binding human-readable messages, or null when
+ * the error is not a binding-validation failure (or carries no detail).
+ */
+export function extractBindingValidationErrors(error: unknown): string[] | null {
+  if (!error || typeof error !== 'object') return null
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (!detail || typeof detail !== 'object') return null
+  const obj = detail as Partial<BindingValidationFailureDetail>
+  if (obj.error !== 'binding_validation_failed') return null
+  const messages = Array.isArray(obj.messages)
+    ? obj.messages.filter((m): m is string => typeof m === 'string' && m.length > 0)
+    : []
+  return messages.length > 0 ? messages : null
+}
+
 /**
  * Extracts a human-readable error message from an unknown error value.
  *

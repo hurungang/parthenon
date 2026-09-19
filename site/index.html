@@ -802,24 +802,26 @@ flowchart TD
     subgraph Services["Three Isolated Backend Services"]
         ControlCenter["Control Center\n----------------\nDatabase owner\nCertificate Authority\nPermission resolver\nToken refresh\nAudit logs"]
 
-        CommHub["Communication Hub\n----------------\nUI-agent broker\nAgent Gateway\nSession management\nToken injection per tool call"]
+        CommHub["Communication Hub /\nMCP Gateway\n----------------\nUI-agent broker\nAgent Gateway\nSession management\nToken injection per tool call"]
 
         AgentRuntime["Agent Runtime\n----------------\nLangChain agent loop\nmTLS authenticated\nNo DB access\nNo raw tokens"]
     end
 
-    MCPHub["MCP Hub\nRegistered MCP Servers\nand Synced Tool Namespaces"]
+    ExternalMCP["External MCP\nServers &amp; Tools"]
 
     PostgreSQL[("PostgreSQL\nDatabase")]
 
     UserBrowser -- "OIDC login" --> UserRealm
+    UserBrowser -- "admin APIs + dashboard" --> ControlCenter
     UserBrowser -- "REST + WebSocket" --> CommHub
+    ControlCenter -- "OIDC token validation + refresh" --> IdentityProvider
     CommHub -- "Permission check\nToken resolution" --> ControlCenter
     CommHub -- "Dispatch jobs\nmTLS" --> AgentRuntime
     ControlCenter -- "Read / Write" --> PostgreSQL
     ControlCenter -- "Issue agent-instance certs\n24h validity" --> AgentRuntime
-    AgentRuntime -- "Tool calls\n(token injected by CommHub)" --> MCPHub
     AgentRealm -- "Agent credentials\n(encrypted, auto-refreshed)" --> ControlCenter
-    MCPHub -- "Tool results" --> AgentRuntime
+    CommHub -- "MCP proxy: tool calls" --> ExternalMCP
+    ExternalMCP -- "Tool results" --> CommHub
     AgentRuntime -- "Results / status" --> CommHub
           </div>
         </div>

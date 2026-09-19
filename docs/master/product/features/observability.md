@@ -7,14 +7,14 @@ Observability provides real-time insight into the health, performance, and activ
 - Enterprise Admins: Monitor platform health, performance, and troubleshoot issues
 - Compliance Auditors: Review logs, traces, and metrics for compliance
 - Operations Teams: Respond to alerts and maintain system reliability
-- **AI Operations Leads: Monitor live runtime topology, model-usage posture, and guardrail enforcement state**
+- **AI Operations Leads: Monitor live agent activity via the Agent Runtime Monitor, model-usage posture, and guardrail enforcement state**
 
 ## What It Does
 - Instruments all platform components with OTEL for metrics, traces, and logs
 - Integrates with an OTEL Collector for centralized data aggregation
 - Supports multiple exporters (Prometheus, Jaeger, Loki) for external monitoring
 - Provides an admin dashboard for real-time observability and diagnostics
-- **Surfaces runtime control dashboard signals** including active agents, delegated children, configured model-usage limits, current usage posture, and guardrail enforcement state
+- **Surfaces Agent Runtime Monitor signals** including active agents, delegated children, configured model-usage limits, current usage posture, and guardrail enforcement state
 - **Surfaces observe-only guardrail limit alerts as user-visible operational signals** in execution logs distinct from standard execution failures
 - **Surfaces disabled-model and disabled-vendor block events** in execution logs and operational dashboards
 - **Surfaces operator-initiated termination outcomes** as a distinct `terminated` state distinct from `failed` (genuine agent or runtime error)
@@ -25,8 +25,8 @@ Observability provides real-time insight into the health, performance, and activ
 - **OTEL Collector**: Central service for aggregating observability data
 - **Exporter**: Integration point for external monitoring tools
 - **Admin Dashboard**: UI for real-time monitoring and diagnostics
-- **Runtime Control Dashboard**: Read-only operator view of currently running agents, delegation topology, model-usage posture, and termination actions
-- **Topology Diagram**: Visual representation of active parent-child agent execution relationships
+- **Agent Runtime Monitor**: Read-only interactive map of currently running agents showing delegation relationships, trigger sources, intervention state, model-usage posture, and termination actions
+- **Live Map Presentation**: The monitor is a full-page, auto-fitting, interactive map (team-row layout by delegation depth) that stays current through live server push updates with automatic fallback to polling, shows a trigger-entity column with per-entity coloured lines, whole-chain focus on hover/click, tool-call routes through the Communication Hub and its MCP servers, and a filter popover with a recent-completed window and legend recovery
 - **Usage Posture**: Current state of a model's usage against its configured guardrail limits — `within limit`, `approaching limit`, or `breached`
 
 ## Acceptance Criteria
@@ -48,5 +48,5 @@ Observability provides real-time insight into the health, performance, and activ
 
 ## Dependencies & Constraints
 - Depends on a vendor and model catalogue that the hierarchy can be built on top of, so that vendor enable/disable and model selection have a stable source of truth
-- Depends on reliable runtime state and delegation relationship signals to render accurate running-agent topology
+- Depends on reliable runtime state and delegation relationship signals to render the Agent Runtime Monitor map accurately
 - Constrained by enterprise auditability requirements: guardrail alerts, model-usage posture changes, vendor/model disable changes, and termination actions must be visible in operational logs

@@ -92,6 +92,7 @@ Variables for the `communication-hub` container, including the Agent Gateway lif
 | `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | Timeout for inbound agent execution requests before the gateway returns a timeout error; should be greater than `AGENT_RUNTIME_SESSION_TIMEOUT_SECONDS` | |
 | `CONTROL_CENTER_URL` | Base URL of the Control Center (Platform API), e.g. `http://control-center:8000`. Used by the Communication Hub to call internal certificate validation endpoints when forwarding tool-call requests from agent instances, and to call `POST /internal/auth/validate-api-key` for API key validation. | |
 | `CH_API_KEY_AUTH_ENABLED` | Feature flag to enable or disable API key authentication on the Communication Hub. When `false`, only mTLS certificate authentication is accepted. Default `false`. Set to `true` only after verifying the API key creation flow works end-to-end. | |
+| `CH_MCP_PROTOCOL_SERVER_ENABLED` | Feature flag to enable or disable the MCP protocol server endpoint (`/mcp`, `/mcp/sse`, `/mcp/sse/messages`) on the Communication Hub. When `false` (default), the endpoint is not registered and the existing REST `load_skills` and internal mTLS paths remain available unchanged. Set to `true` to expose the standard MCP protocol (initialize / tools/list / tools/call) to external MCP clients. | |
 
 ---
 
