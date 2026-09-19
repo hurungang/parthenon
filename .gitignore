@@ -85,3 +85,6 @@ secrets/
 # but generated at runtime and should not be committed)
 config/identity.yaml
 docs/demo.mp4
+
+# Agent workspace scratch/cache (may contain fetched Jira/Confluence data)
+workspace/
