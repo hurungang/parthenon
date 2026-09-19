@@ -18,6 +18,7 @@ SOP Management enables the creation and orchestration of Standard Operating Proc
 - Prevents direct and indirect cyclic delegation paths across SOP and agent delegation chains
 - Applies delegation depth and delegated-step boundaries as part of bounded execution governance
 - Provides auditability and management of all SOPs
+- SOP creation is also available inline from the Agent Management Panel, which reuses the same create/edit dialogs — with no change to standalone SOP Management behaviour
 
 ## Key Concepts
 - **SOP (Standard Operating Procedure)**: A multi-step, sequenced workflow composed of Skills

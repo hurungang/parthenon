@@ -12,6 +12,15 @@
 - **Frontend (vitest)**: React component rendering, state, and user interaction. Location: `frontend/src/__tests__/`
 - **E2E (Playwright)**: User journeys, cross-module flows, UI+backend integration. Location: `e2e/tests/`
 
+## E2E Mocking Conventions (Mock-First)
+
+E2E tests are **mocked-first** by default: each suite wires `page.route()` handlers (via the shared `mockApiCatchAllProxyAware` + `standardSetup` helpers) so journeys run fast and deterministically without the live stack.
+
+**Conventions for mocked E2E suites:**
+- **Shared per-change mock worlds**: stateful, suite-scoped route handlers live in an underscore-prefixed sibling file (e.g. `e2e/tests/_agent_panel_world.ts`), providing in-memory CRUD endpoints, reusable locators, and a **request-observer route** that lets tests assert network behavior (e.g. "zero write requests until save") rather than relying on absence-of-visibility timing.
+- **One real-backend variant per domain**: at least one unmocked test per change probes the live stack and **skips cleanly** when the backend or test credentials are unavailable. For changes with DB schema changes this is mandatory (see Database Migration Testing Requirements below); for frontend-only changes it remains a cheap wiring check.
+- **Identifiable, self-cleaning data**: mocked worlds use timestamped test data per test (the per-test world is discarded automatically); real-backend tests use identifiable prefixes with explicit cleanup.
+
 ## Database Migration Testing Requirements
 
 Changes that include database schema changes (`has_db_changes: true`) require additional verification:

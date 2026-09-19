@@ -951,6 +951,199 @@ tr.revoked-row td{color:#9CA3AF}
 @media(max-width:640px){.dash-metrics-grid{grid-template-columns:1fr}.idp-grid-d{grid-template-columns:1fr}}
 .dash-metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
 
+
+/* ═══════════ AGENT MANAGEMENT PANEL (agent-management-panel change set) ═══════════
+   Namespaced `amp-` styles for the panel view — reuses the master tokens/buttons/chips/
+   forms/modals; nothing outside #view-agent-management-panel and the amp- overlays is styled. */
+#view-agent-management-panel .amp-shell{display:grid;grid-template-columns:270px 1fr 372px;gap:16px;height:calc(100vh - var(--topbar-h) - 48px);min-height:520px}
+@media(max-width:1400px){#view-agent-management-panel .amp-shell{grid-template-columns:250px 1fr 340px}}
+#view-agent-management-panel .amp-col{overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:2px;min-height:0}
+#view-agent-management-panel .amp-col::-webkit-scrollbar{width:6px}#view-agent-management-panel .amp-col::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.amp-section-label{padding:0 2px 6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between}
+.amp-search input{width:100%;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);outline:none;font-size:13px;transition:border-color var(--transition)}
+.amp-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.amp-agent-list{display:flex;flex-direction:column;gap:2px}
+.amp-agent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);cursor:pointer;transition:background var(--transition);border:1px solid transparent;background:var(--surface)}
+.amp-agent-item:hover{background:var(--sidebar-hover-bg)}
+.amp-agent-item.active{background:var(--primary-light);border-color:#BFDBFE}
+.amp-agent-item-icon{width:34px;height:34px;border-radius:var(--radius-sm);background:#E0E7FF;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.amp-agent-item-main{flex:1;min-width:0}
+.amp-agent-item-name{font-size:13px;font-weight:600;font-family:ui-monospace,SFMono-Regular,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-agent-item-meta{font-size:11px;color:var(--text-secondary)}
+.amp-pending-dot{width:8px;height:8px;border-radius:50%;background:var(--warning);flex-shrink:0;animation:ampLivepulse 1.4s infinite}
+.amp-unsaved-badge{display:none;align-items:center;gap:6px;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px}
+.amp-unsaved-badge.show{display:inline-flex}
+.amp-unsaved-badge .amp-udot{width:7px;height:7px;border-radius:50%;background:var(--warning);animation:ampLivepulse 1.4s infinite}
+.amp-demo-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border:1px dashed var(--border);border-radius:var(--radius);background:#F8FAFC;font-size:12px;color:var(--text-secondary);margin-bottom:14px}
+.amp-demo-btn{background:#fff;border:1px solid var(--border);color:var(--text-primary);padding:4px 12px;border-radius:4px;font-size:11.5px;cursor:pointer;transition:all var(--transition);font-weight:500}
+.amp-demo-btn:hover{border-color:var(--primary);color:var(--primary)}
+.amp-demo-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+/* header card (Create + Delete only) */
+.amp-agent-header{display:flex;align-items:center;gap:14px;padding:16px 20px}
+.amp-ah-icon{width:48px;height:48px;border-radius:var(--radius);background:#E0E7FF;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.amp-ah-main{flex:1;min-width:0}
+.amp-ah-name-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.amp-ah-name{font-size:18px;font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace}
+.amp-ah-desc{font-size:12.5px;color:var(--text-secondary);margin-top:2px}
+.amp-ah-actions{display:flex;gap:6px;flex-shrink:0}
+/* properties section */
+.amp-prop-head{padding:13px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.amp-prop-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.amp-prop-body{padding:12px 14px 14px}
+.amp-guard-box{border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:2px;overflow:hidden}
+.amp-guard-summary{list-style:none;display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:12.5px;font-weight:600;cursor:pointer;background:#F8FAFC;user-select:none}
+.amp-guard-summary::-webkit-details-marker{display:none}
+.amp-guard-summary .amp-g-caret{margin-left:auto;font-size:10px;color:var(--text-secondary);transition:transform var(--transition)}
+.amp-guard-box[open] .amp-guard-summary .amp-g-caret{transform:rotate(180deg)}
+.amp-guard-body{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;background:#FDFDFE}
+.amp-gr-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.amp-gr-grid .full{grid-column:1/-1}
+.amp-gr-title{grid-column:1/-1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);padding-bottom:2px;border-bottom:1px dashed var(--border)}
+.amp-unit-adorn{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);pointer-events:none}
+.amp-num-wrap{position:relative}
+#view-agent-management-panel .inline-form-error,#amp-modal-overlay .inline-form-error{display:none}
+#view-agent-management-panel .inline-form-error.visible,#amp-modal-overlay .inline-form-error.visible{display:block}
+.amp-form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* topology */
+.amp-topo-card{display:flex;flex-direction:column;overflow:hidden}
+.amp-topo-head{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);flex-shrink:0;gap:10px;flex-wrap:wrap}
+.amp-topo-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.amp-topo-head-right{display:flex;align-items:center;gap:10px}
+.amp-topo-hint{font-size:11px;color:var(--text-secondary)}
+.amp-topo-canvas{background:#FAFBFD;border-bottom:1px solid var(--border)}
+.amp-topo-stage svg{width:100%;height:auto;display:block;user-select:none;touch-action:none}
+.amp-topo-node{cursor:pointer}
+.amp-topo-node text{pointer-events:none}
+.amp-topo-node .amp-n-box{transition:stroke-width .15s}
+.amp-topo-node:hover .amp-n-box{stroke-width:3}
+.amp-topo-node.amp-ghost .amp-n-box{stroke-dasharray:5 4;fill:#FFFFFF}
+.amp-topo-node.amp-ghost:hover .amp-n-box{fill:#F8FAFC}
+.amp-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 18px;font-size:12px}
+.amp-legend strong{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary);margin-right:2px}
+.amp-legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:11.5px}
+.amp-legend-item svg{flex-shrink:0}
+/* fullscreen topology */
+.amp-fs-overlay{display:none;position:fixed;inset:0;background:var(--surface);z-index:1300;flex-direction:column;padding:16px;gap:10px}
+.amp-fs-overlay.open{display:flex}
+.amp-fs-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;flex-wrap:wrap}
+.amp-fs-toolbar .amp-fs-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px}
+.amp-fs-controls{display:flex;align-items:center;gap:6px}
+.amp-fs-zoom-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);width:30px;height:30px;font-size:14px;font-weight:700;color:var(--text-primary);display:inline-flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.amp-fs-zoom-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.amp-fs-zoom-btn:disabled{opacity:.4;cursor:not-allowed}
+.amp-fs-zoom-pct{min-width:44px;text-align:center;font-size:12px;font-weight:600;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.amp-fs-fit-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-primary);display:inline-flex;align-items:center;gap:6px;transition:all var(--transition)}
+.amp-fs-fit-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.amp-fs-fit-btn:disabled{opacity:.4;cursor:not-allowed}
+.amp-fs-exit-btn{background:none;border:none;color:var(--text-secondary);padding:6px 10px;font-size:12.5px;font-weight:600;border-radius:var(--radius-sm)}
+.amp-fs-exit-btn:hover{background:var(--bg);color:var(--text-primary)}
+.amp-fs-body{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius);background:#FAFBFD;overflow:hidden}
+.amp-fs-body .amp-topo-stage{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+.amp-fs-body .amp-topo-stage svg{flex:1 1 0;min-height:0;width:100%;height:100%}
+.amp-fs-body .amp-legend{flex-shrink:0}
+.amp-fs-hint{font-size:11px;color:var(--text-secondary);text-align:center;flex-shrink:0}
+/* equipment slots */
+.amp-equip-head{padding:13px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.amp-equip-head h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.amp-perm-note{display:none;align-items:flex-start;gap:8px;margin:12px 14px 0;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);font-size:11.5px;color:#92400E;line-height:1.5}
+.amp-perm-note.show{display:flex}
+.amp-slots-wrap{padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.amp-slot{border:1px solid var(--border);border-radius:var(--radius);background:#FDFDFE;overflow:hidden}
+.amp-slot-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border);background:#F8FAFC}
+.amp-slot-head .amp-sh-icon{font-size:14px}
+.amp-slot-head .amp-sh-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);flex:1}
+.amp-slot-body{padding:8px 10px;display:flex;flex-direction:column;gap:6px;min-height:40px}
+.amp-slot-empty{font-size:12px;color:#94A3B8;font-style:italic;padding:6px 2px}
+.amp-slot-locked{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#64748B;background:#F8FAFC;border:1px dashed var(--border);border-radius:var(--radius-sm);padding:8px 10px;line-height:1.5}
+.amp-slot-item{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+.amp-slot-item .amp-si-icon{font-size:15px;flex-shrink:0}
+.amp-slot-item .amp-si-main{flex:1;min-width:0}
+.amp-slot-item .amp-si-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-slot-item .amp-si-meta{font-size:10.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-slot-item .amp-si-remove{background:none;border:none;color:#94A3B8;font-size:14px;padding:2px 6px;border-radius:4px;line-height:1;transition:all var(--transition)}
+.amp-slot-item .amp-si-remove:hover{background:#FEE2E2;color:var(--error)}
+.amp-slot-actions{display:flex;gap:6px;padding:8px 10px;border-top:1px dashed var(--border);flex-wrap:wrap}
+.amp-slot-actions .btn{flex:1;justify-content:center;min-width:0}
+/* pending-changes tray */
+.amp-pending-box{margin:0 14px 14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#FDFDFE}
+.amp-pending-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:#F8FAFC;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)}
+.amp-pending-chips{display:flex;gap:5px;flex-wrap:wrap;padding:10px 12px 2px}
+.amp-pending-chips:empty{display:none}
+.amp-tray-chip{font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;border:1px solid #FDE68A;background:#FFFBEB;color:#92400E;display:inline-flex;align-items:center;gap:4px}
+.amp-pending-foot{padding:8px 12px 4px;font-size:10.5px;color:var(--text-secondary);line-height:1.5}
+.amp-pending-actions{display:flex;gap:8px;justify-content:flex-end;padding:8px 12px 12px}
+/* resource picker */
+.amp-picker-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.amp-picker-overlay.open{display:flex}
+.amp-picker{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;animation:ampModalIn .18s ease}
+.amp-picker-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
+.amp-picker-header h3{font-size:16px;font-weight:600}
+.amp-picker-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px}
+.amp-picker-search{margin:14px 24px 0;position:relative}
+.amp-picker-search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:var(--radius-sm);outline:none;font-size:13px;transition:border-color var(--transition)}
+.amp-picker-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.amp-picker-search .amp-ps-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-secondary)}
+.amp-picker-list{margin:10px 24px 0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow-y:auto;flex:1;min-height:180px;max-height:340px}
+.amp-picker-list::-webkit-scrollbar{width:4px}.amp-picker-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.amp-pick-row{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #F1F5F9;transition:background .12s}
+.amp-pick-row:last-child{border-bottom:none}
+.amp-pick-row:hover{background:#F0F7FE}
+.amp-pick-row.amp-selected{background:#E3F2FD;box-shadow:inset 3px 0 0 var(--primary)}
+.amp-pick-row .amp-pr-check{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.amp-pick-row .amp-pr-radio{width:13px;height:13px;border-radius:50%;border:2px solid #CBD5E1;flex-shrink:0;background:#fff}
+.amp-pick-row.amp-selected .amp-pr-radio{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 2.5px #fff}
+.amp-pick-row .amp-pr-main{flex:1;min-width:0}
+.amp-pick-row .amp-pr-label{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-pick-row .amp-pr-sub{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-picker-empty{padding:26px 12px;text-align:center;font-size:12.5px;color:#94A3B8;font-style:italic}
+.amp-picker-pg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 24px 0;font-size:11.5px;color:var(--text-secondary);flex-wrap:wrap}
+.amp-picker-pg .amp-pg-nav{display:flex;align-items:center;gap:4px}
+.amp-picker-pg .amp-pg-btn{background:none;border:1px solid var(--border);border-radius:4px;width:24px;height:24px;font-size:12px;color:var(--text-primary);display:inline-flex;align-items:center;justify-content:center}
+.amp-picker-pg .amp-pg-btn:disabled{opacity:.35;cursor:not-allowed}
+.amp-picker-pg select{padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11.5px;outline:none;cursor:pointer}
+.amp-picker-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.amp-picker-footer .spacer{flex:1}
+/* module-dialog helpers (reused dialogs) */
+.amp-reuse-chip{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;padding:2px 8px;border-radius:4px}
+.amp-pick-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px}
+.amp-pick-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s}
+.amp-pick-item:hover{background:#F0F7FE}
+.amp-pick-item input{accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.amp-pi-icon{font-size:16px;flex-shrink:0}
+.amp-pi-main{min-width:0}
+.amp-pi-main b{font-size:13px;display:block}
+.amp-pi-main small{font-size:11px;color:var(--text-secondary);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-grant-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px}
+.amp-grant-col-title{grid-column:1/-1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-secondary)}
+.amp-grant-item{display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer}
+.amp-grant-item input{accent-color:var(--primary);cursor:pointer}
+.amp-field-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F1F5F9}
+.amp-field-row:last-child{border-bottom:none}
+.amp-field-row .amp-fr-name{flex:2}
+.amp-field-row .amp-fr-type{flex:1.4}
+.amp-field-row .amp-fr-req{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-secondary);flex-shrink:0}
+.amp-field-row .amp-fr-req input{accent-color:var(--primary)}
+.amp-field-row .amp-fr-del{background:none;border:none;color:#94A3B8;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px}
+.amp-field-row .amp-fr-del:hover{background:#FEE2E2;color:var(--error)}
+.amp-add-field-btn{width:100%;background:none;border:1px dashed var(--border);color:var(--text-secondary);padding:6px;border-radius:var(--radius-sm);font-size:12px;margin-top:6px}
+.amp-add-field-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.amp-provision-steps{list-style:none;margin:14px 0}
+.amp-provision-step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--text-secondary)}
+.amp-provision-step.amp-done{color:var(--success)}
+.amp-provision-step .amp-ps-icon{width:20px;text-align:center;flex-shrink:0}
+.amp-success-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:12px 14px;font-size:12.5px;color:#166534;line-height:1.7;margin-top:8px}
+.amp-success-box b{color:#14532D}
+#amp-modal-overlay .modal-sub{font-size:11.5px;color:var(--text-secondary);margin-top:3px}
+@keyframes ampModalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+@keyframes ampLivepulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+/* toasts */
+.amp-toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.amp-toast{padding:11px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:ampToastIn .3s ease;display:flex;align-items:center;gap:8px;max-width:520px}
+@keyframes ampToastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.amp-toast-success{background:#2E7D32}.amp-toast-error{background:#C62828}.amp-toast-info{background:#1565C0}
+
+#amp-modal-overlay{z-index:1200}
+
 </style>
 </head>
 <body>
@@ -1054,6 +1247,7 @@ tr.revoked-row td{color:#9CA3AF}
       <div class="nav-item sub-item" data-view="agent-roles"        data-group="agents" onclick="nav(this,'agent-roles')">      <span class="nav-icon">👤</span>Agent Roles</div>
       <div class="nav-item sub-item" data-view="agent-identities"   data-group="agents" onclick="nav(this,'agent-identities')">  <span class="nav-icon">🆔</span>Agent Identities</div>
       <div class="nav-item sub-item" data-view="agents"             data-group="agents" onclick="nav(this,'agents')">            <span class="nav-icon">🤖</span>Agent Types</div>
+      <div class="nav-item sub-item" data-view="agent-management-panel" data-group="agents" onclick="nav(this,'agent-management-panel')"><span class="nav-icon">🎛️</span>Agent Management Panel</div>
       <div class="nav-item sub-item" data-view="agent-executions"   data-group="agents" onclick="nav(this,'agent-executions')">  <span class="nav-icon">▶️</span>Agent Executions</div>
       <div class="nav-item sub-item" data-view="runtime-monitor"    data-group="agents" onclick="nav(this,'runtime-monitor')">   <span class="nav-icon">🕸️</span>Agent Runtime Monitor</div>
       <div class="nav-item sub-item" data-view="agent-trails"       data-group="agents" onclick="nav(this,'agent-trails')">      <span class="nav-icon">📋</span>Agent Trails</div>
@@ -4148,6 +4342,220 @@ Returns: { request_id, status }</div>
   </div>
 </div>
 
+
+<!-- ═══════════════════════════════ VIEW: AGENT MANAGEMENT PANEL (agent-management-panel) ═══════════════════════════════ -->
+<div id="view-agent-management-panel" class="view">
+  <div class="view-header">
+    <div><h2>Agent Management Panel</h2><div class="view-desc">Equip an agent — role, identity, skills, SOPs, data types, model — from one panel. Editing is draft-based; the tray saves everything as a single update.</div></div>
+  </div>
+
+  <div class="change-banner">
+    <div class="cb-icon">i</div>
+    <div class="cb-body">
+      <h4>One panel, one save <span class="cb-tag">agent-management-panel</span></h4>
+      <p>The property bar edits <strong>every</strong> agent property: a <strong>Properties</strong> section (name, description, system instruction,
+         execution guardrails) plus seven <strong>equipment slots</strong> — "Assign existing" opens a searchable + paginated picker, "Create new"
+         reuses the source module dialogs inline. The <strong>zoned topology</strong> (① Configuration → ② Capabilities → ③ Tools, with the
+         <strong>Communication Hub as a vertical bar</strong>) re-renders <strong>live on every change, before saving</strong>; open it fullscreen for zoom &amp; pan.</p>
+    </div>
+  </div>
+
+  <!-- demo persona controls (inline — not a floating panel, to avoid overlapping other views' demo panels) -->
+  <div class="amp-demo-strip">
+    <span><b>Prototype demo</b> — sign in as</span>
+    <button class="amp-demo-btn active" id="amp-perm-admin" onclick="AMP.setPerm('admin')">Administrator</button>
+    <button class="amp-demo-btn" id="amp-perm-viewer" onclick="AMP.setPerm('viewer')">Process Owner (read-only)</button>
+    <span class="amp-unsaved-badge" id="amp-unsaved-badge"><span class="amp-udot"></span><span id="amp-unsaved-text">0 unsaved changes</span></span>
+    <span style="flex:1"></span>
+    <button class="amp-demo-btn" onclick="location.reload()">↺ Reset data</button>
+  </div>
+
+  <div class="amp-shell">
+
+    <!-- ── Region 1: agent list ── -->
+    <div class="amp-col">
+      <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px;min-height:0;flex:1">
+        <div class="amp-section-label"><span>Agent Types</span><span class="count-badge" id="amp-agent-count">4</span></div>
+        <div class="amp-search"><input type="text" id="amp-search-agents" placeholder="🔍 Search agents…" oninput="AMP.onSearch(this.value)"></div>
+        <div class="amp-agent-list" id="amp-agent-list"></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" id="amp-btn-create-agent" onclick="AMP.openCreateAgent()">＋ Create Agent</button>
+      </div>
+    </div>
+
+    <!-- ── Region 2: header card + live zoned topology ── -->
+    <div class="amp-col">
+      <div class="card amp-agent-header" id="amp-agent-header"></div>
+      <div class="card amp-topo-card">
+        <div class="amp-topo-head">
+          <h3>Agent Topology <span class="live" id="amp-topo-live"><span class="live-dot"></span>LIVE</span></h3>
+          <div class="amp-topo-head-right">
+            <span class="amp-topo-hint">updates instantly — no save required · drag to pan in fullscreen</span>
+            <span class="chip chip-green" id="amp-topo-state-chip">✓ saved</span>
+            <button class="btn btn-secondary btn-xs" onclick="AMP.enterFs()" title="Expand the topology over the whole viewport (Esc exits)">⛶ Fullscreen</button>
+          </div>
+        </div>
+        <div class="amp-topo-canvas" id="amp-topo-host">
+          <div class="amp-topo-stage" id="amp-topo-stage">
+            <svg id="amp-topo-svg" viewBox="0 0 1120 640" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-label="agent topology"></svg>
+            <div class="amp-legend" id="amp-legend"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Region 3: property bar (Properties · Equipment · tray) ── -->
+    <div class="amp-col">
+
+      <div class="card">
+        <div class="amp-prop-head"><h3>⚙️ Properties</h3><span class="chip chip-gray">draft edits</span></div>
+        <div class="amp-prop-body">
+          <div class="form-group">
+            <label>Name (slug) *</label>
+            <input id="amp-p-name" class="form-control" placeholder="e.g. compliance-reporter" oninput="AMP.onPropName(this.value)">
+            <div class="inline-form-error" id="amp-p-name-err"></div>
+            <div class="form-hint">Lowercase letters, numbers and hyphens — the agent's slug identity.</div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="amp-p-desc" class="form-control" rows="2" placeholder="What this agent does…" oninput="AMP.onPropText('desc',this.value)"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>System Instruction</label>
+            <textarea id="amp-p-si" class="form-control" rows="3" placeholder="Core behaviour of the agent…" oninput="AMP.onPropText('systemInstruction',this.value)"></textarea>
+          </div>
+          <details class="amp-guard-box" id="amp-guard-box">
+            <summary class="amp-guard-summary">🛡 Execution Guardrails <span class="amp-g-caret">▼</span></summary>
+            <div class="amp-guard-body">
+              <div class="amp-gr-grid">
+                <div class="amp-gr-title">Loop &amp; time limits</div>
+                <div class="amp-num-wrap"><input id="amp-g-maxIter" type="number" min="1" max="1000" class="form-control" placeholder="Max iterations" oninput="AMP.onGrNum('maxIterations',this)"></div>
+                <div class="amp-num-wrap"><input id="amp-g-timeout" type="number" min="1" max="86400" class="form-control" placeholder="Timeout (s)" oninput="AMP.onGrNum('executionTimeoutSeconds',this)"></div>
+                <div class="amp-num-wrap"><input id="amp-g-depth" type="number" min="0" max="32" class="form-control" placeholder="Max delegation depth" oninput="AMP.onGrNum('maxDelegationDepth',this)"></div>
+                <div class="amp-num-wrap"><input id="amp-g-steps" type="number" min="0" max="5000" class="form-control" placeholder="Max delegated steps" oninput="AMP.onGrNum('maxDelegatedSteps',this)"></div>
+              </div>
+              <div class="amp-gr-grid">
+                <div class="amp-gr-title">Token budget</div>
+                <div class="full amp-num-wrap">
+                  <input id="amp-g-budget" type="number" min="1" class="form-control" style="padding-right:56px" placeholder="Token budget" oninput="AMP.onGrBudget(this)">
+                  <span class="amp-unit-adorn">k tokens</span>
+                </div>
+                <div class="form-hint full" id="amp-g-budget-hint" style="margin-top:0"></div>
+              </div>
+              <div class="amp-gr-grid" id="amp-gr-typed-controls">
+                <div class="amp-gr-title">Budget enforcement (typed agents)</div>
+                <select id="amp-g-enforce" class="form-control" onchange="AMP.onGrSel('tokenEnforcementMode',this)">
+                  <option value="observe">Observe — log only</option>
+                  <option value="enforce">Enforce — stop over budget</option>
+                </select>
+                <select id="amp-g-fallback" class="form-control" onchange="AMP.onGrSel('tokenFallbackMode',this)">
+                  <option value="observe_and_log">Fallback: observe &amp; log</option>
+                  <option value="stop_on_next_hard_guardrail">Fallback: stop at next hard guardrail</option>
+                </select>
+              </div>
+              <div class="amp-gr-grid" id="amp-gr-conv-controls" style="display:none">
+                <div class="amp-gr-title">Conversational controls</div>
+                <select id="amp-g-visibility" class="form-control" onchange="AMP.onGrSel('conversationalTokenVisibilityMode',this)">
+                  <option value="enabled">Token visibility: enabled</option>
+                  <option value="disabled">Token visibility: disabled</option>
+                </select>
+                <select id="amp-g-continuation" class="form-control" onchange="AMP.onGrSel('conversationalContinuationPolicy',this)">
+                  <option value="allow">Continuation: allowed</option>
+                </select>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column">
+        <div class="amp-equip-head"><h3>🎒 Equipment</h3><span class="chip chip-gray" id="amp-equip-agent-name"></span></div>
+        <div class="amp-perm-note" id="amp-perm-note">
+          <span>🔒</span>
+          <span><b>Read-only mode.</b> Your account lacks write permissions on one or more equipment modules (e.g. <code>agent::roles</code>, <code>agent::identities</code>). Assignment actions are disabled.</span>
+        </div>
+        <div class="amp-slots-wrap" id="amp-slots"></div>
+        <div class="amp-pending-box">
+          <div class="amp-pending-head">
+            <span>📝 Pending changes (<span id="amp-pending-count">0</span>)</span>
+            <span class="chip chip-green" id="amp-tray-state-chip">✓ saved</span>
+          </div>
+          <div class="amp-pending-chips" id="amp-pending-chips"></div>
+          <div class="amp-pending-foot">Save issues a <b>single agent-type update</b> (one PUT — binding lists deduplicated by resource id). The topology already reflects every draft change.</div>
+          <div class="amp-pending-actions">
+            <button class="btn btn-secondary btn-sm" id="amp-btn-discard" onclick="AMP.discardChanges()" disabled>↩ Discard</button>
+            <button class="btn btn-primary btn-sm" id="amp-btn-save" onclick="AMP.saveChanges()" disabled>💾 Save Changes</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── AMP generic modal (create-agent + shared module dialogs) ── -->
+<div class="modal-overlay" id="amp-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div><h3 id="amp-modal-title"></h3><div class="modal-sub" id="amp-modal-sub"></div></div>
+      <button class="modal-close" onclick="AMP.closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="amp-modal-body"></div>
+    <div class="modal-footer" id="amp-modal-footer"></div>
+  </div>
+</div>
+
+<!-- ── AMP resource picker (Assign existing — searchable + paginated) ── -->
+<div class="amp-picker-overlay" id="amp-picker-overlay">
+  <div class="amp-picker">
+    <div class="amp-picker-header">
+      <div><h3 id="amp-picker-title">Assign</h3><div class="amp-picker-sub" id="amp-picker-sub"></div></div>
+      <button class="modal-close" onclick="AMP.closePicker()">×</button>
+    </div>
+    <div class="amp-picker-search">
+      <span class="amp-ps-ico">🔍</span>
+      <input type="text" id="amp-picker-search" placeholder="Search by name or detail…" oninput="AMP.pickerSearch(this.value)">
+    </div>
+    <div class="amp-picker-list" id="amp-picker-list"></div>
+    <div class="amp-picker-pg">
+      <span id="amp-picker-pg-info">0 of 0</span>
+      <span class="amp-pg-nav">
+        <span>Rows:</span>
+        <select id="amp-picker-rows" onchange="AMP.pickerRows(this.value)"><option>10</option><option>25</option><option>50</option></select>
+        <button class="amp-pg-btn" id="amp-pg-prev" onclick="AMP.pickerPage(-1)">‹</button>
+        <button class="amp-pg-btn" id="amp-pg-next" onclick="AMP.pickerPage(1)">›</button>
+      </span>
+    </div>
+    <div class="amp-picker-footer">
+      <button class="btn btn-secondary btn-sm" id="amp-picker-create-btn" onclick="AMP.pickerCreateNew()">＋ Create new</button>
+      <span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" onclick="AMP.closePicker()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="amp-picker-assign-btn" onclick="AMP.pickerAssign()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── AMP fullscreen topology ── -->
+<div class="amp-fs-overlay" id="amp-fs-overlay">
+  <div class="amp-fs-toolbar">
+    <div class="amp-fs-title">
+      Agent Topology
+      <span class="live" id="amp-fs-live"><span class="live-dot"></span>LIVE</span>
+      <span class="chip chip-green" id="amp-fs-state-chip">✓ saved</span>
+    </div>
+    <div class="amp-fs-controls">
+      <button class="amp-fs-zoom-btn" id="amp-fs-zoom-out" onclick="AMP.zoomOut()" title="Zoom out">−</button>
+      <span class="amp-fs-zoom-pct" id="amp-fs-zoom-pct">100%</span>
+      <button class="amp-fs-zoom-btn" id="amp-fs-zoom-in" onclick="AMP.zoomIn()" title="Zoom in">＋</button>
+      <button class="amp-fs-fit-btn" id="amp-fs-fit" onclick="AMP.zoomFit()" title="Back to auto-fit">⤢ Fit</button>
+      <button class="amp-fs-exit-btn" onclick="AMP.exitFs()" title="Exit (Esc)">✕ Exit fullscreen</button>
+    </div>
+  </div>
+  <div class="amp-fs-body" id="amp-fs-body"></div>
+  <div class="amp-fs-hint">Drag the canvas to pan · zoom steps ≈20% (0.5×–3×) · Esc exits</div>
+</div>
+
+<div class="amp-toast-container" id="amp-toasts"></div>
+
   </div><!-- /main-content -->
 
 <!-- ═══════════════════════════════ VIEW: DATA TYPES (NEW — enhance-agent-output-system) ═══════════════ -->
@@ -5453,6 +5861,7 @@ const viewTitles = {
   'skills': 'Skills',
   'sops': 'Standard Operating Procedures',
   'agents': 'Agent Types',
+  'agent-management-panel': 'Agent Management Panel',
   'gateway': 'Gateway',
   'schedules': 'Schedules',
   'notifications': 'Notification Integration',
@@ -10954,6 +11363,1262 @@ window.rmSetRecentUnit=rmSetRecentUnit;
 })();
 
 rmInitMap();
+})();
+</script>
+
+<script>
+(function(){
+'use strict';
+/* ═══ Agent Management Panel (agent-management-panel) — integrated into the master prototype.
+   All behaviour mirrors the change prototype (docs/changes/agent-management-panel/prototype),
+   namespaced under window.AMP and amp-* ids/classes so it never collides with the master's
+   own globals, views, or dialogs. Placeholder data only — self-contained, works from file://. */
+/* ============ CATEGORY METADATA ============ */
+const CATS = {
+  role:     {icon:'👤', label:'Role',             catKey:'roles',      perm:'agent::roles'},
+  identity: {icon:'🆔', label:'Identity',         catKey:'identities', perm:'agent::identities'},
+  skill:    {icon:'🔧', label:'Skill',            catKey:'skills',     perm:'agent::skills'},
+  sop:      {icon:'📋', label:'SOP',              catKey:'sops',       perm:'agent::sops'},
+  input:    {icon:'📥', label:'Input Data Type',  catKey:'datatypes',  perm:'agent::data_types'},
+  output:   {icon:'📤', label:'Output Data Type', catKey:'datatypes',  perm:'agent::data_types'},
+  model:    {icon:'🧠', label:'Model',            catKey:'models',     perm:'agent::model_configs'},
+};
+/* Plural aliases — the multi slots use the plural slot id ('skills' / 'sops') */
+CATS.skills = {icon:'🔧', label:'Skills', catKey:'skills', perm:'agent::skills'};
+CATS.sops   = {icon:'📋', label:'SOPs',   catKey:'sops',   perm:'agent::sops'};
+
+/* ============ MOCK DATA ============ */
+let uidSeq = 100;
+const nextId = p => p + '-amp-' + (++uidSeq);
+
+const catalog = {
+  roles: [
+    {id:'r-dev',      name:'Developer',          desc:'Code-review permissions across Git tooling', scope:['s-pr-analysis','s-git-blame','o-pr']},
+    {id:'r-docproc',  name:'Document Processor', desc:'OCR and document parsing capabilities',      scope:['s-ocr','s-pdf','o-inv']},
+    {id:'r-ops',      name:'Platform Operator',  desc:'Cluster inspection and runbook access',      scope:['s-kubectl-logs','s-runbook','o-incident']},
+    {id:'r-auditor',  name:'Security Auditor',   desc:'Read-only audit trails and policy tools',    scope:[]},
+    {id:'r-analyst',  name:'Data Analyst',       desc:'Query and charting capabilities',            scope:['s-chart','o-weekly']},
+  ],
+  identities: [
+    {id:'i-pr',  name:'PR Reviewer Bot',   account:'svc-pr-reviewer@agents.parthenon.local', provider:'Keycloak',      realm:'ai_agents'},
+    {id:'i-inv', name:'Invoice Bot',       account:'svc-invoice-bot@agents.parthenon.local', provider:'Keycloak',      realm:'ai_agents'},
+    {id:'i-ops', name:'Ops Assistant Bot', account:'svc-ops-assistant@agents.parthenon.local', provider:'Keycloak',     realm:'ai_agents'},
+    {id:'i-rep', name:'Weekly Report Bot', account:'svc-weekly-report@contoso.com',          provider:'Azure EntraID', realm:'agents'},
+  ],
+  skills: [
+    {id:'s-pr-analysis', name:'github-pr-analysis', mcp:'mcp-github',     tool:'analyze_pull_request'},
+    {id:'s-git-blame',   name:'git-blame-lookup',   mcp:'mcp-github',     tool:'get_blame'},
+    {id:'s-ocr',         name:'ocr-extract-text',   mcp:'mcp-vision',     tool:'extract_text'},
+    {id:'s-pdf',         name:'pdf-parse',          mcp:'mcp-filesystem', tool:'parse_pdf'},
+    {id:'s-kubectl-logs',name:'kubectl-logs-query', mcp:'mcp-kubernetes', tool:'query_logs'},
+    {id:'s-runbook',     name:'runbook-search',     mcp:'mcp-wiki',       tool:'search_runbooks'},
+    {id:'s-chart',       name:'chart-render',       mcp:'mcp-filesystem', tool:'render_chart'},
+  ],
+  sops: [
+    {id:'o-pr',       name:'github-pr-workflow',          steps:['s-pr-analysis','s-git-blame'], desc:'Fetch, analyse and summarise a pull request'},
+    {id:'o-inv',      name:'invoice-processing-pipeline', steps:['s-pdf','s-ocr'],               desc:'Parse document then extract structured invoice fields'},
+    {id:'o-incident', name:'incident-triage',             steps:['s-kubectl-logs','s-runbook'],  desc:'Correlate cluster logs with matching runbooks'},
+    {id:'o-weekly',   name:'weekly-report',               steps:['s-chart','s-chart'],           desc:'Render KPI charts into a weekly summary (composed once — deduplicated)'},
+  ],
+  datatypes: [
+    {id:'d-prctx',  name:'PR Context',     slug:'pr-context',     kind:'json',   fields:[{n:'repo',t:'string',r:true},{n:'pr_number',t:'number',r:true},{n:'diff',t:'string',r:false}]},
+    {id:'d-review', name:'Review Report',  slug:'review-report',  kind:'json',   fields:[{n:'verdict',t:'enum',r:true},{n:'findings',t:'number',r:true},{n:'summary',t:'string',r:true}]},
+    {id:'d-doc',    name:'Document Blob',  slug:'document-blob',  kind:'binary', fields:[]},
+    {id:'d-inv',    name:'Invoice Record', slug:'invoice-record', kind:'json',   fields:[{n:'vendor',t:'string',r:true},{n:'total',t:'number',r:true},{n:'currency',t:'enum',r:true},{n:'due_date',t:'date',r:false}]},
+    {id:'d-chat',   name:'Chat Message',   slug:'chat-message',   kind:'text',   fields:[]},
+    {id:'d-report', name:'Report Pack',    slug:'report-pack',    kind:'json',   fields:[{n:'period',t:'string',r:true},{n:'kpis',t:'number',r:true}]},
+  ],
+  models: [
+    {id:'m-azure',     name:'gpt-4o (Azure GPT-4o)',       provider:'azure_openai', endpoint:'https://cc-eu.openai.azure.com'},
+    {id:'m-openai',    name:'gpt-4o (OpenAI GPT-4o)',      provider:'openai',       endpoint:'https://api.openai.com/v1'},
+    {id:'m-anthropic', name:'claude-sonnet-4 (Anthropic)', provider:'anthropic',    endpoint:'https://api.anthropic.com'},
+    {id:'m-gemini',    name:'gemini-2.0-flash (Gemini)',   provider:'gemini',       endpoint:'https://generativelanguage.googleapis.com'},
+    {id:'m-groq',      name:'llama-3.3-70b (Groq)',        provider:'groq',         endpoint:'https://api.groq.com/openai/v1'},
+  ],
+};
+
+/* Guardrail defaults — mirrors AgentTypeForm / useAgentDraftComposition fallbacks */
+const GR_DEFAULTS = {
+  maxIterations:10, maxDelegationDepth:3, maxDelegatedSteps:20, executionTimeoutSeconds:300,
+  tokenBudget:1000000, tokenEnforcementMode:'observe', tokenFallbackMode:'observe_and_log',
+  conversationalTokenVisibilityMode:'enabled', conversationalContinuationPolicy:'allow',
+};
+
+function mkAgent(id,name,kind,desc,si,config,guard){
+  return {id,name,kind,desc,systemInstruction:si,config,guardrails:Object.assign({},GR_DEFAULTS,guard||{})};}
+let agents = [
+  mkAgent('ag-1','pr-reviewer','typed','Reviews pull requests against team guidelines and posts structured verdicts.',
+    'You are a senior code reviewer. Analyse the provided pull request diff, check it against team guidelines, and produce a structured verdict.',
+    {role:'r-dev',identity:'i-pr',skills:['s-pr-analysis','s-git-blame'],sops:['o-pr'],input:'d-prctx',output:'d-review',model:'m-azure'},
+    {tokenEnforcementMode:'enforce'}),
+  mkAgent('ag-2','invoice-extractor','typed','Reads scanned invoices and emits schema-validated invoice records.',
+    'You extract structured invoice data from parsed documents. Always validate totals and currency against the invoice schema.',
+    {role:'r-docproc',identity:'i-inv',skills:['s-ocr','s-pdf'],sops:['o-inv'],input:'d-doc',output:'d-inv',model:'m-openai'},
+    {maxIterations:20,tokenBudget:2000000}),
+  mkAgent('ag-3','ops-assistant','conversational','Conversational on-call assistant that triages incidents using cluster logs and runbooks.',
+    'You are an on-call operations assistant. Investigate incidents using cluster logs and the runbook library, and guide the engineer step by step.',
+    {role:'r-ops',identity:'i-ops',skills:['s-kubectl-logs','s-runbook'],sops:['o-incident'],input:'d-chat',output:null,model:'m-anthropic'},
+    {maxIterations:30,executionTimeoutSeconds:600}),
+  /* No DIRECT skills — the Skills section is HIDDEN in the topology; the composed
+     skill under weekly-report still renders and still routes to its tool. */
+  mkAgent('ag-4','report-generator','typed','Compiles weekly KPI reports via the weekly-report SOP.',
+    'You compile weekly KPI summaries from chart outputs. Keep the narrative concise and factual.',
+    {role:'r-analyst',identity:'i-rep',skills:[],sops:['o-weekly'],input:'d-report',output:'d-report',model:'m-gemini'},
+    {maxDelegatedSteps:50}),
+];
+
+/* ============ STATE ============ */
+let SAVED = {};                    // last-saved snapshot per agent id (draft = agents[] entries)
+agents.forEach(a => SAVED[a.id] = deep(a));
+let selectedId = agents[0].id;
+let perm = 'admin';                // 'admin' | 'viewer'
+let searchQ = '';
+let pendingSelectTarget = null;    // agent switch requested while dirty
+
+/* Fullscreen topology view state (mirrors PanelTopologyCanvas:
+   zoom 1 = auto-fit; viewBox transform view = world / zoom, clamped) */
+let fsMode = false;
+let zoom = 1, panCx = 560, panCy = 320;
+const FS_MIN_ZOOM = 0.5, FS_MAX_ZOOM = 3, FS_ZOOM_STEP = 1.2;
+const WORLD = {w:1120, h:640};
+
+/* ============ UTILS ============ */
+function $(id){return document.getElementById(id)}
+function deep(o){return JSON.parse(JSON.stringify(o))}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function cur(){return agents.find(a=>a.id===selectedId)}
+function cfg(){return cur().config}
+function item(catKey,id){return catalog[catKey].find(x=>x.id===id)||null}
+function canWrite(){return perm==='admin'}
+function slugValid(s){return /^[a-z0-9-]+$/.test(s)}
+function truncate(s,n){s=String(s);return s.length>n?s.slice(0,n-1)+'…':s}
+function itemMeta(catKey,it){
+  switch(catKey){
+    case 'roles':      return (it.scope&&it.scope.length? it.scope.length+' grants · ':'')+(it.desc||'');
+    case 'identities': return it.account+' · '+it.provider;
+    case 'skills':     return it.mcp+' · '+it.tool;
+    case 'sops':       return (it.steps?it.steps.length:0)+' steps · '+(it.desc||'');
+    case 'datatypes':  return it.slug+' · '+it.kind+(it.fields&&it.fields.length?' · '+it.fields.length+' fields':'');
+    case 'models':     return it.provider+' · '+it.endpoint;
+  }
+  return '';
+}
+function toast(msg,type){
+  const t=document.createElement('div');
+  t.className='amp-toast amp-toast-'+(type||'info');
+  t.innerHTML=(type==='success'?'✓ ':type==='error'?'✕ ':'ℹ ')+esc(msg);
+  $('amp-toasts').appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),320)},2600);
+}
+
+/* -- Dirty tracking (draft vs snapshot) — mirrors useAgentDraftComposition -- */
+function slotValue(a,key){
+  const c=a.config;
+  return {role:c.role,identity:c.identity,skills:c.skills,sops:c.sops,input:c.input,output:c.output,model:c.model}[key];
+}
+function changedSlotIds(a){
+  const s=SAVED[a.id];
+  return ['role','identity','skills','sops','input','output','model'].filter(k=>
+    JSON.stringify(slotValue(a,k))!==JSON.stringify(slotValue(s,k)));
+}
+function propertiesChanged(a){
+  const s=SAVED[a.id];
+  return a.name!==s.name || a.desc!==s.desc || a.systemInstruction!==s.systemInstruction ||
+         JSON.stringify(a.guardrails)!==JSON.stringify(s.guardrails);
+}
+function isDirty(a){return changedSlotIds(a).length>0||propertiesChanged(a)}
+function isNameInvalid(a){return !a.name||!slugValid(a.name)}
+
+/* ============ SIDEBAR ============ */
+function onSearch(v){searchQ=v.toLowerCase().trim();renderSidebar()}
+function renderSidebar(){
+  const list=agents.filter(a=>!searchQ||a.name.toLowerCase().includes(searchQ));
+  $('amp-agent-count').textContent=agents.length;
+  $('amp-btn-create-agent').disabled=!canWrite();
+  $('amp-btn-create-agent').title=canWrite()?'':'Read-only: requires write permission on agent::types';
+  $('amp-agent-list').innerHTML=list.map(a=>`
+    <div class="amp-agent-item ${a.id===selectedId?'active':''}" onclick="AMP.selectAgentReq('${a.id}')">
+      <div class="amp-agent-item-icon">🤖</div>
+      <div class="amp-agent-item-main">
+        <div class="amp-agent-item-name">${esc(a.name)}</div>
+        <div class="amp-agent-item-meta">${a.kind==='typed'?'Typed output':'Conversational'} · ${equipmentCount(a)} equipped</div>
+      </div>
+      ${isDirty(a)?'<span class="amp-pending-dot" title="Has unsaved changes"></span>':''}
+    </div>`).join('')||'<div class="amp-slot-empty" style="padding:10px 12px">No agents match your search.</div>';
+}
+function equipmentCount(a){
+  const c=a.config;
+  return (c.role?1:0)+(c.identity?1:0)+c.skills.length+c.sops.length+(c.input?1:0)+(c.output?1:0)+(c.model?1:0);
+}
+/* Unsaved-changes guard on agent switch (useUnsavedChangesDialog) */
+function selectAgentReq(id){
+  if(id===selectedId)return;
+  if(isDirty(cur())){
+    pendingSelectTarget=id;
+    const a=cur();
+    const body='<p style="font-size:13.5px;line-height:1.6">You have <b>unsaved changes</b> on <b>“'+esc(a.name)+'”</b>. Switching agents discards the draft.</p>';
+    const footer='<button class="btn btn-secondary" onclick="AMP.closeModal()">Keep editing</button>'+
+      '<button class="btn btn-danger" onclick="AMP.confirmSwitch()">Discard &amp; switch</button>';
+    openModal('Unsaved changes','',body,footer);
+    return;
+  }
+  selectAgent(id);
+}
+function confirmSwitch(){
+  const target=pendingSelectTarget; pendingSelectTarget=null;
+  closeModal(); selectAgent(target);
+  toast('Draft discarded — switched agent.','info');
+}
+function selectAgent(id){selectedId=id;renderAll()}
+
+/* ============ AGENT HEADER (Create + Delete only — NO edit dialog) ============ */
+function renderHeader(){
+  const a=cur();
+  if(!a){$('amp-agent-header').innerHTML='<div class="amp-ah-main"><span class="amp-ah-name">No agents</span></div>';return;}
+  const inChip=a.config.input?item('datatypes',a.config.input):null;
+  const modelChip=a.config.model?item('models',a.config.model):null;
+  $('amp-agent-header').innerHTML=`
+    <div class="amp-ah-icon">🤖</div>
+    <div class="amp-ah-main">
+      <div class="amp-ah-name-row">
+        <span class="amp-ah-name">${esc(a.name)}</span>
+        <span class="chip ${a.kind==='typed'?'chip-purple':'chip-blue'}">${a.kind==='typed'?'📤 Typed output':'💬 Conversational'}</span>
+        ${inChip?`<span class="chip chip-green">📥 ${esc(inChip.name)}</span>`:''}
+        ${modelChip?`<span class="chip chip-orange">🧠 ${esc(modelChip.name)}</span>`:''}
+        ${isDirty(a)?'<span class="chip chip-yellow">● unsaved draft</span>':''}
+      </div>
+      <div class="amp-ah-desc">${esc(a.desc)}</div>
+    </div>
+    <div class="amp-ah-actions">
+      <button class="btn btn-ghost-danger btn-sm" ${canWrite()?'':'disabled'} title="${canWrite()?'Delete this agent type':'Read-only: missing write permission on agent::types'}" onclick="AMP.confirmDeleteAgent()">🗑 Delete</button>
+    </div>`;
+}
+
+/* ============ PROPERTIES SECTION (draft edits — no dialog) ============ */
+function renderProperties(){
+  const a=cur(); if(!a)return;
+  const g=a.guardrails, dis=!canWrite();
+  $('amp-p-name').value=a.name; $('amp-p-name').disabled=dis;
+  $('amp-p-desc').value=a.desc; $('amp-p-desc').disabled=dis;
+  $('amp-p-si').value=a.systemInstruction; $('amp-p-si').disabled=dis;
+  $('amp-g-maxIter').value=g.maxIterations; $('amp-g-maxIter').disabled=dis;
+  $('amp-g-timeout').value=g.executionTimeoutSeconds; $('amp-g-timeout').disabled=dis;
+  $('amp-g-depth').value=g.maxDelegationDepth; $('amp-g-depth').disabled=dis;
+  $('amp-g-steps').value=g.maxDelegatedSteps; $('amp-g-steps').disabled=dis;
+  $('amp-g-budget').value=Math.round((g.tokenBudget||0)/1000); $('amp-g-budget').disabled=dis;
+  $('amp-g-budget-hint').textContent=a.kind==='conversational'
+    ?'Visible current-session usage threshold for conversational agents. Default: 1000k tokens.'
+    :'Budget for non-conversational enforcement. Default: 1000k tokens.';
+  $('amp-g-enforce').value=g.tokenEnforcementMode; $('amp-g-enforce').disabled=dis;
+  $('amp-g-fallback').value=g.tokenFallbackMode; $('amp-g-fallback').disabled=dis;
+  $('amp-g-visibility').value=g.conversationalTokenVisibilityMode; $('amp-g-visibility').disabled=dis;
+  $('amp-g-continuation').value=g.conversationalContinuationPolicy; $('amp-g-continuation').disabled=dis;
+  const conv=a.kind==='conversational';
+  $('amp-gr-typed-controls').style.display=conv?'none':'grid';
+  $('amp-gr-conv-controls').style.display=conv?'grid':'none';
+  renderNameValidity(a);
+}
+function renderNameValidity(a){
+  const bad=isNameInvalid(a);
+  const dup=!bad&&agents.some(x=>x.id!==a.id&&x.name.toLowerCase()===a.name.toLowerCase());
+  $('amp-p-name').classList.toggle('error',bad||dup);
+  const e=$('amp-p-name-err');
+  if(bad){e.textContent='Name must be a non-empty slug (lowercase letters, numbers, hyphens).';e.classList.add('visible');}
+  else if(dup){e.textContent='An agent with this name already exists. Duplicate names are rejected on save.';e.classList.add('visible');}
+  else e.classList.remove('visible');
+}
+function onPropName(v){
+  const a=cur(); a.name=v.trim();
+  onDraftMutated({skipProps:true});
+}
+function onPropText(key,v){
+  const a=cur(); a[key]=v; onDraftMutated({skipProps:true});
+}
+/* k-token <-> raw conversion (raw = k x 1000), mirroring AgentTypeForm */
+function onGrBudget(el){
+  const a=cur();
+  const k=Number(el.value);
+  a.guardrails.tokenBudget=(Number.isFinite(k)&&k>0)?Math.round(k*1000):GR_DEFAULTS.tokenBudget;
+  onDraftMutated({skipProps:true});
+}
+function onGrNum(key,el){
+  const a=cur();
+  const n=Number(el.value);
+  a.guardrails[key]=Number.isFinite(n)?n:GR_DEFAULTS[key];
+  onDraftMutated({skipProps:true});
+}
+function onGrSel(key,el){
+  const a=cur(); a.guardrails[key]=el.value; onDraftMutated({skipProps:true});
+}
+
+/* ============ TOPOLOGY — zoned graph + Communication Hub vertical bar ============ */
+const NS='http://www.w3.org/2000/svg';
+function svgEl(name,attrs,parent){const e=document.createElementNS(NS,name);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+
+/* Palettes + deterministic hash colours — mirrors capabilityColor / mcpGroupColor */
+const MCP_GROUP_PALETTE=['#15803d','#0e7490','#b45309','#1d4ed8','#a21caf','#4d7c0f','#b91c1c'];
+const CAPABILITY_COLOR_PALETTE=['#E53935','#8E24AA','#3949AB','#1E88E5','#00897B','#43A047','#F4511E','#6D4C41','#546E7A','#5E35B1','#00ACC1','#FB8C00'];
+function hashColor(str,palette){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))>>>0;return palette[h%palette.length]}
+function capabilityColor(nodeId){return hashColor(nodeId,CAPABILITY_COLOR_PALETTE)}
+function mcpGroupColor(slug){return hashColor(slug,MCP_GROUP_PALETTE)}
+
+const EDGE={equipped:'#64748B',grants:'#2563EB'}; /* solid = equipped with · dotted = role grants */
+const SECTION_GROUP_COLOR='#7c3aed';
+function equippedSkillPool(){
+  const c=cfg();const ids=new Set(c.skills);
+  c.sops.forEach(sid=>{const s=item('sops',sid);s&&s.steps.forEach(t=>ids.add(t));});
+  return [...ids].map(id=>item('skills',id)).filter(Boolean);
+}
+function toolGroups(){
+  const map=new Map();
+  equippedSkillPool().forEach(s=>{if(!map.has(s.mcp))map.set(s.mcp,[]);if(!map.get(s.mcp).includes(s.tool))map.get(s.mcp).push(s.tool);});
+  return [...map.entries()].map(([slug,tools])=>({slug,tools}));
+}
+function r3(n){return Math.round(n*1000)/1000}
+
+function renderTopology(){
+  const svg=$('amp-topo-svg');
+  if(!cur()){svg.innerHTML='';return;}
+  svg.innerHTML='';
+  const a=cur(),c=cfg(),pend=isDirty(a);
+
+  const identity=c.identity?item('identities',c.identity):null;
+  const role=c.role?item('roles',c.role):null;
+  const inputIt=c.input?item('datatypes',c.input):null;
+  const outputLocked=a.kind==='conversational';
+  const outputIt=(!outputLocked&&c.output)?item('datatypes',c.output):null;
+  const modelIt=c.model?item('models',c.model):null;
+  const sops=c.sops.map(id=>item('sops',id)).filter(Boolean);
+  const directSkills=c.skills.map(id=>item('skills',id)).filter(Boolean);
+
+  /* arrow markers — one per edge colour (per-edge explicit colours with matching markers) */
+  const defs=svgEl('defs',{},svg);
+  const markerCols=new Set([EDGE.equipped,EDGE.grants]);
+  sops.forEach(s=>markerCols.add(capabilityColor('sop_'+s.id)));
+  directSkills.forEach(s=>markerCols.add(capabilityColor('skill_'+s.id)));
+  equippedSkillPool().forEach(s=>markerCols.add(capabilityColor('skill_'+s.id)));
+  [...markerCols].forEach(col=>{
+    const id='amp-mk-'+col.replace('#','');
+    const m=svgEl('marker',{id,viewBox:'0 0 10 10',refX:8.5,refY:5,markerWidth:6,markerHeight:6,orient:'auto'},defs);
+    svgEl('path',{d:'M0 0L10 5L0 10z',fill:col},m);
+  });
+  const mkRef=col=>('url(#amp-mk-'+col.replace('#','')+')');
+
+  const zoneLayer=svgEl('g',{},svg);
+  const groupLayer=svgEl('g',{},svg);
+  const edgeLayer=svgEl('g',{},svg);
+  const hubLayer=svgEl('g',{},svg);
+  const nodeLayer=svgEl('g',{},svg);
+
+  const halo='paint-order:stroke;stroke:#FAFBFD;stroke-width:4px';
+  function txt(x,y,s,o){
+    o=o||{};
+    const t=svgEl('text',{x,y,'font-size':o.fs||10,'font-weight':o.fw||'normal',fill:o.fill||'#334155','text-anchor':o.anchor||'start',style:o.halo?halo:'',...(o.transform?{transform:o.transform}:{})},o.layer||nodeLayer);
+    if(o.ls)t.setAttribute('letter-spacing',o.ls);
+    if(o.mono)t.setAttribute('font-family','ui-monospace,SFMono-Regular,monospace');
+    t.textContent=s;return t;
+  }
+  function zone(x,y,w,h,title,sub,tcol,fill,stroke,dashed){
+    const g=svgEl('g',{},zoneLayer);
+    svgEl('rect',{x,y,width:w,height:h,rx:14,fill,stroke,'stroke-width':1.4,...(dashed?{'stroke-dasharray':'7 5'}:{})},g);
+    txt(x+14,y+22,title,{fs:11,fw:700,fill:tcol,ls:'.5px',layer:g});
+    txt(x+14,y+37,sub,{fs:9.5,fill:'#64748B',layer:g});
+  }
+  /* Node renderer: small type icon (10px) in a left gutter + truncating labels.
+     Full text on hover (<title>) and on click (toast). */
+  function drawNode(o){
+    const g=svgEl('g',{class:'amp-topo-node'+(o.ghost?' amp-ghost':''),'data-topology-node':'1'},nodeLayer);
+    const fullText=(o.full||o.label)+(o.fullSub?(' — '+o.fullSub):(o.sub?(' — '+o.sub):''));
+    g.addEventListener('click',o.onClick||(()=>toast(fullText,'info')));
+    svgEl('title',{},g).textContent=fullText;
+    svgEl('rect',{class:'amp-n-box',x:o.cx-o.w/2,y:o.cy-o.h/2,width:o.w,height:o.h,rx:10,
+      fill:o.ghost?'#FFFFFF':(o.fill||'#FFFFFF'),
+      stroke:o.ghost?'#CBD5E1':(o.stroke||'#94A3B8'),'stroke-width':o.ghost?1.4:(o.sw||1.6),
+      ...(o.ghost?{'stroke-dasharray':'5 4'}:{})},g);
+    const isz=o.iconSize||10;                                  /* small type icon — 10px */
+    const t0=svgEl('text',{x:o.cx-o.w/2+10,y:o.cy+isz/2-2,'font-size':isz},g);t0.textContent=o.icon||'';
+    const tx=o.cx-o.w/2+10+isz+7;
+    const t1=svgEl('text',{x:tx,y:o.cy+(o.sub?-3:4.5),'font-size':o.fs||11,'font-weight':600,fill:o.ghost?'#94A3B8':'#1E293B'},g);
+    t1.textContent=truncate(o.label,o.lw||19);
+    if(o.sub){const t2=svgEl('text',{x:tx,y:o.cy+11,'font-size':o.subFs||8.4,fill:'#64748B'},g);t2.textContent=truncate(o.sub,o.subLw||28);}
+    return g;
+  }
+  function secLabel(y,s,layer){const t=svgEl('text',{x:CAPX+4,y,'font-size':9,'font-weight':700,fill:SECTION_GROUP_COLOR,'letter-spacing':'.6px'},layer||nodeLayer);t.textContent=s.toUpperCase();}
+  function inLabel(y,s){const t=svgEl('text',{x:48,y,'font-size':8.5,'font-weight':700,fill:'#64748B','letter-spacing':'.8px'},nodeLayer);t.textContent=s.toUpperCase();}
+
+  /* -- dynamic layout -- */
+  const CAPX=316,CAPW=318,SOP_W=232,CHILD_W=200,NODE_H=44,CHILD_H=32;
+  let yy=94;
+
+  /* Zone 2 - SOPs section (ALWAYS rendered; keeps its empty placeholder) */
+  secLabel(yy+8,'SOPs — procedures');yy+=20;
+  const sopBoxes=[];
+  if(!sops.length){
+    sopBoxes.push({ghost:true,boxY:yy,boxH:NODE_H+20,nodeCy:yy+10+NODE_H/2});
+    yy+=NODE_H+20+12;
+  }else sops.forEach(s=>{
+    const color=capabilityColor('sop_'+s.id);
+    const kids=[...new Set(s.steps)];                       /* composed skills, deduplicated */
+    const pad=10,nodeCy=yy+pad+NODE_H/2;
+    let ky=nodeCy+NODE_H/2+14;
+    const kidCys=kids.map(()=>{const cy=ky+CHILD_H/2;ky+=CHILD_H+6;return cy;});
+    const boxH=pad+NODE_H+(kids.length?14+kids.length*CHILD_H+(kids.length-1)*6:0)+pad-4;
+    sopBoxes.push({sop:s,color,boxY:yy,boxH,nodeCy,kids,kidCys});
+    yy+=boxH+12;
+  });
+
+  /* Zone 2 - Skills section: HIDDEN entirely when no direct skills are equipped */
+  const skillBox={cys:[]};
+  if(directSkills.length){
+    secLabel(yy+8,'Skills — capabilities');yy+=20;
+    const pad=10;
+    let sy=yy+pad+NODE_H/2;
+    skillBox.boxY=yy;
+    directSkills.forEach(()=>{skillBox.cys.push(sy);sy+=NODE_H+12;});
+    skillBox.boxH=pad+directSkills.length*NODE_H+(directSkills.length-1)*12+pad-6;
+    yy=yy+skillBox.boxH+12;
+  }
+  const capEnd=yy;
+
+  /* Zone 3 - tools groups (MCP-server group boxes) */
+  const groups=toolGroups();
+  const TGX=756,TGW=334,CHIP_W=300;
+  let ty=94;const toolGpos=[];
+  if(!groups.length){
+    toolGpos.push({ghost:true,top:ty,gh:NODE_H+16});ty+=NODE_H+16+12;
+  }else groups.forEach(g=>{
+    let cy=ty+26;g.tools.forEach(()=>cy+=26);
+    const gh=cy-ty+6;
+    toolGpos.push({slug:g.slug,tools:g.tools,top:ty,gh});
+    ty+=gh+14;
+  });
+  const toolEnd=ty;
+
+  /* zone heights (uniform bands, grow with content) */
+  const ZH=Math.max(584,capEnd-40+16,toolEnd-40+16);
+  WORLD.h=40+ZH+24;
+
+  /* zone backgrounds */
+  zone(14,40,270,ZH,'① CONFIGURATION','who the agent IS','#1E40AF','#F0F6FF','#1D4ED8',false);
+  zone(298,40,342,ZH,'② CAPABILITIES',"what it's EQUIPPED WITH",'#5B21B6','#FAF5FF','#7C3AED',false);
+  zone(730,40,390,ZH,'③ TOOLS','MCP tools it can call — via the Hub','#334155','#F8FAFC','#64748B',true);
+
+  /* section group boxes (each SOP box wraps itself + its composed children) */
+  sopBoxes.forEach(b=>{
+    svgEl('rect',{x:CAPX,y:b.boxY,width:CAPW,height:b.boxH,rx:10,fill:'#FFFFFF','fill-opacity':.55,
+      stroke:SECTION_GROUP_COLOR,'stroke-width':1,opacity:.55},groupLayer);
+  });
+  if(directSkills.length){
+    svgEl('rect',{x:CAPX,y:skillBox.boxY,width:CAPW,height:skillBox.boxH,rx:10,fill:'#FFFFFF','fill-opacity':.55,
+      stroke:SECTION_GROUP_COLOR,'stroke-width':1,opacity:.55},groupLayer);
+  }
+
+  /* -- edges --
+     capability targets: SOP nodes + direct skill nodes (composed children are NOT targets) */
+  const targets=[];
+  sopBoxes.forEach(b=>targets.push(b.ghost?{cy:b.nodeCy,ghost:true}:{cy:b.nodeCy}));
+  directSkills.forEach((s,i)=>targets.push({cy:skillBox.cys[i]}));
+  let firstTy=null;
+  targets.forEach(tg=>{
+    const sy=Math.max(130,Math.min(tg.cy,40+ZH-60));
+    if(tg.ghost){
+      svgEl('line',{x1:268,y1:sy,x2:CAPX+10,y2:tg.cy,stroke:'#CBD5E1','stroke-width':1.4,'stroke-dasharray':'3 5'},edgeLayer);
+    }else{
+      svgEl('path',{d:'M 268 '+sy+' C 300 '+sy+', 296 '+tg.cy+', '+(CAPX+16)+' '+tg.cy,fill:'none',stroke:EDGE.equipped,'stroke-width':1.8,'marker-end':mkRef(EDGE.equipped)},edgeLayer);
+      if(firstTy===null)firstTy=tg.cy;
+    }
+  });
+  if(firstTy!==null)txt(299,firstTy-8,'equipped with',{fs:8.5,fill:EDGE.equipped,anchor:'middle',halo:true,layer:edgeLayer});
+  if(role&&targets.some(t=>!t.ghost)){
+    targets.filter(t=>!t.ghost).forEach(tg=>{
+      svgEl('path',{d:'M 252 280 C 300 280, 296 '+tg.cy+', '+(CAPX+16)+' '+tg.cy,fill:'none',stroke:EDGE.grants,'stroke-width':1.7,'stroke-dasharray':'2 4.5','marker-end':mkRef(EDGE.grants),opacity:.95},edgeLayer);
+    });
+    txt(296,266,'grants',{fs:8.5,fill:EDGE.grants,anchor:'middle',halo:true,layer:edgeLayer});
+  }
+
+  /* SOP -> composed skill: elbow connectors in the SOP's accent colour */
+  sopBoxes.forEach(b=>{
+    if(b.ghost||!b.kids.length)return;
+    const sopBottom=b.nodeCy+NODE_H/2;
+    b.kidCys.forEach((cy,i)=>{
+      svgEl('path',{d:'M '+(CAPX+10+SOP_W/2)+' '+sopBottom+' V '+cy+' H '+(CAPX+10+(SOP_W-CHILD_W)/2-4),
+        fill:'none',stroke:b.color,'stroke-width':1.6,'marker-end':mkRef(b.color),opacity:.9},edgeLayer);
+      if(i===0)txt(CAPX+10+SOP_W/2+7,sopBottom+13,'composed of',{fs:8.2,fill:b.color,halo:true,layer:edgeLayer});
+    });
+  });
+
+  /* skill -> tool: dashed connectors CROSS the hub bar, coloured per skill */
+  const capRight=CAPX+CAPW+10;
+  function skillToolEdges(skill,cy){
+    const color=capabilityColor('skill_'+skill.id);
+    groups.forEach(gp=>{
+      gp.tools.forEach((tool,ti)=>{
+        if(skill.tool!==tool)return;
+        const ty2=gp.top+26+ti*26+11;
+        svgEl('path',{d:'M '+capRight+' '+cy+' C '+(capRight+80)+' '+cy+', '+(TGX-96)+' '+ty2+', '+(TGX+14)+' '+ty2,
+          fill:'none',stroke:color,'stroke-width':1.8,'stroke-dasharray':'6 5','marker-end':mkRef(color),opacity:.92},edgeLayer);
+      });
+    });
+  }
+  directSkills.forEach((s,i)=>skillToolEdges(s,skillBox.cys[i]));
+  sopBoxes.forEach(b=>{
+    if(b.ghost)return;
+    b.kids.forEach((kidId,i)=>{
+      const sk=item('skills',kidId);if(!sk)return;
+      skillToolEdges(sk,b.kidCys[i]);
+    });
+  });
+
+  /* -- Communication Hub — VERTICAL BAR between 2 and 3 (not a node) -- */
+  const hb=svgEl('g',{'data-topology-node':'1'},hubLayer);
+  hb.style.cursor='default';
+  hb.addEventListener('click',()=>toast('Communication Hub — platform broker · agent gateway · MCP endpoint. Tool connectors cross this bar; every call is routed through the Hub.','info'));
+  svgEl('title',{},hb).textContent='Communication Hub — broker · agent gateway · MCP endpoint';
+  svgEl('rect',{class:'amp-n-box',x:664,y:40,width:48,height:ZH,rx:12,fill:'#E0E7FF',stroke:'#3730A3','stroke-width':2},hb);
+  const hubCy=40+ZH/2;
+  txt(679,hubCy,'📡 COMMUNICATION HUB',{fs:11,fw:700,fill:'#312E81',anchor:'middle',transform:'rotate(-90 679 '+hubCy+')'});
+  txt(697,hubCy,'broker · agent gateway · MCP',{fs:8,fill:'#4338CA',anchor:'middle',transform:'rotate(-90 697 '+hubCy+')'});
+
+  /* == ZONE 1 — agent boundary (containment) == */
+  const bg=svgEl('g',{class:'amp-topo-node','data-topology-node':'1'},nodeLayer);
+  bg.addEventListener('click',()=>toast('Agent Type: '+a.name+' — '+(a.kind==='typed'?'typed output':'conversational')+' · '+equipmentCount(a)+' items equipped. Identity & role are PART of the agent (containment).','info'));
+  svgEl('title',{},bg).textContent=a.name+' — Agent Type boundary (identity & role are part of it)';
+  svgEl('rect',{class:'amp-n-box',x:32,y:88,width:236,height:424,rx:14,fill:pend?'#FEF3C7':'#DBEAFE','fill-opacity':.32,stroke:pend?'#D97706':'#1D4ED8','stroke-width':3},bg);
+  txt(48,112,'🤖 '+truncate(a.name,15),{fs:13.5,fw:700,fill:'#1E3A8A'});
+  txt(48,128,'Agent Type · '+(a.kind==='typed'?'typed output':'conversational')+(pend?' · unsaved draft':''),{fs:9.5,fill:'#475569'});
+  inLabel(170,'signs in as');
+  drawNode({cx:150,cy:198,w:204,h:48,icon:'🆔',label:identity?identity.name:'No identity assigned',
+    sub:identity?identity.account:'click to assign',ghost:!identity,
+    fill:'#FEF3C7',stroke:'#B45309',
+    onClick:identity?()=>toast('Identity: '+identity.name+' — '+identity.account+' ('+identity.provider+' · '+identity.realm+')','info'):()=>openPicker('identity'),
+    full:identity?('Identity: '+identity.name):'No identity assigned',fullSub:identity?identity.account:''});
+  inLabel(252,'assumes as');
+  drawNode({cx:150,cy:280,w:204,h:48,icon:'👤',label:role?role.name:'No role assigned',
+    sub:role?(role.scope.length+' grants · permission source'):'click to assign',ghost:!role,
+    fill:'#DBEAFE',stroke:'#1D4ED8',
+    onClick:role?()=>toast('Role: '+role.name+' — grants '+role.scope.length+' skills/SOPs; permission flows via the dotted grants edges','info'):()=>openPicker('role'),
+    full:role?('Role: '+role.name):'No role assigned',fullSub:role?(role.scope.length+' grants'):''});
+  svgEl('line',{x1:48,y1:326,x2:252,y2:326,stroke:'#93C5FD','stroke-dasharray':'4 4'},nodeLayer);
+  inLabel(346,'contract');
+  const inchips=[
+    {it:inputIt,cat:'input',slot:'input',ph:'No input type'},
+    ...(a.kind==='typed'?[{it:outputIt,cat:'output',slot:'output',ph:'No output type'}]:[]),
+    {it:modelIt,cat:'model',slot:'model',ph:'No model'},
+  ];
+  let chipY=366;
+  inchips.forEach(ch=>{
+    drawNode({cx:150,cy:chipY+17,w:204,h:34,icon:CATS[ch.cat].icon,iconSize:10,
+      label:ch.it?ch.it.name:ch.ph,lw:15,
+      sub:ch.it?(ch.cat==='model'?ch.it.provider:ch.it.slug+' · '+ch.it.kind):'click to assign',subLw:24,
+      ghost:!ch.it,fs:10,subFs:8,
+      fill:ch.cat==='input'?'#DCFCE7':ch.cat==='output'?'#FCE7F3':'#FED7AA',
+      stroke:ch.cat==='input'?'#15803D':ch.cat==='output'?'#9D174D':'#C2410C',
+      onClick:ch.it?()=>toast(CATS[ch.cat].label+': '+ch.it.name+' — '+itemMeta(CATS[ch.cat].catKey,ch.it),'info'):()=>openPicker(ch.slot),
+      full:ch.it?(CATS[ch.cat].label+': '+ch.it.name):ch.ph,fullSub:ch.it?itemMeta(CATS[ch.cat].catKey,ch.it):''});
+    chipY+=46;
+  });
+  txt(32,40+ZH-14,'⬤ Identity & Role are part of the agent (containment — thick boundary)',{fs:8.5,fill:'#64748B'});
+
+  /* == ZONE 2 — capabilities == */
+  sopBoxes.forEach(b=>{
+    if(b.ghost){
+      drawNode({cx:CAPX+10+SOP_W/2,cy:b.nodeCy,w:SOP_W,h:NODE_H,icon:'📋',label:'No SOPs equipped',sub:'click to assign',ghost:true,
+        onClick:()=>openPicker('sops'),full:'No SOPs equipped — empty slot, click to assign'});
+      return;
+    }
+    const s=b.sop;
+    drawNode({cx:CAPX+10+SOP_W/2,cy:b.nodeCy,w:SOP_W,h:NODE_H,icon:'📋',label:s.name,lw:17,
+      sub:s.steps.length+' steps · '+(s.desc||''),subLw:26,
+      fill:'#CFFAFE',stroke:b.color,sw:2,
+      onClick:()=>toast('SOP: '+s.name+' — '+s.desc+' Composes '+b.kids.length+' skill(s); composed skills render as its children.','info'),
+      full:'SOP: '+s.name,fullSub:s.desc});
+    b.kids.forEach((kidId,i)=>{
+      const sk=item('skills',kidId);if(!sk)return;
+      const kc=capabilityColor('skill_'+kidId);
+      drawNode({cx:CAPX+10+(SOP_W-CHILD_W)/2+CHILD_W/2,cy:b.kidCys[i],w:CHILD_W,h:CHILD_H,icon:'🔧',iconSize:10,
+        label:sk.name,lw:15,sub:sk.mcp+' · '+sk.tool,subLw:22,fs:10,subFs:7.8,
+        fill:'#EDE9FE',stroke:kc,sw:1.8,
+        onClick:()=>toast('Composed skill: '+sk.name+' — calls '+sk.tool+' via '+sk.mcp+' (composed under '+s.name+')','info'),
+        full:'Composed skill: '+sk.name,fullSub:sk.mcp+' · '+sk.tool});
+    });
+  });
+  directSkills.forEach((s,i)=>{
+    const kc=capabilityColor('skill_'+s.id);
+    drawNode({cx:CAPX+10+SOP_W/2,cy:skillBox.cys[i],w:SOP_W,h:NODE_H,icon:'🔧',label:s.name,lw:17,
+      sub:s.mcp+' · '+s.tool,subLw:26,
+      fill:'#EDE9FE',stroke:kc,sw:2,
+      onClick:()=>toast('Skill: '+s.name+' — calls '+s.tool+' via '+s.mcp+' (its connector reuses this colour)','info'),
+      full:'Skill: '+s.name,fullSub:s.mcp+' · '+s.tool});
+  });
+
+  /* == ZONE 3 — tools (MCP-server group boxes) == */
+  toolGpos.forEach(gp=>{
+    if(gp.ghost){
+      drawNode({cx:TGX+TGW/2,cy:gp.top+(NODE_H+16)/2,w:250,h:NODE_H,icon:'⚙',label:'No tools resolved',sub:'equip skills or SOPs →',ghost:true,
+        full:'No MCP tools — equip skills or SOPs to build a call path'});
+      return;
+    }
+    const mc=mcpGroupColor(gp.slug);
+    const g=svgEl('g',{},nodeLayer);
+    svgEl('rect',{x:TGX,y:gp.top,width:TGW,height:gp.gh,rx:10,fill:mc,'fill-opacity':.07,stroke:mc,'stroke-width':1.3},g);
+    svgEl('circle',{cx:TGX+13,cy:gp.top+14,r:3.5,fill:mc},g);
+    txt(TGX+22,gp.top+18,gp.slug,{fs:9.5,fw:700,fill:mc,layer:g});
+    txt(TGX+TGW-10,gp.top+18,gp.tools.length+(gp.tools.length===1?' tool':' tools'),{fs:8.5,fill:'#64748B',anchor:'end',layer:g});
+    let cy=gp.top+26;
+    gp.tools.forEach(tool=>{
+      const tg2=svgEl('g',{'data-topology-node':'1'},nodeLayer);
+      tg2.style.cursor='default';
+      tg2.addEventListener('click',()=>toast('MCP tool '+tool+' on '+gp.slug+' — routed via the Communication Hub (dashed connector in the calling skill colour).','info'));
+      svgEl('title',{},tg2).textContent='MCP tool on '+gp.slug+' — routed via the Communication Hub';
+      svgEl('rect',{x:TGX+14,y:cy,width:CHIP_W,height:22,rx:6,fill:'#FFFFFF',stroke:mc,'stroke-width':1.1},tg2);
+      const t=svgEl('text',{x:TGX+26,y:cy+14.5,'font-size':9.5,fill:'#334155','font-family':'ui-monospace,SFMono-Regular,monospace'},tg2);
+      t.textContent=truncate(tool,30);
+      cy+=26;
+    });
+  });
+
+  /* apply the current view (inline = whole world; fullscreen = zoom/pan view) */
+  updateViewBox();
+  renderLegend();
+}
+
+/* ============ FULLSCREEN + ZOOM/PAN ============ */
+function clampZoom(z){return Math.min(FS_MAX_ZOOM,Math.max(FS_MIN_ZOOM,z))}
+function updateViewBox(){
+  const svg=$('amp-topo-svg');
+  if(!svg)return;
+  if(fsMode){
+    const w=WORLD.w/zoom,h=WORLD.h/zoom;
+    const cx=Math.min(Math.max(panCx,w/2),WORLD.w-w/2);
+    const cy=Math.min(Math.max(panCy,h/2),WORLD.h-h/2);
+    svg.setAttribute('viewBox',r3(cx-w/2)+' '+r3(cy-h/2)+' '+r3(w)+' '+r3(h));
+    const pct=$('amp-fs-zoom-pct');if(pct)pct.textContent=Math.round(zoom*100)+'%';
+    const zin=$('amp-fs-zoom-in'),zout=$('amp-fs-zoom-out'),fit=$('amp-fs-fit');
+    if(zin)zin.disabled=zoom>=FS_MAX_ZOOM;
+    if(zout)zout.disabled=zoom<=FS_MIN_ZOOM;
+    if(fit)fit.disabled=zoom===1;
+  }else{
+    svg.setAttribute('viewBox','0 0 '+WORLD.w+' '+WORLD.h);
+  }
+}
+/* Fullscreen enter/exit always reset zoom -> auto-fit (zoom 1), per PanelTopologyCanvas */
+function enterFs(){
+  if(!cur())return;
+  fsMode=true;zoom=1;panCx=WORLD.w/2;panCy=WORLD.h/2;
+  $('amp-fs-body').appendChild($('amp-topo-stage'));
+  $('amp-fs-overlay').classList.add('open');
+  syncFsChip();
+  updateViewBox();
+}
+function exitFs(){
+  fsMode=false;zoom=1;panCx=WORLD.w/2;panCy=WORLD.h/2;
+  $('amp-topo-host').appendChild($('amp-topo-stage'));
+  $('amp-fs-overlay').classList.remove('open');
+  updateViewBox();
+}
+function syncFsChip(){
+  const a=cur(),chip=$('amp-fs-state-chip');if(!a||!chip)return;
+  chip.className=isDirty(a)?'chip chip-yellow':'chip chip-green';
+  chip.textContent=isDirty(a)?'● unsaved':'✓ saved';
+}
+function zoomIn(){zoom=clampZoom(zoom*FS_ZOOM_STEP);updateViewBox()}
+function zoomOut(){zoom=clampZoom(zoom/FS_ZOOM_STEP);updateViewBox()}
+function zoomFit(){zoom=1;panCx=WORLD.w/2;panCy=WORLD.h/2;updateViewBox()}
+(function bindPan(){
+  const svg=$('amp-topo-svg');
+  let dragging=false,lx=0,ly=0;
+  svg.addEventListener('pointerdown',e=>{
+    if(!fsMode)return;
+    if(e.target.closest&&e.target.closest('[data-topology-node]'))return;
+    dragging=true;lx=e.clientX;ly=e.clientY;
+    try{svg.setPointerCapture(e.pointerId)}catch(err){}
+  });
+  svg.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    const dx=e.clientX-lx,dy=e.clientY-ly;
+    lx=e.clientX;ly=e.clientY;
+    const rect=svg.getBoundingClientRect();
+    panCx-=dx*(WORLD.w/zoom)/Math.max(rect.width,1);
+    panCy-=dy*(WORLD.h/zoom)/Math.max(rect.height,1);
+    updateViewBox();
+  });
+  svg.addEventListener('pointerup',()=>{dragging=false});
+  svg.addEventListener('wheel',e=>{
+    if(!fsMode)return;
+    e.preventDefault();
+    const rect=svg.getBoundingClientRect();
+    panCx+=e.deltaX*(WORLD.w/zoom)/Math.max(rect.width,1);
+    panCy+=e.deltaY*(WORLD.h/zoom)/Math.max(rect.height,1);
+    updateViewBox();
+  },{passive:false});
+})();
+
+/* ============ LEGEND (edge semantics) ============ */
+function renderLegend(){
+  if(!cur()){$('amp-legend').innerHTML='';return;}
+  const uniq=[...new Set(equippedSkillPool().map(s=>s.mcp))];
+  $('amp-legend').innerHTML='<strong>Legend</strong>'+
+    '<span class="amp-legend-item"><svg width="22" height="14"><rect x="2" y="2" width="18" height="10" rx="3" fill="none" stroke="#1D4ED8" stroke-width="2.5"/></svg>agent boundary — identity &amp; role <b>are part of</b> the agent</span>'+
+    '<span class="amp-legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#64748B" stroke-width="2"/><path d="M19 1l6 3-6 3z" fill="#64748B"/></svg>equipped with</span>'+
+    '<span class="amp-legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#2563EB" stroke-width="2" stroke-dasharray="2 3"/><path d="M19 1l6 3-6 3z" fill="#2563EB"/></svg>role grants permission</span>'+
+    '<span class="amp-legend-item"><svg width="30" height="12"><path d="M2 2v8h20" fill="none" stroke="#E53935" stroke-width="2"/><path d="M22 5l6 2.5-6 2.5z" fill="#E53935"/></svg>composed of (SOP accent colour)</span>'+
+    '<span class="amp-legend-item"><svg width="26" height="8"><line x1="1" y1="4" x2="19" y2="4" stroke="#8E24AA" stroke-width="2" stroke-dasharray="5 3"/><path d="M19 1l6 3-6 3z" fill="#8E24AA"/></svg>call path via Hub <b>(crosses the bar — per-skill colour)</b></span>'+
+    '<span class="amp-legend-item">🆔 Identity · 👤 Role · 🔧 Skill · 📋 SOP · 📥 Input · 📤 Output · 🧠 Model</span>'+
+    uniq.map(s=>'<span class="amp-legend-item"><span style="width:9px;height:9px;border-radius:50%;display:inline-block;background:'+mcpGroupColor(s)+'"></span>'+esc(s)+'</span>').join('')+
+    '<span class="amp-legend-item">⬚ dashed = empty slot · Skills section hidden when empty · hover/click a node for full text</span>';
+}
+
+/* ============ EQUIPMENT SLOTS ============ */
+const SLOT_DEFS=[
+  {key:'role',    multi:false, module:'Agent Roles',         reuse:'agent::roles'},
+  {key:'identity',multi:false, module:'Agent Identities',    reuse:'agent::identities'},
+  {key:'skills',  multi:true,  module:'Skills',              reuse:'agent::skills'},
+  {key:'sops',    multi:true,  module:'SOPs',                reuse:'agent::sops'},
+  {key:'input',   multi:false, module:'Agent Data Types',    reuse:'agent::data_types'},
+  {key:'output',  multi:false, module:'Agent Data Types',    reuse:'agent::data_types'},
+  {key:'model',   multi:false, module:'Model Configurations',reuse:'agent::model_configs'},
+];
+
+function slotItemRow(icon,name,meta,onRemove){
+  return '<div class="amp-slot-item">'+
+    '<span class="amp-si-icon">'+icon+'</span>'+
+    '<div class="amp-si-main"><div class="amp-si-name">'+esc(name)+'</div><div class="amp-si-meta">'+esc(meta||'')+'</div></div>'+
+    (onRemove?'<button class="amp-si-remove" title="Unassign" '+(canWrite()?'':'disabled')+' onclick="'+onRemove+'">✕</button>':'')+
+  '</div>';
+}
+
+function renderSlots(){
+  const a=cur();if(!a)return;
+  $('amp-equip-agent-name').textContent=a.name;
+  $('amp-perm-note').classList.toggle('show',!canWrite());
+  const c=cfg();
+  const lockBtn=(fn,title)=>canWrite()?'onclick="'+fn+'"':'disabled title="'+(title||'Read-only')+'"';
+
+  $('amp-slots').innerHTML=SLOT_DEFS.map(def=>{
+    const cat2=CATS[def.key];
+    const permTitle=canWrite()?'':'Read-only: requires '+cat2.perm;
+    let body='',actions='';
+
+    if(def.key==='output' && a.kind==='conversational'){
+      body='<div class="amp-slot-locked"><span>🔒</span><span><b>Not available.</b> Conversational agents do not support typed outputs (Agent Data Type rule).</span></div>';
+    }else if(def.multi){
+      const arr=c[def.key];
+      body=arr.length?arr.map(id=>{const it=item(cat2.catKey,id);return it?slotItemRow(cat2.icon,it.name,itemMeta(cat2.catKey,it),'AMP.unassignMulti(\''+def.key+'\',\''+id+'\')'):''}).join('')
+        :'<div class="amp-slot-empty">Nothing equipped yet.</div>';
+      actions='<button class="btn btn-secondary btn-xs" '+lockBtn('AMP.openPicker(\''+def.key+'\')',permTitle)+'>Assign existing…</button>'+
+              '<button class="btn btn-secondary btn-xs" '+lockBtn('AMP.openCreate(\''+def.key+'\')',permTitle)+'>＋ Create new</button>';
+    }else{
+      const id=c[def.key], it=id?item(cat2.catKey,id):null;
+      body=it?slotItemRow(cat2.icon,it.name,itemMeta(cat2.catKey,it),'AMP.unassignSingle(\''+def.key+'\')')
+             :'<div class="amp-slot-empty">— not equipped —</div>';
+      actions='<button class="btn btn-secondary btn-xs" '+lockBtn('AMP.openPicker(\''+def.key+'\')',permTitle)+'>Assign existing…</button>'+
+              '<button class="btn btn-secondary btn-xs" '+lockBtn('AMP.openCreate(\''+def.key+'\')',permTitle)+'>＋ Create new</button>'+
+              (it?'<button class="btn btn-ghost-danger btn-xs" '+lockBtn('AMP.unassignSingle(\''+def.key+'\')',permTitle)+'>Unassign</button>':'');
+    }
+
+    return '<div class="amp-slot">'+
+      '<div class="amp-slot-head"><span class="amp-sh-icon">'+cat2.icon+'</span><span class="amp-sh-label">'+cat2.label+'</span>'+
+        (def.multi?'<span class="count-badge">'+c[def.key].length+'</span>':'')+
+      '</div>'+
+      '<div class="amp-slot-body">'+body+'</div>'+
+      '<div class="amp-slot-actions">'+actions+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ============ PENDING CHANGES TRAY (Save = one PUT · Discard) ============ */
+function renderTray(){
+  const a=cur();
+  const slotIds=a?changedSlotIds(a):[], props=a?propertiesChanged(a):false, dirty=a?isDirty(a):false;
+  const n=slotIds.length+(props?1:0);
+  $('amp-unsaved-badge').classList.toggle('show',dirty);
+  $('amp-unsaved-text').textContent=n+' unsaved change'+(n===1?'':'s');
+  const setChip=(id)=>{const el=$(id);if(!el)return;el.className=dirty?'chip chip-yellow':'chip chip-green';el.textContent=dirty?'● unsaved draft':'✓ saved';};
+  setChip('amp-topo-state-chip');setChip('amp-tray-state-chip');
+  syncFsChip();
+  const tl=$('amp-topo-live');if(tl)tl.style.color=dirty?'#B45309':'#1D4ED8';
+  $('amp-pending-count').textContent=n;
+  const chips=[];
+  if(props)chips.push('<span class="amp-tray-chip">⚙️ Properties</span>');
+  slotIds.forEach(k=>chips.push('<span class="amp-tray-chip">'+CATS[k].icon+' '+CATS[k].label+'</span>'));
+  $('amp-pending-chips').innerHTML=chips.join('');
+  const nameBad=a?isNameInvalid(a):true;
+  $('amp-btn-save').disabled=!dirty||!canWrite()||nameBad;
+  $('amp-btn-save').title=nameBad?'Fix the agent name (slug) before saving':'';
+  $('amp-btn-discard').disabled=!dirty||!canWrite();
+}
+function saveChanges(){
+  const a=cur();
+  if(isNameInvalid(a)){toast('Fix the agent name before saving — it must be a non-empty slug.','error');return;}
+  if(agents.some(x=>x.id!==a.id&&x.name.toLowerCase()===a.name.toLowerCase())){toast('Duplicate agent name rejected — another agent type already uses "'+a.name+'".','error');return;}
+  SAVED[a.id]=deep(a);
+  toast('Saved — single PUT /agents/types/'+a.id+'.','success');
+  renderAll();
+}
+function discardChanges(){
+  const i=agents.findIndex(x=>x.id===selectedId);
+  agents[i]=deep(SAVED[selectedId]);
+  toast('Draft changes discarded — reverted to the last saved snapshot.','info');
+  renderAll();
+}
+
+/* ============ ASSIGN / UNASSIGN (draft mutations) ============ */
+function applyAssign(slotKey,id){
+  const cat2=CATS[slotKey], it=item(cat2.catKey,id), prev=cfg()[slotKey];
+  if(prev===id){toast(cat2.label+' "'+it.name+'" is already equipped.','info');return;}
+  cfg()[slotKey]=id;
+  toast(cat2.label+' equipped: '+it.name+' (draft — save to persist)','success');
+  onDraftMutated();
+}
+function unassignSingle(slotKey){
+  const cat2=CATS[slotKey], it=item(cat2.catKey,cfg()[slotKey]);
+  if(!it)return;
+  cfg()[slotKey]=null;
+  toast(cat2.label+' unequipped: '+it.name,'info');
+  onDraftMutated();
+}
+function applyMulti(slotKey,newIds){
+  const cat2=CATS[slotKey];
+  const before=cfg()[slotKey];
+  const added=newIds.filter(id=>!before.includes(id)), removed=before.filter(id=>!newIds.includes(id));
+  if(!added.length&&!removed.length)return;
+  cfg()[slotKey]=newIds;
+  toast(cat2.label+'s updated (+'+added.length+' / −'+removed.length+') — draft only.','success');
+  onDraftMutated();
+}
+function unassignMulti(slotKey,id){
+  const cat2=CATS[slotKey], it=item(cat2.catKey,id);
+  cfg()[slotKey]=cfg()[slotKey].filter(x=>x!==id);
+  toast(cat2.label+' unequipped: '+it.name,'info');
+  onDraftMutated();
+}
+/* Every draft mutation -> live topology re-render + slots + tray + header */
+function onDraftMutated(opts){
+  renderTopology();renderSlots();renderTray();renderHeader();renderSidebar();
+  if(!(opts&&opts.skipProps))renderProperties();
+  else renderNameValidity(cur());
+}
+
+/* ============ MODAL SYSTEM (namespaced twin of the master modal, amp-* ids) ============ */
+function openModal(title,sub,body,footer){
+  $('amp-modal-title').innerHTML=title; $('amp-modal-sub').innerHTML=sub||'';
+  $('amp-modal-body').innerHTML=body; $('amp-modal-footer').innerHTML=footer;
+  $('amp-modal-overlay').classList.add('open');
+}
+function closeModal(){$('amp-modal-overlay').classList.remove('open');AMP.modalSave=null;}
+$('amp-modal-overlay').addEventListener('click',e=>{if(e.target===$('amp-modal-overlay'))closeModal()});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(fsMode){exitFs();return;}
+  if($('amp-modal-overlay').classList.contains('open')){closeModal();return;}
+  if($('amp-picker-overlay').classList.contains('open'))closePicker();
+});
+function stdFooter(saveLabel,onSave){
+  AMP.modalSave=onSave;
+  return '<button class="btn btn-secondary" onclick="AMP.closeModal()">Cancel</button>'+
+         '<button class="btn btn-primary" onclick="AMP.runSave()">'+saveLabel+'</button>';
+}
+function runSave(){if(AMP.modalSave)AMP.modalSave()}
+function setErr(id,msg){$(id).classList.add('error');const e=$(id+'-err');if(e){e.textContent=msg;e.classList.add('visible')}}
+function clearErrs(){document.querySelectorAll('#amp-modal-body .error').forEach(x=>x.classList.remove('error'));document.querySelectorAll('#amp-modal-body .inline-form-error').forEach(x=>{x.classList.remove('visible');x.textContent=''})}
+function dupCheck(catKey,name,exceptId){
+  return catalog[catKey].some(x=>x.id!==exceptId&&x.name.toLowerCase()===name.toLowerCase());
+}
+
+/* ============ RESOURCE PICKER (searchable + paginated · single/multi · create-new inside) ============ */
+let picker={slot:null,mode:'single',items:[],sel:new Set(),baseline:[],q:'',page:0,rows:10};
+function equippedIds(slotKey){
+  const v=cfg()[slotKey];
+  return Array.isArray(v)?v.slice():(v?[v]:[]);
+}
+function pickerItems(slotKey){
+  const cat2=CATS[slotKey];
+  return catalog[cat2.catKey].map(it=>({id:it.id,label:it.name,sub:itemMeta(cat2.catKey,it)}));
+}
+function openPicker(slotKey){
+  if(!canWrite()){toast('Read-only: requires '+CATS[slotKey].perm+' to assign.','error');return;}
+  if(slotKey==='output'&&cur().kind==='conversational')return;
+  const def=SLOT_DEFS.find(d=>d.key===slotKey),cat2=CATS[slotKey];
+  picker={slot:slotKey,mode:def.multi?'multi':'single',items:pickerItems(slotKey),
+          sel:new Set(equippedIds(slotKey)),baseline:equippedIds(slotKey),q:'',page:0,rows:10};
+  $('amp-picker-search').value='';
+  $('amp-picker-rows').value='10';
+  $('amp-picker-title').textContent='Assign '+cat2.label+(def.multi?'s':'');
+  $('amp-picker-sub').innerHTML=(def.multi?'Attach one or more ':'Pick from existing ')+def.module.toLowerCase()+' resources · source: <span class="amp-reuse-chip">'+def.reuse+'</span>';
+  $('amp-picker-create-btn').style.display='';
+  renderPickerList();
+  $('amp-picker-overlay').classList.add('open');
+}
+function closePicker(){
+  $('amp-picker-overlay').classList.remove('open');
+  picker={slot:null,mode:'single',items:[],sel:new Set(),baseline:[],q:'',page:0,rows:10};
+}
+function pickerFiltered(){
+  const q=picker.q.trim().toLowerCase();
+  if(!q)return picker.items;
+  return picker.items.filter(it=>it.label.toLowerCase().includes(q)||(it.sub||'').toLowerCase().includes(q));
+}
+function renderPickerList(){
+  const filtered=pickerFiltered();
+  const pageCount=Math.max(1,Math.ceil(filtered.length/picker.rows));
+  if(picker.page>pageCount-1)picker.page=pageCount-1;
+  const start=picker.page*picker.rows;
+  const rows=filtered.slice(start,start+picker.rows);
+  const multi=picker.mode==='multi';
+  $('amp-picker-list').innerHTML=rows.length?rows.map(it=>{
+    const sel=picker.sel.has(it.id);
+    return '<div class="amp-pick-row'+(sel?' amp-selected':'')+'" onclick="AMP.pickerToggle(\''+it.id+'\')">'+
+      (multi?'<input type="checkbox" class="amp-pr-check" '+(sel?'checked':'')+' onclick="event.stopPropagation();AMP.pickerToggle(\''+it.id+'\')">':'<span class="amp-pr-radio"></span>')+
+      '<div class="amp-pr-main"><div class="amp-pr-label" title="'+esc(it.label)+'">'+esc(it.label)+'</div>'+
+      (it.sub?'<div class="amp-pr-sub" title="'+esc(it.sub)+'">'+esc(it.sub)+'</div>':'')+
+      '</div></div>';
+  }).join(''):'<div class="amp-picker-empty">No resources match your search.</div>';
+  $('amp-picker-pg-info').textContent=filtered.length===0?'0 of 0':(start+1)+'–'+Math.min(start+picker.rows,filtered.length)+' of '+filtered.length;
+  $('amp-pg-prev').disabled=picker.page<=0;
+  $('amp-pg-next').disabled=picker.page>=pageCount-1;
+  /* baseline change detection — Assign disabled until the selection differs from equipped */
+  const changed=picker.mode==='single'
+    ?(picker.sel.size>0?[...picker.sel][0]:null)!==(picker.baseline[0]||null)
+    :(picker.sel.size!==picker.baseline.length||[...picker.sel].some(id=>!picker.baseline.includes(id)));
+  $('amp-picker-assign-btn').disabled=!changed;
+  $('amp-picker-assign-btn').textContent=changed?('Assign ('+picker.sel.size+')'):'Assign';
+}
+function pickerToggle(id){
+  if(picker.mode==='single')picker.sel=new Set([id]);
+  else{const n=new Set(picker.sel);n.has(id)?n.delete(id):n.add(id);picker.sel=n;}
+  renderPickerList();
+}
+function pickerSearch(v){picker.q=v;picker.page=0;renderPickerList()}
+function pickerPage(dir){picker.page+=dir;renderPickerList()}
+function pickerRows(v){picker.rows=parseInt(v,10)||10;picker.page=0;renderPickerList()}
+function pickerAssign(){
+  const slotKey=picker.slot,ids=[...picker.sel];
+  const def=SLOT_DEFS.find(d=>d.key===slotKey);
+  closePicker();
+  if(def.multi)applyMulti(slotKey,ids);
+  else ids.length?applyAssign(slotKey,ids[0]):null;
+}
+/* "Create new" INSIDE the picker: opens the module dialog while the picker stays
+   mounted; the created resource is pre-selected in the refreshed list. */
+function pickerCreateNew(){
+  if(!picker.slot)return;
+  openCreate(picker.slot,true);
+}
+function refreshPickerWithPreset(id){
+  if(!$('amp-picker-overlay').classList.contains('open')||!picker.slot)return;
+  const cat2=CATS[picker.slot];
+  picker.items=pickerItems(picker.slot);
+  picker.sel=new Set([id]);                       /* created resource pre-selected */
+  const it=picker.items.find(x=>x.id===id);
+  picker.page=it?Math.floor(picker.items.indexOf(it)/picker.rows):0;
+  toast(cat2.label+' created — pre-selected below. Review and click Assign.','info');
+  renderPickerList();
+}
+
+/* ============ INLINE CREATE (reuses source module dialogs — identical behaviour) ============ */
+function openCreate(slotKey,fromPicker){
+  clearErrs();
+  switch(slotKey){
+    case 'role':     return createRoleDialog(fromPicker);
+    case 'identity': return createIdentityDialog(fromPicker);
+    case 'skill':
+    case 'skills':   return createSkillDialog(fromPicker);
+    case 'sop':
+    case 'sops':     return createSopDialog(fromPicker);
+    case 'input':    return createDatatypeDialog('input',fromPicker);
+    case 'output':   return createDatatypeDialog('output',fromPicker);
+    case 'model':    return createModelDialog(fromPicker);
+  }
+}
+function afterCreate(slotKey,fromPicker,createdId,msg){
+  if(fromPicker){closeModal();refreshPickerWithPreset(createdId);}
+  else{applyAssign(slotKey,createdId);closeModal();}
+  toast(msg,'success');
+}
+
+function createRoleDialog(fromPicker){
+  const grants='<div class="amp-grant-grid">'+
+    '<div class="amp-grant-col-title">Skills</div>'+
+    catalog.skills.map(s=>'<label class="amp-grant-item"><input type="checkbox" class="amp-g-skill" value="'+s.id+'">🔧 '+esc(s.name)+'</label>').join('')+
+    '<div class="amp-grant-col-title">SOPs</div>'+
+    catalog.sops.map(s=>'<label class="amp-grant-item"><input type="checkbox" class="amp-g-sop" value="'+s.id+'">📋 '+esc(s.name)+'</label>').join('')+
+    '</div>';
+  const body='<div class="form-group"><label>Role Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Auditor"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Description</label><textarea id="f-desc" class="form-control" style="min-height:60px" placeholder="What this role grants…"></textarea></div>'+
+    '<div class="form-group"><label>Grants access to (Skills &amp; SOPs)</label>'+grants+'</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Assign'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Role name is required.');ok=false;}
+    else if(dupCheck('roles',name)){setErr('f-name','A role with this name already exists.');ok=false;}
+    if(!ok)return;
+    const role={id:nextId('r'),name,desc:$('f-desc').value.trim(),
+      scope:[...document.querySelectorAll('.amp-g-skill:checked'),...document.querySelectorAll('.amp-g-sop:checked')].map(x=>x.value)};
+    catalog.roles.push(role);
+    afterCreate('role',fromPicker,role.id,'Role "'+name+'" created inline (reused Agent Roles dialog).');
+  });
+  openModal('👤 New Agent Role','Inline creation — identical to the <span class="amp-reuse-chip">agent::roles</span> module dialog',body,footer);
+}
+
+function createIdentityDialog(fromPicker){
+  const body='<div id="idp-form">'+
+    '<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>Display Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Scanner Bot"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Identity Provider *</label><select id="f-provider" class="form-control"><option>Keycloak</option><option>Azure EntraID</option></select></div>'+
+    '</div>'+
+    '<div class="form-group"><label>Preferred Username *</label><input id="f-user" class="form-control" placeholder="svc-security-scanner"><div class="inline-form-error" id="f-user-err"></div></div>'+
+    '<div class="form-hint">Provisioning signs in to the agent realm (<code>ai_agents</code>) via OIDC and stores the token encrypted. Tokens are resolved by Control Center at call time — agents never hold identity tokens.</div>'+
+    '</div>'+
+    '<div id="idp-progress" style="display:none;text-align:center;padding:8px 0"><span class="mini-spinner" style="width:22px;height:22px"></span>'+
+    '<ul class="amp-provision-steps" style="text-align:left;max-width:340px;margin:14px auto 0">'+
+    '<li class="amp-provision-step" id="ps1"><span class="amp-ps-icon">·</span>Redirecting to identity provider…</li>'+
+    '<li class="amp-provision-step" id="ps2"><span class="amp-ps-icon">·</span>OAuth sign-in &amp; consent</li>'+
+    '<li class="amp-provision-step" id="ps3"><span class="amp-ps-icon">·</span>Principal provisioned in agent realm</li>'+
+    '</ul></div>'+
+    '<div id="idp-success" style="display:none"><div class="amp-success-box" id="idp-success-box"></div></div>';
+  const footer=stdFooter('🔐 Sign in & Provision',()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), user=$('f-user').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Display name is required.');ok=false;}
+    if(!user){setErr('f-user','Preferred username is required.');ok=false;}
+    if(!ok)return;
+    $('idp-form').style.display='none';
+    const foot=$('amp-modal-footer'); foot.style.display='none';
+    const prog=$('idp-progress'); prog.style.display='block';
+    const step=(id,delay)=>new Promise(res=>setTimeout(()=>{const li=$(id);li.classList.add('amp-done');li.querySelector('.amp-ps-icon').textContent='✓';res()},delay));
+    step('ps1',500).then(()=>step('ps2',900)).then(()=>step('ps3',800)).then(()=>{
+      prog.style.display='none';
+      const provider=$('f-provider').value, realm=provider==='Keycloak'?'ai_agents':'agents';
+      const account=(user.includes('@')?user:user+'@'+(provider==='Keycloak'?'agents.parthenon.local':'contoso.com'));
+      $('idp-success-box').innerHTML='✓ Identity provisioned.<br><b>'+esc(account)+'</b><br>realm <b>'+realm+'</b> · provider '+esc(provider)+' · token stored encrypted';
+      $('idp-success').style.display='block';
+      foot.style.display='flex';
+      AMP.modalSave=()=>{
+        const identity={id:nextId('i'),name,account,provider,realm};
+        catalog.identities.push(identity);
+        afterCreate('identity',fromPicker,identity.id,'Identity "'+account+'" provisioned inline (reused Agent Identities sign-in flow).');
+      };
+      foot.innerHTML='<button class="btn btn-secondary" onclick="AMP.closeModal()">Cancel</button><button class="btn btn-primary" onclick="AMP.runSave()">'+(fromPicker?'Done — back to picker':'Assign to agent')+'</button>';
+    });
+  });
+  openModal('🆔 New Agent Identity','Inline sign-in / provisioning — identical to the <span class="amp-reuse-chip">agent::identities</span> OIDC flow',body,footer);
+}
+
+function createSkillDialog(fromPicker){
+  const body='<div class="form-group"><label>Skill Name *</label><input id="f-name" class="form-control" placeholder="e.g. secret-scan-diff"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>MCP Server *</label><select id="f-mcp" class="form-control"><option>mcp-github</option><option>mcp-kubernetes</option><option>mcp-filesystem</option><option>mcp-wiki</option><option>mcp-vision</option></select></div>'+
+    '<div class="form-group"><label>MCP Tool *</label><input id="f-tool" class="form-control" placeholder="e.g. scan_secrets"><div class="inline-form-error" id="f-tool-err"></div></div>'+
+    '</div>'+
+    '<div class="form-group"><label>Description</label><input id="f-desc" class="form-control" placeholder="What this skill does…"></div>'+
+    '<div class="form-hint">Skills wrap one or more MCP tool calls and are the permission-grantable unit for agents.</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Attach'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), tool=$('f-tool').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Skill name is required.');ok=false;}
+    else if(dupCheck('skills',name)){setErr('f-name','A skill with this name already exists.');ok=false;}
+    if(!tool){setErr('f-tool','MCP tool is required.');ok=false;}
+    if(!ok)return;
+    const skill={id:nextId('s'),name,mcp:$('f-mcp').value,tool,desc:$('f-desc').value.trim()};
+    catalog.skills.push(skill);
+    if(fromPicker){closeModal();refreshPickerWithPreset(skill.id);}
+    else{applyMulti('skills',[...cfg().skills,skill.id]);closeModal();}
+    toast('Skill "'+name+'" created inline (reused Skill dialog).','success');
+  });
+  openModal('🔧 New Skill','Inline creation — identical to the <span class="amp-reuse-chip">agent::skills</span> module dialog',body,footer);
+}
+
+function createSopDialog(fromPicker){
+  const body='<div class="form-group"><label>SOP Name *</label><input id="f-name" class="form-control" placeholder="e.g. dependency-audit-flow"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Description</label><input id="f-desc" class="form-control" placeholder="What this SOP accomplishes…"></div>'+
+    '<div class="form-group"><label>Composed Skills (run in selected order) *</label>'+
+    '<div class="amp-pick-list" style="max-height:170px">'+
+    catalog.skills.map(s=>'<label class="amp-pick-item"><input type="checkbox" class="amp-sop-step" value="'+s.id+'"><span class="amp-pi-icon">🔧</span><span class="amp-pi-main"><b>'+esc(s.name)+'</b><small>'+esc(itemMeta('skills',s))+'</small></span></label>').join('')+
+    '</div><div class="inline-form-error" id="f-steps-err"></div>'+
+    '<div class="form-hint">SOPs are higher-level Skills with sequencing logic; they may delegate to other agents.</div></div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Attach'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim();
+    const steps=Array.from(document.querySelectorAll('.amp-sop-step:checked')).map(x=>x.value);
+    let ok=true;
+    if(!name){setErr('f-name','SOP name is required.');ok=false;}
+    else if(dupCheck('sops',name)){setErr('f-name','An SOP with this name already exists.');ok=false;}
+    if(!steps.length){const e=$('f-steps-err');e.textContent='Select at least one skill step.';e.classList.add('visible');ok=false;}
+    if(!ok)return;
+    const sop={id:nextId('o'),name,steps,desc:$('f-desc').value.trim()};
+    catalog.sops.push(sop);
+    if(fromPicker){closeModal();refreshPickerWithPreset(sop.id);}
+    else{applyMulti('sops',[...cfg().sops,sop.id]);closeModal();}
+    toast('SOP "'+name+'" created inline (reused SOP dialog).','success');
+  });
+  openModal('📋 New SOP','Inline creation — identical to the <span class="amp-reuse-chip">agent::sops</span> module dialog',body,footer);
+}
+
+let fieldRowSeq=0;
+function addDtField(){
+  const wrap=$('f-fields'); if(!wrap)return;
+  const i=++fieldRowSeq;
+  const row=document.createElement('div'); row.className='amp-field-row'; row.id='amp-frow-'+i;
+  row.innerHTML='<input class="form-control fr-name" placeholder="field_name">'+
+    '<select class="form-control fr-type"><option>string</option><option>number</option><option>boolean</option><option>date</option><option>enum</option></select>'+
+    '<label class="amp-fr-req"><input type="checkbox" class="amp-fr-req-cb">req</label>'+
+    '<button class="amp-fr-del" onclick="this.parentNode.remove()">✕</button>';
+  wrap.appendChild(row);
+}
+/* helpers exposed to inline attributes inside dialog bodies */
+function syncDtSlug(input){const slug=$('f-slug');if(slug)slug.value=slugify(input.value)}
+function toggleDtFields(select){const wrap=$('f-fields-wrap');if(wrap)wrap.style.display=select.value==='json'?'block':'none'}
+function createDatatypeDialog(slotKey,fromPicker){
+  const cat2=CATS[slotKey];
+  const body='<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>Type Name *</label><input id="f-name" class="form-control" placeholder="e.g. Security Finding" oninput="AMP.syncDtSlug(this)"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Slug *</label><input id="f-slug" class="form-control" placeholder="security-finding"><div class="inline-form-error" id="f-slug-err"></div></div>'+
+    '</div>'+
+    '<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>Base Kind</label><select id="f-kind" class="form-control" onchange="AMP.toggleDtFields(this)"><option value="json">json — typed fields</option><option value="text">text</option><option value="binary">binary</option></select></div>'+
+    '<div class="form-group"><label>Description</label><input id="f-desc" class="form-control"></div>'+
+    '</div>'+
+    '<div class="form-group" id="f-fields-wrap"><label>Typed Fields</label><div id="f-fields">'+
+    '<div class="amp-field-row"><input class="form-control fr-name" placeholder="field_name">'+
+    '<select class="form-control fr-type"><option>string</option><option>number</option><option>boolean</option><option>date</option><option>enum</option></select>'+
+    '<label class="amp-fr-req"><input type="checkbox" class="amp-fr-req-cb" checked>req</label>'+
+    '<button class="amp-fr-del" onclick="this.parentNode.remove()">✕</button></div></div>'+
+    '<button class="amp-add-field-btn" onclick="AMP.addDtField()">＋ Add field</button></div>'+
+    '<div class="form-hint">⚠️ Data types cannot be deleted while referenced by agent types, and conversational agents do not support typed outputs.</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Assign'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), slug=$('f-slug').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Type name is required.');ok=false;}
+    else if(dupCheck('datatypes',name)){setErr('f-name','A data type with this name already exists.');ok=false;}
+    if(!slug){setErr('f-slug','Slug is required.');ok=false;}
+    if(!ok)return;
+    const kind=$('f-kind').value;
+    const fields=kind==='json'?Array.from(document.querySelectorAll('#f-fields .amp-field-row')).map(r=>({
+      n:r.querySelector('.fr-name').value.trim(), t:r.querySelector('.fr-type').value, r:r.querySelector('.amp-fr-req-cb').checked
+    })).filter(f=>f.n):[];
+    const dt={id:nextId('d'),name,slug,kind,fields,desc:$('f-desc').value.trim()};
+    catalog.datatypes.push(dt);
+    afterCreate(slotKey,fromPicker,dt.id,'Data type "'+name+'" created inline (reused Agent Data Types dialog).');
+  });
+  openModal(cat2.icon+' New Agent Data Type',(slotKey==='output'?'Output':'Input')+' type — inline creation, identical to the <span class="amp-reuse-chip">agent::data_types</span> module dialog',body,footer);
+}
+function slugify(s){return s.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}
+
+function createModelDialog(fromPicker){
+  const body='<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>Config Name *</label><input id="f-name" class="form-control" placeholder="e.g. Azure GPT-4o mini"><div class="inline-form-error" id="f-name-err"></div></div>'+
+    '<div class="form-group"><label>Provider *</label><select id="f-provider" class="form-control"><option>openai</option><option>azure_openai</option><option>anthropic</option><option>gemini</option><option>groq</option><option>cohere</option><option>litellm_proxy</option><option>deepseek</option></select></div>'+
+    '</div>'+
+    '<div class="form-group"><label>API Key *</label><input id="f-key" type="password" class="form-control" placeholder="•••••••••••• (stored AES-256 encrypted)"><div class="inline-form-error" id="f-key-err"></div></div>'+
+    '<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>Base URL</label><input id="f-url" class="form-control" placeholder="https://…"></div>'+
+    '<div class="form-group"><label>Enabled Models *</label><input id="f-models" class="form-control" placeholder="gpt-4o-mini, gpt-4o"><div class="inline-form-error" id="f-models-err"></div></div>'+
+    '</div>'+
+    '<button class="btn btn-secondary btn-sm" onclick="AMP.toast(\'Connection test OK — provider reachable (mock).\',\'success\')">🔌 Test Connection</button>'+
+    '<div class="form-hint" style="margin-top:8px">Credentials are encrypted (AES-256) and decrypted only at call time. Agent types reference model IDs resolved to configs at runtime.</div>';
+  const footer=stdFooter('Create'+(fromPicker?' — back to picker':' & Select'),()=>{
+    clearErrs();
+    const name=$('f-name').value.trim(), key=$('f-key').value, models=$('f-models').value.trim();
+    let ok=true;
+    if(!name){setErr('f-name','Config name is required.');ok=false;}
+    else if(dupCheck('models',name)){setErr('f-name','A model config with this name already exists.');ok=false;}
+    if(!key){setErr('f-key','API key is required.');ok=false;}
+    if(!models){setErr('f-models','List at least one enabled model.');ok=false;}
+    if(!ok)return;
+    const model={id:nextId('m'),name,provider:$('f-provider').value,endpoint:$('f-url').value.trim()||'https://api.'+$('f-provider').value+'.example'};
+    catalog.models.push(model);
+    afterCreate('model',fromPicker,model.id,'Model config "'+name+'" created inline (reused Model Configurations dialog).');
+  });
+  openModal('🧠 New Model Configuration','Inline creation — identical to the <span class="amp-reuse-chip">agent::model_configs</span> module dialog',body,footer);
+}
+
+/* ============ AGENT CRUD (Create dialog · Delete confirm — NO edit dialog) ============ */
+function agentFormBody(){
+  return '<div class="form-group"><label>Agent Name (slug) *</label><input id="f-ag-name" class="form-control" placeholder="e.g. compliance-reporter" oninput="AMP.validateAgentFormLive()"><div class="inline-form-error" id="f-ag-name-err"></div><div class="form-hint">Lowercase letters, numbers and hyphens.</div></div>'+
+    '<div class="amp-form-row-2">'+
+    '<div class="form-group"><label>Agent Kind *</label><select id="f-ag-kind" class="form-control"><option value="typed">Typed output (structured)</option><option value="conversational">Conversational</option></select></div>'+
+    '<div class="form-group"><label>Description</label><input id="f-ag-desc" class="form-control" placeholder="What this agent does…"></div>'+
+    '</div>'+
+    '<div class="form-group"><label>System Instruction *</label><textarea id="f-ag-si" class="form-control" placeholder="Core behaviour of the agent…"></textarea><div class="inline-form-error" id="f-ag-si-err"></div></div>'+
+    '<div class="form-hint">Equipment (role, identity, skills, SOPs, data types, model) is configured via the equipment slots after creation. Guardrails default to the platform baseline and are editable in the Properties section.</div>';
+}
+function validateAgentFormLive(){
+  const name=$('f-ag-name').value.trim();
+  const bad=!name||!slugValid(name);
+  const dup=!bad&&agents.some(x=>x.name.toLowerCase()===name.toLowerCase());
+  $('f-ag-name').classList.toggle('error',bad||dup);
+  const e=$('f-ag-name-err');
+  if(bad){e.textContent='Name must be a non-empty slug (lowercase letters, numbers, hyphens).';e.classList.add('visible');}
+  else if(dup){e.textContent='An agent with this name already exists.';e.classList.add('visible');}
+  else e.classList.remove('visible');
+}
+function openCreateAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to create agents.','error');return;}
+  const footer=stdFooter('Create Agent',()=>{
+    clearErrs();
+    const name=$('f-ag-name').value.trim(), si=$('f-ag-si').value.trim();
+    let ok=true;
+    if(!name||!slugValid(name)){setErr('f-ag-name','Name must be a non-empty slug (lowercase letters, numbers, hyphens).');ok=false;}
+    else if(agents.some(a=>a.name.toLowerCase()===name.toLowerCase())){setErr('f-ag-name','An agent with this name already exists. Duplicate names are rejected.');ok=false;}
+    if(!si){setErr('f-ag-si','System instruction is required.');ok=false;}
+    if(!ok)return;
+    const kind=$('f-ag-kind').value;
+    const agent=mkAgent(nextId('ag'),name,kind,$('f-ag-desc').value.trim(),si,
+      {role:null,identity:null,skills:[],sops:[],input:null,output:null,model:null});
+    agents.push(agent); SAVED[agent.id]=deep(agent);
+    selectedId=agent.id; closeModal(); renderAll();
+    toast('Agent "'+name+'" created — now equip it via the equipment slots.','success');
+  });
+  openModal('🤖 Create Agent','New agent type with the required fields — equipment is added afterwards via the slots','',footer);
+  $('amp-modal-body').innerHTML=agentFormBody();
+}
+function confirmDeleteAgent(){
+  if(!canWrite()){toast('Read-only: you need write permission on agent::types to delete agents.','error');return;}
+  const a=cur();
+  const body='<p style="font-size:13.5px;line-height:1.6">Delete agent type <b>"'+esc(a.name)+'"</b>?'+
+    '<br><span style="font-size:12px;color:var(--text-secondary)">Related resources (roles, skills, SOPs, data types, models) remain available for reuse. A new agent can be created with the same name afterwards.</span></p>';
+  const footer='<button class="btn btn-secondary" onclick="AMP.closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="AMP.doDeleteAgent(\''+a.id+'\')">🗑 Delete Agent</button>';
+  openModal('Delete Agent','',body,footer);
+}
+function doDeleteAgent(id){
+  const a=agents.find(x=>x.id===id), name=a.name;
+  agents=agents.filter(x=>x.id!==id);
+  delete SAVED[id];
+  if(selectedId===id)selectedId=agents[0]?agents[0].id:null;
+  closeModal();
+  if(!agents.length){
+    $('amp-agent-list').innerHTML='<div class="amp-slot-empty" style="padding:12px">No agents. Create one to get started.</div>';
+    $('amp-agent-header').innerHTML='<div class="amp-ah-main"><span class="amp-ah-name">No agents</span></div>';
+    $('amp-topo-svg').innerHTML='';$('amp-legend').innerHTML='';
+    $('amp-slots').innerHTML='<div class="amp-slot-empty" style="padding:12px">Create an agent first.</div>';
+    renderTray();
+    toast('Agent "'+name+'" deleted.','info'); return;
+  }
+  renderAll();
+  toast('Agent "'+name+'" deleted. You can recreate it with the same name.','info');
+}
+
+/* ============ PERMISSIONS (graceful degradation demo) ============ */
+function setPerm(p){
+  perm=p;
+  $('amp-perm-admin').classList.toggle('active',p==='admin');
+  $('amp-perm-viewer').classList.toggle('active',p==='viewer');
+  renderAll();
+  toast(p==='admin'?'Signed in as Administrator — full write access.':'Signed in as Process Owner — read-only view for review & audit.','info');
+}
+
+/* ============ RENDER ALL ============ */
+function renderAll(){
+  renderSidebar(); renderHeader(); renderProperties(); renderTopology(); renderSlots(); renderTray();
+}
+renderAll();
+/* expose the inline-handler surface (namespaced — never collides with the master prototype) */
+window.AMP={onSearch,openCreateAgent,selectAgentReq,confirmSwitch,closeModal,confirmDeleteAgent,doDeleteAgent,enterFs,exitFs,zoomIn,zoomOut,zoomFit,onPropName,onPropText,onGrNum,onGrSel,onGrBudget,discardChanges,saveChanges,openPicker,closePicker,pickerSearch,pickerRows,pickerPage,pickerToggle,pickerAssign,pickerCreateNew,openCreate,setPerm,addDtField,syncDtSlug,toggleDtFields,unassignSingle,unassignMulti,slugify,toast,validateAgentFormLive,runSave};
 })();
 </script>
 

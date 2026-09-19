@@ -12,6 +12,7 @@ Welcome to the master product documentation for the Parthenon Enterprise AI Harn
 - **Skill Management** — Skill definition, MCP tool wrapping, and permission assignment
 - **SOP Management** — SOP composition, step sequencing, agent-to-agent delegation, AI-assisted workflow authoring, and bounded delegation guardrails (cyclic-delegation prevention, depth limits, Default SOP fallback)
 - **Agent Management** — Agent types, identity, instance lifecycle, and max-instance enforcement
+- **Agent Management Panel** — Unified panel to create, inspect, and edit agents end-to-end: header create/delete, all editing in the right-hand property bar, inline create-and-assign of roles, identities, skills, SOPs, data types, and model configurations via reusable dialogs, searchable/paginated resource picker, draft-until-save editing with a pending-changes tray and discard, and a live agent topology featuring the Communication Hub with fullscreen and zoom
 - **Agent Types** — Per-Agent-Type execution guardrail profiles and bounded policy controls
 - **Agent Identity** — OIDC agent-realm sign-in, encrypted token storage and automatic refresh, and identity-to-role assignment
 - **Agent Execution** — Asynchronous agent session lifecycle from submission through completion, powered by the deep agent framework

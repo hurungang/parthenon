@@ -136,10 +136,6 @@
 - Real Backend Integration - Service Segregation Deny Paths > internal system-tools endpoint is wired and rejects missing service certificate
 - Real Backend Integration - Service Segregation Deny Paths > revocation contract endpoint uses revoked/{serial_number} path
 - Browser Boundary - Frontend Uses API/WS Boundaries Only > dashboard traffic does not attempt direct database connections
-- Runtime Control Dashboard > shows running sessions and opens execution details dialog
-- Runtime Control Dashboard > surfaces observe-only threshold policy events in execution logs
-- Runtime Control Dashboard > shows topology selection and opens termination dialog for selected node
-- Runtime Control Dashboard > returns recursion_validation_failed contract for run preflight dead-loop checks
 - test_hello_agent_tool_with_role_returns_greeting
 - test_hello_agent_tool_without_role_returns_access_denied
 - test_hello_user_tool_with_role_returns_greeting
@@ -185,6 +181,12 @@
 - Agent Runtime Monitor > renders the Communication Hub and tool-call routes to MCP servers
 - Agent Runtime Monitor > renders the System Tools node and skips unknown-slug and a2a tool calls
 - Agent Runtime Monitor > shows schedule creator attribution and no person line for a null-creator schedule
+- Agent Management Panel — CRUD lifecycle > creates an agent from the panel and shows it in sidebar + header immediately (no reload)
+- Agent Management Panel — equipment slots (inline create-and-assign) > role slot: create-new mounts the real Agent Role dialog and assigns the created role
+- Agent Management Panel — live topology > topology updates immediately on draft mutations with zero network requests
+- Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology
+- Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation
+- Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT
 
 ## Scenario Index table
 | # | Feature | What it Shows | Change | Spec File |
@@ -307,10 +309,6 @@
 | 107 | Delegation Timeout/Failure Terminal State | Conversational delegated execution resolves waiting to a clear timeout/failure terminal state in the same chat surface | agent-delegation-visibility | conversation-delegation-visibility.spec.ts |
 | 108 | Live Non-Conversation Progress Stream | Running non-conversation session appends execution progress from live stream endpoint without manual refresh | agent-delegation-visibility | agent-live-logs-stream.spec.ts |
 | 109 | Working Steps Collapsed-by-Default Readability | Agent log viewer starts with Working Steps collapsed so users can expand details on demand | agent-delegation-visibility | agent-logs.spec.ts |
-| 110 | Runtime visibility and execution drill-down | Operator opens Agent Executions, sees active sessions, and drills into a run from the dashboard detail flow | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
-| 111 | Guardrail policy visibility | Operator reviews execution logs and sees an observe-only guardrail threshold event surfaced as a policy signal rather than a functional failure | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
-| 112 | Runtime topology and termination control | Operator selects a running node from topology, opens the terminate dialog, submits a reason, and triggers a governed termination request | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
-| 113 | Recursion and dead-loop prevention | Operator attempts to start a risky run and sees the request blocked before execution with a recursion validation failure contract | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
 | 114 | Model guardrail hierarchy (vendor → model → guardrail) | Operator opens the runtime control panel and sees a vendor row with its enabled models and per-period guardrails, replacing the previous flat list | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
 | 115 | Vendor disable cascade | Operator disables a vendor and immediately sees the cascade-source badge on every model underneath; pre-execution availability check returns `vendor_disabled` for those models | harden-agent-guardrails-and-runtime-control-dashboard | runtime-control-dashboard.spec.ts |
 | 116 | Model Configurations — Expanded 12-Provider Catalogue | Admin opens the Model Configurations page to see provider chips for all 12 supported LLM vendors (including Gemini, Mistral, Cohere, Groq, Together, Fireworks, Perplexity, DeepSeek) each with a unique colour | expand-model-config-providers | agent-runtime.spec.ts |
@@ -398,4 +396,10 @@
 | 197 | Communication Hub & MCP routes | The Communication Hub renders as a full-height vertical bar and tool-call routes run orthogonally to MCP server nodes (per tool slug) with tool chips; selecting an agent highlights its route and involved MCP/tools. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
 | 198 | System Tools & excluded calls | System-slug tool calls collapse into the single synthetic "System Tools" node with its tool chip; unknown-slug calls (NULL route_type degrade rows) render no MCP node or chip, and a2a rows (delegations) are excluded outright. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
 | 199 | Creator attribution & trigger cards | Schedule entities render in the trigger column wired to their executions. The schedule card with a known creator shows the creator caption ("by Alice Operator"); a legacy null-creator schedule shows no creator caption, and its execution degrades the "Triggered by" line to "Unknown" — the schedule name never appears as a person. | agent-runtime-monitor | agent-runtime-monitor.spec.ts |
+| 200 | Agent CRUD lifecycle | Admin fills the Create Agent dialog (name, role, SOP binding); the saved agent appears in the sidebar and header immediately with the agent count updated and no page reload | agent-management-panel | agent-management-panel.spec.ts |
+| 201 | Inline create-and-assign (role slot) | "Create new" in the role slot mounts the real Agent Role dialog (same title/fields as the source module); the persisted role lands on the draft instantly without leaving the panel | agent-management-panel | agent-management-panel-slots.spec.ts |
+| 202 | Live topology without saving | Unassigning and re-assigning the role re-renders the topology canvas instantly, proving zero network requests are fired until save | agent-management-panel | agent-management-panel-topology.spec.ts |
+| 203 | Communication Hub in preview topologies | The Agent Types details dialog (Agent Preview tab) appends the Communication Hub node with its dashed "platform messaging" edge to a typed agent's persisted plan topology, exactly once | agent-management-panel | agent-management-panel-topology.spec.ts |
+| 204 | Permission degradation (403 slot disable) | A 403 on the roles list disables only the role slot with a localized explanation while every other slot keeps working and no error alert appears | agent-management-panel | agent-management-panel-permissions.spec.ts |
+| 205 | Unsaved-changes tray / single-PUT save | Assigning a model dirties the draft with zero write calls and the tray lists the pending change; Save Changes issues exactly one agent-type PUT and flips the tray to saved | agent-management-panel | agent-management-panel.spec.ts |
 

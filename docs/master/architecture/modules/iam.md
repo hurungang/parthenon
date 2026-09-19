@@ -105,3 +105,7 @@ The batch policy endpoint serves both editor views through a single atomic trans
 Policy editors support both structured form-based input and raw JSON editing, with free-text wildcard pattern entry for custom resource type specifications. The frontend mirrors the backend `ResourceTypeManifest` to validate resource types at input time.
 
 This pattern supports entering partial wildcards (`agent::mana*`), module wildcards (`agent::*`), global wildcards (`*`), and exact namespace matches — either by selecting from the grouped dropdown or by typing directly. The Autocomplete component renders manifest options grouped by module (Agents, Integrations, System) while accepting free-text input that passes through to the API unchanged.
+
+## Agent Management Panel Permission Gating
+
+The [Agent Management Panel](agent-management-panel.md) reuses existing `agent::*` resource types only — **no new manifest entries** and no permission-resolution changes: `agent::roles`, `agent::identities`, `agent::skills`, `agent::sops`, `agent::data_types`, `agent::model_configs` (agent CRUD actions have no explicit binding and degrade through the standard API error surfaces). A denied (403) slot list query disables that slot's actions with an explanatory localized note instead of an error; structured 403 detail renders through the standard permission alert components in-dialog and the global permission snackbar. The backend Permission Engine remains the single enforcement point.

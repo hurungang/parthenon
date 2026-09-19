@@ -204,7 +204,7 @@ The module is owned entirely by **Control Center** — all database tables, serv
 | Symbol | Type | Description | File |
 |--------|------|-------------|------|
 | `DataTypesPage` | page | Admin data types list with CRUD, pagination, usage display, delete guard | `frontend/src/pages/data-types/DataTypesPage.tsx` |
-| `DataTypeFormDialog` | component | Create/edit dialog with dynamic field editor (5 field types); Dialog Error Handling Standard | `frontend/src/pages/data-types/DataTypeFormDialog.tsx` |
+| `DataTypeFormDialog` | component | Create/edit dialog with dynamic field editor (5 field types); Dialog Error Handling Standard | `frontend/src/components/agents/DataTypeFormDialog.tsx` (shared; relocated from the page folder) |
 | `AgentOutputsPage` | page | Admin outputs page with filter bar, dynamic schema-based columns, CSV export, detail drawer | `frontend/src/pages/agent-outputs/AgentOutputsPage.tsx` |
 | `AgentOutputDetailDrawer` | component | Output detail drawer with TypedOutputRenderer, validation error banner, raw fallback | `frontend/src/pages/agent-outputs/AgentOutputDetailDrawer.tsx` |
 | `TypedOutputRenderer` | component | Schema-based field-by-field typed output renderer | `frontend/src/components/executions/TypedOutputRenderer.tsx` |

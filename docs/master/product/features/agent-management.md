@@ -34,7 +34,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Keeps guardrail editing compact by default so governance updates remain efficient in high-volume administration workflows
 - Clicking an agent type row opens a comprehensive dialog with:
 	- Agent type details (basic info)
-	- Plan preview tab (shows saved agent plan)
+	- Plan preview tab (shows saved agent plan; the topology includes the Communication Hub as a connected node)
 	- Execution logs tab (filtered by agent type)
 	- Sessions tab (visible only for conversation-type agents) — lists all conversation sessions with title, status, and last active time
 	- Role and Identity names as clickable links, opening the corresponding view dialogs
@@ -49,13 +49,37 @@ Agent Management enables organizations to define, configure, and govern AI agent
 	- All sessions are user-scoped (users only see their own sessions)
 	- Conversation sessions surface inline intervention dialogs when delegated sub-agents request human input, with the pause-on-intervention state visible in the session list
 
+## Agent Management Panel
 
+The Agent Management Panel is a unified management module in the **Agents group** where an administrator creates, inspects, and edits agent types end-to-end — equipping each agent with its role, identity, skills, SOPs, input/output data types, and model — without navigating to the other modules. It follows a "character screen" interaction model: the administrator visually equips the agent, sees the result immediately, and saves when satisfied. Full setup works with only existing resources, only newly created resources, or any mix of both.
+
+### What the panel provides
+- **Single panel for the full agent lifecycle**: create, inspect, and edit an agent from one place
+- **Header actions**: create a new agent and delete an agent (with confirmation); the agent list refreshes automatically after both
+- **Right-hand property bar as the single editing surface**: ALL editing of an existing agent happens here — a Properties section (name, description, system instruction, execution guardrails) plus equipment slots for role, identity, skills, SOPs, input type, output data type, and model
+- **Inline create-and-assign**: missing roles, identities (sign-in/provisioning), skills, SOPs, data types, and model configurations can be created directly from the panel using the exact same dialogs as their source modules — no duplicated forms, and no change to the standalone module pages
+- **Searchable, paginated resource picker**: "Assign existing" opens a searchable, paginated selection dialog (single or multi-select per slot) with currently equipped resources pre-selected and an inline "Create new" action
+- **Draft-until-save model**: every edit is held as a draft and summarized in a pending-changes tray with Save and Discard actions; a confirmation protects unsaved changes when switching agents or navigating away
+- **Live agent topology**: a visual composition graph (equipped roles, identity, skills, SOPs, data types, model, tools) updates instantly as equipment changes — before saving — and re-renders when switching agents; the Communication Hub is shown as a connected platform element (a hub bar between capabilities and tools, with connectors crossing it)
+- **Fullscreen and zoom**: the topology can be expanded fullscreen with zoom in/out/fit and pan; the view auto-fits when entering or leaving fullscreen
+- **Permission-aware equipment slots**: actions a user lacks permission for are disabled with a clear explanation; read-only users can browse and review compositions
+
+### Acceptance criteria (panel)
+- Administrator can create a new agent with the required fields; it appears in the panel's agent list immediately with all values displayed
+- Administrator can view all accessible agents with their equipment shown accurately; search and filter work correctly
+- Administrator can edit any base property or equipment in the property bar; changes accumulate as a draft and become visible in the topology immediately — without saving
+- After saving, changes are persisted and the agent list and topology reflect the saved state without a manual page reload
+- Administrator can delete an agent with confirmation; it disappears from the list immediately, related counts update, and a new agent can be created with the same name afterwards
+- Inline-created resources become immediately assignable in their slot without leaving the panel and behave identically (same fields, validation, error handling) to the source-module dialogs
+- Validation errors are surfaced clearly (required fields, invalid names, binding conflicts); permission errors are shown gracefully inside dialogs and slots rather than failing silently
+- The Communication Hub appears as a connected node in both the panel topology and the existing agent preview topology (Plan preview tab)
 
 ## Key Concepts
 - **Agents Group**: A sidebar navigation group containing all agent-related modules for streamlined access
 - **Agent Role**: A permission grouping for SOPs, Skills, and tools, assigned to agent identities
 - **Identity-Role Assignment**: Explicit, many-to-many mapping between agent identities and roles, managed bidirectionally in the UI
 - **Agent Type**: A defined class of agent with specific identity, role, and model configuration
+- **Agent Management Panel**: A unified panel for creating, inspecting, and equipping agents end-to-end, with inline resource creation and a live topology preview that updates before saving
 - **Conversation Agent Session**: A persistent, user-named conversation with a conversation-type agent; includes automatic title generation, session management (start/resume/end/archive), and full turn history
 - **Session Type**: Either traditional (named session) or passthrough (direct agent identity propagation to MCP server)
 - **Model Configuration**: Central management of model providers and enabled models for agent use; the supported provider catalogue and lifecycle are defined in the [Model Configurations](./model-configurations.md) feature spec
@@ -80,7 +104,7 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Supports both traditional and passthrough session types for MCP servers; passthrough enables direct agent identity propagation without explicit session selection
 - Clicking an agent type row opens a dialog with:
 	- Agent type details (basic info)
-	- Tab: Plan preview (shows saved agent plan)
+	- Tab: Plan preview (shows saved agent plan; the topology includes the Communication Hub as a connected node)
 	- Tab: Execution logs (list of executions for this agent type)
 	- Tab: Sessions (visible only for conversation-type agents) — lists all user's conversation sessions with:
 		- Session title (auto-generated from first user prompt)
@@ -121,12 +145,14 @@ Agent Management enables organizations to define, configure, and govern AI agent
 - Changes to authentication or RBAC logic
 - Non-agent-related navigation changes
 - No new functionality or changes to Agent Roles or Agent Identities pages themselves (other than menu placement and view dialog edit button)
+- The Agent Management Panel does not replace or alter the standalone Agent Roles, Agent Identities, Skills, SOPs, Agent Data Types, or Model Configurations pages; inline creation reuses those modules' existing dialogs and adds no new standalone resource management
 
 ## Dependencies & Constraints
 - Relies on existing agent type, execution, identity, and role data being available
 - Must maintain compatibility with OIDC/OAuth2 and RBAC roles
 - UI changes must not break existing agent workflows
 - Requires OIDC-compliant identity provider (Keycloak, Azure EntraID)
+- Inline identity provisioning from the Agent Management Panel requires a reachable, configured identity provider and degrades gracefully when it is unavailable
 - Agent identities must be managed in a separate, configurable realm within the identity provider
 - Relies on existing MCP tool and Skill registration mechanisms
 - Asynchronous session system must be available for agent execution and result tracking
