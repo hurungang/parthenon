@@ -60,6 +60,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Register an external OIDC provider instead of bundled Keycloak.",
     )
     id_cmd.add_argument(
+        "--tenant-demo",
+        action="store_true",
+        help=(
+            "OPT-IN: seed a demo TENANT realm (own issuer, public frontend "
+            "client, test users) for isolated per-tenant OIDC testing. "
+            "Runs INSTEAD of the default bundled-Keycloak bootstrap."
+        ),
+    )
+    id_cmd.add_argument(
+        "--tenant-demo-realm",
+        default=None,
+        help="Demo tenant realm name (default: parthenon-acme).",
+    )
+    id_cmd.add_argument(
         "--keycloak-url",
         default=None,
         help="Keycloak base URL (default: http://localhost:8082).",

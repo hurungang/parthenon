@@ -193,9 +193,15 @@ class AgentRole(Base):
     """A named permission set granting access to specific SOPs and/or Skills."""
 
     __tablename__ = "agent_roles"
+    __table_args__ = (
+        Index("ix_agent_roles_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -373,9 +379,15 @@ class AgentIdentity(Base):
     """A first-class OIDC principal representing an agent's credentials in the identity provider."""
 
     __tablename__ = "agent_identities"
+    __table_args__ = (
+        Index("ix_agent_identities_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     identity_type: Mapped[AgentIdentityType] = mapped_column(
@@ -435,9 +447,15 @@ class ModelConfig(Base):
     """LLM provider configuration: credentials and endpoint for a specific provider."""
 
     __tablename__ = "model_configs"
+    __table_args__ = (
+        Index("ix_model_configs_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     display_name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     provider_type: Mapped[ModelProvider] = mapped_column(
@@ -479,9 +497,15 @@ class AgentType(Base):
     """Definition of an agent: role, identity, model binding, and input/output configuration."""
 
     __tablename__ = "agent_types"
+    __table_args__ = (
+        Index("ix_agent_types_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -716,9 +740,15 @@ class AgentInstance(Base):
     """Legacy runtime instance of an AgentType. Superseded by AgentJob in Phase 5."""
 
     __tablename__ = "agent_instances"
+    __table_args__ = (
+        Index("ix_agent_instances_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_types.id", ondelete="CASCADE"), nullable=False
@@ -753,9 +783,15 @@ class AgentJob(Base):
     """Tracks a single agent execution session from submission through completion."""
 
     __tablename__ = "agent_jobs"
+    __table_args__ = (
+        Index("ix_agent_jobs_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     agent_type_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_types.id", ondelete="CASCADE"), nullable=False
@@ -934,6 +970,9 @@ class AgentA2ASession(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
+    )
     requester_instance_id: Mapped[str] = mapped_column(String(200), nullable=False)
     receiver_instance_id: Mapped[str] = mapped_column(String(200), nullable=False)
     receiver_is_dynamic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -953,6 +992,7 @@ class AgentA2ASession(Base):
     __table_args__ = (
         Index("ix_agent_a2a_sessions_requester", "requester_instance_id"),
         Index("ix_agent_a2a_sessions_receiver", "receiver_instance_id"),
+        Index("ix_agent_a2a_sessions_tenant_id", "tenant_id"),
     )
 
     def __repr__(self) -> str:

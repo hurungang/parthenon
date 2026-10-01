@@ -21,6 +21,9 @@ from typing import Any
 
 import httpx
 
+from app.core.tenant_context import TenantContext
+from app.core.tenant_signature import tenant_context_headers
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30.0
@@ -124,6 +127,7 @@ class AgentRuntimeClient:
         session_id: uuid.UUID,
         agent_type_id: uuid.UUID,
         input_data: dict[str, Any] | None = None,
+        tenant_context: TenantContext | None = None,
     ) -> dict[str, Any]:
         """POST an execution trigger to Agent Runtime.
 
@@ -131,10 +135,15 @@ class AgentRuntimeClient:
         session ID, agent type, and input data.  Agent Runtime enqueues the
         session for immediate dispatch.
 
+        When ``tenant_context`` is provided (multi-tenant mode), the signed
+        tenant context headers are attached so Agent Runtime can verify and
+        bind the tenant; when it is None, no tenant headers are added.
+
         Args:
-            session_id:    UUID of the pre-created AgentJob in Control Center.
-            agent_type_id: UUID of the agent type to execute.
-            input_data:    Optional input payload for the session.
+            session_id:     UUID of the pre-created AgentJob in Control Center.
+            agent_type_id:  UUID of the agent type to execute.
+            input_data:     Optional input payload for the session.
+            tenant_context: Resolved tenant context (None in single-tenant mode).
 
         Returns:
             Response dict with ``session_id`` and ``status``.
@@ -148,10 +157,13 @@ class AgentRuntimeClient:
             "agent_type_id": str(agent_type_id),
             "input_data": input_data or {},
         }
+        headers = tenant_context_headers(tenant_context)
 
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=_DEFAULT_TIMEOUT
+                )
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 logger.info(
@@ -176,6 +188,7 @@ class AgentRuntimeClient:
         self,
         session_id: uuid.UUID,
         response_value: dict | None = None,
+        tenant_context: TenantContext | None = None,
     ) -> dict[str, Any]:
         """POST a resume request to Agent Runtime via Communication Hub after human intervention.
 
@@ -187,10 +200,15 @@ class AgentRuntimeClient:
         context message without needing to re-query the intervene response
         from the database.
 
+        When ``tenant_context`` is provided (multi-tenant mode), the signed
+        tenant context headers are attached; when it is None, no tenant
+        headers are added.
+
         Args:
             session_id:     UUID of the session to resume.
             response_value: Optional dict with the human's response
                             (e.g. ``{"approval_value": True}``).
+            tenant_context: Resolved tenant context (None in single-tenant mode).
 
         Returns:
             Response dict with ``session_id`` and ``status``.
@@ -203,6 +221,8 @@ class AgentRuntimeClient:
         if response_value:
             body["response_value"] = response_value
 
+        headers = tenant_context_headers(tenant_context)
+
         logger.info(
             "Resume session %s with response_value=%s -> body keys=%s",
             session_id,
@@ -212,7 +232,9 @@ class AgentRuntimeClient:
 
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=_DEFAULT_TIMEOUT
+                )
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 logger.info(
@@ -237,6 +259,7 @@ class AgentRuntimeClient:
         self,
         session_id: uuid.UUID,
         reason: str | None = None,
+        tenant_context: TenantContext | None = None,
     ) -> dict[str, Any] | None:
         """Cancel an in-flight session on Agent Runtime.
 
@@ -275,9 +298,13 @@ class AgentRuntimeClient:
         if reason:
             body["reason"] = reason
 
+        headers = tenant_context_headers(tenant_context)
+
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=_DEFAULT_TIMEOUT
+                )
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 logger.info(

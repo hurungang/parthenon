@@ -7,7 +7,6 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }
 // Stub all page components to simple divs to avoid deep render trees
 vi.mock('../../pages/auth/LoginPage', () => ({ LoginPage: () => <div>LoginPage</div> }))
 vi.mock('../../pages/auth/OidcCallback', () => ({ OidcCallback: () => <div>OidcCallback</div> }))
-vi.mock('../../pages/setup/SetupWizard', () => ({ SetupWizard: () => <div>SetupWizard</div> }))
 vi.mock('../../pages/DashboardPage', () => ({ DashboardPage: () => <div>Dashboard</div> }))
 vi.mock('../../pages/NotFoundPage', () => ({ NotFoundPage: () => <div>NotFound</div> }))
 vi.mock('../../pages/mcp/McpHubPage', () => ({ McpHubPage: () => <div>Mcp</div> }))

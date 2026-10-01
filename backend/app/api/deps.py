@@ -143,6 +143,253 @@ def require_admin(request: Request) -> dict[str, Any]:
     return claims
 
 
+#: Membership-based grants for the tenant self-service surfaces.
+#: A user's ACTIVE TenantUserMembership in the request's tenant grants
+#: these tenant:: permissions directly (the tenant workspace equivalent
+#: of the platform-admin role).  Platform RBAC roles/policies continue to
+#: apply on top, so wildcard policies (system_admin) still work.
+_TENANT_MEMBERSHIP_GRANTS: dict[str, dict[str, set[str]]] = {
+    "tenant::settings": {
+        "read": {"member", "tenant_admin", "platform_admin"},
+        "manage": {"tenant_admin", "platform_admin"},
+    },
+    "tenant::members": {
+        "read": {"tenant_admin", "platform_admin"},
+        "create": {"tenant_admin", "platform_admin"},
+        "update": {"tenant_admin", "platform_admin"},
+        "delete": {"tenant_admin", "platform_admin"},
+        "manage": {"tenant_admin", "platform_admin"},
+    },
+}
+
+
+async def _membership_grants(
+    db: AsyncSession,
+    user_id: Any,
+    tenant_id: Any,
+    module: str,
+    action: str,
+) -> bool:
+    """True when the user's tenant membership grants module/action.
+
+    ROOT blanket grant (10.21): an active ROOT membership grants EVERY
+    module except the ``platform::*`` admin group — the root is the
+    tenant owner.  The static legacy dict below then only governs
+    NON-root membership roles (tenant_admin/member) on the tenant
+    self-service surfaces; business modules (agent::*, integration::*,
+    system::*) ride the seeded tenant RBAC roles for non-root members.
+    """
+    if tenant_id is None:
+        return False
+    membership = await _active_membership(db, user_id, tenant_id)
+    if membership is None:
+        return False
+    return _membership_grants_from(membership, module, action)
+
+
+def _membership_grants_from(
+    membership: Any,
+    module: str,
+    action: str,
+) -> bool:
+    """Grant evaluation for an ALREADY-LOADED active membership.
+
+    platform::* is the platform-admin domain (module group convention in
+    resource_types.py) — memberships, root included, never grant it.
+    Phase 10: the ROOT membership grants ALL tenant permissions inside
+    its tenant — no additional role grants required (the root is the
+    tenant owner; the slug-addressed workspace is theirs by creation).
+    Checked BEFORE the static dict so modules missing from the dict
+    (agent::*, integration::*, system::*) are granted to the root too.
+    """
+    # platform::* is the platform-admin domain (module group convention in
+    # resource_types.py) — memberships, root included, never grant it.
+    if module.startswith("platform::"):
+        return False
+    # Phase 10: the ROOT membership grants ALL tenant permissions inside
+    # its tenant — no additional role grants required (the root is the
+    # tenant owner; the slug-addressed workspace is theirs by creation).
+    # Checked BEFORE the static dict so modules missing from the dict
+    # (agent::*, integration::*, system::*) are granted to the root too.
+    if getattr(membership, "is_root", False):
+        return True
+    allowed_roles = _TENANT_MEMBERSHIP_GRANTS.get(module, {}).get(action)
+    if not allowed_roles:
+        return False
+    role = membership.tenant_role.value if hasattr(membership.tenant_role, "value") else str(membership.tenant_role)
+    return role in allowed_roles
+
+
+async def guard_non_root_membership(
+    db: AsyncSession,
+    membership: Any,
+    *,
+    request: Request | None = None,
+    action: str = "mutate",
+) -> None:
+    """Reject any mutation targeting the ROOT membership (Phase 10).
+
+    Shared guard used by the tenant self-service router AND every
+    platform-admin path that could touch a membership: the root (owner)
+    membership is immutable — it can never be demoted, suspended,
+    removed or role-changed, regardless of the actor (delegated tenant
+    admin or platform admin).  Rejections raise HTTP 403 and record a
+    security-relevant ``root_protection_rejected`` TenantAuditEvent
+    (fire-and-forget-safe; the audit failure never masks the 403).
+
+    Raises:
+        HTTPException 403 — when ``membership.is_root`` is true.
+    """
+    if membership is None or not getattr(membership, "is_root", False):
+        return
+
+    tenant_id = getattr(membership, "tenant_id", None)
+    client_ip = getattr(getattr(request, "client", None), "host", None) if request is not None else None
+    try:
+        from app.db.models.tenant_audit_event import (
+            TenantAuditActorType,
+            TenantAuditEventType,
+        )
+        from app.services.tenancy.tenant_audit_service import TenantAuditService
+
+        await TenantAuditService().record_safe(
+            db,
+            TenantAuditEventType.root_protection_rejected,
+            tenant_id=tenant_id,
+            actor_type=TenantAuditActorType.system,  # refined by callers below when known
+            target_resource=f"tenant_membership:{membership.id}",
+            detail={"action": action, "root_user_id": str(membership.user_id)},
+            is_security_relevant=True,
+        )
+        # Commit NOW: this guard raises HTTPException immediately after,
+        # and FastAPI throws that exception into the get_db generator,
+        # whose handler ROLLS BACK the request session — a flushed-only
+        # audit would be silently lost (the rejection must be audited per
+        # PRD CS-30/CS-31).  At this point the only pending write is the
+        # audit event itself, so committing is safe.
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to audit root protection rejection")
+
+    logger.warning(
+        "Root protection: rejected %s of root membership %s (tenant=%s)",
+        action, membership.id, tenant_id,
+    )
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "The organization owner (root) membership is immutable and "
+            "cannot be changed or removed"
+        ),
+    )
+
+
+async def _active_membership(
+    db: AsyncSession,
+    user_id: Any,
+    tenant_id: Any,
+) -> Any | None:
+    """The user's ACTIVE TenantUserMembership in *tenant_id*, or None.
+
+    Single membership lookup shared by the no-access gate and the
+    membership grants path in :func:`authorize_identity`.
+    """
+    from sqlalchemy import select
+
+    from app.db.models.tenant_membership import (
+        TenantUserMembership,
+        TenantUserMembershipStatus,
+    )
+
+    return (
+        await db.execute(
+            select(TenantUserMembership).where(
+                TenantUserMembership.user_id == user_id,
+                TenantUserMembership.tenant_id == tenant_id,
+                TenantUserMembership.status == TenantUserMembershipStatus.active,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+class NoWorkspaceAccessError(HTTPException):
+    """Authenticated user WITHOUT an active membership in the resolved tenant.
+
+    Authorization (membership) denial — explicitly NOT an authentication
+    failure: clients must surface it as a permission error without
+    clearing tokens or redirecting to login (no bounce loop;
+    FIX-20260929-221449).
+
+    Serialized FLAT by the app-level handler in ``app.main`` (registered
+    for this subclass, so it takes precedence over FastAPI's default
+    ``HTTPException`` envelope)::
+
+        {"detail": "no_access_to_workspace", ...extra fields}
+
+    ``detail`` is the machine-readable ``no_access_to_workspace`` marker;
+    extra keyword arguments carry context (``required_permission`` for
+    permission-gated calls, ``tenant_slug`` for membership dependencies).
+    """
+
+    def __init__(self, **extra: Any) -> None:
+        super().__init__(status_code=403, detail="no_access_to_workspace")
+        self.extra: dict[str, Any] = extra
+
+
+def _no_access_to_workspace_detail(module: str, action: str) -> NoWorkspaceAccessError:
+    """403 for a permission-gated call by a user with no membership in the
+    resolved tenant — carries the structured ``required_permission`` payload
+    so the frontend surfaces a targeted access-denied message."""
+    return NoWorkspaceAccessError(
+        required_permission=RequiredPermission(
+            resource_type=module,
+            action=action,
+            resource_id=None,
+        ).model_dump()
+    )
+
+
+async def _system_tenant_platform_admin(db: AsyncSession, user_id: Any) -> bool:
+    """True when the user holds an ACTIVE ``platform_admin`` membership in
+    the SYSTEM tenant (the platform console's membership-based gate,
+    FIX-20260930-235927).
+
+    Both lookups run through :func:`execute_unscoped` (identity plane):
+    the platform console lives at the base domain where no tenant scope
+    is bound, but these lookups must also stay correct if a scoped
+    session ever reaches this path.
+    """
+    from sqlalchemy import select
+
+    from app.db.models.tenant import Tenant
+    from app.db.models.tenant_membership import (
+        TenantUserMembership,
+        TenantUserMembershipStatus,
+    )
+    from app.db.tenant_scoping import execute_unscoped
+
+    system = (
+        await execute_unscoped(
+            db, select(Tenant.id).where(Tenant.is_system_tenant.is_(True))
+        )
+    ).scalar_one_or_none()
+    if system is None:
+        return False
+
+    membership = (
+        await execute_unscoped(
+            db,
+            select(TenantUserMembership).where(
+                TenantUserMembership.user_id == user_id,
+                TenantUserMembership.tenant_id == system,
+                TenantUserMembership.status == TenantUserMembershipStatus.active,
+                TenantUserMembership.tenant_role == "platform_admin",
+            ),
+        )
+    ).scalar_one_or_none()
+    return membership is not None
+
+
 async def authorize_identity(
     db: AsyncSession,
     claims: dict[str, Any],
@@ -150,6 +397,7 @@ async def authorize_identity(
     action: str,
     *,
     is_super_admin: bool = False,
+    tenant_id: Any = None,
 ) -> dict[str, Any]:
     """Enforce a permission-engine check for an already-validated identity.
 
@@ -165,13 +413,28 @@ async def authorize_identity(
     Keeping one implementation guarantees the stream enforces EXACTLY the same
     permission semantics as the REST endpoint (permission parity).
 
+    *tenant_id* — the request's resolved tenant id (multi-tenancy on); binds
+    role collection to the tenant so identical role names in different tenants
+    never collide.  None (switch off) leaves single-tenant behaviour unchanged.
+
+    Identity-plane note (FIX-20260929-221449): the PlatformUser-by-sub
+    lookup is an IDENTITY resolution — it runs tenant-scope-exempt
+    (:func:`app.db.tenant_scoping.execute_unscoped`) so a user with no
+    membership in the resolved tenant still RESOLVES.  Access is then
+    decided by membership: without an ACTIVE membership in the resolved
+    tenant the request is denied with the clean structured
+    ``no_access_to_workspace`` 403 — never "user must re-authenticate".
+
     Raises:
+        HTTPException 403 ``no_access_to_workspace`` — resolved tenant and
+            the user holds no ACTIVE membership in it.
         HTTPException 403 — if the user has no matching allow policy.
         HTTPException 403 — if the user has no PlatformUser record yet.
     """
     from sqlalchemy import select
 
     from app.db.models.platform_user import PlatformUser
+    from app.db.tenant_scoping import execute_unscoped
     from app.services.permissions.permission_engine import PermissionEngine
 
     # Super admin bypass — full access to all modules and actions
@@ -193,8 +456,11 @@ async def authorize_identity(
         logger.warning("authorize_identity: No identity claims found")
         raise HTTPException(status_code=403, detail="No identity claims found.")
 
-    result = await db.execute(
-        select(PlatformUser).where(PlatformUser.sub == sub)
+    # Identity plane (FIX-20260929-221449): resolving WHO the request is
+    # from is platform-level — exempt from the session's tenant scope so
+    # the user row is visible without a membership in the resolved tenant.
+    result = await execute_unscoped(
+        db, select(PlatformUser).where(PlatformUser.sub == sub)
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -212,6 +478,80 @@ async def authorize_identity(
         user.id, user.sub,
     )
 
+    # No-membership gate (FIX-20260929-221449): an authenticated user
+    # WITHOUT an active membership in the RESOLVED tenant gets the clean
+    # structured no_access_to_workspace denial — the identity is valid
+    # (no re-authentication), but the workspace grants them nothing.
+    # Cross-tenant safety is preserved: membership + row-level scoping
+    # still gate every piece of data.
+    membership = None
+    if tenant_id is not None:
+        membership = await _active_membership(db, user.id, tenant_id)
+        if membership is None:
+            logger.warning(
+                "authorize_identity: user_id=%s has no active membership in "
+                "resolved tenant=%s — no_access_to_workspace",
+                user.id, tenant_id,
+            )
+            raise _no_access_to_workspace_detail(module, action)
+
+    # Tenant membership grants (multi-tenancy): the ROOT membership grants
+    # every non-platform module directly (blanket tenant-owner grant);
+    # non-root membership roles keep the legacy tenant self-service
+    # grants (tenant::*).  Business modules (agent::*, integration::*,
+    # system::*) reach this path too so a root tenant owner can use them
+    # without any platform RBAC role.
+    if membership is not None and not module.startswith("platform::"):
+        if _membership_grants_from(membership, module, action):
+            logger.debug(
+                "authorize_identity ALLOWED via membership: user_id=%s module=%s action=%s",
+                user.id, module, action,
+            )
+            return claims
+
+    # Platform gating (FIX-20260930-235927): with multi-tenancy ON, the
+    # ``platform::*`` admin group is satisfied ONLY by the super-admin
+    # bypass (above) or an ACTIVE platform_admin membership in the SYSTEM
+    # tenant.  The PermissionEngine collects GLOBAL tenant-less roles for
+    # every module — legacy pre-tenancy ``system_admin`` wildcard holders
+    # would otherwise unlock the whole platform console.  Global roles
+    # remain effective for every non-platform module (legacy behaviour in
+    # tenant workspaces unchanged); multi-tenancy OFF skips this gate
+    # entirely (byte-for-byte legacy, no platform concept).
+    if module.startswith("platform::"):
+        from app.services.tenancy.platform_settings_service import (
+            get_platform_settings_service,
+        )
+
+        if await get_platform_settings_service().is_multi_tenancy_enabled(db):
+            if await _system_tenant_platform_admin(db, user.id):
+                logger.debug(
+                    "authorize_identity ALLOWED via system-tenant platform_admin "
+                    "membership: user_id=%s module=%s action=%s",
+                    user.id, module, action,
+                )
+                return claims
+            logger.warning(
+                "authorize_identity PLATFORM DENIED: user_id=%s module=%s action=%s "
+                "— platform::* requires a system-tenant platform_admin membership "
+                "when multi-tenancy is ON",
+                user.id, module, action,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=PermissionDeniedDetail(
+                    detail=(
+                        "Platform administration requires a platform_admin "
+                        "membership in the system tenant."
+                    ),
+                    required_permission=RequiredPermission(
+                        resource_type=module,
+                        action=action,
+                        resource_id=None,
+                    ),
+                ).model_dump(),
+            )
+
     auth = await PermissionEngine().authorize(
         db=db,
         user_id=user.id,
@@ -219,6 +559,7 @@ async def authorize_identity(
         action=action,
         resource_id="*",
         resource_tags={},
+        tenant_id=tenant_id,
     )
     if not auth.allowed:
         logger.warning(
@@ -274,12 +615,21 @@ def require_permission(module: str, action: str) -> Callable:
         db: AsyncSession = Depends(get_db),
     ) -> dict[str, Any]:
         claims: dict[str, Any] = getattr(request.state, "identity", {})
+        # Tenant-bound RBAC (multi-tenancy on): collect the resolved tenant
+        # so roles are evaluated within the request's tenant.  No-op (None)
+        # when the switch is off.
+        from app.core.tenant_context import get_tenant_context
+
+        tenant_context = get_tenant_context(request)
         return await authorize_identity(
             db,
             claims,
             module,
             action,
             is_super_admin=bool(getattr(request.state, "is_super_admin", False)),
+            tenant_id=(
+                tenant_context.tenant_id if tenant_context.is_set else None
+            ),
         )
 
     _permission_dep_cache[(module, action)] = _dep

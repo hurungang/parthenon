@@ -10,7 +10,7 @@
     "add": "Add",
     "cancel": "Cancel",
     "delete": "Delete",
-    "deleting": "Deleting\u2026",
+    "deleting": "Deleting…",
     "edit": "Edit",
     "expand": "Expand",
     "collapse": "Collapse",
@@ -74,7 +74,12 @@
     "agentData": "Agent Data",
     "groupAgents": "Agents",
     "groupIntegrations": "Integrations",
-    "groupSystem": "System"
+    "groupSystem": "System",
+    "groupPlatform": "Platform",
+    "platformTenants": "Tenants",
+    "platformSettings": "Platform Settings",
+    "platformAudit": "Security Audit",
+    "tenantPrefix": "· {{name}}"
   },
   "auth": {
     "login": "Sign In",
@@ -82,7 +87,10 @@
     "loginWithOidc": "Sign in with OIDC",
     "loginWithProvider": "Sign in with {{provider}}",
     "oidcProvider": "Identity Provider",
-    "loginAsSuperAdmin": "Login as Super Admin",
+    "email": "Email",
+    "platformAdminSignIn": "Platform admin sign-in",
+    "loginFailed": "Sign-in failed. Please check your credentials and try again.",
+    "noSignInAvailable": "No sign-in method is configured for this deployment yet. Please contact your platform administrator.",
     "logout": "Sign Out",
     "loggingIn": "Signing in...",
     "tokenRefreshed": "Session refreshed",
@@ -91,64 +99,41 @@
     "superAdminInfo": "No identity providers are configured yet. Sign in with the super admin account to set up OIDC.",
     "username": "Username",
     "password": "Password",
-    "setupWizard": "No identity providers and super admin are not available. Please run the setup wizard.",
-    "goToSetup": "Go to Setup Wizard",
-    "or": "or"
-  },
-  "setup": {
-    "title": "Identity Provider Setup",
-    "step": {
-      "providerSelection": {
-        "label": "Select Provider"
-      },
-      "keycloakConfig": {
-        "label": "Keycloak Configuration"
-      },
-      "externalOidc": {
-        "label": "OIDC Configuration"
-      },
-      "verification": {
-        "label": "Configuring..."
-      },
-      "completion": {
-        "label": "Setup Complete"
+    "or": "or",
+    "tenantWorkspaceOf": "Sign in to {{name}}",
+    "tenantBlocked": "This organization is not accessible ({{status}}). Please contact your platform administrator.",
+    "tenantSignInUnavailable": "Sign-in is not configured for this organization yet. Please contact your organization administrator.",
+    "tenantPicker": {
+      "title": "Choose an organization",
+      "subtitle": "You are a member of multiple organizations. Choose which one to sign in to — one session is bound to one organization.",
+      "default": "Default",
+      "signedInAs": "Current session: {{name}}. Switching organizations requires a fresh sign-in.",
+      "role": {
+        "platform_admin": "Platform admin",
+        "tenant_admin": "Tenant admin",
+        "member": "Member"
       }
     },
-    "provider": {
-      "bundledKeycloak": "Bundled Keycloak (Recommended)",
-      "externalKeycloak": "External Keycloak",
-      "azureEntraId": "Azure EntraID"
+    "findWorkspace": {
+      "subtitle": "Enter your workspace address to sign in.",
+      "addressLabel": "Workspace address",
+      "addressPlaceholder": "e.g. acme or acme.example.com",
+      "slugHint": "Looking up workspace \"{{slug}}\" from this address",
+      "remember": "Remember this workspace",
+      "continue": "Continue",
+      "lookup": "Looking up...",
+      "notFound": "No workspace found at this address",
+      "lookupFailed": "Something went wrong while looking up the workspace. Please try again.",
+      "notYourWorkspace": "Not your workspace? Use a different workspace"
     },
-    "field": {
-      "keycloakUrl": "Keycloak URL",
-      "realm": "Realm Name",
-      "clientId": "Client ID",
-      "adminUser": "Keycloak Admin Username",
-      "adminPassword": "Keycloak Admin Password",
-      "initialAdminPassword": "Initial Parthenon Admin Password",
-      "oidcDiscoveryUrl": "OIDC Discovery URL",
-      "clientSecret": "Client Secret"
-    },
-    "action": {
-      "next": "Next",
-      "back": "Back",
-      "submit": "Configure",
-      "retry": "Try Again",
-      "goToLogin": "Go to Login"
-    },
-    "status": {
-      "configuring": "Configuring identity provider...",
-      "success": "Identity provider configured successfully!",
-      "error": "Configuration Failed"
-    },
-    "error": {
-      "keycloakUnreachable": "Cannot reach Keycloak. Please verify the URL and try again.",
-      "alreadyConfigured": "Identity provider is already configured."
-    }
+    "noWorkspaceYet": "New to Parthenon?",
+    "createWorkspace": "Create your workspace"
   },
   "mcp": {
     "title": "MCP Hub",
-    "servers": "Servers",
+    "servers": {
+      "sessions": "Sessions"
+    },
     "tools": "Tools",
     "registerServer": "Register Server",
     "editServer": "Edit Server",
@@ -182,9 +167,6 @@
       "noSessionsError": "This server has no configured sessions",
       "warnings": "Sync completed with warnings"
     },
-    "servers": {
-      "sessions": "Sessions"
-    },
     "manageSessions": "Manage Sessions",
     "sessions": {
       "title": "Sessions",
@@ -205,10 +187,10 @@
       "password": "Password",
       "basicAuthHint": "Basic authentication credentials",
       "oauthInstructions": "Click the button below to authenticate via OAuth. You can optionally provide OAuth configuration if auto-discovery doesn't work.",
-      "oauthManualConfig": "Advanced: Manual OAuth Configuration",
+      "oauthManualConfig": "Manual config",
       "oauthManualConfigHelp": "If auto-discovery fails, provide either a metadata URL or manual OAuth endpoints.",
-      "oauthMetadataUrl": "OAuth Metadata Document URL",
-      "oauthMetadataUrlHint": "e.g., https://provider.com/.well-known/oauth-authorization-server (see GitHub's approach)",
+      "oauthMetadataUrl": "OAuth Metadata URL",
+      "oauthMetadataUrlHint": "Optional. Fetches OAuth endpoints from this URL (RFC 8414).",
       "oauthManualConfigOr": "— OR manually specify endpoints —",
       "oauthAuthorizationUrl": "Authorization URL",
       "oauthTokenUrl": "Token URL",
@@ -242,14 +224,7 @@
       "inactiveCantDefault": "Inactive sessions cannot be set as default",
       "credentialSaved": "•••••••• (saved)",
       "credentialSavedHint": "A key is already saved. Leave blank to keep it unchanged, or type a new key to replace it.",
-      "oauthMetadataUrl": "OAuth Metadata URL",
-      "oauthMetadataUrlHint": "Optional. Fetches OAuth endpoints from this URL (RFC 8414).",
       "oauthAuthUrl": "Authorization URL",
-      "oauthTokenUrl": "Token URL",
-      "oauthClientId": "Client ID",
-      "oauthClientSecret": "Client Secret",
-      "oauthScope": "Scope",
-      "oauthManualConfig": "Manual config",
       "oauthAutoDiscovery": "Auto discovery",
       "apiKeyAsBearer": "Send as Bearer token (Authorization header instead of X-API-Key)",
       "authTypeApiKey": "API Key",
@@ -566,10 +541,10 @@
         "moveDown": "Move down",
         "remove": "Remove",
         "selectPlaceholder": "Select an item…",
-    "brokenReference": "(deleted)",
-    "orphanWarning": "Some bound items are no longer available in the selected role. Remove them before saving.",
-    "removeOrphans": "Remove All",
-    "bound": "Bound"
+        "brokenReference": "(deleted)",
+        "orphanWarning": "Some bound items are no longer available in the selected role. Remove them before saving.",
+        "removeOrphans": "Remove All",
+        "bound": "Bound"
       },
       "guardrails": {
         "title": "Execution Guardrails",
@@ -1068,24 +1043,24 @@
         "tool_call": "Tool Call"
       },
       "nodeTypes": {
-      "agent": "Agent",
-      "identity": "Identity",
-      "role": "Agent Role",
-      "sop": "SOP",
-      "skill": "Skill",
-      "agent_type": "Delegated Agent",
-      "tool": "Tool",
-      "communication_hub": "Communication Hub",
-      "input_data_type": "Input Data Type",
-      "output_data_type": "Output Data Type",
-      "model": "Model",
-      "empty_role": "Role (empty)",
-      "empty_identity": "Identity (empty)",
-      "empty_skills": "Skills (empty)",
-      "empty_sops": "SOPs (empty)",
-      "empty_input_data_type": "Input Data Type (empty)",
-      "empty_output_data_type": "Output Data Type (empty)",
-      "empty_model": "Model (empty)"
+        "agent": "Agent",
+        "identity": "Identity",
+        "role": "Agent Role",
+        "sop": "SOP",
+        "skill": "Skill",
+        "agent_type": "Delegated Agent",
+        "tool": "Tool",
+        "communication_hub": "Communication Hub",
+        "input_data_type": "Input Data Type",
+        "output_data_type": "Output Data Type",
+        "model": "Model",
+        "empty_role": "Role (empty)",
+        "empty_identity": "Identity (empty)",
+        "empty_skills": "Skills (empty)",
+        "empty_sops": "SOPs (empty)",
+        "empty_input_data_type": "Input Data Type (empty)",
+        "empty_output_data_type": "Output Data Type (empty)",
+        "empty_model": "Model (empty)"
       }
     }
   },
@@ -1388,7 +1363,7 @@
       "deleteRole": "Delete Role",
       "cloneRole": "Clone Role",
       "cloneNamePrefix": "Copy of {{name}}",
-      "jsonView": "View JSON",
+      "jsonView": "JSON",
       "policies": "Policy Statements",
       "addPolicy": "Add Policy Statement",
       "addPolicyStatement": "Add Policy Statement",
@@ -1426,7 +1401,6 @@
       "invalidJson": "Invalid JSON format",
       "managePolicies": "Manage Policies",
       "formView": "Form",
-      "jsonView": "JSON",
       "editSourceCode": "Edit Source Code",
       "policySourceCode": "Policy Source Code",
       "validate": "Validate",
@@ -1593,87 +1567,6 @@
     "viewLogs": "View Logs"
   },
   "systemConfig": {
-    "title": "System Configuration",
-    "workflowSection": "Workflow Generation",
-    "workflowHint": "Select the AI model used for Skill and SOP workflow generation and preview. Options are loaded from your configured model providers.",
-    "workflowModel": "Generation Model",
-    "workflowNotConfigured": "Not configured",
-    "workflowNoOptions": "No model configurations found. Create a model configuration in Model Configs first.",
-    "saveSuccess": "Configuration saved"
-  },
-  "admin": {
-    "dataTypes": {
-      "title": "Data Types",
-      "create": "Create Data Type",
-      "edit": "Edit Data Type",
-      "delete": "Delete",
-      "name": "Name",
-      "slug": "Slug",
-      "slugHelper": "Unique identifier used in API calls and query_result tool",
-      "description": "Description",
-      "fields": "Fields",
-      "fieldName": "Field Name",
-      "fieldType": "Field Type",
-      "fieldDescription": "Description",
-      "fieldDescriptionHint": "Explain what this field means to the LLM",
-      "enumValues": "Enum Values",
-      "required": "Required",
-      "addField": "Add Field",
-      "removeField": "Remove Field",
-      "fieldCount": "Fields",
-      "inUse": "This data type is currently in use by one or more agent types and cannot be deleted.",
-      "referencedBy": "Referenced by the following agent types:",
-      "confirmDelete": "Delete Data Type",
-      "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
-      "atLeastOneField": "At least one field is required."
-    },
-    "agentData": {
-      "title": "Agent Data",
-      "filterAgentType": "Agent Type",
-      "allAgentTypes": "All Agent Types",
-      "columnTimestamp": "Timestamp",
-      "columnDataName": "Data Name",
-      "columnAgentType": "Agent Type",
-      "columnSessionId": "Session ID",
-      "columnDataType": "Data Type",
-      "detailTitle": "Agent Data Detail",
-      "dataValueLabel": "Data Value",
-      "noResults": "No agent data records found matching the current filters."
-    },
-    "agentOutputs": {
-      "title": "Agent Outputs",
-      "filterDataType": "Data Type",
-      "filterAgentType": "Agent Type",
-      "filterDateRange": "Date Range",
-      "filterDateFrom": "From",
-      "filterDateTo": "To",
-      "exportCsv": "Export CSV",
-      "columnTimestamp": "Timestamp",
-      "columnAgentType": "Agent Type",
-      "columnDataType": "Data Type",
-      "columnStatus": "Status",
-      "statusValid": "Valid",
-      "statusError": "Validation Error",
-      "detailTitle": "Output Detail",
-      "noResults": "No agent outputs found matching the current filters.",
-      "loading": "Loading agent outputs...",
-      "error": "Failed to load agent outputs."
-    }
-  },
-  "dataTypeSelector": {
-    "label": "Output Data Type",
-    "none": "None",
-    "loading": "Loading data types...",
-    "error": "Failed to load data types"
-  },
-  "typedField": {
-    "true": "On",
-    "false": "Off",
-    "null": "null",
-    "empty": "empty",
-    "missing": "Missing required value"
-  },
-  "systemConfig": {
     "title": "System Config",
     "identityProvidersTitle": "Identity Providers Configuration",
     "oidcSetup": {
@@ -1713,6 +1606,12 @@
       "scopesFixedHint": "Platform-managed — determined by identity type",
       "claimsMapping": "Claims Mapping",
       "claimsMappingHint": "Map OIDC claims to platform fields. Leave empty for defaults.",
+      "defaultRoleLabel": "Default role for new OIDC users",
+      "defaultRoleNone": "None (reject new users)",
+      "defaultRoleTenantSystemAdmin": "Tenant System Admin",
+      "defaultRoleAgentManager": "Agent Manager",
+      "defaultRoleAgentExecutor": "Agent Executor",
+      "defaultRoleAgentViewer": "Agent Viewer",
       "advancedOptions": "Advanced Options",
       "authorizationEndpoint": "Authorization Endpoint",
       "tokenEndpoint": "Token Endpoint",
@@ -1787,6 +1686,78 @@
       "testOidcConfig": "Test OIDC Configuration",
       "testOidcLogin": "Test OIDC Login"
     }
+  },
+  "admin": {
+    "dataTypes": {
+      "title": "Data Types",
+      "create": "Create Data Type",
+      "edit": "Edit Data Type",
+      "delete": "Delete",
+      "name": "Name",
+      "slug": "Slug",
+      "slugHelper": "Unique identifier used in API calls and query_result tool",
+      "description": "Description",
+      "fields": "Fields",
+      "fieldName": "Field Name",
+      "fieldType": "Field Type",
+      "fieldDescription": "Description",
+      "fieldDescriptionHint": "Explain what this field means to the LLM",
+      "enumValues": "Enum Values",
+      "required": "Required",
+      "addField": "Add Field",
+      "removeField": "Remove Field",
+      "fieldCount": "Fields",
+      "inUse": "This data type is currently in use by one or more agent types and cannot be deleted.",
+      "referencedBy": "Referenced by the following agent types:",
+      "confirmDelete": "Delete Data Type",
+      "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+      "atLeastOneField": "At least one field is required."
+    },
+    "agentData": {
+      "title": "Agent Data",
+      "filterAgentType": "Agent Type",
+      "allAgentTypes": "All Agent Types",
+      "columnTimestamp": "Timestamp",
+      "columnDataName": "Data Name",
+      "columnAgentType": "Agent Type",
+      "columnSessionId": "Session ID",
+      "columnDataType": "Data Type",
+      "detailTitle": "Agent Data Detail",
+      "dataValueLabel": "Data Value",
+      "noResults": "No agent data records found matching the current filters."
+    },
+    "agentOutputs": {
+      "title": "Agent Outputs",
+      "filterDataType": "Data Type",
+      "filterAgentType": "Agent Type",
+      "filterDateRange": "Date Range",
+      "filterDateFrom": "From",
+      "filterDateTo": "To",
+      "exportCsv": "Export CSV",
+      "columnTimestamp": "Timestamp",
+      "columnAgentType": "Agent Type",
+      "columnDataType": "Data Type",
+      "columnStatus": "Status",
+      "statusValid": "Valid",
+      "statusError": "Validation Error",
+      "detailTitle": "Output Detail",
+      "noResults": "No agent outputs found matching the current filters.",
+      "loading": "Loading agent outputs...",
+      "error": "Failed to load agent outputs."
+    }
+  },
+  "dataTypeSelector": {
+    "label": "Output Data Type",
+    "none": "None",
+    "loading": "Loading data types...",
+    "error": "Failed to load data types"
+  },
+  "typedField": {
+    "true": "On",
+    "false": "Off",
+    "null": "null",
+    "empty": "empty",
+    "missing": "Missing required value"
   },
   "dashboard": {
     "operationalMetrics": "Operational Metrics",
@@ -1884,5 +1855,229 @@
     "mcpConfigSse": "SSE",
     "copyEndpoint": "Copy endpoint",
     "copyConfig": "Copy config"
+  },
+  "platform": {
+    "accessDenied": {
+      "title": "Platform access denied",
+      "message": "You do not have platform administrator access to this console.",
+      "back": "Back to dashboard"
+    },
+    "tenants": {
+      "title": "Tenant Management",
+      "create": "Create Tenant",
+      "createTitle": "Create Tenant",
+      "edit": "Edit",
+      "editTitle": "Edit Tenant",
+      "name": "Name",
+      "slug": "Tenant address (slug)",
+      "slugHelp": "Lowercase letters, digits and hyphens — used as the tenant address",
+      "status": {
+        "active": "Active",
+        "suspended": "Suspended",
+        "deleted": "Deleted"
+      },
+      "adminContact": "Admin contact",
+      "adminContactName": "Admin contact name",
+      "adminContactEmail": "Admin contact email",
+      "created": "Created",
+      "actions": "Actions",
+      "system": "System",
+      "suspend": "Suspend",
+      "resume": "Resume",
+      "delete": "Delete",
+      "deleteTitle": "Delete tenant",
+      "deleteWarning": "This permanently deletes \"{name}\" and ALL of its data. This action cannot be undone.",
+      "deleteConfirmPrompt": "Type the tenant address \"{slug}\" to confirm:",
+      "tier": "Tier",
+      "usage": "Usage",
+      "tierValue": {
+        "free": "Free",
+        "team": "Team",
+        "enterprise": "Enterprise"
+      },
+      "usageSummary": "{{users}}/{{maxUsers}} users · {{agentTypes}}/{{maxAgentTypes}} agent types · {{executions}}/{{maxExecutions}} runs",
+      "license": "License",
+      "licenseTitle": "License — {{name}}",
+      "licenseHelp": "Assign a license tier (limits are pre-filled and editable) or change the current license. The previous license is kept in history.",
+      "licenseTier": "Tier",
+      "maxUsers": "Max users",
+      "maxAgentTypes": "Max agent types",
+      "monthlyExecutions": "Monthly agent executions",
+      "licenseAssign": "Assign license",
+      "licenseChange": "Save license",
+      "licenseRemove": "Remove license",
+      "licenseRemoveConfirm": "Remove & fall back to Free",
+      "licenseRemoveWarning": "Remove the active {{tier}} license for this tenant?",
+      "licenseRemoveFallback": "The tenant immediately falls back to the built-in Free-tier limits. This takes effect right away."
+    },
+    "settings": {
+      "title": "Platform Settings",
+      "tenancySwitch": "Multi-tenancy",
+      "tenancyHelp": "When enabled, the platform serves multiple organizations (tenants) with hard logical isolation. Existing data is adopted into an implicit system tenant; the existing identity provider keeps working for it.",
+      "tenancyOn": "Enabled",
+      "tenancyOff": "Disabled",
+      "tenancyOnNote": "Multi-tenancy is ON: users sign in via their tenant address or tenant header, and the platform admin console is available at the base domain.",
+      "confirmTitle": "Enable multi-tenancy?",
+      "confirmWarning": "Enabling multi-tenancy adopts all existing data into an implicit system tenant and cannot simply be reversed — disabling later does not remove tenants or their data. Existing administrators receive platform-admin access.",
+      "confirmDetails": "On enable: a system tenant is created; every existing role, agent, MCP server, skill, SOP, schedule, model config and history row is attached to it; existing administrators are granted platform-admin membership.",
+      "confirmPrompt": "Type {phrase} to confirm:",
+      "confirmEnable": "Enable multi-tenancy",
+      "adoptionDone": "Multi-tenancy enabled. System tenant adopted ({tables} tables backfilled, {admins} platform-admin memberships granted).",
+      "disableDone": "Multi-tenancy disabled. All tenant data is preserved; the platform behaves as single-tenant again."
+    },
+    "audit": {
+      "title": "Security & Audit Events",
+      "tenant": "Tenant",
+      "allTenants": "All tenants",
+      "eventType": "Event type",
+      "allEvents": "All events",
+      "severity": "Severity",
+      "allSeverities": "All",
+      "securityOnly": "Security-relevant only",
+      "from": "From",
+      "to": "To",
+      "time": "Time",
+      "target": "Target",
+      "actor": {
+        "platform_admin": "Platform admin",
+        "tenant_admin": "Tenant admin",
+        "tenant_user": "Tenant user",
+        "tenant_agent": "Tenant agent",
+        "api_key": "API key",
+        "system": "System"
+      },
+      "platform": "Platform",
+      "empty": "No audit events match the current filters.",
+      "event": {
+        "tenant_created": "Tenant created",
+        "tenant_updated": "Tenant updated",
+        "tenant_suspended": "Tenant suspended",
+        "tenant_resumed": "Tenant resumed",
+        "tenant_deleted": "Tenant deleted",
+        "cross_tenant_access_denied": "Cross-tenant access denied",
+        "tenant_boundary_violation": "Tenant boundary violation",
+        "platform_setting_updated": "Platform setting updated"
+      }
+    }
+  },
+  "tenant": {
+    "settings": {
+      "title": "Organization Settings",
+      "saved": "Organization settings saved.",
+      "onboarded": "Onboarded",
+      "pendingOnboarding": "Onboarding pending",
+      "name": "Organization name",
+      "contactName": "Admin contact name",
+      "contactEmail": "Admin contact email",
+      "root": "Owner",
+      "nameRootHint": "The organization display name (alias) — the address never changes",
+      "nameRootOnly": "Only the organization owner (root) can rename the organization",
+      "aliasLockedNote": "Renaming is reserved to the organization owner",
+      "address": "Organization address",
+      "addressImmutable": "The unique address is immutable — it cannot be changed"
+    },
+    "onboarding": {
+      "title": "Welcome — set up your organization",
+      "alreadyComplete": "Onboarding is complete for this organization.",
+      "stepInvite": "Invite users",
+      "stepSignin": "Connect sign-in",
+      "stepFinish": "Finish",
+      "inviteHelp": "Invite your first team members by email. Each invitation is single-use and expires.",
+      "inviteEmail": "Email address",
+      "inviteSend": "Send invitation",
+      "tokenNote": "Invitation created — share this one-time token with the invitee (it is shown only once):",
+      "finish": "Finish onboarding",
+      "skip": "Skip for now",
+      "skipNote": "You can complete onboarding later from Organization Settings."
+    },
+    "members": {
+      "title": "Members & Invitations",
+      "invite": "Invite member",
+      "inviteTitle": "Invite a new member",
+      "inviteSend": "Create invitation",
+      "name": "Name",
+      "email": "Email",
+      "roleLabel": "Role",
+      "role": {
+        "platform_admin": "Platform admin",
+        "tenant_admin": "Tenant admin",
+        "member": "Member"
+      },
+      "status": {
+        "active": "Active",
+        "suspended": "Suspended",
+        "removed": "Removed"
+      },
+      "remove": "Remove",
+      "revoke": "Revoke",
+      "expires": "Expires",
+      "pendingInvitations": "Pending invitations",
+      "noInvitations": "No pending invitations.",
+      "tokenShownOnce": "Invitation created. Share this one-time token with the invitee — it will not be shown again.",
+      "removeTitle": "Remove member",
+      "removeWarning": "Remove {name} from this organization? They will lose access immediately."
+    },
+    "accept": {
+      "title": "Join an organization",
+      "signInFirst": "Sign in first, then open your invitation link to join the organization.",
+      "help": "Paste the one-time invitation token you received to join the organization.",
+      "tokenLabel": "Invitation token",
+      "join": "Join organization",
+      "joined": "You joined {{name}}!",
+      "enter": "Enter workspace"
+    },
+    "usage": {
+      "title": "License & usage",
+      "freeDefaults": "No license assigned — built-in free-tier limits apply",
+      "users": "Members (users)",
+      "agentTypes": "Agent types",
+      "executionsThisMonth": "Agent executions this month",
+      "of": "{{used}} of {{limit}}"
+    },
+    "quota": {
+      "blockedTitle": "Action blocked — plan limit reached",
+      "blockedBody": "Your {{tier}} plan allows up to {{limit}} {{quotaType}}; you are currently at {{used}}.",
+      "quotaType": {
+        "users": "members",
+        "agentTypes": "agent types",
+        "monthlyExecutions": "agent executions this month"
+      },
+      "tier": {
+        "free": "Free",
+        "team": "Team",
+        "enterprise": "Enterprise"
+      },
+      "usageMeters": "{{used}} / {{limit}} used",
+      "upgradePath": "Upgrade path: contact your platform administrator to raise this limit."
+    }
+  },
+  "signup": {
+    "title": "Create your workspace",
+    "subtitle": "Sign up with your email, then set up your organization",
+    "stepAccount": "Account",
+    "stepOrganization": "Organization",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least 8 characters, with a letter and a digit",
+    "confirmPassword": "Confirm password",
+    "orgName": "Organization name",
+    "orgAddress": "Organization address",
+    "orgAddressHint": "Your unique workspace address — lowercase letters, digits and hyphens (immutable after creation)",
+    "continue": "Continue",
+    "createWorkspace": "Create workspace",
+    "haveAccount": "Already have an account?",
+    "signIn": "Sign in",
+    "unavailable": "Self-serve registration is not available on this platform",
+    "error": {
+      "email": "Enter a valid email address",
+      "password": "Password must be at least 8 characters and contain a letter and a digit",
+      "passwordMismatch": "Passwords do not match",
+      "orgName": "Organization name is required",
+      "slug": "Address must be 3-63 characters: lowercase letters, digits and hyphens, starting and ending with a letter or digit",
+      "emailExists": "An account with this email already exists",
+      "slugTaken": "This address is already taken — choose another",
+      "oneTenantPerUser": "Each user can own only one organization",
+      "generic": "Registration failed — please try again"
+    }
   }
 }

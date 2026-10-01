@@ -26,6 +26,11 @@ export const RESOURCE_TYPE_MANIFEST = {
   "system::observability": { actions: ["read"] },
   "system::permissions": { actions: ["create", "read", "update", "delete", "manage", "approve", "reject"] },
   "system::system_config": { actions: ["read", "manage"] },
+  "platform::tenants": { actions: ["create", "read", "update", "delete", "manage"] },
+  "platform::settings": { actions: ["read", "manage"] },
+  "platform::audit": { actions: ["read"] },
+  "tenant::settings": { actions: ["read", "manage"] },
+  "tenant::members": { actions: ["create", "read", "update", "delete", "manage"] },
 } as const
 
 export type ResourceType = keyof typeof RESOURCE_TYPE_MANIFEST
@@ -72,6 +77,21 @@ export const MODULE_GROUPS: Record<string, ModuleGroup> = {
       "system::observability",
       "system::permissions",
       "system::system_config",
+    ],
+  },
+  platform: {
+    label: "Platform",
+    submodules: [
+      "platform::tenants",
+      "platform::settings",
+      "platform::audit",
+    ],
+  },
+  tenant: {
+    label: "Tenant",
+    submodules: [
+      "tenant::settings",
+      "tenant::members",
     ],
   },
 }

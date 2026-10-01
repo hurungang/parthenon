@@ -225,4 +225,6 @@ async def validate_api_key_internal(
         permissions=sorted(allowed_tools),
         skills=skills,
         api_key_name=api_key.name,
+        # Multi-tenancy: tenant binding for MCP session scoping at CH.
+        tenant_id=getattr(api_key, "tenant_id", None),
     )

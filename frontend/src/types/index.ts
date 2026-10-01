@@ -996,8 +996,76 @@ export interface AuthClaims {
   name?: string
   preferred_username?: string
   roles?: string[]
+  /** Tenant slug this token is bound to (multi-tenancy only) */
+  tenant?: string
+  /** Platform-level role for super admin tokens (multi-tenancy only) */
+  platform_role?: string
   exp: number
   iat: number
+}
+
+/** A tenant the authenticated user is an active member of (org picker). */
+export interface TenantMembership {
+  tenant_id: string
+  tenant_slug: string
+  tenant_name: string
+  tenant_role: 'platform_admin' | 'tenant_admin' | 'member'
+  is_default: boolean
+}
+
+/** The tenant bound to the current session (one session = one tenant). */
+export interface ActiveTenant {
+  id: string
+  slug: string
+  name: string
+  role: 'platform_admin' | 'tenant_admin' | 'member'
+}
+
+/** Public branding info for a tenant resolved at sign-in. */
+export interface PublicTenantInfo {
+  slug: string
+  name: string
+  status: 'active' | 'suspended' | 'deleted'
+  sign_in_ready: boolean
+}
+
+export interface TenantDiscovery {
+  multi_tenancy_enabled: boolean
+  tenant: PublicTenantInfo | null
+}
+
+// ── Licensing & Quotas (Phase 10) ─────────────────────────────────────────────
+
+export type LicenseTier = 'free' | 'team' | 'enterprise'
+
+/** A tenant's active license (null → free-tier defaults apply). */
+export interface LicenseRead {
+  tier: LicenseTier
+  max_users: number
+  max_agent_types: number
+  monthly_agent_executions: number
+  assigned_at: string | null
+}
+
+/** Tier + effective limits + current usage for one tenant. */
+export interface TenantUsageRead {
+  tier: LicenseTier
+  max_users: number
+  max_agent_types: number
+  monthly_agent_executions: number
+  users: number
+  agent_types: number
+  executions_this_month: number
+}
+
+/** Structured quota refusal payload (backend quota_exhausted contract). */
+export interface QuotaBlockedPayload {
+  code: 'quota_exhausted'
+  quota_type: 'users' | 'agent_types' | 'monthly_executions'
+  tier: LicenseTier
+  limit: number
+  used: number
+  upgrade_path: string
 }
 
 export interface AuthState {

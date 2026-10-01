@@ -90,6 +90,11 @@ async def forward_terminate_session(
     }
 
     headers: dict[str, str] = {}
+    # Multi-tenancy: forward the signed tenant context received from
+    # CC so Agent Runtime binds the execution to the tenant.
+
+    from app.core.tenant_signature import forward_tenant_headers
+    headers.update(forward_tenant_headers())
     if cert_manager and cert_manager.cert_path and cert_manager.key_path:
         if ar_base.startswith("https://"):
             client_kwargs["cert"] = (str(cert_manager.cert_path), str(cert_manager.key_path))

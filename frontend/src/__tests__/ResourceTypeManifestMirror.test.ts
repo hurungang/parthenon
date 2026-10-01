@@ -1,6 +1,6 @@
 /**
  * Tests that the frontend resource type manifest mirror stays in sync
- * with the backend manifest. Verifies all 17 identifiers are present,
+ * with the backend manifest. Verifies all identifiers are present,
  * module groupings are correct, and no legacy flat values exist.
  */
 import { describe, it, expect } from "vitest"
@@ -13,9 +13,9 @@ import {
 } from "../constants/resourceTypes"
 
 describe("ResourceTypeManifestMirror", () => {
-  it("has exactly 19 namespaced resource types", () => {
+  it("has exactly 24 namespaced resource types", () => {
     const keys = Object.keys(RESOURCE_TYPE_MANIFEST)
-    expect(keys).toHaveLength(19)
+    expect(keys).toHaveLength(24)
   })
 
   it("all identifiers use :: delimiter with exactly two layers", () => {
@@ -38,10 +38,20 @@ describe("ResourceTypeManifestMirror", () => {
     expect(MODULE_GROUPS.system.submodules).toHaveLength(3)
   })
 
-  it("has three module groups with correct labels", () => {
+  it("has 3 platform submodules", () => {
+    expect(MODULE_GROUPS.platform.submodules).toHaveLength(3)
+  })
+
+  it("has 2 tenant submodules", () => {
+    expect(MODULE_GROUPS.tenant.submodules).toHaveLength(2)
+  })
+
+  it("has five module groups with correct labels", () => {
     expect(MODULE_GROUPS.agents.label).toBe("Agents")
     expect(MODULE_GROUPS.integrations.label).toBe("Integrations")
     expect(MODULE_GROUPS.system.label).toBe("System")
+    expect(MODULE_GROUPS.platform.label).toBe("Platform")
+    expect(MODULE_GROUPS.tenant.label).toBe("Tenant")
   })
 
   it("all module group submodules are keys in the manifest", () => {
@@ -61,7 +71,7 @@ describe("ResourceTypeManifestMirror", () => {
         seen.add(submodule)
       }
     }
-    expect(seen.size).toBe(19)
+    expect(seen.size).toBe(24)
   })
 
   it("all agent submodules start with 'agent::'", () => {
@@ -82,8 +92,20 @@ describe("ResourceTypeManifestMirror", () => {
     }
   })
 
-  it("RESOURCE_TYPE_OPTIONS contains all 19 types", () => {
-    expect(RESOURCE_TYPE_OPTIONS).toHaveLength(19)
+  it("all platform submodules start with 'platform::'", () => {
+    for (const submodule of MODULE_GROUPS.platform.submodules) {
+      expect(submodule.startsWith("platform::")).toBe(true)
+    }
+  })
+
+  it("all tenant submodules start with 'tenant::'", () => {
+    for (const submodule of MODULE_GROUPS.tenant.submodules) {
+      expect(submodule.startsWith("tenant::")).toBe(true)
+    }
+  })
+
+  it("RESOURCE_TYPE_OPTIONS contains all 24 types", () => {
+    expect(RESOURCE_TYPE_OPTIONS).toHaveLength(24)
   })
 
   it("no legacy flat values in the manifest", () => {
@@ -143,5 +165,30 @@ describe("ResourceTypeManifestMirror", () => {
     expect(keys).toContain("system::observability")
     expect(keys).toContain("system::permissions")
     expect(keys).toContain("system::system_config")
+    expect(keys).toContain("platform::tenants")
+    expect(keys).toContain("platform::settings")
+    expect(keys).toContain("platform::audit")
+    expect(keys).toContain("tenant::settings")
+    expect(keys).toContain("tenant::members")
+  })
+
+  it("tenant-management actions mirror the backend manifest", () => {
+    expect(getActionsForResourceType("platform::tenants")).toEqual([
+      "create",
+      "read",
+      "update",
+      "delete",
+      "manage",
+    ])
+    expect(getActionsForResourceType("platform::settings")).toEqual(["read", "manage"])
+    expect(getActionsForResourceType("platform::audit")).toEqual(["read"])
+    expect(getActionsForResourceType("tenant::settings")).toEqual(["read", "manage"])
+    expect(getActionsForResourceType("tenant::members")).toEqual([
+      "create",
+      "read",
+      "update",
+      "delete",
+      "manage",
+    ])
   })
 })

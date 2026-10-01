@@ -23,6 +23,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -72,10 +73,14 @@ class ModelGuardrailConfiguration(Base):
     __tablename__ = "model_guardrail_configurations"
     __table_args__ = (
         UniqueConstraint("model_id", "model_name", "period", name="uq_guardrail_vendor_model_period"),
+        Index("ix_model_guardrail_configurations_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     model_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

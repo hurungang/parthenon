@@ -30,10 +30,14 @@ class GuardrailThresholdEvent(Base):
     __tablename__ = "guardrail_threshold_events"
     __table_args__ = (
         Index("ix_guardrail_threshold_events_agent_job", "agent_job_id"),
+        Index("ix_guardrail_threshold_events_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     model_guardrail_evaluation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

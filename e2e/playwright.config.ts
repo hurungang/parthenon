@@ -3,6 +3,9 @@ import path from 'path'
 
 export default defineConfig({
   testDir: './tests',
+  // auth-required/ specs need a live Keycloak + provisioned users (see
+  // tests/auth-required/README.md) — excluded from the default run.
+  testIgnore: '**/auth-required/**',
   fullyParallel: false,
   retries: 0,
   workers: 1,

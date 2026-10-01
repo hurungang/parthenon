@@ -38,10 +38,14 @@ class ModelUsagePosture(Base):
             name="uq_model_usage_posture_configuration_period",
         ),
         Index("ix_model_usage_postures_model", "model_id"),
+        Index("ix_model_usage_postures_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     model_guardrail_configuration_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

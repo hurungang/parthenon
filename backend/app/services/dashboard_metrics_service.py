@@ -221,7 +221,15 @@ class DashboardMetricsService:
         if not sub:
             logger.warning("DashboardMetricsService: No 'sub' in claims — all permissions denied.")
             return
-        result = await self._db.execute(select(PlatformUser.id).where(PlatformUser.sub == sub))
+        # Identity-plane lookup (FIX-20260929-221449): resolving the
+        # caller's PlatformUser by sub is platform-level — exempt from
+        # the session's tenant scope so the dashboard resolves its actor
+        # regardless of memberships in the resolved tenant.
+        from app.db.tenant_scoping import execute_unscoped
+
+        result = await execute_unscoped(
+            self._db, select(PlatformUser.id).where(PlatformUser.sub == sub)
+        )
         row = result.scalar_one_or_none()
         if row is not None:
             self._user_id = row

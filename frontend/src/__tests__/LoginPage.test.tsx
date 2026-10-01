@@ -26,6 +26,9 @@ vi.mock('../stores/authStore', () => ({
     claims: null,
     logout: vi.fn(),
     setToken: vi.fn(),
+    multiTenancyEnabled: false,
+    resolvedTenant: null,
+    refreshProviders: vi.fn(),
   }),
 }))
 

@@ -50,10 +50,14 @@ class ExecutionLogEntry(Base):
     __tablename__ = "execution_log_entries"
     __table_args__ = (
         Index("ix_execution_log_entries_session_id", "session_id"),
+        Index("ix_execution_log_entries_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

@@ -29,10 +29,16 @@ class AgentRunRelationship(Base):
         ),
         Index("ix_agent_run_relationships_parent", "parent_agent_job_id"),
         Index("ix_agent_run_relationships_child", "child_agent_job_id"),
+        Index("ix_agent_run_relationships_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="SET NULL"),
+        nullable=True,
     )
     parent_agent_job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

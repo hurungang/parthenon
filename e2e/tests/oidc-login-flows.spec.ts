@@ -396,17 +396,4 @@ test.describe('Token Persistence', () => {
       expect(page.url()).not.toContain('/login')
     }
   })
-
-test.describe('Setup Wizard', () => {
-
-  test('setup page is accessible at /setup', async ({ page }) => {
-    await setupMocks(page, { hasOidcProvider: false, superAdminEnabled: false })
-    await page.goto('/setup')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(3000)
-
-    await expect(page.locator('body')).toBeVisible({ timeout: 5000 })
-    console.log('Setup page URL:', page.url())
-  })
-})
 })

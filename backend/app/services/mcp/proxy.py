@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.credential_vault import get_vault
 from app.core.ssl_context import get_ssl_context
-from app.db.models.mcp_hub import McpSession, McpSessionAuthType, McpTool
+from app.db.models.mcp_hub import McpServer, McpSession, McpSessionAuthType, McpTool
 from app.services.mcp.oauth_refresh import OAuthRefreshService
 
 logger = logging.getLogger(__name__)
@@ -175,9 +175,15 @@ class McpProxyEngine:
         """
         from sqlalchemy.orm import selectinload
 
+        # McpSession is a parent-scoped (tenant-agnostic) table: joining the
+        # tenant-scoped McpServer parent lets the do_orm_execute choke point
+        # constrain every resolution to the request's tenant (no-op on
+        # unscoped sessions — FK-guaranteed inner join).
         if session_id:
             result = await db.execute(
-                select(McpSession).where(
+                select(McpSession)
+                .join(McpServer, McpServer.id == McpSession.server_id)
+                .where(
                     McpSession.id == session_id,
                     McpSession.server_id == server_id,
                     McpSession.is_active == True,  # noqa: E712
@@ -187,7 +193,9 @@ class McpProxyEngine:
         else:
             # Priority 1: explicitly marked default + active
             result = await db.execute(
-                select(McpSession).where(
+                select(McpSession)
+                .join(McpServer, McpServer.id == McpSession.server_id)
+                .where(
                     McpSession.server_id == server_id,
                     McpSession.is_default == True,  # noqa: E712
                     McpSession.is_active == True,  # noqa: E712
@@ -198,7 +206,9 @@ class McpProxyEngine:
             if not session:
                 # Priority 2: sole active session auto-fallback
                 result = await db.execute(
-                    select(McpSession).where(
+                    select(McpSession)
+                    .join(McpServer, McpServer.id == McpSession.server_id)
+                    .where(
                         McpSession.server_id == server_id,
                         McpSession.is_active == True,  # noqa: E712
                     )

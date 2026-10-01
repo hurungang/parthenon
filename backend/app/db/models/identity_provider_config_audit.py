@@ -18,9 +18,18 @@ class IdentityProviderConfigAudit(Base):
     """
 
     __tablename__ = "identity_provider_config_audits"
+    __table_args__ = (
+        sa.Index("ix_identity_provider_config_audits_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    # Tenant the audited config belongs to (follows the config it audits)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="SET NULL"),
+        nullable=True,
     )
     config_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

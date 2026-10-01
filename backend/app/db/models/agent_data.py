@@ -24,10 +24,14 @@ class AgentData(Base):
             "session_id",
             "data_name",
         ),
+        Index("ix_agent_data_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

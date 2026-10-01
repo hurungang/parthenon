@@ -1,0 +1,1364 @@
+..............ss...s............sss....................................s [  2%]
+ssssss............ssssssssssssssssssssssssss............................ [  5%]
+.ssssssssssssssssssssssssss............................................. [  8%]
+..........s.................ss.......................................... [ 11%]
+.................................................sssss..F......F........ [ 14%]
+........................................................................ [ 17%]
+.s.........ssss.....................................sFF..sssssssssssssss [ 20%]
+sssssssss.....s..................................sss.s....s............. [ 23%]
+..........................................FFFFFF........................ [ 26%]
+......sssssssssssssssssssssssssss...F..F..F.......ssssssssss............ [ 29%]
+........................ssssssssssss.ss...................sss........... [ 32%]
+........................ss....FFFFFF.sssssssssssssssssssssssssssssssssss [ 35%]
+sss....ssss...............................ssss..sss.F................... [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+...................................................................s.... [ 52%]
+........................................................................ [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+......................................................sss.........sss... [ 73%]
+.............................ssss....................................... [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+.......................................s................................ [ 93%]
+........................................................................ [ 96%]
+........................................................................ [ 99%]
+..............E                                                          [100%]
+==================================== ERRORS ====================================
+_ ERROR at teardown of test_conversation_context_emits_delegation_status_events _
+
+    def finalizer() -> None:
+        """Yield again, to finalize."""
+    
+        async def async_finalizer() -> None:
+            try:
+                await gen_obj.__anext__()
+            except StopAsyncIteration:
+                pass
+            else:
+                msg = "Async generator fixture didn't stop."
+                msg += "Yield only once."
+                raise ValueError(msg)
+    
+>       runner.run(async_finalizer(), context=context)
+
+.venv/lib/python3.11/site-packages/pytest_asyncio/plugin.py:424: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/pytest_asyncio/plugin.py:416: in async_finalizer
+    await gen_obj.__anext__()
+backend/tests/fixtures/authenticated_clients.py:84: in cc_client
+    await client.aclose()
+.venv/lib/python3.11/site-packages/httpx/_client.py:1985: in aclose
+    await self._transport.aclose()
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:406: in aclose
+    await self._pool.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:353: in aclose
+    await self._close_connections(closing_connections)
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:345: in _close_connections
+    await connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:173: in aclose
+    await self._connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+----------------------------- Captured stdout call -----------------------------
+2026-09-29 11:48:31,672 - app.services.agents.langchain_tool_wrapper - INFO - Delegation 'research-agent' -> tool_response to parent (session=e7daf7e9-ad28-4161-a0c3-98a9f0527257): status=completed response={}
+------------------------------ Captured log call -------------------------------
+INFO     app.services.agents.langchain_tool_wrapper:langchain_tool_wrapper.py:536 Delegation 'research-agent' -> tool_response to parent (session=e7daf7e9-ad28-4161-a0c3-98a9f0527257): status=completed response={}
+=================================== FAILURES ===================================
+_____ TestNamespaceMigration.test_deployment_has_namespaced_policy_values ______
+
+self = <test_namespace_migration.TestNamespaceMigration object at 0x10f439d90>
+real_db_url = 'postgresql+asyncpg://parthenon:parthenon@localhost:5432/parthenon'
+
+    async def test_deployment_has_namespaced_policy_values(self, real_db_url):
+        """After migration, policy_statements.module should not contain legacy flat values."""
+        engine = create_async_engine(real_db_url)
+        TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    
+        async with TestSession() as session:
+            # Check for any legacy flat values
+            for legacy_val in LEGACY_TYPES:
+                result = await session.execute(
+                    text("SELECT COUNT(*) FROM policy_statements WHERE module = :module"),
+                    {"module": legacy_val},
+                )
+                count = result.scalar()
+>               assert count == 0, (
+                    f"Found {count} policy_statements with legacy flat value '{legacy_val}'. "
+                    f"Migration may not have been applied."
+                )
+E               AssertionError: Found 6 policy_statements with legacy flat value 'agent'. Migration may not have been applied.
+E               assert 6 == 0
+
+backend/tests/db/test_namespace_migration.py:154: AssertionError
+________________ TestNewTables.test_tenancy_switch_seeded_false ________________
+
+self = <test_tenant_schema_migration.TestNewTables object at 0x10f443c90>
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x110a6f6d0>
+
+    async def test_tenancy_switch_seeded_false(self, db):
+        """Pristine state: the switch row exists and is FALSE."""
+        value = await _scalar(
+            db,
+            "SELECT value FROM platform_settings WHERE key = 'multi_tenancy_enabled'",
+        )
+        assert value is not None, "multi_tenancy_enabled row must be seeded"
+>       assert value.get("enabled") is False
+E       AssertionError: assert True is False
+E        +  where True = <built-in method get of dict object at 0x11170ebc0>('enabled')
+E        +    where <built-in method get of dict object at 0x11170ebc0> = {'enabled': True}.get
+
+backend/tests/db/test_tenant_schema_migration.py:117: AssertionError
+_ TestFullExecutionFlow.test_cc_internal_data_api_accessible_from_ar_perspective _
+
+self = <tests.integration.test_agent_execution_flow.TestFullExecutionFlow object at 0x10f50b250>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_cc_internal_data_api_accessible_from_ar_perspective(self, cc_client):
+        """CC's internal data API is accessible with a service cert (AR's perspective).
+    
+        AR calls CC's data API to claim queued sessions and post results.
+        This confirms the AR → CC data path is open, completing one leg of
+        the full bidirectional flow.
+    
+        EXPECTED TO PASS — this leg already works (test-service cert is accepted
+        by CC's require_service_certificate dependency).
+        """
+        await _skip_if_unreachable(_cc_url(), "Control Center")
+    
+        response = await cc_client.post(
+            "/api/v1/internal/data/sessions/claim-queued",
+            json={"limit": 1},
+        )
+>       assert response.status_code == 200, (
+            f"CC data API (claim-queued) returned {response.status_code}: {response.text[:200]}"
+        )
+E       AssertionError: CC data API (claim-queued) returned 403: {"detail":{"error":"internal_endpoint_denied","reason":"unknown_internal_caller","caller_type":null,"method":"POST","endpoint":"/api/v1/internal/data/sessions/claim-queued"}}
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_agent_execution_flow.py:425: AssertionError
+____ TestFullExecutionFlow.test_session_status_endpoint_confirms_data_path _____
+
+self = <tests.integration.test_agent_execution_flow.TestFullExecutionFlow object at 0x10f50bb50>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_session_status_endpoint_confirms_data_path(self, cc_client):
+        """CC's session status update endpoint reachable from AR (via service cert).
+    
+        AR calls PATCH /internal/data/sessions/{id}/status to update session
+        state.  A 404 (not 401) proves the auth succeeds — AR can push status
+        updates back to CC.
+    
+        EXPECTED TO PASS — this leg already works.
+        """
+        await _skip_if_unreachable(_cc_url(), "Control Center")
+    
+        fake_session_id = "00000000-0000-0000-0000-000000000099"
+>       response = await cc_client.patch(
+            f"/api/v1/internal/data/sessions/{fake_session_id}/status",
+            json={"status": "running"},
+        )
+
+backend/tests/integration/test_agent_execution_flow.py:444: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1933: in patch
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+--------------------------- Captured stdout teardown ---------------------------
+2026-09-29 11:41:06,140 - opentelemetry.sdk.metrics._internal.export - WARNING - Cannot call collect on a MetricReader until it is registered on a MeterProvider
+2026-09-29 11:41:06,179 - opentelemetry.sdk.metrics._internal.export - WARNING - Cannot call collect on a MetricReader until it is registered on a MeterProvider
+2026-09-29 11:41:06,186 - opentelemetry.sdk.metrics._internal.export - WARNING - Cannot call collect on a MetricReader until it is registered on a MeterProvider
+_ TestAgentRuntimeToControlCenterDataPath.test_claim_queued_sessions_endpoint_accessible _
+
+self = <tests.integration.test_cross_service_flows.TestAgentRuntimeToControlCenterDataPath object at 0x10f5e9190>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_claim_queued_sessions_endpoint_accessible(self, cc_client):
+        """AR claim-queued endpoint: CC returns 200 with a session_ids list.
+    
+        This is the endpoint AR calls to atomically claim queued sessions.
+        An empty list confirms there are no queued sessions; it also confirms
+        the auth path from AR to CC works end-to-end.
+        """
+        response = await cc_client.post(
+            "/api/v1/internal/data/sessions/claim-queued",
+            json={"limit": 1},
+        )
+>       assert response.status_code == 200, (
+            f"claim-queued returned {response.status_code}: {response.text[:200]}"
+        )
+E       AssertionError: claim-queued returned 403: {"detail":{"error":"internal_endpoint_denied","reason":"unknown_internal_caller","caller_type":null,"method":"POST","endpoint":"/api/v1/internal/data/sessions/claim-queued"}}
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_cross_service_flows.py:174: AssertionError
+_ TestAgentRuntimeToControlCenterDataPath.test_session_status_update_rejects_nonexistent_session _
+
+self = <tests.integration.test_cross_service_flows.TestAgentRuntimeToControlCenterDataPath object at 0x10f5e9910>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_session_status_update_rejects_nonexistent_session(self, cc_client):
+        """PATCH /internal/data/sessions/{id}/status returns 404 for unknown session.
+    
+        This endpoint is used by AR to post running/completed/failed transitions.
+        A 404 (not 401/403) proves the auth path works — AR can reach CC and
+        auth is accepted.
+        """
+        fake_id = "00000000-0000-0000-0000-000000000002"
+>       response = await cc_client.patch(
+            f"/api/v1/internal/data/sessions/{fake_id}/status",
+            json={"status": "running"},
+        )
+
+backend/tests/integration/test_cross_service_flows.py:190: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1933: in patch
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_ TestAgentRuntimeToControlCenterDataPath.test_session_result_submission_rejects_nonexistent_session _
+
+self = <tests.integration.test_cross_service_flows.TestAgentRuntimeToControlCenterDataPath object at 0x10f5ea0d0>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_session_result_submission_rejects_nonexistent_session(self, cc_client):
+        """POST /internal/data/sessions/{id}/result returns 404 for unknown session.
+    
+        This endpoint is used by AR to post execution results back to CC.
+        404 confirms the auth path is open.
+        """
+        fake_id = "00000000-0000-0000-0000-000000000003"
+        response = await cc_client.post(
+            f"/api/v1/internal/data/sessions/{fake_id}/result",
+            json={"output_data": {"test": "result"}},
+        )
+>       assert response.status_code == 404, (
+            f"Expected 404, got {response.status_code}: {response.text[:200]}"
+        )
+E       AssertionError: Expected 404, got 403: {"detail":{"error":"internal_endpoint_denied","reason":"unknown_internal_caller","caller_type":null,"method":"POST","endpoint":"/api/v1/internal/data/sessions/{session_id}/result"}}
+E       assert 403 == 404
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_cross_service_flows.py:211: AssertionError
+_ TestControlCenterToCommHubDispatchPath.test_ch_dispatch_rejects_test_service_cert _
+
+self = <tests.integration.test_cross_service_flows.TestControlCenterToCommHubDispatchPath object at 0x10f5ea950>
+ch_client = <httpx.AsyncClient object at 0x111e25a10>
+
+    @pytest.mark.asyncio
+    async def test_ch_dispatch_rejects_test_service_cert(self, ch_client):
+        """CH /dispatch requires service:control-center cert; test-service cert is rejected.
+    
+        This test confirms the mTLS enforcement on CH's dispatch path is
+        working correctly — a 401 here is the **expected** result.
+        """
+        await _skip_if_unreachable(_ch_url(), "Communication Hub")
+    
+        response = await ch_client.post(
+            "/dispatch",
+            json={"session_id": "00000000-0000-0000-0000-000000000004", "payload": {}},
+        )
+        # 401 confirms CH's cert middleware is active and test-service cert is rejected
+>       assert response.status_code == 401, (
+            f"Expected 401 (test-service cert rejected), got {response.status_code}"
+        )
+E       AssertionError: Expected 401 (test-service cert rejected), got 404
+E       assert 404 == 401
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+backend/tests/integration/test_cross_service_flows.py:249: AssertionError
+_______ TestControlCenterToCommHubDispatchPath.test_ch_health_is_public ________
+
+self = <tests.integration.test_cross_service_flows.TestControlCenterToCommHubDispatchPath object at 0x10f5eb110>
+ch_client = <httpx.AsyncClient object at 0x111e25a10>
+
+    @pytest.mark.asyncio
+    async def test_ch_health_is_public(self, ch_client):
+        """CH /health does not require a cert and is accessible with any client."""
+        await _skip_if_unreachable(_ch_url(), "Communication Hub")
+    
+>       response = await ch_client.get("/health")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/integration/test_cross_service_flows.py:258: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1768: in get
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_ TestControlCenterToAgentRuntimeTriggerPath.test_ar_execute_rejects_test_service_cert _
+
+self = <tests.integration.test_cross_service_flows.TestControlCenterToAgentRuntimeTriggerPath object at 0x10f5e9f10>
+ar_client = <httpx.AsyncClient object at 0x112549410>
+
+    @pytest.mark.asyncio
+    async def test_ar_execute_rejects_test_service_cert(self, ar_client):
+        """AR /execute requires service:control-center cert; test-service cert is rejected.
+    
+        A 401 here is the **expected** result — it confirms cert enforcement is active.
+        """
+        await _skip_if_unreachable(_ar_url(), "Agent Runtime")
+    
+>       response = await ar_client.post(
+            "/execute",
+            json={
+                "session_id": "00000000-0000-0000-0000-000000000005",
+                "agent_type_id": "00000000-0000-0000-0000-000000000006",
+            },
+        )
+
+backend/tests/integration/test_cross_service_flows.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:229: in handle_async_request
+    await self._close_connections(closing)
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:345: in _close_connections
+    await connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:173: in aclose
+    await self._connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_____ TestCommunicationHubForwardingEndpoint.test_ch_rejects_non_cc_certs ______
+
+self = <tests.integration.test_full_execution_flow.TestCommunicationHubForwardingEndpoint object at 0x10f63b0d0>
+ch_client = <httpx.AsyncClient object at 0x111e25a10>
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_ch_rejects_non_cc_certs(self, ch_client):
+        """CH /internal/agent/execute rejects callers that are not Control Center.
+    
+        Expected result: **FAIL** (architecture bug)
+    
+        ``ControlPlaneMiddleware`` in Communication Hub has an explicit bypass for
+        ``/internal/agent/execute``::
+    
+            if request.url.path == _AGENT_EXECUTE_PATH:
+                return await call_next(request)  # ← no cert check!
+    
+        This allows ANY caller — not just Control Center — to trigger agent execution.
+        The test sends the ``service:test-service`` cert (not ``service:control-center``)
+        and asserts it is rejected with 401.  Because the path is exempt, it passes
+        through and the assertion fails.
+    
+        Fix:
+            Remove the ``_AGENT_EXECUTE_PATH`` exemption from
+            ``app/communication_hub/middleware/control_plane.py`` and enforce
+            ``service:control-center`` cert validation on this path.
+        """
+        await _skip_if_unreachable(_ch_url(), "Communication Hub")
+    
+        payload = {
+            "session_id": str(uuid.uuid4()),
+            "agent_type_id": str(uuid.uuid4()),
+        }
+        # ch_client carries service:test-service cert — not service:control-center
+>       response = await ch_client.post("/internal/agent/execute", json=payload)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/integration/test_full_execution_flow.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_____ TestControlCenterCallsCommunicationHub.test_cc_includes_certificate ______
+
+self = <tests.integration.test_full_execution_flow.TestControlCenterCallsCommunicationHub object at 0x10f64c790>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_cc_includes_certificate(self, cc_client):
+        """Control Center is reachable and responds with correct service identity.
+    
+        Expected result: **PASS**
+    
+        This test verifies CC is running and the service cert mechanism works — the
+        ``cc_client`` fixture carries a ``service:test-service`` certificate that CC's
+        ``require_service_certificate`` accepts on ``/internal/*`` routes.
+    
+        CC also maintains its own service certificate (``CC_CERT_PATH``) for outbound
+        calls.  The health endpoint confirms CC is alive; cert presence for outbound
+        calls is confirmed by the CommunicationHubClient / AgentRuntimeClient source.
+        """
+        await _skip_if_unreachable(_cc_url(), "Control Center")
+    
+>       response = await cc_client.get("/health")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+backend/tests/integration/test_full_execution_flow.py:386: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1768: in get
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:229: in handle_async_request
+    await self._close_connections(closing)
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:345: in _close_connections
+    await connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:173: in aclose
+    await self._connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_ TestAgentRuntimeOnlyAcceptsCommunicationHub.test_ar_middleware_enforces_ch_only _
+
+self = <tests.integration.test_full_execution_flow.TestAgentRuntimeOnlyAcceptsCommunicationHub object at 0x10f64df50>
+ar_client = <httpx.AsyncClient object at 0x112549410>
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_ar_middleware_enforces_ch_only(self, ar_client):
+        """AR /execute rejection error message names communication-hub as the expected caller.
+    
+        Expected result: **FAIL** (architecture bug)
+    
+        When AR rejects a certificate on ``/execute``, the error response currently
+        references ``service:control-center`` as the expected CN (because
+        ``_EXPECTED_SERVICE_NAME = "control-center"``).  After the fix, the error
+        would reference ``service:communication-hub``.
+    
+        The test calls AR ``/execute`` with the ``service:test-service`` cert (which
+        is always rejected), then checks that the rejection message confirms the
+        *correct* expected caller (``communication-hub``).
+        """
+        await _skip_if_unreachable(_ar_url(), "Agent Runtime")
+    
+>       response = await ar_client.post(
+            "/execute",
+            json={
+                "session_id": str(uuid.uuid4()),
+                "agent_type_id": str(uuid.uuid4()),
+            },
+        )
+
+backend/tests/integration/test_full_execution_flow.py:484: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:229: in handle_async_request
+    await self._close_connections(closing)
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:345: in _close_connections
+    await connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:173: in aclose
+    await self._connection.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_ TestAuthenticatedDataAPICalls.test_session_data_api_requires_valid_service_cert _
+
+self = <tests.integration.test_service_auth.TestAuthenticatedDataAPICalls object at 0x10f6cf4d0>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_session_data_api_requires_valid_service_cert(self, cc_client):
+        """GET /internal/data/sessions/{id} returns 404 (not 401/403) for test service cert.
+    
+        A 404 proves the cert was accepted and the request reached the handler.
+        A 401 or 403 would indicate auth failure.
+        """
+>       response = await cc_client.get(
+            f"/api/v1/internal/data/sessions/{self._FAKE_UUID}"
+        )
+
+backend/tests/integration/test_service_auth.py:177: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1768: in get
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+_________ TestAuthenticatedDataAPICalls.test_claim_queued_sessions_api _________
+
+self = <tests.integration.test_service_auth.TestAuthenticatedDataAPICalls object at 0x10f721350>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_claim_queued_sessions_api(self, cc_client):
+        """POST /internal/data/sessions/claim-queued returns 200 with session_ids list.
+    
+        Empty list is expected when no sessions are queued; validates the full
+        auth+data path without requiring pre-existing test data.
+        """
+        response = await cc_client.post(
+            "/api/v1/internal/data/sessions/claim-queued",
+            json={"limit": 4},
+        )
+>       assert response.status_code == 200, (
+            f"Expected 200, got {response.status_code}: {response.text[:200]}"
+        )
+E       AssertionError: Expected 200, got 403: {"detail":{"error":"internal_endpoint_denied","reason":"unknown_internal_caller","caller_type":null,"method":"POST","endpoint":"/api/v1/internal/data/sessions/claim-queued"}}
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_service_auth.py:195: AssertionError
+____________ TestAuthenticatedDataAPICalls.test_agent_type_plan_api ____________
+
+self = <tests.integration.test_service_auth.TestAuthenticatedDataAPICalls object at 0x10f722190>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_agent_type_plan_api(self, cc_client):
+        """GET /internal/data/agent-types/{id}/plan returns 404 for nonexistent agent type.
+    
+        404 proves auth succeeded; 401/403 indicates a cert validation problem.
+        """
+>       response = await cc_client.get(
+            f"/api/v1/internal/data/agent-types/{self._FAKE_UUID}/plan"
+        )
+
+backend/tests/integration/test_service_auth.py:208: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1768: in get
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+__________ TestAuthenticatedDataAPICalls.test_agent_type_context_api ___________
+
+self = <tests.integration.test_service_auth.TestAuthenticatedDataAPICalls object at 0x10f757210>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_agent_type_context_api(self, cc_client):
+        """GET /internal/data/agent-types/{id}/context returns 404 for nonexistent type."""
+        response = await cc_client.get(
+            f"/api/v1/internal/data/agent-types/{self._FAKE_UUID}/context"
+        )
+>       assert response.status_code == 404, (
+            f"Expected 404, got {response.status_code}: {response.text[:200]}"
+        )
+E       AssertionError: Expected 404, got 403: {"detail":{"error":"internal_endpoint_denied","reason":"unknown_internal_caller","caller_type":null,"method":"GET","endpoint":"/api/v1/internal/data/agent-types/{agent_type_id}/context"}}
+E       assert 403 == 404
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_service_auth.py:221: AssertionError
+_____________ TestAuthenticatedDataAPICalls.test_model_config_api ______________
+
+self = <tests.integration.test_service_auth.TestAuthenticatedDataAPICalls object at 0x10f754990>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_model_config_api(self, cc_client):
+        """GET /internal/data/model-configs/{id} returns 404 for nonexistent config."""
+>       response = await cc_client.get(
+            f"/api/v1/internal/data/model-configs/{self._FAKE_UUID}"
+        )
+
+backend/tests/integration/test_service_auth.py:228: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.11/site-packages/httpx/_client.py:1768: in get
+    return await self.request(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.11/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1444: in _handle_async_request_wrapper
+    raise exception.with_traceback(exception.__traceback__)
+.venv/lib/python3.11/site-packages/opentelemetry/instrumentation/httpx/__init__.py:1399: in _handle_async_request_wrapper
+    response = await wrapped(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.11/site-packages/httpcore/_async/connection.py:103: in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:135: in handle_async_request
+    await self._response_closed()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:250: in _response_closed
+    await self.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_async/http11.py:258: in aclose
+    await self._network_stream.aclose()
+.venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py:53: in aclose
+    await self._stream.aclose()
+.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:1344: in aclose
+    self._transport.close()
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/selector_events.py:864: in close
+    self._loop.call_soon(self._call_connection_lost, None)
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:762: in call_soon
+    self._check_closed()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=True debug=False>
+
+    def _check_closed(self):
+        if self._closed:
+>           raise RuntimeError('Event loop is closed')
+E           RuntimeError: Event loop is closed
+
+/usr/local/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/base_events.py:520: RuntimeError
+___________ TestAuthenticatedDataAPICalls.test_user_permissions_api ____________
+
+self = <tests.integration.test_service_auth.TestAuthenticatedDataAPICalls object at 0x10f754e50>
+cc_client = <httpx.AsyncClient object at 0x111135410>
+
+    @pytest.mark.asyncio
+    async def test_user_permissions_api(self, cc_client):
+        """GET /internal/data/users/{id}/permissions returns 404 for nonexistent user."""
+        response = await cc_client.get(
+            f"/api/v1/internal/data/users/{self._FAKE_UUID}/permissions"
+        )
+>       assert response.status_code == 404, (
+            f"Expected 404, got {response.status_code}: {response.text[:200]}"
+        )
+E       AssertionError: Expected 404, got 403: {"detail":{"error":"internal_endpoint_denied","reason":"unknown_internal_caller","caller_type":null,"method":"GET","endpoint":"/api/v1/internal/data/users/{user_id}/permissions"}}
+E       assert 403 == 404
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_service_auth.py:241: AssertionError
+_ TestWebSocketServiceIntegration.test_control_center_does_not_serve_websocket_routes _
+
+self = <tests.integration.test_websocket_communication_hub.TestWebSocketServiceIntegration object at 0x10f7c9490>
+
+    @pytest.mark.asyncio
+    async def test_control_center_does_not_serve_websocket_routes(self):
+        """Verify Control Center no longer has WebSocket routes registered."""
+        import httpx
+    
+        async with httpx.AsyncClient() as client:
+            # Control Center should still have its API routes
+            response = await client.get(f"{CONTROL_CENTER_URL}/health", timeout=5.0)
+            assert response.status_code == 200
+    
+            health_data = response.json()
+            assert health_data["service"] == "control-center"
+    
+            # But WebSocket paths should return 404 or not be registered
+            try:
+                ws_response = await client.get(
+                    f"{CONTROL_CENTER_URL}/ws/sessions/test",
+                    timeout=2.0
+                )
+                # Should get 404, 401 (auth rejection), 405 (method not allowed),
+                # or 426 (upgrade required) - anything except 200 or 101 (WebSocket upgrade)
+                assert ws_response.status_code not in [200, 101], \
+                    "Control Center should not serve WebSocket endpoint with successful status"
+>               assert ws_response.status_code in [401, 404, 405, 426], \
+                    f"Expected auth rejection or not found, got {ws_response.status_code}"
+E                   AssertionError: Expected auth rejection or not found, got 403
+E                   assert 403 in [401, 404, 405, 426]
+E                    +  where 403 = <Response [403 Forbidden]>.status_code
+
+backend/tests/integration/test_websocket_communication_hub.py:239: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/opentelemetry/sdk/_logs/_internal/__init__.py:551
+tests/core/test_telemetry.py::TestExporterFactoryDisabledSignals::test_traces_disabled_produces_no_trace_processors
+  /Users/minglijiang/source/parthenon/.venv/lib/python3.11/site-packages/opentelemetry/sdk/_logs/_internal/__init__.py:551: DeprecationWarning: `LoggingHandler` in `opentelemetry-sdk` is deprecated. Use the handler from `opentelemetry-instrumentation-logging` instead.
+    warnings.warn(
+
+backend/app/main.py:348
+  /Users/minglijiang/source/parthenon/backend/app/main.py:348: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+.venv/lib/python3.11/site-packages/fastapi/applications.py:4598
+.venv/lib/python3.11/site-packages/fastapi/applications.py:4598
+tests/communication_hub/api/internal/test_agent_execute.py::test_happy_path_forwards_and_returns_accepted
+  /Users/minglijiang/source/parthenon/.venv/lib/python3.11/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+backend/app/main.py:380
+  /Users/minglijiang/source/parthenon/backend/app/main.py:380: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+backend/tests/fixtures/test_service_certificate.py:34
+  /Users/minglijiang/source/parthenon/backend/tests/fixtures/test_service_certificate.py:34: PytestCollectionWarning: cannot collect test class 'TestServiceBootstrapError' because it has a __init__ constructor (from: tests/fixtures/test_service_certificate.py)
+    class TestServiceBootstrapError(Exception):
+
+backend/tests/fixtures/test_service_certificate.py:38
+  /Users/minglijiang/source/parthenon/backend/tests/fixtures/test_service_certificate.py:38: PytestCollectionWarning: cannot collect test class 'TestServiceCertificateManager' because it has a __init__ constructor (from: tests/fixtures/test_service_certificate.py)
+    class TestServiceCertificateManager:
+
+backend/tests/fixtures/test_service_certificate.py:34
+  /Users/minglijiang/source/parthenon/backend/tests/fixtures/test_service_certificate.py:34: PytestCollectionWarning: cannot collect test class 'TestServiceBootstrapError' because it has a __init__ constructor (from: tests/integration/test_service_auth.py)
+    class TestServiceBootstrapError(Exception):
+
+backend/tests/fixtures/test_service_certificate.py:38
+  /Users/minglijiang/source/parthenon/backend/tests/fixtures/test_service_certificate.py:38: PytestCollectionWarning: cannot collect test class 'TestServiceCertificateManager' because it has a __init__ constructor (from: tests/integration/test_service_auth.py)
+    class TestServiceCertificateManager:
+
+backend/app/services/agents/langchain_system_tools.py:54
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:54: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainSendNotificationTool(BaseTool):
+
+backend/app/services/agents/langchain_system_tools.py:100
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:100: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainGetRecipientGroupTool(BaseTool):
+
+backend/app/services/agents/langchain_system_tools.py:139
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:139: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainHumanInterveneTool(BaseTool):
+
+backend/app/services/agents/langchain_system_tools.py:250
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:250: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainQueryResultTool(BaseTool):
+
+backend/app/services/agents/langchain_system_tools.py:317
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:317: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainSaveDataTool(BaseTool):
+
+backend/app/services/agents/langchain_system_tools.py:362
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:362: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainGetDataTool(BaseTool):
+
+backend/app/services/agents/langchain_system_tools.py:429
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_system_tools.py:429: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class LangChainGetOutputTool(BaseTool):
+
+tests/api/test_agent_type_bindings_api.py::TestValidationErrors::test_reject_sop_not_in_role
+tests/api/test_agent_type_bindings_api.py::TestValidationErrors::test_reject_skill_not_in_role
+tests/api/test_agent_type_bindings_api.py::TestValidationErrors::test_reject_duplicate_sop_binding
+tests/api/test_agent_type_bindings_api.py::TestValidationErrors::test_reject_binding_without_role
+tests/api/test_agent_type_bindings_api.py::TestBindingValidationDetailShape::test_update_validation_failure_carries_per_binding_detail
+  /Users/minglijiang/source/parthenon/.venv/lib/python3.11/site-packages/fastapi/routing.py:328: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/api/test_model_configs_api.py: 2 warnings
+tests/api/v1/test_api_keys_api.py: 2 warnings
+tests/api/v1/test_permissions_api.py: 1 warning
+tests/api/v1/test_role_policy_batch.py: 5 warnings
+tests/communication_hub/api/internal/test_validate_api_key.py: 1 warning
+tests/integration/api/test_agent_types_plan.py: 1 warning
+tests/integration/test_intervention_api_integration.py: 1 warning
+tests/integration/test_notification_api.py: 2 warnings
+tests/test_data_types_api.py: 4 warnings
+tests/test_tenant_licensing_quotas.py: 2 warnings
+tests/test_tenant_registration.py: 2 warnings
+  /Users/minglijiang/source/parthenon/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:59: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)
+
+tests/api/v1/test_permissions_api.py::test_list_platform_users_as_admin_returns_200
+  /Users/minglijiang/source/parthenon/backend/app/api/v1/platform_users.py:100: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    tenant_id = scope_for_session(db)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/api/v1/test_sops_api.py::test_get_sop_with_real_db_triggers_missing_greenlet
+tests/integration/api/test_runtime_topology_api.py::test_conversation_counts_chat_spawned_linked_job_as_active
+tests/integration/api/test_runtime_topology_stream.py::test_stream_payload_matches_rest_shape
+tests/integration/db/test_scheduled_job_schema.py::test_schedule_persists_with_null_scheduled_by_user_id
+tests/integration/test_internal_intervene_respond.py::TestInternalRespondRequiresServiceCert::test_internal_respond_requires_service_cert
+tests/integration/test_intervention_api_integration.py::TestExistingEndpointsReturnNewFields::test_resume_returns_intervene_request_id
+tests/integration/test_non_conversational_regression.py::TestNonConversationalFlowPreservation::test_mixed_conversational_and_non_conv
+tests/unit/test_ws_delegation_visibility.py::test_conversation_context_emits_delegation_status_events
+  sys:1: SAWarning: Can't sort tables for DROP; an unresolvable foreign key dependency exists between tables: agent_jobs, agent_outputs, termination_requests; and backend does not support ALTER.  To restore at least a partial sort, apply use_alter=True to ForeignKey and ForeignKeyConstraint objects involved in the cycle to mark these as known cycles that will be ignored.
+
+tests/communication_hub/api/internal/test_agent_execute.py::test_happy_path_forwards_and_returns_accepted
+  /Users/minglijiang/source/parthenon/backend/app/communication_hub/main.py:146: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/core/test_telemetry.py::TestExporterFactoryConsole::test_console_builds_log_processor
+tests/core/test_telemetry.py::TestExporterFactoryConsole::test_console_log_exporter_type
+  /Users/minglijiang/source/parthenon/backend/app/core/telemetry.py:138: DeprecationWarning: Use ConsoleLogRecordExporter. Since logs are not stable yet this WILL be removed in future releases.
+    return ConsoleLogExporter()
+
+tests/integration/test_system_tool_endpoints.py::test_ch_allowlist_contains_all_system_tool_cc_endpoint_paths
+  /Users/minglijiang/source/parthenon/backend/tests/integration/test_system_tool_endpoints.py:235: UserWarning: Stale entries in _CH_ALLOWLIST:
+  POST /api/v1/internal/system-tools/skills/resolve  (stale)
+    warnings.warn(
+
+tests/integration/test_tenant_adoption.py: 6 warnings
+tests/test_default_tenant_roles.py: 1 warning
+tests/test_platform_admin_api.py: 3 warnings
+  /Users/minglijiang/source/parthenon/backend/app/services/tenancy/tenant_adoption_service.py:172: SAWarning: Cannot correctly sort tables; there are unresolvable cycles between tables "agent_jobs, agent_outputs, termination_requests", which is usually caused by mutually dependent foreign key constraints.  Foreign key constraints involving these tables will not be considered; this warning may raise an error in a future release.
+    for table in Base.metadata.sorted_tables:
+
+tests/integration/test_tenant_adoption.py::TestSystemTenantAdoption::test_backfill_claims_every_null_row
+  /Users/minglijiang/source/parthenon/backend/tests/integration/test_tenant_adoption.py:152: SAWarning: Cannot correctly sort tables; there are unresolvable cycles between tables "agent_jobs, agent_outputs, termination_requests", which is usually caused by mutually dependent foreign key constraints.  Foreign key constraints involving these tables will not be considered; this warning may raise an error in a future release.
+    for table in Base.metadata.sorted_tables:
+
+tests/security/test_cross_tenant_isolation.py::TestCrossTenantIsolationPerDomain::test_direct_address_yields_none_and_audits[identity_roles]
+tests/security/test_cross_tenant_isolation.py::TestCrossTenantIsolationPerDomain::test_direct_address_yields_none_and_audits[mcp_skills_sops]
+  sys:1: SAWarning: fully NULL primary key identity cannot load any object.  This condition may raise an error in a future release.
+
+tests/services/test_mcp_oauth_service.py::test_callback_token_exchange_200_succeeds
+tests/services/test_mcp_oauth_service.py::test_callback_token_exchange_201_succeeds
+tests/services/test_mcp_oauth_service.py::test_callback_token_exchange_204_succeeds
+tests/services/test_mcp_oauth_service.py::test_callback_tool_sync_success_returns_counts
+tests/services/test_mcp_oauth_service.py::test_callback_tool_sync_failure_handled_gracefully
+tests/services/test_mcp_oauth_service.py::test_callback_tool_sync_skipped_when_server_not_found
+  /Users/minglijiang/source/parthenon/backend/app/services/mcp_oauth_service.py:837: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(session)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/services/test_termination_orchestrator.py::test_request_termination_calls_agent_runtime_per_session
+tests/services/test_termination_orchestrator.py::test_request_termination_records_terminated_outcome
+tests/services/test_termination_orchestrator.py::test_request_termination_404_from_runtime_is_success
+tests/services/test_termination_orchestrator.py::test_request_termination_runtime_error_still_persists_db
+tests/unit/test_agent_runtime_executor.py::test_run_skips_when_job_not_found
+tests/unit/test_agent_runtime_executor.py::test_run_skips_when_status_not_running
+  /Users/minglijiang/source/parthenon/.venv/lib/python3.11/site-packages/_pytest/stash.py:108: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    del self._storage[key]
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_platform_admin_api.py::TestTenantLifecycleCRUD::test_delete_removes_tenant_and_slug_is_reusable
+tests/test_tenant_licensing_quotas.py::TestTenantDeletionWithLicenseRows::test_deletion_removes_license_and_quota_rows_recreate_free
+tests/test_tenant_scoping.py::TestTenantLifecycleService::test_delete_removes_tenant_and_slug_is_reusable
+  /Users/minglijiang/source/parthenon/backend/app/services/tenancy/tenant_service.py:363: SAWarning: Cannot correctly sort tables; there are unresolvable cycles between tables "agent_jobs, agent_outputs, termination_requests", which is usually caused by mutually dependent foreign key constraints.  Foreign key constraints involving these tables will not be considered; this warning may raise an error in a future release.
+    for table in reversed(Base.metadata.sorted_tables):
+
+tests/unit/services/test_plan_generation_service.py::test_generate_plan_no_role_completes_without_crash
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/plan_generation_service.py:115: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    return plan
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_agent_instance_manager.py::TestAgentInstanceManager::test_spawn_creates_instance
+tests/unit/test_agent_instance_manager.py::TestAgentInstanceManager::test_spawn_creates_instance_when_under_limit
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/instance_manager.py:52: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(instance)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_agent_runtime_executor.py::test_capture_prompt_log_writes_agent_prompt_log
+tests/unit/test_agent_runtime_executor.py::test_capture_prompt_log_does_not_raise_on_db_failure
+tests/unit/test_execution_log.py::test_capture_prompt_log_accepts_none_fields
+tests/unit/test_execution_log.py::test_capture_prompt_log_swallows_flush_error
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/runtime_executor.py:897: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(entry)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_langchain_model_factory.py::test_anthropic_returns_native_model
+  /Users/minglijiang/source/parthenon/backend/tests/unit/test_langchain_model_factory.py:86: UserWarning: WARNING! http_async_client is not default parameter.
+                  http_async_client was transferred to model_kwargs.
+                  Please confirm that http_async_client is what you intended.
+    model = factory.get_model(
+
+tests/unit/test_langchain_model_factory.py::test_get_model_from_config_dict_anthropic
+  /Users/minglijiang/source/parthenon/backend/app/services/agents/langchain_model_factory.py:192: UserWarning: WARNING! http_async_client is not default parameter.
+                  http_async_client was transferred to model_kwargs.
+                  Please confirm that http_async_client is what you intended.
+    llm = self.get_model(
+
+tests/unit/test_mcp_hub.py::test_toolsyncservice_adds_new_tools
+tests/unit/test_mcp_hub.py::test_toolsyncservice_uses_oauth2_session_credentials
+tests/unit/test_mcp_hub.py::test_sync_resilience_initialize_fails_but_tools_list_succeeds
+tests/unit/test_mcp_hub.py::test_sync_updates_last_synced_at_on_success
+  /Users/minglijiang/source/parthenon/backend/app/services/mcp/tool_sync.py:365: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    db.add(new_tool)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/unit/test_model_binding.py::test_extract_text_gemini_response_envelope
+  tests/unit/test_model_binding.py:226: PytestWarning: The test <Function test_extract_text_gemini_response_envelope> is marked with '@pytest.mark.asyncio' but it is not an async function. Please remove the asyncio mark. If the test is not marked explicitly, check for global marks applied via 'pytestmark'.
+    @pytest.mark.asyncio
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/db/test_namespace_migration.py::TestNamespaceMigration::test_deployment_has_namespaced_policy_values
+FAILED backend/tests/db/test_tenant_schema_migration.py::TestNewTables::test_tenancy_switch_seeded_false
+FAILED backend/tests/integration/test_agent_execution_flow.py::TestFullExecutionFlow::test_cc_internal_data_api_accessible_from_ar_perspective
+FAILED backend/tests/integration/test_agent_execution_flow.py::TestFullExecutionFlow::test_session_status_endpoint_confirms_data_path
+FAILED backend/tests/integration/test_cross_service_flows.py::TestAgentRuntimeToControlCenterDataPath::test_claim_queued_sessions_endpoint_accessible
+FAILED backend/tests/integration/test_cross_service_flows.py::TestAgentRuntimeToControlCenterDataPath::test_session_status_update_rejects_nonexistent_session
+FAILED backend/tests/integration/test_cross_service_flows.py::TestAgentRuntimeToControlCenterDataPath::test_session_result_submission_rejects_nonexistent_session
+FAILED backend/tests/integration/test_cross_service_flows.py::TestControlCenterToCommHubDispatchPath::test_ch_dispatch_rejects_test_service_cert
+FAILED backend/tests/integration/test_cross_service_flows.py::TestControlCenterToCommHubDispatchPath::test_ch_health_is_public
+FAILED backend/tests/integration/test_cross_service_flows.py::TestControlCenterToAgentRuntimeTriggerPath::test_ar_execute_rejects_test_service_cert
+FAILED backend/tests/integration/test_full_execution_flow.py::TestCommunicationHubForwardingEndpoint::test_ch_rejects_non_cc_certs
+FAILED backend/tests/integration/test_full_execution_flow.py::TestControlCenterCallsCommunicationHub::test_cc_includes_certificate
+FAILED backend/tests/integration/test_full_execution_flow.py::TestAgentRuntimeOnlyAcceptsCommunicationHub::test_ar_middleware_enforces_ch_only
+FAILED backend/tests/integration/test_service_auth.py::TestAuthenticatedDataAPICalls::test_session_data_api_requires_valid_service_cert
+FAILED backend/tests/integration/test_service_auth.py::TestAuthenticatedDataAPICalls::test_claim_queued_sessions_api
+FAILED backend/tests/integration/test_service_auth.py::TestAuthenticatedDataAPICalls::test_agent_type_plan_api
+FAILED backend/tests/integration/test_service_auth.py::TestAuthenticatedDataAPICalls::test_agent_type_context_api
+FAILED backend/tests/integration/test_service_auth.py::TestAuthenticatedDataAPICalls::test_model_config_api
+FAILED backend/tests/integration/test_service_auth.py::TestAuthenticatedDataAPICalls::test_user_permissions_api
+FAILED backend/tests/integration/test_websocket_communication_hub.py::TestWebSocketServiceIntegration::test_control_center_does_not_serve_websocket_routes
+ERROR backend/tests/unit/test_ws_delegation_visibility.py::test_conversation_context_emits_delegation_status_events
+20 failed, 2216 passed, 226 skipped, 101 warnings, 1 error in 614.43s (0:10:14)

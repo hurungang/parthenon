@@ -227,9 +227,18 @@ async def resolve_permissions(
 async def _get_certificate_by_serial(
     serial_number: str, db: AsyncSession
 ) -> AgentInstanceCertificate | None:
-    """Look up a certificate record by serial number."""
+    """Look up a certificate record by serial number.
+
+    agent_instance_certificates is a parent-scoped (tenant-agnostic)
+    table: the AgentType join binds the lookup to the signed tenant
+    context of the internal authorize path, so a foreign tenant's
+    agent-instance certificate can never resolve its permissions here
+    (unscoped sessions — single-tenant mode — are unchanged).
+    """
     result = await db.execute(
-        select(AgentInstanceCertificate).where(
+        select(AgentInstanceCertificate)
+        .join(AgentType, AgentType.id == AgentInstanceCertificate.agent_type_id, isouter=True)
+        .where(
             AgentInstanceCertificate.serial_number == serial_number
         )
     )

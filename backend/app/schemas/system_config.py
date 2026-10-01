@@ -4,7 +4,21 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.tenancy.default_tenant_roles import DEFAULT_TENANT_ROLE_PRESETS
+
+
+def _validate_default_tenant_role(value: Optional[str]) -> Optional[str]:
+    """Accept only the seeded preset role keys (or None)."""
+    if value is None:
+        return None
+    if value not in DEFAULT_TENANT_ROLE_PRESETS:
+        raise ValueError(
+            f"Invalid default_tenant_role '{value}'. Must be one of: "
+            f"{sorted(DEFAULT_TENANT_ROLE_PRESETS)} or null."
+        )
+    return value
 
 
 # ── Identity Provider Config ────────────────────────────────────────────────
@@ -23,6 +37,19 @@ class IdentityProviderConfigCreate(BaseModel):
     scopes: str = Field("openid profile email", description="Space-delimited OIDC scopes")
     claim_mappings: Optional[dict] = Field(None, description="OIDC claim to platform field mappings")
     is_enabled: bool = Field(True, description="Whether the provider is active")
+    default_tenant_role: Optional[str] = Field(
+        None,
+        description=(
+            "JIT default tenant role granted on a user's FIRST OIDC sign-in "
+            "(one of the seeded preset keys), or null to reject users "
+            "without a membership."
+        ),
+    )
+
+    @field_validator("default_tenant_role")
+    @classmethod
+    def _check_default_role_create(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_default_tenant_role(v)
 
 
 class IdentityProviderConfigUpdate(BaseModel):
@@ -37,6 +64,18 @@ class IdentityProviderConfigUpdate(BaseModel):
     scopes: Optional[str] = Field(None, description="Space-delimited OIDC scopes")
     claim_mappings: Optional[dict] = Field(None, description="OIDC claim to platform field mappings")
     is_enabled: Optional[bool] = Field(None, description="Whether the provider is active")
+    default_tenant_role: Optional[str] = Field(
+        None,
+        description=(
+            "JIT default tenant role granted on a user's FIRST OIDC sign-in "
+            "(one of the seeded preset keys); omitted = unchanged."
+        ),
+    )
+
+    @field_validator("default_tenant_role")
+    @classmethod
+    def _check_default_role_update(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_default_tenant_role(v)
 
 
 class IdentityProviderConfigToggle(BaseModel):
@@ -59,6 +98,7 @@ class IdentityProviderConfigResponse(BaseModel):
     scopes: str
     claim_mappings: Optional[dict] = None
     is_enabled: bool
+    default_tenant_role: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -40,8 +40,38 @@ class _CachedProvider:
     discovery_expiry: float = 0.0
 
 
+# Cache key: (tenant_id or None, provider_scope).
+# None tenant_id = the SHARED provider — platform-wide (legacy,
+# single-tenant mode) and the fallback slot for any tenant without its
+# own config (FIX-20260929-221449).
+_CacheKey = tuple
+
+
 class OIDCProviderRegistry:
     """In-memory registry of active OIDC provider configurations.
+
+    Providers are cached by ``(tenant_id, scope)`` when multi-tenancy is
+    on — per-tenant credentials take precedence inside their tenant —
+    and by ``(None, scope)`` when it is off (platform-wide registry,
+    unchanged single-tenant behaviour).
+
+    SHARED providers (FIX-20260929-221449): a tenant-less (NULL
+    ``tenant_id``) config is the SHARED provider — usable by the platform
+    AND by any tenant whose login context resolves to it.  SYSTEM-slot
+    fallback (FIX-20260930-075014): when neither the own nor the shared
+    slot holds a config, the SYSTEM tenant's (``system_id``, scope) slot —
+    the ADOPTED PLATFORM provider — resolves, for BOTH tenant-scoped and
+    tenant-less lookups ("one provider serves the platform and all
+    tenants").  The system tenant id is resolved with the same helper the
+    adoption flow uses (``Tenant.is_system_tenant``) and cached with the
+    same invalidation hooks as the provider map (initialize/reload).
+
+    Full resolution order (multi-tenancy ON):
+
+        own (tenant, scope) → shared (None, scope) → system (system_id, scope)
+
+    A tenant with none of the three resolves ``None`` — fail-closed
+    (sign-in not configured).
 
     Usage::
 
@@ -51,8 +81,86 @@ class OIDCProviderRegistry:
     """
 
     def __init__(self) -> None:
-        self._providers: dict[str, _CachedProvider] = {}
+        self._providers: dict[_CacheKey, _CachedProvider] = {}
         self._initialized: bool = False
+        # Mirrors the platform tenancy switch; refreshed on
+        # initialize/reload (the settings toggle triggers a reload).
+        self._multi_tenancy_enabled: bool = False
+        # The SYSTEM tenant's id (the implicit tenant that adopts
+        # pre-existing data — ``Tenant.is_system_tenant``), cached with
+        # the same invalidation hooks as the provider map
+        # (FIX-20260930-075014).
+        self._system_tenant_id: Optional[str] = None
+
+    # ── Tenancy mode ──────────────────────────────────────────────────────
+
+    @property
+    def multi_tenancy_enabled(self) -> bool:
+        """Whether the registry caches providers per tenant."""
+        return self._multi_tenancy_enabled
+
+    def set_tenancy_enabled(self, enabled: bool) -> None:
+        """Update the tenancy mode (call from the settings toggle path)."""
+        self._multi_tenancy_enabled = bool(enabled)
+
+    def _key(self, scope: str, tenant_id: Any = None) -> tuple:
+        """Cache key for a lookup: per-tenant only when tenancy is on."""
+        if not self._multi_tenancy_enabled or tenant_id is None:
+            return (None, scope)
+        return (str(tenant_id), scope)
+
+    def _resolve_cached(
+        self,
+        scope: str,
+        tenant_id: Any = None,
+        is_system_tenant: bool = False,
+    ) -> Optional[_CachedProvider]:
+        """Resolve the cached provider for (scope, tenant) — shared- and
+        system-slot aware.
+
+        Resolution order (multi-tenancy ON; FIX-20260930-075014):
+
+        1. the tenant's OWN ``(tenant, scope)`` slot (per-tenant
+           precedence — a tenant's own config always wins);
+        2. the SHARED tenant-less ``(None, scope)`` slot;
+        3. the SYSTEM tenant's ``(system_id, scope)`` slot — the adopted
+           platform provider serving the platform and every tenant
+           without own/shared config.
+
+        Tenant-less lookups (``tenant_id=None`` — platform surfaces,
+        ``/auth/tenant-memberships``) resolve shared → system.
+        ``is_system_tenant`` is retained for API compatibility — the
+        fallback no longer depends on it.
+        """
+        cached = self._providers.get(self._key(scope, tenant_id))
+        if cached is not None:
+            return cached
+        if not self._multi_tenancy_enabled:
+            return None  # tenancy OFF: legacy single-global slot only
+        tenant_key = str(tenant_id) if tenant_id is not None else None
+        if tenant_key is not None:
+            # 2. shared slot
+            cached = self._providers.get((None, scope))
+            if cached is not None:
+                return cached
+        # 3. system-tenant slot (own slot already tried when tenant IS
+        # the system tenant — skip the redundant lookup then)
+        if (
+            self._system_tenant_id
+            and self._system_tenant_id != tenant_key
+        ):
+            cached = self._providers.get((self._system_tenant_id, scope))
+        return cached
+
+    async def _load_system_tenant_id(self, db: AsyncSession) -> None:
+        """Cache the SYSTEM tenant's id (the adoption anchor tenant)."""
+        from app.db.models.tenant import Tenant
+
+        result = await db.execute(
+            select(Tenant.id).where(Tenant.is_system_tenant.is_(True))
+        )
+        system_id = result.scalar_one_or_none()
+        self._system_tenant_id = str(system_id) if system_id is not None else None
 
     # ── Initialization / hot-reload ───────────────────────────────────────
 
@@ -62,7 +170,15 @@ class OIDCProviderRegistry:
         return self._initialized
 
     async def initialize(self, db: AsyncSession) -> None:
-        """Load all enabled providers from the database."""
+        """Load all tenants' enabled providers from the database."""
+        from app.services.tenancy.platform_settings_service import (
+            get_platform_settings_service,
+        )
+
+        self._multi_tenancy_enabled = (
+            await get_platform_settings_service().is_multi_tenancy_enabled(db)
+        )
+        await self._load_system_tenant_id(db)
         result = await db.execute(
             select(IdentityProviderConfig).where(
                 IdentityProviderConfig.is_enabled.is_(True)
@@ -71,15 +187,29 @@ class OIDCProviderRegistry:
         rows = result.scalars().all()
         self._providers.clear()
         for row in rows:
-            self._providers[row.provider_scope] = _CachedProvider(
+            if self._multi_tenancy_enabled:
+                tenant_key: Optional[str] = (
+                    str(row.tenant_id) if row.tenant_id is not None else None
+                )
+            else:
+                # Single-tenant mode: everything is platform-wide.  When
+                # tenant-bound rows exist (e.g. the switch was just turned
+                # off), the tenant-less legacy provider wins deterministically.
+                tenant_key = None
+                key = (tenant_key, row.provider_scope)
+                if key in self._providers and row.tenant_id is not None:
+                    continue
+            self._providers[(tenant_key, row.provider_scope)] = _CachedProvider(
                 config=row,
                 decrypted_secret=_decrypt_if_present(row.encrypted_client_secret),
             )
         self._initialized = True
         logger.info(
-            "OIDCProviderRegistry initialized with %d provider(s): %s",
+            "OIDCProviderRegistry initialized with %d provider(s) "
+            "(multi_tenancy=%s): %s",
             len(self._providers),
-            list(self._providers.keys()),
+            self._multi_tenancy_enabled,
+            sorted(f"{k[0] or 'global'}::{k[1]}" for k in self._providers),
         )
 
     async def reload(self, db: AsyncSession) -> None:
@@ -89,48 +219,82 @@ class OIDCProviderRegistry:
         await self.initialize(db)
 
     async def reload_single(self, db: AsyncSession, scope: str) -> None:
-        """Reload a single provider scope from the database."""
+        """Reload every provider of *scope* (all tenants) from the database."""
+        logger.info("OIDCProviderRegistry: hot-reload triggered for scope=%s", scope)
+        for key in [k for k in self._providers if k[1] == scope]:
+            del self._providers[key]
+        # The system tenant id participates in resolution (FIX-20260930-
+        # 075014) — refresh it with the same invalidation hooks.
+        await self._load_system_tenant_id(db)
         result = await db.execute(
             select(IdentityProviderConfig).where(
                 IdentityProviderConfig.provider_scope == scope,
                 IdentityProviderConfig.is_enabled.is_(True),
             )
         )
-        row = result.scalar_one_or_none()
-        if row is None:
-            self._providers.pop(scope, None)
+        rows = result.scalars().all()
+        if not rows:
             logger.info(
                 "OIDCProviderRegistry: removed provider scope=%s", scope
             )
-        else:
-            self._providers[scope] = _CachedProvider(
+        for row in rows:
+            if self._multi_tenancy_enabled:
+                tenant_key: Optional[str] = (
+                    str(row.tenant_id) if row.tenant_id is not None else None
+                )
+            else:
+                tenant_key = None
+                key = (tenant_key, scope)
+                if key in self._providers and row.tenant_id is not None:
+                    continue
+            self._providers[(tenant_key, scope)] = _CachedProvider(
                 config=row,
                 decrypted_secret=_decrypt_if_present(row.encrypted_client_secret),
             )
             logger.info(
-                "OIDCProviderRegistry: reloaded provider scope=%s", scope
+                "OIDCProviderRegistry: reloaded provider scope=%s tenant=%s",
+                scope,
+                tenant_key or "global",
             )
 
     # ── Provider resolution ───────────────────────────────────────────────
 
-    def get_user_provider(self) -> Optional[IdentityProviderConfig]:
+    def get_user_provider(
+        self, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> Optional[IdentityProviderConfig]:
         """Return the active user identity provider config, or ``None``."""
-        cached = self._providers.get("user")
-        return cached.config if cached else None
+        return self.get_provider("user", tenant_id, is_system_tenant)
 
-    def get_agent_provider(self) -> Optional[IdentityProviderConfig]:
+    def get_agent_provider(
+        self, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> Optional[IdentityProviderConfig]:
         """Return the active agent identity provider config, or ``None``."""
-        cached = self._providers.get("agent")
+        return self.get_provider("agent", tenant_id, is_system_tenant)
+
+    def get_provider(
+        self,
+        scope: str,
+        tenant_id: Any = None,
+        is_system_tenant: bool = False,
+    ) -> Optional[IdentityProviderConfig]:
+        """Return the active provider config for the given scope, or ``None``.
+
+        With multi-tenancy on and a resolved tenant, the tenant's OWN
+        provider wins and the SHARED (tenant-less) provider is the
+        fallback; with neither, the result is ``None`` — fail-closed
+        (sign-in not configured).
+        """
+        cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         return cached.config if cached else None
 
-    def get_provider(self, scope: str) -> Optional[IdentityProviderConfig]:
-        """Return the active provider config for the given scope, or ``None``."""
-        cached = self._providers.get(scope)
-        return cached.config if cached else None
-
-    def get_decrypted_secret(self, scope: str) -> Optional[str]:
+    def get_decrypted_secret(
+        self,
+        scope: str,
+        tenant_id: Any = None,
+        is_system_tenant: bool = False,
+    ) -> Optional[str]:
         """Return the decrypted client secret for a provider scope."""
-        cached = self._providers.get(scope)
+        cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         return cached.decrypted_secret if cached else None
 
     def list_providers(self) -> list[IdentityProviderConfig]:
@@ -141,22 +305,28 @@ class OIDCProviderRegistry:
         """Return ``True`` if at least one provider is configured and enabled."""
         return len(self._providers) > 0
 
-    def has_user_provider(self) -> bool:
-        """Return ``True`` if a user provider is active."""
-        return "user" in self._providers
+    def has_user_provider(
+        self, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> bool:
+        """Return ``True`` if a user provider is active for the tenant."""
+        return self.get_provider("user", tenant_id, is_system_tenant) is not None
 
-    def has_agent_provider(self) -> bool:
-        """Return ``True`` if an agent provider is active."""
-        return "agent" in self._providers
+    def has_agent_provider(
+        self, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> bool:
+        """Return ``True`` if an agent provider is active for the tenant."""
+        return self.get_provider("agent", tenant_id, is_system_tenant) is not None
 
     # ── JWKS key cache ────────────────────────────────────────────────────
 
-    async def get_jwks(self, scope: str) -> dict[str, Any]:
+    async def get_jwks(
+        self, scope: str, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> dict[str, Any]:
         """Return the JWKS key map for *scope*, fetching and caching if needed.
 
         Returns ``{kid: jwk}`` mapping.
         """
-        cached = self._providers.get(scope)
+        cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         if cached is None:
             return {}
 
@@ -165,7 +335,7 @@ class OIDCProviderRegistry:
             return cached.jwks_keys
 
         # Fetch fresh JWKS
-        jwks_uri = await self._get_jwks_uri(scope)
+        jwks_uri = await self._get_jwks_uri(scope, tenant_id, is_system_tenant)
         if not jwks_uri:
             return {}
 
@@ -178,8 +348,8 @@ class OIDCProviderRegistry:
                 data = resp.json()
         except Exception as exc:
             logger.error(
-                "OIDCProviderRegistry: failed to fetch JWKS for scope=%s: %s",
-                scope, exc,
+                "OIDCProviderRegistry: failed to fetch JWKS for scope=%s tenant=%s: %s",
+                scope, tenant_id, exc,
             )
             # Return expired cache if available, else empty
             return cached.jwks_keys
@@ -192,22 +362,26 @@ class OIDCProviderRegistry:
         cached.jwks_keys = keys
         cached.jwks_expiry = now + DEFAULT_JWKS_TTL
         logger.debug(
-            "OIDCProviderRegistry: JWKS refreshed for scope=%s (%d keys)",
-            scope, len(keys),
+            "OIDCProviderRegistry: JWKS refreshed for scope=%s tenant=%s (%d keys)",
+            scope, tenant_id, len(keys),
         )
         return keys
 
-    async def invalidate_jwks(self, scope: str) -> None:
+    async def invalidate_jwks(
+        self, scope: str, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> None:
         """Force a JWKS re-fetch on the next call to :meth:`get_jwks`."""
-        cached = self._providers.get(scope)
+        cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         if cached:
             cached.jwks_expiry = 0.0
 
     # ── OIDC Discovery cache ──────────────────────────────────────────────
 
-    async def get_discovery(self, scope: str) -> Optional[dict]:
+    async def get_discovery(
+        self, scope: str, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> Optional[dict]:
         """Return the OIDC Discovery document for *scope*, cached."""
-        cached = self._providers.get(scope)
+        cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         if cached is None:
             return None
 
@@ -227,24 +401,28 @@ class OIDCProviderRegistry:
                 cached.discovery_expiry = now + DEFAULT_DISCOVERY_TTL
         except Exception as exc:
             logger.error(
-                "OIDCProviderRegistry: failed to fetch discovery for scope=%s: %s",
-                scope, exc,
+                "OIDCProviderRegistry: failed to fetch discovery for scope=%s tenant=%s: %s",
+                scope, tenant_id, exc,
             )
             return cached.discovery_doc  # may be None or stale
 
         return cached.discovery_doc
 
-    async def invalidate_discovery(self, scope: str) -> None:
+    async def invalidate_discovery(
+        self, scope: str, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> None:
         """Force a discovery re-fetch on the next call."""
-        cached = self._providers.get(scope)
+        cached = self._resolve_cached(scope, tenant_id, is_system_tenant)
         if cached:
             cached.discovery_expiry = 0.0
 
     # ── JWKS URI resolution ───────────────────────────────────────────────
 
-    async def _get_jwks_uri(self, scope: str) -> Optional[str]:
+    async def _get_jwks_uri(
+        self, scope: str, tenant_id: Any = None, is_system_tenant: bool = False
+    ) -> Optional[str]:
         """Resolve the JWKS URI from discovery, or from cached config."""
-        discovery = await self.get_discovery(scope)
+        discovery = await self.get_discovery(scope, tenant_id, is_system_tenant)
         if discovery:
             return discovery.get("jwks_uri")
         return None

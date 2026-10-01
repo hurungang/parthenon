@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,14 +29,40 @@ class RoleType(str, enum.Enum):
 
 
 class Role(Base):
-    """Named set of permissions; assigned to identities."""
+    """Named set of permissions; assigned to identities.
+
+    Role names are unique **per tenant** when multi-tenancy is on:
+    identical role names in different tenants do not collide.  Global
+    (tenant-less) roles — e.g. system_admin / platform-admin — keep
+    platform-wide unique names.
+    """
 
     __tablename__ = "roles"
+    __table_args__ = (
+        # Per-tenant role name uniqueness (NULL tenant_id rows are exempt —
+        # NULLs are distinct in unique constraints)
+        UniqueConstraint("tenant_id", "name", name="uq_roles_tenant_name"),
+        # Global (tenant-less) role names are platform-wide unique.
+        # Partial index on BOTH dialects: SQLite ignores postgresql_where
+        # and would otherwise index every row, forbidding the per-tenant
+        # duplicate role names the default tenant seeding creates.
+        Index(
+            "uq_roles_global_name",
+            "name",
+            unique=True,
+            postgresql_where=text("tenant_id IS NULL"),
+            sqlite_where=text("tenant_id IS NULL"),
+        ),
+        Index("ix_roles_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     role_type: Mapped[RoleType] = mapped_column(
         Enum(RoleType, name="role_type_enum"), nullable=False, default=RoleType.user
@@ -141,10 +168,14 @@ class Identity(Base):
     __tablename__ = "identities"
     __table_args__ = (
         Index("ix_identities_idp_subject", "idp_subject"),
+        Index("ix_identities_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     # Subject claim from the OIDC provider
     subject: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)

@@ -256,14 +256,19 @@ class AgentRoleService:
             AgentRoleNotFoundError: If role doesn't exist
             ValueError: If MCP session doesn't exist or if role already has a session for this server
         """
-        from app.db.models.mcp_hub import McpSession
-        
+        from app.db.models.mcp_hub import McpServer, McpSession
+
         # Verify role exists
         await self.get_role(role_id, db)
-        
-        # Get MCP session to extract server_id
+
+        # Get MCP session to extract server_id.  McpSession is a
+        # parent-scoped (tenant-agnostic) table — the McpServer join makes
+        # the resolution tenant-bound: a foreign tenant's session id cannot
+        # be linked to a role in tenant context (unchanged when unscoped).
         session_result = await db.execute(
-            select(McpSession).where(McpSession.id == mcp_session_id)
+            select(McpSession)
+            .join(McpServer, McpServer.id == McpSession.server_id)
+            .where(McpSession.id == mcp_session_id)
         )
         mcp_session = session_result.scalar_one_or_none()
         if not mcp_session:

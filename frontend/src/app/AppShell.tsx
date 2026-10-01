@@ -32,6 +32,7 @@ import BadgeIcon from '@mui/icons-material/Badge'
 import TuneIcon from '@mui/icons-material/Tune'
 import ScheduleIcon from '@mui/icons-material/Schedule'
 import MonitorIcon from '@mui/icons-material/Monitor'
+import PublicIcon from '@mui/icons-material/Public'
 import LogoutIcon from '@mui/icons-material/Logout'
 import SecurityIcon from '@mui/icons-material/Security'
 import SettingsIcon from '@mui/icons-material/Settings'
@@ -45,6 +46,7 @@ import PanToolIcon from '@mui/icons-material/PanTool'
 import SaveAltIcon from '@mui/icons-material/SaveAlt'
 import { useAuthStore } from '../stores/authStore'
 import { PermissionErrorSnackbar } from '../components/permissions/PermissionErrorSnackbar'
+import { TenantSessionGate } from '../components/auth/TenantSessionGate'
 import apiClient from '../api/apiClient'
 import type { InterveneMetrics } from '../types'
 
@@ -146,6 +148,21 @@ const NAV_GROUPS: NavGroup[] = [
 ]
 
 /**
+ * Platform console navigation — appended to the sidebar only when
+ * multi-tenancy is on (multiTenancyEnabled from the auth store).
+ */
+const PLATFORM_NAV_GROUP: NavGroup = {
+  groupKey: 'platform',
+  labelKey: 'nav.groupPlatform',
+  icon: <PublicIcon />,
+  children: [
+    { labelKey: 'nav.platformTenants', path: '/platform/tenants', icon: <PublicIcon /> },
+    { labelKey: 'nav.platformSettings', path: '/platform/settings', icon: <SettingsIcon /> },
+    { labelKey: 'nav.platformAudit', path: '/platform/audit', icon: <MonitorIcon /> },
+  ],
+}
+
+/**
  * Default expansion state for the groups on initial render.
  * All groups start collapsed to save space.
  * Groups expand automatically when they contain the active route.
@@ -220,11 +237,13 @@ export function AppShell() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const { claims, logout } = useAuthStore()
+  const { claims, logout, multiTenancyEnabled, activeTenant } = useAuthStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] =
     useState<Record<string, boolean>>(DEFAULT_EXPANDED_GROUPS)
   const [interveneMetrics, setInterveneMetrics] = useState<InterveneMetrics | null>(null)
+  // Platform console entry appears only when multi-tenancy is enabled.
+  const navGroups = multiTenancyEnabled === true ? [...NAV_GROUPS, PLATFORM_NAV_GROUP] : NAV_GROUPS
   const metricsStoppedRef = useRef(false)
 
   useEffect(() => {
@@ -253,12 +272,12 @@ export function AppShell() {
   }, [])
 
   useEffect(() => {
-    const activeGroup = NAV_GROUPS.find((group) =>
+    const activeGroup = navGroups.find((group) =>
       group.children.some((child) => child.path === location.pathname),
     )
     setExpandedGroups(() => {
       const next: Record<string, boolean> = {}
-      for (const group of NAV_GROUPS) {
+      for (const group of navGroups) {
         next[group.groupKey] = group.groupKey === activeGroup?.groupKey
       }
       return next
@@ -298,7 +317,7 @@ export function AppShell() {
         ))}
 
         {/* Sidebar groups (Agents, Integrations, System). Single data-driven render. */}
-        {NAV_GROUPS.map((group) => {
+        {navGroups.map((group) => {
           // A group is "active" when any of its children matches the current pathname.
           // Active state propagates to the header (visually indicated) and force-expands
           // the body, regardless of the user's prior collapsed preference — supports
@@ -384,6 +403,13 @@ export function AppShell() {
           </IconButton>
           <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
             {t('app.title')}
+            {/* Multi-tenancy: signed-in organization branding (inert when
+                the tenancy switch is off — activeTenant is null). */}
+            {activeTenant && (
+              <Typography variant="caption" component="span" sx={{ ml: 1.5, opacity: 0.85 }}>
+                {t('nav.tenantPrefix', { name: activeTenant.name })}
+              </Typography>
+            )}
           </Typography>
           <Tooltip title={claims?.email ?? claims?.sub ?? ''}>
             <Avatar sx={{ width: 32, height: 32, mr: 1, fontSize: 14 }}>
@@ -441,6 +467,9 @@ export function AppShell() {
         <Outlet />
       </Box>
       <PermissionErrorSnackbar />
+      {/* Multi-tenancy: org picker for multi-organization sessions (inert
+          when the tenancy switch is off or the user has a single org). */}
+      <TenantSessionGate />
     </Box>
   )
 }

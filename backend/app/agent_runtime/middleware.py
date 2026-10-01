@@ -196,4 +196,44 @@ class ControlCenterCertificateMiddleware(BaseHTTPMiddleware):
         request.state.service_name = result.service_name
         request.state.service_cert_serial = result.serial_number
 
+        # 6. Tenant context binding (multi-tenant propagation from CC).
+        # Verify-if-present: no tenant headers = single-tenant traffic
+        # (unchanged behaviour); any tenant header requires the full
+        # HMAC-signed set from Control Center — invalid sets are rejected.
+        # AR can never create or widen a tenant context: it only consumes
+        # what CC signed — downstream forwarding propagates the ORIGINAL
+        # verified header set verbatim (AR never re-signs).
+        from app.core.tenant_signature import (
+            TenantSignatureError,
+            bind_forwarded_tenant_headers,
+            extract_tenant_signature_headers,
+            verify_request_tenant_context,
+        )
+        try:
+            tenant_context = verify_request_tenant_context(request.headers)
+        except TenantSignatureError as exc:
+            logger.warning(
+                "AR inbound: rejected %s %s — invalid tenant context: %s",
+                request.method,
+                request.url.path,
+                exc,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid tenant context headers"},
+            )
+        if tenant_context is not None:
+            request.state.tenant_context = tenant_context
+            from app.core.tenant_context import (
+                set_current_tenant_context,
+                set_tenant_span_attributes,
+            )
+
+            set_current_tenant_context(tenant_context)
+            set_tenant_span_attributes(tenant_context)
+            # Forwarding binds the ORIGINAL signed set — no re-signing.
+            bind_forwarded_tenant_headers(
+                extract_tenant_signature_headers(request.headers)
+            )
+
         return await call_next(request)

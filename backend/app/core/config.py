@@ -289,6 +289,23 @@ class Settings(BaseSettings):
     # Key used by the backend integration test suite to obtain a service certificate
     test_service_bootstrap_key: str | None = Field(default=None)
 
+    # Multi-tenancy (opt-in; the runtime switch itself lives in the
+    # platform_settings table and defaults to off — these fields only
+    # configure HOW tenancy works when it is switched on).
+    # Base domain for subdomain tenant resolution: the Host-header label
+    # immediately left of this base is taken as the tenant slug
+    # (e.g. acme.parthenon.example.com -> slug "acme").
+    tenant_address_base_domain: str | None = Field(default=None)
+    # HMAC secret signing the tenant context headers propagated to
+    # Agent Runtime / Communication Hub over mTLS. Identical value on all
+    # three services (CC signs; AR/CH verify only). A development default
+    # keeps local/CI setups working; production must override it.
+    tenant_context_signing_key: str = Field(
+        default="dev-tenant-signing-key-change-me-in-production!"
+    )
+    # How long a resolved tenant (slug -> active tenant) may stay cached.
+    tenant_resolution_cache_ttl_seconds: float = Field(default=30.0)
+
     # Service URLs for inter-service communication
     communication_hub_url: str = Field(default="http://localhost:8002")
     control_center_url: str = Field(default="http://localhost:8000")

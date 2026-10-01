@@ -106,6 +106,11 @@ async def trigger_agent_execution(
     def _build_headers() -> dict:
         """Build request headers with current cert (re-read on each retry for freshness)."""
         hdrs: dict = {}
+        # Multi-tenancy: forward the signed tenant context received
+        # from CC so Agent Runtime binds the execution to the tenant.
+
+        from app.core.tenant_signature import forward_tenant_headers
+        hdrs.update(forward_tenant_headers())
         mgr = getattr(request.app.state, "certificate_manager", None)
         if mgr and mgr.cert_path and mgr.key_path:
             if ar_base.startswith("https://"):

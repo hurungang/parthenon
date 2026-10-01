@@ -241,8 +241,14 @@ async def get_agent_plan(
 
     from app.db.models.agents import AgentPlan, AgentPlanStatus
 
+    # agent_plans is a parent-scoped (tenant-agnostic) table: the AgentType
+    # join binds plan resolution to the signed tenant context — a foreign
+    # agent_type_id cannot resolve its plan in tenant context (FK-guaranteed
+    # inner join; row set unchanged in single-tenant mode).
     result = await db.execute(
-        select(AgentPlan).where(
+        select(AgentPlan)
+        .join(AgentType, AgentType.id == AgentPlan.agent_type_id)
+        .where(
             AgentPlan.agent_type_id == agent_type_id,
             AgentPlan.generation_status == AgentPlanStatus.success,
         )

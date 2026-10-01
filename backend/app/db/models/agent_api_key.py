@@ -55,10 +55,15 @@ class AgentApiKey(Base):
         UniqueConstraint("name", name="uq_agent_api_keys_name"),
         Index("ix_agent_api_keys_key_hash", "key_hash"),
         Index("ix_agent_api_keys_status", "status"),
+        Index("ix_agent_api_keys_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    # Tenant that owns this key — keys can never address another tenant's resources
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(64), nullable=False)

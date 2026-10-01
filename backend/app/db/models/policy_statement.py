@@ -15,6 +15,7 @@ class PolicyEffect(str, enum.Enum):
 class PolicyStatement(Base):
     __tablename__ = "policy_statements"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True)
     role_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
     effect: Mapped[PolicyEffect] = mapped_column(Enum(PolicyEffect, name="policy_effect_enum"), nullable=False)
     module: Mapped[str] = mapped_column(String(100), nullable=False)

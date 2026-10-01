@@ -195,6 +195,19 @@ class ApiKeyAuthMiddleware(BaseHTTPMiddleware):
         request.state.api_key_name = validation.get("api_key_name")
         request.state.auth_method = "api_key"
 
+        # Multi-tenancy: bind the MCP session to the API key's tenant.
+        # The binding comes exclusively from CC's validation response (the
+        # key's tenant_id) — never from client-supplied headers, so an
+        # MCP client cannot widen or forge its tenant.
+        tenant_id = validation.get("tenant_id")
+        if tenant_id:
+            request.state.tenant_id = tenant_id
+            logger.info(
+                "API key auth tenant binding: key_name=%s tenant=%s",
+                validation.get("api_key_name"),
+                tenant_id,
+            )
+
         logger.info(
             "API key auth succeeded: key_name=%s path=%s",
             validation.get("api_key_name"),

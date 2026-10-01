@@ -68,7 +68,23 @@ def _make_scheduled_job(
     job.target_type = JobTargetType.agent
     job.scheduled_by_user_id = scheduled_by_user_id
     job.payload = payload if payload is not None else {"query": "test"}
+    # Legacy (pre-adoption) job: no tenant — the dispatch-time quota gate
+    # (Phase 10) is skipped and provenance forwarding is exercised alone.
+    job.tenant_id = None
     return job
+
+
+def _make_dispatch_db() -> AsyncMock:
+    """AsyncMock db whose execute() resolves to a result with NO rows.
+
+    Keeps the platform-settings read (quota gate) on the built-in default
+    (tenancy off → gate inert) instead of returning AsyncMock coroutines.
+    """
+    db = AsyncMock()
+    empty_result = MagicMock()
+    empty_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = empty_result
+    return db
 
 
 @pytest.mark.asyncio
@@ -82,13 +98,16 @@ async def test_dispatch_passes_scheduled_by_user_id_to_launch():
     scheduled_by = uuid.uuid4()
     job = _make_scheduled_job(scheduled_by_user_id=scheduled_by)
 
-    db = AsyncMock()
-    # db.get(AgentType, target_id) returns a synthetic agent type.
-    db.get = AsyncMock(return_value=MagicMock())
+    db = _make_dispatch_db()
+    # db.get(AgentType, target_id) returns a synthetic agent type without
+    # a tenant (legacy row) so the Phase 10 quota gate stays inert.
+    legacy_agent_type = MagicMock()
+    legacy_agent_type.tenant_id = None
+    db.get = AsyncMock(return_value=legacy_agent_type)
 
     captured: dict = {}
 
-    async def fake_launch(agent_type_id, input_data, user_id, db):
+    async def fake_launch(agent_type_id, input_data, user_id, db, tenant_context=None):
         captured["user_id"] = user_id
         return {"session_id": str(uuid.uuid4())}
 
@@ -114,12 +133,14 @@ async def test_dispatch_null_scheduled_by_user_id_does_not_crash():
 
     job = _make_scheduled_job(scheduled_by_user_id=None)
 
-    db = AsyncMock()
-    db.get = AsyncMock(return_value=MagicMock())
+    db = _make_dispatch_db()
+    legacy_agent_type = MagicMock()
+    legacy_agent_type.tenant_id = None
+    db.get = AsyncMock(return_value=legacy_agent_type)
 
     captured: dict = {}
 
-    async def fake_launch(agent_type_id, input_data, user_id, db):
+    async def fake_launch(agent_type_id, input_data, user_id, db, tenant_context=None):
         captured["user_id"] = user_id
         return {"session_id": str(uuid.uuid4())}
 

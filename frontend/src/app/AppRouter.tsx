@@ -2,8 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
 import { AppShell } from './AppShell'
 import { LoginPage } from '../pages/auth/LoginPage'
+import { SignUpPage } from '../pages/auth/SignUpPage'
 import { OidcCallback } from '../pages/auth/OidcCallback'
-import { SetupWizard } from '../pages/setup/SetupWizard'
 import { McpHubPage } from '../pages/mcp/McpHubPage'
 import { SkillListPage } from '../pages/skills/SkillListPage'
 import { SopListPage } from '../pages/skills/SopListPage'
@@ -39,11 +39,19 @@ import { DataTypesPage } from '../pages/data-types/DataTypesPage'
 import { AgentOutputsPage } from '../pages/agent-outputs/AgentOutputsPage'
 import { ApiKeyListPage } from '../pages/api-keys/ApiKeyListPage'
 import { AccessDeniedPage } from '../pages/AccessDeniedPage'
+import { TenantSettingsPage } from '../pages/tenant/TenantSettingsPage'
+import { OnboardingPage } from '../pages/tenant/OnboardingPage'
+import { MembersPage } from '../pages/tenant/MembersPage'
+import { InvitationAcceptPage } from '../pages/tenant/InvitationAcceptPage'
+import { PlatformAdminRoute } from './PlatformAdminRoute'
+import { PlatformRoutes } from './PlatformRoutes'
 
 /**
  * React Router 7 route tree with protected and public route guards.
- * The LoginPage handles all auth routing decisions (super admin, OIDC, setup wizard)
- * based on live provider discovery — no server-side setup-state redirect is needed.
+ * The LoginPage handles all auth routing decisions (password sign-in, OIDC,
+ * super admin) based on live provider discovery — the pre-auth setup wizard
+ * is removed; identity providers are configured post-sign-in via System
+ * Config / Tenant Settings.
  */
 export function AppRouter() {
   return (
@@ -51,9 +59,10 @@ export function AppRouter() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
         <Route path="/callback" element={<OidcCallback />} />
-        <Route path="/setup" element={<SetupWizard />} />
         <Route path="/access-denied" element={<AccessDeniedPage />} />
+        <Route path="/invitations/accept" element={<InvitationAcceptPage />} />
         {/* Agent OAuth callback — opened in popup; must be accessible without app shell */}
         <Route path="/agents/identities/oauth/callback" element={<AgentOAuthCallbackPage />} />
         {/* MCP OAuth callback — opened in popup; must be accessible without app shell */}
@@ -101,6 +110,21 @@ export function AppRouter() {
           <Route path="/api-keys" element={<ApiKeyListPage />} />
           <Route path="/permissions/access-requests" element={<AccessRequestsPage />} />
           <Route path="/user-permissions/*" element={<PermissionsPage />} />
+
+          {/* Tenant workspace (multi-tenancy on; backend enforces membership) */}
+          <Route path="/tenant/settings" element={<TenantSettingsPage />} />
+          <Route path="/tenant/onboarding" element={<OnboardingPage />} />
+          <Route path="/tenant/members" element={<MembersPage />} />
+
+          {/* Platform admin console (multi-tenancy on + platform admin only) */}
+          <Route
+            path="/platform/*"
+            element={
+              <PlatformAdminRoute>
+                <PlatformRoutes />
+              </PlatformAdminRoute>
+            }
+          />
         </Route>
 
         {/* Catch-all */}

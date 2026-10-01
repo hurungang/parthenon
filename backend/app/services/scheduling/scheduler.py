@@ -122,12 +122,72 @@ class SchedulingEngine:
         from app.db.models.scheduling import JobTargetType
 
         if job.target_type == JobTargetType.agent:
+            from app.core.tenant_context import TenantContext
             from app.db.models.agents import AgentType
+            from app.db.models.tenant import Tenant
             from app.services.gateway.lifecycle_handler import GatewayLifecycleHandler
 
             agent_type = await db.get(AgentType, job.target_id)
             if not agent_type:
                 raise ValueError(f"Agent type {job.target_id} not found")
+
+            # Multi-tenancy: scheduled jobs adopt their OWNING tenant's
+            # context for the whole dispatch chain (CC → CH → AR), so the
+            # triggered execution stays tenant-bound end to end.  Jobs
+            # without a tenant (pre-adoption rows) keep the legacy
+            # single-tenant behaviour.
+            tenant_context = None
+            owning_tenant_id = getattr(job, "tenant_id", None) or getattr(
+                agent_type, "tenant_id", None
+            )
+            if owning_tenant_id is not None:
+                tenant = await db.get(Tenant, owning_tenant_id)
+                if tenant is not None:
+                    tenant_context = TenantContext(
+                        tenant_id=tenant.id,
+                        slug=tenant.slug,
+                        name=tenant.name,
+                        is_system_tenant=bool(tenant.is_system_tenant),
+                    )
+
+            # Quota gate (Phase 10): schedule-triggered executions consult
+            # the owning tenant's monthly execution quota at DISPATCH time.
+            # An exhausted quota skips this dispatch (the job stays
+            # scheduled for future fires), records ``quota_exhausted`` with
+            # tenant attribution, and never crashes the scheduler loop.
+            # Within-quota dispatches increment the counter exactly like
+            # user-initiated submissions (no double counting).  Inert with
+            # the switch off.
+            if tenant_context is not None:
+                from app.db.models.tenant_audit_event import TenantAuditActorType
+                from app.services.tenancy.quota_service import get_tenant_quota_service
+
+                quota = get_tenant_quota_service()
+                check = await quota.check_executions(db, tenant_context.tenant_id)
+                if not check.allowed:
+                    assert check.payload is not None
+                    await quota.record_quota_exhausted(
+                        db,
+                        tenant_context.tenant_id,
+                        check.payload,
+                        actor_type=TenantAuditActorType.system,
+                        target_resource=f"scheduled_job:{job.id}",
+                    )
+                    logger.warning(
+                        "Dispatch skipped (quota exhausted): job=%s tenant=%s "
+                        "used=%d limit=%d",
+                        job.id, tenant_context.slug, check.used, check.limit,
+                    )
+                    return {
+                        "status": "skipped",
+                        "reason": "quota_exhausted",
+                        "quota_type": check.payload.quota_type,
+                        "tier": check.payload.tier,
+                        "limit": check.limit,
+                        "used": check.used,
+                        "session_id": None,
+                    }
+                await quota.increment_executions(db, tenant_context.tenant_id)
 
             handler = GatewayLifecycleHandler()
             result = await handler.launch(
@@ -135,6 +195,7 @@ class SchedulingEngine:
                 input_data=job.payload,
                 user_id=job.scheduled_by_user_id,
                 db=db,
+                tenant_context=tenant_context,
             )
             return result
 

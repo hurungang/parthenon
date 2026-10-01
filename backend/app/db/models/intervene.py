@@ -3,7 +3,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,9 +37,15 @@ class InterveneRequest(Base):
     """
 
     __tablename__ = "intervene_requests"
+    __table_args__ = (
+        Index("ix_intervene_requests_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     agent_session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

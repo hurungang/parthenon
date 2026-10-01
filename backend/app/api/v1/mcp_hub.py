@@ -582,8 +582,16 @@ async def update_mcp_session(
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> McpSession:
+    update_data = body.model_dump(exclude_unset=True, exclude={"credentials", "is_default"})
+    # NOTE: McpSession is a parent-scoped (tenant-agnostic) table — the
+    # McpServer join lets the do_orm_execute choke point constrain the
+    # lookup to the request's tenant even when a foreign (server_id,
+    # session_id) pair is supplied.  Unscoped sessions: FK-guaranteed
+    # inner join, row set unchanged.
     result = await db.execute(
-        select(McpSession).where(
+        select(McpSession)
+        .join(McpServer, McpServer.id == McpSession.server_id)
+        .where(
             McpSession.id == session_id, McpSession.server_id == server_id
         )
     )
@@ -623,8 +631,13 @@ async def delete_mcp_session(
     db: DbSession,
     _: dict = Depends(require_permission(RT_INTEGRATION_MCP_HUB, "manage")),
 ) -> None:
+    # Parent-scoped table: join the tenant-scoped McpServer parent so a
+    # foreign (server_id, session_id) pair cannot be resolved/deleted in
+    # tenant context.
     result = await db.execute(
-        select(McpSession).where(
+        select(McpSession)
+        .join(McpServer, McpServer.id == McpSession.server_id)
+        .where(
             McpSession.id == session_id, McpSession.server_id == server_id
         )
     )
@@ -665,8 +678,13 @@ async def refresh_oauth_token(
     
     Returns the updated session with new token expiry times.
     """
+    # Parent-scoped table: join the tenant-scoped McpServer parent so a
+    # foreign (server_id, session_id) pair cannot be resolved in tenant
+    # context.
     result = await db.execute(
-        select(McpSession).where(
+        select(McpSession)
+        .join(McpServer, McpServer.id == McpSession.server_id)
+        .where(
             McpSession.id == session_id,
             McpSession.server_id == server_id,
         )
@@ -843,17 +861,32 @@ async def test_mcp_tool(
     """Test an MCP tool invocation with a specific session."""
     from app.services.mcp.proxy import McpProxyEngine, McpProxyError
     
-    # Load the tool
-    tool = await db.get(McpTool, tool_id)
+    # Load the tool — parent-scoped table (mcp_tools inherits scope via
+    # mcp_servers), so the McpServer join constrains resolution to the
+    # request's tenant; a foreign tool id 404s in tenant context.
+    tool_result = await db.execute(
+        select(McpTool)
+        .join(McpServer, McpServer.id == McpTool.server_id)
+        .where(McpTool.id == tool_id)
+    )
+    tool = tool_result.scalar_one_or_none()
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
-    
+
     # Load server relationship
     await db.refresh(tool, ["server"])
 
     # Determine which session to use and whether it is passthrough
     if body.session_id is not None:
-        session = await db.get(McpSession, body.session_id)
+        # Parent-scoped table: the McpServer join prevents resolving a
+        # foreign tenant's session id (which would otherwise leak its
+        # server binding via the mismatch error).
+        session_result = await db.execute(
+            select(McpSession)
+            .join(McpServer, McpServer.id == McpSession.server_id)
+            .where(McpSession.id == body.session_id)
+        )
+        session = session_result.scalar_one_or_none()
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         if session.server_id != tool.server_id:

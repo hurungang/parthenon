@@ -125,6 +125,30 @@ def super_admin_username() -> str | None:
     return creds[0] if creds else None
 
 
+def _super_admin_claims(username: str) -> dict:
+    """Claim set for super admin tokens — platform-admin semantics.
+
+    The super admin is a PLATFORM-level principal (multi-tenancy):
+    the token is valid across all tenants for platform administration
+    surfaces only (tenant metadata, platform settings, security audit).
+    It never grants tenant business data access — requests resolved into
+    a tenant workspace are rejected by the auth middleware.
+    """
+    now = int(time.time())
+    from app.core.config import get_settings
+    return {
+        "sub": f"super_admin:{username}",
+        "username": username,
+        "is_super_admin": True,
+        # Platform role semantics (multi-tenancy)
+        "platform_role": "platform_admin",
+        "tenant_access": "platform_only",
+        "iat": now,
+        "exp": now + _DEFAULT_EXPIRY,
+        "jti": str(uuid.uuid4()),
+    }
+
+
 def super_admin_reissue(username: str) -> str:
     """Re-issue a JWT for an already-authenticated super admin (no password check)."""
     if username != (super_admin_username() or ""):
@@ -132,18 +156,10 @@ def super_admin_reissue(username: str) -> str:
     if not super_admin_enabled():
         raise SuperAdminAuthError("Super admin login is disabled")
 
-    now = int(time.time())
     from app.core.config import get_settings
-    secret = get_settings().secret_key
-    payload = {
-        "sub": f"super_admin:{username}",
-        "username": username,
-        "is_super_admin": True,
-        "iat": now,
-        "exp": now + _DEFAULT_EXPIRY,
-        "jti": str(uuid.uuid4()),
-    }
-    return jwt.encode(payload, secret, algorithm="HS256")
+    return jwt.encode(
+        _super_admin_claims(username), get_settings().secret_key, algorithm="HS256"
+    )
 
 
 def super_admin_login(username: str, password: str) -> str:
@@ -165,24 +181,18 @@ def super_admin_login(username: str, password: str) -> str:
     if not super_admin_enabled():
         raise SuperAdminAuthError("Super admin login is disabled")
 
-    now = int(time.time())
     from app.core.config import get_settings
-    secret = get_settings().secret_key
-    payload = {
-        "sub": f"super_admin:{username}",
-        "username": username,
-        "is_super_admin": True,
-        "iat": now,
-        "exp": now + _DEFAULT_EXPIRY,
-        "jti": str(uuid.uuid4()),
-    }
-    return jwt.encode(payload, secret, algorithm="HS256")
+    return jwt.encode(
+        _super_admin_claims(username), get_settings().secret_key, algorithm="HS256"
+    )
 
 
 def validate_super_admin_token(token: str) -> dict:
     """Validate a super admin JWT and return decoded claims.
 
-    Raises SuperAdminAuthError if invalid.
+    Raises SuperAdminAuthError if invalid.  Tokens issued before the
+    platform-role semantics was introduced are backfilled with the
+    platform claims so re-login is not required on upgrade.
     """
     from app.core.config import get_settings
     try:
@@ -191,4 +201,6 @@ def validate_super_admin_token(token: str) -> dict:
         raise SuperAdminAuthError(f"Invalid super admin token: {exc}") from exc
     if not payload.get("is_super_admin"):
         raise SuperAdminAuthError("Token is not a super admin token")
+    payload.setdefault("platform_role", "platform_admin")
+    payload.setdefault("tenant_access", "platform_only")
     return payload

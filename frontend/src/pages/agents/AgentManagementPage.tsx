@@ -29,6 +29,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useAgentTypes, useDeleteAgentType } from '../../hooks/useAgentTypes'
 import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import QuotaBlockedAlert from '../../components/tenant/QuotaBlockedAlert'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import apiClient from '../../api/apiClient'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -406,7 +407,7 @@ export function AgentManagementPage() {
         </DialogTitle>
         <DialogContent dividers>
           {dialogError ? (
-            <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+            <QuotaBlockedAlert error={dialogError} fallbackMessage={t('app.error')} />
           ) : null}
           {saving ? (
             <Box display="flex" flexDirection="column" alignItems="center" py={4}>

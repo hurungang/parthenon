@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -48,9 +49,15 @@ class ConversationSession(Base):
     """A bounded interaction context between an initiator and an agent."""
 
     __tablename__ = "conversation_sessions"
+    __table_args__ = (
+        Index("ix_conversation_sessions_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     agent_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

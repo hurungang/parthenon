@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.identity import Identity, IdentityType
 from app.db.models.platform_user import PlatformUser
+from app.db.tenant_scoping import execute_unscoped
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,14 @@ class UserCacheService:
     Both upserts are idempotent: a user who has logged in before will simply
     have ``last_seen_at`` / ``updated_at`` refreshed. New users get both a
     ``PlatformUser`` and an ``Identity`` row created in the same transaction.
+
+    Identity-plane note (FIX-20260929-221449): the by-subject lookups are
+    IDENTITY resolution — they run tenant-scope-exempt
+    (:func:`app.db.tenant_scoping.execute_unscoped`) so JIT provisioning
+    finds and refreshes the existing record even when the session is
+    tenant-scoped and the user holds no membership in that tenant (a
+    scoped lookup would miss the row and the INSERT would collide with
+    the unique ``sub``/``subject`` constraints).
     """
 
     async def upsert_user(
@@ -27,15 +36,15 @@ class UserCacheService:
         display_name: str,
     ) -> PlatformUser:
         """Upsert PlatformUser by sub; handle email conflict from re-provisioned IdP."""
-        result = await db.execute(
-            select(PlatformUser).where(PlatformUser.sub == sub)
+        result = await execute_unscoped(
+            db, select(PlatformUser).where(PlatformUser.sub == sub)
         )
         user = result.scalar_one_or_none()
 
         if user is None:
             # Check for email conflict — stale user from a previous IdP instance
-            existing_by_email = await db.execute(
-                select(PlatformUser).where(PlatformUser.email == email)
+            existing_by_email = await execute_unscoped(
+                db, select(PlatformUser).where(PlatformUser.email == email)
             )
             stale = existing_by_email.scalar_one_or_none()
             if stale is not None:
@@ -87,8 +96,8 @@ class UserCacheService:
         assignment is driven by ``/setup/init`` (admin seed) and the
         group-claim mapper.
         """
-        result = await db.execute(
-            select(Identity).where(Identity.subject == sub)
+        result = await execute_unscoped(
+            db, select(Identity).where(Identity.subject == sub)
         )
         identity = result.scalar_one_or_none()
 
@@ -114,8 +123,11 @@ class UserCacheService:
         return identity
 
     async def get_user_by_sub(self, db: AsyncSession, sub: str) -> PlatformUser | None:
-        """Return the PlatformUser for the given OIDC subject, or None."""
-        result = await db.execute(
-            select(PlatformUser).where(PlatformUser.sub == sub)
+        """Return the PlatformUser for the given OIDC subject, or None.
+
+        Identity-plane lookup — tenant-scope-exempt (FIX-20260929-221449).
+        """
+        result = await execute_unscoped(
+            db, select(PlatformUser).where(PlatformUser.sub == sub)
         )
         return result.scalar_one_or_none()

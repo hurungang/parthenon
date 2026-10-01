@@ -22,9 +22,11 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-// Mock authStore
+// Mock authStore — tenancy state is mutable per test (null = discovery in flight)
 const mockLogin = vi.fn()
 const mockSetToken = vi.fn()
+const mockRefreshProviders = vi.fn()
+let mockMultiTenancyEnabled: boolean | null = false
 vi.mock('../stores/authStore', () => ({
   useAuthStore: () => ({
     login: mockLogin,
@@ -33,10 +35,13 @@ vi.mock('../stores/authStore', () => ({
     claims: null,
     logout: vi.fn(),
     setToken: mockSetToken,
+    multiTenancyEnabled: mockMultiTenancyEnabled,
+    resolvedTenant: null,
+    refreshProviders: mockRefreshProviders,
   }),
 }))
 
-// Mock API functions
+// Mock system config API functions (providers, super admin)
 const mockGetProviders = vi.fn()
 const mockGetSuperAdminStatus = vi.fn()
 const mockSuperAdminLogin = vi.fn()
@@ -46,11 +51,54 @@ vi.mock('../api/systemConfigApi', () => ({
   superAdminLogin: (u: string, p: string) => mockSuperAdminLogin(u, p),
 }))
 
-function Wrapper({ children }: { children: React.ReactNode }) {
+// Mock tenant auth API functions (platform password sign-in + workspace discovery)
+const mockLoginPassword = vi.fn()
+const mockSetResolvedTenantSlug = vi.fn()
+const mockDiscoverTenant = vi.fn()
+const mockGetRememberedTenantSlug = vi.fn()
+const mockSetRememberedTenantSlug = vi.fn()
+vi.mock('../api/tenantAuthApi', () => ({
+  loginPassword: (e: string, p: string) => mockLoginPassword(e, p),
+  setResolvedTenantSlug: (slug: string | null) => mockSetResolvedTenantSlug(slug),
+  discoverTenant: (slug?: string) => mockDiscoverTenant(slug),
+  getRememberedTenantSlug: () => mockGetRememberedTenantSlug(),
+  setRememberedTenantSlug: (slug: string | null) => mockSetRememberedTenantSlug(slug),
+}))
+
+const OIDC_PROVIDER_ITEM = {
+  id: '1',
+  provider_scope: 'user',
+  is_enabled: true,
+  provider_type: 'oidc_generic',
+  display_name: 'OIDC',
+  issuer_url: '',
+  client_id: '',
+  encrypted_client_secret: null,
+  scopes: '',
+  claim_mappings: null,
+  created_at: '',
+  updated_at: '',
+}
+
+function Wrapper({ children, initialEntries }: { children?: React.ReactNode; initialEntries?: string[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return React.createElement(QueryClientProvider, { client: qc },
-    React.createElement(MemoryRouter, null, children)
+    React.createElement(MemoryRouter, { initialEntries }, children)
   )
+}
+
+const ACTIVE_TENANT = {
+  slug: 'acme',
+  name: 'Acme Corp',
+  status: 'active',
+  sign_in_ready: true,
+}
+
+const SUSPENDED_TENANT = {
+  slug: 'acme',
+  name: 'Acme Corp',
+  status: 'suspended',
+  sign_in_ready: false,
 }
 
 import { LoginPage } from '../pages/auth/LoginPage'
@@ -59,56 +107,21 @@ describe('LoginPage - state rendering', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockMultiTenancyEnabled = false
     mockGetProviders.mockResolvedValue({ items: [], total: 0 })
     mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: false, username: null, last_login_at: null })
     mockSuperAdminLogin.mockResolvedValue({ access_token: 'test-token', token_type: 'bearer', username: 'admin', is_super_admin: true })
+    mockLoginPassword.mockResolvedValue({
+      access_token: 'pw-token', token_type: 'bearer',
+      tenant_id: 't1', tenant_slug: 'acme', tenant_name: 'Acme', your_role: 'platform_admin',
+    })
+    mockDiscoverTenant.mockResolvedValue({ multi_tenancy_enabled: true, tenant: ACTIVE_TENANT })
+    mockGetRememberedTenantSlug.mockReturnValue(null)
   })
 
-  describe('super_admin_only state', () => {
+  describe('oidc_only state (tenancy off)', () => {
     beforeEach(() => {
-      mockGetProviders.mockResolvedValue({ items: [], total: 0 })
-      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
-    })
-
-    it('shows super admin login form', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByText('auth.superAdminInfo')).toBeDefined()
-      })
-    })
-
-    it('renders username and password fields', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        // MUI TextField renders labels that can be found by label text
-        const usernameLabel = screen.getByLabelText('auth.username')
-        const passwordLabel = screen.getByLabelText('auth.password')
-        expect(usernameLabel).toBeDefined()
-        expect(passwordLabel).toBeDefined()
-      })
-    })
-
-    it('has login button for super admin', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByText('auth.login')).toBeDefined()
-      })
-    })
-
-    it('does not show OIDC login button', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.queryByText('auth.loginWithProvider')).toBeNull()
-      })
-    })
-  })
-
-  describe('oidc_only state', () => {
-    beforeEach(() => {
-      mockGetProviders.mockResolvedValue({
-        items: [{ id: '1', provider_scope: 'user', is_enabled: true, provider_type: 'oidc_generic', display_name: 'OIDC', issuer_url: '', client_id: '', encrypted_client_secret: null, scopes: '', claim_mappings: null, created_at: '', updated_at: '' }],
-        total: 1,
-      })
+      mockGetProviders.mockResolvedValue({ items: [OIDC_PROVIDER_ITEM], total: 1 })
       mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: false, username: 'admin', last_login_at: null })
     })
 
@@ -120,10 +133,19 @@ describe('LoginPage - state rendering', () => {
       })
     })
 
-    it('does not show super admin form', async () => {
+    it('shows the OIDC button as the primary (contained) action when no password form exists', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        const btn = screen.getByText('auth.loginWithProvider').closest('button')
+        expect(btn?.className).toContain('MuiButton-contained')
+      })
+    })
+
+    it('does not show super admin entry when super admin is disabled', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
         expect(screen.queryByText('auth.superAdminInfo')).toBeNull()
+        expect(screen.queryByTestId('super-admin-entry')).toBeNull()
       })
     })
 
@@ -137,97 +159,297 @@ describe('LoginPage - state rendering', () => {
     })
   })
 
-  describe('both state', () => {
+  describe('super admin only (tenancy off, no OIDC)', () => {
     beforeEach(() => {
-      mockGetProviders.mockResolvedValue({
-        items: [{ id: '1', provider_scope: 'user', is_enabled: true, provider_type: 'oidc_generic', display_name: 'OIDC', issuer_url: '', client_id: '', encrypted_client_secret: null, scopes: '', claim_mappings: null, created_at: '', updated_at: '' }],
-        total: 1,
-      })
+      mockGetProviders.mockResolvedValue({ items: [], total: 0 })
       mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
     })
 
-    it('shows OIDC login button first', async () => {
+    it('shows a discreet platform admin entry instead of the form', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+      // Form fields are hidden until the entry is used
+      expect(screen.queryByLabelText('auth.username')).toBeNull()
+    })
+
+    it('does not show OIDC login button', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.queryByText('auth.loginWithProvider')).toBeNull()
       })
     })
 
-    it('shows divider with "or" text', async () => {
+    it('reveals the super admin form with first-run info when the entry is clicked', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.or')).toBeDefined()
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
       })
-    })
-
-    it('shows "Login as Super Admin" toggle button', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByText('auth.loginAsSuperAdmin')).toBeDefined()
-      })
-    })
-
-    it('reveals super admin form when toggle clicked', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByText('auth.loginAsSuperAdmin')).toBeDefined()
-      })
-      fireEvent.click(screen.getByText('auth.loginAsSuperAdmin'))
+      fireEvent.click(screen.getByTestId('super-admin-entry'))
       await waitFor(() => {
         expect(screen.getByLabelText('auth.username')).toBeDefined()
         expect(screen.getByLabelText('auth.password')).toBeDefined()
+        expect(screen.getByText('auth.login')).toBeDefined()
+        // First-run guidance lives inside the expanded form, not on the page
+        expect(screen.getByText('auth.superAdminInfo')).toBeDefined()
       })
     })
 
-    it('shows back button when super admin form is revealed', async () => {
+    it('hides the super admin form when back is clicked', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.loginAsSuperAdmin')).toBeDefined()
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
       })
-      fireEvent.click(screen.getByText('auth.loginAsSuperAdmin'))
-      await waitFor(() => {
-        expect(screen.getByText('app.back')).toBeDefined()
-      })
-    })
-
-    it('hides super admin form when back button clicked', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByText('auth.loginAsSuperAdmin')).toBeDefined()
-      })
-      fireEvent.click(screen.getByText('auth.loginAsSuperAdmin'))
+      fireEvent.click(screen.getByTestId('super-admin-entry'))
       await waitFor(() => {
         expect(screen.getByText('app.back')).toBeDefined()
       })
       fireEvent.click(screen.getByText('app.back'))
       await waitFor(() => {
         expect(screen.queryByText('app.back')).toBeNull()
-        expect(screen.getByText('auth.loginAsSuperAdmin')).toBeDefined()
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
       })
     })
   })
 
-  describe('setup_wizard state', () => {
+  describe('oidc + super admin (tenancy off)', () => {
+    beforeEach(() => {
+      mockGetProviders.mockResolvedValue({ items: [OIDC_PROVIDER_ITEM], total: 1 })
+      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
+    })
+
+    it('shows the OIDC login button', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
+      })
+    })
+
+    it('shows the discreet platform admin entry and no password form or divider (tenancy off)', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+        expect(screen.queryByTestId('password-signin-form')).toBeNull()
+        expect(screen.queryByText('auth.or')).toBeNull()
+      })
+    })
+
+    it('reveals the super admin form without the info alert when OIDC is configured', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('super-admin-entry'))
+      await waitFor(() => {
+        expect(screen.getByLabelText('auth.username')).toBeDefined()
+        expect(screen.queryByText('auth.superAdminInfo')).toBeNull()
+      })
+    })
+
+    it('hides and re-reveals the super admin form', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('super-admin-entry'))
+      await waitFor(() => {
+        expect(screen.getByText('app.back')).toBeDefined()
+      })
+      fireEvent.click(screen.getByText('app.back'))
+      await waitFor(() => {
+        expect(screen.queryByText('app.back')).toBeNull()
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+    })
+  })
+
+  describe('no providers configured (tenancy off)', () => {
     beforeEach(() => {
       mockGetProviders.mockResolvedValue({ items: [], total: 0 })
       mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: false, username: null, last_login_at: null })
     })
 
-    it('shows setup wizard redirect', async () => {
+    it('does NOT show the setup wizard prompt or navigate to /setup', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.setupWizard')).toBeDefined()
-        expect(screen.getByText('auth.goToSetup')).toBeDefined()
+        expect(screen.getByText('app.title')).toBeDefined()
+      })
+      expect(screen.queryByText('auth.setupWizard')).toBeNull()
+      expect(screen.queryByText('auth.goToSetup')).toBeNull()
+      expect(mockNavigate).not.toHaveBeenCalledWith('/setup')
+    })
+
+    it('explains that no sign-in method is available', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByText('auth.noSignInAvailable')).toBeDefined()
+      })
+    })
+  })
+
+  describe('password sign-in (tenancy on)', () => {
+    beforeEach(() => {
+      mockMultiTenancyEnabled = true
+      // A remembered workspace skips the find-workspace step, landing the
+      // page directly on the tenant-branded sign-in card these tests cover.
+      mockGetRememberedTenantSlug.mockReturnValue('acme')
+      mockGetProviders.mockResolvedValue({ items: [], total: 0 })
+      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: false, username: null, last_login_at: null })
+    })
+
+    it('shows the email + password form even with no OIDC provider configured', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByLabelText('auth.email')).toBeDefined()
+        expect(screen.getByLabelText('auth.password')).toBeDefined()
+      })
+      // Absence of OIDC must NOT produce the setup wizard prompt
+      expect(screen.queryByText('auth.setupWizard')).toBeNull()
+      expect(screen.queryByText('auth.goToSetup')).toBeNull()
+    })
+
+    it('shows the signup entry link', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('signup-entry-link')).toBeDefined()
+        expect(screen.getByText('auth.noWorkspaceYet')).toBeDefined()
       })
     })
 
-    it('navigates to setup when button clicked', async () => {
+    it('shows the OIDC button with a divider when a provider is configured', async () => {
+      mockGetProviders.mockResolvedValue({ items: [OIDC_PROVIDER_ITEM], total: 1 })
       render(React.createElement(LoginPage), { wrapper: Wrapper })
       await waitFor(() => {
-        expect(screen.getByText('auth.goToSetup')).toBeDefined()
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
+        expect(screen.getByText('auth.or')).toBeDefined()
       })
-      fireEvent.click(screen.getByText('auth.goToSetup'))
-      expect(mockNavigate).toHaveBeenCalledWith('/setup')
+    })
+
+    it('renders the password submit as the primary action next to a outlined OIDC button', async () => {
+      mockGetProviders.mockResolvedValue({ items: [OIDC_PROVIDER_ITEM], total: 1 })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        const submit = screen.getByText('auth.login').closest('button')
+        const oidc = screen.getByText('auth.loginWithProvider').closest('button')
+        expect(submit?.className).toContain('MuiButton-contained')
+        expect(oidc?.className).toContain('MuiButton-outlined')
+      })
+    })
+
+    it('disables the submit button while fields are empty', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByLabelText('auth.email')).toBeDefined()
+      })
+
+      const submitBtn = screen.getByText('auth.login').closest('button')
+      expect(submitBtn).toHaveProperty('disabled', true)
+
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'owner@acme.io' } })
+      await waitFor(() => {
+        expect(submitBtn).toHaveProperty('disabled', true)
+      })
+
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'secret123' } })
+      await waitFor(() => {
+        expect(submitBtn).toHaveProperty('disabled', false)
+      })
+    })
+
+    it('calls loginPassword with the trimmed, lowercased email', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByLabelText('auth.email')).toBeDefined()
+      })
+
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: ' Owner@Acme.IO ' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'secret123' } })
+      fireEvent.click(screen.getByText('auth.login'))
+
+      await waitFor(() => {
+        expect(mockLoginPassword).toHaveBeenCalledWith('owner@acme.io', 'secret123')
+      })
+    })
+
+    it('stores the token, binds the tenant slug and navigates to the dashboard on success', async () => {
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByLabelText('auth.email')).toBeDefined()
+      })
+
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'owner@acme.io' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'secret123' } })
+      fireEvent.click(screen.getByText('auth.login'))
+
+      await waitFor(() => {
+        expect(mockSetToken).toHaveBeenCalledWith('pw-token')
+        expect(mockSetResolvedTenantSlug).toHaveBeenCalledWith('acme')
+        expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true })
+      })
+      expect(setItemSpy).toHaveBeenCalledWith('access_token', 'pw-token')
+      setItemSpy.mockRestore()
+    })
+
+    it('shows an inline error and does not navigate on wrong credentials', async () => {
+      mockLoginPassword.mockRejectedValue(new Error('Invalid email or password'))
+
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByLabelText('auth.email')).toBeDefined()
+      })
+
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'owner@acme.io' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'wrong' } })
+      fireEvent.click(screen.getByText('auth.login'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid email or password')).toBeDefined()
+      })
+      expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard', { replace: true })
+      expect(mockSetToken).not.toHaveBeenCalled()
+    })
+
+    it('shows the generic failure message for non-Error rejections', async () => {
+      mockLoginPassword.mockRejectedValue({ response: { data: {} } })
+
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByLabelText('auth.email')).toBeDefined()
+      })
+
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'owner@acme.io' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'wrong' } })
+      fireEvent.click(screen.getByText('auth.login'))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.loginFailed')).toBeDefined()
+      })
+    })
+  })
+
+  describe('super admin entry (tenancy on)', () => {
+    beforeEach(() => {
+      mockMultiTenancyEnabled = true
+      // Remembered workspace → straight to the tenant-branded card
+      mockGetRememberedTenantSlug.mockReturnValue('acme')
+      mockGetProviders.mockResolvedValue({ items: [OIDC_PROVIDER_ITEM], total: 1 })
+      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
+    })
+
+    it('stays available and discreet alongside the password form and OIDC button', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByText('auth.loginWithProvider')).toBeDefined()
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+      // Never prominent: hidden form fields until the entry is used
+      expect(screen.queryByLabelText('auth.username')).toBeNull()
     })
   })
 
@@ -238,12 +460,20 @@ describe('LoginPage - state rendering', () => {
       mockSuperAdminLogin.mockResolvedValue({ access_token: 'sa-test-token', token_type: 'bearer', username: 'admin', is_super_admin: true })
     })
 
-    it('calls super admin login API on form submit', async () => {
-      render(React.createElement(LoginPage), { wrapper: Wrapper })
+    const expandSuperAdminForm = async () => {
+      await waitFor(() => {
+        expect(screen.getByTestId('super-admin-entry')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('super-admin-entry'))
       await waitFor(() => {
         expect(screen.getByLabelText('auth.username')).toBeDefined()
         expect(screen.getByLabelText('auth.password')).toBeDefined()
       })
+    }
+
+    it('calls super admin login API on form submit', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await expandSuperAdminForm()
 
       fireEvent.change(screen.getByLabelText('auth.username'), { target: { value: 'admin' } })
       fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'testpass' } })
@@ -256,9 +486,7 @@ describe('LoginPage - state rendering', () => {
 
     it('navigates to dashboard on successful login', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByLabelText('auth.username')).toBeDefined()
-      })
+      await expandSuperAdminForm()
 
       fireEvent.change(screen.getByLabelText('auth.username'), { target: { value: 'admin' } })
       fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'testpass' } })
@@ -273,9 +501,7 @@ describe('LoginPage - state rendering', () => {
       const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
 
       render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByLabelText('auth.username')).toBeDefined()
-      })
+      await expandSuperAdminForm()
 
       fireEvent.change(screen.getByLabelText('auth.username'), { target: { value: 'admin' } })
       fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'testpass' } })
@@ -290,9 +516,7 @@ describe('LoginPage - state rendering', () => {
 
     it('sets token via authStore setToken on success', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByLabelText('auth.username')).toBeDefined()
-      })
+      await expandSuperAdminForm()
 
       fireEvent.change(screen.getByLabelText('auth.username'), { target: { value: 'admin' } })
       fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'testpass' } })
@@ -309,9 +533,7 @@ describe('LoginPage - state rendering', () => {
       )
 
       render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByLabelText('auth.username')).toBeDefined()
-      })
+      await expandSuperAdminForm()
 
       fireEvent.change(screen.getByLabelText('auth.username'), { target: { value: 'admin' } })
       fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'wrong' } })
@@ -328,9 +550,7 @@ describe('LoginPage - state rendering', () => {
       )
 
       render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByLabelText('auth.username')).toBeDefined()
-      })
+      await expandSuperAdminForm()
 
       fireEvent.change(screen.getByLabelText('auth.username'), { target: { value: 'admin' } })
       fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'wrong' } })
@@ -349,9 +569,7 @@ describe('LoginPage - state rendering', () => {
 
     it('login button is disabled when fields are empty', async () => {
       render(React.createElement(LoginPage), { wrapper: Wrapper })
-      await waitFor(() => {
-        expect(screen.getByLabelText('auth.username')).toBeDefined()
-      })
+      await expandSuperAdminForm()
 
       const loginBtn = screen.getByText('auth.login').closest('button')
       expect(loginBtn).toHaveProperty('disabled', true)
@@ -367,6 +585,170 @@ describe('LoginPage - state rendering', () => {
       await waitFor(() => {
         expect(loginBtn).toHaveProperty('disabled', false)
       })
+    })
+  })
+
+  describe('workspace address sign-in (tenancy on, no workspace bound)', () => {
+    beforeEach(() => {
+      mockMultiTenancyEnabled = true
+      mockGetRememberedTenantSlug.mockReturnValue(null)
+      mockGetProviders.mockResolvedValue({ items: [], total: 0 })
+      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: false, username: null, last_login_at: null })
+    })
+
+    it('shows the find-workspace card first when nothing is bound', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      expect(screen.queryByTestId('password-signin-form')).toBeNull()
+      expect(screen.getByLabelText('auth.findWorkspace.addressLabel')).toBeDefined()
+      // "Remember this workspace" defaults to checked
+      const checkbox = screen.getByTestId('remember-workspace-checkbox').querySelector('input')
+      expect(checkbox).toHaveProperty('checked', true)
+      // Continue is disabled while the address is empty
+      expect(screen.getByText('auth.findWorkspace.continue').closest('button')).toHaveProperty('disabled', true)
+    })
+
+    it('resolves a bare slug to the tenant-branded sign-in card', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      fireEvent.change(screen.getByLabelText('auth.findWorkspace.addressLabel'), { target: { value: 'acme' } })
+      fireEvent.click(screen.getByTestId('find-workspace-submit'))
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByText('auth.tenantWorkspaceOf')).toBeDefined()
+      })
+      expect(mockDiscoverTenant).toHaveBeenCalledWith('acme')
+      expect(mockSetResolvedTenantSlug).toHaveBeenCalledWith('acme')
+      expect(mockSetRememberedTenantSlug).toHaveBeenCalledWith('acme')
+      // OIDC start config re-resolves for the newly bound tenant context
+      expect(mockRefreshProviders).toHaveBeenCalled()
+    })
+
+    it('derives the slug from a full host address and shows a hint', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      fireEvent.change(screen.getByLabelText('auth.findWorkspace.addressLabel'), { target: { value: 'acme.example.com' } })
+      await waitFor(() => {
+        expect(screen.getByText('auth.findWorkspace.slugHint')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('find-workspace-submit'))
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+      })
+      expect(mockDiscoverTenant).toHaveBeenCalledWith('acme')
+    })
+
+    it('shows a neutral error and stays on the finder for an unknown workspace', async () => {
+      mockDiscoverTenant.mockResolvedValue({ multi_tenancy_enabled: true, tenant: null })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      fireEvent.change(screen.getByLabelText('auth.findWorkspace.addressLabel'), { target: { value: 'acme' } })
+      fireEvent.click(screen.getByTestId('find-workspace-submit'))
+      await waitFor(() => {
+        expect(screen.getByText('auth.findWorkspace.notFound')).toBeDefined()
+      })
+      expect(screen.queryByTestId('password-signin-form')).toBeNull()
+      expect(mockSetResolvedTenantSlug).not.toHaveBeenCalled()
+    })
+
+    it('does not remember the workspace when the checkbox is unchecked', async () => {
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('remember-workspace-checkbox'))
+      fireEvent.change(screen.getByLabelText('auth.findWorkspace.addressLabel'), { target: { value: 'acme' } })
+      fireEvent.click(screen.getByTestId('find-workspace-submit'))
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+      })
+      expect(mockSetRememberedTenantSlug).toHaveBeenCalledWith(null)
+    })
+
+    it('skips the find step for a remembered workspace', async () => {
+      mockGetRememberedTenantSlug.mockReturnValue('acme')
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByText('auth.tenantWorkspaceOf')).toBeDefined()
+      })
+      expect(screen.queryByTestId('workspace-finder-form')).toBeNull()
+      expect(mockDiscoverTenant).toHaveBeenCalledWith('acme')
+    })
+
+    it('falls back to the finder when the remembered workspace is gone', async () => {
+      mockGetRememberedTenantSlug.mockReturnValue('acme')
+      mockDiscoverTenant.mockResolvedValue({ multi_tenancy_enabled: true, tenant: null })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      expect(screen.queryByTestId('password-signin-form')).toBeNull()
+      // Stale hint is cleaned up
+      expect(mockSetRememberedTenantSlug).toHaveBeenCalledWith(null)
+    })
+
+    it('pre-resolves ?workspace= straight to the branded card without remembering', async () => {
+      render(
+        React.createElement(Wrapper, { initialEntries: ['/login?workspace=acme'] },
+          React.createElement(LoginPage)
+        )
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('password-signin-form')).toBeDefined()
+        expect(screen.getByText('auth.tenantWorkspaceOf')).toBeDefined()
+      })
+      expect(screen.queryByTestId('workspace-finder-form')).toBeNull()
+      expect(mockDiscoverTenant).toHaveBeenCalledWith('acme')
+      // Deep links never write the remember hint implicitly
+      expect(mockSetRememberedTenantSlug).not.toHaveBeenCalled()
+    })
+
+    it('clears stored workspaces and returns to the finder via the switch link', async () => {
+      mockGetRememberedTenantSlug.mockReturnValue('acme')
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('switch-workspace-link')).toBeDefined()
+      })
+      fireEvent.click(screen.getByTestId('switch-workspace-link'))
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      expect(mockSetRememberedTenantSlug).toHaveBeenCalledWith(null)
+      expect(mockSetResolvedTenantSlug).toHaveBeenCalledWith(null)
+      expect(screen.queryByTestId('password-signin-form')).toBeNull()
+    })
+
+    it('shows the blocked state for a suspended workspace address', async () => {
+      mockDiscoverTenant.mockResolvedValue({ multi_tenancy_enabled: true, tenant: SUSPENDED_TENANT })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      fireEvent.change(screen.getByLabelText('auth.findWorkspace.addressLabel'), { target: { value: 'acme' } })
+      fireEvent.click(screen.getByTestId('find-workspace-submit'))
+      await waitFor(() => {
+        expect(screen.getByText('auth.tenantBlocked')).toBeDefined()
+      })
+      expect(screen.queryByTestId('password-signin-form')).toBeNull()
+    })
+
+    it('keeps the signup link and the discreet super admin entry on the finder', async () => {
+      mockGetSuperAdminStatus.mockResolvedValue({ is_enabled: true, username: 'admin', last_login_at: null })
+      render(React.createElement(LoginPage), { wrapper: Wrapper })
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-finder-form')).toBeDefined()
+      })
+      expect(screen.getByTestId('signup-entry-link')).toBeDefined()
+      expect(screen.getByTestId('super-admin-entry')).toBeDefined()
     })
   })
 

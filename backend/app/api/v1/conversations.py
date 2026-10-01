@@ -213,8 +213,15 @@ async def respond_to_conversation_intervention(
         raise HTTPException(status_code=403, detail="Not authorized to respond to interventions for this session")
 
     # Resolve operator identity from the authenticated caller
+    # (identity plane — tenant-scope-exempt, FIX-20260929-221449: the
+    # operator's Identity row may live in another tenant than the
+    # resolved workspace).
     sub = claims.get("sub")
-    identity_result = await db.execute(select(Identity).where(Identity.subject == sub))
+    from app.db.tenant_scoping import execute_unscoped
+
+    identity_result = await execute_unscoped(
+        db, select(Identity).where(Identity.subject == sub)
+    )
     identity = identity_result.scalar_one_or_none()
     if identity is None:
         raise HTTPException(status_code=403, detail="User identity not found")

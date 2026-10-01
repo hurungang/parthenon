@@ -135,6 +135,48 @@ class ControlPlaneMiddleware(BaseHTTPMiddleware):
         if not request.url.path.startswith(_INTERNAL_PATH_PREFIX):
             return await call_next(request)
 
+        # Tenant context binding (multi-tenancy propagation from CC) for
+        # ALL internal paths, including the cert-exempt agent
+        # execute/terminate/resume forwards.  Verify-if-present: no
+        # tenant headers = single-tenant traffic (unchanged); any tenant
+        # header requires the full HMAC-signed set from CC.  CH can never
+        # create or widen a tenant context — it only consumes what CC
+        # signed, scoping its own forwarding by it.  Downstream
+        # forwarding propagates the ORIGINAL verified set verbatim
+        # (CH never re-signs).
+        from app.core.tenant_signature import (
+            TenantSignatureError,
+            bind_forwarded_tenant_headers,
+            extract_tenant_signature_headers,
+            verify_request_tenant_context,
+        )
+        try:
+            tenant_context = verify_request_tenant_context(request.headers)
+        except TenantSignatureError as exc:
+            logger.warning(
+                "CH control plane: rejected %s %s — invalid tenant context: %s",
+                request.method,
+                request.url.path,
+                exc,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid tenant context headers"},
+            )
+        if tenant_context is not None:
+            request.state.tenant_context = tenant_context
+            from app.core.tenant_context import (
+                set_current_tenant_context,
+                set_tenant_span_attributes,
+            )
+
+            set_current_tenant_context(tenant_context)
+            set_tenant_span_attributes(tenant_context)
+            # Forwarding binds the ORIGINAL signed set — no re-signing.
+            bind_forwarded_tenant_headers(
+                extract_tenant_signature_headers(request.headers)
+            )
+
         # Agent execute endpoint is called by Control Center (CA itself) 
         # which doesn't have a service certificate - exempt from validation
         if request.url.path == _AGENT_EXECUTE_PATH:

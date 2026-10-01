@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { standardSetup } from './_helpers'
+import { standardSetup } from '../_helpers'
 
 const MOCK_AGENT_TYPES = [
   { id: 'at-1', name: 'Research Agent', mode: 'skillful', description: 'Research', is_active: true },

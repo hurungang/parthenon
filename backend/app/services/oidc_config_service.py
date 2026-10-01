@@ -32,32 +32,81 @@ class OIDCConfigError(Exception):
     """Raised when an OIDC config operation fails business validation."""
 
 
+async def _multi_tenancy_on(db: AsyncSession) -> bool:
+    """Cached read of the platform tenancy switch."""
+    from app.services.tenancy.platform_settings_service import (
+        get_platform_settings_service,
+    )
+    return await get_platform_settings_service().is_multi_tenancy_enabled(db)
+
+
 class OIDCConfigService:
-    """Full CRUD for ``IdentityProviderConfig``, with encryption and auditing."""
+    """Full CRUD for ``IdentityProviderConfig``, with encryption and auditing.
+
+    Per-tenant binding (multi-tenancy on): every operation accepts an
+    optional ``tenant_id`` and addresses ONLY the provider config in that
+    ``(tenant_id, scope)`` slot — a tenant admin can never read or write
+    another tenant's provider config, and provider scope uniqueness is
+    enforced per tenant.  With the switch off, behaviour is unchanged:
+    platform-wide uniqueness with a single global config per scope.
+    """
 
     # ── Read ──────────────────────────────────────────────────────────────
 
     async def list_providers(
-        self, db: AsyncSession
+        self, db: AsyncSession, *, tenant_id: Optional[uuid.UUID] = None
     ) -> list[IdentityProviderConfig]:
-        """Return all configured identity providers, newest first."""
-        result = await db.execute(
-            select(IdentityProviderConfig).order_by(
-                IdentityProviderConfig.created_at.desc()
-            )
+        """Return configured identity providers, newest first.
+
+        With multi-tenancy on and *tenant_id* set, only that tenant's
+        configs (plus the shared global one) are returned; without a
+        tenant the SHARED (NULL-tenant) configs only — the public
+        login-page listing must never expose other tenants' provider
+        metadata (FIX-20261001-010107).
+        """
+        query = select(IdentityProviderConfig).order_by(
+            IdentityProviderConfig.created_at.desc()
         )
+        if await _multi_tenancy_on(db):
+            if tenant_id is not None:
+                query = query.where(
+                    (IdentityProviderConfig.tenant_id == tenant_id)
+                    | (IdentityProviderConfig.tenant_id.is_(None))
+                )
+            else:
+                # No resolved tenant context (public login-page probe /
+                # platform surface): shared slot only — fail-closed
+                # privacy, never a cross-tenant metadata dump.
+                query = query.where(IdentityProviderConfig.tenant_id.is_(None))
+        result = await db.execute(query)
         return list(result.scalars().all())
 
     async def get_by_scope(
-        self, db: AsyncSession, scope: str
+        self,
+        db: AsyncSession,
+        scope: str,
+        *,
+        tenant_id: Optional[uuid.UUID] = None,
     ) -> Optional[IdentityProviderConfig]:
-        """Return the config for *scope* (``user`` or ``agent``), or ``None``."""
+        """Return the config for *scope* (``user`` or ``agent``), or ``None``.
+
+        With multi-tenancy on, the exact ``(tenant_id, scope)`` slot is
+        addressed (``tenant_id=None`` → the global config).  With the
+        switch off, the legacy single-config-per-scope lookup is used.
+        """
         _validate_scope(scope)
-        result = await db.execute(
-            select(IdentityProviderConfig).where(
-                IdentityProviderConfig.provider_scope == scope
-            )
+        query = select(IdentityProviderConfig).where(
+            IdentityProviderConfig.provider_scope == scope
         )
+        if await _multi_tenancy_on(db):
+            # ``tenant_id == None`` compiles to ``tenant_id = NULL`` which
+            # matches NOTHING in SQL — the shared slot must be addressed
+            # with ``IS NULL`` (FIX-20261001-010107).
+            if tenant_id is None:
+                query = query.where(IdentityProviderConfig.tenant_id.is_(None))
+            else:
+                query = query.where(IdentityProviderConfig.tenant_id == tenant_id)
+        result = await db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_enabled(
@@ -87,18 +136,40 @@ class OIDCConfigService:
         scopes: str = "openid profile email",
         claim_mappings: Optional[dict] = None,
         is_enabled: bool = True,
+        default_tenant_role: Optional[str] = None,
         changed_by: str = "system",
+        tenant_id: Optional[uuid.UUID] = None,
     ) -> IdentityProviderConfig:
         """Create a new identity provider config.
 
         Validates OIDC Discovery at the issuer URL before persisting.
-        Rejects duplicate *provider_scope* entries.
+        Rejects duplicate *provider_scope* entries — platform-wide when
+        the tenancy switch is off, per ``(tenant_id, scope)`` slot when
+        on.  With the switch off, *tenant_id* is ignored (the config is
+        stored tenant-less, preserving single-tenant behaviour).
+        *default_tenant_role* — the JIT role preset key for first OIDC
+        sign-ins (FIX-20260930-075014); validated against the seeded
+        presets.
         """
         _validate_scope(provider_scope)
         _validate_provider_type(provider_type)
+        _validate_default_tenant_role(default_tenant_role)
 
-        # Reject duplicate scope
-        existing = await self.get_by_scope(db, provider_scope)
+        # Reject duplicates occupying the same slot
+        if await _multi_tenancy_on(db):
+            existing = await self.get_by_scope(
+                db, provider_scope, tenant_id=tenant_id
+            )
+        else:
+            # Switch off: registry is platform-wide — no other row may
+            # hold this scope at all.
+            tenant_id = None
+            existing = await db.execute(
+                select(IdentityProviderConfig).where(
+                    IdentityProviderConfig.provider_scope == provider_scope
+                )
+            )
+            existing = existing.scalar_one_or_none()
         if existing is not None:
             raise OIDCConfigError(
                 f"A provider config already exists for scope '{provider_scope}'."
@@ -116,6 +187,7 @@ class OIDCConfigService:
 
         config = IdentityProviderConfig(
             id=uuid.uuid4(),
+            tenant_id=tenant_id,
             provider_scope=provider_scope,
             provider_type=provider_type,
             display_name=display_name,
@@ -126,6 +198,7 @@ class OIDCConfigService:
             scopes=scopes,
             claim_mappings=claim_mappings,
             is_enabled=is_enabled,
+            default_tenant_role=default_tenant_role,
         )
         db.add(config)
 
@@ -141,14 +214,15 @@ class OIDCConfigService:
             previous_values=None,
         )
 
-        # Update setup state sentinel
-        await _update_setup_state(db, provider_scope, configured=True)
+        # Update setup state sentinel (platform scope only)
+        if tenant_id is None:
+            await _update_setup_state(db, provider_scope, configured=True)
 
         await db.flush()
         await db.refresh(config)
         logger.info(
-            "OIDCConfigService: created provider scope=%s type=%s",
-            provider_scope, provider_type,
+            "OIDCConfigService: created provider scope=%s type=%s tenant=%s",
+            provider_scope, provider_type, tenant_id,
         )
         return config
 
@@ -168,18 +242,24 @@ class OIDCConfigService:
         scopes: Optional[str] = None,
         claim_mappings: Optional[dict] = None,
         is_enabled: Optional[bool] = None,
+        default_tenant_role: Optional[str] = None,
         changed_by: str = "system",
+        tenant_id: Optional[uuid.UUID] = None,
     ) -> IdentityProviderConfig:
         """Update an existing provider config by scope.
 
         Only non-``None`` fields are updated.  If *issuer_url* changes the
-        new URL is validated via OIDC Discovery before persisting.
+        new URL is validated via OIDC Discovery before persisting.  With
+        multi-tenancy on, only the ``(tenant_id, scope)`` slot is
+        addressed — other tenants' configs are invisible (fail-closed).
         """
         _validate_scope(scope)
         if provider_type is not None:
             _validate_provider_type(provider_type)
+        if default_tenant_role is not None:
+            _validate_default_tenant_role(default_tenant_role)
 
-        config = await self.get_by_scope(db, scope)
+        config = await self.get_by_scope(db, scope, tenant_id=tenant_id)
         if config is None:
             raise OIDCConfigError(
                 f"No provider config exists for scope '{scope}'."
@@ -220,6 +300,11 @@ class OIDCConfigService:
         if is_enabled is not None and is_enabled != config.is_enabled:
             changed.append("is_enabled")
             config.is_enabled = is_enabled
+        if default_tenant_role is not None and default_tenant_role != getattr(
+            config, "default_tenant_role", None
+        ):
+            changed.append("default_tenant_role")
+            config.default_tenant_role = default_tenant_role
 
         if changed:
             config.updated_at = datetime.now(timezone.utc)
@@ -247,10 +332,11 @@ class OIDCConfigService:
         db: AsyncSession,
         scope: str,
         changed_by: str = "system",
+        tenant_id: Optional[uuid.UUID] = None,
     ) -> None:
         """Delete a provider config by scope."""
         _validate_scope(scope)
-        config = await self.get_by_scope(db, scope)
+        config = await self.get_by_scope(db, scope, tenant_id=tenant_id)
         if config is None:
             raise OIDCConfigError(
                 f"No provider config exists for scope '{scope}'."
@@ -287,10 +373,11 @@ class OIDCConfigService:
         scope: str,
         is_enabled: bool,
         changed_by: str = "system",
+        tenant_id: Optional[uuid.UUID] = None,
     ) -> IdentityProviderConfig:
         """Enable or disable a provider without deleting its config."""
         _validate_scope(scope)
-        config = await self.get_by_scope(db, scope)
+        config = await self.get_by_scope(db, scope, tenant_id=tenant_id)
         if config is None:
             raise OIDCConfigError(
                 f"No provider config exists for scope '{scope}'."
@@ -471,6 +558,19 @@ def _validate_provider_type(provider_type: str) -> None:
         )
 
 
+def _validate_default_tenant_role(role_key: Optional[str]) -> None:
+    """Reject unknown JIT default-role preset keys (FIX-20260930-075014)."""
+    if role_key is None:
+        return
+    from app.services.tenancy.default_tenant_roles import DEFAULT_TENANT_ROLE_PRESETS
+
+    if role_key not in DEFAULT_TENANT_ROLE_PRESETS:
+        raise OIDCConfigError(
+            f"Invalid default_tenant_role '{role_key}'. Must be one of: "
+            f"{sorted(DEFAULT_TENANT_ROLE_PRESETS)}."
+        )
+
+
 async def _validate_oidc_discovery(issuer_url: str) -> dict:
     """Fetch OIDC Discovery and return it. Raises on any error."""
     return await _fetch_discovery(issuer_url)
@@ -522,6 +622,7 @@ def _config_diff_fields(
         "scopes": new.scopes,
         "claim_mappings": new.claim_mappings,
         "is_enabled": new.is_enabled,
+        "default_tenant_role": getattr(new, "default_tenant_role", None),
     }
 
 

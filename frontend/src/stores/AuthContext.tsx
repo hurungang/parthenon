@@ -7,7 +7,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { AuthClaims, AuthState } from '../types'
+import type { ActiveTenant, AuthClaims, AuthState, TenantMembership, TenantDiscovery } from '../types'
+import {
+  discoverTenant,
+  getMyTenantMemberships,
+  setResolvedTenantSlug,
+  getResolvedTenantSlug,
+} from '../api/tenantAuthApi'
 
 // ── Token utilities ────────────────────────────────────────────────────────────
 
@@ -69,6 +75,32 @@ interface AuthContextValue extends AuthState {
   availableProviders: AvailableProvider[] | null
   superAdminEnabled: boolean
   isSuperAdmin: boolean
+  /**
+   * Multi-tenancy: whether the platform tenancy switch is on.
+   * `null` = discovery still in flight (callers must stay inert — never
+   * treat "unknown" as "off", or deep-links into /platform/* would bounce
+   * before the switch state resolves).
+   */
+  multiTenancyEnabled: boolean | null
+  /** Multi-tenancy: tenant resolved from the host at sign-in (null = platform surface) */
+  resolvedTenant: TenantDiscovery['tenant'] | null
+  /** Multi-tenancy: the authenticated user's active tenant memberships */
+  availableTenants: TenantMembership[]
+  refreshAvailableTenants: () => Promise<void>
+  /**
+   * Multi-tenancy: the tenant bound to this session (derived from the
+   * token's tenant claim — immutable until sign-out).  Null on the
+   * platform surface or when the tenancy switch is off.
+   */
+  activeTenant: ActiveTenant | null
+  /**
+   * Re-run provider / super-admin discovery with the CURRENT context.
+   * The workspace-address sign-in flow calls this right after binding a
+   * tenant slug so the OIDC start config (issuer / client) is resolved
+   * for the tenant's provider, not the platform default (the fetch picks
+   * up X-Tenant from the per-tab resolved slug).
+   */
+  refreshProviders: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -79,6 +111,15 @@ const OIDC_AUTHORITY_FALLBACK = import.meta.env.VITE_OIDC_AUTHORITY ?? 'http://l
 const OIDC_CLIENT_ID_FALLBACK = import.meta.env.VITE_OIDC_CLIENT_ID ?? 'parthenon-api-ui'
 const OIDC_REDIRECT_URI = `${window.location.origin}/callback`
 
+// sessionStorage keys for the OIDC round-trip state (FIX-20260929-043443
+// #3): login() persists the CHOSEN authority/client so OidcCallback
+// exchanges the code against the SAME tenant-resolved provider the
+// authorize redirect started from (a tenant provider with a non-default
+// issuer fails the exchange at the platform default). Consumed + cleared
+// by the callback; legacy flows fall back to the env defaults.
+const OIDC_AUTHORITY_KEY = 'oidc_authority'
+const OIDC_CLIENT_ID_KEY = 'oidc_client_id'
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(
     () => localStorage.getItem('access_token'),
@@ -88,6 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [superAdminEnabled, setSuperAdminEnabled] = useState(false)
   const [oidcAuthority, setOidcAuthority] = useState<string>(OIDC_AUTHORITY_FALLBACK)
   const [oidcClientId, setOidcClientId] = useState<string>(OIDC_CLIENT_ID_FALLBACK)
+  const [multiTenancyEnabled, setMultiTenancyEnabled] = useState<boolean | null>(null)
+  const [resolvedTenant, setResolvedTenant] = useState<TenantDiscovery['tenant'] | null>(null)
+  const [availableTenants, setAvailableTenants] = useState<TenantMembership[]>([])
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const claims = useMemo<AuthClaims | null>(() => {
@@ -99,6 +143,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return !!claims && !!(claims as unknown as Record<string, unknown>).is_super_admin
   }, [claims])
 
+  // Active tenant: derived from the token's immutable tenant claim plus
+  // the membership list (role).  Null when the claim is absent (platform
+  // surface) — one session = one tenant.
+  const activeTenant = useMemo<ActiveTenant | null>(() => {
+    const slug = (claims as unknown as Record<string, unknown> | null)?.tenant
+    if (typeof slug !== 'string' || slug === '') return null
+    const membership = availableTenants.find((m) => m.tenant_slug === slug)
+    return {
+      id: membership?.tenant_id ?? slug,
+      slug,
+      name: membership?.tenant_name ?? slug,
+      role: membership?.tenant_role ?? 'member',
+    }
+  }, [claims, availableTenants])
+
   const isAuthenticated = !!token && !!claims && !isTokenExpired(claims)
 
   const setToken = useCallback((newToken: string) => {
@@ -106,69 +165,126 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(newToken)
   }, [])
 
-  // Discover active providers and super admin status on app load
-  useEffect(() => {
-    const discoverProviders = async () => {
+  // Discover active providers and super admin status on app load.
+  // Extracted so the workspace-address sign-in flow can re-run it after
+  // binding a tenant (X-Tenant is read from storage at fetch time).
+  const discoverProviders = useCallback(async () => {
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+      const headers: Record<string, string> = {}
+      const storedToken = localStorage.getItem('access_token')
+      if (storedToken) {
+        headers.Authorization = `Bearer ${storedToken}`
+      }
+      // Multi-tenancy: attach the resolved tenant slug so per-tenant
+      // provider resolution returns THIS tenant's provider config.
+      const tenantSlug = getResolvedTenantSlug()
+      if (tenantSlug) {
+        headers['X-Tenant'] = tenantSlug
+      }
+
+      // Fetch identity providers
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
-        const headers: Record<string, string> = {}
-        const storedToken = localStorage.getItem('access_token')
-        if (storedToken) {
-          headers.Authorization = `Bearer ${storedToken}`
-        }
-
-        // Fetch identity providers
-        try {
-          const providersResp = await fetch(`${apiBase}/system/identity-providers`, { headers })
-          if (providersResp.ok) {
-            const data = await providersResp.json() as {
-              items: Array<{
-                provider_scope: string
-                provider_type: string
-                display_name: string
-                is_enabled: boolean
-                issuer_url: string
-                client_id: string
-                ui_client_id?: string
-                public_client_id?: string
-              }>
-            }
-            setAvailableProviders(
-              data.items.map((p) => ({
-                scope: p.provider_scope,
-                providerType: p.provider_type,
-                displayName: p.display_name,
-                isEnabled: p.is_enabled,
-              })),
-            )
-            // Update dynamic OIDC config from discovered user provider
-            const userP = data.items.find((p) => p.provider_scope === 'user' && p.is_enabled)
-            if (userP) {
-              setOidcAuthority(userP.issuer_url)
-              setOidcClientId(userP.public_client_id || userP.ui_client_id || userP.client_id || OIDC_CLIENT_ID_FALLBACK)
-            }
+        const providersResp = await fetch(`${apiBase}/system/identity-providers`, { headers })
+        if (providersResp.ok) {
+          const data = await providersResp.json() as {
+            items: Array<{
+              provider_scope: string
+              provider_type: string
+              display_name: string
+              is_enabled: boolean
+              issuer_url: string
+              client_id: string
+              ui_client_id?: string
+              public_client_id?: string
+            }>
           }
-        } catch {
-          // Silently fail; providers may not be configured
-        }
-
-        // Fetch super admin status
-        try {
-          const saResp = await fetch(`${apiBase}/system/super-admin/status`, { headers })
-          if (saResp.ok) {
-            const saData = await saResp.json() as { is_enabled: boolean }
-            setSuperAdminEnabled(saData.is_enabled)
+          setAvailableProviders(
+            data.items.map((p) => ({
+              scope: p.provider_scope,
+              providerType: p.provider_type,
+              displayName: p.display_name,
+              isEnabled: p.is_enabled,
+            })),
+          )
+          // Update dynamic OIDC config from discovered user provider
+          const userP = data.items.find((p) => p.provider_scope === 'user' && p.is_enabled)
+          if (userP) {
+            setOidcAuthority(userP.issuer_url)
+            setOidcClientId(userP.public_client_id || userP.ui_client_id || userP.client_id || OIDC_CLIENT_ID_FALLBACK)
           }
-        } catch {
-          // Silently fail
         }
       } catch {
-        // Silently fail; discovery is best-effort
+        // Silently fail; providers may not be configured
+      }
+
+      // Fetch super admin status
+      try {
+        const saResp = await fetch(`${apiBase}/system/super-admin/status`, { headers })
+        if (saResp.ok) {
+          const saData = await saResp.json() as { is_enabled: boolean }
+          setSuperAdminEnabled(saData.is_enabled)
+        }
+      } catch {
+        // Silently fail
+      }
+    } catch {
+      // Silently fail; discovery is best-effort
+    }
+  }, [token])
+
+  useEffect(() => {
+    void discoverProviders()
+  }, [discoverProviders])
+
+  // Multi-tenancy: resolve the tenant from the current host on load.
+  // Inert when the switch is off (discovery reports enabled=false) so the
+  // single-tenant sign-in flow is untouched.
+  useEffect(() => {
+    const resolveTenant = async () => {
+      try {
+        const discovery = await discoverTenant()
+        setMultiTenancyEnabled(discovery.multi_tenancy_enabled)
+        setResolvedTenant(discovery.tenant)
+        // FIX-20260929-043443 #2b: only an explicit echo (re)binds — a bare
+        // discovery response (platform host, tenancy probe) must never
+        // WIPE an existing explicit binding (it made the binding flicker
+        // away whenever the echo was missing). Clearing remains the job of
+        // the explicit flows (workspace switch, logout).
+        if (discovery.tenant?.slug) {
+          setResolvedTenantSlug(discovery.tenant.slug)
+        }
+        if (discovery.tenant && discovery.tenant.status !== 'active') {
+          // Suspended/deleted tenant: no sign-in redirect should occur —
+          // the LoginPage renders the blocked state instead.
+          setAvailableProviders([])
+        }
+      } catch {
+        // Discovery is best-effort; stay inert on failure.
+        setMultiTenancyEnabled(false)
+        setResolvedTenant(null)
       }
     }
+    void resolveTenant()
+  }, [])
 
-    void discoverProviders()
-  }, [token])
+  // Multi-tenancy: fetch the caller's memberships when authenticated
+  // (powers the multi-org picker).  Inert when unauthenticated/off.
+  const refreshAvailableTenants = useCallback(async () => {
+    if (!isAuthenticated || isSuperAdmin || !multiTenancyEnabled) {
+      setAvailableTenants([])
+      return
+    }
+    try {
+      setAvailableTenants(await getMyTenantMemberships())
+    } catch {
+      setAvailableTenants([])
+    }
+  }, [isAuthenticated, isSuperAdmin, multiTenancyEnabled])
+
+  useEffect(() => {
+    void refreshAvailableTenants()
+  }, [refreshAvailableTenants])
 
   const login = useCallback(async () => {
     // Generate PKCE code verifier and challenge
@@ -177,6 +293,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Store verifier in sessionStorage for callback handler
     sessionStorage.setItem('pkce_code_verifier', codeVerifier)
+    // FIX-20260929-043443 #3: persist the resolved start config so the
+    // callback exchanges the code against the SAME provider (issuer +
+    // client) this authorize redirect was built for.
+    sessionStorage.setItem(OIDC_AUTHORITY_KEY, oidcAuthority)
+    sessionStorage.setItem(OIDC_CLIENT_ID_KEY, oidcClientId)
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -199,6 +320,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(null)
     setAvailableProviders(null)
     setSuperAdminEnabled(false)
+    setAvailableTenants([])
+    setResolvedTenantSlug(null)
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
 
     // For super admin sessions, just redirect to login
@@ -281,8 +404,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       availableProviders,
       superAdminEnabled,
       isSuperAdmin,
+      multiTenancyEnabled,
+      resolvedTenant,
+      availableTenants,
+      refreshAvailableTenants,
+      activeTenant,
+      refreshProviders: discoverProviders,
     }),
-    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin],
+    [isAuthenticated, isLoading, token, claims, login, logout, setToken, availableProviders, superAdminEnabled, isSuperAdmin, multiTenancyEnabled, resolvedTenant, availableTenants, refreshAvailableTenants, activeTenant, discoverProviders],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

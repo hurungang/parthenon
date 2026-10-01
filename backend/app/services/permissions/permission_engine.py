@@ -41,6 +41,7 @@ class PermissionEngine:
         action: str,
         resource_id: str,
         resource_tags: dict[str, str],
+        tenant_id: uuid.UUID | None = None,
     ) -> AuthorizationResult:
         """Evaluate whether user_id may perform action on resource_id in module.
 
@@ -50,6 +51,12 @@ class PermissionEngine:
         3. Load PolicyStatements for those roles filtered by module
         4. For each allow statement, check action, resource, and tag conditions
         5. Return allow if any statement matches; deny otherwise
+
+        When *tenant_id* is provided (multi-tenancy on), role collection is
+        bound to the tenant: only roles assigned within that tenant (plus
+        global/tenant-less roles such as the platform-admin role) are
+        considered, so identical role names in different tenants never
+        collide.  Single-tenant mode (tenant_id=None) is unchanged.
         """
         # Manifest validation — fail fast for unknown module names
         # Wildcards '*', '*::*', and 'module::*' bypass this check
@@ -62,7 +69,7 @@ class PermissionEngine:
                     reason=f"Unknown resource type '{module}'.",
                 )
 
-        role_ids = await self._get_effective_role_ids(db, user_id)
+        role_ids = await self._get_effective_role_ids(db, user_id, tenant_id)
         if not role_ids:
             return AuthorizationResult(allowed=False, reason="User has no assigned roles.")
 
@@ -159,10 +166,72 @@ class PermissionEngine:
         return pattern == resource_id
 
     async def _get_effective_role_ids(
-        self, db: AsyncSession, user_id: uuid.UUID
+        self,
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID | None = None,
     ) -> List[uuid.UUID]:
-        """Collect all role IDs for a user: direct + group-inherited."""
-        # Direct roles
+        """Collect all role IDs for a user: direct + group-inherited.
+
+        With *tenant_id* set (multi-tenancy on), roles are collected only
+        from the request's tenant — direct and group roles whose Role row
+        belongs to the tenant — plus global tenant-less roles (e.g. the
+        system/platform-admin role), which stay effective in every tenant.
+        Roles of other tenants are never collected.
+        """
+        from app.db.models.group import Group
+        from app.db.models.group_role import GroupRole
+        from app.db.models.identity import Role
+        from app.db.models.user_group import UserGroup
+        from app.db.models.user_role import UserRole
+
+        if tenant_id is not None:
+            # Direct roles, tenant-bound: join Role and keep this tenant's
+            # roles plus global (tenant-less) ones.
+            direct_result = await db.execute(
+                select(UserRole.role_id)
+                .join(Role, Role.id == UserRole.role_id)
+                .where(
+                    UserRole.user_id == user_id,
+                    or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                )
+            )
+            role_ids = list(direct_result.scalars().all())
+            logger.debug(
+                "_get_effective_role_ids user=%s tenant=%s direct_roles=%s",
+                user_id, tenant_id, [str(r) for r in role_ids],
+            )
+
+            group_result = await db.execute(
+                select(UserGroup.group_id).where(UserGroup.user_id == user_id)
+            )
+            group_ids = list(group_result.scalars().all())
+
+            if group_ids:
+                group_role_result = await db.execute(
+                    select(GroupRole.role_id)
+                    .join(Role, Role.id == GroupRole.role_id)
+                    .join(Group, Group.id == GroupRole.group_id)
+                    .where(
+                        GroupRole.group_id.in_(group_ids),
+                        or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)),
+                    )
+                )
+                group_role_ids = list(group_role_result.scalars().all())
+                logger.debug(
+                    "_get_effective_role_ids user=%s tenant=%s group_roles=%s",
+                    user_id, tenant_id, [str(r) for r in group_role_ids],
+                )
+                role_ids.extend(group_role_ids)
+
+            effective = list(set(role_ids))
+            logger.info(
+                "_get_effective_role_ids user=%s tenant=%s effective_role_ids=%s count=%d",
+                user_id, tenant_id, [str(r) for r in effective], len(effective),
+            )
+            return effective
+
+        # Single-tenant mode — unchanged legacy behaviour.
         direct_result = await db.execute(
             select(UserRole.role_id).where(UserRole.user_id == user_id)
         )

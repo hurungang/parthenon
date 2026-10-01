@@ -46,9 +46,10 @@ def test_manifest_structure():
             assert len(action) > 0
 
 
-def test_manifest_has_20_entries():
-    """Manifest should contain exactly 20 resource types (19 namespaced + bare 'agent')."""
-    assert len(ResourceTypeManifest) == 20
+def test_manifest_has_25_entries():
+    """Manifest should contain exactly 25 resource types
+    (24 namespaced + bare 'agent')."""
+    assert len(ResourceTypeManifest) == 25
 
 
 def test_all_resource_type_constants_exist():
@@ -105,9 +106,15 @@ def test_invalid_resource_type_not_in_manifest():
     assert "" not in ResourceTypeManifest
 
 
-def test_module_groups_have_three_modules():
-    """MODULE_GROUPS should contain agent, integration, and system."""
-    assert set(MODULE_GROUPS.keys()) == {"agent", "integration", "system"}
+def test_module_groups_have_five_modules():
+    """MODULE_GROUPS should contain agent, integration, system, platform, tenant."""
+    assert set(MODULE_GROUPS.keys()) == {
+        "agent",
+        "integration",
+        "system",
+        "platform",
+        "tenant",
+    }
 
 
 def test_agent_module_has_14_submodules():
@@ -125,6 +132,49 @@ def test_system_module_has_3_submodules():
     assert len(MODULE_GROUPS["system"]) == 3
 
 
+def test_platform_module_has_3_submodules():
+    """Platform module should have 3 submodules."""
+    assert len(MODULE_GROUPS["platform"]) == 3
+    for rt in MODULE_GROUPS["platform"]:
+        assert rt.startswith("platform::")
+        assert rt in ResourceTypeManifest
+
+
+def test_tenant_module_has_2_submodules():
+    """Tenant module should have 2 submodules."""
+    assert len(MODULE_GROUPS["tenant"]) == 2
+    for rt in MODULE_GROUPS["tenant"]:
+        assert rt.startswith("tenant::")
+        assert rt in ResourceTypeManifest
+
+
+def test_tenant_management_resource_types_have_expected_actions():
+    """platform::/tenant:: resource types should expose sensible action sets."""
+    assert set(ResourceTypeManifest["platform::tenants"]["actions"]) == {
+        "create",
+        "read",
+        "update",
+        "delete",
+        "manage",
+    }
+    assert set(ResourceTypeManifest["platform::settings"]["actions"]) == {
+        "read",
+        "manage",
+    }
+    assert ResourceTypeManifest["platform::audit"]["actions"] == ["read"]
+    assert set(ResourceTypeManifest["tenant::settings"]["actions"]) == {
+        "read",
+        "manage",
+    }
+    assert set(ResourceTypeManifest["tenant::members"]["actions"]) == {
+        "create",
+        "read",
+        "update",
+        "delete",
+        "manage",
+    }
+
+
 def test_get_module_from_resource_type():
     """get_module_from_resource_type should extract the module prefix."""
     assert get_module_from_resource_type("agent::management") == "agent"
@@ -140,6 +190,8 @@ def test_is_valid_wildcard():
     assert is_valid_wildcard("agent::*") is True
     assert is_valid_wildcard("integration::*") is True
     assert is_valid_wildcard("system::*") is True
+    assert is_valid_wildcard("platform::*") is True
+    assert is_valid_wildcard("tenant::*") is True
     assert is_valid_wildcard("invalid::*") is False
     assert is_valid_wildcard("*") is False
     assert is_valid_wildcard("agent::management") is False

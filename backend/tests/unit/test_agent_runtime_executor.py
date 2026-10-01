@@ -55,10 +55,14 @@ def test_executor_has_session_service():
 def test_executor_uses_langgraph_create_agent():
     """runtime_executor uses LangGraph create_agent (tasks 9.6-9.8 migration complete)."""
     import importlib.util
+    from pathlib import Path
 
+    # Anchor to the repository layout (backend/app/...) so the test is
+    # independent of the working directory pytest is invoked from.
+    backend_root = Path(__file__).resolve().parents[2]
     spec = importlib.util.spec_from_file_location(
         "runtime_executor",
-        "app/services/agents/runtime_executor.py",
+        str(backend_root / "app" / "services" / "agents" / "runtime_executor.py"),
     )
     if spec and spec.origin:
         with open(spec.origin, encoding="utf-8") as f:

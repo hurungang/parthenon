@@ -633,6 +633,20 @@ async def launch_agent_session(
         user_id_str: str | None = claims.get("platform_user_id")
         user_id = uuid.UUID(user_id_str) if user_id_str else None
 
+    # Quota gate (Phase 10): monthly agent executions — consulted BEFORE
+    # any side effect, and the counter is incremented exactly once on
+    # acceptance, BEFORE any dispatch.  Inert when the tenancy switch is
+    # off.  An exhausted quota returns the structured tier/limit/usage/
+    # upgrade payload (403) and the execution never reaches CH/AR.
+    from app.core.tenant_context import get_tenant_context
+    from app.services.tenancy.quota_service import get_tenant_quota_service
+
+    quota_tenant_id: uuid.UUID | None = None
+    tenant_context = get_tenant_context(request)
+    if tenant_context.is_set:
+        quota_tenant_id = tenant_context.tenant_id
+        await get_tenant_quota_service().ensure_executions(db, quota_tenant_id)
+
     # Recursion pre-flight validation before launching
     try:
         await get_recursion_validation_service().validate_agent_type(
@@ -660,6 +674,11 @@ async def launch_agent_session(
         )
 
     try:
+        # Count the execution at ACCEPTANCE (before any dispatch) so the
+        # monthly counter never double-counts in-flight runs and never
+        # refunds on completion/failure.
+        if quota_tenant_id is not None:
+            await get_tenant_quota_service().increment_executions(db, quota_tenant_id)
         result = await _lifecycle_handler.launch(
             agent_type_id=body.agent_type_id,
             input_data=body.input_data,
@@ -1317,6 +1336,16 @@ async def create_agent_type(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Agent types must specify at least one SOP or Skill binding",
         )
+
+    # Quota gate (Phase 10): agent types — consulted BEFORE any side
+    # effect.  Inert when the tenancy switch is off; an exhausted quota
+    # returns the structured tier/limit/usage/upgrade payload (403).
+    from app.core.tenant_context import get_tenant_context
+    from app.services.tenancy.quota_service import get_tenant_quota_service
+
+    tenant_context = get_tenant_context(request)
+    if tenant_context.is_set:
+        await get_tenant_quota_service().ensure_agent_types(db, tenant_context.tenant_id)
 
     # Validate bindings against role permissions
     if body.sop_bindings or body.skill_bindings:
@@ -2575,6 +2604,7 @@ async def request_runtime_termination(
     """
     from app.db.models.identity import Identity
     from app.db.models.platform_user import PlatformUser
+    from app.db.tenant_scoping import execute_unscoped
     from app.services.permissions.permission_engine import PermissionEngine
 
     claims = get_current_claims(request)
@@ -2582,7 +2612,12 @@ async def request_runtime_termination(
     if not sub:
         raise HTTPException(status_code=403, detail="No identity claims found.")
 
-    user_result = await db.execute(select(PlatformUser).where(PlatformUser.sub == sub))
+    # Identity-plane lookups (FIX-20260929-221449): resolving WHO is
+    # requesting the termination (PlatformUser by sub, canonical human
+    # Identity by subject) is platform-level — tenant-scope-exempt.
+    user_result = await execute_unscoped(
+        db, select(PlatformUser).where(PlatformUser.sub == sub)
+    )
     user = user_result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
@@ -2590,7 +2625,9 @@ async def request_runtime_termination(
             detail="User not found in platform. Please re-authenticate.",
         )
 
-    identity_result = await db.execute(select(Identity).where(Identity.subject == sub))
+    identity_result = await execute_unscoped(
+        db, select(Identity).where(Identity.subject == sub)
+    )
     identity = identity_result.scalar_one_or_none()
     if identity is None:
         raise HTTPException(
@@ -2657,14 +2694,22 @@ async def list_runtime_policy_events(
     """List structured runtime policy events for dashboard/log correlation."""
     from app.db.models.session_logs import ExecutionEventCategory, ExecutionLogEntry
 
-    stmt = select(ExecutionLogEntry).where(
-        ExecutionLogEntry.event_category.in_(
-            [
-                ExecutionEventCategory.guardrail,
-                ExecutionEventCategory.validation,
-                ExecutionEventCategory.termination,
-                ExecutionEventCategory.posture,
-            ]
+    # execution_logs is a parent-scoped table: joining the tenant-scoped
+    # AgentJob parent constrains the events to the request's tenant in
+    # tenant context (the FK guarantees the parent, so the inner join does
+    # not change the row set in single-tenant mode).
+    stmt = (
+        select(ExecutionLogEntry)
+        .join(AgentJob, AgentJob.id == ExecutionLogEntry.session_id)
+        .where(
+            ExecutionLogEntry.event_category.in_(
+                [
+                    ExecutionEventCategory.guardrail,
+                    ExecutionEventCategory.validation,
+                    ExecutionEventCategory.termination,
+                    ExecutionEventCategory.posture,
+                ]
+            )
         )
     )
     if session_id is not None:

@@ -24,6 +24,10 @@ Run:
 ```powershell
 $env:DEMO_SPEED="normal"; npx playwright test --config=playwright.demo.config.ts --project=chromium --grep "..."
 ```
+macOS/Linux equivalent:
+```bash
+DEMO_SPEED=normal npx playwright test --config=playwright.demo.config.ts --project=chromium --grep "..."
+```
 (from `e2e/` directory)
 
 ## Manual Control (UI Mode)
@@ -31,6 +35,10 @@ $env:DEMO_SPEED="normal"; npx playwright test --config=playwright.demo.config.ts
 Launch Playwright UI as a detached background process:
 ```powershell
 Start-Process -WindowStyle Hidden -FilePath "npx" -ArgumentList "playwright","test","--ui","--config=playwright.demo.config.ts","--ui-host=localhost","--ui-port=8080","--headed"
+```
+macOS/Linux equivalent:
+```bash
+nohup npx playwright test --ui --config=playwright.demo.config.ts --ui-host=localhost --ui-port=8080 --headed > /tmp/pw-ui.log 2>&1 &
 ```
 Open `http://localhost:8080` — clicking ▶ runs each scenario with the app browser opening automatically.
 
@@ -96,6 +104,20 @@ require(path.resolve('e2e/node_modules/@playwright/test/cli.js'));
 | Hub in preview topology | `Agent Management Panel — Communication Hub in existing preview topologies > Agent Types details dialog shows the hub in a typed agent plan preview topology` | Communication Hub node rendered in the existing Agent Types plan preview topology |
 | Permission degradation | `Agent Management Panel — permissions > 403 on the roles list disables only the role slot with a localized explanation` | Denied slot disables gracefully with an explanation — no error surface |
 | Single-PUT save | `Agent Management Panel — CRUD lifecycle > pending-changes tray saves the draft with exactly one agent-type PUT` | Pending-changes tray persists the whole draft with exactly one agent-type update call |
+| **Multi-Tenancy** (multi-tenant-support) | | |
+| Single-tenant regression | `Single-Tenant Regression (switch OFF) > CS-01: /platform/* routes are absent — navigating there lands on dashboard` | With tenancy off, `/platform/*` deep links land on the dashboard — unchanged single-tenant product |
+| Platform settings toggle | `Platform Settings Toggle (mocked) > toggle requires the typed ENABLE confirmation and reflects server state` | Typed ENABLE confirmation; button disabled on wrong input; state reflects server immediately |
+| Tenant lifecycle | `Platform Tenant Management Lifecycle (mocked) > CS-07/CS-09: create → edit → suspend → resume → delete → slug reusable, all without page reload` | Platform console CRUD with typed-confirmation delete; parent table refreshes without reload |
+| Multi-org tenant picker | `Multi-org picker — one session = one tenant > multi-org user sees the picker; single selection binds the session` | Multi-org user picks an org at sign-in; session binds and survives reload |
+| Platform audit | `Platform Audit View (mocked) > lists events with tenant attribution and exposes filters; no business data` | Cross-tenant audit events with tenant attribution and filters |
+| Sign-up off (switch OFF) | `Self-Serve Sign-Up (mocked) > CS-29: switch off — no entry link on login, /signup inert` | No sign-up link on login; /signup renders an unavailable note with no form |
+| Self-serve sign-up journey | `Self-Serve Sign-Up (mocked) > CS-26: full journey — entry link → wizard → lands in onboarding as root` | Two-step wizard (account → organization); new root lands in guided onboarding, no platform-admin action |
+| Duplicate email blocked | `Self-Serve Sign-Up (mocked) > CS-27: duplicate email blocked with a clear inline error` | Inline "already exists" error; user stays on /signup, no session |
+| One-tenant-per-user | `Self-Serve Sign-Up (mocked) > CS-28: one-tenant-per-user message on a second registration attempt` | Second registration attempt blocked with the dedicated message |
+| Quota-blocked invitation | `Quota Enforcement (mocked) > CS-35/CS-41: blocked invite shows tier/limit/usage/upgrade; unblocked once the license is raised` | Structured block alert (tier, limit, usage, upgrade path); raising the license unblocks with no reload |
+| License usage panel | `Quota Enforcement (mocked) > CS-34: the tenant usage panel mirrors tier and limits` | Tenant settings shows the tier chip and usage against limits |
+| Real-backend tenant isolation | `Real Backend Integration - Multi-Tenant Isolation > isolation contract holds against the live backend` | ⚠️ Requires a live running stack (see `/start-app`); auto-skips otherwise |
+| Real-backend self-serve registration | `Real Backend Integration - Self-Serve Registration & Quotas > registration + one-tenant block + usage read against the live backend` | ⚠️ Requires a live running stack (see `/start-app`); auto-skips otherwise |
 
 ## Prerequisites
 

@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parthenon — Multi-Tenant Support · UI Prototype</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563EB;--primary-dark:#1D4ED8;--primary-light:#DBEAFE;
+  --surface:#FFFFFF;--bg:#FAFAFA;--border:#E0E0E0;
+  --success:#4CAF50;--warning:#FF9800;--error:#F44336;--info:#2196F3;
+  --text-primary:#212121;--text-secondary:#757575;
+  --shadow:0 1px 2px 0 rgba(60,64,67,0.3),0 1px 3px 1px rgba(60,64,67,0.15);
+  --shadow-md:0 4px 6px 0 rgba(60,64,67,0.3),0 4px 8px 3px rgba(60,64,67,0.15);
+  --radius:8px;--radius-sm:4px;--radius-lg:12px;
+  --transition:0.2s ease;
+}
+html,body{height:100%;font-family:'Inter','Roboto',system-ui,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:14px}
+strong{font-weight:600}
+
+/* ── PROTOTYPE NAV BAR ── */
+.proto-nav{position:fixed;top:0;left:0;right:0;height:52px;background:#0F172A;color:#E2E8F0;display:flex;align-items:center;gap:6px;padding:0 16px;z-index:1500;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.proto-nav .pn-brand{font-weight:700;font-size:14px;margin-right:10px;white-space:nowrap}
+.proto-nav .pn-brand small{font-weight:500;color:#94A3B8;margin-left:6px;font-size:11px}
+.pn-btn{background:transparent;border:1px solid transparent;color:#CBD5E1;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;transition:all var(--transition);white-space:nowrap}
+.pn-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+.pn-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pn-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pn-mode{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;letter-spacing:.4px;text-transform:uppercase}
+.pn-mode.off{background:#334155;color:#CBD5E1}
+.pn-mode.on{background:#14532D;color:#86EFAC}
+.pn-reset{background:transparent;border:1px solid #475569;color:#94A3B8;font-size:11px;padding:4px 10px;border-radius:6px}
+.pn-reset:hover{border-color:#94A3B8;color:#E2E8F0}
+
+/* ── STAGE & SCENES ── */
+.stage{padding:68px 24px 24px}
+.scene{display:none}.scene.active{display:block}
+.scene-note{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:#F0F5FF;border:1px solid #C7D7F5;border-radius:var(--radius);font-size:12.5px;color:#334A75;margin-bottom:16px}
+.scene-note .sn-icon{flex-shrink:0}
+.view-header h2{font-size:20px;font-weight:700;letter-spacing:-.3px}
+.view-desc{font-size:13px;color:var(--text-secondary)}
+.avatar{background:var(--primary);color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+
+/* ── APP SHELL (embedded mini console) ── */
+.shell{display:flex;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);height:calc(100vh - 130px);min-height:520px;overflow:hidden}
+.shell-sidebar{width:212px;flex-shrink:0;border-right:1px solid var(--border);background:#FBFCFE;display:flex;flex-direction:column}
+.shell-logo{padding:14px 16px;border-bottom:1px solid var(--border)}
+.shell-logo h1{font-size:15px;font-weight:700;letter-spacing:-.3px}
+.shell-logo small{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.shell-nav{padding:8px;flex:1;overflow-y:auto}
+.snav-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--radius);font-size:13px;color:var(--sidebar-text,#424242);cursor:pointer;transition:background var(--transition);margin-bottom:1px;user-select:none}
+.snav-item:hover{background:rgba(0,0,0,.04)}
+.snav-item.active{background:rgba(37,99,235,.1);color:var(--primary);font-weight:500}
+.snav-sep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);padding:10px 12px 4px}
+.snav-foot{padding:10px 14px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-secondary);line-height:1.5}
+.shell-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.shell-topbar{height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 18px;flex-shrink:0}
+.shell-title{font-size:15px;font-weight:600}
+.ctx-chip{display:inline-flex;align-items:center;gap:6px;background:var(--primary-light);color:var(--primary-dark);font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px}
+.ctx-chip .ctx-dot{width:7px;height:7px;border-radius:50%;background:var(--primary)}
+.ctx-addr{font-size:11px;color:var(--text-secondary);font-family:'Courier New',monospace;background:#F1F5F9;padding:2px 8px;border-radius:4px}
+.shell-body{flex:1;overflow-y:auto;padding:20px}
+.panel{display:none}.panel.active{display:block}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);border:none;font-weight:500;transition:all var(--transition);white-space:nowrap;letter-spacing:.25px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow)}.btn-primary:hover{background:var(--primary-dark)}
+.btn-primary:disabled{background:#93B4F0;cursor:not-allowed;box-shadow:none}
+.btn-secondary{background:var(--surface);color:var(--text-primary);border:1px solid var(--border)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--error);color:#fff}.btn-danger:hover{opacity:.9}
+.btn-danger:disabled{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px}
+.btn-ghost{background:none;border:none;color:var(--primary);padding:4px 8px}.btn-ghost:hover{background:var(--primary-light)}
+
+/* ── CARDS / TABLES ── */
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.table-wrap{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead{background:#F8FAFC}
+thead th{padding:10px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+tbody tr:hover{background:#F8FAFC}
+tbody td{padding:11px 16px;vertical-align:middle}
+tbody tr:last-child{border-bottom:none}
+.actions-cell{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:#DBEAFE;color:#1D4ED8}
+.chip-green{background:#DCFCE7;color:#15803D}
+.chip-red{background:#FEE2E2;color:#B91C1C}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-purple{background:#EDE9FE;color:#6D28D9}
+.chip-gray{background:#F1F5F9;color:#475569}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:var(--success)}.dot-yellow{background:var(--warning)}.dot-red{background:var(--error)}.dot-gray{background:#94A3B8}
+.chip-root{background:#312E81;color:#C7D2FE;cursor:default}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:6px}
+.form-control{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);transition:border-color var(--transition);outline:none}
+.form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.form-control.error{border-color:var(--error);box-shadow:0 0 0 2px rgba(244,67,54,.15)}
+.form-hint{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.form-error{font-size:11px;color:var(--error);margin-top:4px;display:none}
+.form-error.visible{display:block}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.addr-group{display:flex;align-items:center}
+.addr-group .addr-prefix{padding:9px 10px;background:#F1F5F9;border:1px solid var(--border);border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm);font-family:'Courier New',monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap}
+.addr-group .form-control{border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.addr-group .addr-suffix{padding:9px 10px;background:#F1F5F9;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-family:'Courier New',monospace;font-size:13px;color:var(--text-secondary);white-space:nowrap}
+
+/* ── TOGGLE ── */
+.toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{width:44px;height:24px;background:#CBD5E1;border-radius:12px;transition:background var(--transition);position:relative;flex-shrink:0}
+.toggle-slider::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+.toggle-slider{background:var(--success)}
+.toggle input:checked+.toggle-slider::after{transform:translateX(20px)}
+
+/* ── ALERTS ── */
+.alert{border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.5;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#EFF6FF;color:#1E40AF;border-left:4px solid #3B82F6}
+.alert-warning{background:#FFFBEB;color:#92400E;border-left:4px solid #F59E0B}
+.alert-success{background:#F0FDF4;color:#166534;border-left:4px solid #22C55E}
+.alert-danger{background:#FEF2F2;color:#991B1B;border-left:4px solid #EF4444}
+
+/* ── METRIC CARDS ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.metric-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);padding:16px 18px}
+.metric-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.metric-value{font-size:26px;font-weight:700;line-height:1}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-lg{max-width:640px}
+.modal-header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-header h3{font-size:16px;font-weight:600}
+.modal-close{background:none;border:none;padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1}.modal-close:hover{background:var(--bg)}
+.modal-body{padding:22px 24px;overflow-y:auto;flex:1}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0}
+
+/* ── DRAWER ── */
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:1900}
+.drawer-overlay.open{display:block}
+.drawer{position:fixed;top:0;right:-480px;bottom:0;width:440px;max-width:94vw;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:1901;transition:right .3s ease;display:flex;flex-direction:column;overflow:hidden}
+.drawer.open{right:0}
+.drawer-header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-header h3{font-size:16px;font-weight:600}
+.drawer-body{flex:1;overflow-y:auto;padding:22px 24px}
+.detail-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:13px;border-bottom:1px solid #F0F0F0}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:var(--text-secondary);font-weight:500}
+.detail-value{font-weight:600;text-align:right;word-break:break-all}
+
+/* ── WIZARD ── */
+.wizard-steps{display:flex;align-items:center;margin-bottom:28px}
+.wizard-step{display:flex;align-items:center;gap:10px;flex:1}
+.wizard-step:last-child{flex:0}
+.step-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;transition:all var(--transition)}
+.step-circle.done{background:var(--success);color:#fff}
+.step-circle.active{background:var(--primary);color:#fff;box-shadow:0 0 0 4px var(--primary-light)}
+.step-circle.pending{background:var(--border);color:var(--text-secondary)}
+.step-label{font-size:12px;font-weight:500;white-space:nowrap}
+.step-label.active{color:var(--primary);font-weight:600}
+.step-label.pending{color:var(--text-secondary)}
+.step-connector{flex:1;height:2px;background:var(--border);margin:0 8px}
+.step-connector.done{background:var(--success)}
+.wizard-panel{display:none}.wizard-panel.active{display:block}
+.wizard-success{text-align:center;padding:28px 0}
+.wizard-success .check-icon{width:60px;height:60px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:#fff;font-size:26px}
+
+/* ── AUTH PAGES ── */
+.auth-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:8px 0}
+.addr-bar{display:inline-flex;align-items:center;gap:8px;background:#0F172A;color:#94A3B8;border-radius:999px;padding:8px 18px;font-family:'Courier New',monospace;font-size:12.5px;box-shadow:var(--shadow)}
+.addr-bar .lock{color:#4ADE80}
+.addr-bar b{color:#E2E8F0;font-weight:600}
+.login-card{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);width:100%;max-width:420px;overflow:hidden}
+.login-header{padding:28px 32px 16px;text-align:center}
+.login-header .logo-icon{width:52px;height:52px;background:var(--primary);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px;color:#fff;font-weight:700;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+.login-header h1{font-size:19px;margin-bottom:4px}
+.login-header p{font-size:12.5px;color:var(--text-secondary)}
+.login-body{padding:0 32px 28px}
+.login-footer{padding:14px 32px;border-top:1px solid var(--border);background:#FAFBFC;text-align:center;font-size:11.5px;color:var(--text-secondary);border-radius:0 0 var(--radius-lg) var(--radius-lg)}
+.oidc-login-btn{display:flex;align-items:center;gap:10px;width:100%;padding:12px 20px;border:2px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text-primary);font-weight:600;font-size:14px;cursor:pointer;transition:all var(--transition);justify-content:center}
+.oidc-login-btn:hover{border-color:var(--primary);background:var(--primary-light)}
+.login-divider{display:flex;align-items:center;gap:14px;margin:18px 0;color:var(--text-secondary);font-size:12px}
+.login-divider::before,.login-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.org-choice{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.org-option{display:flex;align-items:center;gap:14px;padding:14px 16px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all var(--transition);text-align:left;background:#fff;width:100%}
+.org-option:hover{border-color:var(--primary);background:#F8FAFC}
+.org-option .oo-avatar{width:42px;height:42px;border-radius:10px;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
+.org-option .oo-name{font-weight:600;font-size:14px}
+.org-option .oo-meta{font-size:11.5px;color:var(--text-secondary);font-family:'Courier New',monospace}
+.blocked-hero{max-width:480px;width:100%;background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:36px 36px 30px;text-align:center;border-top:5px solid var(--error)}
+.blocked-hero .bh-icon{width:60px;height:60px;border-radius:50%;background:#FEE2E2;color:var(--error);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px}
+.blocked-hero h2{font-size:19px;margin-bottom:8px}
+.blocked-hero p{font-size:13.5px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px}
+.si-extras{display:flex;flex-direction:column;align-items:center;gap:6px}
+.si-create-link{font-size:13px;color:var(--text-secondary)}
+.si-create-link b{color:var(--primary);font-weight:600}
+.si-create-link:hover b{text-decoration:underline}
+.si-admin-link{background:none;border:none;color:var(--text-secondary);font-size:11.5px;padding:3px 10px;border-radius:var(--radius-sm);transition:all var(--transition)}
+.si-admin-link:hover{color:var(--text-primary);background:#F1F5F9}
+.si-admin-card{max-width:360px}
+.si-admin-card .login-header{padding:20px 28px 10px}
+.si-admin-card .login-header .logo-icon{width:40px;height:40px;font-size:18px;border-radius:11px;margin-bottom:10px;background:#0F172A;box-shadow:0 3px 8px rgba(15,23,42,.25)}
+.si-admin-card .login-header h1{font-size:16px}
+.si-admin-card .login-body{padding:6px 28px 20px}
+/* find-workspace step */
+.fw-remember{display:flex;align-items:center;gap:8px;margin:2px 0 16px;font-size:13px;font-weight:500;cursor:pointer;user-select:none}
+.fw-remember input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer;margin:0;flex-shrink:0}
+.si-remember-note{font-size:11.5px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:5px}
+.si-remember-note .rn-check{color:var(--success);font-weight:700}
+.si-diff-link{font-size:12.5px;color:var(--text-secondary)}
+.si-diff-link b{color:var(--primary);font-weight:600}
+.si-diff-link:hover b{text-decoration:underline}
+
+/* ── DEMO CONTROLS ── */
+.demo-box{background:#FFFDF5;border:1px dashed #EAB308;border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:#713F12;margin-bottom:16px}
+.demo-box b{font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.demo-btn{padding:4px 12px;border:1px solid #EAB308;border-radius:999px;background:#fff;font-size:11.5px;font-weight:600;color:#854D0E;cursor:pointer;transition:all var(--transition)}
+.demo-btn:hover{background:#FEF9C3}
+.demo-btn.active{background:#EAB308;color:#fff}
+
+/* ── NOT FOUND CARD ── */
+.notfound-card{max-width:560px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:32px;text-align:center}
+.notfound-code{font-size:44px;font-weight:800;color:#CBD5E1;letter-spacing:-1px;line-height:1}
+.notfound-card h3{font-size:17px;margin:8px 0 8px}
+.notfound-card p{font-size:13px;color:var(--text-secondary);line-height:1.6}
+
+/* ── INVITE CHIPS ── */
+.invite-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.invite-item{display:flex;align-items:center;gap:8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px}
+.invite-item .iv-email{flex:1;font-weight:500}
+.invite-remove{background:none;border:none;color:var(--error);cursor:pointer;font-size:15px;line-height:1;padding:2px 6px;border-radius:4px}
+.invite-remove:hover{background:#FEE2E2}
+
+/* ── USAGE METERS (license quotas) ── */
+.meter-row{margin-bottom:14px}
+.meter-row:last-child{margin-bottom:0}
+.meter-head{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;gap:8px}
+.meter-head .mh-label{font-weight:600}
+.meter-head .mh-value{text-align:right;color:var(--text-secondary);white-space:nowrap}
+.meter-head .mh-value.at-limit{color:var(--error);font-weight:700}
+.meter{height:8px;background:#E2E8F0;border-radius:999px;overflow:hidden}
+.meter-fill{height:100%;border-radius:999px;background:var(--success);transition:width .3s ease}
+.meter-fill.warn{background:var(--warning)}
+.meter-fill.full{background:var(--error)}
+.lock-btn{background:#F1F5F9;border:1px solid var(--border);color:#94A3B8;border-radius:var(--radius-sm);padding:3px 8px;font-size:11px;cursor:not-allowed;display:inline-flex;align-items:center;gap:4px;font-weight:600;white-space:nowrap}
+
+/* ── HOME FLOW CARDS ── */
+.flow-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.flow-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;display:flex;flex-direction:column;gap:10px;transition:box-shadow var(--transition)}
+.flow-card:hover{box-shadow:var(--shadow-md)}
+.flow-card h3{font-size:15px;font-weight:600}
+.flow-card p{font-size:12.5px;color:var(--text-secondary);flex:1;line-height:1.55}
+.flow-card .fc-persona{align-self:flex-start}
+
+/* ── SWITCHER MENU ── */
+.switcher-wrap{position:relative}
+.switcher-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;width:280px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);z-index:300;padding:8px}
+.switcher-menu.open{display:block}
+.switcher-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-size:13px;cursor:pointer}
+.switcher-item:hover{background:#F1F5F9}
+.switcher-item.current{background:#EFF6FF;color:var(--primary-dark)}
+.switcher-item.locked{cursor:not-allowed;color:var(--text-secondary)}
+.switcher-note{font-size:11px;color:var(--text-secondary);padding:8px 10px 4px;line-height:1.5;border-top:1px solid var(--border);margin-top:6px}
+
+/* ── TOAST ── */
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{padding:11px 20px;border-radius:var(--radius);color:#fff;font-size:13px;font-weight:500;box-shadow:var(--shadow-md);animation:toastIn .3s ease;max-width:520px}
+.toast.toast-success{background:#2E7D32}
+.toast.toast-error{background:#C62828}
+.toast.toast-info{background:#1565C0}
+
+/* ── MISC ── */
+.empty-state{text-align:center;padding:56px 24px;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:38px;margin-bottom:12px}
+.spinner{width:40px;height:40px;border-radius:50%;border:4px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mini-spinner{width:14px;height:14px;border-radius:50%;border:2px solid #E2E8F0;border-top-color:var(--primary);animation:spin .9s linear infinite;display:inline-block;vertical-align:-2px}
+.section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-secondary{color:var(--text-secondary)}
+.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:12px}.justify-between{justify-content:space-between}
+.mt-2{margin-top:8px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}
+.mono{font-family:'Courier New',monospace}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ PROTOTYPE NAV ═══════════════ -->
+<div class="proto-nav">
+  <span class="pn-brand">⚡ Parthenon <small>Multi-Tenant Support · prototype</small></span>
+  <button class="pn-btn active" data-scene="home" onclick="showScene('home',this)">Overview</button>
+  <button class="pn-btn" data-scene="platform" onclick="showScene('platform',this)">Platform Admin</button>
+  <button class="pn-btn" data-scene="org-create" onclick="showScene('org-create',this)">Self-Serve Sign-Up</button>
+  <button class="pn-btn" data-scene="onboarding" onclick="showScene('onboarding',this)">Onboarding</button>
+  <button class="pn-btn" data-scene="signin" onclick="showScene('signin',this)">Tenant Sign-In</button>
+  <button class="pn-btn" data-scene="workspace" onclick="showScene('workspace',this)">Tenant Workspace</button>
+  <button class="pn-btn" data-scene="isolation" onclick="showScene('isolation',this)">Isolation</button>
+  <div class="pn-right">
+    <span class="pn-mode off" id="pn-mode">Multi-tenancy: OFF</span>
+    <button class="pn-reset" onclick="resetDemo()">↺ Reset demo</button>
+  </div>
+</div>
+
+<div class="stage">
+
+<!-- ═══════════════ SCENE: HOME ═══════════════ -->
+<div class="scene active" id="scene-home">
+  <div class="view-header mb-4">
+    <div><h2>Multi-Tenant Support — UI Prototype</h2>
+    <div class="view-desc">Clickable flows for the hosted (SaaS) multi-tenancy epic. All data is placeholder — no backend calls.</div></div>
+  </div>
+  <div class="scene-note"><span class="sn-icon">💡</span><span><b>Start where a real operator would:</b> multi-tenancy ships <b>disabled by default</b>. Open <b>Platform Admin</b> and flip the switch in <b>Platform Settings</b> — the whole console changes. Then try the <b>self-serve sign-up</b> (instant workspace as tenant root), onboarding, sign-in, license quotas, and the isolation demo.</span></div>
+  <div class="flow-grid">
+    <div class="flow-card">
+      <span class="chip chip-blue fc-persona">Platform Admin</span>
+      <h3>1 · Tenancy Switch, Governance &amp; Licenses</h3>
+      <p>Platform Settings with the default-off multi-tenancy toggle and its irreversibility warning. Tenant list with create / suspend / resume / delete. Tenant detail gains <b>license assignment</b> (tier + limits) and usage columns — metadata only, business data never exposed.</p>
+      <button class="btn btn-primary btn-sm" onclick="go('platform')">Open Platform Console →</button>
+    </div>
+    <div class="flow-card">
+      <span class="chip chip-purple fc-persona">Prospective Owner</span>
+      <h3>2 · Self-Serve Sign-Up → Tenant Root</h3>
+      <p>Visitor signs up with a <b>personal email + password</b> and an organization name — an instant tenant workspace, with the creator as its permanent <b>tenant root</b>. Includes the <b>one-tenant-per-user</b> block for accounts that already own a workspace.</p>
+      <button class="btn btn-primary btn-sm" onclick="go('org-create')">Sign up &amp; create your organization →</button>
+    </div>
+    <div class="flow-card">
+      <span class="chip chip-purple fc-persona">Tenant Root</span>
+      <h3>3 · Guided Onboarding Wizard</h3>
+      <p>First-run setup for the new tenant root: connect the organization's own OIDC provider (issuer URL, client id/secret), invite users with roles within quota, and confirm the default workspace.</p>
+      <button class="btn btn-primary btn-sm" onclick="go('onboarding')">Start onboarding →</button>
+    </div>
+    <div class="flow-card">
+      <span class="chip chip-green fc-persona">Tenant User</span>
+      <h3>4 · Tenant-Branded Sign-In &amp; Org Choice</h3>
+      <p>Sign-in opens on an AWS-style <b>Find your workspace</b> step — enter your workspace address (optionally <b>remembered on this device</b>) — then the tenant-branded card takes over: <b>Sign in to your workspace</b> (email + password for platform-issued accounts, inline error states), an OIDC SSO button shown <b>only when a provider is configured</b> — no wizard prompt when absent — a <b>Not your workspace?</b> escape hatch, plus a <b>Create your organization</b> entry and an expandable <b>platform-admin</b> sign-in. Multi-org users pick their organization — <b>one session = one tenant</b>. Suspended-tenant blocking and tenant-bound credential errors still apply.</p>
+      <button class="btn btn-primary btn-sm" onclick="go('signin')">Try tenant sign-in →</button>
+    </div>
+    <div class="flow-card">
+      <span class="chip chip-green fc-persona">Tenant Root</span>
+      <h3>5 · Tenant-Scoped Workspace, Root &amp; Quotas</h3>
+      <p>Tenant context in the header, a <b>Root</b> badge, locked root actions in the member list, <b>alias editing</b> (address fixed, header updates instantly), and a <b>License &amp; usage</b> panel — with a blocked invite when the user quota is full.</p>
+      <button class="btn btn-primary btn-sm" onclick="go('workspace')">Open workspace →</button>
+    </div>
+    <div class="flow-card">
+      <span class="chip chip-red fc-persona">Security Auditor</span>
+      <h3>6 · Isolation Cues</h3>
+      <p>Cross-tenant access attempts render as <b>"Not found or no access"</b> — deliberately generic, with no tenant-B data leaked — and are recorded as security events visible to the platform admin.</p>
+      <button class="btn btn-primary btn-sm" onclick="go('isolation')">Simulate an attempt →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCENE: PLATFORM ADMIN CONSOLE ═══════════════ -->
+<div class="scene" id="scene-platform">
+  <div class="shell">
+    <div class="shell-sidebar">
+      <div class="shell-logo"><h1>⚡ Parthenon</h1><small>Platform Console</small></div>
+      <div class="shell-nav">
+        <div class="snav-item" id="pnav-overview" onclick="pNav('overview')"><span>📊</span>Overview</div>
+        <div class="snav-sep">Platform</div>
+        <div class="snav-item" id="pnav-settings" onclick="pNav('settings')"><span>⚙️</span>Platform Settings</div>
+        <div class="snav-item" id="pnav-tenants" onclick="pNav('tenants')"><span>🏢</span>Tenants</div>
+        <div class="snav-item" id="pnav-audit" onclick="pNav('audit')"><span>🛡️</span>Security Audit</div>
+      </div>
+      <div class="snav-foot"><b>🔑 Platform Admin</b><br>Manages tenants &amp; platform settings only — tenant business data is never accessible.</div>
+    </div>
+    <div class="shell-main">
+      <div class="shell-topbar">
+        <span class="shell-title">Platform Console</span>
+        <span class="ctx-chip" id="pc-mode-chip"><span class="ctx-dot" style="background:#94A3B8"></span>Single-Tenant Mode</span>
+      </div>
+      <div class="shell-body">
+
+        <!-- PANEL: Overview -->
+        <div class="panel" id="ppanel-overview">
+          <div id="pc-overview-multi" class="hidden">
+            <div class="metrics-grid">
+              <div class="metric-card"><div class="metric-label">Tenants</div><div class="metric-value" id="m-tenants">4</div></div>
+              <div class="metric-card"><div class="metric-label">Active</div><div class="metric-value" id="m-active">3</div></div>
+              <div class="metric-card"><div class="metric-label">Suspended</div><div class="metric-value" id="m-suspended">1</div></div>
+              <div class="metric-card"><div class="metric-label">Cross-Tenant Attempts (7d)</div><div class="metric-value" style="color:var(--error)" id="m-attempts">3</div></div>
+            </div>
+            <div class="alert alert-info"><span>🔒</span><span><b>Minimal operator access.</b> This console shows tenant <b>metadata</b> (status, admin contact, license tier, limits, usage counts). Tenant agents, conversations, skills, and other business data are never browsable from here.</span></div>
+          </div>
+          <div id="pc-overview-single">
+            <div class="empty-state"><div class="empty-icon">🏠</div><h3>Single-Tenant Deployment</h3><p class="text-sm mt-2">Multi-tenancy is disabled — this deployment serves one organization, exactly as today.<br>No tenant concept is visible anywhere in the product.</p></div>
+          </div>
+        </div>
+
+        <!-- PANEL: Platform Settings -->
+        <div class="panel" id="ppanel-settings">
+          <div class="view-desc mb-4">Deployment-wide configuration. Changes here affect the whole hosted platform.</div>
+          <div class="card" style="max-width:680px">
+            <div class="card-header"><h3>Multi-Tenancy</h3>
+              <label class="toggle"><input type="checkbox" id="tenancy-toggle" onchange="onToggleTenancy(this.checked)"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="card-body">
+              <div id="settings-off">
+                <span class="chip chip-gray">Status: Disabled (default)</span>
+                <div class="mt-3 text-sm" style="line-height:1.8">
+                  With the switch <b>off</b>, the platform behaves exactly as the current single-tenant product:<br>
+                  • One organization, one identity provider, one set of roles, agents, and integrations<br>
+                  • No tenant concept is visible anywhere in the UI, sign-in, or APIs<br>
+                  • All existing functionality and test suites pass unchanged
+                </div>
+                <div class="alert alert-info mt-4 mb-0"><span>ℹ️</span><span>Local development, demos, and existing self-hosted installations are unaffected. Flip the switch to evaluate the hosted multi-tenant mode.</span></div>
+              </div>
+              <div id="settings-on" class="hidden">
+                <span class="chip chip-green">Status: Enabled · Multi-Tenant</span>
+                <div class="alert alert-success mt-3 mb-3"><span>✓</span><span><b>Existing organization adopted.</b> "Parthenon Demo Org" became this deployment's first tenant — its configuration and data remain intact with no manual reconfiguration of its identity provider.</span></div>
+                <div class="text-sm" style="line-height:1.8">
+                  • Tenant features are now available (tenant registry, self-serve creation, per-tenant sign-in)<br>
+                  • Tenant adoption is <b>irreversible</b> — see the warning shown when enabling<br>
+                  • Disabling the switch again hides tenant features and restores single-tenant behavior <b>without data loss</b>
+                </div>
+                <div class="alert alert-warning mt-3 mb-0"><span>⚠️</span><span>Wildcard DNS (<span class="mono">*.parthenon.app</span>) and certificates are required for per-tenant web addresses.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL: Tenants -->
+        <div class="panel" id="ppanel-tenants">
+          <div id="tenants-multi">
+            <div class="flex items-center justify-between mb-3">
+              <div class="view-desc">Registry of all organizations on this deployment — metadata, license tier, and usage only.</div>
+              <button class="btn btn-primary btn-sm" onclick="openModal('createTenantModal')">+ Create Tenant</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Tenant</th><th>Tenant Address</th><th>Tier</th><th>Status</th><th>Users</th><th>Agent Types</th><th>Execs / Month</th><th>Admin Contact (Root)</th><th style="text-align:right">Actions</th></tr></thead>
+                <tbody id="tenant-rows"></tbody>
+              </table>
+            </div>
+            <div class="alert alert-info mt-3 mb-0"><span>📜</span><span><b>Licenses.</b> Open <b>Details</b> to assign a license (free / team / enterprise) with its limits. Tenants without a license run on <b>Free tier defaults</b>. Usage columns update immediately after every license change.</span></div>
+          </div>
+          <div id="tenants-single" class="hidden">
+            <div class="empty-state"><div class="empty-icon">🏢</div><h3>Tenants unavailable</h3><p class="text-sm mt-2">Multi-tenancy is disabled. Enable it in Platform Settings to manage tenants.</p></div>
+          </div>
+        </div>
+
+        <!-- PANEL: Security Audit -->
+        <div class="panel" id="ppanel-audit">
+          <div id="audit-multi">
+            <div class="view-desc mb-3">Security-relevant events. Directly addressed requests for another tenant's identifiers return no data — and are recorded here.</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Time</th><th>Actor</th><th>Source Tenant</th><th>Attempted Target</th><th>Resource</th><th>Result</th></tr></thead>
+                <tbody id="audit-rows"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="audit-single" class="hidden">
+            <div class="empty-state"><div class="empty-icon">🛡️</div><h3>Security audit unavailable</h3><p class="text-sm mt-2">Cross-tenant audit requires multi-tenancy to be enabled.</p></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCENE: SELF-SERVE SIGN-UP ═══════════════ -->
+<div class="scene" id="scene-org-create">
+  <div class="demo-box">
+    <b>Demo:</b> self-serve sign-up — zero platform-admin involvement
+    <button class="demo-btn" onclick="sgTryExistingOwner()">Try an email that already owns a tenant (alex@acme.com)</button>
+    <span>→ shows the <b>one tenant per user</b> block.</span>
+  </div>
+  <div class="auth-wrap">
+    <span class="addr-bar"><span class="lock">🔒</span>https://<b>parthenon.app</b>/sign-up</span>
+    <div class="login-card" style="max-width:520px">
+      <div class="login-header">
+        <div class="logo-icon">＋</div>
+        <h1>Create your organization</h1>
+        <p>Sign up with your personal email — get an instant workspace and become its <b>tenant root</b>.</p>
+      </div>
+      <div class="login-body">
+        <div class="wizard-steps">
+          <div class="wizard-step"><div class="step-circle active" id="sg-c1">1</div><div class="step-label active" id="sg-l1">Your Account</div></div>
+          <div class="step-connector" id="sg-con1"></div>
+          <div class="wizard-step"><div class="step-circle pending" id="sg-c2">2</div><div class="step-label pending" id="sg-l2">Your Organization</div></div>
+        </div>
+
+        <!-- STEP 1: personal account -->
+        <div class="wizard-panel active" id="sg-p1">
+          <div class="form-group"><label>Full name</label><input class="form-control" id="sg-admin-name" placeholder="Peter Gibbons"><div class="form-error" id="sg-adminname-err">Full name is required.</div></div>
+          <div class="form-group"><label>Personal email</label><input class="form-control" id="sg-admin-email" placeholder="peter@example.com" oninput="sgEmailClear()"><div class="form-error" id="sg-adminemail-err">A valid email is required.</div><div class="form-error" id="sg-owner-err"></div></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="sg-admin-pass" placeholder="Minimum 10 characters"><div class="form-error" id="sg-adminpass-err">Password must be at least 10 characters.</div></div>
+          <div class="alert alert-info"><span>🔑</span><span>This email + password account is issued by the platform itself (no OIDC provider needed) and becomes the <b>tenant root</b> — the permanent super-admin of your workspace. It unlocks only your tenant.</span></div>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="sgNext(1)">Continue →</button>
+        </div>
+
+        <!-- STEP 2: organization -->
+        <div class="wizard-panel" id="sg-p2">
+          <div class="form-group">
+            <label>Organization name</label>
+            <input class="form-control" id="sg-name" placeholder="e.g. Initech LLC" oninput="sgSlugSuggest()">
+            <div class="form-hint">Shown across your workspace and on your sign-in page. You can rename it later — the address stays fixed.</div>
+            <div class="form-error" id="sg-name-err">Organization name is required.</div>
+          </div>
+          <div class="form-group">
+            <label>Choose your unique tenant address</label>
+            <div class="addr-group">
+              <span class="addr-prefix">https://</span>
+              <input class="form-control mono" id="sg-slug" placeholder="initech" oninput="sgValidateSlug(true)">
+              <span class="addr-suffix">.parthenon.app</span>
+            </div>
+            <div class="form-hint">Lowercase letters, numbers, and dashes. Your address alone determines which workspace visitors land in.</div>
+            <div class="form-error" id="sg-slug-err"></div>
+          </div>
+          <div class="alert alert-success"><span>⚡</span><span><b>Instant workspace.</b> No sales call, no waiting — your tenant is created immediately on the <b>Free tier</b> (10 users · 5 agent types · 100 executions/mo). Upgrade later via the platform admin.</span></div>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary" onclick="sgNext(2, true)">← Back</button>
+            <button class="btn btn-primary" style="flex:1;justify-content:center" id="sg-create-btn" onclick="sgCreate()">Create my organization</button>
+          </div>
+        </div>
+
+        <!-- SUCCESS -->
+        <div class="wizard-panel" id="sg-done">
+          <div class="wizard-success">
+            <div class="check-icon">✓</div>
+            <h3 style="font-size:17px;margin-bottom:6px">Your workspace is live</h3>
+            <p class="text-sm text-secondary" id="sg-done-text"></p>
+            <p class="text-xs text-secondary mt-2">One tenant per user — this account owns exactly this workspace, and you are its permanent <b>tenant root</b>.</p>
+            <button class="btn btn-primary mt-4" onclick="startOnboardingFromSignup()">Set up your workspace →</button>
+          </div>
+        </div>
+      </div>
+      <div class="login-footer">Prototype · Creating a tenant is free in this epic (billing out of scope). The new tenant is invisible to all other tenants.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCENE: ONBOARDING WIZARD ═══════════════ -->
+<div class="scene" id="scene-onboarding">
+  <div class="shell" style="background:#FAFBFC">
+    <div class="shell-main" style="margin:0 auto;max-width:760px;border-left:1px solid var(--border);border-right:1px solid var(--border);background:var(--surface)">
+      <div class="shell-topbar">
+        <span class="shell-title">Welcome to Parthenon 👋</span>
+        <span class="ctx-chip" id="ob-org-chip"><span class="ctx-dot"></span><span id="ob-org-name">Initech LLC</span></span>
+      </div>
+      <div class="shell-body">
+        <div class="view-desc mb-2">Guided setup — get your organization ready for users in a few minutes. You can change everything later in Settings.</div>
+        <div class="wizard-steps">
+          <div class="wizard-step"><div class="step-circle active" id="ob-c1">1</div><div class="step-label active" id="ob-l1">Connect Sign-In</div></div>
+          <div class="step-connector" id="ob-con1"></div>
+          <div class="wizard-step"><div class="step-circle pending" id="ob-c2">2</div><div class="step-label pending" id="ob-l2">Invite Users</div></div>
+          <div class="step-connector" id="ob-con2"></div>
+          <div class="wizard-step"><div class="step-circle pending" id="ob-c3">3</div><div class="step-label pending" id="ob-l3">Confirm Workspace</div></div>
+        </div>
+
+        <!-- STEP 1: OIDC -->
+        <div class="wizard-panel active" id="ob-p1">
+          <div class="alert alert-info"><span>🔐</span><span>Connect your organization's own identity provider (Keycloak, Azure Entra ID, or any OIDC-compliant provider). Your users will sign in with corporate credentials — <b>yours only</b>; other tenants' providers never affect you.</span></div>
+          <div class="form-group">
+            <label>Issuer URL</label>
+            <input class="form-control mono" id="ob-issuer" placeholder="https://id.yourcompany.com/realms/your-org">
+            <div class="form-hint">OIDC discovery: <span class="mono">{issuer}/.well-known/openid-configuration</span></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Client ID</label><input class="form-control mono" id="ob-clientid" placeholder="parthenon-sso"></div>
+            <div class="form-group"><label>Client Secret</label><input type="password" class="form-control mono" id="ob-clientsecret" placeholder="••••••••••••"></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-secondary" onclick="obTestConn()" id="ob-test-btn">Test connection</button>
+            <span id="ob-test-result" class="text-sm"></span>
+            <button class="btn btn-primary" style="margin-left:auto" onclick="obNext(1)">Continue →</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: invites -->
+        <div class="wizard-panel" id="ob-p2">
+          <div class="alert alert-info"><span>✉️</span><span>Invite colleagues and assign tenant roles. Invited users receive an email to join <b>your</b> workspace only. Invitations count toward your tenant's user quota.</span></div>
+          <div class="form-group"><label>Invite by email</label>
+            <div class="flex gap-2">
+              <input class="form-control" id="ob-invite-email" placeholder="colleague@yourcompany.com" style="flex:1">
+              <select class="form-control" id="ob-invite-role" style="width:170px"><option>Tenant Admin</option><option selected>Member</option></select>
+              <button class="btn btn-primary" onclick="obAddInvite()">Add</button>
+            </div>
+            <div class="form-hint">Your tenant starts on the <b>Free tier</b> — up to 10 users, 5 agent types, 100 executions/month. More capacity via the platform admin.</div>
+          </div>
+          <div class="invite-list" id="ob-invite-list"></div>
+          <div class="flex justify-between mt-4">
+            <button class="btn btn-secondary" onclick="obNext(2,true)">← Back</button>
+            <button class="btn btn-primary" onclick="obNext(2)">Continue →</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: confirm -->
+        <div class="wizard-panel" id="ob-p3">
+          <div class="card"><div class="card-header"><h3>Your workspace at a glance</h3></div><div class="card-body">
+            <div class="detail-row"><span class="detail-label">Workspace</span><span class="detail-value" id="ob-sum-name">Initech LLC</span></div>
+            <div class="detail-row"><span class="detail-label">Tenant address</span><span class="detail-value mono" id="ob-sum-addr">initech.parthenon.app</span></div>
+            <div class="detail-row"><span class="detail-label">Your role</span><span class="detail-value"><span class="chip chip-root" title="Tenant root — permanent">Root</span> <span class="text-sm">Tenant root — permanent super-admin of this workspace</span></span></div>
+            <div class="detail-row"><span class="detail-label">License</span><span class="detail-value">Free tier (default) <span class="text-xs text-secondary">· 10 users · 5 agent types · 100 executions/mo</span></span></div>
+            <div class="detail-row"><span class="detail-label">Sign-in provider</span><span class="detail-value">Your own OIDC provider <span class="chip chip-green" style="margin-left:6px">Verified</span></span></div>
+            <div class="detail-row"><span class="detail-label">Invitations</span><span class="detail-value" id="ob-sum-invites">2 pending</span></div>
+            <div class="detail-row"><span class="detail-label">Default setup</span><span class="detail-value text-sm">Default tenant roles · no agents yet · MCP Hub, Skills, SOPs, Schedules &amp; Model Configs ready to configure</span></div>
+            <div class="detail-row"><span class="detail-label">Isolation</span><span class="detail-value text-sm">Everything in this workspace belongs to your organization only</span></div>
+          </div></div>
+          <label class="checkbox-item mt-3" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="ob-confirm-check" style="accent-color:var(--primary);width:15px;height:15px">
+            <span class="text-sm">I understand my organization's data is fully isolated from all other tenants on this platform.</span>
+          </label>
+          <div class="flex justify-between mt-4">
+            <button class="btn btn-secondary" onclick="obNext(3,true)">← Back</button>
+            <button class="btn btn-primary" id="ob-finish-btn" onclick="obFinish()" disabled>Finish setup</button>
+          </div>
+        </div>
+
+        <!-- DONE -->
+        <div class="wizard-panel" id="ob-done">
+          <div class="wizard-success">
+            <div class="check-icon">✓</div>
+            <h3 style="font-size:17px;margin-bottom:6px">You're all set!</h3>
+            <p class="text-sm text-secondary">Your organization is ready. Share your tenant address with your team — they sign in there with your corporate credentials.</p>
+            <button class="btn btn-primary mt-4" onclick="enterWorkspaceFromOnboarding()">Open your workspace →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCENE: TENANT SIGN-IN ═══════════════ -->
+<div class="scene" id="scene-signin">
+  <div class="demo-box">
+    <b>Demo:</b> sign-in starts at the neutral <b>find-workspace</b> step — quick-fill an address and press Continue:
+    <button class="demo-btn" onclick="siFindQuick('acme')">find “acme” → branded sign-in</button>
+    <button class="demo-btn" onclick="siFindQuick('northwind')">find “northwind” → suspended</button>
+    <button class="demo-btn" onclick="siFindQuick('zzz')">find “zzz” → not found</button>
+    <span style="flex-basis:100%"></span>
+    <span>Or jump straight to a tenant address:</span>
+    <button class="demo-btn active" id="si-btn-acme" onclick="siPick('acme')">acme.parthenon.app</button>
+    <button class="demo-btn" id="si-btn-globex" onclick="siPick('globex')">globex.parthenon.app</button>
+    <button class="demo-btn" id="si-btn-northwind" onclick="siPick('northwind')">northwind.parthenon.app (suspended)</button>
+    <button class="demo-btn active" id="si-btn-oidc" onclick="siToggleOidc()">OIDC provider: configured</button>
+    <span id="si-oidc-note"></span>
+  </div>
+  <div class="auth-wrap">
+    <span class="addr-bar hidden" id="si-addrbar-find"><span class="lock">🔒</span>https://<b>parthenon.app</b>/sign-in</span>
+    <span class="addr-bar" id="si-addrbar-tenant"><span class="lock">🔒</span>https://<b id="si-addr">acme</b>.parthenon.app/sign-in</span>
+
+    <!-- NEW INITIAL STATE: find your workspace — no tenant context yet (AWS-style address lookup).
+         Resolving an address brands the sign-in card; an unknown address shows a neutral inline error;
+         a suspended tenant resolves straight to the blocked screen. -->
+    <div class="login-card hidden" id="si-find">
+      <div class="login-header">
+        <div class="logo-icon">🔍</div>
+        <h1>Find your workspace</h1>
+        <p>Enter your organization's workspace address to continue.</p>
+      </div>
+      <div class="login-body">
+        <form onsubmit="siFindSubmit(); return false">
+          <div class="form-group">
+            <label for="si-find-slug">Workspace address</label>
+            <input class="form-control mono" id="si-find-slug" placeholder="acme" autocomplete="off" oninput="siFindClear()">
+            <div class="form-hint">e.g. acme — your organization's workspace address</div>
+            <div class="form-error" id="si-find-err">No workspace found at this address.</div>
+          </div>
+          <label class="fw-remember" for="si-find-remember">
+            <input type="checkbox" id="si-find-remember" checked>
+            <span>Remember this workspace</span>
+          </label>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Continue</button>
+        </form>
+      </div>
+      <div class="login-footer">Your workspace address was chosen at sign-up — find it in your invitation email.</div>
+    </div>
+
+    <!-- PRIMARY CARD: workspace sign-in — email + password (platform-issued accounts from self-serve sign-up) -->
+    <div class="login-card" id="si-form">
+      <div class="login-header">
+        <div class="logo-icon" id="si-logo">A</div>
+        <h1>Sign in to your workspace</h1>
+        <p>Welcome to <b id="si-brand">Acme Corp</b> — sign in with your workspace account.</p>
+      </div>
+      <div class="login-body">
+        <div class="alert alert-danger hidden" id="si-err"><span>⛔</span><span id="si-err-text"></span></div>
+        <form onsubmit="siSignIn(); return false">
+          <div class="form-group">
+            <label for="si-email">Email</label>
+            <input class="form-control" id="si-email" type="email" placeholder="you@company.com" autocomplete="off" oninput="siClearFieldErr('si-email','si-email-err')">
+            <div class="form-error" id="si-email-err">Enter your workspace email.</div>
+          </div>
+          <div class="form-group">
+            <label for="si-pass">Password</label>
+            <input class="form-control" id="si-pass" type="password" placeholder="Your workspace password" autocomplete="off" oninput="siClearFieldErr('si-pass','si-pass-err')">
+            <div class="form-error" id="si-pass-err">Enter your password.</div>
+          </div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Sign in</button>
+        </form>
+
+        <!-- OIDC SSO button — rendered only when a provider is configured for this tenant. When absent, nothing
+             replaces it: no "no provider configured" hint and no setup-wizard entry on any pre-auth surface. -->
+        <div id="si-oidc-wrap">
+          <div class="login-divider"><span>or</span></div>
+          <button class="oidc-login-btn" onclick="siOidc()"><span>🔑</span> Sign in with <span id="si-provider-name">Acme Corp</span> SSO (OIDC)</button>
+        </div>
+
+        <div class="login-divider"><span>demo shortcuts</span></div>
+        <div class="flex gap-2" style="flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="siFill('alex')">Fill Alex (single-org tenant root)</button>
+          <button class="btn btn-secondary btn-sm" onclick="siFill('sam')">Fill Sam (member of 2 orgs)</button>
+          <button class="btn btn-secondary btn-sm" onclick="siWrongCredential()">Use a Globex-issued account here</button>
+        </div>
+      </div>
+      <div class="login-footer">
+        Workspace accounts are issued by this organization only — a credential issued here can never unlock another tenant's workspace.
+      </div>
+    </div>
+
+    <!-- Below the card: remember caption, escape hatch to the find-workspace step, and create-organization entry for visitors -->
+    <div class="si-extras" id="si-extras">
+      <span class="si-remember-note hidden" id="si-remember-note"><span class="rn-check">✓</span>Remembered on this device</span>
+      <span class="si-diff-link" id="si-diff-link">Not your workspace? <a href="#" onclick="siUseDifferent(); return false;"><b>Use a different workspace</b></a></span>
+      <span class="si-create-link">New to Parthenon? <a href="#" onclick="go('org-create'); return false;"><b>Create your organization →</b></a></span>
+    </div>
+
+    <!-- Muted, expandable platform-admin entry (super admin only) -->
+    <button class="si-admin-link" id="si-admin-link" onclick="siToggleAdmin()">Platform admin sign-in ▾</button>
+
+    <!-- SECONDARY CARD: platform admin sign-in — expands on click -->
+    <div class="login-card si-admin-card hidden" id="si-admin-card">
+      <div class="login-header">
+        <div class="logo-icon">🛡️</div>
+        <h1>Platform admin sign-in</h1>
+        <p>Super-admin of this deployment — tenants, licenses &amp; platform settings.</p>
+      </div>
+      <div class="login-body">
+        <form onsubmit="siAdminSignIn(); return false">
+          <div class="form-group">
+            <label for="si-admin-user">Username</label>
+            <input class="form-control" id="si-admin-user" placeholder="platform-admin" autocomplete="off" oninput="siClearFieldErr('si-admin-user','si-admin-user-err')">
+            <div class="form-error" id="si-admin-user-err">Enter the admin username.</div>
+          </div>
+          <div class="form-group">
+            <label for="si-admin-pass">Password</label>
+            <input class="form-control" id="si-admin-pass" type="password" placeholder="••••••••" autocomplete="off" oninput="siClearFieldErr('si-admin-pass','si-admin-pass-err')">
+            <div class="form-error" id="si-admin-pass-err">Enter the admin password (4+ characters).</div>
+          </div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Sign in to Platform Console</button>
+        </form>
+      </div>
+      <div class="login-footer">Demo only — any username and password (4+ characters) opens the platform console. No real credentials.</div>
+    </div>
+
+    <!-- STATE: org choice -->
+    <div class="login-card hidden" id="si-orgchoice" style="max-width:460px">
+      <div class="login-header">
+        <div class="logo-icon">S</div>
+        <h1>Choose your organization</h1>
+        <p>Signed in as <b>sam@example.com</b> — you belong to multiple organizations</p>
+      </div>
+      <div class="login-body">
+        <div class="org-choice">
+          <button class="org-option" onclick="siChooseOrg('acme')">
+            <span class="oo-avatar">A</span>
+            <span style="flex:1"><span class="oo-name">Acme Corp</span><br><span class="oo-meta">acme.parthenon.app</span></span>
+            <span>→</span>
+          </button>
+          <button class="org-option" onclick="siChooseOrg('globex')">
+            <span class="oo-avatar">G</span>
+            <span style="flex:1"><span class="oo-name">Globex Industries</span><br><span class="oo-meta">globex.parthenon.app</span></span>
+            <span>→</span>
+          </button>
+        </div>
+        <div class="alert alert-warning mt-3 mb-0"><span>⚠️</span><span><b>One session = one tenant.</b> You'll be signed in to the chosen organization only. Switching later requires signing out and signing in again.</span></div>
+      </div>
+    </div>
+
+    <!-- STATE: suspended -->
+    <div class="blocked-hero hidden" id="si-blocked">
+      <div class="bh-icon">🚫</div>
+      <h2>Tenant suspended</h2>
+      <p><b>Northwind Ltd</b>'s workspace has been suspended by the platform operator.</p>
+      <p>Sign-in is blocked and all active sessions were ended. No data has been lost — access is restored immediately when the tenant is resumed.</p>
+      <p class="text-xs text-secondary mt-2">Please contact your organization's administrator or the platform operator.</p>
+      <button class="btn btn-secondary mt-3" onclick="siShowFind()">← Back to find workspace</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCENE: TENANT WORKSPACE ═══════════════ -->
+<div class="scene" id="scene-workspace">
+  <div class="demo-box">
+    <b>Demo:</b> license &amp; quota state of the current tenant
+    <button class="demo-btn" onclick="wsSimLicense('team')">Assign Team license</button>
+    <button class="demo-btn" onclick="wsSimLicense('none')">Remove license (→ Free)</button>
+    <span>Acme starts unlicensed on Free with the user quota reached — open <b>Users</b> and try <b>+ Invite user</b>.</span>
+  </div>
+  <div class="shell">
+    <div class="shell-sidebar">
+      <div class="shell-logo"><h1 id="ws-side-org">Acme Corp</h1><small>Workspace</small></div>
+      <div class="shell-nav">
+        <div class="snav-item active" id="ws-nav-overview" onclick="wsTab('overview',this)"><span>🏠</span>Dashboard</div>
+        <div class="snav-sep">Agents</div>
+        <div class="snav-item"><span>👤</span>Agent Roles</div>
+        <div class="snav-item"><span>🤖</span>Agent Types</div>
+        <div class="snav-item"><span>🔧</span>Skills</div>
+        <div class="snav-item"><span>📋</span>SOPs</div>
+        <div class="snav-sep">Integrations</div>
+        <div class="snav-item"><span>🔌</span>MCP Hub</div>
+        <div class="snav-item"><span>🔑</span>API Keys</div>
+        <div class="snav-sep">Administration</div>
+        <div class="snav-item" id="ws-nav-users" onclick="wsTab('users',this)"><span>👥</span>Users</div>
+        <div class="snav-item" id="ws-nav-settings" onclick="wsTab('settings',this)"><span>⚙️</span>Tenant Settings</div>
+      </div>
+      <div class="snav-foot">Everything you see belongs to <b id="ws-side-org2">Acme Corp</b> only. Other tenants' data is never reachable.</div>
+    </div>
+    <div class="shell-main">
+      <div class="shell-topbar">
+        <span class="shell-title" id="ws-title">Dashboard</span>
+        <span class="ctx-chip"><span class="ctx-dot"></span><span id="ws-org-chip">Acme Corp</span></span>
+        <span class="ctx-addr" id="ws-org-addr">acme.parthenon.app</span>
+        <div style="margin-left:auto"></div>
+        <span class="text-sm" style="font-weight:600" id="ws-user-name">Alex Rivera</span>
+        <span class="chip chip-root" id="ws-root-badge" title="Tenant root — permanent super-admin; cannot be demoted or removed">🌱 Root</span>
+        <div class="switcher-wrap">
+          <div class="avatar" id="ws-avatar" style="width:34px;height:34px;font-size:12px;cursor:pointer" onclick="wsToggleMenu()" title="Switch organization">AR</div>
+          <div class="switcher-menu" id="ws-menu">
+            <div class="switcher-item current" id="ws-cur-org"><span>✓</span><span><b id="ws-menu-cur">Acme Corp</b><br><span class="text-xs mono" id="ws-menu-cur-addr">acme.parthenon.app</span></span></div>
+            <div class="switcher-item locked" onclick="wsTrySwitch()"><span>🔒</span><span>Globex Industries<br><span class="text-xs">switching requires sign-out &amp; sign-in</span></span></div>
+            <div class="switcher-note">One session = one tenant. To work in another organization, sign out and authenticate again at its tenant address.</div>
+          </div>
+        </div>
+      </div>
+      <div class="shell-body">
+        <div class="alert alert-success"><span>🛡️</span><span>You are signed in to <b id="ws-banner-org">Acme Corp</b>. Every list, search, and action in this session is automatically filtered to this organization.</span></div>
+        <div id="ws-tab-overview">
+          <div class="metrics-grid">
+            <div class="metric-card"><div class="metric-label">Members</div><div class="metric-value" id="ws-m-members">10</div></div>
+            <div class="metric-card"><div class="metric-label">Agent Types</div><div class="metric-value">3</div></div>
+            <div class="metric-card"><div class="metric-label">Conversations Today</div><div class="metric-value">31</div></div>
+            <div class="metric-card"><div class="metric-label">Active Schedules</div><div class="metric-value">6</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Recent activity</h3><span class="chip chip-gray">Acme Corp only</span></div>
+            <div class="card-body">
+              <table>
+                <thead><tr><th>Agent</th><th>Action</th><th>When</th></tr></thead>
+                <tbody>
+                  <tr><td>finance-analyst</td><td>Completed SOP "monthly-close-report"</td><td>12 min ago</td></tr>
+                  <tr><td>it-helpdesk</td><td>Executed skill "password-reset"</td><td>48 min ago</td></tr>
+                  <tr><td>research-bot</td><td>Schedule "daily-briefing" triggered</td><td>2 h ago</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="ws-tab-users" class="hidden">
+          <div class="flex items-center justify-between mb-3" style="flex-wrap:wrap;gap:8px">
+            <div class="view-desc">Members of your organization. Roles apply within this tenant only.</div>
+            <div class="flex items-center gap-2">
+              <span class="chip chip-gray" id="ws-users-quota-chip">10/10 users</span>
+              <button class="btn btn-primary btn-sm" id="ws-invite-btn" onclick="wsInvite()">+ Invite user</button>
+            </div>
+          </div>
+          <div id="ws-users-meter" class="mb-3"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+              <tbody id="ws-user-rows"></tbody>
+            </table>
+          </div>
+          <div class="alert alert-info mt-3 mb-0"><span>ℹ️</span><span>Role names may repeat across tenants without collision — they are evaluated within your tenant only. The <b>tenant root</b> cannot be demoted or removed — not by tenant admins, not by the platform operator.</span></div>
+        </div>
+        <div id="ws-tab-settings" class="hidden">
+          <div class="two-col">
+            <div class="card">
+              <div class="card-header"><h3>Tenant profile</h3><span class="chip chip-gray">Alias editing</span></div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label>Tenant alias (display name)</label>
+                  <div class="flex gap-2">
+                    <input class="form-control" id="ws-alias-input" style="flex:1">
+                    <button class="btn btn-primary btn-sm" id="ws-alias-save" onclick="wsSaveAlias()">Save alias</button>
+                  </div>
+                  <div class="form-hint">Only the <b>tenant root</b> can rename the workspace. The new alias appears in the header, sidebar, and everywhere else <b>immediately</b> — no reload.</div>
+                </div>
+                <div class="form-group mb-0">
+                  <label>Tenant address (fixed)</label>
+                  <div class="addr-group">
+                    <span class="addr-prefix">https://</span>
+                    <input class="form-control mono" id="ws-addr-fixed" value="acme" disabled>
+                    <span class="addr-suffix">.parthenon.app</span>
+                  </div>
+                  <div class="form-hint">🔒 Unique and permanent — the address never changes, only the alias does.</div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h3>License &amp; usage</h3><span id="ws-tier-chip"></span></div>
+              <div class="card-body">
+                <div class="alert alert-warning" id="ws-license-note"></div>
+                <div id="ws-license-meters"></div>
+                <div class="text-xs text-secondary mt-3">Limits come from your license tier and reset executions each calendar month. Need more? <b>Contact your platform admin</b> to change tier.</div>
+              </div>
+            </div>
+          </div>
+          <div class="alert alert-warning mt-3" id="ws-root-note"><span>🌱</span><span>You are the <b>tenant root</b> — the permanent super-admin of this workspace. Your membership cannot be demoted, removed, or transferred by any tenant admin or platform operator.</span></div>
+          <div class="alert alert-info mt-3 hidden" id="ws-member-note"><span>ℹ️</span><span>You are signed in as a regular member. Only the <b>tenant root</b> can edit the tenant alias and manage root-protected settings.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCENE: ISOLATION ═══════════════ -->
+<div class="scene" id="scene-isolation">
+  <div class="view-header mb-4">
+    <div><h2>Isolation Demo — Cross-Tenant Access Attempt</h2><div class="view-desc">A signed-in Acme Corp user tries to open a Globex Industries resource by guessing its reference. Isolation is enforced centrally — the attempt never leaks data.</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-header"><h3>Attempt details</h3><span class="chip chip-blue">Session: Acme Corp</span></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Signed-in session</label>
+          <select class="form-control" id="iso-source">
+            <option value="acme">Sam Chen · Acme Corp session</option>
+            <option value="globex">Acme API key · used at Globex scope</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Target resource (forged / guessed reference)</label>
+          <select class="form-control" id="iso-target">
+            <option value="globex:/agents/agt-7731">globex · Agent "ledger-bot" (agt-7731)</option>
+            <option value="globex:/conversations/cnv-2214">globex · Conversation (cnv-2214)</option>
+            <option value="globex:/api-keys/ak_9f2c">globex · API key (ak_9f2c…)</option>
+            <option value="acme:/skills/skl-118">acme · Skill (skl-118)</option>
+          </select>
+          <div class="form-hint">In the real product, references like these can arrive via crafted URLs, forged API calls, or prompt-injected agent instructions — the outcome is always the same.</div>
+        </div>
+        <button class="btn btn-danger" onclick="runAttempt()">Attempt cross-tenant access</button>
+      </div>
+    </div>
+    <div>
+      <div class="card hidden" id="iso-result">
+        <div class="card-body" style="text-align:center">
+          <div class="notfound-card" style="box-shadow:none;border:none;padding:8px 0 16px">
+            <div class="notfound-code">404</div>
+            <h3>Not found or no access</h3>
+            <p>The requested resource does not exist in your organization's workspace, or you don't have permission to access it.</p>
+          </div>
+          <div class="alert alert-warning" style="text-align:left;margin-bottom:12px"><span>🛡️</span><span><b>Security event recorded.</b> Cross-tenant access attempt (<span class="mono" id="iso-attempt-path">acme → globex</span>) was logged with tenant attribution and is visible to the platform admin.</span></div>
+          <button class="btn btn-secondary btn-sm" onclick="viewInAudit()">View in Platform Security Audit →</button>
+        </div>
+      </div>
+      <div class="card" id="iso-placeholder">
+        <div class="card-body empty-state" style="padding:56px 24px">
+          <div class="empty-icon">🎯</div>
+          <p class="text-sm">Run an attempt to see the user-visible result.<br>Notice: the message is deliberately generic — <b>no target-tenant data is ever rendered</b>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /stage -->
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- Enable multi-tenancy -->
+<div class="modal-overlay" id="enableTenancyModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Enable multi-tenancy?</h3><button class="modal-close" onclick="closeModal('enableTenancyModal')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-warning"><span>⚠️</span><span><b>This action adopts your existing organization as a tenant — and tenant adoption is irreversible.</b> You cannot return this deployment to its original pre-tenancy configuration.</span></div>
+      <ul style="margin:0 0 16px 18px;font-size:13px;line-height:1.9">
+        <li>Your current organization <b>Parthenon Demo Org</b> becomes the deployment's first tenant; its configuration and data remain intact — no reconfiguration of its identity provider is needed.</li>
+        <li>Tenant features become available: tenant registry, self-serve organization creation, per-tenant sign-in.</li>
+        <li>Disabling the switch later hides tenant features and restores single-tenant behavior <b>without data loss</b> — but the adoption itself cannot be undone.</li>
+      </ul>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="enable-confirm-check" onchange="document.getElementById('enable-confirm-btn').disabled=!this.checked" style="accent-color:var(--primary);width:15px;height:15px">
+        <span class="text-sm">I understand tenant adoption is irreversible.</span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('enableTenancyModal')">Cancel</button>
+      <button class="btn btn-primary" id="enable-confirm-btn" disabled onclick="doEnableTenancy()">Enable multi-tenancy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Disable multi-tenancy -->
+<div class="modal-overlay" id="disableTenancyModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Disable multi-tenancy?</h3><button class="modal-close" onclick="closeModal('disableTenancyModal')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-info"><span>ℹ️</span><span>Tenant features will be hidden and the deployment returns to single-tenant behavior. <b>No tenant data is lost</b> — re-enabling restores everything.</span></div>
+      <p class="text-sm text-secondary">Existing tenants, including the adopted organization, are retained in the registry.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('disableTenancyModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doDisableTenancy()">Disable multi-tenancy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create tenant -->
+<div class="modal-overlay" id="createTenantModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Create Tenant</h3><button class="modal-close" onclick="closeModal('createTenantModal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Tenant name</label><input class="form-control" id="ct-name" placeholder="e.g. Umbrella Corp"><div class="form-error" id="ct-name-err">Tenant name is required.</div></div>
+      <div class="form-group"><label>Tenant address (unique)</label>
+        <div class="addr-group">
+          <span class="addr-prefix">https://</span>
+          <input class="form-control mono" id="ct-slug" placeholder="umbrella" oninput="ctClearErr()">
+          <span class="addr-suffix">.parthenon.app</span>
+        </div>
+        <div class="form-error" id="ct-slug-err"></div>
+      </div>
+      <div class="form-group"><label>Primary admin contact</label><input class="form-control" id="ct-admin" placeholder="admin@umbrella.com"><div class="form-error" id="ct-admin-err">A contact email is required.</div></div>
+      <div class="alert alert-info mb-0"><span>ℹ️</span><span>Names and addresses must be unique across the platform. The tenant appears in the overview immediately.</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('createTenantModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateTenant()">Create tenant</button>
+    </div>
+  </div>
+</div>
+
+<!-- Suspend tenant -->
+<div class="modal-overlay" id="suspendTenantModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Suspend tenant</h3><button class="modal-close" onclick="closeModal('suspendTenantModal')">×</button></div>
+    <div class="modal-body">
+      <p class="text-sm" style="line-height:1.7">Users of <b id="su-name">—</b> will be blocked at sign-in with a clear "tenant suspended" message, and all active sessions will be ended immediately.<br><br><b>No data is lost.</b> Resume restores full access instantly.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('suspendTenantModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="doSuspend()">Suspend tenant</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete tenant -->
+<div class="modal-overlay" id="deleteTenantModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Delete tenant</h3><button class="modal-close" onclick="closeModal('deleteTenantModal')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger"><span>🗑️</span><span><b>Permanent and irreversible.</b> Deleting <b id="de-name">—</b> removes the tenant and <b>all of its data</b> — users, agents, conversations, outputs, keys, everything.</span></div>
+      <div class="form-group mt-3"><label>Type the tenant address <span class="mono" id="de-slug">—</span> to confirm</label>
+        <input class="form-control mono" id="de-confirm" placeholder="type address here…" oninput="deValidate()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('deleteTenantModal')">Cancel</button>
+      <button class="btn btn-danger" id="de-btn" disabled onclick="doDelete()">Delete permanently</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quota blocked (invite user) -->
+<div class="modal-overlay" id="inviteBlockedModal">
+  <div class="modal">
+    <div class="modal-header"><h3>⛔ User limit reached</h3><button class="modal-close" onclick="closeModal('inviteBlockedModal')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger"><span>🚫</span><span><b>Action blocked by your tenant's quota.</b> Nothing was sent — no partial invitation was created.</span></div>
+      <div class="detail-row"><span class="detail-label">Current tier</span><span class="detail-value" id="qb-tier">Free</span></div>
+      <div class="detail-row"><span class="detail-label">Limit</span><span class="detail-value"><span id="qb-limit">10</span> users max</span></div>
+      <div class="detail-row"><span class="detail-label">Current usage</span><span class="detail-value" id="qb-usage">10 / 10</span></div>
+      <div class="alert alert-warning mt-3 mb-0"><span>⬆️</span><span><b>Upgrade path:</b> contact your <b>platform admin</b> to change your license tier. Everything else keeps working — only new invitations beyond the limit are blocked.</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('inviteBlockedModal')">Close</button>
+      <button class="btn btn-primary" onclick="closeModal('inviteBlockedModal'); toast('Upgrade request sent to the platform admin (demo)','info')">Request upgrade</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tenant detail drawer (metadata only) -->
+<div class="drawer-overlay" id="tenantDrawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="tenantDrawer">
+  <div class="drawer-header"><h3 id="td-title">Tenant details</h3><button class="modal-close" onclick="closeDrawer()">×</button></div>
+  <div class="drawer-body">
+    <div class="detail-row"><span class="detail-label">Tenant name</span><span class="detail-value" id="td-name">—</span></div>
+    <div class="detail-row"><span class="detail-label">Tenant address</span><span class="detail-value mono" id="td-addr">—</span></div>
+    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" id="td-status">—</span></div>
+    <div class="detail-row"><span class="detail-label">Admin contact (tenant root)</span><span class="detail-value" id="td-admin">—</span></div>
+    <div class="detail-row"><span class="detail-label">Created</span><span class="detail-value" id="td-created">—</span></div>
+
+    <div class="section-title">License assignment</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tier</label>
+        <select class="form-control" id="td-tier" onchange="tdTierChanged()">
+          <option value="none">No license (Free tier defaults)</option>
+          <option value="free">Free</option>
+          <option value="team">Team</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+        <div class="form-hint">Removing the license falls the tenant back to Free immediately.</div>
+      </div>
+      <div class="form-group"><label>Max users</label><input type="number" min="1" class="form-control" id="td-lim-users"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Max agent types</label><input type="number" min="1" class="form-control" id="td-lim-agents"></div>
+      <div class="form-group"><label>Monthly agent executions</label><input type="number" min="1" class="form-control" id="td-lim-exec"></div>
+    </div>
+    <div class="flex gap-2 mb-3" style="justify-content:flex-start">
+      <button class="btn btn-primary btn-sm" onclick="tdSaveLicense()">Save license</button>
+      <button class="btn btn-secondary btn-sm" onclick="tdRemoveLicense()">Remove license</button>
+    </div>
+
+    <div class="section-title">Current usage (calendar month)</div>
+    <div class="detail-row"><span class="detail-label">Users (used / limit)</span><span class="detail-value" id="td-users">—</span></div>
+    <div class="detail-row"><span class="detail-label">Agent types (used / limit)</span><span class="detail-value" id="td-agents">—</span></div>
+    <div class="detail-row"><span class="detail-label">Agent executions this month</span><span class="detail-value" id="td-exec">—</span></div>
+
+    <div class="alert alert-warning mt-4 mb-3"><span>🔒</span><span><b>Platform admin sees metadata only.</b> Tenant business data — agents, conversations, skills, keys — is never accessible from this console, and the tenant root cannot be altered from here.</span></div>
+    <button class="btn btn-secondary w-full" style="width:100%;justify-content:center" disabled title="Platform admin cannot enter tenant workspaces">🚫 Open tenant workspace (not permitted)</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+/* ═══════════ STATE ═══════════ */
+var TIERS = {
+  free:       {label:'Free',       limits:{users:10,  agentTypes:5,   executions:100}},
+  team:       {label:'Team',       limits:{users:50,  agentTypes:20,  executions:5000}},
+  enterprise: {label:'Enterprise', limits:{users:500, agentTypes:100, executions:100000}}
+};
+function effectiveTier(t) { return t.license ? t.license.tier : 'free'; }
+function effectiveLimits(t) { return t.license ? t.license.limits : TIERS.free.limits; }
+
+function seedTenants() {
+  return [
+    {id:'t-demo',    name:'Parthenon Demo Org', slug:'demo',     status:'active',    admin:'admin@demo.parthenon.app', created:'Mar 12, 2026', adopted:true,
+     license:{tier:'enterprise', limits:{users:500, agentTypes:100, executions:100000}}, usage:{users:12, agentTypes:4, executions:3200}},
+    {id:'t-acme',    name:'Acme Corp',          slug:'acme',     status:'active',    admin:'alex@acme.com',            created:'Apr 03, 2026', adopted:false,
+     license:null, usage:{users:10, agentTypes:3, executions:42}},
+    {id:'t-globex',  name:'Globex Industries',  slug:'globex',   status:'active',    admin:'ops@globex.com',           created:'Jun 21, 2026', adopted:false,
+     license:{tier:'team', limits:{users:50, agentTypes:20, executions:5000}}, usage:{users:9, agentTypes:3, executions:1240}},
+    {id:'t-north',   name:'Northwind Ltd',      slug:'northwind',status:'suspended', admin:'it@northwind.com',         created:'Jul 08, 2026', adopted:false,
+     license:{tier:'team', limits:{users:50, agentTypes:20, executions:5000}}, usage:{users:15, agentTypes:4, executions:610}}
+  ];
+}
+function seedMembers() {
+  return {
+    acme: [
+      {name:'Alex Rivera',  email:'alex@acme.com',    role:'Tenant Admin', status:'Active',  root:true},
+      {name:'Sam Chen',     email:'sam@example.com',  role:'Member',       status:'Active',  root:false},
+      {name:'Priya Patel',  email:'priya@acme.com',   role:'Member',       status:'Invited', root:false}
+    ],
+    globex: [
+      {name:'Gina Morales', email:'ops@globex.com',   role:'Tenant Admin', status:'Active',  root:true},
+      {name:'Omar Siddiqui',email:'omar@globex.com',  role:'Member',       status:'Active',  root:false}
+    ]
+  };
+}
+
+var state = {
+  multiTenancy: false,
+  nextAttemptCount: 0,
+  tenants: seedTenants(),
+  members: seedMembers(),
+  audit: [
+    {time:'Sep 20 · 14:02', actor:'user sam@example.com', src:'acme',   tgt:'globex', res:'agent agt-7731',        result:'Blocked · 404'},
+    {time:'Sep 20 · 11:47', actor:'api-key ak_9f2c…',     src:'globex', tgt:'acme',   res:'GET /api/v1/conversations', result:'Blocked · 403'},
+    {time:'Sep 19 · 09:15', actor:'agent research-bot',   src:'acme',   tgt:'globex', res:'mcp hub mcp-fx',        result:'Blocked · 404'}
+  ],
+  workspaceOrg: {name:'Acme Corp', slug:'acme', persona:{name:'Alex Rivera', email:'alex@acme.com', isRoot:true}},
+  newOrg: null,
+  invites: [{email:'dana@initech.com', role:'Tenant Admin'}, {email:'milton@initech.com', role:'Member'}]
+};
+
+var signinSlug = 'acme';
+
+/* ═══════════ NAVIGATION ═══════════ */
+function showScene(id, btn) {
+  document.querySelectorAll('.scene').forEach(function(s){ s.classList.remove('active'); });
+  var t = document.getElementById('scene-' + id);
+  if (t) t.classList.add('active');
+  document.querySelectorAll('.pn-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  else {
+    var bs = document.querySelectorAll('.pn-btn[data-scene="' + id + '"]');
+    if (bs.length) bs[0].classList.add('active');
+  }
+  window.scrollTo(0, 0);
+}
+function go(id) { showScene(id, null); }
+
+/* ═══════════ TOAST ═══════════ */
+function toast(msg, type) {
+  var c = document.getElementById('toast-container');
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + (type || 'info');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 3200);
+}
+
+/* ═══════════ PLATFORM CONSOLE ═══════════ */
+function pNav(panel) {
+  document.querySelectorAll('#scene-platform .panel').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('ppanel-' + panel).classList.add('active');
+  ['overview','settings','tenants','audit'].forEach(function(p){
+    var el = document.getElementById('pnav-' + p);
+    if (el) el.classList.toggle('active', p === panel);
+  });
+}
+
+function onToggleTenancy(checked) {
+  var t = document.getElementById('tenancy-toggle');
+  if (checked) {
+    t.checked = false; // revert until confirmed
+    document.getElementById('enable-confirm-check').checked = false;
+    document.getElementById('enable-confirm-btn').disabled = true;
+    openModal('enableTenancyModal');
+  } else {
+    openModal('disableTenancyModal');
+  }
+}
+
+function doEnableTenancy() {
+  state.multiTenancy = true;
+  closeModal('enableTenancyModal');
+  updateModeUI();
+  toast('Multi-tenancy enabled — "Parthenon Demo Org" adopted as first tenant', 'success');
+}
+
+function doDisableTenancy() {
+  state.multiTenancy = false;
+  closeModal('disableTenancyModal');
+  updateModeUI();
+  toast('Multi-tenancy disabled — single-tenant behavior restored, no data lost', 'info');
+}
+
+function updateModeUI() {
+  var on = state.multiTenancy;
+  document.getElementById('tenancy-toggle').checked = on;
+  document.getElementById('settings-off').classList.toggle('hidden', on);
+  document.getElementById('settings-on').classList.toggle('hidden', !on);
+  document.getElementById('tenants-multi').classList.toggle('hidden', !on);
+  document.getElementById('tenants-single').classList.toggle('hidden', on);
+  document.getElementById('audit-multi').classList.toggle('hidden', !on);
+  document.getElementById('audit-single').classList.toggle('hidden', on);
+  document.getElementById('pc-overview-multi').classList.toggle('hidden', !on);
+  document.getElementById('pc-overview-single').classList.toggle('hidden', on);
+  var chip = document.getElementById('pc-mode-chip');
+  if (on) { chip.innerHTML = '<span class="ctx-dot" style="background:var(--success)"></span>Multi-Tenant Mode'; }
+  else { chip.innerHTML = '<span class="ctx-dot" style="background:#94A3B8"></span>Single-Tenant Mode'; }
+  var pn = document.getElementById('pn-mode');
+  pn.textContent = 'Multi-tenancy: ' + (on ? 'ON' : 'OFF');
+  pn.className = 'pn-mode ' + (on ? 'on' : 'off');
+  renderTenants(); renderAudit(); renderMetrics();
+}
+
+/* ── Tenant table ── */
+function statusChip(status) {
+  if (status === 'active') return '<span class="chip chip-green"><span class="status-dot dot-green"></span>Active</span>';
+  if (status === 'suspended') return '<span class="chip chip-red"><span class="status-dot dot-red"></span>Suspended</span>';
+  return '<span class="chip chip-gray">' + status + '</span>';
+}
+function tierChipHtml(t) {
+  var tier = effectiveTier(t);
+  var cls = tier === 'team' ? 'chip-blue' : tier === 'enterprise' ? 'chip-purple' : 'chip-gray';
+  var def = t.license ? '' : ' <span class="text-xs text-secondary">(default)</span>';
+  return '<span class="chip ' + cls + '">' + TIERS[tier].label + '</span>' + def;
+}
+function usageCell(used, limit) {
+  var full = used >= limit;
+  var style = full ? ' style="color:var(--error);font-weight:700"' : '';
+  return '<span class="text-sm"' + style + '>' + used + ' / ' + limit.toLocaleString() + '</span>';
+}
+function meterRowHtml(label, used, limit) {
+  var pct = Math.min(100, Math.round(used / limit * 100));
+  var cls = pct >= 100 ? 'full' : pct >= 70 ? 'warn' : '';
+  var valCls = used >= limit ? 'mh-value at-limit' : 'mh-value';
+  return '<div class="meter-row"><div class="meter-head"><span class="mh-label">' + label + '</span>' +
+    '<span class="' + valCls + '">' + used.toLocaleString() + ' / ' + limit.toLocaleString() + '</span></div>' +
+    '<div class="meter"><div class="meter-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>';
+}
+function renderTenants() {
+  var tb = document.getElementById('tenant-rows');
+  tb.innerHTML = state.tenants.map(function(t) {
+    var L = effectiveLimits(t);
+    var actions = '';
+    if (t.status === 'active') actions += '<button class="btn btn-xs btn-secondary" onclick="askSuspend(\'' + t.id + '\')">Suspend</button>';
+    else actions += '<button class="btn btn-xs btn-secondary" style="color:var(--success)" onclick="doResume(\'' + t.id + '\')">Resume</button>';
+    actions += '<button class="btn btn-xs btn-secondary" onclick="openTenantDetail(\'' + t.id + '\')">Details</button>';
+    actions += '<button class="btn btn-xs btn-secondary" style="color:var(--error)" onclick="askDelete(\'' + t.id + '\')">Delete</button>';
+    var nameHtml = '<b>' + t.name + '</b>' + (t.adopted ? ' <span class="chip chip-purple">Adopted</span>' : '');
+    return '<tr><td>' + nameHtml + '</td>' +
+      '<td class="mono text-sm">' + t.slug + '.parthenon.app</td>' +
+      '<td>' + tierChipHtml(t) + '</td>' +
+      '<td>' + statusChip(t.status) + '</td>' +
+      '<td>' + usageCell(t.usage.users, L.users) + '</td>' +
+      '<td>' + usageCell(t.usage.agentTypes, L.agentTypes) + '</td>' +
+      '<td>' + usageCell(t.usage.executions, L.executions) + '</td>' +
+      '<td class="text-sm">' + t.admin + '</td>' +
+      '<td><div class="actions-cell" style="justify-content:flex-end">' + actions + '</div></td></tr>';
+  }).join('');
+}
+
+function renderMetrics() {
+  document.getElementById('m-tenants').textContent = state.tenants.length;
+  document.getElementById('m-active').textContent = state.tenants.filter(function(t){return t.status==='active';}).length;
+  document.getElementById('m-suspended').textContent = state.tenants.filter(function(t){return t.status==='suspended';}).length;
+  document.getElementById('m-attempts').textContent = state.audit.length;
+}
+
+function renderAudit() {
+  var tb = document.getElementById('audit-rows');
+  tb.innerHTML = state.audit.map(function(a) {
+    return '<tr><td class="text-sm text-secondary">' + a.time + '</td>' +
+      '<td class="text-sm mono">' + a.actor + '</td>' +
+      '<td><span class="chip chip-blue">' + a.src + '</span></td>' +
+      '<td><span class="chip chip-purple">' + a.tgt + '</span></td>' +
+      '<td class="text-sm mono">' + a.res + '</td>' +
+      '<td><span class="chip chip-red">' + a.result + '</span></td></tr>';
+  }).join('');
+}
+
+/* ── Create tenant ── */
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function ctClearErr() {
+  var e = document.getElementById('ct-slug-err'); e.classList.remove('visible'); e.textContent = '';
+  document.getElementById('ct-slug').classList.remove('error');
+}
+function submitCreateTenant() {
+  var name = document.getElementById('ct-name').value.trim();
+  var slug = document.getElementById('ct-slug').value.trim().toLowerCase();
+  var admin = document.getElementById('ct-admin').value.trim();
+  var ok = true;
+  function err(id, msg, input) {
+    var e = document.getElementById(id); e.textContent = msg; e.classList.add('visible');
+    if (input) document.getElementById(input).classList.add('error');
+    ok = false;
+  }
+  ['ct-name-err','ct-slug-err','ct-admin-err'].forEach(function(id){ document.getElementById(id).classList.remove('visible'); });
+  ['ct-name','ct-slug','ct-admin'].forEach(function(id){ document.getElementById(id).classList.remove('error'); });
+  if (!name) err('ct-name-err','Tenant name is required.');
+  if (!slug) err('ct-slug-err','Tenant address is required.','ct-slug');
+  else if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) err('ct-slug-err','Use lowercase letters, numbers, and dashes only.','ct-slug');
+  else if (state.tenants.some(function(t){return t.slug===slug;})) err('ct-slug-err','This tenant address is already in use — addresses must be unique. Try "'+slug+'-2".','ct-slug');
+  if (!admin) err('ct-admin-err','A primary admin contact email is required.');
+  if (!ok) return;
+  state.tenants.push({id:'t-'+slug, name:name, slug:slug, status:'active', admin:admin, created:'Sep 20, 2026', adopted:false,
+    license:null, usage:{users:1, agentTypes:0, executions:0}});
+  closeModal('createTenantModal');
+  renderTenants(); renderMetrics();
+  toast('Tenant "' + name + '" created on Free tier defaults — visible in the overview immediately', 'success');
+  ['ct-name','ct-slug','ct-admin'].forEach(function(id){ document.getElementById(id).value=''; });
+}
+
+/* ── Suspend / resume ── */
+var suspendTarget = null;
+function askSuspend(id) {
+  suspendTarget = id;
+  var t = state.tenants.find(function(x){return x.id===id;});
+  document.getElementById('su-name').textContent = t.name;
+  openModal('suspendTenantModal');
+}
+function doSuspend() {
+  var t = state.tenants.find(function(x){return x.id===suspendTarget;});
+  if (t) { t.status = 'suspended'; renderTenants(); renderMetrics(); }
+  closeModal('suspendTenantModal');
+  toast('Tenant suspended — users blocked at sign-in, sessions ended. No data lost.', 'success');
+}
+function doResume(id) {
+  var t = state.tenants.find(function(x){return x.id===id;});
+  if (t) { t.status = 'active'; renderTenants(); renderMetrics(); }
+  toast('Tenant resumed — full access restored immediately', 'success');
+}
+
+/* ── Delete ── */
+var deleteTarget = null;
+function askDelete(id) {
+  deleteTarget = id;
+  var t = state.tenants.find(function(x){return x.id===id;});
+  document.getElementById('de-name').textContent = t.name;
+  document.getElementById('de-slug').textContent = t.slug + '.parthenon.app';
+  document.getElementById('de-confirm').value = '';
+  document.getElementById('de-btn').disabled = true;
+  openModal('deleteTenantModal');
+}
+function deValidate() {
+  var t = state.tenants.find(function(x){return x.id===deleteTarget;});
+  document.getElementById('de-btn').disabled = document.getElementById('de-confirm').value.trim().toLowerCase() !== (t.slug + '.parthenon.app');
+}
+function doDelete() {
+  var t = state.tenants.find(function(x){return x.id===deleteTarget;});
+  state.tenants = state.tenants.filter(function(x){return x.id!==deleteTarget;});
+  closeModal('deleteTenantModal');
+  renderTenants(); renderMetrics();
+  toast('Tenant deleted with all data — its address "' + t.slug + '" is now reusable', 'success');
+}
+
+/* ── Detail drawer (metadata only + license assignment) ── */
+var licenseTarget = null;
+function openTenantDetail(id) {
+  var t = state.tenants.find(function(x){return x.id===id;});
+  licenseTarget = id;
+  document.getElementById('td-title').textContent = 'Tenant details — metadata only';
+  document.getElementById('td-name').textContent = t.name;
+  document.getElementById('td-addr').textContent = t.slug + '.parthenon.app';
+  document.getElementById('td-status').innerHTML = statusChip(t.status);
+  document.getElementById('td-admin').textContent = t.admin;
+  document.getElementById('td-created').textContent = t.created;
+  var sel = document.getElementById('td-tier');
+  var ids = ['td-lim-users','td-lim-agents','td-lim-exec'];
+  if (t.license) {
+    sel.value = t.license.tier;
+    document.getElementById('td-lim-users').value = t.license.limits.users;
+    document.getElementById('td-lim-agents').value = t.license.limits.agentTypes;
+    document.getElementById('td-lim-exec').value = t.license.limits.executions;
+    ids.forEach(function(i){ document.getElementById(i).disabled = false; });
+  } else {
+    sel.value = 'none';
+    document.getElementById('td-lim-users').value = TIERS.free.limits.users;
+    document.getElementById('td-lim-agents').value = TIERS.free.limits.agentTypes;
+    document.getElementById('td-lim-exec').value = TIERS.free.limits.executions;
+    ids.forEach(function(i){ document.getElementById(i).disabled = true; });
+  }
+  tdRefreshUsage();
+  document.getElementById('tenantDrawer').classList.add('open');
+  document.getElementById('tenantDrawerOverlay').classList.add('open');
+}
+function tdTierChanged() {
+  var tier = document.getElementById('td-tier').value;
+  var dis = tier === 'none';
+  ['td-lim-users','td-lim-agents','td-lim-exec'].forEach(function(i){ document.getElementById(i).disabled = dis; });
+  if (!dis) {
+    document.getElementById('td-lim-users').value = TIERS[tier].limits.users;
+    document.getElementById('td-lim-agents').value = TIERS[tier].limits.agentTypes;
+    document.getElementById('td-lim-exec').value = TIERS[tier].limits.executions;
+  }
+}
+function tdRefreshUsage() {
+  var t = state.tenants.find(function(x){return x.id===licenseTarget;});
+  if (!t) return;
+  var L = effectiveLimits(t);
+  document.getElementById('td-users').innerHTML = usageCell(t.usage.users, L.users);
+  document.getElementById('td-agents').innerHTML = usageCell(t.usage.agentTypes, L.agentTypes);
+  document.getElementById('td-exec').innerHTML = usageCell(t.usage.executions, L.executions);
+}
+function tdApplyToWorkspace(t) {
+  if (t.slug === state.workspaceOrg.slug) { wsRenderLicense(); wsRenderUsers(); }
+}
+function tdSaveLicense() {
+  var t = state.tenants.find(function(x){return x.id===licenseTarget;});
+  if (!t) return;
+  var tier = document.getElementById('td-tier').value;
+  if (tier === 'none') { tdRemoveLicense(); return; }
+  var u = parseInt(document.getElementById('td-lim-users').value, 10);
+  var a = parseInt(document.getElementById('td-lim-agents').value, 10);
+  var e = parseInt(document.getElementById('td-lim-exec').value, 10);
+  if (!(u > 0) || !(a > 0) || !(e > 0)) { toast('Invalid license — all limits must be positive numbers', 'error'); return; }
+  t.license = {tier:tier, limits:{users:u, agentTypes:a, executions:e}};
+  renderTenants(); tdRefreshUsage(); tdApplyToWorkspace(t);
+  toast(TIERS[tier].label + ' license saved for "' + t.name + '" — tenant overview and the tenant\u2019s own usage view update immediately', 'success');
+}
+function tdRemoveLicense() {
+  var t = state.tenants.find(function(x){return x.id===licenseTarget;});
+  if (!t) return;
+  t.license = null;
+  document.getElementById('td-tier').value = 'none';
+  document.getElementById('td-lim-users').value = TIERS.free.limits.users;
+  document.getElementById('td-lim-agents').value = TIERS.free.limits.agentTypes;
+  document.getElementById('td-lim-exec').value = TIERS.free.limits.executions;
+  ['td-lim-users','td-lim-agents','td-lim-exec'].forEach(function(i){ document.getElementById(i).disabled = true; });
+  renderTenants(); tdRefreshUsage(); tdApplyToWorkspace(t);
+  toast('License removed — "' + t.name + '" fell back to Free tier defaults immediately', 'info');
+}
+function closeDrawer() {
+  document.getElementById('tenantDrawer').classList.remove('open');
+  document.getElementById('tenantDrawerOverlay').classList.remove('open');
+}
+
+/* ═══════════ SELF-SERVE SIGNUP ═══════════ */
+var OWNER_EMAILS = {
+  'alex@acme.com':             'Acme Corp',
+  'ops@globex.com':            'Globex Industries',
+  'it@northwind.com':          'Northwind Ltd',
+  'admin@demo.parthenon.app':  'Parthenon Demo Org'
+};
+function sgStepVisual(step) {
+  for (var i = 1; i <= 2; i++) {
+    var c = document.getElementById('sg-c'+i), l = document.getElementById('sg-l'+i);
+    c.className = 'step-circle ' + (i < step ? 'done' : i === step ? 'active' : 'pending');
+    if (i < step) c.textContent = '✓'; else c.textContent = i;
+    l.className = 'step-label ' + (i === step ? 'active' : 'pending');
+  }
+  document.getElementById('sg-con1').className = 'step-connector' + (step > 1 ? ' done' : '');
+  document.getElementById('sg-p1').classList.toggle('active', step === 1);
+  document.getElementById('sg-p2').classList.toggle('active', step === 2);
+  document.getElementById('sg-done').classList.toggle('active', step === 3);
+}
+function sgTryExistingOwner() {
+  sgStepVisual(1);
+  document.getElementById('sg-admin-email').value = 'alex@acme.com';
+  document.getElementById('sg-admin-name').value = document.getElementById('sg-admin-name').value || 'Alex Rivera';
+  toast('Demo: press "Continue" to see the one-tenant-per-user block', 'info');
+}
+function sgEmailClear() {
+  document.getElementById('sg-owner-err').classList.remove('visible');
+  document.getElementById('sg-admin-email').classList.remove('error');
+}
+function sgNext(step, back) {
+  if (step === 1 && !back) {
+    var an = document.getElementById('sg-admin-name').value.trim();
+    var ae = document.getElementById('sg-admin-email').value.trim();
+    var ap = document.getElementById('sg-admin-pass').value;
+    var ok = true;
+    function err(id, input) { document.getElementById(id).classList.add('visible'); if (input) document.getElementById(input).classList.add('error'); ok = false; }
+    ['sg-adminname-err','sg-adminemail-err','sg-adminpass-err','sg-owner-err'].forEach(function(id){ document.getElementById(id).classList.remove('visible'); });
+    ['sg-admin-name','sg-admin-email','sg-admin-pass'].forEach(function(id){ document.getElementById(id).classList.remove('error'); });
+    if (!an) err('sg-adminname-err','sg-admin-name');
+    if (!ae || ae.indexOf('@') < 1) err('sg-adminemail-err','sg-admin-email');
+    if (!ap || ap.length < 10) err('sg-adminpass-err','sg-admin-pass');
+    if (!ok) return;
+    var owner = OWNER_EMAILS[ae.toLowerCase()];
+    if (owner) {
+      var oe = document.getElementById('sg-owner-err');
+      oe.innerHTML = 'This email already owns a tenant (<b>' + owner + '</b>). <b>One tenant per user</b> — a second workspace cannot be created for this account. Sign in at your existing tenant instead. Nothing was created.';
+      oe.classList.add('visible');
+      document.getElementById('sg-admin-email').classList.add('error');
+      return;
+    }
+    if (!document.getElementById('sg-slug').value) document.getElementById('sg-slug').value = sgSlugify(an.split(' ')[0] + ' ' + (document.getElementById('sg-name').value || 'org'));
+    sgStepVisual(2);
+  } else if (step === 2 && back) sgStepVisual(1);
+}
+function sgSlugify(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30); }
+function sgSlugSuggest() {
+  var name = document.getElementById('sg-name').value.trim();
+  if (name && !document.getElementById('sg-slug').dataset.touched) {
+    document.getElementById('sg-slug').value = sgSlugify(name);
+  }
+}
+function sgValidateSlug(showErr) {
+  document.getElementById('sg-slug').dataset.touched = '1';
+  var slug = document.getElementById('sg-slug').value.trim().toLowerCase();
+  var e = document.getElementById('sg-slug-err');
+  var input = document.getElementById('sg-slug');
+  input.classList.remove('error'); e.classList.remove('visible');
+  if (!slug) { if (showErr) { e.textContent='Tenant address is required.'; e.classList.add('visible'); input.classList.add('error'); } return false; }
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) { if (showErr) { e.textContent='Use lowercase letters, numbers, and dashes only.'; e.classList.add('visible'); input.classList.add('error'); } return false; }
+  if (state.tenants.some(function(t){return t.slug===slug;})) {
+    if (showErr) { e.textContent='"' + slug + '" is already taken — tenant addresses must be unique across the platform.'; e.classList.add('visible'); input.classList.add('error'); }
+    return false;
+  }
+  return true;
+}
+function sgCreate() {
+  var name = document.getElementById('sg-name').value.trim();
+  var slug = document.getElementById('sg-slug').value.trim().toLowerCase();
+  var an = document.getElementById('sg-admin-name').value.trim();
+  var ae = document.getElementById('sg-admin-email').value.trim();
+  var ok = true;
+  document.getElementById('sg-name-err').classList.toggle('visible', !name);
+  document.getElementById('sg-name').classList.toggle('error', !name);
+  if (!name) ok = false;
+  if (!sgValidateSlug(true)) ok = false;
+  if (!ok) return;
+  if (state.tenants.some(function(t){return t.slug===slug;})) { toast('Address already taken — no partial data was created', 'error'); return; }
+  state.newOrg = {name:name, slug:slug, creator:{name:an, email:ae}};
+  state.tenants.push({id:'t-'+slug, name:name, slug:slug, status:'active', admin:ae, created:'Sep 25, 2026', adopted:false,
+    license:null, usage:{users:1, agentTypes:0, executions:0}});
+  renderTenants(); renderMetrics();
+  document.getElementById('sg-done-text').innerHTML = '<b>' + name + '</b> is live at <span class="mono">' + slug + '.parthenon.app</span> — you are signed in as its <b>tenant root</b> (permanent super-admin).';
+  sgStepVisual(3);
+  toast('Organization created instantly — invisible to all other tenants', 'success');
+}
+function startOnboardingFromSignup() {
+  var o = state.newOrg || {name:'Initech LLC', slug:'initech', creator:{name:'Peter Gibbons', email:'peter@example.com'}};
+  document.getElementById('ob-org-name').textContent = o.name;
+  document.getElementById('ob-sum-name').textContent = o.name;
+  document.getElementById('ob-sum-addr').textContent = o.slug + '.parthenon.app';
+  obStepVisual(1);
+  go('onboarding');
+  toast('Guided onboarding started — you are the tenant root', 'info');
+}
+
+/* ═══════════ ONBOARDING WIZARD ═══════════ */
+function obStepVisual(step) {
+  for (var i = 1; i <= 3; i++) {
+    var c = document.getElementById('ob-c'+i), l = document.getElementById('ob-l'+i);
+    c.className = 'step-circle ' + (i < step ? 'done' : i === step ? 'active' : 'pending');
+    if (i < step) c.textContent = '✓'; else c.textContent = i;
+    l.className = 'step-label ' + (i === step ? 'active' : 'pending');
+  }
+  document.getElementById('ob-con1').className = 'step-connector' + (step > 1 ? ' done' : '');
+  document.getElementById('ob-con2').className = 'step-connector' + (step > 2 ? ' done' : '');
+  for (var p = 1; p <= 3; p++) document.getElementById('ob-p'+p).classList.toggle('active', p === step);
+  document.getElementById('ob-done').classList.toggle('active', step === 4);
+}
+function obNext(step, back) {
+  if (step === 1 && !back) {
+    var issuer = document.getElementById('ob-issuer').value.trim();
+    if (!issuer) { toast('Enter your identity provider issuer URL first','error'); return; }
+    obStepVisual(2);
+  } else if (step === 2 && !back) obStepVisual(3);
+  else if (step === 3 && !back) {
+    if (!document.getElementById('ob-confirm-check').checked) { toast('Please confirm the isolation acknowledgement first','error'); return; }
+    obStepVisual(4);
+  }
+  else if (back) obStepVisual(step - 1);
+}
+function obTestConn() {
+  var btn = document.getElementById('ob-test-btn');
+  var res = document.getElementById('ob-test-result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="mini-spinner"></span> Testing…';
+  res.innerHTML = '';
+  setTimeout(function() {
+    btn.disabled = false;
+    btn.textContent = 'Test connection';
+    res.innerHTML = '<span class="chip chip-green">✓ Verified — discovery document found</span>';
+  }, 1200);
+}
+function obAddInvite() {
+  var input = document.getElementById('ob-invite-email');
+  var role = document.getElementById('ob-invite-role').value;
+  var email = input.value.trim();
+  if (!email || email.indexOf('@') < 1) { toast('Enter a valid email address', 'error'); return; }
+  state.invites.push({email:email, role:role});
+  input.value = '';
+  renderInvites();
+}
+function obRemoveInvite(i) { state.invites.splice(i,1); renderInvites(); }
+function renderInvites() {
+  var list = document.getElementById('ob-invite-list');
+  list.innerHTML = state.invites.map(function(inv, i) {
+    return '<div class="invite-item"><span>✉️</span><span class="iv-email">' + inv.email + '</span>' +
+      '<span class="chip ' + (inv.role === 'Tenant Admin' ? 'chip-blue' : 'chip-gray') + '">' + inv.role + '</span>' +
+      '<button class="invite-remove" onclick="obRemoveInvite(' + i + ')">×</button></div>';
+  }).join('') || '<div class="text-sm text-secondary" style="padding:6px 2px">No invitations yet.</div>';
+  document.getElementById('ob-sum-invites').textContent = state.invites.length + ' pending';
+}
+function obFinish() { obStepVisual(4); toast('Onboarding complete — your organization is ready', 'success'); }
+function enterWorkspaceFromOnboarding() {
+  var o = state.newOrg || {name:'Initech LLC', slug:'initech', creator:{name:'Peter Gibbons', email:'peter@example.com'}};
+  setWorkspaceOrg(o.name, o.slug, {name:o.creator.name, email:o.creator.email, isRoot:true});
+  go('workspace');
+  toast('Signed in to ' + o.name + ' as the tenant root — one session, one tenant', 'success');
+}
+
+/* ═══════════ TENANT SIGN-IN ═══════════ */
+var brands = {
+  acme:     {name:'Acme Corp',         letter:'A', suspended:false},
+  globex:   {name:'Globex Industries', letter:'G', suspended:false},
+  northwind:{name:'Northwind Ltd',     letter:'N', suspended:true}
+};
+/* Platform-issued workspace accounts (created via self-serve sign-up / tenant invitations) */
+var SI_ACCOUNTS = {
+  'alex@acme.com':   {name:'Alex Rivera',   root:true,  orgs:['acme']},
+  'sam@example.com': {name:'Sam Chen',      root:false, orgs:['acme','globex']},
+  'priya@acme.com':  {name:'Priya Patel',   root:false, orgs:['acme']},
+  'ops@globex.com':  {name:'Gina Morales',  root:true,  orgs:['globex']},
+  'omar@globex.com': {name:'Omar Siddiqui', root:false, orgs:['globex']}
+};
+/* Per-tenant OIDC provider configuration (demo state) — Globex starts with none configured */
+var siOidcConfigured = {acme:true, globex:false, northwind:true};
+var siAdminOpen = false;
+/* Workspace slug remembered on this device via the find-workspace step (null = nothing remembered) */
+var siRemembered = null;
+
+function siFieldErr(inputId, errId) {
+  document.getElementById(inputId).classList.add('error');
+  document.getElementById(errId).classList.add('visible');
+}
+function siClearFieldErr(inputId, errId) {
+  document.getElementById(inputId).classList.remove('error');
+  document.getElementById(errId).classList.remove('visible');
+  document.getElementById('si-err').classList.add('hidden');
+}
+function siResetForm() {
+  ['si-email','si-pass'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+  ['si-email','si-pass'].forEach(function(id){ var el = document.getElementById(id); if (el) el.classList.remove('error'); });
+  ['si-email-err','si-pass-err'].forEach(function(id){ var el = document.getElementById(id); if (el) el.classList.remove('visible'); });
+  document.getElementById('si-err').classList.add('hidden');
+}
+function siShowInlineErr(msg) {
+  document.getElementById('si-err-text').innerHTML = msg;
+  document.getElementById('si-err').classList.remove('hidden');
+}
+function siApplyOidc() {
+  var on = !!siOidcConfigured[signinSlug];
+  document.getElementById('si-oidc-wrap').classList.toggle('hidden', !on);
+  var btn = document.getElementById('si-btn-oidc');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? 'OIDC provider: configured' : 'OIDC provider: not configured';
+  document.getElementById('si-oidc-note').textContent = on
+    ? 'The tenant SSO button renders on the sign-in card.'
+    : 'No provider configured — the SSO button is simply absent. No no-provider-configured hint and no setup-wizard entry appears on this page.';
+}
+function siToggleOidc() {
+  siOidcConfigured[signinSlug] = !siOidcConfigured[signinSlug];
+  siApplyOidc();
+  toast(siOidcConfigured[signinSlug]
+    ? 'OIDC provider configured for this tenant — the SSO button appears on its sign-in page'
+    : 'OIDC provider removed for this tenant — the SSO button disappears with no wizard prompt', 'info');
+}
+/* Resolve sign-in branding for a slug from the live tenant registry (falls back to demo brand set) */
+function siBrandFor(slug) {
+  var t = state.tenants.find(function(x){return x.slug===slug;});
+  if (!t) return null;
+  var b = brands[slug] || {name:t.name, letter:(t.name.charAt(0) || '?').toUpperCase()};
+  return {name:b.name, letter:b.letter, suspended:t.status==='suspended'};
+}
+/* ── Find-your-workspace step (neutral — no tenant context yet) ── */
+function siFindClear() {
+  document.getElementById('si-find-slug').classList.remove('error');
+  document.getElementById('si-find-err').classList.remove('visible');
+}
+function siFindErr(msg) {
+  var e = document.getElementById('si-find-err');
+  e.textContent = msg;
+  e.classList.add('visible');
+  document.getElementById('si-find-slug').classList.add('error');
+}
+function siFindSubmit() {
+  var slug = document.getElementById('si-find-slug').value.trim().toLowerCase();
+  siFindClear();
+  if (!slug) { siFindErr('Enter your workspace address.'); return; }
+  if (!siBrandFor(slug)) { siFindErr('No workspace found at this address.'); return; }
+  siRemembered = document.getElementById('si-find-remember').checked ? slug : null;
+  siPick(slug);
+}
+function siFindQuick(slug) {
+  siShowFind();
+  document.getElementById('si-find-slug').value = slug;
+  siFindSubmit();
+}
+function siShowFind() {
+  if (siAdminOpen) siToggleAdmin();
+  document.getElementById('si-addrbar-find').classList.remove('hidden');
+  document.getElementById('si-addrbar-tenant').classList.add('hidden');
+  document.getElementById('si-find').classList.remove('hidden');
+  ['si-form','si-extras','si-admin-card','si-orgchoice','si-blocked'].forEach(function(id){
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById('si-admin-link').classList.add('hidden');
+  siFindClear();
+  if (siRemembered) document.getElementById('si-find-slug').value = siRemembered;
+}
+function siUseDifferent() {
+  siRemembered = null;
+  siShowFind();
+  toast('Workspace forgotten on this device — enter your workspace address again (demo)', 'info');
+}
+function siApplyRemember() {
+  var remembered = siRemembered === signinSlug;
+  document.getElementById('si-remember-note').classList.toggle('hidden', !remembered);
+}
+function siPick(slug) {
+  var b = siBrandFor(slug);
+  if (!b) { /* tenant no longer exists — fall back to the find step with a neutral error */
+    siShowFind();
+    document.getElementById('si-find-slug').value = slug;
+    siFindErr('No workspace found at this address.');
+    return;
+  }
+  signinSlug = slug;
+  document.getElementById('si-addrbar-tenant').classList.remove('hidden');
+  document.getElementById('si-addrbar-find').classList.add('hidden');
+  document.getElementById('si-addr').textContent = slug;
+  document.getElementById('si-logo').textContent = b.letter;
+  document.getElementById('si-brand').textContent = b.name;
+  document.getElementById('si-provider-name').textContent = b.name;
+  siResetForm();
+  if (siAdminOpen) siToggleAdmin();
+  var suspended = !!b.suspended;
+  document.getElementById('si-find').classList.add('hidden');
+  document.getElementById('si-form').classList.toggle('hidden', suspended);
+  document.getElementById('si-extras').classList.toggle('hidden', suspended);
+  document.getElementById('si-admin-link').classList.toggle('hidden', suspended);
+  document.getElementById('si-admin-card').classList.add('hidden');
+  document.getElementById('si-orgchoice').classList.add('hidden');
+  document.getElementById('si-blocked').classList.toggle('hidden', !suspended);
+  siApplyRemember();
+  siApplyOidc();
+  ['acme','globex','northwind'].forEach(function(s){
+    var el = document.getElementById('si-btn-' + s);
+    if (el) el.classList.toggle('active', s === slug);
+  });
+}
+function siSignIn() {
+  var email = document.getElementById('si-email').value.trim().toLowerCase();
+  var pass = document.getElementById('si-pass').value;
+  ['si-email-err','si-pass-err'].forEach(function(id){ document.getElementById(id).classList.remove('visible'); });
+  ['si-email','si-pass'].forEach(function(id){ document.getElementById(id).classList.remove('error'); });
+  document.getElementById('si-err').classList.add('hidden');
+  var ok = true;
+  if (!email || email.indexOf('@') < 1) { siFieldErr('si-email','si-email-err'); ok = false; }
+  if (!pass) { siFieldErr('si-pass','si-pass-err'); ok = false; }
+  if (!ok) return;
+  var acct = SI_ACCOUNTS[email];
+  if (acct && acct.orgs.indexOf(signinSlug) < 0) {
+    var home = brands[acct.orgs[0]];
+    siShowInlineErr('Sign-in failed — this account belongs to the <b>' + home.name + '</b> workspace. Workspace accounts are tenant-bound: credentials issued by one organization can never unlock another tenant\u2019s workspace.');
+    document.getElementById('si-email').classList.add('error');
+    return;
+  }
+  if (acct) {
+    if (acct.orgs.length > 1) { siShowOrgChoice(); return; }
+    var b = brands[signinSlug];
+    setWorkspaceOrg(b.name, signinSlug, {name:acct.name, email:email, isRoot:acct.root});
+    go('workspace');
+    toast('Signed in to ' + b.name + (acct.root ? ' as the tenant root' : '') + ' — one session, one tenant', 'success');
+    return;
+  }
+  siShowInlineErr('Sign-in failed — incorrect email or password. Check your workspace credentials and try again.');
+  document.getElementById('si-pass').classList.add('error');
+}
+function siOidc() {
+  toast('Authenticated by ' + brands[signinSlug].name + ' SSO (demo) — this identity belongs to multiple organizations', 'info');
+  siShowOrgChoice();
+}
+function siShowOrgChoice() {
+  document.getElementById('si-find').classList.add('hidden');
+  document.getElementById('si-form').classList.add('hidden');
+  document.getElementById('si-extras').classList.add('hidden');
+  document.getElementById('si-admin-link').classList.add('hidden');
+  document.getElementById('si-orgchoice').classList.remove('hidden');
+}
+function siChooseOrg(slug) {
+  var b = brands[slug];
+  setWorkspaceOrg(b.name, slug, {name:'Sam Chen', email:'sam@example.com', isRoot:false});
+  go('workspace');
+  toast('Signed in to ' + b.name + ' — this session is bound to this tenant only', 'success');
+}
+function siFill(who) {
+  document.getElementById('si-email').value = who === 'alex' ? 'alex@acme.com' : 'sam@example.com';
+  document.getElementById('si-pass').value = 'demo-password';
+  siSignIn();
+}
+function siWrongCredential() {
+  document.getElementById('si-email').value = signinSlug === 'acme' ? 'ops@globex.com' : 'alex@acme.com';
+  document.getElementById('si-pass').value = 'demo-password';
+  siSignIn();
+}
+function siToggleAdmin() {
+  siAdminOpen = !siAdminOpen;
+  document.getElementById('si-admin-card').classList.toggle('hidden', !siAdminOpen);
+  document.getElementById('si-extras').classList.toggle('hidden', siAdminOpen);
+  document.getElementById('si-admin-link').innerHTML = siAdminOpen ? '← Back to workspace sign-in' : 'Platform admin sign-in ▾';
+  if (!siAdminOpen) siResetAdmin();
+}
+function siResetAdmin() {
+  ['si-admin-user','si-admin-pass'].forEach(function(id){
+    var el = document.getElementById(id); if (el) { el.value = ''; el.classList.remove('error'); }
+  });
+  ['si-admin-user-err','si-admin-pass-err'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.classList.remove('visible');
+  });
+}
+function siAdminSignIn() {
+  var u = document.getElementById('si-admin-user').value.trim();
+  var p = document.getElementById('si-admin-pass').value;
+  var ok = true;
+  if (!u) { siFieldErr('si-admin-user','si-admin-user-err'); ok = false; }
+  if (!p || p.length < 4) { siFieldErr('si-admin-pass','si-admin-pass-err'); ok = false; }
+  if (!ok) return;
+  go('platform'); pNav('overview');
+  toast('Signed in to the Platform Console as the super admin (demo — placeholder credentials)', 'success');
+}
+
+/* ═══════════ TENANT WORKSPACE ═══════════ */
+var WS_TITLES = {overview:'Dashboard', users:'Users', settings:'Tenant Settings'};
+function setWorkspaceOrg(name, slug, persona) {
+  state.workspaceOrg = {name:name, slug:slug, persona:persona || {name:'Alex Rivera', email:'alex@acme.com', isRoot:true}};
+  applyWorkspaceIdentity();
+}
+function applyWorkspaceIdentity() {
+  var wo = state.workspaceOrg, name = wo.name, slug = wo.slug, p = wo.persona;
+  document.getElementById('ws-org-chip').textContent = name;
+  document.getElementById('ws-org-addr').textContent = slug + '.parthenon.app';
+  document.getElementById('ws-banner-org').textContent = name;
+  document.getElementById('ws-side-org').textContent = name;
+  document.getElementById('ws-side-org2').textContent = name;
+  document.getElementById('ws-menu-cur').textContent = name;
+  document.getElementById('ws-menu-cur-addr').textContent = slug + '.parthenon.app';
+  document.getElementById('ws-avatar').textContent = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+  document.getElementById('ws-cur-org').classList.add('current');
+  document.getElementById('ws-user-name').textContent = p.name;
+  document.getElementById('ws-root-badge').classList.toggle('hidden', !p.isRoot);
+  document.getElementById('ws-alias-input').value = name;
+  document.getElementById('ws-alias-input').disabled = !p.isRoot;
+  document.getElementById('ws-alias-save').disabled = !p.isRoot;
+  document.getElementById('ws-addr-fixed').value = slug;
+  document.getElementById('ws-root-note').classList.toggle('hidden', !p.isRoot);
+  document.getElementById('ws-member-note').classList.toggle('hidden', p.isRoot);
+  wsRenderUsers(); wsRenderLicense();
+}
+function wsTenant() { return state.tenants.find(function(t){return t.slug===state.workspaceOrg.slug;}); }
+function wsMembers() {
+  var slug = state.workspaceOrg.slug;
+  if (!state.members[slug]) {
+    var p = state.workspaceOrg.persona;
+    state.members[slug] = [{name:p.name, email:p.email, role:'Tenant Admin', status:'Active', root:true}];
+  }
+  return state.members[slug];
+}
+function wsRenderUsers() {
+  var t = wsTenant(); if (!t) return;
+  var L = effectiveLimits(t);
+  var tier = TIERS[effectiveTier(t)].label;
+  var full = t.usage.users >= L.users;
+  var chip = document.getElementById('ws-users-quota-chip');
+  chip.className = 'chip ' + (full ? 'chip-red' : 'chip-gray');
+  chip.textContent = t.usage.users + '/' + L.users + ' users · ' + tier + ' tier';
+  chip.title = full ? 'User quota exhausted — Free tier limit' : 'Users used vs. plan limit';
+  document.getElementById('ws-users-meter').innerHTML = meterRowHtml('Users', t.usage.users, L.users);
+  document.getElementById('ws-user-rows').innerHTML = wsMembers().map(function(m) {
+    var role = '<span class="chip ' + (m.role === 'Tenant Admin' ? 'chip-blue' : 'chip-gray') + '">' + m.role + '</span>';
+    if (m.root) role += ' <span class="chip chip-root" title="Tenant root — permanent">🌱 Root</span>';
+    var actions;
+    if (m.root) {
+      actions = '<span class="lock-btn" title="Tenant root — permanent">🔒 Locked</span>';
+    } else if (m.status === 'Invited') {
+      actions = '<button class="btn btn-xs btn-secondary" onclick="toast(\'Invitation resent (demo)\',\'info\')">Resend</button>' +
+                '<button class="btn btn-xs btn-secondary" style="color:var(--error)" onclick="toast(\'Invitation withdrawn (demo)\',\'info\')">Withdraw</button>';
+    } else {
+      actions = '<button class="btn btn-xs btn-secondary" onclick="toast(\'Role change is demo-only — members can be changed, the root can never be\',\'info\')">Change role</button>' +
+                '<button class="btn btn-xs btn-secondary" style="color:var(--error)" onclick="toast(\'Remove is demo-only — members can be removed, the root can never be\',\'info\')">Remove</button>';
+    }
+    var status = m.status === 'Active' ? '<span class="chip chip-green">Active</span>' : '<span class="chip chip-yellow">Invited</span>';
+    return '<tr><td style="font-weight:500">' + m.name + '</td><td class="mono text-sm">' + m.email + '</td><td>' + role + '</td><td>' + status + '</td><td><div class="actions-cell" style="justify-content:flex-end">' + actions + '</div></td></tr>';
+  }).join('');
+  var mm = document.getElementById('ws-m-members'); if (mm) mm.textContent = t.usage.users;
+}
+function wsRenderLicense() {
+  var t = wsTenant(); if (!t) return;
+  var tier = effectiveTier(t), L = effectiveLimits(t);
+  document.getElementById('ws-tier-chip').innerHTML = tierChipHtml(t);
+  var note = document.getElementById('ws-license-note');
+  if (t.license) {
+    note.className = 'alert alert-info';
+    note.innerHTML = '<span>📜</span><span>Your <b>' + TIERS[tier].label + ' license</b> was assigned by the platform admin. The meters below update immediately when the license changes.</span>';
+  } else {
+    note.className = 'alert alert-warning';
+    note.innerHTML = '<span>🆓</span><span>No license assigned — this tenant runs on <b>Free tier defaults</b>. Every signup starts here. Contact your platform admin to upgrade.</span>';
+  }
+  document.getElementById('ws-license-meters').innerHTML =
+    meterRowHtml('Users', t.usage.users, L.users) +
+    meterRowHtml('Agent types', t.usage.agentTypes, L.agentTypes) +
+    meterRowHtml('Agent executions this month', t.usage.executions, L.executions);
+}
+function wsInvite() {
+  var t = wsTenant(); if (!t) return;
+  var L = effectiveLimits(t);
+  if (t.usage.users >= L.users) {
+    document.getElementById('qb-tier').textContent = TIERS[effectiveTier(t)].label;
+    document.getElementById('qb-limit').textContent = L.users;
+    document.getElementById('qb-usage').textContent = t.usage.users + ' / ' + L.users;
+    openModal('inviteBlockedModal');
+    return;
+  }
+  t.usage.users++;
+  wsRenderUsers(); renderTenants();
+  toast('Invitation sent (demo) — now ' + t.usage.users + ' / ' + L.users + ' users on ' + TIERS[effectiveTier(t)].label + ' tier', 'success');
+}
+function wsSaveAlias() {
+  var t = wsTenant(); if (!t) return;
+  if (!state.workspaceOrg.persona.isRoot) { toast('Only the tenant root can change the tenant alias', 'error'); return; }
+  var v = document.getElementById('ws-alias-input').value.trim();
+  if (!v) { toast('Alias cannot be empty', 'error'); return; }
+  t.name = v;
+  state.workspaceOrg.name = v;
+  applyWorkspaceIdentity();
+  renderTenants();
+  toast('Alias updated — workspace renamed to "' + v + '" everywhere instantly (tenant address unchanged)', 'success');
+}
+function wsSimLicense(tier) {
+  var t = wsTenant(); if (!t) return;
+  if (tier === 'none') {
+    t.license = null;
+    toast('License removed — tenant fell back to Free tier defaults immediately', 'info');
+  } else {
+    t.license = {tier:tier, limits:{users:TIERS[tier].limits.users, agentTypes:TIERS[tier].limits.agentTypes, executions:TIERS[tier].limits.executions}};
+    toast(TIERS[tier].label + ' license assigned — limits raised, meters and platform view update instantly', 'success');
+  }
+  wsRenderLicense(); wsRenderUsers(); renderTenants();
+}
+function wsToggleMenu() { document.getElementById('ws-menu').classList.toggle('open'); }
+function wsTrySwitch() {
+  toast('For isolation, switching organizations requires signing out and signing in again — one session = one tenant', 'error');
+}
+function wsTab(tab, el) {
+  ['overview','users','settings'].forEach(function(t){
+    document.getElementById('ws-tab-' + t).classList.toggle('hidden', t !== tab);
+  });
+  document.querySelectorAll('#scene-workspace .shell-nav .snav-item').forEach(function(n){ n.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  document.getElementById('ws-title').textContent = WS_TITLES[tab] || 'Dashboard';
+}
+
+/* ═══════════ ISOLATION DEMO ═══════════ */
+function runAttempt() {
+  var src = document.getElementById('iso-source').value;
+  var tgtFull = document.getElementById('iso-target').value;
+  var parts = tgtFull.split(':');
+  var tgt = parts[0], path = parts[1];
+  document.getElementById('iso-attempt-path').textContent = src + ' → ' + tgt + ' ' + path;
+  document.getElementById('iso-placeholder').classList.add('hidden');
+  document.getElementById('iso-result').classList.remove('hidden');
+  state.audit.unshift({
+    time:'Sep 20 · just now',
+    actor: src === 'acme' ? 'user sam@example.com' : 'api-key ak_9f2c…',
+    src: src, tgt: tgt, res: path.replace(/^\//,''),
+    result:'Blocked · 404'
+  });
+  renderAudit(); renderMetrics();
+  toast('Access denied — request returned no target-tenant data; audit event recorded', 'error');
+}
+function viewInAudit() {
+  go('platform'); pNav('audit');
+  toast('Cross-tenant attempt visible to the platform admin with tenant attribution', 'info');
+}
+
+/* ═══════════ RESET ═══════════ */
+function resetDemo() {
+  state.multiTenancy = false;
+  state.newOrg = null;
+  state.tenants = seedTenants();
+  state.members = seedMembers();
+  state.audit = state.audit.filter(function(a){ return a.time.indexOf('just now') < 0; });
+  state.invites = [{email:'dana@initech.com', role:'Tenant Admin'}, {email:'milton@initech.com', role:'Member'}];
+  ['sg-name','sg-slug','sg-admin-name','sg-admin-email','sg-admin-pass'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  ['ob-issuer','ob-clientid','ob-clientsecret','ob-invite-email'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+   ['sg-slug'].forEach(function(id){ document.getElementById(id).dataset.touched = ''; });
+  siOidcConfigured = {acme:true, globex:false, northwind:true};
+  siAdminOpen = false;
+  siRemembered = null;
+  var siFindInput = document.getElementById('si-find-slug');
+  if (siFindInput) { siFindInput.value = ''; siFindInput.classList.remove('error'); }
+  document.getElementById('si-find-err').classList.remove('visible');
+  document.getElementById('si-find-remember').checked = true;
+  siResetAdmin();
+  sgStepVisual(1); obStepVisual(1); renderInvites();
+  setWorkspaceOrg('Acme Corp','acme', {name:'Alex Rivera', email:'alex@acme.com', isRoot:true});
+  wsTab('overview', document.getElementById('ws-nav-overview'));
+  siShowFind();
+  document.getElementById('iso-result').classList.add('hidden');
+  document.getElementById('iso-placeholder').classList.remove('hidden');
+  updateModeUI();
+  closeDrawer();
+  ['enableTenancyModal','disableTenancyModal','createTenantModal','suspendTenantModal','deleteTenantModal','inviteBlockedModal'].forEach(closeModal);
+  go('home');
+  toast('Prototype reset to defaults (multi-tenancy OFF)', 'info');
+}
+
+/* ═══════════ INIT ═══════════ */
+renderTenants(); renderAudit(); renderMetrics(); renderInvites();
+updateModeUI();
+siShowFind();
+setWorkspaceOrg('Acme Corp','acme', {name:'Alex Rivera', email:'alex@acme.com', isRoot:true});
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('ws-menu');
+  if (menu.classList.contains('open') && !e.target.closest('.switcher-wrap')) menu.classList.remove('open');
+  document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
+    if (e.target === m) m.classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>

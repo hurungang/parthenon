@@ -14,7 +14,7 @@
  * Real backend suite: one test runs against actual running backend (requires app up).
  */
 import { test, expect } from '@playwright/test'
-import { standardSetup, FAKE_TOKEN } from './_helpers'
+import { standardSetup, FAKE_TOKEN } from '../_helpers'
 
 const HUB_CONNECT_PATH = '/api/v1/agents/hub/connect'
 

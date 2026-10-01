@@ -32,6 +32,7 @@ from app.db.models.agent_security import (
     CertificateValidationLog,
     CertificateValidationOutcome,
 )
+from app.db.models.agents import AgentType
 
 logger = logging.getLogger(__name__)
 
@@ -763,9 +764,16 @@ async def revoke_certificate(
     Raises:
         ValueError: If the certificate is not found or already revoked.
     """
-    # Update certificate record
+    # Update certificate record.  agent_instance_certificates is a
+    # parent-scoped (tenant-agnostic) table: the AgentType join binds the
+    # serial lookup to the request's tenant in tenant context (platform /
+    # single-tenant sessions are unscoped and keep full-CA access).
+    # LEFT join: the FK is enforced by PostgreSQL in production, but the
+    # join must not silently drop rows whose parent is absent.
     result = await db.execute(
-        select(AgentInstanceCertificate).where(
+        select(AgentInstanceCertificate)
+        .join(AgentType, AgentType.id == AgentInstanceCertificate.agent_type_id, isouter=True)
+        .where(
             AgentInstanceCertificate.serial_number == serial_number
         )
     )

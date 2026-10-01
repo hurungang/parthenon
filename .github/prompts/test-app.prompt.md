@@ -6,7 +6,7 @@ Run Parthenon's test suite across all three test layers.
 
 | Layer | Command (from project root) | Directory |
 |-------|------|-----------|
-| Backend unit/integration | `.venv/bin/python3 -m pytest backend/tests/ -v` | `backend/tests/` |
+| Backend unit/integration | `.venv/bin/python -m pytest backend/tests/ -v` | `backend/tests/` |
 | Frontend component | `npx vitest run src/__tests__/ --reporter=verbose` (from `frontend/`) | `frontend/src/__tests__/` |
 | E2E | `npm test` (from `e2e/`) | `e2e/tests/` |
 
@@ -24,6 +24,11 @@ Run Parthenon's test suite across all three test layers.
 - `--filter <pattern> --e2e` — Filter only E2E tests
 
 ⚠️ `--filter` alone (no layer flag) runs across **all 3 layers** with the filter.
+
+## Multi-Tenant E2E Notes
+
+- The multi-tenant E2E suites (`single-tenant-regression`, `multi-tenant-lifecycle`, `multi-tenant-login-flows`, `self-serve-signup`, `quota-enforcement`) are fully **mocked — no backend or live stack needed**.
+- `multi-tenant-isolation.real-backend.spec.ts` and `self-serve-signup.real-backend.spec.ts` require a live running stack and **auto-skip** when the backend is not up (no failure).
 
 ## Pre-Test Checklist
 
@@ -50,4 +55,8 @@ cd frontend
 npx vitest run --reporter=json --outputFile=vitest_results.json
 $j = Get-Content vitest_results.json | ConvertFrom-Json
 Write-Host "Passed: $($j.numPassedTests) / $($j.numTotalTests)"
+```
+macOS/Linux equivalent:
+```bash
+cd frontend && npx vitest run --reporter=json --outputFile=vitest_results.json && cat vitest_results.json | python3 -c "import json,sys; j=json.load(sys.stdin); print(f\"Passed: {j['numPassedTests']} / {j['numTotalTests']}\")"
 ```

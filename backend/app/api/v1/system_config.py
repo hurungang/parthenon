@@ -23,6 +23,7 @@ from app.schemas.system_config import (
     SuperAdminStatusResponse,
 )
 from app.services.oidc_config_service import OIDCConfigError, OIDCConfigService
+from app.core.tenant_context import get_tenant_context, tenant_id_or_none
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,20 @@ def _get_changed_by(request: Request) -> str:
     return identity.get("sub", "unknown")
 
 
+def _resolved_tenant_id(request: Request):
+    """Tenant id from the RESOLVED tenant context, or None (shared slot).
+
+    Provider CRUD is slot-addressed (FIX-20261001-010107): a workspace
+    request (``X-Tenant`` resolved by TenantResolutionMiddleware)
+    addresses that tenant's ``(tenant_id, scope)`` slot; a request
+    WITHOUT a tenant context addresses the SHARED NULL-tenant slot (the
+    platform surface manages the shared slot via ``/platform/*`` —
+    ``/system/*`` writes without a context stay fail-closed 403 at the
+    resolution middleware).
+    """
+    return tenant_id_or_none(get_tenant_context(request))
+
+
 @SystemConfigRouter.get(
     "/identity-providers", response_model=IdentityProviderConfigListResponse
 )
@@ -123,7 +138,9 @@ async def list_identity_providers(
     discover available providers. Client secrets are masked.
     """
     service = OIDCConfigService()
-    configs = await service.list_providers(db)
+    configs = await service.list_providers(
+        db, tenant_id=_resolved_tenant_id(request)
+    )
 
     items = []
     for cfg in configs:
@@ -148,7 +165,9 @@ async def get_identity_provider(
     _require_auth(request)
     service = OIDCConfigService()
     try:
-        config = await service.get_by_scope(db, scope)
+        config = await service.get_by_scope(
+            db, scope, tenant_id=_resolved_tenant_id(request)
+        )
     except OIDCConfigError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -189,7 +208,9 @@ async def create_identity_provider(
             scopes=body.scopes,
             claim_mappings=body.claim_mappings,
             is_enabled=body.is_enabled,
+            default_tenant_role=body.default_tenant_role,
             changed_by=changed_by,
+            tenant_id=_resolved_tenant_id(request),
         )
         await db.commit()
         await _reload_registry(db, scope=body.provider_scope)
@@ -229,7 +250,9 @@ async def update_identity_provider(
             scopes=body.scopes,
             claim_mappings=body.claim_mappings,
             is_enabled=body.is_enabled,
+            default_tenant_role=body.default_tenant_role,
             changed_by=changed_by,
+            tenant_id=_resolved_tenant_id(request),
         )
         await db.commit()
         await _reload_registry(db, scope=scope)
@@ -253,7 +276,9 @@ async def delete_identity_provider(
     changed_by = _get_changed_by(request)
     service = OIDCConfigService()
     try:
-        await service.delete_provider(db, scope, changed_by=changed_by)
+        await service.delete_provider(
+            db, scope, changed_by=changed_by, tenant_id=_resolved_tenant_id(request)
+        )
         await db.commit()
         await _reload_registry(db, scope=scope)
     except OIDCConfigError as exc:
@@ -279,7 +304,11 @@ async def toggle_identity_provider(
     service = OIDCConfigService()
     try:
         config = await service.toggle_provider(
-            db, scope, is_enabled=body.is_enabled, changed_by=changed_by
+            db,
+            scope,
+            is_enabled=body.is_enabled,
+            changed_by=changed_by,
+            tenant_id=_resolved_tenant_id(request),
         )
         await db.commit()
         await _reload_registry(db, scope=scope)
@@ -534,6 +563,7 @@ def _config_to_response(
         scopes=config.scopes,
         claim_mappings=config.claim_mappings,
         is_enabled=config.is_enabled,
+        default_tenant_role=getattr(config, "default_tenant_role", None),
         created_at=config.created_at,
         updated_at=config.updated_at,
     )

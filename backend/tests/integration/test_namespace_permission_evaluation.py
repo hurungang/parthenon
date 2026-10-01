@@ -47,20 +47,26 @@ class TestNamespacePermissionEvaluationRealDB:
 
     async def test_manifest_contains_expected_modules(self):
         """Verify the manifest structure is intact when imported in integration context."""
-        # Three modules
-        assert set(MODULE_GROUPS.keys()) == {"agent", "integration", "system"}
+        # Five modules — agent/integration/system plus the multi-tenancy
+        # platform/tenant groups (resource types registered per the
+        # manifest-registration convention).
+        assert set(MODULE_GROUPS.keys()) == {
+            "agent", "integration", "system", "platform", "tenant",
+        }
         # Correct counts
         assert len(MODULE_GROUPS["agent"]) == 14
         assert len(MODULE_GROUPS["integration"]) == 2
         assert len(MODULE_GROUPS["system"]) == 3
+        assert len(MODULE_GROUPS["platform"]) == 3
+        assert len(MODULE_GROUPS["tenant"]) == 2
         # All entries in manifest
         for module in MODULE_GROUPS.values():
             for rt in module:
                 assert rt in ResourceTypeManifest
 
-    async def test_manifest_has_20_entries(self):
-        """Manifest should contain exactly 20 resource types (19 namespaced + bare 'agent')."""
-        assert len(ResourceTypeManifest) == 20
+    async def test_manifest_has_25_entries(self):
+        """Manifest should contain exactly 25 resource types (24 namespaced + bare 'agent')."""
+        assert len(ResourceTypeManifest) == 25
 
     async def test_all_entries_use_double_colon_delimiter(self):
         """Every namespaced manifest entry must use the :: delimiter; bare 'agent' is the exception."""

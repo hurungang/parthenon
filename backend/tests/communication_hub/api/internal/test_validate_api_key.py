@@ -45,6 +45,9 @@ def _mock_validate_key_as_active():
     mock_key.name = "Test API Key"
     mock_key.agent_identity_id = uuid.uuid4()
     mock_key.agent_role_id = uuid.uuid4()
+    # Real attribute values so is_key_expired / tenant binding work:
+    mock_key.expires_at = None  # never expires
+    mock_key.tenant_id = None  # single-tenant mode: keys are tenant-less
 
     return patch(
         "app.api.v1.internal.validate_api_key.validate_api_key_from_hash",

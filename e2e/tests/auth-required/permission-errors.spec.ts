@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginViaUI } from './_helpers'
+import { loginViaUI } from '../_helpers'
 
 /**
  * E2E tests to verify permission error handling is standardized across all pages.

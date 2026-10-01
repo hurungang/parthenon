@@ -21,6 +21,9 @@ from typing import Any
 
 import httpx
 
+from app.core.tenant_context import TenantContext
+from app.core.tenant_signature import tenant_context_headers
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30.0
@@ -127,6 +130,7 @@ class CommunicationHubClient:
         message_type: str,
         content: dict[str, Any] | str,
         metadata: dict[str, Any] | None = None,
+        tenant_context: TenantContext | None = None,
     ) -> dict[str, Any]:
         """POST a message dispatch request to Communication Hub.
 
@@ -134,11 +138,16 @@ class CommunicationHubClient:
         The Hub publishes the message to the session's Redis pub/sub channel
         so that connected WebSocket subscribers receive it.
 
+        When ``tenant_context`` is provided (multi-tenant mode), the signed
+        tenant context headers are attached so the Hub can verify and bind
+        the tenant; when it is None, no tenant headers are added.
+
         Args:
-            session_id:    UUID of the session whose channel receives the message.
-            message_type:  Semantic type label (e.g. ``"agent_result"``).
-            content:       Message body — dict or pre-serialised string.
-            metadata:      Optional extra key/value pairs attached to the message.
+            session_id:     UUID of the session whose channel receives the message.
+            message_type:   Semantic type label (e.g. ``"agent_result"``).
+            content:        Message body — dict or pre-serialised string.
+            metadata:       Optional extra key/value pairs attached to the message.
+            tenant_context: Resolved tenant context (None in single-tenant mode).
 
         Returns:
             Response dict with ``dispatched``, ``channel``, and ``subscribers``.
@@ -155,9 +164,13 @@ class CommunicationHubClient:
         if metadata:
             body["metadata"] = metadata
 
+        headers = tenant_context_headers(tenant_context)
+
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=_DEFAULT_TIMEOUT
+                )
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 logger.info(
@@ -184,16 +197,22 @@ class CommunicationHubClient:
         session_id: uuid.UUID,
         agent_type_id: uuid.UUID,
         input_data: dict[str, Any] | None = None,
+        tenant_context: TenantContext | None = None,
     ) -> dict[str, Any]:
         """POST an agent execution trigger to Communication Hub.
 
         Calls ``POST /internal/agent/execute`` on the Communication Hub service,
         which forwards the request to Agent Runtime.
 
+        When ``tenant_context`` is provided (multi-tenant mode), the signed
+        tenant context headers are attached; when it is None, no tenant
+        headers are added.
+
         Args:
-            session_id:    UUID of the pre-created AgentJob in Control Center.
-            agent_type_id: UUID of the agent type to execute.
-            input_data:    Optional input payload for the session.
+            session_id:     UUID of the pre-created AgentJob in Control Center.
+            agent_type_id:  UUID of the agent type to execute.
+            input_data:     Optional input payload for the session.
+            tenant_context: Resolved tenant context (None in single-tenant mode).
 
         Returns:
             Response dict with ``session_id`` and ``status``.
@@ -207,10 +226,13 @@ class CommunicationHubClient:
             "agent_type_id": str(agent_type_id),
             "input_data": input_data or {},
         }
+        headers = tenant_context_headers(tenant_context)
 
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, headers=headers, timeout=_DEFAULT_TIMEOUT
+                )
                 resp.raise_for_status()
                 data: dict[str, Any] = resp.json()
                 logger.info(

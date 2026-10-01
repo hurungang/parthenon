@@ -14,6 +14,8 @@ from typing import Any
 
 import httpx
 
+from app.core.tenant_signature import forward_tenant_headers
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30.0  # seconds
@@ -90,10 +92,12 @@ class ControlCenterDataClient:
         return f"{self._control_center_url}/api/v1{path}"
 
     async def _get(self, path: str) -> dict[str, Any]:
+        """GET with signed tenant context forwarding (multi-tenancy)."""
         url = self._url(path)
+        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
-                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -109,6 +113,8 @@ class ControlCenterDataClient:
         headers: dict[str, str] = {}
         if user_jwt:
             headers["Authorization"] = f"Bearer {user_jwt}"
+        # Multi-tenancy: forward the signed tenant context received from CC.
+        headers.update(forward_tenant_headers())
         async with self._make_client() as client:
             try:
                 resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers)

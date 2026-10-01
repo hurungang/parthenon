@@ -100,3 +100,31 @@ from app.db.models.termination_request import TerminationRequest  # noqa: F401
 from app.db.models.termination_cascade_outcome import TerminationCascadeOutcome  # noqa: F401
 from app.db.models.sop_recursion_validation_check import SopRecursionValidationCheck  # noqa: F401
 from app.db.models.sop_recursion_validation_finding import SopRecursionValidationFinding  # noqa: F401
+
+# Multi-tenant support models
+from app.db.models.tenant import Tenant, TenantRole, TenantStatus  # noqa: F401
+from app.db.models.tenant_membership import (  # noqa: F401
+    TenantUserMembership,
+    TenantUserMembershipStatus,
+)
+from app.db.models.tenant_invitation import (  # noqa: F401
+    TenantInvitation,
+    TenantInvitationStatus,
+)
+from app.db.models.tenant_audit_event import (  # noqa: F401
+    TenantAuditActorType,
+    TenantAuditEvent,
+    TenantAuditEventType,
+)
+from app.db.models.platform_setting import (  # noqa: F401
+    PlatformSetting,
+    PlatformSettingCategory,
+)
+from app.db.models.tenant_license import (  # noqa: F401
+    LicenseTier,
+    TenantLicense,
+)
+from app.db.models.tenant_quota_usage import (  # noqa: F401
+    QuotaType,
+    TenantQuotaUsage,
+)

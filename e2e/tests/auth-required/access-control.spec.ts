@@ -1,5 +1,5 @@
 ﻿import { test, expect } from '@playwright/test'
-import { standardSetup } from './_helpers'
+import { standardSetup } from '../_helpers'
 
 /**
  * E2E tests for the global access control feature.

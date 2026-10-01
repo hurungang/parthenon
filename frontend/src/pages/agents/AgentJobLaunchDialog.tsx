@@ -18,7 +18,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../api/apiClient'
-import PermissionDeniedAlert from '../../components/permissions/PermissionDeniedAlert'
+import QuotaBlockedAlert from '../../components/tenant/QuotaBlockedAlert'
 import { DynamicSchemaForm } from '../../components/DynamicSchemaForm'
 import type { AgentJob, AgentRole, AgentType, Skill, Sop } from '../../types'
 
@@ -201,7 +201,7 @@ export function AgentJobLaunchDialog({
 
       <DialogContent dividers>
         {dialogError ? (
-          <PermissionDeniedAlert error={dialogError} fallbackMessage={t('app.error')} />
+          <QuotaBlockedAlert error={dialogError} fallbackMessage={t('app.error')} />
         ) : null}
 
         {planIsStale && (

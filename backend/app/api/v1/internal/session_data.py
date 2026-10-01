@@ -1212,9 +1212,14 @@ async def internal_intervene_respond(
         operator_user_id = job.triggered_by_user_id
 
     if operator_user_id is None and body.operator_subject:
-        # Look up Identity by OIDC subject
-        identity_result = await db.execute(
-            select(Identity).where(Identity.subject == body.operator_subject)
+        # Look up Identity by OIDC subject (identity plane —
+        # tenant-scope-exempt, FIX-20260929-221449: the operator's
+        # Identity row may live in another tenant than the signed
+        # request context).
+        from app.db.tenant_scoping import execute_unscoped
+
+        identity_result = await execute_unscoped(
+            db, select(Identity).where(Identity.subject == body.operator_subject)
         )
         identity = identity_result.scalar_one_or_none()
         if identity:

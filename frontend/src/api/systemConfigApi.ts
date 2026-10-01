@@ -18,6 +18,7 @@ export interface IdentityProviderConfigItem {
   scopes: string
   claim_mappings: Record<string, string> | null
   is_enabled: boolean
+  default_tenant_role: string | null
   created_at: string
   updated_at: string
 }
@@ -39,6 +40,7 @@ export interface IdentityProviderConfigCreate {
   scopes?: string
   claim_mappings?: Record<string, string> | null
   is_enabled?: boolean
+  default_tenant_role?: string | null
 }
 
 export interface IdentityProviderConfigUpdate {
@@ -52,6 +54,7 @@ export interface IdentityProviderConfigUpdate {
   scopes?: string | null
   claim_mappings?: Record<string, string> | null
   is_enabled?: boolean | null
+  default_tenant_role?: string | null
 }
 
 export interface OIDCTestStep {
@@ -89,9 +92,26 @@ export interface SuperAdminLoginResponse {
 
 // ── API Functions ──────────────────────────────────────────────────────────
 
+// FIX-20261001-010107: identity-provider WRITES are slot-addressed.
+// With a workspace session bound to this tab (apiClient attaches
+// X-Tenant), /system/* addresses the tenant's own slot.  Without a
+// binding (platform context) /system/* writes are fail-closed 403 at the
+// tenant-resolution middleware — the shared (NULL-tenant) config is
+// managed via the platform surface /platform/identity-providers instead.
+// Declared locally (NOT imported) because apiClient mirrors this key and
+// importing it would be circular.
+const TENANT_SLUG_KEY = 'parthenon_tenant_slug'
+
+function identityProvidersWriteBase(): string {
+  const tenantSlug = sessionStorage.getItem(TENANT_SLUG_KEY)
+  return tenantSlug ? '/system/identity-providers' : '/platform/identity-providers'
+}
+
 /**
  * List all configured identity providers.
- * Public endpoint — accessible before auth.
+ * Public endpoint — accessible before auth. Returns the SHARED configs
+ * only without a tenant context, shared + own-tenant with a workspace
+ * session (never other tenants').
  */
 export async function getIdentityProviders(): Promise<IdentityProviderConfigListResponse> {
   const { data } = await apiClient.get<IdentityProviderConfigListResponse>(
@@ -105,7 +125,7 @@ export async function getIdentityProviders(): Promise<IdentityProviderConfigList
  */
 export async function getIdentityProvider(scope: string): Promise<IdentityProviderConfigItem> {
   const { data } = await apiClient.get<IdentityProviderConfigItem>(
-    `/system/identity-providers/${scope}`,
+    `${identityProvidersWriteBase()}/${scope}`,
   )
   return data
 }
@@ -117,7 +137,7 @@ export async function createIdentityProvider(
   body: IdentityProviderConfigCreate,
 ): Promise<IdentityProviderConfigItem> {
   const { data } = await apiClient.post<IdentityProviderConfigItem>(
-    '/system/identity-providers',
+    identityProvidersWriteBase(),
     body,
   )
   return data
@@ -131,7 +151,7 @@ export async function updateIdentityProvider(
   body: IdentityProviderConfigUpdate,
 ): Promise<IdentityProviderConfigItem> {
   const { data } = await apiClient.put<IdentityProviderConfigItem>(
-    `/system/identity-providers/${scope}`,
+    `${identityProvidersWriteBase()}/${scope}`,
     body,
   )
   return data
@@ -141,7 +161,7 @@ export async function updateIdentityProvider(
  * Delete an identity provider config.
  */
 export async function deleteIdentityProvider(scope: string): Promise<void> {
-  await apiClient.delete(`/system/identity-providers/${scope}`)
+  await apiClient.delete(`${identityProvidersWriteBase()}/${scope}`)
 }
 
 /**
@@ -152,7 +172,7 @@ export async function toggleIdentityProvider(
   isEnabled: boolean,
 ): Promise<IdentityProviderConfigItem> {
   const { data } = await apiClient.patch<IdentityProviderConfigItem>(
-    `/system/identity-providers/${scope}/toggle`,
+    `${identityProvidersWriteBase()}/${scope}/toggle`,
     { is_enabled: isEnabled },
   )
   return data

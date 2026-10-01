@@ -53,10 +53,14 @@ class ModelAvailability(Base):
             name="uq_availability_vendor_model",
         ),
         Index("ix_model_availability_vendor", "vendor_model_config_id"),
+        Index("ix_model_availability_tenant_id", "tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     model_name: Mapped[str] = mapped_column(String(500), nullable=False)
     vendor_model_config_id: Mapped[uuid.UUID] = mapped_column(

@@ -15,6 +15,8 @@ from typing import Any
 
 import httpx
 
+from app.core.tenant_signature import forward_tenant_headers
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30.0  # seconds
@@ -92,11 +94,16 @@ class ControlCenterDataClient:
         return f"{self._control_center_url}/api/v1/internal/data{path}"
 
     async def _get(self, path: str) -> dict[str, Any]:
-        """GET request with error propagation and auto-recovery from 401."""
+        """GET request with error propagation and auto-recovery from 401.
+
+        Multi-tenancy: forwards the signed tenant context received from
+        CC so every data resolve is tenant-scoped at the CC choke point.
+        """
         url = self._url(path)
+        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
-                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.get(url, timeout=_DEFAULT_TIMEOUT, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -109,7 +116,9 @@ class ControlCenterDataClient:
                     await self._auto_recover_certificate()
                     # Retry once after re-bootstrap
                     async with self._make_client() as retry_client:
-                        retry_resp = await retry_client.get(url, timeout=_DEFAULT_TIMEOUT)
+                        retry_resp = await retry_client.get(
+                            url, timeout=_DEFAULT_TIMEOUT, headers=headers
+                        )
                         retry_resp.raise_for_status()
                         return retry_resp.json()
                 
@@ -123,11 +132,17 @@ class ControlCenterDataClient:
                 ) from exc
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        """POST request with error propagation and auto-recovery from 401."""
+        """POST request with error propagation and auto-recovery from 401.
+
+        Forwards the signed tenant context (multi-tenancy) like ``_get``.
+        """
         url = self._url(path)
+        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
-                resp = await client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.post(
+                    url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
@@ -140,7 +155,9 @@ class ControlCenterDataClient:
                     await self._auto_recover_certificate()
                     # Retry once after re-bootstrap
                     async with self._make_client() as retry_client:
-                        retry_resp = await retry_client.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                        retry_resp = await retry_client.post(
+                            url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers
+                        )
                         retry_resp.raise_for_status()
                         return retry_resp.json()
                 
@@ -154,11 +171,17 @@ class ControlCenterDataClient:
                 ) from exc
 
     async def _patch(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        """PATCH request with error propagation and auto-recovery from 401."""
+        """PATCH request with error propagation and auto-recovery from 401.
+
+        Forwards the signed tenant context (multi-tenancy) like ``_get``.
+        """
         url = self._url(path)
+        headers = forward_tenant_headers()
         async with self._make_client() as client:
             try:
-                resp = await client.patch(url, json=body, timeout=_DEFAULT_TIMEOUT)
+                resp = await client.patch(
+                    url, json=body, timeout=_DEFAULT_TIMEOUT, headers=headers
+                )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:

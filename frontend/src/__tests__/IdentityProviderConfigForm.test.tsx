@@ -137,6 +137,7 @@ describe('IdentityProviderConfigForm', () => {
         display_name: 'Test', issuer_url: 'https://example.com', client_id: 'test',
         encrypted_client_secret: 'encrypted', scopes: 'openid', claim_mappings: null,
         ui_client_id: null, public_client_id: null,
+        default_tenant_role: null,
         is_enabled: true, created_at: '', updated_at: '',
       },
     }))
@@ -163,6 +164,7 @@ describe('IdentityProviderConfigForm', () => {
         display_name: '', issuer_url: 'https://example.com', client_id: 'test',
         encrypted_client_secret: null, scopes: 'openid', claim_mappings: null,
         ui_client_id: null, public_client_id: null,
+        default_tenant_role: null,
         is_enabled: true, created_at: '', updated_at: '',
       },
     }))
@@ -181,6 +183,7 @@ describe('IdentityProviderConfigForm', () => {
         display_name: '', issuer_url: 'https://example.com', client_id: 'test',
         encrypted_client_secret: null, scopes: 'openid', claim_mappings: null,
         ui_client_id: null, public_client_id: null,
+        default_tenant_role: null,
         is_enabled: true, created_at: '', updated_at: '',
       },
     }))
@@ -198,5 +201,29 @@ describe('IdentityProviderConfigForm', () => {
     await waitFor(() => {
       expect(screen.getByTestId('expand-less-icon')).toBeDefined()
     })
+  })
+
+  // FIX-20260930-075014 — JIT default tenant role select
+
+  it('renders the default role select for the user scope', () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    expect(
+      screen.getAllByText('systemConfig.identityProviders.defaultRoleLabel').length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('does not render the default role select for the agent scope', () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'agent', onSave: mockOnSave }))
+    expect(screen.queryByText('systemConfig.identityProviders.defaultRoleLabel')).toBeNull()
+  })
+
+  it('persists default_tenant_role: null when no role is selected', async () => {
+    render(React.createElement(IdentityProviderConfigForm, { scope: 'user', onSave: mockOnSave }))
+    fireEvent.click(screen.getByRole('button', { name: 'systemConfig.identityProviders.save' }))
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalled()
+    })
+    const savedData = mockOnSave.mock.calls[mockOnSave.mock.calls.length - 1][0]
+    expect(savedData.default_tenant_role).toBeNull()
   })
 })

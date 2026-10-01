@@ -26,6 +26,20 @@ _DEFAULT_ADMIN_USER = "admin"
 _DEFAULT_ADMIN_PASSWORD = "admin"
 _DEFAULT_INITIAL_ADMIN_PASSWORD = "admin"
 
+# Demo tenant realm (opt-in: `identity --tenant-demo`)
+_DEFAULT_TENANT_DEMO_REALM = "parthenon-acme"
+_TENANT_DEMO_USERS = [
+    {"username": "acme-admin", "password": "acme-admin"},
+    {"username": "acme-user", "password": "acme-user"},
+]
+# Mirrors the main realm's UI client redirect URIs (setup/identity.py).
+_TENANT_DEMO_REDIRECT_URIS = [
+    "http://localhost:5173/*",
+    "http://localhost:5174/*",
+    "http://localhost:4173/*",
+    "http://localhost:3000/*",
+]
+
 
 async def run_identity_setup(args: Any) -> int:
     """Provision Keycloak realms and clients.
@@ -47,10 +61,28 @@ async def run_identity_setup(args: Any) -> int:
         or os.environ.get("INITIAL_ADMIN_PASSWORD", _DEFAULT_INITIAL_ADMIN_PASSWORD)
     )
     is_external = getattr(args, "external", False)
+    is_tenant_demo = getattr(args, "tenant_demo", False)
 
     results: list[dict[str, str]] = []
 
-    if is_external:
+    if is_tenant_demo:
+        # OPT-IN demo tenant realm seeding — kept OUT of the default
+        # bootstrap flow (never runs from `dev`).
+        report = await _run_tenant_demo_seed(
+            keycloak_url=keycloak_url,
+            realm=args.tenant_demo_realm or os.environ.get(
+                "KEYCLOAK_TENANT_DEMO_REALM", _DEFAULT_TENANT_DEMO_REALM
+            ),
+            client_id=client_id,
+            admin_user=admin_user,
+            admin_password=admin_password,
+        )
+        results.extend(report)
+        if args.output != "json" and not any(
+            r["status"] == "error" for r in report
+        ):
+            _print_tenant_demo_instructions(keycloak_url, args.tenant_demo_realm or _DEFAULT_TENANT_DEMO_REALM, client_id)
+    elif is_external:
         results.append(_r("external_oidc", "skipped", "External OIDC registration — use setup-identity --external"))
     else:
         report = await _setup_bundled_keycloak(
@@ -758,3 +790,116 @@ async def _ensure_mcp_demo_app_client(
 
 def _r(step: str, status: str, detail: str = "") -> dict[str, str]:
     return {"step": step, "status": status, "detail": detail}
+
+
+# ── Demo tenant realm (opt-in `identity --tenant-demo`) ──────────────────────
+
+
+async def _run_tenant_demo_seed(
+    *,
+    keycloak_url: str,
+    realm: str,
+    client_id: str,
+    admin_user: str,
+    admin_password: str,
+) -> list[dict[str, str]]:
+    """Authenticate against Keycloak and seed the demo tenant realm."""
+    kc = KeycloakAdminClient(keycloak_url.rstrip("/"))
+    try:
+        token = await kc.authenticate(admin_user, admin_password)
+    except KeycloakAdminError as exc:
+        return [_r("authenticate", "error", str(exc))]
+    return await _seed_demo_tenant_realm(
+        kc,
+        token,
+        realm=realm,
+        ui_client_id=f"{client_id}-ui",
+        users=[dict(u) for u in _TENANT_DEMO_USERS],
+    )
+
+
+async def _seed_demo_tenant_realm(
+    kc: KeycloakAdminClient,
+    token: Any,
+    *,
+    realm: str,
+    ui_client_id: str,
+    users: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Idempotently provision a demo tenant realm.
+
+    Creates the realm (unless it exists), a PUBLIC frontend client
+    mirroring the main realm's UI client redirect URIs, and the demo
+    users (skipping any that already exist).  All existence checks go
+    through the shared Keycloak admin client helpers so re-runs are
+    safe.
+    """
+    report: list[dict[str, str]] = []
+
+    # ── Realm ─────────────────────────────────────────────────────────
+    realm_exists = await kc.realm_exists(token, realm)
+    if realm_exists:
+        report.append(_r("tenant_demo_realm", "exists", f"Realm '{realm}' already exists"))
+    else:
+        await kc.create_realm(token, realm, display_name="Parthenon Demo Tenant")
+        report.append(_r("tenant_demo_realm", "created", f"Created realm '{realm}'"))
+
+    # ── Frontend public client (mirrors the main realm UI client) ─────
+    client_exists = await kc.client_exists(token, realm, ui_client_id)
+    if client_exists:
+        report.append(
+            _r("tenant_demo_client", "exists", f"Client '{ui_client_id}' already exists in '{realm}'")
+        )
+    else:
+        await kc.create_oidc_client(
+            token,
+            realm,
+            ui_client_id,
+            redirect_uris=list(_TENANT_DEMO_REDIRECT_URIS),
+            public_client=True,
+        )
+        report.append(
+            _r("tenant_demo_client", "created", f"Created public client '{ui_client_id}' in '{realm}'")
+        )
+
+    # ── Demo users ─────────────────────────────────────────────────────
+    for user in users:
+        username = user["username"]
+        existing_id = await kc.get_user_by_username(token, realm, username)
+        if existing_id:
+            report.append(
+                _r("tenant_demo_user", "exists", f"User '{username}' already exists in '{realm}'")
+            )
+            continue
+        try:
+            await kc.create_user(token, realm, username, user["password"], roles=[])
+            report.append(_r("tenant_demo_user", "created", f"Created user '{username}' in '{realm}'"))
+        except KeycloakAdminError as exc:
+            report.append(
+                _r("tenant_demo_user", "error", f"Failed to create user '{username}': {exc.detail}")
+            )
+
+    return report
+
+
+def _print_tenant_demo_instructions(
+    keycloak_url: str, realm: str, client_id: str
+) -> None:
+    """Post-run operator instructions (issuer, credentials, JIT hint)."""
+    issuer = f"{keycloak_url.rstrip('/')}/realms/{realm}"
+    ui_client_id = f"{client_id}-ui"
+    print()
+    print("=" * 72)
+    print(f"Demo tenant realm '{realm}' provisioned.")
+    print()
+    print("Next steps:")
+    print(f"  1. Issuer URL for per-tenant OIDC config (System Config UI or")
+    print(f"     tenant settings): {issuer}")
+    print(f"     Frontend client ID: {ui_client_id} (public client)")
+    print("  2. Test credentials:")
+    for user in _TENANT_DEMO_USERS:
+        print(f"       - {user['username']} / {user['password']}")
+    print("  3. If you want JIT onboarding for new realm users, set the")
+    print("     provider's 'Default role for new OIDC users' in the tenant")
+    print("     identity provider configuration.")
+    print("=" * 72)

@@ -3,11 +3,12 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
+from app.services.tenancy.default_tenant_roles import DefaultTenantRole
 
 
 class IdentityProviderConfig(Base):
@@ -19,9 +20,19 @@ class IdentityProviderConfig(Base):
     """
 
     __tablename__ = "identity_provider_configs"
+    __table_args__ = (
+        sa.Index("ix_identity_provider_configs_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    # Per-tenant OIDC binding: each tenant registers its own provider; sign-in
+    # credentials are tenant-bound (NULL while multi-tenancy is disabled).
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="SET NULL"),
+        nullable=True,
     )
     provider_scope: Mapped[str] = mapped_column(
         String(50), nullable=False, comment="user | agent"
@@ -49,6 +60,22 @@ class IdentityProviderConfig(Base):
     claim_mappings: Mapped[dict | None] = mapped_column(
         JSON, nullable=True,
         comment="OIDC claim to platform field mappings (e.g. {'sub': 'subject'})"
+    )
+    # JIT default tenant role (FIX-20260930-075014): when set, a user's
+    # FIRST OIDC sign-in to a tenant (via a provider slot resolvable for
+    # that tenant) is admitted with this seeded preset role — active
+    # membership + role grant.  NULL → no JIT (sign-in without membership
+    # is rejected with the no_access_to_workspace 403).  Non-native enum:
+    # stored as VARCHAR + CHECK, one of the four preset keys.
+    default_tenant_role: Mapped[str | None] = mapped_column(
+        Enum(
+            DefaultTenantRole,
+            name="default_tenant_role_enum",
+            native_enum=False,
+            length=50,
+        ),
+        nullable=True,
+        comment="JIT tenant role preset key for first OIDC sign-in (nullable)",
     )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,

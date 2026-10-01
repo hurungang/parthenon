@@ -18,8 +18,8 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_service_certificate
 from app.core.credential_vault import get_vault
-from app.db.models.agents import AgentIdentity, AgentType, AgentRoleMcpSession
-from app.db.models.mcp_hub import McpTool, McpSession
+from app.db.models.agents import AgentIdentity, AgentRole, AgentType, AgentRoleMcpSession
+from app.db.models.mcp_hub import McpServer, McpTool, McpSession
 from app.db.session import DbSession
 from app.services.agents.tool_naming import parse_tool_name, build_tool_name
 from app.services.mcp.proxy import McpProxyEngine, McpProxyError
@@ -96,8 +96,12 @@ async def proxy_mcp_tool(
         # Non-canonical names are still checked directly via the original candidate.
         pass
 
+    # Parent-scoped table (mcp_tools inherits scope via mcp_servers): the
+    # McpServer join lets the choke point constrain tool resolution to the
+    # signed tenant context — slugs are per-tenant in multi-tenant mode.
     result = await db.execute(
         select(McpTool)
+        .join(McpServer, McpServer.id == McpTool.server_id)
         .where(McpTool.name.in_(tool_name_candidates), McpTool.is_active.is_(True))
         .options(selectinload(McpTool.server))
     )
@@ -135,10 +139,17 @@ async def proxy_mcp_tool(
     if body.agent_identity_id:
         identity_id = uuid.UUID(body.agent_identity_id)
 
-    # Resolve MCP session for this tool's server from role assignments
+    # Resolve MCP session for this tool's server from role assignments.
+    # Both McpSession and the join tables here are parent-scoped: joining
+    # the tenant-scoped McpServer and AgentRole parents binds the session
+    # resolution to the signed tenant context (role must be in-tenant,
+    # session's server must be in-tenant).  FK-guaranteed inner joins —
+    # row set unchanged in single-tenant mode.
     mcp_session_result = await db.execute(
         select(McpSession)
         .join(AgentRoleMcpSession, AgentRoleMcpSession.mcp_session_id == McpSession.id)
+        .join(AgentRole, AgentRole.id == AgentRoleMcpSession.role_id)
+        .join(McpServer, McpServer.id == McpSession.server_id)
         .where(
             AgentRoleMcpSession.role_id == role_id,
             McpSession.server_id == tool.server_id,

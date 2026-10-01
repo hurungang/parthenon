@@ -366,13 +366,14 @@ async def authed_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
         dep = require_permission(RT_AGENT, action)
         app.dependency_overrides[dep] = no_op_permission
 
-    # Mock OIDC auth middleware to bypass JWT validation (middleware runs before dep overrides)
-    from app.middleware.auth import JWTAuthMiddleware
+    # Mock OIDC auth middleware to bypass JWT validation (middleware runs before dep overrides).
+    # The middleware delegates to the module-level validate_raw_token pipeline.
+    import app.middleware.auth as auth_middleware
 
     with patch.object(
-        JWTAuthMiddleware,
-        "_try_oidc_auth",
-        new=AsyncMock(return_value={"sub": "test-user", "roles": ["admin"]}),
+        auth_middleware,
+        "validate_raw_token",
+        new=AsyncMock(return_value=({"sub": "test-user", "roles": ["admin"]}, False)),
     ):
         async with AsyncClient(
             transport=ASGITransport(app=app),

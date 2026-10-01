@@ -103,8 +103,15 @@ async def respond_to_intervene_request(
             detail="Path request_id does not match body request_id",
         )
     # Resolve operator user from the authenticated caller's identity
+    # (identity plane — tenant-scope-exempt, FIX-20260929-221449: the
+    # operator's Identity row may live in another tenant than the
+    # resolved workspace).
     sub = claims.get("sub")
-    result = await db.execute(select(Identity).where(Identity.subject == sub))
+    from app.db.tenant_scoping import execute_unscoped
+
+    result = await execute_unscoped(
+        db, select(Identity).where(Identity.subject == sub)
+    )
     identity = result.scalar_one_or_none()
     if identity is None:
         raise HTTPException(status_code=403, detail="User identity not found")

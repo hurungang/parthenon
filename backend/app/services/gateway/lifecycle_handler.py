@@ -192,6 +192,7 @@ class GatewayLifecycleHandler:
         input_data: dict[str, Any] | None,
         user_id: uuid.UUID | None,
         db: AsyncSession,
+        tenant_context: Any = None,
     ) -> dict[str, Any]:
         """
         Validate agent identity OAuth token, enqueue an agent session, and return the
@@ -230,6 +231,11 @@ class GatewayLifecycleHandler:
             user_id=user_id,
             db=db,
         )
+        # Multi-tenancy: adopted launches (scheduled jobs) stamp the
+        # created session with the owning tenant so execution stays
+        # tenant-bound end to end.
+        if tenant_context is not None and getattr(job, "tenant_id", None) is None:
+            job.tenant_id = tenant_context.tenant_id
         logger.info(
             "Gateway launch: enqueued session %s for type %s", job.id, agent_type_id
         )
@@ -244,7 +250,9 @@ class GatewayLifecycleHandler:
         
         # Trigger immediate execution via Communication Hub
         # This replaces the 30-second polling delay with instant execution
-        await self._trigger_execution_via_comm_hub(job.id, agent_type_id, input_data, db=db)
+        await self._trigger_execution_via_comm_hub(
+            job.id, agent_type_id, input_data, db=db, tenant_context=tenant_context
+        )
         
         return {"session_id": str(job.id)}
 
@@ -254,6 +262,7 @@ class GatewayLifecycleHandler:
         agent_type_id: uuid.UUID,
         input_data: dict[str, Any] | None,
         db: AsyncSession | None = None,
+        tenant_context: Any = None,
     ) -> None:
         """Trigger immediate agent execution via Communication Hub.
         
@@ -281,6 +290,7 @@ class GatewayLifecycleHandler:
                 session_id=session_id,
                 agent_type_id=agent_type_id,
                 input_data=input_data,
+                tenant_context=tenant_context,
             )
             logger.info(
                 "Execution trigger sent to Communication Hub: session=%s",

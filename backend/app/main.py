@@ -80,6 +80,83 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+    # ── Structured quota contract (Phase 10) ─────────────────────────────
+    # Single shared HTTP mapping for ALL three enforcement gates: a
+    # refused action always yields 403 with the structured payload the
+    # frontend renders as-is (QuotaBlockedAlert).  The audit write uses a
+    # FRESH session because the request session rolls back when the gate
+    # raises.  No quota error can be produced with the tenancy switch
+    # off — the quota service checks are inert in single-tenant mode.
+    from app.db.models.tenant_audit_event import TenantAuditActorType
+    from app.db.session import AsyncSessionLocal
+    from app.schemas.tenant_quota import QUOTA_EXHAUSTED_CODE
+    from app.services.tenancy.quota_service import QuotaExceededError
+
+    @app.exception_handler(QuotaExceededError)
+    async def quota_exceeded_handler(
+        request: Request, exc: QuotaExceededError
+    ) -> JSONResponse:
+        logger.warning(
+            "Quota gate refused %s %s: %s",
+            request.method, request.url.path, exc.payload.model_dump(),
+        )
+        # Tenant attribution: the payload deliberately stays tenant-free
+        # (no data leak), so the audit re-derives the tenant from the
+        # request's resolved tenant context.
+        try:
+            from app.core.tenant_context import get_tenant_context
+
+            context = get_tenant_context(request)
+            audit_tenant_id = context.tenant_id if context.is_set else None
+        except Exception:
+            audit_tenant_id = None
+        try:
+            from app.db.models.tenant_audit_event import TenantAuditEventType
+            from app.services.tenancy.tenant_audit_service import TenantAuditService
+
+            async with AsyncSessionLocal() as audit_db:
+                await TenantAuditService().record_safe(
+                    audit_db,
+                    TenantAuditEventType.quota_exhausted,
+                    tenant_id=audit_tenant_id,
+                    actor_type=TenantAuditActorType.system,
+                    actor_ip=request.client.host if request.client else None,
+                    target_resource=f"{request.method} {request.url.path}",
+                    detail=exc.payload.model_dump(),
+                )
+                await audit_db.commit()
+        except Exception:
+            logger.exception("Failed to audit quota_exhausted event")
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": exc.payload.model_dump()},
+        )
+
+    # ── No-workspace-access contract (FIX-20260929-221449) ───────────────
+    # An authenticated user WITHOUT an active membership in the resolved
+    # tenant is an AUTHORIZATION denial, not an auth failure: the body is
+    # serialized FLAT ({"detail": "no_access_to_workspace", ...}) so the
+    # frontend surfaces a permission denial without clearing tokens or
+    # redirecting to login.  Registered for the NoWorkspaceAccessError
+    # subclass so it takes precedence over FastAPI's default HTTPException
+    # detail envelope.
+    from app.api.deps import NoWorkspaceAccessError
+
+    @app.exception_handler(NoWorkspaceAccessError)
+    async def no_workspace_access_handler(
+        request: Request, exc: NoWorkspaceAccessError
+    ) -> JSONResponse:
+        logger.warning(
+            "No workspace access: %s %s (tenant=%s)",
+            request.method,
+            request.url.path,
+            exc.extra.get("tenant_slug"),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": exc.detail, **exc.extra},
+        )
+
     # 422 Unprocessable Entity handler with structured field details
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
@@ -162,6 +239,13 @@ def create_app() -> FastAPI:
     # JWT Auth Middleware (applied after CORS)
     app.add_middleware(JWTAuthMiddleware)
 
+    # Tenant Resolution Middleware — registered AFTER JWTAuthMiddleware so
+    # it runs BEFORE it (Starlette: last-registered middleware executes
+    # first).  Completely inert while multi-tenancy is off; fail-closed
+    # tenant resolution otherwise.  See app.middleware.tenant_resolution.
+    from app.middleware.tenant_resolution import TenantResolutionMiddleware
+    app.add_middleware(TenantResolutionMiddleware)
+
     # Health check (public endpoint)
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str | None]:
@@ -239,6 +323,50 @@ async def _seed_system_tools() -> None:
         logger.exception("System tools seeding failed; application will continue.")
 
 
+async def _seed_platform_settings() -> None:
+    """Seed platform settings on startup.
+
+    Ensures the ``multi_tenancy_enabled`` row exists as false (multi-tenancy
+    is opt-in and off by default).  Idempotent — existing rows are never
+    overwritten.  The platform stays completely inert while the switch is
+    false.
+    """
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.tenancy.platform_settings_service import (
+            get_platform_settings_service,
+        )
+        async with AsyncSessionLocal() as db:
+            await get_platform_settings_service().seed_defaults(db)
+            await db.commit()
+        logger.info("Platform settings seeding complete (multi_tenancy_enabled default false)")
+    except Exception:
+        logger.exception("Platform settings seeding failed; application will continue.")
+
+
+async def _sweep_default_tenant_roles() -> None:
+    """Self-healing sweep for default tenant roles (idempotent).
+
+    For every active tenant: seed any missing default tenant-scoped role
+    (Tenant System Admin / Agent Manager / Agent Executor / Agent Viewer)
+    and assign the tenant's system-admin role to every active root (owner)
+    membership holder that lacks it.  Retro-fixes tenants created before
+    default seeding existed without manual SQL; no-op when everything is
+    already in place (a constant number of indexed queries).
+    """
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.services.tenancy.default_tenant_roles import (
+            sweep_missing_tenant_default_roles,
+        )
+        async with AsyncSessionLocal() as db:
+            summary = await sweep_missing_tenant_default_roles(db)
+            await db.commit()
+        logger.info("Default tenant roles sweep complete: %s", summary)
+    except Exception:
+        logger.exception("Default tenant roles sweep failed; application will continue.")
+
+
 app = create_app()
 
 
@@ -264,6 +392,8 @@ async def startup_event() -> None:
     # Phase 2: Internal data seeding and service initialization
     await _cleanup_stale_sessions_on_startup()
     await _run_bootstrap()
+    await _seed_platform_settings()
+    await _sweep_default_tenant_roles()
     await _seed_system_tools()
     await _cleanup_super_admin_db_records()
     await _initialize_oidc_provider_registry()

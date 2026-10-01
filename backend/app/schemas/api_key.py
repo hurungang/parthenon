@@ -120,6 +120,11 @@ class ApiKeyValidateResponse(BaseModel):
     permissions: list[str] = Field(default_factory=list, description="List of allowed tool identifiers")
     skills: list[SkillWithVersion] = Field(default_factory=list, description="Accessible skills with version info")
     api_key_name: str | None = None
+    # Multi-tenancy: the key's tenant binding — CH binds the MCP session
+    # to this tenant so tool listing/calls stay within it.
+    tenant_id: uuid.UUID | None = Field(
+        default=None, description="Tenant the API key belongs to (null = single-tenant mode / unadopted key)"
+    )
 
 
 class SkillWithVersion(BaseModel):

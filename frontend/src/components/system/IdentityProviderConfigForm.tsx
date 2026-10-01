@@ -33,6 +33,15 @@ const DEFAULT_SCOPES: Record<string, string> = {
   agent: 'openid profile email offline_access',
 }
 
+// JIT default tenant role presets (FIX-20260930-075014) — exact seeded
+// preset keys from backend services/tenancy/default_tenant_roles.py.
+const DEFAULT_TENANT_ROLE_OPTIONS = [
+  { value: 'tenant_system_admin', labelKey: 'systemConfig.identityProviders.defaultRoleTenantSystemAdmin' },
+  { value: 'agent_manager', labelKey: 'systemConfig.identityProviders.defaultRoleAgentManager' },
+  { value: 'agent_executor', labelKey: 'systemConfig.identityProviders.defaultRoleAgentExecutor' },
+  { value: 'agent_viewer', labelKey: 'systemConfig.identityProviders.defaultRoleAgentViewer' },
+]
+
 interface IdentityProviderConfigFormProps {
   scope: 'user' | 'agent'
   currentConfig?: IdentityProviderConfigItem | null
@@ -47,6 +56,7 @@ interface IdentityProviderConfigFormProps {
     scopes: string
     claim_mappings?: Record<string, string>
     is_enabled: boolean
+    default_tenant_role?: string | null
   }) => Promise<void>
   disabled?: boolean
 }
@@ -75,6 +85,9 @@ export function IdentityProviderConfigForm({
       : '',
   )
   const [isEnabled, setIsEnabled] = useState(currentConfig?.is_enabled ?? true)
+  const [defaultTenantRole, setDefaultTenantRole] = useState<string>(
+    currentConfig?.default_tenant_role ?? '',
+  )
   const [showSecret, setShowSecret] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -112,6 +125,8 @@ export function IdentityProviderConfigForm({
         scopes,
         claim_mappings: claimMappings,
         is_enabled: isEnabled,
+        default_tenant_role:
+          scope === 'user' ? defaultTenantRole || null : null,
       })
 
       // Clear the secret field after save
@@ -179,6 +194,26 @@ export function IdentityProviderConfigForm({
             ))}
           </Select>
         </FormControl>
+
+        {scope === 'user' && (
+          <FormControl fullWidth disabled={disabled}>
+            <InputLabel>{t('systemConfig.identityProviders.defaultRoleLabel')}</InputLabel>
+            <Select
+              value={defaultTenantRole}
+              label={t('systemConfig.identityProviders.defaultRoleLabel')}
+              onChange={(e) => setDefaultTenantRole(e.target.value)}
+            >
+              <MenuItem value="">
+                {t('systemConfig.identityProviders.defaultRoleNone')}
+              </MenuItem>
+              {DEFAULT_TENANT_ROLE_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {t(opt.labelKey)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
 
         <TextField
           label={t('app.name')}

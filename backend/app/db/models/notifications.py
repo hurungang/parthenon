@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,9 +43,15 @@ class NotificationChannel(Base):
     """A configured outbound notification destination."""
 
     __tablename__ = "notification_channels"
+    __table_args__ = (
+        Index("ix_notification_channels_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     channel_type: Mapped[ChannelType] = mapped_column(
@@ -124,9 +130,15 @@ class RecipientGroup(Base):
     """A named, addressable audience that maps to one or more notification channels."""
 
     __tablename__ = "recipient_groups"
+    __table_args__ = (
+        Index("ix_recipient_groups_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
@@ -203,9 +215,15 @@ class NotificationLog(Base):
     """Immutable delivery record for each channel attempt."""
 
     __tablename__ = "notification_logs"
+    __table_args__ = (
+        Index("ix_notification_logs_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     group_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -257,9 +275,15 @@ class NotificationEvent(Base):
     """
 
     __tablename__ = "notification_events"
+    __table_args__ = (
+        Index("ix_notification_events_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True
     )
     channel_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

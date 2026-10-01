@@ -55,6 +55,28 @@ router.include_router(SetupRouter)
 # Auth endpoints
 router.include_router(AuthRouter)
 
+# Tenant auth endpoints (public discovery + authenticated memberships)
+from app.api.v1.auth_tenant import TenantAuthRouter  # noqa: E402
+
+router.include_router(TenantAuthRouter)
+
+# Platform admin console (tenant metadata, platform settings, security audit)
+from app.api.v1.platform.settings import PlatformSettingsRouter  # noqa: E402
+from app.api.v1.platform.tenants import PlatformTenantsRouter  # noqa: E402
+from app.api.v1.platform.audit import PlatformAuditRouter  # noqa: E402
+from app.api.v1.platform.identity_providers import PlatformIdentityProvidersRouter  # noqa: E402
+
+router.include_router(PlatformSettingsRouter)
+router.include_router(PlatformTenantsRouter)
+router.include_router(PlatformAuditRouter)
+router.include_router(PlatformIdentityProvidersRouter)
+
+# Tenant self-service (settings, onboarding, members, invitations)
+from app.api.v1.tenant import InvitationAcceptRouter, TenantRouter  # noqa: E402
+
+router.include_router(TenantRouter)
+router.include_router(InvitationAcceptRouter)
+
 # System Config (identity providers, super admin management)
 router.include_router(SystemConfigRouter)
 

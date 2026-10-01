@@ -78,7 +78,7 @@ test.describe('Authentication', () => {
     await page.route('**/api/v1/dashboard/summary', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ active_agents: 0, mcp_servers: 0, scheduled_jobs: 0, conversation_sessions: 0 }) })
     )
-    const { FAKE_TOKEN } = await import('./_helpers')
+    const { FAKE_TOKEN } = await import('../_helpers')
     await page.goto('/login')
     await page.evaluate((token) => { localStorage.setItem('access_token', token) }, FAKE_TOKEN)
     await page.goto('/dashboard')

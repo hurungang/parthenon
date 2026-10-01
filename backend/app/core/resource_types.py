@@ -36,14 +36,29 @@ RT_SYSTEM_OBSERVABILITY: Final[str] = "system::observability"
 RT_SYSTEM_PERMISSIONS: Final[str] = "system::permissions"
 RT_SYSTEM_CONFIG: Final[str] = "system::system_config"
 
+# Platform module — platform admin console.  These surfaces expose tenant
+# METADATA only (never tenant business data) and are hosted at the base
+# domain; guarded by platform-admin memberships.
+RT_PLATFORM_TENANTS: Final[str] = "platform::tenants"
+RT_PLATFORM_SETTINGS: Final[str] = "platform::settings"
+RT_PLATFORM_AUDIT: Final[str] = "platform::audit"
+
+# Tenant module — tenant workspace self-service (tenant admins).
+RT_TENANT_SETTINGS: Final[str] = "tenant::settings"
+RT_TENANT_MEMBERS: Final[str] = "tenant::members"
+
 # ── Manifest ──────────────────────────────────────────────────────────────────
 
 ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     RT_API_KEYS: {
         "actions": ["read", "manage"],
     },
+    # Bare "agent" gates the agent-type CRUD / session surfaces in
+    # agents.py (create/update/delete/execute) — the declared action set
+    # mirrors that real usage so presets validated against the manifest
+    # can grant it.  (Frontend mirrors only namespaced types.)
     RT_AGENT: {
-        "actions": ["read"],
+        "actions": ["create", "read", "update", "delete", "execute"],
     },
     RT_AGENT_ROLES: {
         "actions": ["read", "manage"],
@@ -99,6 +114,21 @@ ResourceTypeManifest: Final[dict[str, dict[str, list[str]]]] = {
     RT_SYSTEM_CONFIG: {
         "actions": ["read", "manage"],
     },
+    RT_PLATFORM_TENANTS: {
+        "actions": ["create", "read", "update", "delete", "manage"],
+    },
+    RT_PLATFORM_SETTINGS: {
+        "actions": ["read", "manage"],
+    },
+    RT_PLATFORM_AUDIT: {
+        "actions": ["read"],
+    },
+    RT_TENANT_SETTINGS: {
+        "actions": ["read", "manage"],
+    },
+    RT_TENANT_MEMBERS: {
+        "actions": ["create", "read", "update", "delete", "manage"],
+    },
 }
 
 # ── Module groups ─────────────────────────────────────────────────────────────
@@ -128,6 +158,15 @@ MODULE_GROUPS: Final[dict[str, list[str]]] = {
         RT_SYSTEM_OBSERVABILITY,
         RT_SYSTEM_PERMISSIONS,
         RT_SYSTEM_CONFIG,
+    ],
+    "platform": [
+        RT_PLATFORM_TENANTS,
+        RT_PLATFORM_SETTINGS,
+        RT_PLATFORM_AUDIT,
+    ],
+    "tenant": [
+        RT_TENANT_SETTINGS,
+        RT_TENANT_MEMBERS,
     ],
 }
 
